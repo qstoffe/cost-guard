@@ -93,7 +93,9 @@ function setup() {
    assert.match(helpText(headers[3].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
-  assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
+   assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
+   assert.equal(view.earlierToggle.attributes['aria-pressed'],'false');
+   assert.equal(view.prompts.dataset.expanded,'false');
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;

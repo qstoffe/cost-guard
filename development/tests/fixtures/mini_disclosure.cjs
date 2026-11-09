@@ -6,13 +6,23 @@ module.exports = function disclosure(view, win, controller, input) {
   Object.assign(win, {outerWidth:650, outerHeight:400, innerWidth:628, screen:{availHeight:1000}});
   win.requestAnimationFrame = fn => frames.push(fn);
   view.fitHeight = () => view.earlier.hidden ? 400 : 550;
-  const toggle = () => view.earlierToggle.fire('click');
+  const state = () => {
+    const expanded = String(!view.earlier.hidden);
+    assert.equal(view.earlierToggle.attributes['aria-pressed'],expanded);
+    assert.equal(view.earlierToggle.attributes['aria-expanded'],expanded);
+    assert.equal(view.prompts.dataset.expanded,expanded);
+    assert.equal(view.earlierToggle.attributes['aria-controls'],'mini-earlier-sessions');
+    assert.equal(view.earlierToggle.textContent,'Earlier Sessions');
+  };
+  const toggle = () => { view.earlierToggle.fire('click'); state(); };
   const settle = () => {while (frames.length) frames.shift()();};
   win.resizeTo = (width, height) => {
+    state(); // State is synchronized before layout/resize observers can run.
     calls.push([width,height]); win.outerWidth=width; win.outerHeight=height; win.fire('resize');
   };
   toggle(); settle(); assert.deepEqual(calls,[[650,550]]);
   for (let i=0;i<5;i++) {input.view.now_ms++; controller.update(input);}
+  state(); assert.equal(view.earlier.hidden,false,'ordinary updates preserve the pressed choice');
   assert.equal(calls.length,1,'passive publications never resize');
   toggle(); assert.deepEqual(calls.at(-1),[650,400],'fit collapse uses current two-row baseline');
   toggle(); settle(); win.outerWidth=600; win.outerHeight=700; win.fire('resize'); toggle();

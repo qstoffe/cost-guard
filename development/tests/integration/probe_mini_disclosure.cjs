@@ -4,7 +4,7 @@ module.exports = async function disclosure({evaluate,until,fixture,command,pipSe
   const read = () => evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {
     outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],
     session:[v.prompts.clientHeight,v.prompts.scrollHeight],accounts:[v.accounts.clientHeight,v.accounts.scrollHeight],
-    expanded:!v.earlier.hidden,attempts:w.probeResizeCalls.length,
+    expanded:!v.earlier.hidden,pressed:v.earlierToggle.getAttribute('aria-pressed'),attempts:w.probeResizeCalls.length,
     restore:v.disclosureSize.restore,pending:!!v.disclosureSize.pending};})()`);
   const click = async () => {
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},pipSession);
@@ -37,6 +37,7 @@ module.exports = async function disclosure({evaluate,until,fixture,command,pipSe
     assert.ok(before.session[1]<=before.session[0]+1,JSON.stringify(before));
     await activate(); const after=await read();
     assert.equal(after.attempts,1,JSON.stringify({before,after})); assert.equal(after.outer[0],before.outer[0]);
+    assert.equal(before.pressed,'false'); assert.equal(after.pressed,'true');
     assert.ok(after.outer[1]>before.outer[1],JSON.stringify(after)); assert.ok(after.restore);
     assert.ok(after.session[1]<=after.session[0]+1,JSON.stringify(after));
     await fixture('history-1-1'); await until(`miniWatch.view.historyRows.size===1`);

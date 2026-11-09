@@ -12,8 +12,9 @@ function inspect(view) {
       if(line){line.left=Math.min(line.left,rect.left);line.right=Math.max(line.right,rect.right);}
       else lines.push({left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom});
     }
-    const r=node.getBoundingClientRect();
+    const r=node.getBoundingClientRect(),style=w.getComputedStyle(node);
     return {text:node.textContent,box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom},lines:lines.map(r=>({left:r.left,right:r.right,top:r.top,bottom:r.bottom})),
+      font:style.fontFamily,size:style.fontSize,lineHeight:style.lineHeight,
       overflow:node.scrollWidth>node.clientWidth+1 && w.getComputedStyle(node).overflowX==='hidden'};
   });
   const fits=parts.every(p=>p.lines.length===1 && !p.overflow && p.box.left>=bounds.left-1 && p.box.right<=bounds.right+1 &&
@@ -21,8 +22,13 @@ function inspect(view) {
     parts.slice(1).every((p,i)=>p.lines[0].left>=parts[i].lines[0].right &&
       p.lines[0].top<parts[i].lines[0].bottom && p.lines[0].bottom>parts[i].lines[0].top);
   const marker=w.getComputedStyle(view.earlierToggle,'::before'),button=w.getComputedStyle(view.earlierToggle);
+  const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(n=>{const c=Number(n)/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+  const light=luminance(button.color),background=luminance(button.backgroundColor);
   return {fits,width:bounds.width,parts,marker:{content:marker.content,width:marker.width},
-    button:{border:button.borderWidth,outline:button.outlineWidth,focused:view.doc.activeElement===view.earlierToggle},
+    button:{border:button.borderWidth,outline:button.outlineWidth,focused:view.doc.activeElement===view.earlierToggle,
+      pressed:view.earlierToggle.getAttribute('aria-pressed'),expanded:view.earlierToggle.getAttribute('aria-expanded'),
+      controls:view.earlierToggle.getAttribute('aria-controls'),hidden:view.earlier.hidden,data:view.prompts.dataset.expanded,
+      background:button.backgroundColor,color:button.color,contrast:(Math.max(light,background)+.05)/(Math.min(light,background)+.05)},
     documentOverflow:view.doc.documentElement.scrollWidth>w.innerWidth+1};
 }
 async function pipSession({evaluate,command,targetId}) {
@@ -33,7 +39,7 @@ async function pipSession({evaluate,command,targetId}) {
   }
   assert.ok(pip);return pip;
 }
-async function disclosure({evaluate,command,pip,read,layouts,label,required}) {
+async function disclosure({evaluate,command,pip,read,layouts,label,required,capture}) {
   await command('Page.bringToFront',{},pip);
   await evaluate(`(()=>{const w=miniWatch.window;w.headerResizes=[];for(const name of ['resizeBy','resizeTo']) {
     const native=w[name].bind(w);w[name]=(...args)=>{w.headerResizes.push({name,args,before:[w.outerWidth,w.outerHeight]});return native(...args);};}})()`);
@@ -53,6 +59,17 @@ async function disclosure({evaluate,command,pip,read,layouts,label,required}) {
       await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point},pip);
     }
     await settle();const value=await read();assert.equal(value.expanded,expanded);
+    const b=value.header.button;
+    assert.equal(b.pressed,String(expanded));assert.equal(b.expanded,String(expanded));assert.equal(b.data,String(expanded));
+    assert.equal(b.hidden,!expanded);assert.equal(b.controls,'mini-earlier-sessions');
+    assert.equal(value.header.parts[1].text,'Earlier Sessions');
+    assert.ok(['none','normal','""'].includes(value.header.marker.content),'no disclosure chevron');
+    if(expanded){assert.notEqual(b.background,initial.header.button.background);assert.ok(b.contrast>=4.5,JSON.stringify(b));}
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pip);
+    const resting=await read();
+    if(expanded)assert.equal(resting.header.button.background,b.background,'pressed fill persists without hover');
+    else assert.equal(resting.header.button.background,initial.header.button.background);
+    if(expanded && !key && label.theme==='classic' && label.color==='light' && label.font==='system-ui')await capture('expanded');
     value.resizeRequests=await evaluate('miniWatch.window.headerResizes');
     for(const request of value.resizeRequests)assert.ok(request.name==='resizeBy'?Math.abs(request.args[0])<=1:
       Math.abs(request.args[0]-request.before[0])<=1,'only height and permitted one-DIP rounding correction');
@@ -98,7 +115,7 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
       value.measurement=await evaluate(`(()=>{const v=miniWatch.measure.view,h=v.root.firstElementChild.cloneNode(true);h.classList.add('mini-header-measuring');v.root.append(h);
         const actual=h.querySelector('.mini-daily > span'),toggle=h.querySelector('.mini-earlier-toggle'),real=actual.textContent,widths=[];
         for(const text of [real,'CCost Today 90 000 · 999 prompts'])for(const expanded of ['false','true']) {
-          actual.textContent=text;toggle.setAttribute('aria-expanded',expanded);widths.push({text,expanded,width:h.getBoundingClientRect().width});}
+          actual.textContent=text;toggle.setAttribute('aria-expanded',expanded);toggle.setAttribute('aria-pressed',expanded);widths.push({text,expanded,width:h.getBoundingClientRect().width});}
         const s=getComputedStyle(miniWatch.measure.body),w=miniWatch.window,d=w.document;
         const result={widths,real,maximum:Math.max(...widths.map(n=>n.width)),horizontal:parseFloat(s.paddingLeft)+parseFloat(s.paddingRight),
           gutter:w.innerWidth-d.documentElement.getBoundingClientRect().width,scale:(outerWidth-16)/innerWidth};h.remove();return result;})()`);
@@ -120,6 +137,11 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
         widths.push(value.request.width);await close();continue;
       }
       assert.equal(value.header.fits,true,JSON.stringify({theme,font,unit,state,value}));
+      assert.equal(new Set(value.header.parts.map(p=>p.size)).size,1,'shared header type size');
+      assert.equal(new Set(value.header.parts.map(p=>p.font)).size,1,'shared header font');
+      assert.equal(new Set(value.header.parts.map(p=>p.lineHeight)).size,1,'shared line height');
+      const centers=value.header.parts.map(p=>(p.lines[0].top+p.lines[0].bottom)/2);
+      assert.ok(Math.max(...centers)-Math.min(...centers)<=1.5,JSON.stringify(value.header));
       if(theme==='classic' && color==='light' && font==='system-ui' && cost==='90 000')await capture();
       // Lower real openings must also contain the reference without requesting a resize.
       const reference=await evaluate(`(()=>{const v=miniWatch.view,children=[...v.dailyText.childNodes];v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
@@ -130,8 +152,11 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
         const children=[...v.dailyText.childNodes];if(${JSON.stringify(m.widths[2].width>=m.widths[0].width)})v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
         try{return (${inspectSource})(v);}finally{r.style.width=old;v.dailyText.replaceChildren(...children);}})()`);
       assert.equal(narrower.fits,false,JSON.stringify({value,narrower}));
+      assert.equal(narrower.documentOverflow,false);
+      assert.ok(Math.abs(narrower.parts[0].lines[0].top-narrower.parts[1].lines[0].top)<=1.5,'actions stay grouped');
+      assert.ok(narrower.parts[2].lines[0].top>=narrower.parts[1].lines[0].bottom,'whole readout uses the secondary row');
       layouts.push({case:'intrinsic-width',theme,color,font,unit,state,...value,narrower});
-      if(cost==='90 000')await disclosure({evaluate,command,pip,read,layouts,label:{theme,color,font},required:m.maximum});
+      if(cost==='90 000')await disclosure({evaluate,command,pip,read,layouts,label:{theme,color,font},required:m.maximum,capture});
       widths.push(value.request.width);
       await close();
     }

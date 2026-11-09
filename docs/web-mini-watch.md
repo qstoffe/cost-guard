@@ -27,7 +27,7 @@ both disclosure states**, where browser/native limits permit. It reserves at lea
 the formatted reference **CCost Today 90 000 · 999 prompts**, or wider real opening
 text, plus **8 CSS pixels** for focus/rounding and a measured stable scrollbar gutter.
 The reference exists only in inert measurement clones: real displayed totals are
-never changed. The equal-width disclosure markers and stable gutter prevent a
+never changed. The stable-width toggle and scrollbar gutter prevent a
 toggle or capped-height scrollbar from stealing header space. Each opening uses
 actual fonts, gaps and padding, not a fixed pixel width or table minimum.
 Height is measured at the resulting available content width,
@@ -115,7 +115,13 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 
 ### Earlier Sessions
 
-The neutral **Earlier Sessions** header button expands a separate four-column table
+The **Earlier Sessions** header button is outlined when collapsed and filled when
+expanded. Its text never changes and has no arrow. The title action, toggle and
+Today readout share one font size, line height and vertical rhythm. When width is
+constrained, the title and toggle stay together and the complete readout moves to
+a deliberate secondary row; exceptionally narrow widths can wrap the actions too.
+The pressed state remains visible without hover and is exposed to assistive technology.
+The button expands a separate four-column table
 **above** the running prompts: **Finished | Session | CCost (Total) | Ctx**.
 Finished shows only the canonical representative prompt's supported finish in configured
 local **HH:mm** (24-hour, no seconds). Focus, hover or tap the time for the server-prepared

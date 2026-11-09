@@ -152,6 +152,11 @@ the hovered or keyboard-focused option's explanation **beside the option list**.
 Keyboard navigation changes only the preview until Enter/Space commits; Escape
 cancels. Touch/narrow pickers show descriptions within the open list, before a
 committing tap. Long descriptions scroll within the bounded native popup.
+In the side-by-side picker, wheel over the option label to scroll its visible
+explanation without moving onto the explanation or selecting the option. This
+also works for Default and the selected choice; scrolling directly over the
+explanation and its scrollbar remains available. Narrow/touch in-flow descriptions
+retain normal popup scrolling.
 
 Browsers without customizable-select/selected-content support retain ordinary
 native selects plus an expandable **Choice help** reference for all options,
