@@ -1,6 +1,6 @@
 # FR 000648 — Full Web Watch: show useful native running-tool commands and labeled timeouts
 
-**Owner-approved Ready Feature Request / targeted correction, 2026-11-09.** Permanent ID **000648**; temporary Ready priority **000830**, after existing Ready FR000645 (000800), FR000646 (000810), and FR000647 (000820). **Authoring only:** add this FR and update backlog highWatermark **647 → 648** on current main; no executable code/tests/docs, release/version, settings or unrelated FR changes in this commit.
+**Owner-approved Ready Feature Request / targeted correction, 2026-11-09.** Permanent ID **000648**; temporary Ready priority **000830**, after the two currently Ready FRs FR000646 (000810) and FR000647 (000820); FR000645 had already moved to Complete. **Authoring only:** add this FR and update backlog highWatermark **647 → 648** on current main; no executable code/tests/docs, release/version, settings or unrelated FR changes in this commit.
 
 ## Owner observation, concern, and desired outcome
 
