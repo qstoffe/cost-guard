@@ -111,7 +111,7 @@ flowchart TD
     outcome -->|yes| pr["PR to actual default; inspect blockers"]
     skip --> pr
     pr --> ci{"Configured CI triggered?"}
-    ci -->|yes| checks["Hosted Web Beta jobs; report actual failures / skips"]
+    ci -->|yes| checks["Hosted Web jobs; report actual failures / skips"]
     ci -->|no| merge["Normal protected merge"]
     checks --> permitted{"Checks / protections permit merge?"}
     permitted -->|no| repair
