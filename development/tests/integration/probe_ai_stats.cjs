@@ -77,6 +77,7 @@ async function main() {
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
+    await require('./probe_ai_stats_rate_help.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
     for(const theme of ['classic','light','dark']) for(const width of [360,520,1280]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
@@ -110,10 +111,10 @@ async function main() {
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hypothetical shift/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Robot 8h shift:/);
     await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
       ReportView.setUnit('usd',output);`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/\$/);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),3);
     await evaluate(`ReportView.setUnit('credits',output)`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
@@ -201,6 +202,12 @@ async function main() {
     assert.doesNotMatch(await evaluate(`output.textContent`),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|synthetic|snapshot interval/i);
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-value')].every(node=>node.textContent.includes('0'))`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
+    await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+      document.querySelector('.ai-stat h4 button').focus();`);
+    await until(`!document.getElementById('context-help').hidden`);
+    const idleHelp=await evaluate(`document.getElementById('context-help').textContent`);
+    assert.equal(idleHelp.split('\n\n').length,3);
+    assert.match(idleHelp,/No scheduled workdays/); assert.match(idleHelp,/hasn't started/);
     await evaluate(`api=__realApi; AIStatsView.remember(current,__savedStats); current.failed=false; show(current)`);
     checks.push('cold failed acquisition has ten playful zero figures, no invented record links; warm failure retains fun results');
     // Server-side coalescing is exercised from independent browser documents.

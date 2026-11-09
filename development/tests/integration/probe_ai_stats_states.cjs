@@ -126,7 +126,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='unknown-duration').result)};
     current.stats.update(current); ReportView.setUnit('credits',output);`);
   assert.equal(await evaluate(`document.activeElement===__focusedStat`),true);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hypothetical shift/);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Imagine eight hours of nonstop silicon/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
   checks.push('twelve canonical evidence cases: ten cards with three Python-prepared rates, example/faster robot/no-workdays, both units/three themes; no state/reason DOM, focused heading retained');

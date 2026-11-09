@@ -373,7 +373,7 @@ The first **💸 AI Hourly Rate** card has three compact rows, not three cards:
 
 - **24h average:** the period's Total AI Cost divided by 24 nominal hours per selected local date.
 - **Workday average:** the same total (including night/weekend spending) divided by eight scheduled hours per eligible workday. Weekends and configured `SE` public holidays are excluded; an empty `workdayCalendar` excludes weekends only. With none, the row says **No workdays**.
-- **Robot · 8h shift:** the original cost per actively running AI hour × eight. This is the **hypothetical** price of a full robot shift at that period's intensity, not actual cost per workday. Title help includes the active-hour basis and the imaginary total for all eligible shifts; these are not extra headline figures.
+- **Robot · 8h shift:** the original cost per actively running AI hour × eight. This is the **hypothetical** price of a full robot shift at that period's intensity, not actual cost per workday. Title help keeps these three perspectives to three short, playful paragraphs rather than repeating the calculations. Robot jokes use fixed reference-Credit tiers, not your salary; idle or uncertain inputs avoid replacement comparisons.
 
 For 840 Credits and 28 active hours over seven dates/five workdays, these are
 **5 CCost/h**, **21 CCost/h** and **240 CCost/8h day** (USD: **$0.05/h**,

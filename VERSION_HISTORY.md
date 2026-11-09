@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.229 — 2026-11-09
+
+- AI Hourly Rate title help now has three short workplace-robot jokes, one per value, with real blank lines instead of a calculation lecture. Raw reference-Credit shift tiers choose bargain/ordinary/extravagant punchlines independently of currency; idle or uncertain inputs avoid replacement comparisons.
+- All three rates, traits, other cards and accounting stay unchanged. Existing optional hover/focus/touch help refreshes in place; empty-state help uses the same three-paragraph style. Detailed numeric definitions remain in the Web guide.
+
 ## v80.228 — 2026-11-09
 
 - Full Watch's collapsed Running details preserve native commands, quoting, Windows paths and harmless CLI assignments. Recognized credential values are redacted where safe; ambiguous credentials and unsupported/oversized/absent input get specific explanations instead of a blanket warning.

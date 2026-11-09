@@ -1,8 +1,11 @@
 'use strict';
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
+  const idleRateHelp = '24h: The same robot tab, spread around the clock; even your beauty sleep gets a budget line.\n\n' +
+    'Workday: No scheduled workdays to carry the tab; even imaginary payroll gets weekends and holidays off.\n\n' +
+    "Robot 8h shift: The imaginary shift hasn't started; HR is still writing the robot's job description.";
   const definitions = [
-    ['hourly-rate', '💸', 'AI Hourly Rate', 'Three ways to feed the silicon crew: around the clock, scheduled hours, or a hypothetical robot shift.'],
+    ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
     ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Coffee breaks excluded.'],
     ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
@@ -155,7 +158,7 @@ const AIStatsView = (() => {
         [2, 5, 6].includes(index) ? '0s' : index === 7 ? '0%' : index === 8 ? '0 days' : '0';
       const display = {value, trait: traits[index], ...(index === 0 ? {
         calendar_rate: '0 CCost/h', workday_rate: 'No workdays', robot_day: '0 CCost/8h day',
-        rate_help: '24h spreads the tab around the clock. Workday uses scheduled hours. Robot day imagines a hypothetical eight-hour shift. The robot clock is taking a nap.'} : {})};
+        rate_help: idleRateHelp} : {})};
       return {metric, value: 0, display, display_units: {credits: display,
         usd: {...display, value: index < 2 || index === 3 || index === 4 ? '$0.00' + suffix : value,
           ...(index === 0 ? {calendar_rate: '$0.00/h', robot_day: '$0.00/8h day'} : {})}}};
