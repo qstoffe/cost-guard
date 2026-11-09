@@ -7,6 +7,7 @@ class Node {
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(n => n.textContent).join(''); }
   append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.text = ''; this.children = nodes; }
   setAttribute() {}
   addEventListener() {}
 }

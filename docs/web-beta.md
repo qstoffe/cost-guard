@@ -497,6 +497,11 @@ Shared navigation and actionable authentication/source/host notices remain avail
 Native amounts and attribution live in the existing focus/tap/600ms-hover help, not a
 second report. CLI and Diagnostics keep their detailed account layouts.
 
+Known provider account headings on both Accounts and Full Watch open the provider's
+usage/settings or billing page in a new tab. Hover underlines the heading text; keyboard
+focus is visible. The provider uses your browser's signed-in account/workspace, not Cost
+Guard credentials. Unknown providers keep plain headings.
+
 The existing single authenticated Live stream updates Accounts even if Watch has never
 opened. Switching routes uses the latest retained common observation immediately;
 it starts no finite report, account refresh owner, provider call, history scan or second

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.217 — 2026-11-09
+
+- Web Watch and Accounts card headings open trusted provider usage/settings pages in a new tab, with text-only hover links and keyboard focus. Copilot, Claude and ChatGPT use the requested direct destinations; API accounts and MiniMax regions retain their own console/billing destinations, while unknown providers remain plain headings.
+- Navigation preserves live card identity, quotas, reference costs, exhausted colors and quiet refresh behavior; no provider polling, authentication or accounting changes.
+
 ## v80.216 — 2026-11-09
 
 - Mini Watch's compact ↕ header action fits the currently visible content vertically, growing or shrinking without deliberately changing width. It shares the bounded native resize owner and includes accessible hover/focus/touch help; passive publications never resize.
