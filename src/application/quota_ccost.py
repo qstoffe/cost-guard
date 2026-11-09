@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from src.numbers import ccost_amount
+from .contracts import record
 
 
 def capacity_period(values):
@@ -55,7 +56,8 @@ def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
     return {"capacity_label": label, "monthly_capacity": value, "monthly_capacity_help": explanation}
 
 
-def quota_ccost_tokens(values, now_ms):
+def quota_ccost_values(values, now_ms):
+    """Unrounded reference amounts shared by quota tokens and Web remaining pace."""
     context = values.get("period_ccost")
     if context is None:
         return {}
@@ -109,6 +111,42 @@ def quota_ccost_tokens(values, now_ms):
                     and (values.get("scope") != "model" or values.get("model_id"))):
                 basis, capacity = "ratio", used / (1 - fraction)
                 remaining = capacity - used
+    return dict(context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
+                basis=basis, coherent=coherent, current=current)
+
+
+def quota_ccost_pace(values, now_ms):
+    """Spread only this quota's accepted reference Remaining over its native calendar."""
+    pace = values.get("native_pace")
+    if (pace is None or values.get("period") != "fixed" or values.get("duration_seconds")
+            or values.get("window_active") is False or now_ms is None
+            or values.get("reset_at_ms") is None or values["reset_at_ms"] <= now_ms):
+        return None
+    # Invalid native facts must not become a positive reference budget, even if
+    # an independent observed-cost ratio happens to produce one.
+    for key in ("used", "remaining", "remaining_fraction"):
+        value = values.get(key)
+        if value is not None and (not Decimal(value).is_finite() or Decimal(value) < 0):
+            return None
+    reference = quota_ccost_values(values, now_ms)
+    remaining = reference.get("remaining")
+    counts = dict(pace.fields)
+    days, workdays = counts["days"], counts["workdays"]
+    if (remaining is None or not remaining.is_finite() or remaining < 0
+            or not reference["current"] or days <= 0 or not 0 <= workdays <= days):
+        return None
+    return record(ccost_remaining=remaining, ccost_per_day=remaining / days,
+                  ccost_per_workday=remaining / workdays if workdays else None,
+                  days=days, workdays=workdays)
+
+
+def quota_ccost_tokens(values, now_ms):
+    reference = quota_ccost_values(values, now_ms)
+    if not reference:
+        return {}
+    context, cost = reference["context"], reference["cost"]
+    used, capacity, remaining = (reference[key] for key in ("used", "capacity", "remaining"))
+    basis = reference["basis"]
     amount = lambda value: "?" if value is None else ccost_amount(value)
     explanation = {
         "native": "Provider-reported included AI-credit limit.\n"
@@ -142,7 +180,7 @@ def quota_ccost_tokens(values, now_ms):
         brief += "\n" + context["note"]
     if values.get("reference_ccost_capacity") is not None and basis == "native":
         brief = "Source-verified reference Capacity; observed Used CCost is independent."
-    return {**monthly_tokens(values, capacity, cost, coherent, current, now_ms),
+    return {**monthly_tokens(values, capacity, cost, reference["coherent"], reference["current"], now_ms),
             "ccost_used": amount(used), "ccost_remaining": amount(remaining),
             "ccost_capacity": ("N/A" if basis == "unlimited" else amount(capacity)) +
                 (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),

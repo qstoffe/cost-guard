@@ -14,6 +14,7 @@ def watch_quota(quota, period=None, *, estimated=False, note="", provider_id="",
     percent = "—" if fraction is None else ("<100%" if fraction < 1 and fraction * 100 >= Decimal("99.95")
         else f"{fraction * 100:.1f}".removesuffix(".0") + "%")
     return record(quota=quota_record(quota, period.cost if period is not None else None,
+            pace=period.pace if period is not None else None,
             provider_id=provider_id, availability=availability, estimated=estimated, note=note),
         used_fraction=fraction, used_percent=percent, exhausted=fraction == 1,
         restricted=quota.status == "blocked" and fraction != 1,

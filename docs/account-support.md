@@ -19,7 +19,7 @@ other valid windows extrapolate from observed cost / raw fraction used. Neither 
 guaranteed budget. Numeric inferred Capacity carries **(guesstimate)** in Web text/help;
 verified comparable native limits do not. Unknown estimates show **?**, Unlimited Capacity **N/A**, without that suffix. A verified
 idle 0%-Used window has native 100% Remaining even when reference Capacity is unknown.
-Native amounts remain in Accounts/help; CLI and Remaining/day pace do not change.
+Native amounts remain in Accounts/help; CLI pacing does not change.
 
 Bars represent genuine provider-reported capacity: a real denominator or an explicitly reported percentage, never a fabricated allocation. Balance/informational spend without capacity stays textual. Native currencies are not added or converted; balances/spend are not CCost or historical usage. A current credential never establishes historical request-account attribution. There are no provider-specific Report/Watch renderer branches.
 
@@ -33,7 +33,9 @@ Account-level `BLOCKED` belongs to the account, not to every window. When a curr
 
 Copilot preserves provider plan/status/usage when entitlement is zero, pooled or unusable. Business/Enterprise `hasQuota=false` survives degraded denominators; a known blocked state shows `⚠  COPILOT PAUSED`, while errors alone never imply blocked. Only explicit native unlimited state establishes unlimited capacity.
 
-`Remaining: X/day · Y/workday` (formerly Pace) spreads reported included credits over days/workdays until the reported reset, rounded down. Today counts as a day and, when applicable, a `workdayCalendar` workday. No history is needed; extra credits are excluded. Missing balance/reset hides it; organization pools are not personal allocations. Reports use a separate Remaining line and retain units/money/reset.
+CLI `Remaining: X/day · Y/workday` (formerly Pace) spreads reported included credits over days/workdays until the reported reset, rounded down. Today counts as a day and, when applicable, a `workdayCalendar` workday. No history is needed; extra credits are excluded. Missing balance/reset hides it; organization pools are not personal allocations. Reports use a separate Remaining line and retain units/money/reset.
+
+Web Watch and Accounts instead spread each eligible fixed quota's **reference CCost Remaining** over those same days/workdays. Settings selects reference USD (`$`, two decimals) or Credits (remaining rounded down); changes apply to retained cards without fetching. The basis is the card's own accepted Remaining, including verified Copilot reference credits or a supported same-window cost ratio, never arbitrary native tokens/messages. A verified Capacity alone does not invent Remaining. Unknown/stale/unlimited/expired budgets omit pace; known zero shows zero and zero workdays says **no workdays left**. Native Used/Remaining bars, reset facts, CLI and Mini remain unchanged.
 
 Positive reported overage allowances show separately as `Extra credit limit N` (report: `N AI credits`), never an inferred purchased/remaining balance or included Remaining. Paused states and independent billing/balances remain, without extra polling. Copilot `Usage Today` is absent: GitHub's billing usage API requires a classic PAT, not Copilot OAuth, so no substitute is added.
 

@@ -84,6 +84,16 @@ Normal Copilot reports reconcile native used credits with indexed CCost over a v
 
 ## Transport-neutral application boundary and parity inventory
 
+FR000638 adds Web-only `quota.ccost_pace`: `quota_record` binds native calendar counts
+by quota identity, and `quota_ccost.py` shares its unrounded accepted reference Remaining
+with the existing quota tokens. `with_display` exports distinct raw `ccost_per_day` /
+`ccost_per_workday` and both display units; native `QuotaPace` remains unchanged.
+Both shared live cards and the legacy/compact Accounts renderer consume this field,
+never native pace or browser price arithmetic. Missing/stale/expired budgets omit pace
+without clearing other quietly retained figures. Tests: `test_web_quota_pace.py`,
+`test_quota_period_lifecycle.py`, existing account/quota VM checks and
+`integration/probe_quota_pace.cjs` through the shared Accounts browser driver.
+
 Normal progress additionally distinguishes early-stopping sample roots, availability,
 model rows/catalog, account cache/batch/analysis and account projection. Application
 packaging owns finalizing observations. `WorkProgress.stage` is optional and separately

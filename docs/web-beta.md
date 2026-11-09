@@ -236,7 +236,8 @@ shows **?**, Unlimited Capacity **N/A**. Focus/tap the visible label/value for n
 attribution and limitations. Credits/USD converts all three reference figures together.
 A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
 its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
-Native money, Remaining/day/workday pace and CLI orientation remain independent.
+Native money and CLI orientation remain independent. Full Web Watch and Accounts
+Remaining/day/workday lines use reference CCost in the selected USD/Credits unit.
 
 Only these five nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
@@ -823,7 +824,13 @@ ordered text, controls, help, warnings, percentages, reset and accessibility; fu
 deliberate divergence requires explicit owner approval. Mini stays separately compact.
 The bar is followed by a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
-secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
+secondaries follow a divider. These two pace amounts divide this quota's unrounded
+reference CCost Remaining by its existing remaining calendar days/workdays, counting
+configured-local today. USD shows `$` and two decimals; Credits remaining rounds down.
+Changing Settings updates both routes immediately without a fetch or replacing cards.
+Unknown, stale, unlimited, inactive or expired reference budgets omit pace; native
+messages/tokens are never silently converted. Native quota bars, reset/calendar rules,
+Mini and CLI pacing are unchanged. No routine rolling/fixed boilerplate appears. Exact
 account/window/model costs include pre-Watch native-month history, never Today/30-day
 substitutions. Unavailable reference costs show **(?)**; confirmed empty windows
 show Used **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings

@@ -20,6 +20,12 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000638: Web-only reference-CCost remaining pace is owned by
+`application/quota_ccost.py`, `display.py`, identity-bound `projection.py` /
+`watch_accounts.py`, `account-cards.js` and legacy `render.js`. Focused coverage:
+`test_web_quota_pace.py`, `test_quota_period_lifecycle.py`, Accounts/quota VM tests
+and `probe_quota_pace.cjs` through `probe_accounts_live.cjs`. Native/CLI pace is unchanged.
+
 FR000635 scoped navigation: `mini.js`/`mini.css` own the grouped measured header
 and pressed disclosure; `settings.js`/`app.css` own native sibling help panes and
 wheel delegation. `fixtures/settings_wheel.cjs` covers units/guards/preview;

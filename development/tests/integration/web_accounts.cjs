@@ -22,7 +22,7 @@ assert.equal(all(output, 'table').length, 0, 'no quota filter/pager wall');
 assert.deepEqual(cards.map(n => all(n, 'h4')[0].textContent), view.accounts_quotas.accounts.map(a => a.observation.label));
 for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
   'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
-  '29 AI credits/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2', 'Rate limited',
+  'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2', 'Rate limited',
   'Connection failed', 'Window not started', 'Attribution incomplete', 'Quota unavailable; not zero or unlimited.']) {
   assert.ok(output.textContent.includes(text), text);
 }
@@ -40,6 +40,11 @@ for (const text of ['PRIVATE', '0.89876543211', '89.876543211', '1.23456789', 'r
 // Rendering another section must not acquire or mutate the shared frozen report.
 assert.equal(view.accounts_quotas.accounts[0].observation.quotas[0].remaining, '89.876543211');
 const original = output.textContent, native = JSON.stringify(view), bar = all(cards[0], 'progress')[0];
+vm.runInContext('ReportView.setUnit("usd", output)', context);
+assert.match(cards[0].textContent, /Monthly Remaining: \$0.30\/day/);
+assert.doesNotMatch(cards[0].textContent, /AI credits\/day/);
+assert.equal(all(cards[0], 'progress')[0], bar);
+vm.runInContext('ReportView.setUnit("credits", output)', context);
 vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(output)', context);
 assert.match(cards[0].textContent, /90% remaining/);
 assert.match(cards[0].textContent, /Remaining 89\/100 AI credits/);
@@ -59,7 +64,7 @@ const visible = node => node.tag === 'details' ? node.children[0].textContent : 
 assert.equal(compact.length, 7);
 for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
   'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
-  '29 AI credits/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2',
+  'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2',
   'Rate limited', 'Connection failed', 'Window not started', 'Quota unavailable; not zero or unlimited.']) {
   assert.ok(visible(output).includes(text), 'important CLI value visible by default: ' + text);
 }
