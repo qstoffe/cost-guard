@@ -22,7 +22,8 @@ class Node {
 }
 function doc() { const value = {createElement: tag => Object.assign(new Node(tag), {ownerDocument:value}),
   createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI}),
-  head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; return value; }
+   createTextNode: text => Object.assign(new Node('#text'), {textContent:text}),
+   head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; return value; }
 function win() {
   const node = new Node('window'); node.document = doc(); node.closed = false; node.timers = new Set();
   node.document.defaultView = node; node.clearTimeout = clearTimeout; node.setTimeout = setTimeout;
@@ -84,13 +85,14 @@ function setup() {
   let view = controller.view;
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
   assert.equal(view.body.children.length, 2);
-   assert.equal(view.body.children[0].children[2].textContent, '2 (4583)');
-   assert.equal(view.body.children[1].children[2].textContent, '3 (4583)');
-   assert.match(helpText(view.body.children[1].children[2].children[0].children[0]), /Duration: 20m/);
+    assert.equal(view.body.children[0].children[2].textContent, '2');
+    assert.equal(view.body.children[1].children[2].textContent, '3');
+    assert.equal(view.body.children[1].children[3].textContent, '4583');
+    assert.match(helpText(view.body.children[1].children[2].children[0]), /Duration: 20m/);
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
-   assert.equal(headers[3].textContent, 'Ctx');
-   assert.match(helpText(headers[3].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
+    assert.equal(headers[4].textContent, 'Ctx');
+    assert.match(helpText(headers[4].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
    assert.equal(view.earlierToggle,undefined,'obsolete disclosure removed');
@@ -102,10 +104,10 @@ function setup() {
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
     controller.update(input);
-     assert.equal(view.body.children[0].children[3].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
+     assert.equal(view.body.children[0].children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
   }
   contextItem.live_context = null; controller.update(input);
-   assert.equal(view.body.children[0].children[3].textContent, 'N/A');
+    assert.equal(view.body.children[0].children[4].textContent, 'N/A');
   contextItem.live_context = originalContext; controller.update(input);
   const guidanceWarning=input.view.active_cards[0].session_summary.context.warning;
   const originalWarning=structuredClone(guidanceWarning);
@@ -113,9 +115,9 @@ function setup() {
     guidanceWarning.guidance_state=state;
     guidanceWarning.multiplier=state==='ready'?'2.4':null;
     guidanceWarning.display.warning_cost='('+wording+')';controller.update(input);
-    assert.equal(view.body.children[0].children[3].dataset.guidance,state);
-    assert.ok(helpText(view.body.children[0].children[3]).includes(wording));
-    assert.equal(view.body.children[0].children[3].textContent,originalContext.display.watch_next_context_tokens);
+    assert.equal(view.body.children[0].children[4].dataset.guidance,state);
+    assert.ok(helpText(view.body.children[0].children[4]).includes(wording));
+    assert.equal(view.body.children[0].children[4].textContent,originalContext.display.watch_next_context_tokens);
   }
   Object.assign(guidanceWarning,originalWarning);controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
@@ -254,7 +256,7 @@ function setup() {
     const terminal = view.promptRows.get(originals[1].session_id);
     assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
     assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
-     assert.match(helpText(terminal.children[2].children[0].children[0]),/Duration: 20m/);
+     assert.match(helpText(terminal.children[2].children[0]),/Duration: 20m/);
     input.view = {...savedView, active_cards:[originals[0]], history_state:'observed', history_epoch:1,
       history_cards:[{...structuredClone(originals[1]),focal_id:''}]};
     controller.update(input);
@@ -299,7 +301,8 @@ function setup() {
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; primary.quota = savedQuota; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-   assert.equal(view.body.children[0].children[2].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$20.88\)/);
+    assert.equal(view.body.children[0].children[2].textContent, '$0.01');
+    assert.equal(view.body.children[0].children[3].textContent, '$45.82'); assert.match(retained.textContent, /\(\$20.88\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   const themeStyle = child.document.documentElement.style;
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');
@@ -319,7 +322,7 @@ function setup() {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
-     assert.match(helpText(view.body.children[1].children[2].children[0].children[0]), /Duration: 20m/);
+     assert.match(helpText(view.body.children[1].children[2].children[0]), /Duration: 20m/);
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;

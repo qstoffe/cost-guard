@@ -65,5 +65,5 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
   }
   await fixture('running');await until('liveValue.view.active_cards.length===2');
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings()`);
-  checks.push('Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed four-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged');
+  checks.push('Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged');
 };

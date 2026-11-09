@@ -1,14 +1,32 @@
 'use strict';
-// One text-only, noninteractive help surface per document, including Document PiP.
+// One noninteractive text surface per document; only live Duration has a safe span.
 const ContextHelp = (() => {
   const entries = new WeakMap(), documents = new WeakMap();
+  const durations = new WeakSet();
+  function runningDuration(before, duration, after) {
+    const value = {before, duration, after}; durations.add(value); return value;
+  }
+  function fragmentText(node, text) {
+    if (node.textContent === text) return;
+    const leaf = node.nodeType === 3 ? node : node.firstChild;
+    if (leaf?.nodeType !== 3) { node.textContent = text; return; }
+    const selection = node.ownerDocument.getSelection?.(), length = leaf.length;
+    const anchor = selection?.anchorNode, focus = selection?.focusNode;
+    const start = selection?.anchorOffset, end = selection?.focusOffset;
+    leaf.data = text;
+    if (anchor === leaf || focus === leaf) {
+      const offset = value => value === length ? text.length : Math.min(value, text.length);
+      selection.setBaseAndExtent(anchor, anchor === leaf ? offset(start) : start,
+        focus, focus === leaf ? offset(end) : end);
+    }
+  }
   const HOVER_DELAY = 600;
   function controller(doc) {
     if (documents.has(doc)) return documents.get(doc);
     const win = doc.defaultView || window, panel = doc.createElement('div');
     panel.id = 'context-help'; panel.className = 'context-help'; panel.hidden = true;
     panel.setAttribute('role', 'tooltip'); panel.setAttribute('popover', 'manual');
-    let active = null, blocked = null, timer, opening, pending = null, origin = null, keyboard = true;
+    let active = null, blocked = null, timer, opening, pending = null, origin = null, keyboard = true, fragments = null;
     const cancel = () => { win.clearTimeout(timer); timer = undefined; };
     const cancelOpening = () => { win.clearTimeout(opening); opening = undefined; pending = null; };
     function position() {
@@ -29,9 +47,22 @@ const ContextHelp = (() => {
       if (!active.isConnected) { close(); return; }
       if (target && target !== active && !target.contains(active)) return;
       const content = entries.get(active).content;
-      const value = String(typeof content === 'function' ? content() : content);
-      if (!value) { close(); return; }
-      if (panel.textContent !== value) panel.textContent = value;
+      const value = typeof content === 'function' ? content() : content;
+      if (durations.has(value)) {
+        if (!fragments) {
+          const before = doc.createTextNode(''), duration = doc.createElement('span'), after = doc.createTextNode('');
+          duration.className = 'context-help-running-duration';
+          panel.replaceChildren(before, duration, after); fragments = [before, duration, after];
+        }
+        [value.before, value.duration, value.after].forEach((text, index) => {
+          fragmentText(fragments[index], text);
+        });
+      } else {
+        const text = String(value);
+        if (!text) { close(); return; }
+        if (fragments || panel.textContent !== text) panel.textContent = text;
+        fragments = null;
+      }
       position();
     }
     function close(suppress = false) {
@@ -176,5 +207,5 @@ const ContextHelp = (() => {
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
   function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
-  return {attach, button, heading, value, refresh, dismiss, HOVER_DELAY};
+  return {attach, button, heading, value, refresh, dismiss, runningDuration, HOVER_DELAY};
 })();

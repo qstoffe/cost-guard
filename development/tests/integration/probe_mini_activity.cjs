@@ -14,9 +14,9 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
     ['—','Unknown finish time'],['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100']]);
-  assert.ok((await values()).every(row=>row.columns===4 && row.focus===0 && !row.native));
+  assert.ok((await values()).every(row=>row.columns===5 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Activity','Session','CCost (Total)','Ctx']);
+    ['Activity','Session','CCost','Total','Ctx']);
   await evaluate('miniWatch.window.resizeTo(650,550)',true); await settle();
   await key('Tab'); await evaluate('activityTime.focus({preventScroll:true})');
   const help = `miniWatch.view.doc.getElementById('context-help')`;
@@ -57,7 +57,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
             nowrap:rows.every(row=>w.getComputedStyle(row.cells[0]).whiteSpace==='nowrap'),
             alignment:rows.every(row=>Math.abs(rect(row.cells[0]).right-rect(v.body.parentNode.rows[0].cells[0]).right)<1),
             totals:rows.every(row=>{const n=row.querySelector('.mini-cost-value'),c=row.cells[2];return n.scrollWidth<=n.clientWidth+1 && rect(n).right<=rect(c).right+1;}),
-            context:rows.every(row=>row.cells[3].textContent!=='')};})()`);
+             context:rows.every(row=>row.cells[4].textContent!=='')};})()`);
         assert.equal(layout.documentOverflow,false); assert.equal(layout.totals,true); assert.equal(layout.context,true);
         assert.equal(layout.nowrap,true); assert.equal(layout.alignment,true);
         if(layout.inner>=600) {assert.equal(layout.horizontal,false);assert.equal(layout.vertical,false);assert.ok(layout.activityWidth<layout.sessionWidth);}
@@ -69,5 +69,5 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     }
   }
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings();miniWatch.window.resizeTo(650,550)`,true); await settle();
-   checks.push('Unified four-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
+    checks.push('Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
 };

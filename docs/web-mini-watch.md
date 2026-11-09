@@ -12,9 +12,9 @@ control is the fallback. Closing/reloading the owner ends Mini. A fresh page sta
 
 ## One session activity table
 
-The always-visible table has exactly four columns:
+The always-visible table has exactly five columns:
 
-**Activity | Session | CCost (Total) | Ctx**
+**Activity | Session | CCost | Total | Ctx**
 
 There is no Earlier Sessions button, separate history section or Duration column.
 
@@ -29,12 +29,15 @@ There is no Earlier Sessions button, separate history section or Duration column
    adds a short hint from that same prompt's existing bounded preview: up to 25 visible
    characters, without splitting combining marks or emoji, and one ellipsis only when
    shortened. Missing/non-prompt previews add nothing; no full prompt text is fetched.
-- **CCost (Total):** the representative prompt's own reference cost, followed by the
-  **entire canonical root/session cost** in parentheses, including supported linked
-  subagents and pre-Watch history. Neither amount substitutes for the other. Credits/
+- **CCost:** the representative prompt's own reference cost.
+- **Total:** the **entire canonical root/session cost**, including supported linked
+  subagents and pre-Watch history, in its own column without parentheses. Neither amount substitutes for the other. Credits/
   USD, zero, **N/A**, unknown **Loading…** and partial **?** retain their meanings.
   Each amount has independent help with model, effort, **Duration**, calls and relevant
-  linked/mixed/pricing/outcome details. Completed duration is frozen. These are reference
+  linked/mixed/pricing/outcome details. Only a genuinely running represented prompt’s
+  complete **Duration: time** line is yellow in both tooltips, and it continues updating
+  while open. Completion, failure, abort, unverified work or a historical representative
+  removes the cue; completed duration is frozen. These are reference
    costs, not verified billing. This cost help does not expose prompt text.
 - **Ctx:** the running/recent representative's supported next-incoming estimate; a
   historical-only row uses the last valid **session-level next-request context**, not
@@ -64,7 +67,7 @@ stale live context or price guidance.
 Every canonical session appears **once**, even with several concurrent prompts or
 identical display names. If several prompts run in one session, the latest genuinely
 running prompt represents it (stable event-ID tie break). Its cost is not a sum of all
-simultaneous focal prompts; the parenthesized whole-session total is independent.
+simultaneous focal prompts; the separate whole-session total is independent.
 Execution-unverified unfinished work remains conservative, not a healthy completion.
 
 All distinct running sessions are included without a data limit. Recent terminal-grace
@@ -104,7 +107,7 @@ defaults; explicit choices stay pinned. Missing preferences create no user file.
 
 Fit on open measures styled content before one PiP request. Width is the larger of:
 
-- The table's compact Activity, CCost and Ctx column need **N**, with a generous Session
+- The table's compact Activity, CCost, Total and Ctx column need **N**, with a generous Session
   target of about **1.6 × N** (about **2.6 × N** for the table), plus stable table scrollbar
   gutter, padding and small focus/rounding allowance.
 - The complete intrinsic header: **Cost Guard · Watch**, **↕**, and the actual/reference
@@ -159,7 +162,7 @@ Authentication/provider restrictions stay meaningful; ordinary refreshes stay qu
 another stream. Verified convertible native allowances supply matching Used, Remaining
 and Capacity reference equivalents (100 Credits = $1), not cash or billing. Other
 eligible percentage-only plans retain disclosed OpenCode-observed period-cost estimates;
-inferred Capacity includes **(guesstimate)**. Only those estimates use the existing
+inferred Capacity has a leading **~**. Only those estimates use the existing
 one/two-significant-digit display rounding, with original Decimal values in subscription
 help. Observed costs, Today and prompt/session costs are unchanged. Missing/invalid/
 stale/unlimited facts remain unknown, not fabricated Remaining. Idle provider-confirmed

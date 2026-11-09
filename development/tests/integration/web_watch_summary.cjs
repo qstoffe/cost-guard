@@ -118,7 +118,7 @@ const periodCost = monthlyCard.children[2].children[1];
 assert.equal(periodCost.title, undefined);
 assert.equal(periodCost.tabIndex,-1,'provider-confirmed parenthetical does not gain an empty tab stop');
 assert.equal(monthlyCard.children[2].querySelectorAll('button').length,0,'quota and capacity share one explanation');
-assert.match(helpText(monthlyCard.children[3].children[0]), /Provider-reported quota Used\/Remaining[\s\S]*OpenCode-observed period CCost is separate/);
+assert.match(helpText(monthlyCard.children[3].children[0]), /Provider-reported full-window allowance[\s\S]*separate from OpenCode-observed usage/);
 assert.match(helpText(monthlyCard.children[3].children[0]), /Native Used: 2088\/25000 AI credits/);
 assert.equal(primaryDetails(monthlyCard).children.length, 3, 'reset and two pace rows; no period cost row');
 assert.match(primaryDetails(monthlyCard).children[0].textContent, /^Reset/);
@@ -126,22 +126,24 @@ assert.match(primaryDetails(monthlyCard).children[1].textContent, /^Remaining: .
 assert.match(primaryDetails(monthlyCard).children[2].textContent, /^Remaining: .*\/workday$/);
 assert.equal(monthlyCard.children.length, 7, 'monthly peer has only an empty alignment row, no fake secondary quota');
 const fiveCard = watch.accounts.children[0].children[1];
+const capacitySample = structuredClone(context.input.view.accounts.accounts[1]);
 assert.equal(fiveCard.children[2].textContent, '5-hour · 25% used (420)');
-assert.equal(fiveCard.children[3].textContent, '5-hour Capacity: 1700 (guesstimate)');
-assert.equal(fiveCard.children[4].textContent, 'Monthly Capacity: 240000 (guesstimate)');
-assert.match(helpText(fiveCard.children[3].children[0]),/1680 Credits[\s\S]*Monthly Capacity: 240000 \(guesstimate\)[\s\S]*241920 Credits[\s\S]*30-day/);
-assert.match(helpText(fiveCard.children[4].children[0]),/241920 Credits/);
+assert.equal(fiveCard.children[3].textContent, '5-hour Capacity: ~1700');
+assert.equal(fiveCard.children[4].textContent, 'Monthly Capacity: ~240000');
+assert.match(helpText(fiveCard.children[3].children[0]),/^Estimated full-window reference CCost[\s\S]*\n\n5-hour/);
+assert.match(helpText(fiveCard.children[4].children[0]),/^Approximate 30-day equivalent[\s\S]*not a guaranteed monthly entitlement/);
+assert.doesNotMatch(helpText(fiveCard.children[3].children[0]),/1680|241920|rounding|÷|×|guesstimate/i);
 assert.equal(fiveCard.children[4].children[0].tabIndex,0);
 assert.equal(fiveCard.children[2].children[1].tabIndex,-1,'observed Used is not rounded or given estimate help');
 assert.match(primaryDetails(fiveCard).textContent, /Reset/);
 assert.equal(footer(fiveCard).children[0].className, 'watch-account-details');
-assert.match(footer(fiveCard).textContent, /Weekly · 100% used \(840\)Weekly Capacity: 800 \(guesstimate\)Monthly Capacity: 3600 \(guesstimate\)Reset/);
+assert.match(footer(fiveCard).textContent, /Weekly · 100% used \(840\)Weekly Capacity: ~800Monthly Capacity: ~3600Reset/);
 const weeklyCard = watch.accounts.children[0].children.at(-1);
-assert.equal(weeklyCard.children[2].textContent, 'weekly · 42% used (?)');
+assert.equal(weeklyCard.children[2].textContent, 'Weekly · 42% used (?)');
 assert.match(primaryDetails(weeklyCard).children[0].textContent, /^Reset/);
 assert.ok(!/5-hour|Usage unavailable/.test(weeklyCard.textContent));
 assert.equal(primaryDetails(weeklyCard).children.length, 1, 'primary reset only');
-assert.equal(weeklyCard.children.length, 7, 'weekly-only has its own monthly equivalent, no secondary section');
+assert.equal(weeklyCard.children.length, 5, 'unknown capacity has neither row nor alignment spacer');
 assert.ok(!/BLOCKED|Unknown|Available|Observation details|Unaccounted usage/.test(watch.accounts.textContent));
 assert.deepEqual(card.summary.children.map(line=>line.textContent), ['Context: 120k (Price threshold >100.0K exceeded; 2.4x more expensive)', 'Total CCost: 4583']);
 assert.equal(card.warningIcon.className, 'watch-warning-icon');
@@ -449,7 +451,7 @@ for (const fixture of context.input.quota_cases || []) {
   const expected = fixture.percent === '—' ? '—' : fixture.percent + ' used';
   assert.ok(label.includes(fixture.value.quota.unlimited ? 'Unlimited' : expected), fixture.name);
   assert.ok(!label.includes('/'), 'native ratios belong in accessible help, not the headline');
-  assert.ok(helpText(account.children[3].children[0]).includes(fixture.native), fixture.name);
+  assert.ok(helpText(account.children[2].children[0]).includes(fixture.native), fixture.name);
   assert.ok(!/CCost:|estimated|partial|[~≈]/.test(label), 'compact value has no visible provenance marker');
   assert.equal(primaryDetails(account).children[0].textContent, 'Reset unknown');
   assert.equal(account.attributes['aria-description'], undefined);
@@ -462,16 +464,16 @@ for (const fixture of context.input.quota_cases || []) {
   if (fixture.name === 'empty period') assert.ok(label.includes('used (0)'));
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
     assert.match(label, /\(\?\)/);
-  if (fixture.name === 'partial period') assert.match(helpText(account.children[3].children[0]), /partial attribution/);
-  if (fixture.name === 'estimated period') assert.match(helpText(account.children[3].children[0]), /estimated attribution/);
+  if (fixture.name === 'partial period') assert.match(helpText(account.children[2].children[0]), /partial attribution/);
+  if (fixture.name === 'estimated period') assert.match(helpText(account.children[2].children[0]), /estimated attribution/);
   if (fixture.name === 'owner example') assert.equal(label, '5 hours · 16% used (94)');
   vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(parent)', context);
   const shown = fixture.value.quota.quota_display.remaining;
   if (fixture.name === 'native money') {
-    assert.match(helpText(account.children[3].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
+    assert.match(helpText(account.children[2].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
     vm.runInContext('ReportView.setUnit("usd", parent)', context);
     assert.equal(account.children[2].textContent.includes('CCost used:'), false);
-    assert.match(helpText(account.children[3].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
+    assert.match(helpText(account.children[2].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
   }
   if (shown.mode === 'remaining') {
     assert.match(account.children[2].textContent, /remaining/);
@@ -528,4 +530,5 @@ assert.equal(page.root.textContent, 'No configured accounts detected.', 'observe
 assert.equal(page.cards.size, 0);
 require('../fixtures/live_status.cjs')(vm, context, value => value == null ? now : (now = value));
 require('../fixtures/account_links.cjs')(vm, context, monthly);
+require('../fixtures/account_capacity.cjs')(vm,context,capacitySample,helpText);
 console.log('watch summary passed');

@@ -27,10 +27,10 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
    await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false},sessionId);
    await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))`);
    const aligned = await evaluate(`(() => {const cards=[...document.querySelectorAll('.watch-subscription')];
-     return cards.map(card=>({top:card.getBoundingClientRect().top,
+      return cards.map(card=>({top:card.getBoundingClientRect().top,known:!!card.querySelector(':scope > .watch-quota-capacity'),
        bar:card.querySelector('.watch-quota-track').getBoundingClientRect().top,
        rows:[...card.children].slice(1,5).map(n=>n.className)}));})()`);
-   for (const card of aligned) for (const other of aligned.filter(other=>Math.abs(other.top-card.top)<1))
+   for (const card of aligned.filter(card=>card.known)) for (const other of aligned.filter(other=>other.known&&Math.abs(other.top-card.top)<1))
      assert.ok(Math.abs(card.bar-other.bar)<1,'conditional subgrid aligns primary bars across neighboring cards');
    layouts.push({case:'quota-capacity-alignment',cards:aligned});
   const exhausted = await evaluate(`(() => {const bar=[...document.querySelectorAll('.watch-quota-track progress')].find(bar=>bar.getAttribute('aria-label')==='Weekly remaining');
@@ -122,9 +122,9 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
        accounts:accounts.textContent,accountBars:[...accounts.querySelectorAll('progress')].map(n=>n.value),
        mini:miniWatch.view.accounts.querySelector('progress').value};})()`);
    assert.deepEqual(idle.labels,['5-hour · 100% remaining (?)','Weekly · 100% remaining (?)']);
-   assert.deepEqual(idle.capacity,['5-hour Capacity: ?','Weekly Capacity: ?']);
+    assert.deepEqual(idle.capacity,[]);
    assert.deepEqual(await evaluate(`[...document.querySelectorAll('.watch-monthly-capacity')].map(n=>n.textContent)`),
-     ['Monthly Capacity: N/A','Monthly Capacity: N/A']);
+      []);
    assert.ok(idle.bars.every(([value,text,name])=>value===1 && text==='100% remaining' && !name.includes('exhausted')));
    assert.deepEqual(idle.accountBars,[1,1]); assert.equal(idle.mini,1);
    assert.match(idle.accounts,/100% remaining \(\?\)/); assert.ok(idle.reset.includes('Window not started'));
@@ -136,19 +136,19 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
    await fixture('quota-ratio');
    await until(`liveValue.view.accounts.accounts[0].primary.quota.remaining_fraction==='0.9'`);
    await until(`document.querySelector('.watch-quota-summary')?.textContent==='5-hour · 10% used (100)'`);
-   assert.equal(await evaluate(`document.querySelector('.watch-quota-capacity').textContent`),'5-hour Capacity: 1000 (guesstimate)');
-    assert.equal(await evaluate(`document.querySelector('.watch-monthly-capacity').textContent`),'Monthly Capacity: 140000 (guesstimate)');
-   assert.match(await evaluate(`miniWatch.view.accounts.children[0].helpText`),/Capacity: 1000 \(guesstimate\)/);
+    assert.equal(await evaluate(`document.querySelector('.watch-quota-capacity').textContent`),'5-hour Capacity: ~1000');
+     assert.equal(await evaluate(`document.querySelector('.watch-monthly-capacity').textContent`),'Monthly Capacity: ~140000');
+    assert.match(await evaluate(`miniWatch.view.accounts.children[0].helpText`),/Capacity: ~1000/);
    await change('quota-display','remaining');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/90% remaining \(900\)/);
    await change('ccost-unit','usd');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/90% remaining \(\$9.00\)/);
    await route('watch');
-   await until(`document.querySelector('.watch-quota-capacity')?.textContent==='5-hour Capacity: $10.00 (guesstimate)'`);
+    await until(`document.querySelector('.watch-quota-capacity')?.textContent==='5-hour Capacity: ~$10.00'`);
    assert.equal(await evaluate(`document.querySelector('.watch-quota-summary').textContent`),'5-hour · 90% remaining ($9.00)');
    await evaluate(`(() => {const account=document.createElement('section');ReportView.overviewAccounts(account,liveValue.probe_accounts,'Accounts',true);
      window.ratioAccountText=account.textContent;})()`);
-   assert.match(await evaluate('ratioAccountText'),/90% remaining \(\$9.00\)Capacity: \$10.00 \(guesstimate\)/);
+    assert.match(await evaluate('ratioAccountText'),/90% remaining \(\$9.00\)Capacity: ~\$10.00/);
     await change('ccost-unit','credits');
     await require('./probe_quota_estimates.cjs')({evaluate,until,command,sessionId,pipSession,checks,fixture,route,change});
     await fixture('running'); await until(`liveValue.view.accounts.accounts.length===6`);

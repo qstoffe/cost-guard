@@ -488,6 +488,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
   border: 1px solid var(--control-line); border-radius: .4rem; box-shadow: var(--shadow);
   background: var(--surface); color: var(--ink); font: 400 .85rem/1.45 system-ui, sans-serif; text-align: left; }
 .context-help[hidden] { display: none; }
+.context-help .context-help-running-duration { color: var(--watch-running); }
 .help-copy { white-space: pre-line; }
 .watch-activity { font-size: .8rem; margin-top: .4rem; overflow-wrap: anywhere; color: var(--watch-activity); }
 .watch-activity :is(details, summary) { color: inherit; }

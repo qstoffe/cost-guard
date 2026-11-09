@@ -51,12 +51,11 @@ def monthly_values(values, capacity, cost, coherent, current, now_ms):
 
 def monthly_tokens(reference):
     raw, reason = reference["monthly_capacity"], reference["monthly_reason"]
-    explanation = (reason or "Theoretical 30-day guesstimate: full-period CCost Capacity × 2,592,000 ÷ full-window seconds.\n"
-        "Assumes repeated full windows; not a monthly entitlement, bill or spending forecast.\n"
-        "Other quotas may constrain usage; compare each separately, never add their monthly equivalents.")
+    explanation = reason or ("Approximate 30-day equivalent of this window’s reference CCost capacity, "
+        "not a guaranteed monthly entitlement.")
     return {"capacity_label": reference["capacity_label"],
-            "monthly_capacity": ("N/A" if raw is None else estimate_amount(raw) + " (guesstimate)") if reference["monthly_applicable"] else "",
-            "monthly_capacity_help": ("Monthly Capacity — " + estimate_help(raw) + "\n" + explanation if raw is not None else explanation) if reference["monthly_applicable"] else ""}
+            "monthly_capacity": ("N/A" if raw is None else "~" + estimate_amount(raw)) if reference["monthly_applicable"] else "",
+            "monthly_capacity_help": explanation if reference["monthly_applicable"] else ""}
 
 
 def coherent_native(limit, used, remaining, fraction):
@@ -224,11 +223,19 @@ def quota_ccost_tokens(values, now_ms, reference=None):
     if values.get("reference_ccost_capacity") is not None and basis == "native":
         brief = "Source-verified reference Capacity. " + brief
     estimated = basis == "ratio"
+    capacity_help = {
+        "ratio": "Estimated full-window reference CCost from observed same-window CCost and the provider’s reported usage fraction.",
+        "native": "Provider-reported full-window allowance in reference CCost units, separate from OpenCode-observed usage.",
+        "unlimited": "The provider reports an unlimited quota.",
+        "unknown": "Reference CCost capacity is unknown.",
+    }[basis]
+    if estimated and context["estimated"]:
+        capacity_help += "\n\nUses estimated account attribution."
     return {**monthly_tokens(reference),
+            "capacity_help": capacity_help,
             "ccost_used": amount(used), "ccost_remaining": estimate_amount(remaining) if estimated else amount(remaining),
             "ccost_remaining_help": "Remaining — " + estimate_help(remaining) if estimated and remaining is not None else "",
             "ccost_capacity_help": "Capacity — " + estimate_help(capacity) if estimated and capacity is not None else "",
-            "ccost_capacity": ("N/A" if basis == "unlimited" else estimate_amount(capacity) if estimated else amount(capacity)) +
-                (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),
+            "ccost_capacity": ("N/A" if basis == "unlimited" else "~" + estimate_amount(capacity) if estimated else amount(capacity)),
             "capacity_basis": basis,
             "ccost_help": explanation, "ccost_brief": brief}
