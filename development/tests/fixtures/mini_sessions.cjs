@@ -30,6 +30,8 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,count<5);
   }
   show([],history);const retained=view.promptRows.get('h4'),time=retained.children[0].children[0];
+  assert.ok(rows().every(row=>row.className===''),'successful cold history is neutral');
+  assert.match(retained.attributes['aria-label'],/Completed/,'neutral history retains its outcome');
   assert.equal(retained.children[3].textContent,'900','historical context uses session summary, not stale prompt');
   assert.equal(time.textContent,'23:47');assert.equal(helpText(time),'2026-10-25 02:30 +0100');
   const resumed=card('h4',300,true);show([resumed],history);
@@ -53,6 +55,17 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   const ended=Array.from({length:5},(_,i)=>{const c=card('h4',400+i);c.focal_id=c.rows[0].prompt.event_id='end'+i;return c;});
   show(ended,history);assert.equal(ids().filter(id=>id==='h4').length,1);assert.equal(view.promptRows.get('h4'),retained);
   assert.equal(retained.className,'mini-success');assert.equal(ids().at(-1),'h4');
+  const handedOff={...ended.at(-1),focal_id:''};
+  show([],[...history.slice(0,4),handedOff]);
+  assert.equal(view.promptRows.get('h4'),retained);assert.equal(retained.className,'','grace expires in the same row');
+  for(const outcome of [{aborted:true,completed_successfully:false},{has_error:true,completed_successfully:false}]) {
+    const failed=structuredClone(handedOff);Object.assign(failed.rows[0].prompt,outcome);
+    show([{...failed,focal_id:failed.rows[0].prompt.event_id}],history);
+    assert.equal(retained.className,'mini-error');
+    show([],[...history.slice(0,4),failed]);assert.equal(retained.className,'','old failure is neutral');
+    assert.match(retained.attributes['aria-label'],/Aborted|Error/);
+  }
+  show([resumed],history);assert.equal(retained.className,'mini-running','a consecutive prompt resumes the same row');
   const olderGrace=card('grace',50);olderGrace.focal_id='grace';show([olderGrace],history);
   assert.deepEqual(ids(),history.map(c=>c.session_id),'older grace cannot displace a newer history winner');
   const unknown=card('unknown',0);unknown.rows[0].prompt.completed_at_ms=null;

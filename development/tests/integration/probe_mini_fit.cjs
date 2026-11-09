@@ -60,6 +60,8 @@ async function main() {
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+    await require('./probe_mini_theme.cjs')({evaluate,until,fixture,command,sessionId,open,close,capture,layouts:evidence.layouts,checks:evidence.checks});
+    if(scope==='colors-only') {evidence.outcome='PASS';return;}
     if(scope!=='manual-only') {
     await require('./probe_mini_width.cjs')({evaluate,command,sessionId,open,close,read,capture,layouts:evidence.layouts,checks:evidence.checks});
     for(const count of [0,1,3,5,6,10])for(const accounts of [0,1,6]) {

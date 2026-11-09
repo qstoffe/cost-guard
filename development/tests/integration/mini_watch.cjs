@@ -248,11 +248,24 @@ function setup() {
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:true},'mini-error','Error'],
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
-    const saved = {...prompt}; Object.assign(prompt, outcome); controller.update(input);
+    const saved = {...prompt}, savedView = input.view;
+    Object.assign(prompt, outcome, {completed_at_ms:10000}); controller.update(input);
     const terminal = view.promptRows.get(originals[1].session_id);
     assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
     assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
-     assert.match(helpText(terminal.children[2].children[0].children[0]),/Duration: 20m/); Object.assign(prompt,saved);
+     assert.match(helpText(terminal.children[2].children[0].children[0]),/Duration: 20m/);
+    input.view = {...savedView, active_cards:[originals[0]], history_state:'observed', history_epoch:1,
+      history_cards:[{...structuredClone(originals[1]),focal_id:''}]};
+    controller.update(input);
+    assert.equal(view.promptRows.get(originals[1].session_id),terminal,'source handoff reuses the row');
+    assert.equal(terminal.className,'','historical outcome does not retain terminal emphasis');
+    assert.ok(terminal.attributes['aria-label'].includes(label));
+    input.view = {...input.view,cards_state:'unavailable',active_cards:[],history_state:'refreshing'};
+    for (const state of ['running','recovering','running']) {
+      controller.update({...input,state}); controller.render();
+      assert.equal(terminal.className,'','retention/retry does not restart completion');
+    }
+    input.view = savedView; Object.assign(prompt,saved); controller.update(input);
   }
   input.view.active_cards = []; controller.update(input);
   assert.match(view.body.textContent,/No earlier sessions/);

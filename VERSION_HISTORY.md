@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.223 — 2026-11-09
+
+- Mini Watch leaves historical session rows neutral, including successful/failed history on first opening. Running remains yellow and recent success/abort/error retains its existing transient green/red emphasis; the source-owned history handoff clears it in the same keyed row.
+- Outcome accessibility, retry/reopen behavior, theme-semantic colors, unified table selection, costs and full Watch remain unchanged. No new timer or lifecycle setting is introduced.
+
 ## v80.222 — 2026-11-09
 
 - Mini Watch uses one chronological Activity / Session / CCost (Total) / Ctx table, one row per canonical session. All distinct running sessions remain visible; the most recent eligible finished sessions fill unused slots up to five. Concurrent prompts choose the latest running representative without changing whole-session totals or full Watch.
