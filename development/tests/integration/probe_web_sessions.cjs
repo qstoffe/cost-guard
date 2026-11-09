@@ -63,7 +63,7 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
       await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-      if (mode === '--live-only') {
+       if (mode === '--live-only') {
         const details = await require('../fixtures/sessions_live_browser.cjs')({evaluate, until, fixture,
           command:(method, params) => command(method, params, sessionId)});
         checks.push(...details.checks); layouts.push(...details.layouts);
@@ -71,8 +71,40 @@ async function main() {
         evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
           personal_profile:false,desktop_effects:false};
         console.log(JSON.stringify({outcome:evidence.outcome,checks}));
-        return;
-      }
+         return;
+       }
+       if (mode === '--dates-only') {
+         await evaluate(`location.hash='#/sessions'`);
+         await until('current.catalog?.data?.view.session_usage.length===50');
+         const original = await evaluate(`({raw:current.catalog.data.view.session_usage[0].last_activity_ms,
+           zone:current.catalog.data.view.timezone_id,text:current.catalog.body.rows[0].cells[0].textContent})`);
+         assert.equal(original.zone,'UTC');
+         assert.equal(original.text,new Date(original.raw).toISOString().slice(0,16).replace('T',' '));
+         for (const locale of ['en-US','sv-SE']) for (const timezoneId of ['America/New_York','Asia/Tokyo']) {
+           await command('Emulation.setLocaleOverride',{locale},sessionId);
+           await command('Emulation.setTimezoneOverride',{timezoneId},sessionId);
+           await evaluate('current.catalog.rows(current.catalog.data.view.session_usage)');
+           assert.equal(await evaluate('current.catalog.body.rows[0].cells[0].textContent'),original.text);
+           assert.deepEqual(await evaluate(`['2026-03-29T00:30Z','2026-03-29T01:30Z','2026-10-25T00:30Z','2026-10-25T01:30Z']
+             .map(value=>ReportView.timestamp(Date.parse(value),'Europe/Stockholm'))`),
+             ['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30']);
+         }
+         await evaluate(`location.hash='#/sessions/root-0000'`);
+         await until('current.detail?.body.rows.length===1001');
+         const values = await evaluate(`(()=>{const texts=[];for(const node of current.detail.body.querySelectorAll('.session-prompt-label .help-value')){
+           node.focus();ContextHelp.refresh(node);const help=document.getElementById('context-help');if(help?.matches(':popover-open'))texts.push(help.textContent);}
+           return {body:current.detail.root.textContent,help:texts};})()`);
+         const forbidden=/\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M\b/;
+         assert.doesNotMatch(values.body,forbidden);
+         values.help.forEach(text=>assert.doesNotMatch(text,forbidden));
+         assert.ok(values.help.some(text=>/1970-01-\d{2} \d{2}:\d{2}/.test(text)));
+         checks.push('real Sessions 50-row HTTP/DTO/DOM configured-UTC activity unchanged by two locales/two browser zones; Stockholm spring/fall DST');
+         checks.push('complete 1001-row session detail and all clock help searched for 12-hour/date-order leaks');
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+           personal_profile:false,desktop_effects:false};
+         console.log(JSON.stringify(evidence));return;
+       }
      await until('current?.result && !current.loading');
      const retiredHashes=['#/reports','#/reports?date=2026-11-05','#/reports?date=2026-10-01:2026-11-05',
        '#/reports?date=2026-02-30','#/reports?date=%ZZ&sort=ccost&offset=50'];
@@ -94,7 +126,7 @@ async function main() {
      for(const width of [1920,360]) {
        await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
        assert.deepEqual(await evaluate('[...document.querySelectorAll("nav a")].map(node=>node.textContent)'),
-          ['Models','Watch','Sessions','Accounts','Token Mix','AI Stats','Settings']);
+        ['Models','Watch','Sessions','Accounts','Token Mix','AI Stats','Comparisons','Settings']);
        assert.equal(await evaluate(`[...document.querySelectorAll('a')].filter(node=>node.getAttribute('href')?.startsWith('#/reports')).length`),0);
        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
      }
@@ -199,15 +231,14 @@ async function main() {
     assert.equal(await evaluate('document.querySelectorAll("tbody tr").length'),1002);
     await fixture('recover'); await until('current.detail.status.hidden');
      checks.push('selection-scroll-end-outage-recovery');
-     for (const locale of ['sv-SE','en-US']) for (const [timezoneId,expected] of [
-       ['Europe/Stockholm',['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30']],
-       ['America/New_York',['2026-03-28 20:30','2026-03-28 21:30','2026-10-24 20:30','2026-10-24 21:30']]]) {
+     const expected = ['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30'];
+     for (const locale of ['sv-SE','en-US']) for (const timezoneId of ['Europe/Stockholm','America/New_York']) {
        await command('Emulation.setLocaleOverride',{locale},sessionId);
        await command('Emulation.setTimezoneOverride',{timezoneId},sessionId);
-       assert.deepEqual(await evaluate(`['2026-03-29T00:30Z','2026-03-29T01:30Z','2026-10-25T00:30Z','2026-10-25T01:30Z'].map(value=>SessionsCatalog.localTimestamp(Date.parse(value)))`),expected);
+       assert.deepEqual(await evaluate(`['2026-03-29T00:30Z','2026-03-29T01:30Z','2026-10-25T00:30Z','2026-10-25T01:30Z'].map(value=>ReportView.timestamp(Date.parse(value),'Europe/Stockholm'))`),expected);
      }
      await command('Emulation.setLocaleOverride',{},sessionId);await command('Emulation.setTimezoneOverride',{timezoneId:''},sessionId);
-     checks.push('browser-local-24-hour-format-two-locales-two-timezones-spring-and-autumn-DST');
+     checks.push('configured-local-24-hour-format-two-locales-two-browser-timezones-spring-and-autumn-DST');
      // Compare the actual post-596 tables to the Watch reference, not a CSS-text proxy.
      for (const route of ['watch','models','token-mix','sessions','sessions/root-0000']) {
        await evaluate(`document.body.style.zoom=1;location.hash=${JSON.stringify('#/'+route)}`);

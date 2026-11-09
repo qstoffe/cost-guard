@@ -28,6 +28,28 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebDisplayTests(unittest.TestCase):
+    def test_shipped_web_dates_have_no_implicit_locale_or_browser_zone_formatters(self):
+        assets = ROOT / 'src/web/assets'
+        for path in assets.glob('*.js'):
+            text = path.read_text(encoding='utf-8')
+            with self.subTest(asset=path.name):
+                self.assertNotRegex(text, r'\.toLocale(?:Date|Time)String\(')
+                self.assertNotRegex(text, r'new Date\([^\n]+\)\.toLocaleString\(')
+                self.assertNotRegex(text, r'\.get(?:FullYear|Month|Date|Hours|Minutes)\(')
+
+    def test_web_observation_and_numeric_reset_leave_raw_and_cli_tokens_intact(self):
+        now = int(datetime(2026, 3, 28, 12, tzinfo=timezone.utc).timestamp() * 1000)
+        deadline = int(datetime(2026, 3, 30, 12, tzinfo=timezone.utc).timestamp() * 1000)
+
+        dto = with_display(record(observed_at_ms=now, reset_at_ms=deadline),
+            'Europe/Stockholm', now_ms=now).to_json()
+
+        self.assertEqual(now, dto['observed_at_ms'])
+        self.assertEqual(deadline, dto['reset_at_ms'])
+        self.assertEqual('2026-03-28 13:00', dto['display']['observed_at_ms'])
+        self.assertEqual('Reset in 48h, 2026-03-30 14:00', dto['display']['web_reset'])
+        self.assertEqual('Reset in 48h, Monday 14:00', dto['display']['reset'])
+
     def test_dual_units_format_unit_independent_clocks_once_with_dst_and_token_order_preserved(self):
         from src.application import display
         start = int(datetime(2026, 10, 25, 0, 30, tzinfo=timezone.utc).timestamp() * 1000)

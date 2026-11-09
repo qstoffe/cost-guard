@@ -430,6 +430,23 @@ shows a compact, actionable warning with hover/focus/touch-accessible connection
 details. A server that never served the page cannot display an offline page. The
 global footer is removed; guarantees remain in relevant optional report help.
 
+### More Coding Benchmarks
+
+Below both Models tables, **More Coding Benchmarks** links to the official
+[Artificial Analysis Coding Agent Index](https://artificialanalysis.ai/agents/coding-agents/).
+Its cost-versus-performance chart compares coding-agent configurations and effort
+settings independently. Its composite score is not Harbor's Solved percentage.
+This is an external link only: no Artificial Analysis data, requests or credentials
+are integrated into Cost Guard.
+
+### Web date and time display
+
+All Web dates and clocks, including optional help and Mini Document PiP, use
+configured-local **YYYY-MM-DD HH:mm**, **YYYY-MM-DD**, or **HH:mm** as appropriate.
+Precise help can include seconds or a derived UTC offset. Browser/OS locale and
+browser timezone do not change this convention. Release/promotion date-only facts
+stay date-only; raw timestamps, sorting, reset deadlines and CLI formats are unchanged.
+
 ## AI Stats
 
 **AI Stats** at `/#/ai-stats` turns your robot adventures into ten playful cards and a
@@ -629,7 +646,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten playful numeric cards plus an optional matched-input fact, five periods, early figures and retained refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
 | Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
-| Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
+| Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Known subtotals are quiet; incomplete pricing/telemetry is explained in the total-title help. Unknown values remain N/A. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
@@ -637,6 +654,14 @@ Generic finite report tables retain search/filter/page controls and ascending/de
 Token Mix targets **five-minute** foreground and **twenty-minute** inactive checks. The host, not hidden browser timers, owns due times. Compact revision/config/price-keyed facts can be shared with AI Stats and Comparisons without sharing their final totals. Changed roots are revalidated; removed roots disappear. Catalog metadata is not usage. Fork deduplication, publisher grouping and pricing tiers retain canonical Python semantics. No new account polling, inference or browser history ledger is introduced.
 
 During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failed background refresh retains the actual old observation silently; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; intrinsic partial costs/volumes retain their semantics. Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
+
+On Token Mix alone, displayed values have no repeated **Partial** or **?** qualifiers
+and no partial-only dimming. Hover, focus or tap the large **Total Token Mix** title
+for observed-token scope/time and, when relevant, a short **Partial pricing** paragraph:
+CCost includes only known priced requests; missing cost is not zero. Incomplete token
+telemetry is qualified there too. Complete/empty usage never claims missing-price
+costs. Real source/outage and empty-history states remain distinct. This presentation
+does not change CLI, Watch/Mini partial markers, raw coverage, counts or valuation.
 
 ### Host-owned freshness and background warming
 

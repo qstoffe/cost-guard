@@ -34,7 +34,8 @@ const context = vm.createContext({document, location, history, URLSearchParams, 
     else assert.fail('unexpected API '+path);
     return {ok:true,json:async()=>value};
   }});
-context.ReportView.LiveStatus = vm.runInNewContext(fs.readFileSync('src/web/assets/render.js','utf8') + '\nReportView.LiveStatus', {Date:Clock});
+const presentation = vm.runInNewContext(fs.readFileSync('src/web/assets/render.js','utf8') + '\nReportView', {Date:Clock});
+for (const key of ['LiveStatus','timestamp','setTimezone']) context.ReportView[key] = presentation[key];
 for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.readFileSync('src/web/assets/'+file,'utf8'),context);
 // Presentation is independently tested in rendered probes; retain actual lifetime logic.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);

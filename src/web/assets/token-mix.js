@@ -7,6 +7,17 @@ const TokenMixView = (() => {
     'Input tokens written to the cache.', 'Output tokens, including reasoning once.'];
   const e = (...args) => ReportView.element(...args);
   const tokenKey = 'mix_total_tokens';
+  // This surface alone shows known subtotals quietly; canonical/CLI tokens stay intact.
+  const display = (mix, key) => ReportView.display(mix, key).replace(/^Partial /, '');
+  function titleHelp(result) {
+    const mix = result.view.token_mix;
+    let text = `${mix.known_total_tokens ?? 'No known'} recorded tokens in the same available shown history as the CLI. Deleted history is not reconstructed.\nObserved ${ReportView.timestamp(result.observed_at_ms, result.view.timezone_id)}.`;
+    if (mix.request_count && !mix.cost_complete)
+      text += '\n\nPartial pricing: Some recorded requests have no usable model price, so displayed CCost includes only known priced requests. Missing cost is not zero.';
+    if (mix.request_count && mix.exact_total_tokens == null)
+      text += '\n\nToken telemetry is incomplete; only known recorded tokens are shown. A complete total and shares are unavailable.';
+    return text;
+  }
   function numeric(row, column) {
     if (column === 1) return row.prompts;
     if (column === 2) return row.calls;
@@ -46,7 +57,7 @@ const TokenMixView = (() => {
       const help = [key === 'model' ? 'Canonical historical model display name.' : 'Model manufacturer, not an account provider.',
         'Distinct contributing user prompts. Mixed-model prompts can appear in several rows; counts are not additive.',
         'Attributed model requests in available shown history.',
-        'Known Input, Cached input, Cache write and Output token volume. Partial means incomplete telemetry.',
+         'Known Input, Cached input, Cache write and Output token volume. Missing telemetry is not zero.',
         ...definitions.flatMap(text => [text + ' Share of tokens, not cost.', text + ' Per-request reference valuation, not share of cost.']),
         'Sum of known category reference valuations at each request’s actual model and price tier; not billing.'];
       this.headers = columns.map((label, column) => {
@@ -89,7 +100,7 @@ const TokenMixView = (() => {
           const key = col === 3 ? tokenKey : col === 12 ? 'mix_total_cost' :
             col >= 4 ? 'mix_' + categories[Math.floor((col - 4) / 2)] + (col % 2 ? '_cost' : '_share') : null;
           ReportView.text(span, () => col === 0 ? node.row[this.key] : col === 1 ? node.row.prompts :
-            col === 2 ? node.row.calls : ReportView.display(node.row.mix, key));
+            col === 2 ? node.row.calls : display(node.row.mix, key));
           const tokenHelp = col === 3 && (row.mix.exact_total_tokens == null ||
             ReportView.display(row.mix, tokenKey) !== row.mix.known_total_tokens);
           const partialCost = (col >= 4 && col % 2 || col === 12) && !row.mix.cost_complete;
@@ -98,9 +109,6 @@ const TokenMixView = (() => {
             ContextHelp.value(span, () => col === 3 ?
               `${node.row.mix.known_total_tokens ?? 'No known'} recorded tokens.${node.row.mix.exact_total_tokens == null ? ' Partial telemetry; a complete total and shares are unavailable.' : ''}` :
               ReportView.costHelp(node.row.mix, key) || costHelp(node.row.mix));
-          }
-          if (col >= 4 && col % 2 || col === 12) {
-            span.classList.toggle('partial', !row.mix.cost_complete);
           }
           ContextHelp.refresh(span);
         });
@@ -114,15 +122,15 @@ const TokenMixView = (() => {
     constructor() {
       this.root = e('div', undefined, 'token-mix-view');
       this.title = e('h2');
-      ContextHelp.value(this.title, () => `${this.result.view.token_mix.known_total_tokens ?? 'No known'} recorded tokens in the same available shown history as the CLI. Deleted history is not reconstructed.\nObserved ${new Date(this.result.observed_at_ms).toLocaleString()}.`);
+      ContextHelp.value(this.title, () => this.result ? titleHelp(this.result) : '');
       this.summary = e('div', undefined, 'token-mix-summary');
       this.metrics = categories.map((key, index) => {
         const group = e('div'), label = e('span', names[index]), value = e('strong'), share = e('span'), cost = e('span');
         ContextHelp.value(label, definitions[index]);
         const costKey = 'mix_' + key + '_cost';
         ContextHelp.value(cost, () => this.result ? ReportView.costHelp(this.result.view.token_mix, costKey) : '');
-        ReportView.text(share, () => this.result ? ReportView.display(this.result.view.token_mix, 'mix_' + key + '_share') + ' · ' : 'N/A');
-        ReportView.text(cost, () => this.result ? ReportView.display(this.result.view.token_mix, costKey) : '');
+        ReportView.text(share, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') + ' · ' : 'N/A');
+        ReportView.text(cost, () => this.result ? display(this.result.view.token_mix, costKey) : '');
         ReportView.bind(cost, () => {
           const unavailable = this.result && Boolean(ReportView.costHelp(this.result.view.token_mix, costKey));
           cost.className = unavailable ? 'help-value' : ''; cost.tabIndex = unavailable ? 0 : -1;
@@ -137,14 +145,12 @@ const TokenMixView = (() => {
     update(result) {
       if (this.result === result) return;
       this.result = result;
-      ReportView.text(this.title, () => `Total Token Mix % · ${ReportView.display(this.result.view.token_mix, tokenKey)} tokens`);
+      ReportView.text(this.title, () => `Total Token Mix % · ${display(this.result.view.token_mix, tokenKey)} tokens`);
+      ContextHelp.refresh(this.title);
       this.metrics.forEach(value => ReportView.syncUnits(value));
       const view = result.view;
-      const issues = [
-        !view.token_mix.cost_complete && 'Partial pricing.',
-        view.token_mix.exact_total_tokens == null && 'Incomplete token telemetry.',
-        !view.model_token_mix.length && 'No available historical usage.'];
-      this.status.textContent = issues.filter(Boolean).join(' '); this.status.hidden = !this.status.textContent;
+      this.status.textContent = view.model_token_mix.length ? '' : 'No available historical usage.';
+      this.status.hidden = !this.status.textContent;
       this.models.update(view.model_token_mix); this.publishers.update(view.publisher_token_mix);
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }

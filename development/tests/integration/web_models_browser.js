@@ -54,7 +54,12 @@
        check(!names().includes('GPT-5.1') && header(1).textContent === 'Model ↑ 1', 'filter preserves custom sort');
        state.benchmark.data = BENCHMARK; state.benchmark.draw();
        const benchmark = output.querySelector('.benchmark-table');
-       check(output.querySelectorAll('h2').length === 2 && benchmark.tHead.rows[0].cells.length === 5, 'two independent titled tables');
+       check(output.querySelectorAll('h2').length === 3 && benchmark.tHead.rows[0].cells.length === 5, 'two independent tables plus More Coding Benchmarks');
+       const more = output.lastElementChild, external = more.querySelector('a'), appearance = getComputedStyle(more);
+       check(more.className === 'more-benchmarks' && more.querySelectorAll('a').length === 1 && !more.querySelector('table,button,input'), 'final link-only section');
+       check(appearance.borderTopWidth === '0px' && appearance.backgroundColor === 'rgba(0, 0, 0, 0)' && appearance.paddingTop === '0px', 'unboxed comparison link');
+       check(external.href === 'https://artificialanalysis.ai/agents/coding-agents/' && external.target === '_blank' && external.rel === 'noopener noreferrer', 'safe official comparison destination');
+       external.focus(); check(document.activeElement === external, 'keyboard-accessible external link');
        check(benchmark.tBodies[0].rows.length === 4 && benchmark.tBodies[0].rows[0].cells[3].textContent === '4.0x', 'matched configurations default most expensive first');
        const before = names().join('|'), referenceSort = JSON.stringify(state.models);
        benchmark.tHead.querySelector('button').click();

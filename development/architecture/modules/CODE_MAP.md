@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000657: Web-only `render.js::timestamp` owns explicit-zone browser instants;
+`settings.py` exports the configured timezone and application display prepares numeric
+`web_reset` alongside unchanged CLI reset tokens. `token-mix.js` quiets only its own
+display values and retains partial-pricing/telemetry title help. Models' final
+More Coding Benchmarks link is static. Coverage: Web display/remaining/models/theme/
+loading/session tests; `probe_token_mix_help.cjs`, Mini Activity locale/DST probes
+and Models browser layout. [Evidence](../../journal/web/presentation-dates.md).
+
 FR000653: `analysis/context.py` owns guarded prompt-local input/next fallback and
 running invalidation; `reports/prompts.py` retains richer adjacent baselines.
 `live_projection.py` exports the short canonical context detail; `mini.js` separates

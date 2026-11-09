@@ -154,13 +154,12 @@ async function main() {
    assert.ok(catalogCalls.some(value=>value.action==='interest' && value.visible===false), 'late detached lease is demoted');
   assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
    catalog.detach(); assert.equal(timers.size, 0);
-   const timestamp = expression => vm.runInContext(`SessionsCatalog.localTimestamp(${expression})`, context);
+   const timestamp = expression => vm.runInContext(`ReportView.timestamp(${expression}, "Europe/Stockholm")`, context);
    const originalTZ = process.env.TZ;
    const originalLocaleString = Date.prototype.toLocaleString;
    try {
-     for (const locale of ['sv-SE', 'en-US']) for (const [zone, expected] of [
-       ['Europe/Stockholm', ['2026-03-29 01:30', '2026-03-29 03:30', '2026-10-25 02:30', '2026-10-25 02:30']],
-       ['America/New_York', ['2026-03-28 20:30', '2026-03-28 21:30', '2026-10-24 20:30', '2026-10-24 21:30']]]) {
+     const expected = ['2026-03-29 01:30', '2026-03-29 03:30', '2026-10-25 02:30', '2026-10-25 02:30'];
+     for (const locale of ['sv-SE', 'en-US']) for (const zone of ['Europe/Stockholm', 'America/New_York']) {
        process.env.TZ = zone;
        // Formatting must not invoke browser-locale defaults, including 12-hour locales.
        Date.prototype.toLocaleString = () => { throw new Error('locale-dependent timestamp: ' + locale); };

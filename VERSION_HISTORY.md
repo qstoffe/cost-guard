@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.7 — 2026-11-10
+
+- Models ends with an unboxed More Coding Benchmarks section linking to the official Artificial Analysis Coding Agent Index. No imported data, API, benchmark blending or invented chart anchor.
+- Web Token Mix removes repeated visible Partial prefixes/status and partial-only dimming. Its existing total-title help explains missing prices and telemetry; known subtotals, N/A, exact sorting, raw completeness and CLI/Watch presentation stay intact.
+- Web dates/times use numeric Swedish-style dates and 24-hour clocks in the configured timezone, including host notices, retained snapshots, Sessions, AI Stats intervals and Mini help. Browser locale/timezone cannot shift them; source timestamps, date-only release/promotion facts and DST semantics are preserved.
+
 ## v81.6 — 2026-11-09
 
 - Claude Agent alias-only history uses the exact provider/alias entry in that session's current OpenCode location catalog, matching Desktop's label. A supported concrete catalog model ID enables estimated reference CCost using the original request tokens and tiers, not provider billing.

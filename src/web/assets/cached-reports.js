@@ -15,11 +15,9 @@ const CachedReports = (() => {
     if (!row || typeof zone !== 'string' || !Number.isSafeInteger(row.end_ms) || row.end_ms < 0 ||
         !(period === 'all' && row.start_ms === null ||
           Number.isSafeInteger(row.start_ms) && row.start_ms >= 0 && row.start_ms <= row.end_ms)) return null;
-    try {
-      const format = value => new Intl.DateTimeFormat('sv-SE', {timeZone: zone,
-        dateStyle: 'short', timeStyle: 'short'}).format(value);
-      return `${row.start_ms === null ? 'All available history' : format(row.start_ms)} → ${format(row.end_ms)} (${zone})`;
-    } catch (_) { return null; }
+    const end = ReportView.timestamp(row.end_ms, zone);
+    const start = row.start_ms === null ? 'All available history' : ReportView.timestamp(row.start_ms, zone);
+    return start === 'N/A' || end === 'N/A' ? null : `${start} → ${end} (${zone})`;
   }
   return {cadences, observation, entry, interval};
 })();

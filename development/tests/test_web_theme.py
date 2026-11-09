@@ -36,6 +36,7 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual({"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"}, before["webSettings"])
         self.assertEqual("credits", before["ccostDisplayUnit"])
         self.assertEqual(before["webSettings"], self.settings.read()["webSettings"])
+        self.assertEqual(before["timezone"], self.settings.read()["timezone_id"])
         self.assertEqual(dict.fromkeys(before["webSettings"], "default"), self.settings.read()["webSettingsChoices"])
         self.assertFalse(self.path.exists())
         self.assertEqual("web", self.settings.write("theme", "web")["webSettingsChoices"]["theme"])

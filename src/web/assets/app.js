@@ -65,6 +65,7 @@ const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Contro
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
   () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
 function applySettings(value) {
+  ReportView.setTimezone(value.timezone_id);
   const confirmed = WebSettings.apply(value, output);
   for (const state of views.values()) {
     if (state.detail) ReportView.syncUnits(state.detail.root);
@@ -92,7 +93,7 @@ function connectionStatus(message, state = {}) {
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
-    const time = value => value == null ? 'not yet observed' : new Date(value).toLocaleString();
+    const time = value => value == null ? 'not yet observed' : ReportView.timestamp(value);
     banner.hidden = quiet || hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');

@@ -16,6 +16,17 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000657 keeps these boundaries: `assets/render.js::timestamp` formats unavoidable
+browser-side instants with explicit configured zone, Gregorian/Latin numeric fields
+and a 24-hour clock. Settings exports only the effective `timezone_id` alongside its
+existing allowlisted preferences; no timezone write is added. Existing server-prepared
+clocks remain authoritative for Watch/Mini, resets, release/promotion and benchmark
+dates. A separate `web_reset` display token removes weekday-only Web date labels
+without changing the CLI `reset` token. Token Mix strips its own display qualifier
+only; original mix tokens, flags and numeric sorting stay intact. More Coding
+Benchmarks is a static safe outbound link, not another acquisition lane.
+[Verification and limitations](../../journal/web/presentation-dates.md).
+
 FR000652 adds one optional, independent Models benchmark lane, not a new report,
 valuation source or daemon. `src/benchmarks.py` reads only the fixed documented
 Terminal-Bench 4.0 public Harbor board with verified HTTPS, bounded complete
@@ -253,7 +264,7 @@ new scalar schema. `sessions.js` keeps row/cell/link/text-help identity, updates
 even under focus/selection, and defers only protected structural changes. Help uses the
 shared controller and current observed list, never raw prompt data or browser valuation.
 
-`assets/app.css` shares the Watch-derived compact header/cell/divider/rounded-shell contract across semantic Sessions, Models and both Token Mix tables, preserving their individual tracks/sorts. Sessions uses browser-local numeric date fields (not locale-string parsing), accessible pending cells and URL-backed pager buttons. Detail's adaptive preview keeps intrinsic numeric columns; a separate prepared first-request context token preserves raw values and richer CLI/Watch transitions. Indeterminate progress belongs only to initial/pinned acquisition, not complete-history background checks. No new acquisition owner, timer, source or pricing boundary is introduced.
+`assets/app.css` shares the Watch-derived compact header/cell/divider/rounded-shell contract across semantic Sessions, Models and both Token Mix tables, preserving their individual tracks/sorts. Sessions uses the shared explicit configured-zone numeric timestamp formatter, accessible pending cells and URL-backed pager buttons. Detail's adaptive preview keeps intrinsic numeric columns; a separate prepared first-request context token preserves raw values and richer CLI/Watch transitions. Indeterminate progress belongs only to initial/pinned acquisition, not complete-history background checks. No new acquisition owner, timer, source or pricing boundary is introduced.
 
 `application/session_detail.py` round-robins captures on the isolated detail lane. `begin` pins a capture and `chunk` reads rich 25-row slices from that same revision while acquisition may advance; full totals remain canonical. Compatibility 50-row `page`/`freeze` remain API-only. `reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. The browser batches new DOM suffixes, retains keyed rows/selection/focus/document anchors, closes obsolete leases and has one five-second polling timer through navigation races. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`; measured evidence and the scoped cold-index exception: [Sessions findings](../../journal/web/sessions-live.md).
 

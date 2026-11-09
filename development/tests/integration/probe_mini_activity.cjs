@@ -27,6 +27,17 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100'],['00:08','2026-11-06 00:08 +0100']]);
   assert.equal(await evaluate(`miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','focused help refreshes in place');
+  for(const locale of ['en-US','sv-SE']) for(const timezoneId of ['America/New_York','Asia/Tokyo']) {
+    // Locale is shared by the opener/PiP renderer; a second target override conflicts.
+    await command('Emulation.setLocaleOverride',{locale},ownerSession);
+    for(const session of [ownerSession,pip]) {
+      await command('Emulation.setTimezoneOverride',{timezoneId},session);
+    }
+    assert.deepEqual((await values()).slice(0,2).map(row=>[row.time,row.help]),[
+      ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100']]);
+    assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
+  }
+  checks.push('Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones');
   await key('Escape'); await evaluate('activityTime.blur()');
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
   const point = await evaluate(`(()=>{const r=activityTime.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
