@@ -6,7 +6,7 @@ if [[ -t 1 ]]; then
 else
   printf 'Cost Guard: Checking requirements...\n'
 fi
-CG_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" || exit 1
 
 find_python() {
   typeset -A tested
@@ -33,8 +33,4 @@ PYTHON="$(find_python)" || {
   exit 1
 }
 
-"$PYTHON" "$CG_ROOT/cost-guard.py"
-status=$?
-echo
-read -r '?Press Return to close...'
-exit $status
+exec "$PYTHON" "$CG_ROOT/cost-guard-cli.py" --watch

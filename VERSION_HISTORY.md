@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.0 — 2026-11-09
+
+- Promote the existing secured Web application to the normal Windows/macOS entry: top-level `Cost-Guard-Web` launchers and no-argument `cost-guard.py`. Dynamic header/tab/tray/menu branding is Cost Guard; optional locally generated Finder app is `Cost Guard.app` with canonical version metadata.
+- Preserve independent terminal report/Watch under platform `Legacy/` and explicit `cost-guard-cli.py`. Explicit legacy arguments to the root entry forward unchanged; help/version stay GUI-free and unsupported desktop defaults give guidance.
+- Update launcher root resolution, source guarding, source inventory, CI and migration docs. No account/history/settings/cache migration, Legacy retirement, dependency installation, tag, ZIP or GitHub Release. Physical macOS Finder/Gatekeeper acceptance remains unverified.
+
 ## v80.229 — 2026-11-09
 
 - AI Hourly Rate title help now has three short workplace-robot jokes, one per value, with real blank lines instead of a calculation lecture. Raw reference-Credit shift tiers choose bargain/ordinary/extravagant punchlines independently of currency; idle or uncertain inputs avoid replacement comparisons.

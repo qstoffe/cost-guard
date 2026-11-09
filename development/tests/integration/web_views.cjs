@@ -139,7 +139,8 @@ async function main() {
   await until(() => all(ids.result, 'progress').length === 1);
   assert.equal(all(ids.result, 'progress')[0].max, 100);
   await until(() => ids['product-version'].textContent !== '');
-  assert.equal(ids['product-version'].textContent, ' v91.7', 'running fixture version appears while Models loads');
+  assert.equal(ids['product-version'].textContent, 'v91.7', 'running fixture version appears while Models loads');
+  assert.equal(context.document.title, 'Models · Cost Guard');
   assert.equal(vm.runInContext('current.percent', context), 5, 'genuinely new acquisition resets prior progress');
    assert.equal(all(ids.result, 'progress')[0].getAttribute('aria-valuetext'), '5 percent');
   releaseReport();
@@ -177,7 +178,7 @@ async function main() {
   const navigate = key => {
     ids.content.focused = false;
     location.hash = '#/' + key; handlers.hashchange();
-    assert.equal(ids['product-version'].textContent, ' v91.7', 'persistent server version across routes');
+    assert.equal(ids['product-version'].textContent, 'v91.7', 'persistent server version across routes');
     if (['models', 'overview', 'models/all'].includes(key)) assert.equal(ids.content.focused, true, 'Models route receives keyboard focus');
   };
   const retainedHeartbeat = () => {
@@ -476,7 +477,7 @@ async function main() {
   assert.equal(ids.refresh.disabled, true);
   assert.equal(ids['scope-controls'].inert, true);
   assert.equal(ids.result.textContent, retained, 'terminal state retains the exact frozen report');
-  assert.equal(ids['product-version'].textContent, ' v91.7', 'retained view keeps its original server version');
+  assert.equal(ids['product-version'].textContent, 'v91.7', 'retained view keeps its original server version');
   ids.refresh.click();
   await delay(20);
   assert.equal(requests, terminalRequests, 'disabled terminal refresh cannot start acquisition');

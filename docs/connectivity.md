@@ -28,7 +28,7 @@ fallback. Explicit `v1`/`v2` never silently switches. Histories are never merged
 
 ## Watch waits and recovers
 
-### Web Beta host startup
+### Web host startup
 
 Launching the Web host checks the configured source on its Live worker, without
 delaying the HTTP shell/browser handoff. A healthy source, selected V1 (including

@@ -1,4 +1,4 @@
-"""Explicit opt-in Windows UI probe; opens only this checkout's Beta browser/tray.
+"""Explicit opt-in Windows UI probe; opens only this checkout's browser/tray.
 
 Run with --allow-native-ui only with current user approval. No model/provider calls,
 downloads or service changes. Never included in automatic Quick/Full test suites.
@@ -57,7 +57,7 @@ def window(pid):
             return True
         text = c.create_unicode_buffer(128)
         title(hwnd, text, 128)
-        if found.value == pid and text.value == "Cost Guard Web Beta":
+        if found.value == pid and text.value == "Cost Guard":
             matches.append(hwnd)
         return True
 
@@ -143,13 +143,13 @@ def detached_probe():
     if store.read():
         raise RuntimeError("probe_requires_no_existing_instance")
     launchers = []
-    marker = ROOT / "windows/Beta/native-probe-source-change.py"
+    marker = ROOT / "windows/native-probe-source-change.py"
     if marker.exists():
         raise RuntimeError("probe_marker_already_exists")
     state = None
     try:
         # Actual .cmd from an unrelated cwd; CREATE_NEW_CONSOLE is a transient window.
-        batch = ROOT / "windows/Beta/Cost-Guard-Web.cmd"
+        batch = ROOT / "windows/Cost-Guard-Web.cmd"
         launcher = subprocess.Popen(["cmd.exe", "/d", "/c", str(batch)],
                                     cwd=store.directory, creationflags=subprocess.CREATE_NEW_CONSOLE)
         launchers.append(launcher)
@@ -222,7 +222,7 @@ def source_zip_probe():
         shutil.copy2(ROOT / "cost-guard-web.py", snapshot / "cost-guard-web.py")
         store = InstanceStore(snapshot)
         try:
-            os.startfile(snapshot / "windows/Beta/Cost-Guard-Web.cmd")
+            os.startfile(snapshot / "windows/Cost-Guard-Web.cmd")
             state = until(store.read, seconds=35)
             assert control(state, "status")["ready"]
             assert window(state["pid"])
@@ -246,7 +246,7 @@ def startup_timing_probe():
         for mode in ("cold_host", "warm_restart"):
             started = time.monotonic()
             previous = store.read()
-            child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost-Guard-Web.cmd")],
+            child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Cost-Guard-Web.cmd")],
                                      cwd=ROOT, creationflags=subprocess.CREATE_NEW_CONSOLE)
             try:
                 assert child.wait(timeout=60) == 0

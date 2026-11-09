@@ -136,9 +136,9 @@ def run(label, shell='pwsh.exe', scenario='watch', width='120', host='console'):
     (case / 'src').mkdir(parents=True)
     (case / 'windows').mkdir()
     shutil.copyfile(ROOT / 'src/windows_launcher.ps1', case / 'src/windows_launcher.ps1')
-    relative = {'watch': 'windows/Cost-Guard-Watch.cmd',
+    relative = {'watch': 'windows/Legacy/Cost-Guard-Watch.cmd',
                 'diagnostics': 'development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd'}.get(
-                    scenario, 'windows/Cost-Guard.cmd')
+                    scenario, 'windows/Legacy/Cost-Guard.cmd')
     target = case / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     wrapper = (ROOT / relative).read_text(encoding='utf-8')
@@ -157,7 +157,7 @@ def run(label, shell='pwsh.exe', scenario='watch', width='120', host='console'):
         content = driver.read_text(encoding='utf-8')
         content = content.replace("$ErrorActionPreference = 'Stop'", "$ErrorActionPreference = 'Stop'\nfunction Get-Command { return @() }")
         driver.write_text(content, encoding='utf-8')
-    (case / 'cost-guard.py').write_text('''import json, os, time
+    (case / 'cost-guard-cli.py').write_text('''import json, os, time
 from pathlib import Path
 Path('worker.json').write_text(json.dumps({'pid': os.getpid(), 'owner': os.getppid()}))
 try:
@@ -169,12 +169,12 @@ except KeyboardInterrupt:
 Path('finished.json').write_text('{}')
 ''', encoding='utf-8')
     if scenario == 'crash':
-        with (case / 'cost-guard.py').open('a', encoding='utf-8') as stream:
+        with (case / 'cost-guard-cli.py').open('a', encoding='utf-8') as stream:
             stream.write("raise ValueError('isolated launcher crash')\n")
     if scenario == 'diagnostics':
         diagnostics = case / 'development/tools/collect_diagnostics.py'
         diagnostics.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(case / 'cost-guard.py', diagnostics)
+        shutil.copyfile(case / 'cost-guard-cli.py', diagnostics)
     prompt = "'[synthetic git:main] PS> '" if 'decorated' in label else "'PS> '"
     script = case / 'parent.ps1'
     script.write_text(f'''$ErrorActionPreference = 'Stop'

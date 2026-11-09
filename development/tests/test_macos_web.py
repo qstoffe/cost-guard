@@ -294,16 +294,17 @@ class MacWebTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('zsh') and hasattr(os, 'openpty'), 'zsh/PTY unavailable; native macOS CI owns shell execution')
     def test_command_activity_and_exit_codes_without_native_or_browser_work(self):
         # A fake interpreter tests shell lifetime only, not discovery correctness/AppKit.
-        with tempfile.TemporaryDirectory(prefix='web command space ') as directory:
+        with tempfile.TemporaryDirectory(prefix="web command å ' quote ") as directory:
             root = Path(directory)
-            beta = root / 'macos/Beta'; beta.mkdir(parents=True)
+            beta = root / 'macos'; beta.mkdir(parents=True)
             command = beta / 'Cost-Guard-Web.command'
-            shutil.copyfile(ROOT / 'macos/Beta/Cost-Guard-Web.command', command)
+            shutil.copyfile(ROOT / 'macos/Cost-Guard-Web.command', command)
             binary = root / 'bin'; binary.mkdir()
             python = binary / 'python3'
             python.write_text('''#!/bin/sh
 if [ "$1" = "-c" ]; then exit 0; fi
 printf 'Cost Guard startup: Checking native support\\n'
+printf 'ENTRY:%s|%s\\n' "$1" "$2"
 sleep 0.4
 exit "$CG_FAKE_EXIT"
 ''', encoding='utf-8')
@@ -317,6 +318,7 @@ exit "$CG_FAKE_EXIT"
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
                         self.assertEqual(code, child.returncode)
                         self.assertIn(b'Checking native support', child.stdout)
+                        self.assertIn(('ENTRY:' + str(root / 'cost-guard-web.py') + '|--launch-macos').encode(), child.stdout)
                         # Darwin may discard queued PTY output on the last slave
                         # close. Read while our slave remains open, with a deadline.
                         readable, _, _ = select.select([master], [], [], 1)
@@ -329,10 +331,34 @@ exit "$CG_FAKE_EXIT"
                         os.close(slave)
                         os.close(master)
 
+    @unittest.skipUnless(shutil.which('zsh'), 'native macOS CI owns zsh execution')
+    def test_moved_legacy_commands_resolve_cli_and_preserve_exit_without_gui(self):
+        with tempfile.TemporaryDirectory(prefix="legacy å ' space ") as directory:
+            root = Path(directory)
+            legacy = root / 'macos/Legacy'
+            legacy.mkdir(parents=True)
+            binary = root / 'bin'
+            binary.mkdir()
+            python = binary / 'python3'
+            python.write_text('''#!/bin/sh
+if [ "$1" = "-c" ]; then exit 0; fi
+printf 'ENTRY:%s|%s\\n' "$1" "${2-}"
+exit 17
+''', encoding='utf-8')
+            python.chmod(0o700)
+            for name, argument in (('Cost-Guard.command', ''), ('Cost-Guard-Watch.command', '--watch')):
+                command = legacy / name
+                shutil.copyfile(ROOT / 'macos/Legacy' / name, command)
+                result = subprocess.run([shutil.which('zsh'), str(command)], cwd=binary,
+                    env=dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH']),
+                    stdin=subprocess.DEVNULL, capture_output=True, timeout=5)
+                self.assertEqual(17, result.returncode, result.stderr)
+                self.assertIn(('ENTRY:' + str(root / 'cost-guard-cli.py') + '|' + argument).encode(), result.stdout)
+
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):
-        source = (ROOT / "macos/Beta/Cost-Guard-Web.command").read_text(encoding="utf-8")
+        source = (ROOT / "macos/Cost-Guard-Web.command").read_text(encoding="utf-8")
         self.assertTrue(source.startswith("#!/bin/zsh\n"))
-        self.assertIn('$(dirname "$0")/../..', source)
+        self.assertIn('$(dirname "$0")/.."', source)
         self.assertIn("(3,11)", source)
         self.assertIn("--launch-macos", source)
         self.assertNotIn("osascript", source)

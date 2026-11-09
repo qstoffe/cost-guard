@@ -114,8 +114,8 @@ class WatchLifecycleTests(unittest.TestCase):
 class WindowsShellContractTests(unittest.TestCase):
     def test_all_launchers_use_persistent_separate_console_handoff(self):
         launchers = {
-            "windows/Cost-Guard.cmd": "report",
-            "windows/Cost-Guard-Watch.cmd": "watch",
+            "windows/Legacy/Cost-Guard.cmd": "report",
+            "windows/Legacy/Cost-Guard-Watch.cmd": "watch",
             "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd": "diagnostics",
         }
         for name, mode in launchers.items():

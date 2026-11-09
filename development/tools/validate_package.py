@@ -26,6 +26,8 @@ REQUIRED_FILES = {
     ".gitignore",
     "LICENSE",
     "cost-guard.py",
+    "cost-guard-cli.py",
+    "cost-guard-web.py",
     "README.md",
     "docs/usage-and-cost.md",
     "docs/images/cost-guard-watch.png",
@@ -61,23 +63,25 @@ REQUIRED_FILES = {
     "src/presentation/progress.py",
     "src/presentation/report.py",
     "src/windows_launcher.ps1",
-    "windows/Cost-Guard.cmd",
-    "windows/Cost-Guard-Watch.cmd",
-    "windows/Beta/Cost-Guard-Web.cmd",
-    "macos/Cost-Guard.command",
-    "macos/Cost-Guard-Watch.command",
-    "macos/Beta/Cost-Guard-Web.command",
-    "macos/Beta/launcher.applescript",
+    "windows/Legacy/Cost-Guard.cmd",
+    "windows/Legacy/Cost-Guard-Watch.cmd",
+    "windows/Cost-Guard-Web.cmd",
+    "macos/Legacy/Cost-Guard.command",
+    "macos/Legacy/Cost-Guard-Watch.command",
+    "macos/Cost-Guard-Web.command",
+    "macos/launcher.applescript",
+    "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd",
+    "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command",
     "src/cache/database.py",
     "src/cache/repository.py",
 }
 
 # User-facing launcher folders hold only everyday modes; Diagnostics lives under development/.
 PUBLIC_LAUNCHERS = {
-    "windows": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd", "Beta"},
-    "windows/Beta": {"Cost-Guard-Web.cmd"},
-    "macos": {"Cost-Guard.command", "Cost-Guard-Watch.command", "Beta"},
-    "macos/Beta": {"Cost-Guard-Web.command", "launcher.applescript"},
+    "windows": {"Cost-Guard-Web.cmd", "Legacy"},
+    "windows/Legacy": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
+    "macos": {"Cost-Guard-Web.command", "launcher.applescript", "Legacy"},
+    "macos/Legacy": {"Cost-Guard.command", "Cost-Guard-Watch.command"},
 }
 
 FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", ".vs", "data"}
@@ -191,8 +195,8 @@ def check_lowercase_directories(root: Path, results: Results) -> None:
         if not path.is_dir():
             continue
         relative = path.relative_to(root)
-        if relative.as_posix() in {"windows/Beta", "macos/Beta"}:
-            continue  # Explicit opt-in launcher boundary; no general casing exemption.
+        if relative.as_posix() in {"windows/Legacy", "macos/Legacy"}:
+            continue  # Explicit retained CLI boundary; no general casing exemption.
         if any(part in {".git", "__pycache__"} for part in relative.parts):
             continue
         for part in relative.parts:
@@ -355,10 +359,10 @@ def check_entrypoint(root: Path, results: Results) -> None:
     if any(not isinstance(node, ast.FunctionDef) or node.name not in {"run", "start"} for node in definitions):
         results.fail("entry-point architecture", "cost-guard.py may define only run/start failure-boundary functions")
     imports = imported_modules(path, root)
-    disallowed = sorted(m for m in imports if m not in {"src.bootstrap", "src.runtime_errors", "pathlib", "sys"})
+    disallowed = sorted(m for m in imports if m not in {"src.product_entry", "src.runtime_errors", "pathlib", "sys"})
     if disallowed:
         results.fail("entry-point architecture", f"cost-guard.py may import only the minimal process boundary/bootstrap, found {disallowed}")
-    if any(isinstance(node, ast.ImportFrom) and node.module == "src.bootstrap" for node in tree.body):
+    if any(isinstance(node, ast.ImportFrom) and node.module in {"src.bootstrap", "src.product_entry"} for node in tree.body):
         results.fail("entry-point architecture", "bootstrap import must occur inside the guarded application callback")
     runtime = root / "src/runtime_errors.py"
     if runtime.exists():

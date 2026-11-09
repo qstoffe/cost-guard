@@ -85,8 +85,11 @@ class BootstrapQuickTests(unittest.TestCase):
     def test_help_documents_python_cli_shapes(self) -> None:
         proc = run_python(str(ENTRYPOINT), "--help")
         self.assertEqual(0, proc.returncode, proc.stderr)
-        self.assertIn("python cost-guard.py <session-id> --watch", proc.stdout)
-        self.assertIn("YYYY-MM-DD:YYYY-MM-DD", proc.stdout)
+        self.assertIn("Default: managed Web", proc.stdout)
+        self.assertIn("python cost-guard-cli.py <session-id> --watch", proc.stdout)
+        legacy = run_python(str(ROOT / "cost-guard-cli.py"), "--help")
+        self.assertEqual(0, legacy.returncode, legacy.stderr)
+        self.assertIn("YYYY-MM-DD:YYYY-MM-DD", legacy.stdout)
 
     def test_watch_runtime_is_wired_to_single_startup_dashboard(self) -> None:
         from src import bootstrap
@@ -103,6 +106,84 @@ class BootstrapQuickTests(unittest.TestCase):
         coordinator.run_forever.assert_called_once_with(
             renderer, initial_cycle=coordinator.initialize_with_recovery.return_value)
         runtime.ReportRenderer.assert_not_called()
+
+    def test_product_help_and_version_do_not_import_cli_or_web(self) -> None:
+        from src import product_entry
+        original = __import__
+
+        def guarded(name, *args, **kwargs):
+            if name in {"bootstrap", "src.bootstrap"} or "web" in name:
+                self.fail("Information-only entry imported a runtime")
+            return original(name, *args, **kwargs)
+
+        for argument in ("--help", "-h", "--version"):
+            with self.subTest(argument=argument), patch.object(sys, "argv", ["cost-guard.py", argument]), \
+                    patch("builtins.__import__", guarded), redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(0, product_entry.main())
+                self.assertIn(DISPLAY_VERSION, output.getvalue())
+
+    def test_product_explicit_cli_syntax_forwards_unchanged_without_web(self) -> None:
+        from src import bootstrap, product_entry
+        cases = (["--watch"], ["--sessions", "all"], ["--token-mix"], ["--all-models"],
+                 ["2026-11-01:2026-11-09"], ["ses_example", "--watch"], ["--unknown"])
+        for arguments in cases:
+            with self.subTest(arguments=arguments), patch.object(sys, "argv", ["cost-guard.py", *arguments]), \
+                    patch.object(bootstrap, "main", return_value=17) as cli, \
+                    patch.object(product_entry.subprocess, "run") as native:
+                self.assertEqual(17, product_entry.main())
+                self.assertEqual(arguments, sys.argv[1:])
+                cli.assert_called_once_with()
+                native.assert_not_called()
+
+    def test_product_windows_default_uses_existing_powershell_handoff(self) -> None:
+        from src import product_entry
+        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "win32"), \
+                patch.dict(os.environ, SystemRoot="C:/Windows"), \
+                patch.object(product_entry.subprocess, "run", return_value=SimpleNamespace(returncode=4)) as native:
+            self.assertEqual(4, product_entry.main())
+        self.assertEqual([str(Path("C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")),
+                          "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                          str(ROOT / "src/web/windows_launch.ps1")], native.call_args.args[0])
+        self.assertNotIn("shell", native.call_args.kwargs)
+
+    def test_product_macos_default_uses_existing_managed_launcher(self) -> None:
+        from src import product_entry
+        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "darwin"), \
+                patch("src.web.macos_launch.launch_macos", return_value=4) as native:
+            self.assertEqual(4, product_entry.main())
+        native.assert_called_once_with(ROOT)
+
+    def test_product_unsupported_default_never_attempts_a_native_launch(self) -> None:
+        from src import product_entry
+        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "linux"), \
+                patch.object(product_entry.subprocess, "run") as native, redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(2, product_entry.main())
+        native.assert_not_called()
+        self.assertIn("cost-guard-cli.py", output.getvalue())
+        self.assertIn("--foreground", output.getvalue())
+
+    def test_both_entries_reject_unknown_flags_without_starting_web(self) -> None:
+        for name in ("cost-guard.py", "cost-guard-cli.py"):
+            result = run_python(str(ROOT / name), "--not-a-cost-guard-option")
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Unknown option", result.stdout + result.stderr)
+
+    def test_promoted_source_guard_tracks_each_actual_entry(self) -> None:
+        from src.web.change_guard import SourceGuard
+        entries = ("cost-guard-cli.py", "windows/Cost-Guard-Web.cmd", "macos/Cost-Guard-Web.command",
+                   "macos/launcher.applescript", "windows/Legacy/Cost-Guard.cmd")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in entries:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("original", encoding="utf-8")
+            for relative in entries:
+                with self.subTest(relative=relative):
+                    guard = SourceGuard(root, interval=0)
+                    with (root / relative).open("a", encoding="utf-8") as stream:
+                        stream.write("changed")
+                    self.assertEqual("source_changed", guard.check())
 
     def test_one_shot_header_is_rendered_once_with_selected_source(self) -> None:
         from src import bootstrap

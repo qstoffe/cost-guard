@@ -52,7 +52,7 @@ import time
 for stage in ('Checking safe configuration', 'Waiting for host readiness', 'Opening your default browser'):
     print('Cost Guard startup: ' + stage + ' (1.0s elapsed)', flush=True)
     time.sleep(0.7)
-if {code}: print('Cost Guard Web Beta: Web is running; use Open Cost Guard to retry.', flush=True)
+if {code}: print('Cost Guard: Web is running; use Open Cost Guard to retry.', flush=True)
 raise SystemExit({code})
 ''')
         wrapper = root / 'probe.ps1'
@@ -134,7 +134,7 @@ Start-Sleep -Seconds 30
                     assert content[cell] == ' ', 'Spinner must clear before exit/error'
                     assert 'Cost Guard startup:' not in content
                     if code:
-                        assert content.index('Cost Guard Web Beta:') > cell
+                        assert content.index('Cost Guard:') > cell
                         assert 'Diagnostics:' in content
                     break
                 time.sleep(0.03)

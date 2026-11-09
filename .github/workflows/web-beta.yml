@@ -1,4 +1,4 @@
-name: Web Beta revalidation
+name: Cost Guard Web revalidation
 # Keep detailed verification results in this run / the PR, not a follow-up
 # reporting commit. PR paths are cumulative: a report-only follow-up on a
 # code-changing PR still reruns these checks. No unverified phase skipping.

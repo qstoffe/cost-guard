@@ -34,7 +34,7 @@ def managed(root, nonce, module):
                 return 0 if owner.ready else 1
 
             # Reuse existing sanitized fault machinery, rooted outside tracked source.
-            return RuntimeErrors(store.directory, mode="Web Beta").run(run)
+            return RuntimeErrors(store.directory, mode="Web").run(run)
     except Exception:
         store.log("runtime_fault")
         return 1
@@ -57,9 +57,10 @@ def main():
             return 3
     if arguments == ["--help"]:
         print("Usage: python cost-guard-web.py --foreground\n"
-              "Developer loopback Web Beta. Ctrl+C or runtime changes stop owned work.\n"
-              "Windows: windows/Beta/Cost-Guard-Web.cmd for detached tray mode.\n"
-              "macOS: macos/Beta/Cost-Guard-Web.command (native validation pending).\n"
+              "Developer loopback Web. Ctrl+C or runtime changes stop owned work.\n"
+              "Windows: windows/Cost-Guard-Web.cmd for detached tray mode.\n"
+              "macOS: macos/Cost-Guard-Web.command (native validation pending).\n"
+              "Legacy CLI: python cost-guard-cli.py or windows/Legacy / macos/Legacy.\n"
               "No browser opens in --foreground developer mode.")
         return 0
     is_managed = (len(arguments) == 3 and arguments[0] == "--managed"
@@ -79,7 +80,7 @@ def main():
     try:
         owner.start()
         owner.publish_ready()
-        print(f"Cost Guard Web Beta ready: {owner.server.origin}/", flush=True)
+        print(f"Cost Guard ready: {owner.server.origin}/", flush=True)
         print(f"Open within 120 seconds: {owner.browser_url()}", flush=True)
         print("Developer mode; keep console open. Ctrl+C or runtime changes stop Web.", flush=True)
         owner.stopped.wait()

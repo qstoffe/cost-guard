@@ -1,5 +1,6 @@
 """Main-thread NSStatusItem and bounded Cocoa event pump; no helper process."""
 from queue import Empty, SimpleQueue
+from src.version import DISPLAY_VERSION
 
 from .objc_bridge import BOOL, DOUBLE, INTEGER, MASK, PTR, ObjC, require_main_thread
 from .process_identity import InstanceConflict
@@ -66,7 +67,7 @@ class StatusItem:
         if not button:
             raise InstanceConflict("tray_unavailable")
         api.send(button, "setTitle:", None, (PTR, api.string("CG")))
-        api.send(button, "setToolTip:", None, (PTR, api.string("Cost Guard Web Beta")))
+        api.send(button, "setToolTip:", None, (PTR, api.string(f"Cost Guard {DISPLAY_VERSION}")))
         api.send(self.item, "setMenu:", None, (PTR, self.menu))
         self.timer = api.send(api.cls("NSTimer"), "timerWithTimeInterval:target:selector:userInfo:repeats:",
                               PTR, (DOUBLE, 0.1), (PTR, self.target),

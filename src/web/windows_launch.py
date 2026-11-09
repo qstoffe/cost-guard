@@ -1,4 +1,4 @@
-"""Windows Beta launch preflight and sanitized, actionable terminal results."""
+"""Windows launch preflight and sanitized, actionable terminal results."""
 from src.config import load_configuration, ConfigError
 from .instance_state import InstanceStore
 from .lifecycle import launch
@@ -47,7 +47,7 @@ def launch_windows(root):
         result = launch(root, "src.web.native_windows", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
             store.log("browser_open_failed")
-            print("Cost Guard Web Beta: " + MESSAGES["browser_open_failed"])
+            print("Cost Guard: " + MESSAGES["browser_open_failed"])
             return 4
         progress("handoff")
         return 0
@@ -61,6 +61,7 @@ def launch_windows(root):
         try:
             store.log(code)
         except (OSError, InstanceConflict):
-            print("Cost Guard Web Beta: Private startup diagnostic could not be recorded.")
-    print("Cost Guard Web Beta: " + MESSAGES[code])
+            print("Cost Guard: Private startup diagnostic could not be recorded.")
+    print("Cost Guard: " + MESSAGES[code])
+    print("Legacy CLI: windows/Legacy/Cost-Guard.cmd or python cost-guard-cli.py")
     return 1

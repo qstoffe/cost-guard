@@ -35,8 +35,9 @@ prompt/profile changes, analysis changes or OpenCode service control.
 
 ## Entrypoints
 
-- `windows/Cost-Guard.cmd`: report.
-- `windows/Cost-Guard-Watch.cmd`: Watch.
+- `windows/Cost-Guard-Web.cmd`: default managed Web startup/status handoff.
+- `windows/Legacy/Cost-Guard.cmd`: report via `cost-guard-cli.py`.
+- `windows/Legacy/Cost-Guard-Watch.cmd`: Watch via `cost-guard-cli.py`.
 - `development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd`: Diagnostics.
 - `src/windows_launcher.ps1`: shared driver.
 

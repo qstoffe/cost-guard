@@ -15,7 +15,7 @@ def run(application=None):
         def start():
             if application is not None:
                 return application()
-            from src.bootstrap import main
+            from src.product_entry import main
             return main()
         return errors.run(start, preserve_hooks=True)
     except KeyboardInterrupt:

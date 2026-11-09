@@ -1,4 +1,4 @@
-# Cost Guard v80 architecture
+# Cost Guard architecture
 
 Source revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
 Checked revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
@@ -50,7 +50,7 @@ flowchart TD
     cli -->|invalid configuration / sanitized fault| terminal
 ```
 
-Arrows group calls, control and consumption, not literal Python imports or one linear pipeline. `cost-guard.py` installs `src/runtime_errors.py` before importing the composition root. CLI parse/config validation precedes source, provider and runtime-cache work. `src/bootstrap.py` composes reports or blocking CLI Watch; it does not route CLI through HTTP. Unexpected faults sanitize evidence and close owned work; Diagnostics observes independently rather than owning product recovery. Parent loss exits that finite child through its exact-parent sentinel; failed host cleanup instead retains ownership and faults the host.
+Arrows group calls, control and consumption, not literal Python imports or one linear pipeline. Both `cost-guard.py` and `cost-guard-cli.py` install `src/runtime_errors.py` before importing composition. Since v81, `src/product_entry.py` routes no-argument Windows/macOS intent to the existing managed Web launcher, help/version locally, and explicit legacy arguments unchanged to CLI. Unsupported desktop defaults fail with guidance. `src/bootstrap.py` still composes reports or blocking CLI Watch independently of HTTP; `Legacy/` launchers call the explicit CLI entry. CLI parse/config validation precedes source, provider and runtime-cache work. Unexpected faults sanitize evidence and close owned work; Diagnostics observes independently rather than owning product recovery. Parent loss exits that finite child through its exact-parent sentinel; failed host cleanup instead retains ownership and faults the host.
 
 ### State, lifetime and recovery owners
 

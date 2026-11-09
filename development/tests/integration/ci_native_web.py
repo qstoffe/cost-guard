@@ -44,6 +44,7 @@ from src.web.jobs import ReportJobs
 from src.web.instance_state import InstanceStore
 from src.web.lifecycle import launch
 from src.web.main import main
+from development.tools.ci_web_beta import hosted_only
 mark('imports_complete')
 if sys.platform == 'darwin':
     from src.web.objc_bridge import ObjC
@@ -68,11 +69,28 @@ def isolated(self, *args, **kwargs):
 store_init = InstanceStore.__init__
 def private(self, root, **kwargs):
     store_init(self, root, data_home=Path(os.environ['CG_CI_STATE']))
-with patch.object(WebHost, '__init__', isolated), patch.object(WebHost, 'open_browser', return_value=False), patch.object(InstanceStore, '__init__', private):
-    if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']):
-        module = 'src.web.native_windows' if os.name == 'nt' else 'src.web.native_macos'
-        launch(root, module, opener=lambda url: False)
-        raise SystemExit(0)
+def registered_once(url):
+    # The existing one-handoff budget now exercises the actual shell/main/wrapper.
+    hosted_only()
+    receipt = Path(os.environ['CG_CI_STATE']) / 'handoff.json'
+    if receipt.exists():
+        return False
+    store = InstanceStore(root)
+    state = store.read()
+    assert state and url.startswith(f"http://127.0.0.1:{state['port']}/#bootstrap=")
+    try:
+        accepted = bool(real_opener(url))
+        result = dict(outcome='ACCEPTED' if accepted else 'UNAVAILABLE', accepted=accepted)
+    except OSError as error:
+        result = dict(outcome='UNAVAILABLE', accepted=False, reason=type(error).__name__)
+    result.update(attempts=1, owned_loopback_destination=True, page_rendering='NOT VERIFIED')
+    receipt.write_text(json.dumps(result))
+    return result['accepted']
+module = 'src.web.native_windows' if os.name == 'nt' else 'src.web.native_macos'
+import importlib
+adapter = importlib.import_module(module)
+real_opener = adapter.open_registered_browser
+with patch.object(WebHost, '__init__', isolated), patch.object(WebHost, 'open_browser', return_value=False), patch.object(InstanceStore, '__init__', private), patch.object(adapter, 'open_registered_browser', registered_once):
     raise SystemExit(main())
 '''
 
@@ -96,25 +114,6 @@ def detached(root, home):
     handoff = {}
     result = None
 
-    def open_once(url):
-        # One real production OS handoff, only on this disposable hosted runner.
-        # Never retain bootstrap URLs or infer that an accepted handoff painted.
-        hosted_only()
-        owned = store.read()
-        assert owned and url.startswith(f"http://127.0.0.1:{owned['port']}/#bootstrap=")
-        if os.name == "nt":
-            from src.web.native_windows import open_registered_browser
-        else:
-            from src.web.native_macos import open_registered_browser
-        try:
-            accepted = bool(open_registered_browser(url))
-            handoff.update(outcome="ACCEPTED" if accepted else "UNAVAILABLE", accepted=accepted)
-        except OSError as error:
-            handoff.update(outcome="UNAVAILABLE", accepted=False, reason=type(error).__name__)
-        handoff.update(owned_loopback_destination=True, attempts=1,
-                       page_rendering="NOT VERIFIED", browser_process="NOT VERIFIED")
-        return handoff["accepted"]
-
     def observed_identity(pid):
         current = process_identity(pid)
         if current:
@@ -129,10 +128,10 @@ def detached(root, home):
     try:
         with patch("src.web.lifecycle.InstanceStore", return_value=store), patch("src.web.lifecycle.subprocess.Popen", side_effect=spawn), \
                 patch("src.web.lifecycle.process_identity", side_effect=observed_identity):
-            first = launch(root, module, opener=open_once)
+            first = launch(root, module, opener=lambda url: False)
             state = store.read()
             assert state and control(state, "status")["ready"]
-            assert first.browser_opened == handoff["accepted"]
+            assert not first.browser_opened
             assert control(state, "open")["ready"]
             assert store.read()["nonce"] == first.instance
             second = launch(root, module, opener=lambda url: False)
@@ -149,18 +148,32 @@ def detached(root, home):
             # Do not hold read handles against Windows' delete-on-close cleanup.
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
-            # Actual executable .command plumbing, but shim suppresses Finder/browser.
-            if sys.platform == "darwin":
-                entry = root / "macos/Beta/Cost-Guard-Web.command"
+            # Actual moved shell -> production main -> launch wrapper, including
+            # config/native preflight and macOS helper preparation. Only acquisition
+            # and private test state are isolated; one OS handoff remains the budget.
+            preferences = root / 'config/user-config.jsonc'
+            saved = '{"webSettings":{"theme":"classic","miniWatchSize":"remember-last"}}\n'
+            preferences.write_text(saved)
+            entry = root / ('macos/Cost-Guard-Web.command' if sys.platform == 'darwin' else 'windows/Cost-Guard-Web.cmd')
+            command = [str(entry)] if sys.platform == 'darwin' else ['cmd.exe', '/d', '/c', str(entry)]
+            if sys.platform == 'darwin':
                 assert os.access(entry, os.X_OK)
-                result = subprocess.run([str(entry)], cwd=home, env=environment,
-                                        capture_output=True, timeout=45)
-                assert result.returncode == 0
-            else:
-                entry = root / "windows/Beta/Cost-Guard-Web.cmd"
-                result = subprocess.run(["cmd.exe", "/d", "/c", str(entry)], cwd=home,
-                                        env=environment, capture_output=True, timeout=45)
-                assert result.returncode == 0
+            for attempt in range(2):
+                previous = store.read()
+                result = subprocess.run(command, cwd=home, env=environment, capture_output=True, timeout=60)
+                assert result.returncode in (0, 4), 'production_launch_wrapper_failed'
+                handoff = json.loads((home / 'handoff.json').read_text())
+                expected_exit = 0 if attempt == 0 and handoff['accepted'] else 4
+                assert result.returncode == expected_exit, 'browser_handoff_exit_mismatch'
+                state = store.read()
+                assert state and control(state, 'status')['ready']
+                assert preferences.read_text() == saved
+                assert InstanceStore(root, data_home=home).directory == store.directory
+                if previous:
+                    assert previous['nonce'] != state['nonce']
+                    assert process_identity(previous['pid']) != previous['process']
+                if sys.platform == 'darwin':
+                    assert b'Cost Guard.app' in result.stdout, 'production_helper_preparation_not_observed'
             state = store.read()
             assert state and control(state, "status")["ready"]
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
@@ -186,8 +199,9 @@ def detached(root, home):
             stop_existing(store, current)
     return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
-        "spaces and Unicode source path", "source change removes native host and private record"],
-        command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "PASS (real .cmd/PowerShell; offline entry shim)")
+         "spaces and Unicode source path", "production launcher preflight / restart / unchanged preferences and checkout identity",
+         "source change removes native host and private record"],
+        command="PASS (real moved shell / production wrapper; offline acquisition only)")
 
 
 def macos_cache(root, home):
@@ -197,7 +211,7 @@ def macos_cache(root, home):
     stamp = (first / "Contents/MacOS/applet").stat().st_mtime_ns
     assert prepare_app(root, store) == first
     assert (first / "Contents/MacOS/applet").stat().st_mtime_ns == stamp
-    with (root / "macos/Beta/launcher.applescript").open("a") as stream:
+    with (root / "macos/launcher.applescript").open("a") as stream:
         stream.write("\n-- synthetic fingerprint change\n")
     assert prepare_app(root, store) != first
     return dict(outcome="PASS", checks=["in-box osacompile", "verified cache reuse", "source fingerprint rebuild"],
@@ -231,7 +245,7 @@ def macos_fault(root):
 def main():
     hosted_only()
     evidence = dict(outcome="NOT RUN", checks={}, limitations=["NOT VERIFIED: physical desktop clicks, visual icon/menu, Finder/Gatekeeper, default-browser rendering, accessibility",
-        "Synthetic entry bypasses real source/provider acquisition and stubs menu browser dispatch; one separate production OS handoff is recorded, not end-to-end consumer launcher proof"])
+        "Synthetic entry bypasses real source/provider acquisition and stubs menu browser dispatch; moved shell calls production launch wrapper with one recorded OS handoff, not physical consumer-desktop proof"])
     try:
         with tempfile.TemporaryDirectory(prefix="cg-ci-native-") as temporary:
             base = Path(temporary).resolve()
@@ -239,6 +253,9 @@ def main():
             root.mkdir()
             for name in ("src", "macos", "windows", "config"):
                 shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__", "user-config.jsonc"))
+            support = root / 'development/tools'
+            support.mkdir(parents=True)
+            shutil.copyfile(ROOT / 'development/tools/ci_web_beta.py', support / 'ci_web_beta.py')
             (root / "cost-guard-web.py").write_text(SHIM, encoding="utf-8")
             home = base / "private"
             home.mkdir()

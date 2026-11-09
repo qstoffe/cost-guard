@@ -1,4 +1,4 @@
-"""Bounded hosted-only Web Beta evidence. No workstation UI or private artifacts."""
+"""Bounded hosted-only Web evidence. No workstation UI or private artifacts."""
 import json
 import argparse
 import hashlib
@@ -34,7 +34,7 @@ def notice(name, value):
     text = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
     if len(text) > 60000:
         raise ValueError("evidence_notice_too_large")
-    print("::notice title=Web Beta " + name + "::" + text.replace("%", "%25"), flush=True)
+    print("::notice title=Cost Guard Web " + name + "::" + text.replace("%", "%25"), flush=True)
 
 
 def facts(scope):
@@ -58,7 +58,7 @@ def facts(scope):
 def summary(scope):
     plan = PLANS[scope]
     notice("platform", facts(scope))
-    lines = ["## Web Beta — " + scope + " / " + platform.system() + " / " + platform.machine()]
+    lines = ["## Cost Guard Web — " + scope + " / " + platform.system() + " / " + platform.machine()]
     success = os.environ.get("CI_JOB_STATUS", "success") == "success"
     for name in plan:
         path = RESULTS / (name + ".json")

@@ -258,7 +258,7 @@ class WebRuntimeTests(unittest.TestCase):
         status, _, html = self.request('/')
         self.assertEqual(status, 200)
         self.assertIn(b'rel="icon" href="/favicon-cg1.ico"', html)
-        self.assertIn(b'<title>Cost Guard Web Beta</title>', html)
+        self.assertIn(b'<title>Cost Guard</title>', html)
         self.assertEqual(self.request('/favicon-cg1.ico?anything')[0], 400)
         self.assertEqual(self.request('/favicon.ico', headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)
         self.assertEqual(self.request('/api/status', authenticated=False)[0], 401)

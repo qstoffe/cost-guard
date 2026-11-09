@@ -19,6 +19,7 @@ from src.accounts.claude_transport import _ControlReader, ClaudeReaderFault
 from src.presentation.progress import StartupProgress
 from src.sources.errors import SourceUnavailableError
 from src.watch.observers import LiveEventPump
+from src.version import DISPLAY_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRY = runpy.run_path(str(ROOT / "cost-guard.py"))
@@ -67,7 +68,7 @@ class RuntimeErrorTests(unittest.TestCase):
         text = self.logged() + "\n".join(p.read_text() for p in self.crashes())
         for private in ("SECRET", "PRIVATE-LOCAL", "auth@example.invalid"):
             self.assertNotIn(private, text)
-        for field in ("Cost Guard: v80.", "Python:", "OS:", "PID:", "Fingerprint:", "Error log:", "Crash report:"):
+        for field in (f"Cost Guard: {DISPLAY_VERSION}", "Python:", "OS:", "PID:", "Fingerprint:", "Error log:", "Crash report:"):
             self.assertIn(field, text)
         self.assertIn("in fail", text)
         self.assertIn("Traceback (most recent call last)", text)
@@ -77,7 +78,7 @@ class RuntimeErrorTests(unittest.TestCase):
     def test_entry_import_failure_owned_before_bootstrap(self):
         real_import = __import__
         def importing(name, *args, **kwargs):
-            if name == "src.bootstrap":
+            if name == "src.product_entry":
                 fail(ImportError)
             return real_import(name, *args, **kwargs)
         with patch("src.runtime_errors.RuntimeErrors", return_value=self.reporter), patch("builtins.__import__", side_effect=importing):

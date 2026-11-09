@@ -35,7 +35,7 @@ def native_preflight(root):
 
 def launch_macos(root):
     if sys.platform != "darwin" or sys.version_info < (3, 11):
-        print("Cost Guard Web Beta requires macOS and already-installed Python 3.11+.")
+        print("Cost Guard requires macOS and already-installed Python 3.11+. Legacy CLI: python cost-guard-cli.py")
         return 1
     store = None
     progress = StartupProgress()
@@ -58,10 +58,10 @@ def launch_macos(root):
         result = launch(root, "src.web.native_macos", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
             store.log("browser_open_failed")
-            print("Cost Guard Web Beta: " + MESSAGES["browser_open_failed"])
+            print("Cost Guard: " + MESSAGES["browser_open_failed"])
             return 4
         progress("handoff")
-        print("Cost Guard Web Beta: Running; use the CG menu to Open or Exit.")
+        print("Cost Guard: Running; use the CG menu to Open or Exit.")
         return 0
     except ConfigError:
         code = "configuration_unavailable"
@@ -71,6 +71,7 @@ def launch_macos(root):
         code = "gui_or_server_start_failed"
     if store:
         store.log(code)
-    print("Cost Guard Web Beta: " + MESSAGES[code])
+    print("Cost Guard: " + MESSAGES[code])
+    print("Legacy CLI: macos/Legacy/Cost-Guard.command or python cost-guard-cli.py")
     print("Diagnostics: development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command")
     return 1

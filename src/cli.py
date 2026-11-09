@@ -48,15 +48,18 @@ def help_text() -> str:
     return f"""{PRODUCT_NAME} {DISPLAY_VERSION}
 
 Usage:
-  python cost-guard.py
-  python cost-guard.py --all-models
-  python cost-guard.py --token-mix
-  python cost-guard.py --sessions N|all
-  python cost-guard.py --watch
-  python cost-guard.py <session-id>
-  python cost-guard.py <session-id> --watch
-  python cost-guard.py YYYY-MM-DD
-  python cost-guard.py YYYY-MM-DD:YYYY-MM-DD
+  python cost-guard-cli.py
+  python cost-guard-cli.py --all-models
+  python cost-guard-cli.py --token-mix
+  python cost-guard-cli.py --sessions N|all
+  python cost-guard-cli.py --watch
+  python cost-guard-cli.py <session-id>
+  python cost-guard-cli.py <session-id> --watch
+  python cost-guard-cli.py YYYY-MM-DD
+  python cost-guard-cli.py YYYY-MM-DD:YYYY-MM-DD
+
+Default desktop Web: python cost-guard.py (Windows/macOS).
+Legacy terminal launchers: windows/Legacy/ or macos/Legacy/.
 
 Options:
   --all-models     Full pricing/model catalog only; ignore availability.

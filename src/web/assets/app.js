@@ -440,7 +440,7 @@ function navigate() {
     route = ReportRoutes.resolve(location.hash);
   }
   const match = route.session;
-  document.title = `${route.title} · Cost Guard Web Beta`;
+  document.title = `${route.title} · Cost Guard`;
   document.body.dataset.section = route.section;
   const key = match ? 'session/' + match[1] : route.section === 'sessions' ? 'sessions-catalog' : location.hash || '#/models';
   heading.textContent = route.title;
@@ -512,7 +512,7 @@ async function connect() {
          () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
          writable, {owner: win, history: true}));
      }
-    if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = ' ' + state.product_version;
+    if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
@@ -542,7 +542,7 @@ async function connect() {
     if (!hostState.terminal) connectionStatus('OFFLINE — host unreachable or browser session unavailable. Use the OS launcher; no host is started automatically.',
       {kind: 'offline', writable: false});
     output.setAttribute('aria-busy', 'false');
-    const error = ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard Web Beta. No source data has been assumed ready.', 'error');
+    const error = ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard. No source data has been assumed ready.', 'error');
     error.setAttribute('role', 'alert'); output.replaceChildren(error);
   } finally { credential = null; }
 }
