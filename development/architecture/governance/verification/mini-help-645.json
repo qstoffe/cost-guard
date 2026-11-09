@@ -1,0 +1,26 @@
+{
+  "feature": "FR000645",
+  "date": "2026-11-09",
+  "baseRevision": "0997b8b9e0b9e592db29153a7bceb85d9efba13a",
+  "productVersion": "80.225",
+  "full": {"files": 179, "failures": 0, "seconds": 124.8,
+    "skips": ["Existing macOS command shell test: zsh/PTY unavailable on Windows"]},
+  "validator": {"passes": 11, "failures": 0, "advisoryWarnings": 7},
+  "browser": {
+    "outcome": "PASS", "product": "Edg/157.0.4341.42", "headless": true,
+    "scale": 1, "zoom": 1, "existingLayouts": 91,
+    "helpChecks": ["Next Ctx matches visible token", "Representative signed delta",
+      "Approaching and exceeded canonical guidance", "Historical session versus prompt source",
+      "Missing historical delta stays N/A", "Short grapheme-safe preview",
+      "Literal HTML-like text", "Real Tab, delayed hover, touch and Escape",
+      "Open help updates without losing focus or row identity", "Unchanged four-column geometry"]
+  },
+  "realSource": {
+    "source": "V2", "coherentPublications": 3, "helpRowsChecked": 1,
+    "historicalCardsObserved": 0, "accounts": 3, "seconds": 1.569,
+    "ownedAcquisitionClosed": true, "closeSeconds": 0.112, "sharedOpenCodeUntouched": true
+  },
+  "limitations": ["Historical scenarios use deterministic/synthetic browser evidence",
+    "Headless PiP is not physical desktop/work-area proof", "No macOS or screen-reader claim"],
+  "acceptanceExceptions": []
+}

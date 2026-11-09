@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.225 — 2026-11-09
+
+- Mini Watch's Ctx value help pairs the exact displayed Next Ctx with the selected representative prompt's signed Δ Ctx, preserving canonical approaching/exceeded price guidance. Historical prompt deltas stay distinct from potentially later session estimates; unknown and zero remain source-formatted.
+- Session value help keeps the full name and prompt number, adding only a grapheme-safe 25-character hint from the existing bounded preview. Four-column layout, visible values, colors, sizing, acquisition and full Watch are unchanged.
+
 ## v80.224 — 2026-11-09
 
 - AI Stats keeps ten cards; AI Hourly Rate now holds 24h average, workday average and the hypothetical cost of one eight-hour robot shift. The two averages spread actual period spending over nominal local calendar/scheduled hours; the robot keeps the original unioned active-hour intensity.

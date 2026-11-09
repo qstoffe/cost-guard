@@ -4,7 +4,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   const saved = structuredClone(input.view), base = saved.active_cards[0];
   const card = (id, at, running=false) => ({...structuredClone(base),session_id:id,title:'Same display title',focal_id:running?id:'',
     rows:[{...structuredClone(base.rows[0]),live_context:{display:{watch_next_context_tokens:'17'}},
-      prompt:{...structuredClone(base.rows[0].prompt),event_id:id,at_ms:at,in_progress:running,
+       prompt:{...structuredClone(base.rows[0].prompt),preview:'',event_id:id,at_ms:at,in_progress:running,
         completed_successfully:!running,completed_at_ms:running?null:at,
         display:{ccost:'49',clock:'12:34',start_date_time:'2026-10-25 02:30 +0200',
           finished_clock:'23:47',finished_date_time:'2026-10-25 02:30 +0100'}}}],

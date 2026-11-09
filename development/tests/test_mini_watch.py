@@ -77,6 +77,24 @@ class MiniWatchTests(unittest.TestCase):
         result = running_prompts((self.cards[0], terminal), "observed")
         self.assertEqual((1, D("1.25"), 600_000), (result.count, result.ccost, result.duration_ms))
 
+    def test_active_and_historical_help_fields_keep_prepared_prompt_delta_and_preview(self):
+        for delta, token in ((0, "0k"), (4000, "+4k"), (-12000, "-12k"), (None, "N/A")):
+            prompt = replace(self.first, preview="Bounded representative hint", watch_delta_context_tokens=delta,
+                watch_next_context_tokens=17000)
+            card = replace(self.cards[0], rows=(replace(self.cards[0].rows[0], prompt=prompt),))
+
+            wire = project_live(replace(self.frame, active_cards=(card,),
+                history_cards=(replace(card, focal_id=""),))).to_json()
+
+            for kind in ("active_cards", "history_cards"):
+                with self.subTest(delta=delta, kind=kind):
+                    item = wire[kind][0]["rows"][0]
+                    self.assertEqual("Bounded representative hint", item["prompt"]["preview"])
+                    self.assertEqual(23, item["prompt"]["prompt_number"])
+                    self.assertEqual(token, item["live_context"]["display"]["watch_delta_context_tokens"])
+                    self.assertEqual("17k", item["live_context"]["display"]["watch_next_context_tokens"])
+                    self.assertEqual("120k", wire[kind][0]["session_summary"]["context"]["display"]["watch_next_context_tokens"])
+
     def test_historical_cost_and_help_export_the_same_representative_prompt(self):
         latest = replace(self.second, in_progress=False, watch_model="Historical model",
             watch_effort="high", calls=17, linked_agent_count=2, has_additional_model=True,

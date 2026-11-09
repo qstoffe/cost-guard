@@ -25,18 +25,26 @@ There is no Earlier Sessions button, separate history section or Duration column
   **Unknown finish time** help, never source-refresh time or an inferred ending.
 - **Session:** the flexible, left-aligned name, or canonical session ID if unnamed.
   Only the title ellipsizes. It remains selectable; its help includes the full name
-  and represented **Prompt #**, or **Prompt number unavailable**.
+   and represented **Prompt #**, or **Prompt number unavailable**. When supported, it
+   adds a short hint from that same prompt's existing bounded preview: up to 25 visible
+   characters, without splitting combining marks or emoji, and one ellipsis only when
+   shortened. Missing/non-prompt previews add nothing; no full prompt text is fetched.
 - **CCost (Total):** the representative prompt's own reference cost, followed by the
   **entire canonical root/session cost** in parentheses, including supported linked
   subagents and pre-Watch history. Neither amount substitutes for the other. Credits/
   USD, zero, **N/A**, unknown **Loading…** and partial **?** retain their meanings.
   Each amount has independent help with model, effort, **Duration**, calls and relevant
   linked/mixed/pricing/outcome details. Completed duration is frozen. These are reference
-  costs, not verified billing. Raw prompt text is not exposed.
+   costs, not verified billing. This cost help does not expose prompt text.
 - **Ctx:** the running/recent representative's supported next-incoming estimate; a
   historical-only row uses the last valid **session-level next-request context**, not
-  stale historical prompt context or a sum. Warning/help, token formatting and N/A
-  remain. This differs from full Watch's first-request Ictx and per-prompt Δ Ctx.
+   stale historical prompt context or a sum. Value help includes **Next Ctx**, matching
+   the visible cell, and **Δ Ctx**, the selected representative prompt's own change.
+   Historical Δ is explicitly labeled: the session estimate may be later. Source-prepared
+   signs, zero and **N/A** are preserved, never calculated from rounded values. Existing
+   approaching/**exceeded** threshold wording, price impact and refresh guidance follow
+   these numbers. Neither number means remaining model capacity. The compact cell still
+   shows only Next Ctx; full Watch's first-request Ictx and layout are unchanged.
 
 Every canonical session appears **once**, even with several concurrent prompts or
 identical display names. If several prompts run in one session, the latest genuinely

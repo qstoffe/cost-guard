@@ -334,7 +334,13 @@ unfinished, and `finished_clock` / `finished_date_time` for supported endings. U
 finish stays honest. The cost cell pairs representative prompt CCost with independent
 whole-session CCost; duration/model/effort/calls stay in its existing help. Historical
 Ctx uses the session summary; active/grace Ctx uses the focal estimate. Session help
-retains the full title and exact represented prompt ordinal. Keyed reconciliation uses
+ retains the full title and exact represented prompt ordinal. FR000645 adds only a
+ grapheme-safe 25-character hint from that same row's already-bounded preview, with no
+ extra acquisition or persistence. Ctx help pairs the exact visible Next Ctx token with
+ that representative's prepared signed Δ token; historical Δ is explicitly scoped to
+ the prompt, not the potentially later session estimate. Canonical session threshold
+ text/price impact (including exceeded/pending/refreshing) remains authoritative.
+ Missing values stay N/A; neither value is calculated in the browser. Keyed reconciliation uses
 atomic `moveBefore` when supported to preserve focused help/selection on activity
 reordering, with focus-preserving insertion fallback. No row-wide/native-title help.
 
