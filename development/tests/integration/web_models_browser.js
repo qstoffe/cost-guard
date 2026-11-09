@@ -16,7 +16,7 @@
       const header = index => table.tHead.rows[0].cells[index].querySelector('button');
       check(inputs.length === 2 && output.querySelector('.model-filters').querySelectorAll('button').length === 0 && !('additive' in state.models), 'two filters without additive-mode control or state');
       check(table.tHead.rows[0].cells.length === 4 && controls.children.length === 0, 'one four-column view without catalog links');
-      check(!inputs[0].checked && inputs[1].checked && header(2).textContent === 'Relative CCost ↓', 'fresh filter and descending sort defaults');
+       check(!inputs[0].checked && inputs[1].checked && header(2).textContent === 'Relative Price List Cost ↓', 'fresh filter and descending sort defaults');
       check(!names().includes('GPT-5.1') && names().includes('Unknown'), 'latest-only retains unknown prices');
       check(names().includes('Unselectable') === (view.kind === 'all-models'), 'selectable scope from frozen source');
       toggle(0, true); toggle(1, false);
@@ -26,7 +26,7 @@
        check(old.cells[2].textContent === (view.model_comparison_sample_size ? '8.0x → 16.0x (>200K) → 32.0x (≥1M) *' : ' *'), 'canonical tiers and one postfix star');
        check(!output.querySelector('details') && !output.textContent.includes('More information'), 'Models explanation cards removed');
        const refresh = output.querySelector('[data-model-control="refresh"]');
-       check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('Prices last fetched:'), 'button precedes true fetch timestamp');
+        check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('GitHub Copilot · Prices last fetched:'), 'button precedes true fetch timestamp');
        check(!output.textContent.includes('*1 Fixture promotional terms') && !old.cells[2].querySelector('[title]'), 'no promotion footer or native duplicate tooltip');
       check(table.tBodies[0].scrollHeight <= table.tBodies[0].clientHeight + 1, 'no nested vertical body scrolling');
       check(document.documentElement.scrollWidth <= innerWidth, 'no document horizontal overflow');
@@ -43,7 +43,7 @@
       const long = rows().find(row => row.cells[1].textContent.startsWith('Precision-'));
       check(long.cells[1].textContent.length > 100, 'long name remains complete');
       header(1).click();
-      check(header(1).textContent === 'Model ↑' && header(2).textContent === 'Relative CCost ↕', 'ordinary click replaces sort');
+       check(header(1).textContent === 'Model ↑' && header(2).textContent === 'Relative Price List Cost ↕', 'ordinary click replaces sort');
       header(0).dispatchEvent(new MouseEvent('click', {shiftKey: true}));
       header(3).dispatchEvent(new KeyboardEvent('keydown', {key: ' ', shiftKey: true, cancelable: true}));
       check(header(0).textContent === 'Publisher ↑ 2' && header(3).textContent === 'Release date ↑ 3', 'Shift mouse and keyboard additive keys');
@@ -51,8 +51,31 @@
       header(3).dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', shiftKey: true, cancelable: true}));
       check(header(3).textContent === 'Release date ↓ 3', 'Shift Enter toggles tertiary direction');
       toggle(1, true);
-      check(!names().includes('GPT-5.1') && header(1).textContent === 'Model ↑ 1', 'filter preserves custom sort');
-    }
+       check(!names().includes('GPT-5.1') && header(1).textContent === 'Model ↑ 1', 'filter preserves custom sort');
+       state.benchmark.data = BENCHMARK; state.benchmark.draw();
+       const benchmark = output.querySelector('.benchmark-table');
+       check(output.querySelectorAll('h2').length === 2 && benchmark.tHead.rows[0].cells.length === 6, 'two independent titled tables');
+       check(benchmark.tBodies[0].rows.length === 5 && benchmark.tBodies[0].rows[0].cells[3].textContent === '4.0x', 'all benchmark configurations default most expensive first');
+       const before = names().join('|'), referenceSort = JSON.stringify(state.models);
+       benchmark.tHead.querySelector('button').click();
+       check(names().join('|') === before && JSON.stringify(state.models) === referenceSort, 'benchmark sorting cannot reorder reference pricing');
+       check(!benchmark.querySelector('.promotion'), 'no benchmark price promotion');
+       for (const theme of ['classic', 'web']) for (const zoom of [1, 1.25]) {
+         document.documentElement.dataset.theme = theme; document.documentElement.style.zoom = zoom;
+         const pan = output.querySelector('.benchmark-scroll');
+         check(pan.clientHeight >= benchmark.clientHeight && getComputedStyle(pan).overflowY !== 'scroll', 'benchmark document vertical scrolling '+theme+' '+zoom);
+         if (innerWidth < 500) {
+           pan.scrollLeft = pan.scrollWidth;
+           check(pan.scrollLeft > 0 && pan.scrollWidth > pan.clientWidth, 'benchmark narrow pan '+theme+' '+zoom);
+         }
+         for (const th of benchmark.tHead.rows[0].cells) {
+           const button = th.querySelector('button'), label = button.querySelector('.help-label');
+           check(!!label && getComputedStyle(label).cursor === 'pointer', 'intrinsic sortable benchmark help '+theme+' '+zoom);
+           check(button.getBoundingClientRect().width >= label.getBoundingClientRect().width, 'header label fits action '+theme+' '+zoom);
+         }
+       }
+       document.documentElement.style.zoom = 1;
+     }
     top.document.getElementById('probe').textContent = JSON.stringify({outcome: 'PASS', checks,
       width: innerWidth, background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()});
   } catch (error) {

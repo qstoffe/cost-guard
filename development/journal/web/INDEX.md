@@ -51,6 +51,10 @@ Status: current
 - [Models pricing refresh and compact Mini help](models-pricing.md): strict upstream
   provenance, coherent isolated repricing, two primary-window Mini facts, canonical
   browser tests, real V2/API proof and the scoped split-verification decision.
+- [Independent Models benchmark](models-benchmark.md): fixed public Terminal-Bench
+  4.0 contract, complete cost-per-attempt denominator, reference-release-only New,
+  separate bounded cache/lane, Chrome/Edge interaction and real cold-source proof;
+  earlier unavailable/cleanup failures remain disclosed.
 - [Shared contextual help](contextual-help.md): whole-app content inventory,
   singleton Web/PiP interaction owner, Chrome/Edge and broader Mini evidence,
   current-state regression and explicit synthetic-report/platform limits.

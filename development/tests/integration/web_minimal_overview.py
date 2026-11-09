@@ -88,7 +88,7 @@ def real_workflow(browser, screenshots):
         assert max(heights) - min(heights) < 1, heights
         assert page.evaluate("loadingRoots.size") == 1, "progress DOM was replaced"
         assert page.locator(".report-loading").count() == 0
-        assert page.locator(".overview-model-table th").all_text_contents() == ["Publisher ↕", "Model ↕", "Relative CCost ↓", "Release date ↕"]
+        assert page.locator(".overview-model-table th").all_text_contents() == ["Publisher ↕", "Model ↕", "Relative Price List Cost ↓", "Release date ↕"]
         key = page.evaluate("[...views.values()].find(v=>v.section==='models').result.observed_at_ms")
         page.locator('nav a[href="#/accounts"]').click()
         page.locator('nav a[href="#/models"]').click()

@@ -270,8 +270,8 @@ races. Defaults, OpenCode, credentials, accounts, prices and reports remain read
 v80.118 replaces Overview and the old separate Models view with **Models** at
 `/#/models`. Legacy `/#/overview` and `/#/models/all` bookmarks replace their current
 history entry with Models. Bootstrap credentials are still erased before requests.
-The four-column table spans the available content width: **Publisher | Model |
-Relative CCost | Release date**. All matching rows scroll with the **document**, never
+**Models Reference Pricing** spans the available content width: **Publisher | Model |
+Relative Price List Cost | Release date**. All matching rows scroll with the **document**, never
 an independently scrolling/fixed-height table body. Narrow screens can pan the table
 horizontally; long names wrap without truncation. There is no model search, pager,
 catalog-tab strip, native-rate fifth column or subscription card on this page.
@@ -291,11 +291,11 @@ comparable full-catalog base remains 1.0x in every filter state. Unknown ratios 
 unknown and visible, not zero. Toggling never reprices or reacquires history/accounts.
 CLI candidate selection, ranking, denominators and Watch valuation are unchanged.
 
-Default sorting is **Relative CCost ↓**. Every header toggles its single sort;
+Default sorting is **Relative Price List Cost ↓**. Every header toggles its single sort;
 Shift+click or Shift+Enter/Space adds/toggles keys in priority order. Ordinary touch
 sorts one column; there is no separate sort-mode control. Arrows and priority numbers
 show active keys; only the primary header has ascending/descending `aria-sort`.
-Relative CCost compares unrounded decimal base, then each later ratio, **before** a
+Relative Price List Cost compares unrounded decimal base, then each later ratio, **before** a
 secondary column; boundaries/operators/markers never rank prices. Dates compare
 chronologically, text uses case-insensitive locale order, missing values are last
 in either direction, and ties retain original order. Filters preserve chosen sorting.
@@ -335,20 +335,63 @@ the observation date without claiming a rate change. Filters, Shift multi-sort,
 Credits/USD, focus and horizontal panning are preserved where possible.
 
 There is no **More information** disclosure or concept-card block. Header text alone
-reveals Publisher/Model/Release-date definitions and a grouped Relative CCost/Token
-Mix explanation: actual up-to-100 qualifying completed prompt count, one identical
-token mix across models/tiers, unitless full-catalog ratios, and source tier thresholds.
-Without a qualifying sample, the hidden 2/96/1/1 ranking fallback is explained and
-observed ratios remain blank. Credits and reference USD (`100 credits = $1.00`) are
+reveals short Publisher/Model/Release-date definitions and a compact reference-ratio
+explanation. The calculation still uses one shared up-to-100 completed priceable
+prompt token mix across all models/tiers; arrows retain published context-tier
+thresholds. Without a qualifying sample, hidden 2/96/1/1 ranks prices but observed
+ratios remain blank. Credits and reference USD (`100 credits = $1.00`) are
 display units on a Copilot AI-credit-equivalent reference basis, not native quota or billing.
 Sorting arrows, click/keyboard/Shift actions and accessible names remain separate.
 Active promotions retain their highlight and one unnumbered postfix star after the
-complete Relative CCost tier chain. Hover, keyboard focus or touch opens multiline
+complete Relative Price List Cost tier chain. Hover, keyboard focus or touch opens multiline
 **Price Promotion** help for that model's actual offer, discount and end/resume dates.
 There are no numbered promotion footnotes below the table. **New Models** notices sit
 above it, with the two filters grouped at the right (wrapping on mobile).
 Routine source/catalog-verification caveats are not displayed. **Accounts** retains full supported quota,
 billing, subscription and attribution details and its canonical acquisition behavior.
+
+### Coding Benchmark – Cost per Task
+
+Directly below reference pricing, an independent table shows **Model | Coding Client |
+Effort | Relative Task Cost | USD/Task | Solved** for the official **Terminal-Bench 4.0 ·
+Harbor Hub** board. Its source link and last successful fetch time remain visible.
+Model/client/effort rows, including distinct official runs, are never averaged or
+collapsed to Max. Client help retains the official row ID, source date and version
+when published; missing versions/effort stay unknown. The board's score is already
+0–100, so 0.61 means 0.61%, not 61%.
+
+USD/Task divides the published total USD by all task attempts, including failures.
+Relative Task Cost divides by the cheapest **strictly positive, complete-cost** run
+across the entire paginated edition. Zero-cost rows show $0.00 with no ratio; source-
+declared partial costs show N/A. Tiny positive amounts never display as exact zero.
+Default sorting is **Relative Task Cost descending**, most expensive first.
+Sorting uses raw decimal keys, unknowns last, with stable model/client/effort/row-ID
+tie-breaks. All six headers sort independently of the reference table and preserve
+their state through navigation. USD stays USD regardless of Credits/USD settings.
+
+Only matching GitHub reference-catalog **release_date** can make a benchmark model
+label New/lime, using the same seven-day window (ages 0–6 UTC calendar days). The
+join requires exact publisher/model identity, with only Anthropic's documented
+Claude brand-prefix difference admitted; ambiguous, missing or unmatched models
+stay visible without New. Source dates, fetch times, new efforts/clients and first
+appearance never start a clock. Copilot promotions belong only to reference pricing.
+
+The authenticated local host reads Harbor's documented unauthenticated public API
+in one separate finite lane: fixed verified HTTPS, no redirects, 5s socket/20s read
+budget, 25s owned-job cap, at most 10 pages/1,000 rows/2 MiB. Edition, score schema,
+pagination, stable definition and unique rows must validate before atomic publication
+to the separate `cache/terminal-bench-4-v1.json`. Cache age is 24 hours; failures back
+off from 10 minutes up to 6 hours. Stale last-good data keep their real fetch time;
+without data, a small unavailable message replaces only the benchmark table. Neither
+sorting nor hover fetches anything. Reference-price refresh, Watch, other reports
+and CLI do not acquire or depend on Harbor.
+
+[Harbor documents public leaderboard display on other websites](https://github.com/harbor-framework/harbor/blob/main/docs-mintlify/harbor-hub/leaderboards.mdx#display-a-leaderboard-on-your-own-website).
+Cost Guard attributes/links the official board and caches public aggregates only;
+it does not bundle/mirror task artifacts or claim unlimited redistribution rights.
+No subscription key, credentials, account data, prompts or local OpenCode metadata
+are sent; no model call or new dependency is involved. The reader is pinned to 4.0
+even if tbench.ai's landing page promotes a newer edition.
 
 Healthy connections have no visible status label or banner. An unhealthy loaded page
 shows a compact, actionable warning with hover/focus/touch-accessible connection
@@ -1151,6 +1194,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/interest` | POST | Authenticated bounded tab/route/visibility/scope lease; no worker-count authority |
 | `/api/data` | POST | Strict `{request,retry}` boolean lookup/admission; shared valid result, progress ID or typed error |
 | `/api/models/refresh` | POST | CSRF-protected `{}`; strict upstream pricing fetch then isolated coherent Models rebuild, coalesced in flight; no account refresh |
+| `/api/models/benchmark` | GET | Authenticated prepared public aggregate snapshot; coalesced optional host-owned acquisition, independent of reference pricing |
 | `/api/sessions` | POST | Read shared catalog; validated token, offset/epoch, sort and direction; at most 50 rows, no source acquisition |
 | `/api/detail` | POST | Shared complete session capture, pinned begin/chunk history and handle release; compatibility page/freeze |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |

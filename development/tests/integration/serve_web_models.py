@@ -17,6 +17,9 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.model_views import model_report
 from src.application.projection import project
+from src.application.projection import benchmark_view
+from src.benchmarks import parse_pages
+from development.tests.fixtures.benchmark import payload
 
 
 def main():
@@ -30,12 +33,16 @@ def main():
          promotion_notes=report.model_comparison_promotion_notes)
     view = project(replace(report, model_catalog=catalog)).to_json()
     assets = ROOT / 'src/web/assets'
-    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'reports.js')}
+    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'reports.js', 'benchmark.js')}
     resources['/browser.js'] = Path(__file__).with_name('web_models_browser.js').read_bytes()
     resources['/data.js'] = ('const INPUT = ' + json.dumps(view) + ';').encode()
     resources['/case.html'] = b'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unified Models fixture</title><link rel="stylesheet" href="/app.css"><body data-section="models"><header><h1>Cost Guard Web Beta</h1><p>Synthetic Models acceptance fixture</p></header><nav><a href="#/models" aria-current="page">Models</a><a href="#/accounts">Accounts</a></nav><main><div id="result"></div></main><script src="/render.js"></script><script src="/data.js"></script><script>const state = {section:'models',pages:{}}; ReportView.render(document.getElementById('result'), {view:INPUT,source:{status:'acquired'}},state); if(new URLSearchParams(location.search).get('theme')==='light'){const style=document.createElement('style');style.textContent=':root {color-scheme:light;--bg:#eef2f8;--panel:#fff;--surface:#f6f8fc;--hover:#edf3ff;--ink:#17253b;--muted:#51627b;--line:#d3ddea;--control-line:#7b8da6;--accent:#2457c5;--accent-ink:#fff;--accent-soft:#e8efff;--warn:#815000;--warn-bg:#fff6df;--error:#b1263b;--success:#14674e;}';document.head.append(style);}else{const style=document.createElement('style');style.textContent=':root {color-scheme:dark;--bg:#0c1422;--panel:#141f31;--surface:#19263b;--hover:#20324b;--ink:#e6edf8;--muted:#a6b5cc;--line:#31415b;--control-line:#7387a5;--accent:#9cbfff;--accent-ink:#0d2045;--accent-soft:#23385a;--warn:#ffcf7b;--warn-bg:#352b1a;--error:#ff9aad;--success:#7bd9b3;}';document.head.append(style);}</script></body></html>'''
 
     resources['/case.html'] = resources['/case.html'].replace(b'<script src="/render.js">', b'<script src="/help.js"></script><script src="/render.js">')
+    resources['/case.html'] = resources['/case.html'].replace(b'<script src="/data.js">', b'<script src="/benchmark.js"></script><script src="/data.js">')
+    benchmark = benchmark_view(parse_pages(payload()['pages'], payload()['fetched_at_ms']), now_ms=payload()['fetched_at_ms'])
+    resources['/data.js'] += ('const BENCHMARK = ' + json.dumps(benchmark) + ';').encode()
+    resources['/case.html'] = resources['/case.html'].replace(b'if(new URLSearchParams', b'state.benchmark.data=BENCHMARK;state.benchmark.draw();if(new URLSearchParams')
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

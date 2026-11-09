@@ -31,7 +31,7 @@ function scheduleCachedReport() {
   const state = current;
   if (!historical(state) || !state.result || state.loading || document.hidden || !hostState.writable) return;
   if (demand) {
-    cachedReportTimer = setTimeout(() => { if (current === state) acquire(state, true); }, 5000);
+    cachedReportTimer = setTimeout(() => { if (current === state) { state.benchmark?.load(api); acquire(state, true); } }, 5000);
     return; // Lookup a publication, never schedule a browser-owned source refresh.
   }
   const cadence = CachedReports.cadences[state.section];
@@ -252,6 +252,7 @@ function show(state) {
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
     state.priceControls?.(!!csrf && hostState.writable);
+    if (state.section === 'models' && csrf && hostState.writable && !document.hidden) state.benchmark?.load(api);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');

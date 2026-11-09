@@ -150,7 +150,7 @@ async function main() {
   assert.doesNotMatch(shell, /href=["']#\/reports/);
   assert.doesNotMatch(shell, /Capture date report|type=["']date/);
   assert.doesNotMatch(shell, /id=["']cancel["']|>Cancel</, 'no shared report cancellation control');
-  assert.match(ids.result.textContent, /Refresh price listPrices last fetched:/);
+  assert.match(ids.result.textContent, /Refresh price listGitHub Copilot · Prices last fetched:/);
   assert.doesNotMatch(ids.result.textContent, /More information/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];

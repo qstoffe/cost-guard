@@ -24,7 +24,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/favicon-cg1.ico": ("favicon.ico", "image/x-icon"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/help.js": ("help.js", "text/javascript; charset=utf-8"),
-            "/render.js": ("render.js", "text/javascript; charset=utf-8"),
+             "/render.js": ("render.js", "text/javascript; charset=utf-8"),
+             "/benchmark.js": ("benchmark.js", "text/javascript; charset=utf-8"),
             "/account-cards.js": ("account-cards.js", "text/javascript; charset=utf-8"),
             "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
             "/reports.js": ("reports.js", "text/javascript; charset=utf-8"),
@@ -371,6 +372,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
+            if self.path == '/api/models/benchmark':
+                lane = getattr(self.server.lifecycle, 'benchmark', None)
+                references = ()
+                dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
+                if dispatcher:
+                    with dispatcher.lock:
+                        for request, entry in dispatcher.entries.items():
+                            if request.kind.value == 'normal' and entry['result']:
+                                references = (entry['result']['view'].get('model_catalog') or {}).get('rows', ())
+                                break
+                self.reply(200, lane.view(references) if lane else dict(rows=[], fetched_at_ms=None))
+                return
             if self.path == "/api/settings":
                 self.web_settings()
                 return

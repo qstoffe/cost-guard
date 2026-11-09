@@ -59,6 +59,27 @@ async function main() {
     const read=()=>evaluate(id,`({date:current.result.view.pricing_retrieved_at_ms,revision:current.result.view.model_catalog,
       sample:current.result.view.token_mix,models:current.result.view.model_comparison,choice:current.models})`);
     const initial=await read(); assert.equal((await mode('status')).fetches,1);
+    await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===5`);
+    const referenceChoice = await evaluate(id,`JSON.stringify(current.models)`);
+    for (const [key, code, windowsVirtualKeyCode, expected] of [['Enter','Enter',13,'ascending'],[' ','Space',32,'descending']]) {
+      await evaluate(id,`document.querySelector('[data-benchmark-control="3"]').focus()`);
+      await command('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode,text:key==='Enter'?'\r':' '},id);
+      await command('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode},id);
+      assert.equal(await evaluate(id,`document.querySelector('.benchmark-table th:nth-child(4)').getAttribute('aria-sort')`),expected);
+      assert.equal(await evaluate(id,`JSON.stringify(current.models)`),referenceChoice);
+    }
+    // Sorting deliberately suppresses help until a real focus/hover exit.
+    await evaluate(id,`document.activeElement.blur()`);
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2},id);
+    const labelPoint = await evaluate(id,`(()=>{const n=document.querySelector('[data-benchmark-control="3"] .help-label');n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',...labelPoint},id);
+    await until(id,`document.querySelector('#context-help')?.textContent.includes('Cost per attempt relative') && !document.querySelector('#context-help').hidden`);
+    assert.equal(await evaluate(id,`document.querySelector('#context-help').textContent.length<120`),true);
+    await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},id);
+    await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},id);
+    await until(id,`document.querySelector('#context-help').hidden`);
+    assert.equal((await mode('status')).fetches,1);
+    checks.push('Benchmark native Enter/Space sorts independently, intrinsic concise help and Escape; no price refresh');
     if (baseline === '--baseline') {
       evidence = await evaluate(id, `(()=>{const sample=selector=>{const node=document.querySelector(selector),s=getComputedStyle(node),r=node.getBoundingClientRect();return {font:s.fontFamily,size:s.fontSize,height:r.height,padding:s.padding};};return {outcome:'OBSERVED',button:sample('[data-model-control="refresh"]'),date:sample('.model-tools span'),tier:sample('.model-relative'),ui:getComputedStyle(document.body).fontFamily};})()`);
       console.log(JSON.stringify(evidence)); return;
@@ -141,7 +162,7 @@ async function main() {
         await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
         const text=await evaluate(id,`document.querySelector('#context-help').textContent`);
         assert.ok(!text.includes('Hold Shift')); assert.ok(text.length>20);
-        if(column===2) assert.match(text,/identical token workload[\s\S]*proportions of tokens[\s\S]*unitless/);
+        if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.');
       }
       const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls span').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
       assert.equal(layout.overflow,false);assert.equal(layout.helpFits,true);assert.equal(layout.buttonFirst,true);

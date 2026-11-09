@@ -16,6 +16,24 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000652 adds one optional, independent Models benchmark lane, not a new report,
+valuation source or daemon. `src/benchmarks.py` reads only the fixed documented
+Terminal-Bench 4.0 public Harbor board with verified HTTPS, bounded complete
+pagination and strict edition/schema/identity validation. `cache/benchmark.py`
+atomically retains a separate versioned last-good aggregate; price/canonical caches
+never depend on it. `web/benchmark.py` uses its own existing `ReportJobs` instance,
+ticked and closed by `WebHost`, with one coalesced child, 24-hour freshness and
+bounded failure backoff. HTTP records demand and returns prepared retained data;
+network acquisition never runs on an HTTP caller or browser.
+
+`application/benchmark.py` owns precise per-attempt USD and full-snapshot positive
+normalization; source-qualified partial cost is unknown, zero is not a denominator.
+Only unique exact publisher/model joins to the retained reference catalog can reuse
+`model_is_recent` for lime labels. Run/fetch dates, efforts and clients cannot make
+New; offers remain reference-only. `assets/benchmark.js` retains independent
+six-column sort/DOM state below Models Reference Pricing. [Source contract, tests,
+failed attempts and real-installation proof](../../journal/web/models-benchmark.md).
+
 The host owns finite demand, priorities, warm results and staggered refresh:
 [dispatcher boundaries](data-dispatch.md), [original measurements](../../journal/web/data-dispatch.md)
 and [foreground recovery / scoped acceptance](../../journal/web/foreground-recovery.md).

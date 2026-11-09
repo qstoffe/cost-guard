@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 import sys
+from threading import enumerate as threads
 import time
 import traceback
 from decimal import Decimal
@@ -91,6 +92,8 @@ def main():
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--refresh-prices", action="store_true", help="Force one upstream pricing fetch/rebuild beside pinned Live; no account refresh.")
+    parser.add_argument('--benchmark', action='store_true', help='Observe the independent public Harbor lane via authenticated local HTTP.')
+    parser.add_argument('--benchmark-cold', action='store_true', help='Ignore this probe host\'s cached benchmark in memory; keep the on-disk last-good file.')
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--watch-seconds", type=int, default=90,
         help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
@@ -108,6 +111,8 @@ def main():
     parser.add_argument('--oracle-serial-first', action='store_true',
         help='Time the first verified history certificate without competing reference refresh; validate that exact proof afterwards')
     args = parser.parse_args()
+    if args.benchmark_cold and not args.benchmark:
+        parser.error('--benchmark-cold requires --benchmark')
     if not 90 <= args.watch_seconds <= 300:
         parser.error('--watch-seconds requires 90..300 observation seconds')
     if args.history_oracle is not None:
@@ -132,6 +137,8 @@ def main():
         from development.tests.integration.historical_report_observations import measured_report
         jobs = ReportJobs(target=measured_report)
     host = WebHost(ROOT, jobs=jobs, live_factory=factory)
+    if args.benchmark_cold:
+        host.benchmark.snapshot = host.benchmark.cached = None
     streams = []
     observations = ProbeObservations(tool_invocations=args.tool_invocations)
     with observations.installed(), probe_lifecycle(host, streams, observations):
@@ -177,6 +184,22 @@ def main():
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
+        if args.benchmark:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                benchmark, _ = get('/api/models/benchmark', cookie=cookie)
+                if benchmark['rows']:
+                    break
+                time.sleep(.1)
+            else:
+                print(json.dumps(dict(benchmark='unavailable', error=host.benchmark.error,
+                    jobs=[dict(status=job['status'], error=job['error']) for job in host.benchmark.jobs._jobs.values()])))
+                raise RuntimeError('probe_benchmark_unavailable')
+            assert benchmark['fetched_at_ms'] <= int(time.time() * 1000)
+            assert min(Decimal(row['relative_cost']) for row in benchmark['rows'] if row['relative_cost']) == 1
+            assert len(owners) == 1 and owners[0].coordinator.report_service is not None
+            print(json.dumps(dict(benchmark='complete', rows=len(benchmark['rows']),
+                fetched_at_ms=benchmark['fetched_at_ms'], live_owner_preserved=True, model_calls_started_by_probe=0)))
         if args.accounts:
             observations.stage = 'accounts'
             deadline = time.monotonic() + 90
@@ -518,6 +541,17 @@ def main():
             for frame in traceback.extract_tb(host.failure.__traceback__)]}))
     if host.live.thread.is_alive() or host.thread.is_alive() or host.failure:
         raise RuntimeError('probe_shutdown_failed')
+    if args.benchmark:
+        # A short benchmark probe can finish during unrelated native quota HTTP.
+        # Observe those exact in-process workers' natural exit, not change product
+        # close latency, kill them, or weaken the final zero-owner assertion.
+        retiring = [thread for thread in threads() if thread.name.startswith('cost-guard-')]
+        started_retiring = time.monotonic()
+        deadline = started_retiring + 45
+        for thread in retiring:
+            thread.join(timeout=max(0, deadline - time.monotonic()))
+        print(json.dumps(dict(retiring_workers_observed=len(retiring),
+            retirement_seconds=round(time.monotonic() - started_retiring, 3))))
     final = observations.snapshot(host)
     if final['owned_threads'] or final['owned_processes']:
         raise RuntimeError('probe_owned_workers_remaining')

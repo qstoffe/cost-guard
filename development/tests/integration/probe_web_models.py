@@ -15,6 +15,9 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.model_views import model_report
 from src.application.projection import project
+from src.application.projection import benchmark_view
+from src.benchmarks import parse_pages
+from development.tests.fixtures.benchmark import payload
 
 
 def main():
@@ -25,7 +28,7 @@ def main():
     if not args.browser.is_file() or not args.output.parent.is_dir():
         raise SystemExit('Explicit browser and existing owned output directory required')
     assets = ROOT / 'src/web/assets'
-    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'reports.js')}
+    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'reports.js', 'benchmark.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps([
         project(model_report(all_models=all_models, fallback=fallback, include_model_catalog=True)).to_json()
         for all_models in (False, True) for fallback in (False, True)]) + ';').encode()
@@ -33,6 +36,9 @@ def main():
     resources['/case.html'] = b'''<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><main><div id="scope-controls"></div><div id="result"></div></main><script src="/render.js"></script><script src="/reports.js"></script><script src="/data.js"></script><script src="/browser.js"></script></html>'''
 
     resources['/case.html'] = resources['/case.html'].replace(b'<script src="/render.js">', b'<script src="/help.js"></script><script src="/render.js">')
+    resources['/case.html'] = resources['/case.html'].replace(b'<script src="/data.js">', b'<script src="/benchmark.js"></script><script src="/data.js">')
+    benchmark = benchmark_view(parse_pages(payload()['pages'], payload()['fetched_at_ms']), now_ms=payload()['fetched_at_ms'])
+    resources['/data.js'] += ('const BENCHMARK = ' + json.dumps(benchmark) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -78,7 +84,9 @@ def main():
         limitations=['Synthetic canonical reports in headless Chromium, not installed-history browser integration.',
             'No physical input, screen-reader or native macOS acceptance.'])
     args.output.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
-    print(json.dumps(evidence))
+    print(json.dumps(dict(outcome=evidence['outcome'], cases=[dict(theme=case['theme'],
+        width=case['requested_width'], outcome=case['outcome'], checks=len(case.get('checks', [])),
+        reason=case.get('reason')) for case in outcomes], limitations=evidence['limitations'])))
     return int(evidence['outcome'] != 'PASS')
 
 

@@ -24,6 +24,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Windows browser links](web/browser-links.md): independent one-use native handoffs, bounded Unicode clipboard ownership/privacy and actual verification limits.
 - [Sliding browser sessions](web/browser-sessions.md): per-browser seven-day inactivity, throttled cookie renewal, explicit storage-grace exception and simulated/browser/real-source evidence limits.
 - [Web UI knowledge](web/INDEX.md): snapshot/navigation, Settings/theme persistence and exact first-input Comparisons, browser evidence, separate V2 probes and explicitly scoped historical Decision Delegate test exceptions.
+- [Independent Models benchmark](web/models-benchmark.md): optional public Harbor aggregates, source-proven per-attempt costs, reference-release-only New, independent last-good lifetime and current browser/real-source evidence.
 - [Account heading links](web/account-links.md): reviewed static destinations, API/subscription and MiniMax-region distinctions, shared Watch/Accounts/legacy navigation, safe bound updates and scoped verification limits.
 - [Web Daily and shutdown lifecycle](web/live-lifecycle.md): catalog-bracket amplification, Windows buffered-read cancellation, causal regressions and bounded probe diagnostics.
 - [Live Sessions](web/sessions-live.md): truthful global scalar sorts, cold-index exception, stable catalog epochs, complete revision-pinned history and measured synthetic/real-source limits.

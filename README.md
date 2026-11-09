@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.0, 2026-11-09), the supported distribution.
+Use **current `main`** (v81.1, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.0 (2026-11-09):** Cost Guard Web is the default Windows/macOS application, with the running product version and no Beta branding. CLI report/Watch remain supported under `Legacy/` and `cost-guard-cli.py`. Accounting, settings, security and user data are unchanged. [Migration and Web guide](docs/web-beta.md).
+**v81.1 (2026-11-09):** Models separates reference pricing from an optional Terminal-Bench 4.0 cost-per-task table, with independent sorting and a last-good cache. Benchmark New labels use only matching reference-catalog release dates; CCost, billing, Watch and CLI remain unchanged. [Web guide](docs/web-beta.md#coding-benchmark--cost-per-task).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

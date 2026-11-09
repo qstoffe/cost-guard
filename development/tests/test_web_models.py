@@ -9,6 +9,9 @@ import unittest
 
 from development.tests.fixtures.compact_reports import Availability, rendered, report_service
 from development.tests.fixtures.model_views import model_report
+from development.tests.fixtures.benchmark import payload
+from src.benchmarks import parse_pages
+from src.application.projection import benchmark_view
 from src.application.projection import project
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
@@ -112,7 +115,8 @@ class ModelsTests(unittest.TestCase):
                         self.assertIn("2.1234567890123456789", cli)
                     if shutil.which("node"):
                         result = subprocess.run(["node", "development/tests/integration/web_models.cjs"],
-                            input=json.dumps(dict(view=dto, order=full_names, fallback=fallback)),
+                            input=json.dumps(dict(view=dto, order=full_names, fallback=fallback,
+                                benchmark=benchmark_view(parse_pages(payload()['pages'], 1794182400000), now_ms=1794182400000))),
                             cwd=ROOT, capture_output=True, text=True, timeout=10)
                         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
