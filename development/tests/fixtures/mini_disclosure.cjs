@@ -5,7 +5,9 @@ module.exports = function disclosure(view, win, controller, input) {
   const originalResize = win.resizeTo;
   Object.assign(win, {outerWidth:650, outerHeight:400, innerWidth:628, screen:{availHeight:1000}});
   win.requestAnimationFrame = fn => frames.push(fn);
-  view.fitHeight = () => view.earlier.hidden ? 400 : 550;
+  let layout = {width:600,collapsed:200,expanded:350,scale:1};
+  view.disclosureLayout = () => ({...layout});
+  view.fitHeight = () => {throw new Error('Disclosure must never fit the whole window');};
   const state = () => {
     const expanded = String(!view.earlier.hidden);
     assert.equal(view.earlierToggle.attributes['aria-pressed'],expanded);
@@ -24,20 +26,32 @@ module.exports = function disclosure(view, win, controller, input) {
   for (let i=0;i<5;i++) {input.view.now_ms++; controller.update(input);}
   state(); assert.equal(view.earlier.hidden,false,'ordinary updates preserve the pressed choice');
   assert.equal(calls.length,1,'passive publications never resize');
-  toggle(); assert.deepEqual(calls.at(-1),[650,400],'fit collapse uses current two-row baseline');
+  toggle(); settle(); assert.deepEqual(calls.at(-1),[650,400],'collapse restores the preceding baseline');
   toggle(); settle(); win.outerWidth=600; win.outerHeight=700; win.fire('resize'); toggle();
-  assert.deepEqual(calls.at(-1),[600,400],'fit collapse preserves current manual width');
+  settle(); assert.deepEqual(calls.at(-1),[600,550],'manual resize invalidates restoration and subtracts only current delta');
   size.mode='remember-last'; win.outerHeight=450;
   toggle(); settle(); toggle(); assert.deepEqual(calls.at(-1),[600,450]);
-  toggle(); settle(); win.outerHeight=500; win.fire('resize'); const count=calls.length; toggle();
-  assert.equal(calls.length,count,'manual resize invalidates remembered restoration');
+  toggle(); settle(); win.outerHeight=500; win.fire('resize'); toggle(); settle();
+  assert.equal(win.outerHeight,350,'both modes reconcile manual resize using only current delta');
+  for (const mode of ['fit-on-open','remember-last']) for (const baseline of [220,400,800]) {
+    size.mode=mode;win.outerHeight=baseline;
+    for(let index=0;index<4;index++){toggle();settle();assert.equal(win.outerHeight,baseline+150);toggle();settle();assert.equal(win.outerHeight,baseline);}
+  }
+  win.outerHeight=400;toggle();settle();layout={...layout,expanded:300};toggle();settle();
+  assert.equal(win.outerHeight,450,'changed history subtracts its current rendered contribution, not a stale baseline');
+  layout={...layout,expanded:350};
+  win.outerHeight=1005;const cappedCount=calls.length;toggle();settle();toggle();settle();
+  assert.equal(win.outerHeight,1005);assert.equal(calls.length,cappedCount,'disclosure cannot shrink a baseline already above the fit cap');
+  const count=calls.length;
   size.mode='fit-on-open'; win.outerHeight=400;
   win.navigator={userActivation:{isActive:false}}; toggle(); settle();
   assert.equal(calls.length,count); assert.equal(view.earlier.hidden,false);
   toggle(); win.navigator.userActivation.isActive=true;
+  win.navigator.userActivation.isActive=false;toggle();settle();win.navigator.userActivation.isActive=true;
+  toggle();settle();assert.equal(win.outerHeight,400,'an inactive expansion contributes no height to remove on active collapse');
   win.resizeTo = () => {throw new Error('NotAllowedError');};
-  toggle(); settle(); assert.equal(size.restore,null); toggle();
-  win.resizeTo = () => {}; toggle(); settle(); assert.equal(size.restore,null); toggle();
+  toggle(); settle(); assert.equal(size.restore.after.height,400); toggle();settle();assert.equal(calls.length,count,'refusal cannot cause a later spurious collapse shrink');
+  win.resizeTo = () => {}; toggle(); settle(); assert.equal(size.restore.after.height,400); toggle();settle();assert.equal(win.outerHeight,400);
   win.resizeTo = undefined; toggle(); toggle(); assert.equal(size.restore,null);
   win.resizeTo = (width,height) => {calls.push([width,height]); win.outerHeight=Math.min(height,480);win.fire('resize');};
   toggle(); settle(); assert.equal(size.restore.after.height,480,'achieved clamp, not requested target');
@@ -45,14 +59,21 @@ module.exports = function disclosure(view, win, controller, input) {
   toggle(); win.outerHeight=490; win.fire('resize'); settle(); assert.equal(size.restore,null);
   toggle(); settle(); assert.equal(view.earlier.hidden,true,'rapid toggle cancels pending work');
   assert.equal(size.pending,null);
-  win.outerWidth=600;win.outerHeight=400;size.widthCorrection=0;
-  win.resizeBy=(dx,dy)=>{win.outerWidth+=dx+1;win.outerHeight+=dy;win.fire('resize');};
-  for(let index=0;index<4;index++){toggle();settle();toggle();settle();}
-  assert.equal(win.outerWidth,601,'observed one-DIP native rounding cannot accumulate across clicks');
+  win.outerHeight=400;win.outerWidth=600;
+  view.disclosureLayout=()=>({...layout,width:win.outerWidth,expanded:win.outerWidth===600?350:360});
+  win.resizeTo=(width,height)=>{calls.push([width,height]);win.outerWidth=500;win.outerHeight=Math.min(height,450);win.fire('resize');};
+  toggle();settle();assert.equal(size.restore.layout.width,500,'observe the achieved native-width layout');
+  toggle();settle();assert.equal(win.outerHeight,400,'remove only achieved growth despite native width change');
+  assert.deepEqual(calls.at(-1),[500,400],'collapse requests the baseline height at actual current width');
+  view.disclosureLayout=()=>({...layout});
+  win.outerWidth=600;win.outerHeight=400;
+  win.resizeBy=(dx,dy)=>{assert.equal(dx,0,'no width correction request');win.outerHeight+=Math.round(dy);win.fire('resize');};
+  layout={...layout,expanded:250.25,scale:1.5};
+  for(let index=0;index<4;index++){toggle();settle();assert.equal(win.outerHeight,475);toggle();settle();assert.equal(win.outerHeight,400);}
   delete win.resizeBy;
   let desired=270;
   view.fitHeight=reserve=>{assert.equal(reserve,false,'manual fit excludes the opening reserve');return desired;};
-  size.mode='remember-last';size.widthCorrection=-1;calls.length=0;
+  size.mode='remember-last';calls.length=0;
   win.resizeTo=(width,height)=>{calls.push([width,height]);win.outerWidth=width;win.outerHeight=height;win.fire('resize');};
   const fit=()=>view.fitButton.fire('click');
   const width=win.outerWidth;fit();settle();assert.deepEqual(calls,[[width,270]]);
@@ -72,6 +93,6 @@ module.exports = function disclosure(view, win, controller, input) {
   fit();assert.equal(calls.length,snugCalls,'do not chase native rounding of an already scroll-free snug fit');
   view.doc.scrollingElement.scrollHeight=102;fit();settle();assert.equal(calls.length,snugCalls+1,'real overflow is not waived by the rounding guard');
   delete view.doc.scrollingElement;
-  delete view.fitHeight; delete win.navigator;
+  delete view.fitHeight; delete view.disclosureLayout; delete win.navigator;
   win.resizeTo=originalResize;
 };

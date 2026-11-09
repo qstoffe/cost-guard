@@ -25,7 +25,7 @@ function inspect(view) {
   const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(n=>{const c=Number(n)/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
   const light=luminance(button.color),background=luminance(button.backgroundColor);
   return {fits,width:bounds.width,parts,marker:{content:marker.content,width:marker.width},
-    button:{border:button.borderWidth,outline:button.outlineWidth,focused:view.doc.activeElement===view.earlierToggle,
+     button:{border:button.borderWidth,outline:button.outlineWidth,shadow:button.boxShadow,focused:view.doc.activeElement===view.earlierToggle,
       pressed:view.earlierToggle.getAttribute('aria-pressed'),expanded:view.earlierToggle.getAttribute('aria-expanded'),
       controls:view.earlierToggle.getAttribute('aria-controls'),hidden:view.earlier.hidden,data:view.prompts.dataset.expanded,
       background:button.backgroundColor,color:button.color,contrast:(Math.max(light,background)+.05)/(Math.min(light,background)+.05)},
@@ -64,15 +64,14 @@ async function disclosure({evaluate,command,pip,read,layouts,label,required,capt
     assert.equal(b.hidden,!expanded);assert.equal(b.controls,'mini-earlier-sessions');
     assert.equal(value.header.parts[1].text,'Earlier Sessions');
     assert.ok(['none','normal','""'].includes(value.header.marker.content),'no disclosure chevron');
-    if(expanded){assert.notEqual(b.background,initial.header.button.background);assert.ok(b.contrast>=4.5,JSON.stringify(b));}
+    if(expanded){assert.notEqual(b.background,initial.header.button.background);assert.ok(b.contrast>=4.5,JSON.stringify(b));assert.equal(b.shadow,'none');}
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pip);
     const resting=await read();
     if(expanded)assert.equal(resting.header.button.background,b.background,'pressed fill persists without hover');
     else assert.equal(resting.header.button.background,initial.header.button.background);
     if(expanded && !key && label.theme==='classic' && label.color==='light' && label.font==='system-ui')await capture('expanded');
     value.resizeRequests=await evaluate('miniWatch.window.headerResizes');
-    for(const request of value.resizeRequests)assert.ok(request.name==='resizeBy'?Math.abs(request.args[0])<=1:
-      Math.abs(request.args[0]-request.before[0])<=1,'only height and permitted one-DIP rounding correction');
+    for(const request of value.resizeRequests)assert.equal(request.args[0],request.name==='resizeBy'?0:request.before[0],'height only, no width correction');
     assert.equal(value.header.documentOverflow,false);
     assert.ok(value.header.parts.every(p=>!p.overflow && p.lines.length>0));
     assert.equal(value.header.marker.width,initial.header.marker.width,'markers must not move header contents');

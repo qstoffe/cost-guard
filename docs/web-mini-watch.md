@@ -64,7 +64,10 @@ The small **↕** button next to Earlier Sessions is a one-shot **Fit Mini Watch
 action. Click, tap, or focus it with Tab and press Enter/Space to shrink or grow Mini
 to its **currently visible** header, messages, prompt rows and subscriptions. Expanded
 Earlier rows count; collapsed history, help overlays and the opening's artificial
-two-row reserve do not. Hover, keyboard focus or touch explains the action.
+two-row reserve do not. Hover or new keyboard focus explains the action. Activating
+it by click, touch, Enter or Space immediately dismisses visible/pending help,
+including when sizing is already snug, clamped or refused. Stationary pointer/focus
+does not reopen it; a new deliberate hover/focus interaction can show it again.
 
 It works with either size preference and a manually resized window. It uses the
 current width, requests height only, and neither toggles Earlier nor refreshes data,
@@ -200,13 +203,18 @@ Enter or Space. Hover help closes within a short exit grace when leaving its tar
 or the PiP document; keyboard-focus and intentionally pinned quota/header help have
 separate ownership. Stationary focus and Live rerenders cannot reopen dismissed help.
 
-Pointer, Enter or Space activation measures expanded content and makes at most one
-native height adjustment within that activation. Collapse in Fit mode shrinks to the
-current compact two-row baseline, not a fixed height. Remembered-size mode restores
-eligible pre-expansion bounds only after achieved growth; manual resizing invalidates
-stale restoration. Actual current width is retained where native clamps permit.
-Vertical-only `resizeBy` is preferred; observed one-DIP zoom rounding is compensated
-on the next eligible click, never with an extra call or background repair.
+Pointer, Enter or Space activation measures collapsed and expanded layouts in one
+inert, invisible clone at the same current width. In **both size modes**, expansion
+adds only the difference, including Earlier's real table/empty state, margins and
+layout reflow. It does not globally fit the window or reinstate the opening-only
+two-row reserve. Stable collapse removes the achieved expansion contribution and
+returns to the preceding fitted, remembered or manually chosen height, without drift.
+Changed content, width or intervening manual sizing invalidates stale restoration;
+collapse then subtracts the current measured delta rather than fitting unrelated content.
+Refused/zero growth does not authorize an unrelated collapse shrink. Each eligible
+activation makes at most one height-only native request, with no width correction,
+move, correction loop or passive repair. Native zoom/rounding/clamps can change
+achieved bounds or prevent exact restoration; normal document scrolling remains.
 
 No passive Live/SSE update, timer, prompt/account change or settings read resizes the
 window. Later content exceeding its opening reserve scrolls normally. Missing activation,

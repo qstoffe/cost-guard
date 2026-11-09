@@ -1,0 +1,818 @@
+{
+  "date": "2026-11-09",
+  "productVersion": "80.219",
+  "units": "DOM rects in rendered CSS pixels; native bounds in screen DIPs; DPR includes browser zoom",
+  "limits": [
+    "Strictly headless native API proof, not physical OS-frame proof",
+    "Native clamps/width changes and one-DIP quantization are not exact-geometry PASS"
+  ],
+  "runs": [
+    {
+      "source": "scratch:/delta-chrome-verified.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 115,
+      "checks": [
+        "Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call"
+      ],
+      "examples": [
+        {
+          "case": "fit-before-delta-fit-on-open-0",
+          "before": {
+            "outer": [
+              560,
+              201
+            ],
+            "inner": [
+              544,
+              159
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 139.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "expanded": {
+            "outer": [
+              560,
+              310
+            ],
+            "inner": [
+              544,
+              268
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 248.25,
+            "earlierHeight": 103,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "collapsed": {
+            "outer": [
+              560,
+              201
+            ],
+            "inner": [
+              544,
+              159
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 139.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "delta": 109
+        }
+      ]
+    },
+    {
+      "source": "scratch:/delta-edge.json",
+      "outcome": "PASS",
+      "browser": "Edg/157.0.4341.42",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 115,
+      "checks": [
+        "Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call"
+      ],
+      "examples": [
+        {
+          "case": "fit-before-delta-fit-on-open-0",
+          "before": {
+            "outer": [
+              560,
+              201
+            ],
+            "inner": [
+              544,
+              159
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 139.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "expanded": {
+            "outer": [
+              560,
+              310
+            ],
+            "inner": [
+              544,
+              268
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 248.25,
+            "earlierHeight": 103,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "collapsed": {
+            "outer": [
+              560,
+              201
+            ],
+            "inner": [
+              544,
+              159
+            ],
+            "layout": {
+              "width": 514,
+              "collapsed": 139.25,
+              "expanded": 248.25,
+              "scale": 1
+            },
+            "rootHeight": 139.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1
+          },
+          "delta": 109
+        }
+      ]
+    },
+    {
+      "source": "scratch:/delta-125.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 1.25,
+      "recordedLayouts": 115,
+      "checks": [
+        "Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call"
+      ],
+      "examples": [
+        {
+          "case": "fit-before-delta-fit-on-open-0",
+          "before": {
+            "outer": [
+              560,
+              270
+            ],
+            "inner": [
+              435,
+              182
+            ],
+            "layout": {
+              "width": 408.20001220703125,
+              "collapsed": 162.10000610351562,
+              "expanded": 270.3000183105469,
+              "scale": 1.2505747126436781
+            },
+            "rootHeight": 162.10000610351562,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1.25
+          },
+          "expanded": {
+            "outer": [
+              560,
+              405
+            ],
+            "inner": [
+              435,
+              290
+            ],
+            "layout": {
+              "width": 408.20001220703125,
+              "collapsed": 162.10000610351562,
+              "expanded": 270.3000183105469,
+              "scale": 1.2505747126436781
+            },
+            "rootHeight": 270.3000183105469,
+            "earlierHeight": 102.20000457763672,
+            "zoom": 1,
+            "dpr": 1.25
+          },
+          "collapsed": {
+            "outer": [
+              560,
+              270
+            ],
+            "inner": [
+              435,
+              182
+            ],
+            "layout": {
+              "width": 408.20001220703125,
+              "collapsed": 162.10000610351562,
+              "expanded": 270.3000183105469,
+              "scale": 1.2505747126436781
+            },
+            "rootHeight": 162.10000610351562,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1.25
+          },
+          "delta": 135.3121991738506
+        }
+      ]
+    },
+    {
+      "source": "scratch:/delta-150.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 1.5,
+      "recordedLayouts": 115,
+      "checks": [
+        "Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call"
+      ],
+      "examples": [
+        {
+          "case": "fit-before-delta-fit-on-open-0",
+          "before": {
+            "outer": [
+              560,
+              315
+            ],
+            "inner": [
+              363,
+              182
+            ],
+            "layout": {
+              "width": 337.66668701171875,
+              "collapsed": 161.83334350585938,
+              "expanded": 269.5,
+              "scale": 1.4986225895316805
+            },
+            "rootHeight": 161.83334350585938,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1.5
+          },
+          "expanded": {
+            "outer": [
+              560,
+              476
+            ],
+            "inner": [
+              363,
+              289
+            ],
+            "layout": {
+              "width": 337.66668701171875,
+              "collapsed": 161.83334350585938,
+              "expanded": 269.5,
+              "scale": 1.4986225895316805
+            },
+            "rootHeight": 269.5,
+            "earlierHeight": 101.66667175292969,
+            "zoom": 1,
+            "dpr": 1.5
+          },
+          "collapsed": {
+            "outer": [
+              560,
+              315
+            ],
+            "inner": [
+              363,
+              182
+            ],
+            "layout": {
+              "width": 337.66668701171875,
+              "collapsed": 161.83334350585938,
+              "expanded": 269.5,
+              "scale": 1.4986225895316805
+            },
+            "rootHeight": 161.83334350585938,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 1.5
+          },
+          "delta": 161.35168356146696
+        }
+      ]
+    },
+    {
+      "source": "scratch:/delta-200-visible.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 2,
+      "recordedLayouts": 115,
+      "checks": [
+        "Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call"
+      ],
+      "examples": [
+        {
+          "case": "fit-before-delta-fit-on-open-0",
+          "before": {
+            "outer": [
+              560,
+              492
+            ],
+            "inner": [
+              272,
+              225
+            ],
+            "layout": {
+              "width": 249.5,
+              "collapsed": 205.25,
+              "expanded": 314.25,
+              "scale": 2
+            },
+            "rootHeight": 205.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 2
+          },
+          "expanded": {
+            "outer": [
+              560,
+              710
+            ],
+            "inner": [
+              272,
+              334
+            ],
+            "layout": {
+              "width": 249.5,
+              "collapsed": 205.25,
+              "expanded": 314.25,
+              "scale": 2
+            },
+            "rootHeight": 314.25,
+            "earlierHeight": 103,
+            "zoom": 1,
+            "dpr": 2
+          },
+          "collapsed": {
+            "outer": [
+              560,
+              492
+            ],
+            "inner": [
+              272,
+              225
+            ],
+            "layout": {
+              "width": 249.5,
+              "collapsed": 205.25,
+              "expanded": 314.25,
+              "scale": 2
+            },
+            "rootHeight": 205.25,
+            "earlierHeight": 0,
+            "zoom": 1,
+            "dpr": 2
+          },
+          "delta": 218
+        }
+      ]
+    },
+    {
+      "source": "scratch:/fit-chrome.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 98,
+      "checks": [
+        "Manual height-only native fit: both size modes; 0/1/2/4/20 prompt x 0/1/3 account rows; grow/shrink/idempotence, no two-row reserve, expanded history, pointer/Enter/Space/touch, rapid clicks, 4 CSS zooms x 2 fonts x 4 theme appearances, narrow panning, capped scroll, inactive/refused/unsupported/fallback and passive SSE"
+      ],
+      "examples": []
+    },
+    {
+      "source": "scratch:/fit-edge.json",
+      "outcome": "PASS",
+      "browser": "Edg/157.0.4341.42",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 98,
+      "checks": [
+        "Manual height-only native fit: both size modes; 0/1/2/4/20 prompt x 0/1/3 account rows; grow/shrink/idempotence, no two-row reserve, expanded history, pointer/Enter/Space/touch, rapid clicks, 4 CSS zooms x 2 fonts x 4 theme appearances, narrow panning, capped scroll, inactive/refused/unsupported/fallback and passive SSE"
+      ],
+      "examples": []
+    },
+    {
+      "source": "scratch:/width-chrome.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 104,
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded"
+      ],
+      "examples": []
+    },
+    {
+      "source": "scratch:/width-edge.json",
+      "outcome": "PASS",
+      "browser": "Edg/157.0.4341.42",
+      "deviceScale": "1",
+      "browserZoom": 1,
+      "recordedLayouts": 104,
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded"
+      ],
+      "examples": []
+    },
+    {
+      "source": "scratch:/clamp-dpr150-final.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "1.5",
+      "browserZoom": 1.5,
+      "recordedLayouts": 2,
+      "checks": [
+        "Compounded zoom/DPR: both sizing modes, real trusted disclosure, collapsed/expanded screenshots, requested/achieved bounds, <=1 height-only native request per action, stable passive state, usable reflow and scrolling to history/active/accounts"
+      ],
+      "examples": [
+        {
+          "case": "high-scale-clamp",
+          "mode": "fit-on-open",
+          "before": {
+            "outer": [
+              738,
+              322
+            ],
+            "inner": [
+              481,
+              186
+            ],
+            "layout": {
+              "width": 456.1111145019531,
+              "collapsed": 164.6666717529297,
+              "expanded": 273.22222900390625,
+              "scale": 1.501039501039501
+            },
+            "rootHeight": 164.6666717529297,
+            "earlierHeight": 0,
+            "dpr": 2.25
+          },
+          "expanded": {
+            "outer": [
+              625,
+              410
+            ],
+            "inner": [
+              406,
+              245
+            ],
+            "layout": {
+              "width": 381,
+              "collapsed": 187.9166717529297,
+              "expanded": 296.47222900390625,
+              "scale": 1.5
+            },
+            "rootHeight": 296.47222900390625,
+            "earlierHeight": 102.55555725097656,
+            "dpr": 2.25
+          },
+          "collapsed": {
+            "outer": [
+              626,
+              322
+            ],
+            "inner": [
+              406,
+              186
+            ],
+            "layout": {
+              "width": 381.4444580078125,
+              "collapsed": 187.9166717529297,
+              "expanded": 296.47222900390625,
+              "scale": 1.5024630541871922
+            },
+            "rootHeight": 187.9166717529297,
+            "earlierHeight": 0,
+            "dpr": 2.25
+          },
+          "requests": [
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                163
+              ],
+              "before": [
+                738,
+                322
+              ],
+              "active": true
+            },
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                -88
+              ],
+              "before": [
+                625,
+                410
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "case": "high-scale-clamp",
+          "mode": "remember-last",
+          "before": {
+            "outer": [
+              651,
+              360
+            ],
+            "inner": [
+              423,
+              212
+            ],
+            "layout": {
+              "width": 408.5555725097656,
+              "collapsed": 187.9166717529297,
+              "expanded": 296.47222900390625,
+              "scale": 1.5011820330969268
+            },
+            "rootHeight": 187.9166717529297,
+            "earlierHeight": 0,
+            "dpr": 2.25
+          },
+          "expanded": {
+            "outer": [
+              564,
+              454
+            ],
+            "inner": [
+              365,
+              274
+            ],
+            "layout": {
+              "width": 340.1111145019531,
+              "collapsed": 187.9166717529297,
+              "expanded": 296.47222900390625,
+              "scale": 1.5013698630136987
+            },
+            "rootHeight": 296.47222900390625,
+            "earlierHeight": 102.55555725097656,
+            "dpr": 2.25
+          },
+          "collapsed": {
+            "outer": [
+              564,
+              361
+            ],
+            "inner": [
+              365,
+              213
+            ],
+            "layout": {
+              "width": 350.3333435058594,
+              "collapsed": 187.9166717529297,
+              "expanded": 296.47222900390625,
+              "scale": 1.5013698630136987
+            },
+            "rootHeight": 187.9166717529297,
+            "earlierHeight": 0,
+            "dpr": 2.25
+          },
+          "requests": [
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                163
+              ],
+              "before": [
+                651,
+                360
+              ],
+              "active": true
+            },
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                -94
+              ],
+              "before": [
+                564,
+                454
+              ],
+              "active": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "scratch:/clamp-dpr200-final.json",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "deviceScale": "2",
+      "browserZoom": 2,
+      "recordedLayouts": 2,
+      "checks": [
+        "Compounded zoom/DPR: both sizing modes, real trusted disclosure, collapsed/expanded screenshots, requested/achieved bounds, <=1 height-only native request per action, stable passive state, usable reflow and scrolling to history/active/accounts"
+      ],
+      "examples": [
+        {
+          "case": "high-scale-clamp",
+          "mode": "fit-on-open",
+          "before": {
+            "outer": [
+              624,
+              278
+            ],
+            "inner": [
+              304,
+              118
+            ],
+            "layout": {
+              "width": 281.5,
+              "collapsed": 188.25,
+              "expanded": 297.25,
+              "scale": 2
+            },
+            "rootHeight": 188.25,
+            "earlierHeight": 0,
+            "dpr": 4
+          },
+          "expanded": {
+            "outer": [
+              425,
+              338
+            ],
+            "inner": [
+              204,
+              148
+            ],
+            "layout": {
+              "width": 182,
+              "collapsed": 243.59375,
+              "expanded": 352.59375,
+              "scale": 2.0049019607843137
+            },
+            "rootHeight": 352.59375,
+            "earlierHeight": 103,
+            "dpr": 4
+          },
+          "collapsed": {
+            "outer": [
+              425,
+              278
+            ],
+            "inner": [
+              204,
+              118
+            ],
+            "layout": {
+              "width": 182,
+              "collapsed": 243.59375,
+              "expanded": 352.59375,
+              "scale": 2.0049019607843137
+            },
+            "rootHeight": 243.59375,
+            "earlierHeight": 0,
+            "dpr": 4
+          },
+          "requests": [
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                218
+              ],
+              "before": [
+                624,
+                278
+              ],
+              "active": true
+            },
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                -60
+              ],
+              "before": [
+                425,
+                338
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "case": "high-scale-clamp",
+          "mode": "remember-last",
+          "before": {
+            "outer": [
+              479,
+              352
+            ],
+            "inner": [
+              231,
+              155
+            ],
+            "layout": {
+              "width": 209,
+              "collapsed": 243.59375,
+              "expanded": 352.59375,
+              "scale": 2.0043290043290045
+            },
+            "rootHeight": 243.59375,
+            "earlierHeight": 0,
+            "dpr": 4
+          },
+          "expanded": {
+            "outer": [
+              347,
+              413
+            ],
+            "inner": [
+              165,
+              185
+            ],
+            "layout": {
+              "width": 143,
+              "collapsed": 261.59375,
+              "expanded": 370.59375,
+              "scale": 2.006060606060606
+            },
+            "rootHeight": 370.59375,
+            "earlierHeight": 103,
+            "dpr": 4
+          },
+          "collapsed": {
+            "outer": [
+              347,
+              352
+            ],
+            "inner": [
+              165,
+              155
+            ],
+            "layout": {
+              "width": 143,
+              "collapsed": 261.59375,
+              "expanded": 370.59375,
+              "scale": 2.006060606060606
+            },
+            "rootHeight": 261.59375,
+            "earlierHeight": 0,
+            "dpr": 4
+          },
+          "requests": [
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                218
+              ],
+              "before": [
+                479,
+                352
+              ],
+              "active": true
+            },
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                -61
+              ],
+              "before": [
+                347,
+                413
+              ],
+              "active": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

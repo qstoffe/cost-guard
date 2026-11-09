@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.218, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.219, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -365,7 +365,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.218 (2026-11-09):** Claude aliases retain version-unverified identity instead of a fuzzy concrete release. Affected persisted historical labels and reference-cost projections repair automatically on access; pinned request versions retain exact pricing. See [usage and cost](docs/usage-and-cost.md).
+**v80.219 (2026-11-09):** Mini Watch's Earlier Sessions uses a uniform pressed fill and changes height only by its actual rendered disclosure delta, preserving fitted/manual baselines where native bounds permit. The ↕ Fit Height action immediately dismisses its help. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

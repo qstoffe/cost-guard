@@ -38,7 +38,9 @@ module.exports = async ({evaluate,command,targetId,open,close,read,capture,fixtu
     assert.deepEqual(passive.outer,expanded.outer);assert.equal((await evaluate('miniWatch.window.clampResizes')).length,first.length);
     await activate();const compact=await read();assert.equal(compact.expanded,false);assert.equal(compact.header.button.pressed,'false');
     const requests=await evaluate('miniWatch.window.clampResizes');assert.ok(requests.length<=first.length+1);
-    for(const r of requests){assert.equal(r.active,true);assert.ok(r.name==='resizeBy'?Math.abs(r.args[0])<=1:Math.abs(r.args[0]-r.before[0])<=1);}
+    for(const r of requests){assert.equal(r.active,true);assert.equal(r.args[0],r.name==='resizeBy'?0:r.before[0]);}
+    if(requests.length===2)assert.equal(requests[1].args[1],requests[1].name==='resizeBy'?
+      collapsed.outer[1]-expanded.outer[1]:collapsed.outer[1],'collapse requests removal of achieved growth, not the pre-clamp full delta');
     assert.equal(compact.header.documentOverflow,false);
     layouts.push({case:'high-scale-clamp',mode,collapsed,expanded,passive,compact,reached,requests});
     await close();

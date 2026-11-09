@@ -64,14 +64,15 @@ async function main() {
       request:probeRequests.at(-1),desired:v.fitHeight(),rows:v.promptRows.size,accounts:v.lines.size,expanded:!v.earlier.hidden,
       scroll:[d.documentElement,...v.root.querySelectorAll('*')].filter(n=>n.scrollHeight>n.clientHeight+1 && ['auto','scroll'].includes(w.getComputedStyle(n).overflowY)).map(n=>({tag:n.tagName,class:n.className,client:n.clientHeight,scroll:n.scrollHeight})),
       header:(${require('./probe_mini_width.cjs').inspect.toString()})(v),
-      bodyHeight:d.body.getBoundingClientRect().height,rootHeight:v.root.getBoundingClientRect().height,
+       bodyHeight:d.body.getBoundingClientRect().height,rootHeight:v.root.getBoundingClientRect().height,
+       disclosureLayout:v.disclosureLayout(),earlierHeight:v.earlier.getBoundingClientRect().height,
       promptRows:[...v.body.children].map(n=>n.getBoundingClientRect().height)};})()`);
     const layouts=evidence.layouts;
-    const captureOpening=async(label='opening')=>{
+     const captureOpening=async(label='opening',clip=null)=>{
       for(const target of (await command('Target.getTargets')).targetInfos.filter(t=>t.targetId!==targetId && t.type==='page')) {
         const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
         if(!await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId))continue;
-        const image=await command('Page.captureScreenshot',{format:'png'},attached.sessionId);
+         const image=await command('Page.captureScreenshot',{format:'png',...(clip?{clip}:{})},attached.sessionId);
         await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));return;
       }
       throw new Error('No native PiP screenshot target');
@@ -80,7 +81,17 @@ async function main() {
        await require('./probe_mini_clamp.cjs')({evaluate,command,targetId,open,close,read,capture:captureOpening,fixture,until,layouts,checks:evidence.checks});
        evidence.outcome='PASS';return;
      }
-      if(scope!=='manual-only')await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
+       if(scope==='disclosure-only') {
+         await open();let pipSession;
+         for(const target of (await command('Target.getTargets')).targetInfos.filter(t=>t.targetId!==targetId&&t.type==='page')) {
+           const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
+           if(await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId)){pipSession=attached.sessionId;break;}
+         }
+         assert.ok(pipSession);
+         await require('./probe_mini_disclosure.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks:evidence.checks,capture:captureOpening});
+         await close();evidence.outcome='PASS';return;
+       }
+       if(scope!=='manual-only')await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
       if(scope==='width-only'){evidence.outcome='PASS';return;}
       await require('./probe_mini_disclosure.cjs').fit({evaluate,until,fixture,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
       if(scope==='manual-only'){evidence.outcome='PASS';return;}
@@ -186,7 +197,7 @@ async function main() {
     await command('Page.bringToFront',{},pip);await size(520,250);
     const remembered=await read();await toggle();const grown=await read();assert.ok(grown.outer[1]>remembered.outer[1]);
     await toggle();(await read()).outer.forEach((value,index)=>assert.ok(Math.abs(value-remembered.outer[index])<=1));
-    await toggle();await size(520,350);const changed=await read();await toggle();assert.deepEqual((await read()).outer,changed.outer);
+    await toggle();await size(520,350);const changed=await read();await toggle();assert.ok((await read()).outer[1]<changed.outer[1],'manual baseline reconciles only current Earlier delta');
     layouts.push({case:'remembered-disclosure-manual-invalidation',before:remembered,grown,manual:changed});
     for(const theme of ['classic','web'])for(const color of ['light','dark']) {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},sessionId);
