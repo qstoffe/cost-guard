@@ -121,6 +121,29 @@ their own interest. The backend lease, source isolation, index and acquisition o
 are unchanged. [Quiet-refresh evidence](../../journal/web/quiet-refresh.md) records
 the scoped lifecycle matrix and its synthetic/real-source limits.
 
+### Native session export (FR 000631)
+
+`assets/session-export.js` owns the selected-detail action, synchronous click-time
+Save As activation, optional normal download and abort/object-URL cleanup.
+`app.js` keeps attachment bytes separate from analytics DTOs and validates host
+identity, MIME, disposition and complete length before exposing a Blob.
+`session_detail.py` binds an unexpired detail lease to its canonical source,
+instance, observation epoch and session ID. `web/session_export.py` accepts only
+CSRF/instance-protected POST `{token}` through the ordinary HTTP guards, with one
+nonblocking export slot and host/selection/connection cancellation.
+
+`sources/opencode_v2_export.py` validates the registered source's native OpenAPI
+capability and obtains `sanitize=true` transfer through a private bounded transport.
+It returns native `{info, messages}` (CLI shape), not projected prompt rows or the
+HTTP envelope. Identity/schema/size/incomplete-read failures produce no successful
+file; HTTP response bytes use no-store/nosniff and an ASCII attachment filename.
+Maximum export is 16 MiB with a four-second absolute source deadline; no disk
+staging, new OpenCode process, cache, model call or source write is introduced.
+The [export journal](../../journal/web/session-export.md) records compatibility,
+fresh isolated/real-source checks and the owner's narrow **UNVERIFIED** native
+Save As successful-write exception. Earlier real picker/Cancel evidence remains
+historical, not a new successful-save claim.
+
 Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.
 `token-mix.js` owns a retained compact summary and exactly two 13-column
 tables, exact integer/Decimal/rational sort keys, prepared unit tokens and text-only

@@ -100,6 +100,34 @@ Mini retains those final rows briefly without labeling them running. A later rea
 usage and quota percentages alone never establish an end. Generic failures stay
 errors unless the source supports a specific abort/quota cause.
 
+## Export a session as JSON
+
+Open **Sessions → a session → Export JSON** to save that selected session's full
+native OpenCode export, not just the displayed prompt rows. Exports use OpenCode's
+native **sanitized** mode; review the file before sharing because sanitization is
+not a guarantee that all private information is removed. A running session exports
+its current point-in-time state and can change afterwards.
+
+Supported Edge/Chrome browsers request **Save As** immediately from your click.
+Choose a destination and `.json` filename, or Cancel without starting an export.
+Other browsers use a normal download: browser settings may save automatically to
+Downloads rather than showing a picker. Cost Guard does not remember a save path.
+
+Export needs an observed session in the currently selected OpenCode V2 instance
+and a compatible native export API (verified with OpenCode **2.2.6**). It also works
+for sessions created by isolated LIVE servers using the shared database; opening
+the session in Desktop or keeping the original private server running is not needed.
+Unsupported sources/versions show **Export unavailable**, with the CLI alternative
+`opencode session export <session-id> --sanitize`. Errors never substitute a summary
+or silently truncated JSON. Reopen an expired/source-changed selection before retrying.
+
+Transfers are read-only, one at a time, limited to **16 MiB** and a **four-second**
+source deadline. Larger exports require the native CLI. Transcripts are not staged
+in Cost Guard's cache or repository. Successful real native Save As destination
+selection and disk writing remain **UNVERIFIED** under the owner's limited
+acceptance-evidence exception; browser fallback files and deterministic native
+write/close behavior are separately tested.
+
 ## Web settings
 
 **Settings**, at `/#/settings`, contains five compact dropdown rows, with setting

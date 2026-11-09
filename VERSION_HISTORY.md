@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.213 — 2026-11-09
+
+- Web session detail exports the selected full native sanitized OpenCode JSON, including running point-in-time sessions, through the registered V2 source. Click-time Save As in supported browsers has an ordinary download fallback; privacy help, cancellation and actionable failures remain explicit.
+- Source/instance/lease identity, CSRF-protected POST, one concurrent export, 16 MiB body and four-second source bounds prevent unsafe/truncated transfers. No transcript staging/cache, model call or OpenCode process is introduced. OpenCode 2.2.6 sanitized CLI parity and browser fallback are verified; successful real native Save As destination selection/disk writing remains **UNVERIFIED** under the owner's narrow evidence exception.
+
 ## v80.212 — 2026-11-09
 
 - Populated Web views refresh silently, without historical/as-of strips, delayed-source captions or hidden refresh caveats. Full/Mini global CCost Today has no tooltip; certified Earlier rows and empty states stay stable.
