@@ -10,6 +10,7 @@ import sqlite3
 
 from src.analysis.cache import dependency_signature
 from src.analysis.models import TraceEntry
+from src.analysis.model_identity import encode_model, decode_model, current
 from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain import ModelRef, TokenUsage
@@ -46,6 +47,8 @@ def encode(bundle, reference):
             tokens=[tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning],
             known=list(tokens.known_fields), reported=str(entry.reported_cost), instance=entry.source_instance,
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
+        if entry.model.resolution is not None:
+            facts[-1]['resolved_identity'] = encode_model(entry.model)
         if unverified_alias(entry.model.model, entry.model.provider):
             facts[-1]['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
     return facts
@@ -65,7 +68,8 @@ def decode(facts):
         tokens = TokenUsage(input=counts[0], cache_read=counts[1], cache_write=counts[2],
             output=counts[3], reasoning=counts[4], known_fields=tuple(fact['known']))
         entry = TraceEntry(fact['session'], fact['parent'], fact['message'], fact['part'],
-            fact['completed'], fact['order'], ModelRef(*fact['model']), fact['variant'], tokens,
+            fact['completed'], fact['order'], decode_model(fact['resolved_identity']) if 'resolved_identity' in fact
+            else ModelRef(*fact['model']), fact['variant'], tokens,
             reported_cost=Decimal(fact['reported']), source_instance=fact['instance'])
         costs = None if fact['costs'] is None else tuple(Decimal(value) for value in fact['costs'])
         if costs is not None and (len(costs) != 4 or any(not value.is_finite() or value < 0 for value in costs)):
@@ -75,10 +79,11 @@ def decode(facts):
     return result
 
 
-def load(cached, revision):
+def load(cached, revision, source=None):
     try:
         if cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
-            return decode(cached.payload)
+            facts = decode(cached.payload)
+            return facts if current(source, (entry.model for entry, _prompt, _cost in facts)) else None
     except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, InvalidOperation):
         pass
     return None
@@ -121,7 +126,7 @@ def build_cached_token_mix(service, progress):
     for index, root in enumerate(roots):
         revision = versions[root.session_id]
         key = keys[root.session_id]
-        facts = load(cached.pop(key, None), revision) if root.session_id not in active else None
+        facts = load(cached.pop(key, None), revision, service.source) if root.session_id not in active else None
         service.metrics.add('token_mix_cache_hits' if facts is not None else 'token_mix_cache_misses')
         if facts is not None:
             service._acquisition.revisions[root.session_id] = revision

@@ -86,7 +86,7 @@ def billing_request_fingerprint(entry: TraceEntry) -> str:
     bits = _SIX_INT64.unpack(_SIX_DOUBLES.pack(
         float(entry.reported_cost), tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning,
     ))
-    return "|".join((str(entry.completed_at_ms), entry.model.provider, entry.model.model, *map(str, bits)))
+    return "|".join((str(entry.completed_at_ms), entry.model.provider, entry.model.recorded_model, *map(str, bits)))
 
 
 def measure_prompt_billing(

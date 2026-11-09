@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .accounts import AccountRef, BillingComponent
 
 from .capabilities import ProviderCapabilities, SessionCapabilities
+from .model_identity import ModelResolution
 
 
 class EventKind(str, Enum):
@@ -95,6 +96,11 @@ class ModelRef:
     provider: str
     model: str
     display_name: str | None = None
+    resolution: ModelResolution | None = None
+
+    @property
+    def recorded_model(self) -> str:
+        return self.resolution.selected_model if self.resolution else self.model
 
 
 @dataclass(frozen=True, slots=True)

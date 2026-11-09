@@ -20,7 +20,8 @@ const ComparisonsView = (() => {
         group.runs.every(run => /^[A-Za-z0-9_-]{1,200}$/.test(run.session_id) && run.match_run));
   }
   function provenance(run) {
-    return run.contributors.map(item => `${item.provider}/${item.model_label} [${item.model}] · ${item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n') || 'No attributable request evidence.';
+    const requests = run.contributors.map(item => `${item.provider}/${item.model_label} [${item.model}] · ${item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n') || 'No attributable request evidence.';
+    return requests + (run.model_identity_help ? `\n${run.model_identity_help}\nSelected: ${(run.selected_models || []).join(', ')}` : '');
   }
   function help(run, column) {
     const state = `Run status: ${run.status}.`;

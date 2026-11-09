@@ -15,6 +15,7 @@ from src.domain.acquisition import AcquisitionMetrics
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
+from .model_identity import encode_model, decode_model
 
 ANALYSIS_ALGORITHM_VERSION = "v78-analysis-19-execution-unverified"
 _CACHE_NAMESPACE = "derived-analysis"
@@ -67,7 +68,7 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
         "step_part_id": entry.step_part_id,
         "completed_at_ms": entry.completed_at_ms,
         "sort_order": entry.sort_order,
-        "model": {"provider": entry.model.provider, "model": entry.model.model, "display_name": entry.model.display_name},
+        "model": encode_model(entry.model),
         "variant": entry.variant,
         "tokens": _flat_fields(entry.tokens),
         "reported_cost": str(entry.reported_cost),
@@ -90,7 +91,7 @@ def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
         step_part_id=data.get("step_part_id"),
         completed_at_ms=int(data["completed_at_ms"]),
         sort_order=int(data["sort_order"]),
-        model=ModelRef(str(model["provider"]), str(model["model"]), model.get("display_name")),
+        model=decode_model(model),
         variant=data.get("variant"),
         tokens=TokenUsage(**{key: int(value) for key, value in data["tokens"].items() if key != "known_fields"},
                           known_fields=tuple(data["tokens"]["known_fields"])),
@@ -189,10 +190,12 @@ class AnalysisSessionSource(Protocol):
 
 
 class DerivedAnalysisCache:
-    def __init__(self, repository: CacheRepository, *, metrics: AcquisitionMetrics | None = None) -> None:
+    def __init__(self, repository: CacheRepository, *, metrics: AcquisitionMetrics | None = None,
+                 identity_validator=None) -> None:
         self.repository = repository
         self.metrics = metrics
         self.write_enabled = True
+        self.identity_validator = identity_validator
 
     def load(
         self,
@@ -234,11 +237,16 @@ class DerivedAnalysisCache:
             with self.metrics.measure('cache_decode') if self.metrics is not None else nullcontext():
                 bundle = _bundle_from_dict(payload)
             if payload.get("model_identity_semantics") != MODEL_IDENTITY_SEMANTICS:
-                models = [(entry.model.provider, entry.model.model) for entry in bundle.trace_entries]
+                models = [(entry.model.provider, entry.model.recorded_model) for entry in bundle.trace_entries]
                 models.extend((record.main_provider_id, record.main_model_id) for record in bundle.prompts)
                 models.extend((record.provider_id, record.model_id) for record in bundle.compactions)
                 if not identity_cache_current(None, models):
                     return None
+            identities = tuple(entry.model for entry in bundle.trace_entries)
+            if self.identity_validator is not None and not self.identity_validator(identities):
+                return None
+            if self.identity_validator is None and any(model.resolution is not None for model in identities):
+                return None
         except (KeyError, TypeError, ValueError, InvalidOperation):
             return None
         return (bundle if bundle.cacheable and bundle.root_session_id == root_session_id

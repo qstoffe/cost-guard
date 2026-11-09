@@ -52,6 +52,7 @@ from .opencode_v2_interruptions import LiveInterruptionReasons
 from .opencode_v2_catalog import V2CatalogIndex
 from .opencode_v2_snapshot import load_snapshots
 from .opencode_v2_tree import CardTreeBrackets
+from .opencode_v2_model_identity import DesktopModelCatalog
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
@@ -163,6 +164,7 @@ class OpenCodeV2Source:
         self._interruptions = LiveInterruptionReasons()
         self._evidence_epoch = None
         self._card_trees: CardTreeBrackets | None = None
+        self._model_identities = DesktopModelCatalog(self._client)
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
             "message_contracts": {}, "message_shapes": {}, "message_items": {}, "message_pages": {},
@@ -203,6 +205,7 @@ class OpenCodeV2Source:
             self._catalog_index = None
             self._catalog_listed_at = 0.0
             self._skill_origin_cache.clear()
+            self._model_identities = DesktopModelCatalog(self._client)
         else:
             endpoint = self._endpoint
         self._endpoint = endpoint
@@ -375,6 +378,10 @@ class OpenCodeV2Source:
         """Use the selected registered service's settled global model list."""
         client = self._client()
         return settled_v2_model_ids(lambda: client.json("/api/model"))
+
+    def model_identities_current(self, models):
+        self._current_endpoint()
+        return self._model_identities.current(models)
 
     def skill_origins_for_session(self, session_id: str) -> Mapping[str, str]:
         """Resolve a session's registered location and read its skill origins."""
@@ -602,6 +609,8 @@ class OpenCodeV2Source:
         parts: list[NormalizedPart] = []
         for bundle in bundles:
             message, message_parts = normalize_message_bundle(bundle, self._provenance)
+            if message.role is MessageRole.ASSISTANT:
+                message = replace(message, model=self._model_identities.resolve(message.model, native.directory))
             messages.append(message)
             parts.extend(message_parts)
         messages.sort(key=lambda value: (value.created_at_ms, value.message_id))

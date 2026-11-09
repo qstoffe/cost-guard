@@ -1,5 +1,87 @@
 # Claude alias identity and historical repair — FR 000629
 
+## FR 000651 — owner-approved Desktop catalog estimates (v81.6)
+
+2026-11-09, implementation base `9fda560e05a88345996a25c1e3d98b325e4d927a`.
+This supersedes the **earlier hold and conservative alias-only valuation** below,
+not its source findings. The selected FR expressly accepts a potentially historically
+wrong current-catalog release and matching reference CCost. That is the delivered
+behavior; it is not a new claim that old executed response metadata was recovered.
+
+### Fresh evidence and remaining source boundary
+
+- Read the public v2.2.6 source at `dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06`:
+  `gui-plugins/src/context/catalog.ts::catalogModel` requires the location's provider
+  and model lists, exact provider/alias matching, and skips deprecated entries;
+  `tab.tsx:136` displays `entry?.model?.name ?? message.model.id`.
+- `claude-agent/provider.ts` keeps current SDK names/resolved IDs, not historical
+  response certificates. The converter at `convert-claude-stream.ts:35` emits actual
+  `response-metadata.modelId`; `core/src/aisdk.ts:748–753` explicitly drops this event
+  with `Effect.succeed([])`. No installed binaries, databases or upstream records
+  were changed. No speculative future history field is accepted as verified input.
+- A fresh authenticated **read-only current catalog** observation at the repository
+  location returned `providerID=claude-agent`, `id=sonnet`, `name=Sonnet 5.5`,
+  `modelID=claude-sonnet-5-5`. This is live mapping evidence, **not** a historical
+  assistant capture. No prompt or private session content was exported.
+- The exact owner historical session ID was not supplied. The checkpoint/official
+  SDK transcript join was **NOT PERFORMED**; another session was not substituted.
+  Actual historical recovery and future upstream response-model persistence remain
+  **UNVERIFIED / NOT IMPLEMENTED**, respectively. The revised fallback delivery gate
+  explicitly permits this useful result without those unavailable prerequisites.
+
+| Available evidence | Result |
+| --- | --- |
+| Recorded concrete request model | Existing exact identity/pricing wins and has no mutable alias dependency. |
+| Alias plus source-proven executed response | Still requires a supported response-qualified upstream contract; no real capture or arbitrary native-field trust is claimed. |
+| Alias plus exact current location provider/model entry | Desktop label and supported exact reference rate are an explicitly accepted estimate. |
+| Missing entry, unsupported concrete price identity, or incomplete usage | Real unavailable/partial cost; never guessed generic Sonnet pricing or manufactured zero. |
+
+### Ownership and dependency design
+
+`opencode_v2_model_identity.py` reads only supported location-qualified provider/model
+GETs, at most one pair per location/30 seconds within a reader (bounded 256-location
+observation cache). There is no catalog-sync mutation, CLI fallback, inference,
+daemon or per-cell read. `ModelRef` keeps the effective identity/display name and an
+optional `ModelResolution` with the recorded alias, location mapping dependency and
+`desktop-catalog-estimate` provenance. Provider and request effort stay unchanged.
+Native observations are not rewritten. Catalog labels without supported rates may
+still display, but reference valuation never uses fuzzy matching for those rows.
+
+Model resolution is separate from native-history consistency brackets and the global
+price signature. `MODEL_IDENTITY_SEMANTICS=2` repairs prior affected conclusions on
+access. Derived analysis validates compact model dependencies before reuse; Sessions,
+Token Mix, AI Stats and matched-run caches do likewise, including failed exact lookups.
+Cold-process hits validate before returning old values. Pinned roots need no catalog
+read and keep their cached entries; mixed root-cost checkpoints revalue only changed
+request fingerprints. Clone deduplication uses the **recorded alias**, never a mutable
+catalog identity. Alias-only availability filters retain their resolved requests.
+
+Shared canonical projections supply CLI, Sessions/detail, Full/Mini Watch, model/cost
+groups and Token Mix. Cost/model help and Comparisons retain alias/estimate explanation;
+ordinary rows have no new alarm badge. Catalog estimates never enable monetary billing
+fallback. Recorded concrete models and other providers retain their existing behavior.
+
+The read-only Decision Delegate recommended source-owned materialization, explicit
+cache dependencies, original-identity clone deduplication and alias availability
+preservation. No acceptance waiver or access expansion was requested or granted.
+
+### Verification
+
+- Focused alias/cache tests: **PASS**, 19 cases, including source-shaped V2 HTTP,
+  exact location/provider matching, Desktop find-last/deprecated behavior, alias
+  turnover, failed-lookup recovery, cost/effort/token integrity, all compact caches,
+  unaffected pinned reuse and four real child-process restart runs.
+- Hidden Edge shipped Comparisons/help: **PASS**, two browser process restarts,
+  exact `Sonnet 5.5` label, stable redraw, selected `sonnet` and historical-estimate
+  help. Integrated browser was disconnected; no external desktop was disturbed.
+- Final Full-suite, validator and live read-only installation outcomes are recorded
+  in the task's `COMPLETION.md`; no unperformed check is implied by this section.
+
+Evidence: `scratch:/alias-desktop-browser.json`, `scratch:/full-tests.json` and the
+final live-probe output. No ZIP, tag, GitHub Release or paid model call.
+
+## Historical FR 000629 findings (retained)
+
 Scoped v80.218 implementation, 2026-11-09, based on main
 `1294998ccf8cf9eaf7aff0e50958c4ba422e5de5`. This is not a new whole-tree
 architecture assessment or proof of the owner's underlying executed Claude release.

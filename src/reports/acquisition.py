@@ -5,6 +5,7 @@ from typing import Callable, Mapping, Sequence
 
 from src.analysis.cache import AnalysisDependencies, CacheObservation, DerivedAnalysisCache, analyze_with_cache, cached_analysis
 from src.analysis.models import RootAnalysisBundle
+from src.analysis.model_identity import current
 from src.domain import NormalizedSession, SessionSnapshot
 from src.domain.acquisition import AcquisitionMetrics
 from src.domain.progress import WorkProgress
@@ -105,6 +106,9 @@ class RootAcquisition:
                 snapshot: SessionSnapshot | None = None, report_progress: bool = True,
                 observation: CacheObservation | None = None) -> AnalyzedRoot:
         existing = self.analyzed.get(root.session_id)
+        if existing is not None and not current(self.source, (entry.model for entry in existing.bundle.trace_entries)):
+            self.analyzed.pop(root.session_id, None)
+            existing = None
         if not force_fresh and existing is not None and (not detail or existing.snapshot is not None):
             return existing
         prefetched = self._sample_snapshots.pop(root.session_id, None)
@@ -156,6 +160,9 @@ class RootAcquisition:
         observe("Checking session cache", "cache", 0, len(roots))
         for index, root in enumerate(roots):
             existing = self.analyzed.get(root.session_id)
+            if existing is not None and not current(self.source, (entry.model for entry in existing.bundle.trace_entries)):
+                self.analyzed.pop(root.session_id, None)
+                existing = None
             if root.session_id not in force and existing is None:
                 _, bundle = cached_analysis(self.source, root, self.cache, self.dependencies())
                 if bundle is not None:

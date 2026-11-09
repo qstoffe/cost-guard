@@ -3,6 +3,7 @@ from decimal import InvalidOperation
 
 from src.analysis.ai_stats import StatsRoot
 from src.analysis.cache import dependency_signature
+from src.analysis.model_identity import current
 from .token_mix_cache import encode, decode
 from .matched_runs import project_run, encode_run, decode_run
 
@@ -21,8 +22,10 @@ def payload(bundle, reference, snapshot, config):
                 pending=any(p.in_progress and not p.entries for p in bundle.prompts))
 
 
-def decoded(value, root):
+def decoded(value, root, source=None):
     facts = decode(value['usage'])
+    if not current(source, (entry.model for entry, _prompt, _cost in facts)):
+        raise ValueError('changed_model_catalog')
     intervals = value['intervals']
     if (not isinstance(intervals, list) or type(value['pending']) is not bool
             or type(value['complete']) is not bool):

@@ -96,6 +96,14 @@ tokens without browser arithmetic. Coverage: `test_web_quota_estimates.py`, exis
 quota/pace tests, both Watch/Mini VM suites and `probe_quota_estimates.cjs` through
 `probe_quota_display.cjs`. [Decision/evidence](../../journal/web/quota-estimates.md).
 
+FR000651: `sources/opencode_v2_model_identity.py` observes read-only location-scoped
+provider/model catalogs and materializes Desktop-parity estimates separately from
+the recorded alias in `domain/model_identity.py`. `analysis/model_identity.py`
+owns compact codecs/admission; each derived-cache owner validates only relevant
+dependencies, including negative mappings, without changing native history brackets
+or global pricing signatures. Existing alias/cache/browser tests include turnover,
+exact location/provider matching, preserved clone identity and process restarts.
+
 FR000629: `pricing/identities.py` and `catalog.py` share conservative alias labels
 and valuation gates. `analysis/cache.py`, `session_cost.py`, `reports/session_summary.py`,
 `token_mix_cache.py` and `matched_runs.py` repair affected historical projections lazily;

@@ -4,6 +4,8 @@ from decimal import InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature, cached_analysis
+from src.analysis.model_identity import payload_current, current
+from src.domain import ModelRef
 from src.analysis.input_identity import first_input, preview, IDENTITY_VERSION
 from src.analysis.matched_runs import MatchGroup, MatchesPage, facts, grouped
 from src.cache.repository import CacheEntry
@@ -55,6 +57,12 @@ def build_comparisons(service, request):
         if (root.session_id not in active and item and item.source_revision == revisions[root.session_id]
                 and item.algorithm_version == ALGORITHM):
             try:
+                if item.payload and not payload_current(service.source, item.payload.get('model_identities', ())):
+                    raise ValueError('changed_model_catalog')
+                if item.payload and not item.payload.get('model_identities') and not current(service.source,
+                        (ModelRef(item.payload['provider'], item.payload['model']),
+                         *(ModelRef(group[0], group[1]) for group in item.payload.get('contributors', ())))):
+                    raise ValueError('missing_model_catalog')
                 include(decode_run(item.payload), root)
                 service._acquisition.revisions[root.session_id] = revisions[root.session_id]
                 hit = True

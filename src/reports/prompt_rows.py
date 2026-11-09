@@ -9,7 +9,7 @@ from src.analysis.context import (
     ContextEpochs, NextContextWarningState, build_context_timeline,
     estimate_event_context, estimate_next_context, next_context_warning_state, watch_context_state,
 )
-from src.analysis.effort import prompt_effort, prompt_replies
+from src.analysis.effort import prompt_effort, prompt_replies, interpret_effort
 from src.analysis.models import CompactionRecord, PromptRecord, RootAnalysisBundle
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import billed_spend, comparison_cost
@@ -137,6 +137,12 @@ class PromptRowProjector:
             prompt_effort(record, self.snapshot, replies=self.replies), record.main_provider_id)
         model, effort = effort_model_parts(catalog, record.main_model_id,
             prompt_effort(record, self.snapshot, replies=self.replies), record.main_provider_id)
+        resolved = next((entry.model for entry in record.entries[:record.root_entry_count]
+                         if entry.model.model == record.main_model_id and entry.model.provider == record.main_provider_id
+                         and entry.model.resolution and entry.model.display_name), None)
+        if resolved is not None:
+            model = resolved.display_name
+            model_label = model + (f" ({effort})" if effort != "N/A" else "")
         return PromptProjection(
             at_ms=record.prompt_time_ms,
             prompt_number=record.prompt_number,
@@ -208,6 +214,11 @@ class PromptRowProjector:
         catalog = self.catalog
         state = self.timeline.get(record.user_message_id)
         label = compaction_model_timeline_name(catalog, record.model_id, record.variant, record.provider_id)
+        resolved = next((entry.model for entry in record.entries if entry.model.resolution and entry.model.display_name), None)
+        if resolved is not None:
+            _model, effort = effort_model_parts(catalog, record.model_id,
+                interpret_effort(record.variant, attributable=bool(record.variant), compaction=True), record.provider_id)
+            label = resolved.display_name + (f" ({effort})" if effort != "N/A" else "")
         valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         return PromptProjection(
             at_ms=record.created_at_ms,

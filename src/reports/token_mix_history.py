@@ -85,14 +85,17 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
     else:
         selectable = {_model_key(ModelRef(*value.split("/", 1))) if "/" in value
                       else _model_key(ModelRef("", value)) for value in available}
-        shown = tuple(group for group in groups if _model_key(group.model) in selectable)
+        alias_keys = {_model_key(entry.model) for entry in usage if
+            f'{entry.model.provider}/{entry.model.recorded_model}' in available}
+        shown = tuple(group for group in groups if _model_key(group.model) in selectable | alias_keys)
         if len(shown) != len(groups):
             notes.append(f"Only currently selectable OpenCode models are shown; "
                          f"{len(groups) - len(shown)} other historically used model(s) omitted.")
         groups = shown
     rows = []
     for group in groups:
-        name = reference.display_name(group.model.model, group.model.provider, exact=True)
+        name = (group.model.display_name if group.model.resolution and group.model.display_name else
+                reference.display_name(group.model.model, group.model.provider, exact=True))
         rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
