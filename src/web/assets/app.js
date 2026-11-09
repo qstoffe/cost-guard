@@ -509,7 +509,7 @@ async function connect() {
          history: current.section === 'watch' && current.watch?.earlier.open === true}, writable,
          {history: state.history_demand === true});
        if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
-         () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.earlier.hidden === false}),
+         () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
          writable, {owner: win, history: true}));
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = ' ' + state.product_version;

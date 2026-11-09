@@ -34,13 +34,11 @@ Status: current
   and historical-incident limits/FR000559's scoped delivery exception.
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
   focused three-architecture native startup, scoped handoff permission and proof limits.
-- [Mini Watch and finished history](mini-watch.md): finish-based representatives,
-  intrinsic opening-header width and width-aware two-row height, achieved-layout
-  probes and FR 000607's scoped physical-verification exception;
-  native Chrome CG-icon adoption at Windows 150%, repeated-hour offsets, keyed
-  tables/thin native bars, Chrome/Edge PiP/hidden-page and V2 evidence. Actual shell
-  icon surfaces remain unverified under FR 000570's scoped exception; older
-  geometry/presentation exceptions remain scoped to their original tasks.
+- [Mini Watch and finished history](mini-watch.md): FR000642's single session-keyed
+  Activity table, five-slot history fill, five-row viewport, table/header measured
+  width, explicit Fit and demand withdrawal; real hidden PiP/zoom/clamp and V2
+  evidence. Consolidated historical findings retain their dated evidence and
+  task-scoped exceptions, never fresh physical-platform proof.
 - [Models loading progress](models-progress.md): real Normal stage ownership,
   before/after synthetic observations, bounded process/browser updates and separate
   V2 probe timings/availability limits.

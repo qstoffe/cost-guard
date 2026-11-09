@@ -314,41 +314,31 @@ Closing/replacing PiP removes that listener; Classic removes all inherited Web o
 and retains its original shared CSS. Mini-only Web canvas/quota-surface/scrollbar rules
 never restyle the owner, Classic or browser-native chrome. No layer boundary changes.
 
-Mini renders canonical active/focal card identities, not the running aggregate: one
-keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
-Both tables have four columns: active `Session | CCost (Total) | Duration | Ctx`,
-historical `Activity | Session | CCost (Total) | Ctx`. Session contains only the flexible,
-ellipsized title; the cost cell pairs `prompt.ccost (session_summary.cost)` at its
-intrinsic nonwrapping width, using independent shared display/state handling.
-Both Session text targets preserve the full title and exact represented prompt ordinal
-(or explicit unknown); both independent cost targets use compact Mini prompt details.
-Active rows use their own focal item; history uses its canonical singleton representative's
-model/effort, duration, known calls and linked/mixed/partial/outcome evidence, never another
-prompt or Full Watch's valuation breakdown. Stable value nodes use shared ContextHelp without
-native titles, row-wide help or dedicated cues. FR000635's header groups the title
-and Earlier action, with shared type/line height and a whole-readout secondary row
-when narrow. Earlier Sessions is outlined/filled with stable text, no marker and
-atomic pressed/expanded/hidden/dataset state before measurement; it starts collapsed
-per new PiP document and survives publications. Inert header measurements include
-both pressed states, the real/reference daily text and existing rounding/gutter reserve.
-It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
-active/grace session IDs, and uses `session_summary.context`, never historical prompt Ctx.
-Both keyed tables retain intrinsic heading/metric widths and horizontal panning.
-Session totals/context retain their canonical source/cache states and display tokens;
-there is no added acquisition, valuation, SSE or history scan. The session and subscription
-regions use natural height without premature vertical caps; the document scrolls when needed;
-primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
-have accessible provenance without a visible approximation glyph. Native close and
-the filled Watch toggle own closing; the title still returns to the existing tab.
-Intrinsic metric/header minima leave all spare width to Session; only titles ellipsize,
-and narrow prompt regions scroll horizontally. Healthy/transient operational text is
-omitted, including the redundant retained/partial line below Session. Independent
-usable-observation clocks for each focal prompt, Daily and each quota remain internal;
-ordinary retained refresh never escalates into a timed notice. Definitive host/auth/identity
-failures remain immediately actionable. Partial reads retain unmatched rows but accept valid
-per-card corrections; observed empty publications still evict. Earlier exports canonical
-`completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
-preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
+FR000642 / v80.222 gives Mini one `Activity | Session | CCost (Total) | Ctx`
+table with one keyed DOM row per canonical session ID. Presentation-only `sessions`
+groups authoritative focal cards, choosing the latest genuinely running prompt before
+execution-unverified candidates, then latest start/event-ID ties. All distinct active
+sessions survive; latest finished grace/history representatives fill up to five slots
+after excluding active IDs. Candidates use only the existing verified five-history
+population; no provisional latest-set assertion, scanner, identity inference or valuation.
+Selected rows sort by actual start/finish ascending with deterministic unknown fallback.
+Full Watch retains its prompt multiplicity and independent five-history presentation.
+
+Activity uses Python-prepared `clock` / additive `start_date_time` with UTC offset while
+unfinished, and `finished_clock` / `finished_date_time` for supported endings. Unknown
+finish stays honest. The cost cell pairs representative prompt CCost with independent
+whole-session CCost; duration/model/effort/calls stay in its existing help. Historical
+Ctx uses the session summary; active/grace Ctx uses the focal estimate. Session help
+retains the full title and exact represented prompt ordinal. Keyed reconciliation uses
+atomic `moveBefore` when supported to preserve focused help/selection on activity
+reordering, with focus-preserving insertion fallback. No row-wide/native-title help.
+
+`app.js` leases history for a visible open Mini below five unique active sessions,
+including over a hidden opener; changes and close/host replacement promptly withdraw
+unnecessary demand. Closing clears Mini identity before the withdrawal payload.
+Retention/freshness, Today, account projections, terminal grace, colors, usable source
+corrections and definitive host/auth guidance retain their existing owners. No source,
+accounting, lifecycle or full-Watch boundary moves.
 
 The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`.
 Full and Mini Watch select Python-prepared `daily_usage.display.daily_ccost` variants:
@@ -363,12 +353,13 @@ summary. Loading is not zero. The left title alone returns
 to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMeasure`
 loads the shipped styles inside an inert, invisible shadow layout, then renders current
 presentation synchronously before the opening gesture calls native PiP. Natural layout
-includes all accounts/statuses and a height-only two-running-row reserve. Fit width
-comes from the maximum max-content header clone across both disclosure states and
-real/reference `CCost Today 90 000 · 999 prompts` text, plus body padding, eight CSS
-pixels of focus/rounding tolerance and an actual measured scrollbar gutter. The
-Fit-only stable document gutter and equal-width marker prevent disclosure layout
-shifts; no authentic totals/disclosure are mutated, table minima or fixed width used.
+includes all accounts/statuses and a measured five-row table viewport. `boundTable`
+measures real styled help-bearing rows/header, zoom and horizontal scrollbar thickness;
+six-plus active rows scroll internally under a sticky heading. Header/accounts remain
+outside that region. Fit width is max(inert header's actual/reference Today need,
+2.6 × measured compact metric-column need plus stable table gutter), with body padding
+and eight CSS pixels of focus/rounding tolerance. Session gets flexible extra width;
+unbounded titles/actual row text never choose opening width. No authentic totals change.
 The conservative 16×48-DIP frame estimate separates the opener's side frame from its
 outer/inner zoom estimate; height is measured at the resulting content width. Remember
 mode retains its prior first-open size intention, not the minimal Fit width. PiP content
@@ -382,28 +373,15 @@ Fit on open requests initial sizing on every opening, which can reset remembered
 Standard position can reset remembered size. Only both Remember choices permit browser
 cached bounds after the first opening within the same opener/host nonce. Preferences
 never reposition an open PiP; reload/new openers start fresh.
-FR000639 keeps `DisclosureSize` as the single native owner. One inert clone measures
-both disclosure states at the same effective width, retaining fractional layout height
-until conversion to native DIPs. Expansion adds only that delta, never a whole-window
-fit or synthetic running-row reserve. Both size modes restore achieved expansion
-(including zero/refusal/clamp) when layout/bounds remain unchanged; changed content,
-width or manual bounds reconcile the current delta. One vertical-only `resizeBy(0, dy)`
-or same-width `resizeTo` request is permitted per activation, with no width correction.
-Native events/two-frame confirmation record achieved bounds and cancel stale work.
-Missing activation/refusal/clamps retain disclosure/scroll. Earlier's accent fill has
-no contrasting inset shadow; Fit Height attaches shared action-dismiss help rather
-than passive/pinning help. [Delta verification](../../journal/web/mini-disclosure-delta.md).
-FR000637 adds one measured ↕ action to the same header group and `DisclosureSize` owner.
-Its explicit fit uses an inert clone at the current actual width, with CSS zoom/padding,
-visible history/messages/accounts and no synthetic running-row reserve or help overlay.
-It grows or shrinks in either size mode, clears stale disclosure restoration, and makes
-at most one native call: `resizeBy(0, delta)` or `resizeTo(actualOuterWidth, height)`.
-Neither disclosure nor manual fit requests width-rounding correction. Manual fit's
-side-frame-adjusted zoom estimate avoids old-height-dependent shrink targets; an already
-scroll-free snug fit tolerates small native quantization rather than oscillating.
-Native frame/work-area estimates remain platform-dependent, not physical OS proof.
-Opening/reference width includes all four components, without measuring the tooltip.
-See [implementation and verification](../../journal/web/mini-fit-height.md).
+The obsolete Earlier disclosure/delta owner and its tests are retired. `FitSize` retains
+FR000637's explicit ↕ action, immediate action-help dismissal and activation checks.
+Its current-width inert clone measures the bounded table plus messages/accounts, not
+offscreen sixth-plus rows or help overlays. One `resizeBy(0, delta)` or same-width
+`resizeTo` per deliberate activation, with no width correction, retry or passive native
+resize. Already scroll-free snug fit tolerates native quantization. Browser frame,
+zoom/work-area estimates remain platform-dependent; clamps preserve ordinary scrolling.
+Current tests/evidence: [Mini Watch](../../journal/web/mini-watch.md); the earlier
+[disclosure delta](../../journal/web/mini-disclosure-delta.md) is historical only.
 No rendering/data event invokes native sizing. Shared presentation-only `ReportView.LiveStatus`
 keeps useful retained Full Watch card/day and Watch/Accounts quota values quiet throughout
 ordinary failed coverage; initial missing-data guidance retains its own bounded delay.

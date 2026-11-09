@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.222 — 2026-11-09
+
+- Mini Watch uses one chronological Activity / Session / CCost (Total) / Ctx table, one row per canonical session. All distinct running sessions remain visible; the most recent eligible finished sessions fill unused slots up to five. Concurrent prompts choose the latest running representative without changing whole-session totals or full Watch.
+- Default opening measures five session rows plus subscriptions and a table-derived flexible Session width. Six-plus active sessions scroll inside the table, not by growing the window. Earlier Sessions and the Duration column are removed; full start/finish-offset and prompt-duration help, explicit height-only Fit and remembered/manual sizing remain.
+
 ## v80.221 — 2026-11-09
 
 - Web quota guesstimates use the nearest one significant digit when within 10% of raw reference Credits, otherwise two. Remaining, inferred Capacity, theoretical Monthly Capacity and estimated daily/workday pace round independently before Credits/USD formatting; verified provider allowances and observed costs are unchanged.

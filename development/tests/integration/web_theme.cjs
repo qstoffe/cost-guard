@@ -75,11 +75,11 @@ async function main() {
    assert.deepEqual(quota.children.map(option => [option.value,option.textContent]),
       [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
   assert.match(help.get(theme)(), /Follow the shipped default, currently Classic; do not pin/);
-  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /two running prompts.*Live updates never resize/);
-  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /both Earlier Sessions states.*CCost Today 90 000 · 999 prompts or wider real text/);
+  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /five session rows plus all subscriptions.*Extra active sessions scroll inside the table.*Live updates never resize/);
+  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /compact Activity, CCost \(Total\) and Ctx columns with generous Session space.*CCost Today 90 000 · 999 prompts or wider real text/);
   assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /rounding allowance and scrollbar space.*Real totals are unchanged/);
-  assert.doesNotMatch(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /650/);
-  assert.match(view.root.querySelector('#mini-size-remember-last-help').textContent, /without forcing the minimal Fit opening width/);
+  assert.doesNotMatch(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /650|Earlier Sessions|two running prompts/);
+  assert.match(view.root.querySelector('#mini-size-remember-last-help').textContent, /without forcing the measured Fit opening width.*Fit Height can still resize height/);
   theme.focus(); theme.value = 'web'; const pending = save(theme);
   assert.equal(theme.disabled, true); assert.equal(ccost.disabled, true);
   assert.equal(html.dataset.theme, 'classic', 'never optimistically claim saved theme');

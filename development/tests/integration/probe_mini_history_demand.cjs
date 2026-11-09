@@ -1,4 +1,4 @@
-// Actual PiP keyboard-to-authenticated-lease proof, independent of remembered geometry.
+// Actual open-Mini filler demand to authenticated leases, no disclosure or extra stream.
 const assert = require('node:assert/strict');
 const {setTimeout: pause} = require('node:timers/promises');
 
@@ -20,9 +20,9 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
     }
     throw new Error('Expected accepted key/lifecycle lease before ordinary 30-second renewal');
   };
-  await until('!!miniWatch.demand && !!miniWatch.view && miniWatch.view.earlier.hidden');
+  await until('!!miniWatch.demand && !!miniWatch.view && miniWatch.view.needsHistory');
   const firstTab = await evaluate('miniWatch.demand.tab'); // Identity is used only in memory.
-  let acknowledged = await accepted(firstTab,0,true,false);
+  await accepted(firstTab,0,true,true);
   const targets = await command('Target.getTargets');
   let pipSession;
   for (const target of targets.targetInfos.filter(item => item.targetId !== targetId && item.type === 'page')) {
@@ -36,22 +36,18 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
   const covered = await command('Target.attachToTarget', {targetId:cover.targetId,flatten:true});
   await command('Page.bringToFront',{},covered.sessionId);
   await until('document.hidden && !miniWatch.window.document.hidden');
-  for (const [key,code,keyCode,text] of [['Enter','Enter',13,'\r'],[' ','Space',32,' ']]) {
-    for (const expanded of [true,false]) {
-      assert.ok(performance.now()-acknowledged < 5000,'fresh acknowledged lease excludes periodic renewal');
-      await command('Runtime.evaluate', {expression:'document.querySelector(".mini-earlier-toggle").focus()'}, pipSession);
-      const offset = interest.length;
-      await command('Input.dispatchKeyEvent', {type:'keyDown',key,code,windowsVirtualKeyCode:keyCode,
-        text,unmodifiedText:text},pipSession);
-      await command('Input.dispatchKeyEvent', {type:'keyUp',key,code,windowsVirtualKeyCode:keyCode},pipSession);
-      await until(`!miniWatch.view.earlier.hidden === ${expanded}`);
-       assert.equal(await evaluate('miniWatch.view.earlierToggle.getAttribute("aria-expanded")'),String(expanded));
-       assert.equal(await evaluate('miniWatch.view.earlierToggle.getAttribute("aria-pressed")'),String(expanded));
-       assert.equal(await evaluate('miniWatch.view.prompts.dataset.expanded'),String(expanded));
-      acknowledged = await accepted(firstTab,offset,true,expanded);
-      checks.push(`${code} ${expanded?'expands':'collapses'} actual PiP and promptly updates accepted history demand`);
-    }
+  await evaluate(`window.leaseUpdate=miniWatch.update.bind(miniWatch);miniWatch.update=p=>leaseUpdate(window.leasePublication||p)`);
+  for(const count of [5,1,6,3]) {
+    const offset=interest.length;
+    await evaluate(`(()=>{const p=structuredClone(liveValue),base=p.view.active_cards[0];p.view.now_ms++;
+      p.view.active_cards=Array.from({length:${count}},(_,i)=>({...base,session_id:'lease-'+i}));
+      window.leasePublication=p;miniWatch.update(p);})()`);
+    await until(`miniWatch.view.promptRows.size>=${count}`);
+    assert.equal(await evaluate('miniWatch.view.needsHistory'),count<5);
+    await accepted(firstTab,offset,true,count<5);
+    checks.push(`${count} distinct running sessions promptly ${count<5?'request':'release'} historical filler interest`);
   }
+  await evaluate(`miniWatch.update=window.leaseUpdate;delete window.leasePublication;delete window.leaseUpdate;miniWatch.update(liveValue)`);
   let offset = interest.length;
   await evaluate('miniWatch.close();true');
   await accepted(firstTab,offset,false,false);
@@ -60,16 +56,16 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
   await command('Target.closeTarget',{targetId:cover.targetId});
   offset = interest.length;
   await evaluate('miniWatch.toggle()',true);
-  await until('!!miniWatch.demand && miniWatch.view.earlier.hidden');
+  await until('!!miniWatch.demand && miniWatch.view.needsHistory');
   const secondTab = await evaluate('miniWatch.demand.tab');
   assert.notEqual(secondTab,firstTab,'reopen owns a new document lease');
-  await accepted(secondTab,offset,true,false);
+  await accepted(secondTab,offset,true,true);
   assert.equal(await evaluate('probeStreams'),1,'Mini never creates another EventSource');
   offset = interest.length;
   await evaluate('miniWatch.close();true');
   await accepted(secondTab,offset,false,false);
   assert.deepEqual(errors,[]);
-  checks.push('Hidden opener/visible PiP, accepted close withdrawal, new collapsed reopen lease and single EventSource');
+  checks.push('Hidden opener/visible PiP automatically fills history; accepted close withdrawal, new open-Mini lease and single EventSource');
   return {outcome:'PASS',browser,checks,transactions,
     limitations:['Owned hidden browser keyboard and authenticated leases, not physical input, remembered geometry or OS proof.']};
 };

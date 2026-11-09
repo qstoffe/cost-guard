@@ -108,6 +108,24 @@ class WatchCardTests(unittest.TestCase):
         self.publish(cards, self.roots[0], replace(self.capture, observed_at_ms=9999, retained=True))
         self.assertIsNone(cards.project(10000)[1][0].observed_at_ms)
 
+    def test_history_supplies_five_after_running_and_terminal_grace_exclusions(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        for index, root in enumerate(self.roots):
+            row = replace(self.capture.rows[-1], at_ms=1000 + index,
+                completed_at_ms=9000 - index, in_progress=index < 3)
+            self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=row.at_ms))
+        terminal = replace(cards.sessions[self.roots[2].session_id].capture.rows[0],
+            in_progress=False, completed_at_ms=10000)
+        self.publish(cards, self.roots[2], replace(self.capture, rows=(terminal,), latest_ms=terminal.at_ms), now=2000)
+
+        active, history, state = cards.project(2001)
+
+        self.assertEqual("observed", state)
+        self.assertEqual(3, len(active))
+        self.assertEqual([root.session_id for root in reversed(self.roots[3:])], [card.session_id for card in history])
+        self.assertTrue(set(card.session_id for card in active).isdisjoint(card.session_id for card in history))
+
     def test_history_reorders_selected_set_by_displayed_prompt_with_stable_ties(self):
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog())

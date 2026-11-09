@@ -193,14 +193,13 @@ async function main() {
     await until(`!!miniWatch.measure?.ready`);
     await evaluate('miniWatch.toggle()', true);
     await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
-    await evaluate('miniWatch.view.earlierToggle.click();true', true);
-    const miniIds = JSON.stringify(spec.history_rows.slice(-3).map(row=>row[0]));
-    await until(`!miniWatch.view.earlier.hidden && JSON.stringify([...miniWatch.view.historyBody.querySelectorAll('[data-id]')]
+    const miniIds = JSON.stringify(spec.history_rows.map(row=>row[0]));
+    await until(`JSON.stringify([...miniWatch.view.body.querySelectorAll('[data-id]')]
       .map(row=>row.dataset.id))===${JSON.stringify(miniIds)}`);
-    assert.equal(await evaluate(`liveValue.view.history_cards.slice(-3).every(card=>{
-      const row=miniWatch.view.historyRows.get(card.session_id), prompt=card.rows[0].prompt;
+    assert.equal(await evaluate(`liveValue.view.history_cards.every(card=>{
+      const row=miniWatch.view.promptRows.get(card.session_id), prompt=card.rows[0].prompt;
       return row && row.getBoundingClientRect().height>0 && row.children[0].children[0].textContent===
-        (prompt.completed_at_ms==null?'—':prompt.display.finished_clock) && row.finishHelp===
+        (prompt.completed_at_ms==null?'—':prompt.display.finished_clock) && row.activityHelp===
         (prompt.completed_at_ms==null?'Unknown finish time':prompt.display.finished_date_time);
     })`), true);
     const blank = await command('Target.createTarget', {url:'about:blank'}, null);
@@ -208,12 +207,10 @@ async function main() {
     await command('Page.bringToFront', {}, other);
     await until('document.hidden && !miniWatch.window.document.hidden');
     assert.equal(await evaluate(`miniWatch.demand.payload(true).history && miniWatch.demand.payload(true).visible`), true);
-    facts.mini = {count:Math.min(3,spec.history_rows.length), dom_order:true, finish_display:true,
+    facts.mini = {count:Math.min(5,spec.history_rows.length), dom_order:true, finish_display:true,
       opener_hidden:true, mini_visible:true, independent_history_demand:true};
     await command('Target.closeTarget', {targetId:blank.targetId}, null);
     await command('Page.bringToFront');
-    await evaluate('miniWatch.view.earlierToggle.click();true', true);
-    assert.equal(await evaluate('miniWatch.demand.payload(true).history'), false);
     await evaluate('miniWatch.close();true');
     assert.deepEqual(exceptions, []);
     facts.outcome = 'PASS';
@@ -410,7 +407,6 @@ async function main() {
       const switched = performance.now();
       await evaluate('miniWatch.toggle()', true);
       await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
-      await evaluate('miniWatch.view.earlierToggle.click();true', true);
       const blank = await command('Target.createTarget', {url:'about:blank'}, null);
       const other = (await command('Target.attachToTarget', {targetId:blank.targetId, flatten:true}, null)).sessionId;
       await command('Page.bringToFront', {}, other);
@@ -419,16 +415,14 @@ async function main() {
         visible:miniWatch.demand.payload(true).visible, history:miniWatch.demand.payload(true).history})`);
       assert.equal(facts.promotion.demand.visible && facts.promotion.demand.history, true);
       facts.promotion.hidden_wall_ms = Date.now();
-      const newest = JSON.stringify(spec.winners.slice(0,3).sort());
-      await until(`liveValue?.view?.history_state==='observed' && !miniWatch.view.earlier.hidden &&
-        JSON.stringify([...miniWatch.view.historyRows.keys()].sort())===${JSON.stringify(newest)}`);
+      const newest = JSON.stringify([...spec.winners].sort());
+      await until(`liveValue?.view?.history_state==='observed' &&
+        JSON.stringify([...miniWatch.view.promptRows.keys()].sort())===${JSON.stringify(newest)}`);
       await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(()=>resolve(true))))');
       facts.promotion.switch_to_certified_seconds = (performance.now()-switched)/1000;
       facts.promotion.certified_wall_ms = Date.now();
       await command('Target.closeTarget', {targetId:blank.targetId}, null);
       await command('Page.bringToFront');
-      await evaluate('miniWatch.view.earlierToggle.click();true', true);
-      assert.equal(await evaluate('miniWatch.demand.payload(true).history'), false);
       await evaluate('miniWatch.close();true');
     } else if (spec.history_switch) {
       await until(`typeof current!=='undefined' && current?.section==='models' && liveValue?.view?.history_checked>0`);
@@ -518,13 +512,12 @@ async function main() {
     const miniStart = performance.now();
     await evaluate('miniWatch.toggle()', true);
     await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
-    await evaluate('miniWatch.view.earlierToggle.click();true', true);
-    // Shared history is oldest-to-newest; Mini selects its final newest three.
-    const newestThree = JSON.stringify(spec.winners.slice(0,3).sort());
-    await until(`JSON.stringify([...miniWatch.view.historyRows.keys()].sort())===${JSON.stringify(newestThree)} && !miniWatch.view.earlier.hidden`);
+    // No running sessions in this workload: all five canonical winners fill Mini.
+    const newestFive = JSON.stringify([...spec.winners].sort());
+    await until(`JSON.stringify([...miniWatch.view.promptRows.keys()].sort())===${JSON.stringify(newestFive)}`);
     await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(()=>resolve(true))))');
     facts.routes.push({section:'mini-earlier',status:'complete',seconds:(performance.now()-miniStart)/1000});
-    facts.checks.push('Headless Document PiP Earlier DOM matches the independent newest three');
+    facts.checks.push('Headless Document PiP Activity DOM matches the independent newest five');
     if (spec.history_switch) {
       const blank = await command('Target.createTarget', {url:'about:blank'}, null);
       const other = (await command('Target.attachToTarget', {targetId:blank.targetId, flatten:true}, null)).sessionId;
@@ -537,8 +530,6 @@ async function main() {
       facts.mini_visibility = demand;
       await command('Target.closeTarget', {targetId:blank.targetId}, null);
       await command('Page.bringToFront');
-      await evaluate('miniWatch.view.earlierToggle.click();true', true);
-      assert.equal(await evaluate('miniWatch.demand.payload(true).history'), false);
     }
     await evaluate('miniWatch.close();true');
     if (spec.accounts_switches) {

@@ -1,33 +1,31 @@
-// Historical-only Finished acceptance in the owned headless PiP, not physical OS proof.
+// Unified Activity time/help acceptance in owned headless PiP, not physical OS proof.
 const assert = require('node:assert/strict');
 module.exports = async function activity({evaluate,until,fixture,command,pip,ownerSession,layouts,checks}) {
   const input = (method,params) => command(method,params,pip);
   const settle = () => evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))');
-  const values = () => evaluate(`(()=>{const v=miniWatch.view;return [...v.historyBody.rows].map(row=>({
-    time:row.cells[0].textContent,help:row.finishHelp,columns:row.cells.length,id:row.dataset.id,
+  const values = () => evaluate(`(()=>{const v=miniWatch.view;return [...v.body.rows].filter(r=>r.dataset.id?.startsWith('earlier-')).map(row=>({
+    time:row.cells[0].textContent,help:row.activityHelp,columns:row.cells.length,id:row.dataset.id,
     focus:row.cells[0].firstChild.tabIndex,native:row.cells[0].firstChild.hasAttribute('title')}));})()`);
   const key = async key => {
     for(const type of ['keyDown','keyUp']) await input('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27});
   };
   await fixture('history-times'); await until(`liveValue.view.history_cards[0].rows[0].prompt.display.finished_clock==='23:47'`);
-  if(await evaluate('miniWatch.view.earlier.hidden')) await evaluate('miniWatch.view.earlierToggle.click()');
-  await evaluate('window.activityRow=miniWatch.view.historyBody.rows[0];window.activityTime=activityRow.cells[0].firstChild');
+  await until(`miniWatch.view.promptRows.has('earlier-0')`);
+  await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100'],['—','Unknown finish time']]);
+    ['—','Unknown finish time'],['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100']]);
   assert.ok((await values()).every(row=>row.columns===4 && row.focus===0 && !row.native));
-  assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Finished','Session','CCost (Total)','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Session','CCost (Total)','Duration','Ctx']);
+    ['Activity','Session','CCost (Total)','Ctx']);
   await evaluate('miniWatch.window.resizeTo(650,550)',true); await settle();
   await key('Tab'); await evaluate('activityTime.focus({preventScroll:true})');
   const help = `miniWatch.view.doc.getElementById('context-help')`;
   await until(`${help}?.matches(':popover-open')`);
   assert.equal(await evaluate(`${help}.textContent`),'2026-11-05 23:47 +0100');
-  await fixture('history-dst'); await until(`miniWatch.view.historyBody.rows[0].finishHelp==='2026-10-25 02:30 +0200'`);
+  await fixture('history-dst'); await until(`miniWatch.view.promptRows.get('earlier-0').activityHelp==='2026-10-25 02:30 +0200'`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
     ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100'],['00:08','2026-11-06 00:08 +0100']]);
-  assert.equal(await evaluate('miniWatch.view.historyBody.rows[0]===activityRow && activityRow.cells[0].firstChild===activityTime'),true);
+  assert.equal(await evaluate(`miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','focused help refreshes in place');
   await key('Escape'); await evaluate('activityTime.blur()');
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
@@ -51,13 +49,13 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
       for(const unit of ['credits','usd']) {
         await evaluate(`ReportView.setUnit('${unit}');miniWatch.settings()`);
         const layout = await evaluate(`(()=>{const v=miniWatch.view,w=miniWatch.window,d=w.document,rect=n=>n.getBoundingClientRect();
-          const rows=[...v.historyBody.rows];return {outer:w.outerWidth,inner:w.innerWidth,zoom:devicePixelRatio,
+          const rows=[...v.body.rows].filter(r=>r.dataset.id);return {outer:w.outerWidth,inner:w.innerWidth,zoom:devicePixelRatio,
             documentOverflow:d.documentElement.scrollWidth>w.innerWidth+1,
             horizontal:v.prompts.scrollWidth>v.prompts.clientWidth+1,
             vertical:d.documentElement.scrollHeight>w.innerHeight+1,
             activityWidth:rect(rows[0].cells[0]).width,sessionWidth:rect(rows[0].cells[1]).width,
             nowrap:rows.every(row=>w.getComputedStyle(row.cells[0]).whiteSpace==='nowrap'),
-            alignment:rows.every(row=>Math.abs(rect(row.cells[0]).right-rect(v.historyBody.parentNode.rows[0].cells[0]).right)<1),
+            alignment:rows.every(row=>Math.abs(rect(row.cells[0]).right-rect(v.body.parentNode.rows[0].cells[0]).right)<1),
             totals:rows.every(row=>{const n=row.querySelector('.mini-cost-value'),c=row.cells[2];return n.scrollWidth<=n.clientWidth+1 && rect(n).right<=rect(c).right+1;}),
             context:rows.every(row=>row.cells[3].textContent!=='')};})()`);
         assert.equal(layout.documentOverflow,false); assert.equal(layout.totals,true); assert.equal(layout.context,true);
@@ -71,5 +69,5 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     }
   }
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings();miniWatch.window.resizeTo(650,550)`,true); await settle();
-   checks.push('Four-column Finished history retains midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
+   checks.push('Unified four-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
 };

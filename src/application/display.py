@@ -210,6 +210,7 @@ def history_time_tokens(values, timezone_id):
     if "at_ms" in values:
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
         tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")
+        tokens["start_date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M %z")
     if "completed_at_ms" in values:
         finished = values["completed_at_ms"]
         tokens["finished_clock"] = "—" if finished is None else format_local_timestamp(finished, timezone_id, "%H:%M")

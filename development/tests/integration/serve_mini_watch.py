@@ -261,7 +261,7 @@ def main():
                         title='Earlier long session title ' * 20, rows=(replace(frame.history_cards[0].rows[0],
                             prompt=replace(frame.history_cards[0].rows[0].prompt,
                                 completed_at_ms=frame.now_ms - 100000 + index)),)) for index in range(int(count)))
-                    current = tuple(replace(cards[0], focal_id=str(index), title='Active long title ' * 30,
+                    current = tuple(replace(cards[0], session_id=f'active-{index}', focal_id=str(index), title='Active long title ' * 30,
                         rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
                             event_id=str(index), prompt_number=index + 23)),)) for index in range(int(prompt_count)))
                     quota = replace(frame.quota, accounts=frame.quota.accounts[:int(account_count[0])]) if account_count else frame.quota
@@ -269,7 +269,7 @@ def main():
                         running=running_prompts(current, 'observed')))
                 elif command.startswith('density-'):
                     _, prompts, accounts, *flags = command.split('-')
-                    current = tuple(replace(cards[0], focal_id=str(index),
+                    current = tuple(replace(cards[0], session_id=f'active-{index}', focal_id=str(index),
                         title='Long session title ' * 30 if flags else cards[0].title,
                         rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
                             event_id=str(index), prompt_number=index + 23, at_ms=frame.now_ms - 10000 + index)),))
@@ -278,7 +278,7 @@ def main():
                         for index, item in enumerate(frame.quota.accounts[:int(accounts)])))
                     warning = 'warning' in flags
                     publish(state='recovering' if warning else 'running', value=replace(frame,
-                        active_cards=current, quota=quota, quota_stale=warning,
+                        active_cards=current, history_cards=(), quota=quota, quota_stale=warning,
                         daily_state='retrying' if warning else frame.daily_state,
                         running=running_prompts(current, 'observed')))
                 else:
