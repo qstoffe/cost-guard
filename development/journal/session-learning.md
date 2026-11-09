@@ -49,9 +49,7 @@ owner rescues, independent recurrence, historical delivery truth and cost impact
 remain unestablished. Successful export transport and session outcome metadata
 are not authoritative test or Git verification.
 
-[Suggestion 000604 — preserve causal windows](../backlog/suggestions/000604-preserve-session-learning-causal-windows/SUGGESTION.md)
-is published here for human review, naming Toolkit as the proposed implementation
-owner. Existing Toolkit size/disposal work and focused overflow tests were compared;
+The then-published Suggestion 000604 was removed by explicit owner decision. Its source-backed causal-window findings are now incorporated in [approved Toolkit FR000463](https://github.com/qstoffe/opencode-toolkit/blob/main/development/backlog/ready-to-develop/000010-000463-session-learning-progressive-scan-one-session-causal-review/FR.md), alongside Toolkit's former Suggestion 000460; the 2026-11-06 historical learning assessment remains INCONCLUSIVE. Existing Toolkit size/disposal work and focused overflow tests were compared;
 the proposal targets candidate preservation within unchanged bounds, not larger
 exports or a new governing framework. No proposal was implemented or promoted.
 
