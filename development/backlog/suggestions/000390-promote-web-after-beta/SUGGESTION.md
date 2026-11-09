@@ -1,3 +1,5 @@
+> **2026-11-09 owner-approved promotion:** This parked concept has been rewritten and approved as **[FR000650](../../ready-to-develop/000850-000650-promote-cost-guard-web-to-default-v81-preserve-legacy-cli/FR.md)**, which is the **only executable Ready task for Web promotion**. Historical identity **000390 remains reserved and is not promoted/reused**. The text below remains unchanged archival rationale and its old “not approved” status describes the prior state, not FR000650. **Suggestion000400 stays separately parked; approval of promotion does not authorize deleting Legacy CLI.**
+
 > **Contract r5 migration (2026-11-01), authorized by the Decision Delegate:** folder identity 000390 identifies this same parked concept, not a new allocation or executable FR. This supersedes only the historical unnumbered-layout instruction below; the original text is retained as evidence. The suggestion remains non-executable. Future implementation still requires separate explicit owner approval and a fresh FR identity, never same-ID promotion.
 
 > The retirement suggestion referenced below now resides at `../000400-retire-legacy-after-coexistence/SUGGESTION.md`.
