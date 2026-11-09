@@ -67,7 +67,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
   await evaluate(`document.documentElement.style.zoom='';miniWatch.window.document.documentElement.style.zoom=''`);
   await change('ccost-unit','usd');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/remaining \(\$229.12\)/);
-  await change('ccost-unit','default'); await change('web-theme','default');
+   await change('ccost-unit','credits'); await change('web-theme','default');
   await change('quota-display','used');
   await evaluate(`ReportView.syncUnits(quotaAccounts)`);
   assert.match(await evaluate(`quotaAccounts.textContent`),/Used 2088\/25000 AI credits/);
@@ -119,7 +119,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
    await evaluate(`(() => {const account=document.createElement('section');ReportView.overviewAccounts(account,liveValue.probe_accounts,'Accounts',true);
      window.ratioAccountText=account.textContent;})()`);
    assert.match(await evaluate('ratioAccountText'),/90% remaining \(\$9.00\)Capacity: \$10.00 \(guesstimate\)/);
-   await change('ccost-unit','default');
+    await change('ccost-unit','credits');
    await fixture('running'); await until(`liveValue.view.accounts.accounts.length===6`);
    await change('quota-display','default');
    await route('watch'); await until(`document.querySelector('.watch-account-grid')!==null`);

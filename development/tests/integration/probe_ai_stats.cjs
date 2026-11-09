@@ -110,7 +110,7 @@ async function main() {
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/human time saved/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/silicon crew burns per hour/);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},tab);
     await until(`document.getElementById('context-help').hidden`);
@@ -133,9 +133,9 @@ async function main() {
     await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
     checks.push('all ten AX names, intrinsic title help, Tab/Shift-Tab traversal, Enter/Space activation, emulated touch period activation, Escape');
     await fixture('stats-hold-all');
-    await evaluate(`current.statsResults.delete('all'); selectStats(current,'all')`);
+    await evaluate(`selectStats(current,'all'); void acquire(current)`);
     await until(`current.loading && !!current.active`);
-    assert.equal(await evaluate(`!!output.querySelector('progress') && !output.querySelector('.ai-stat') && current.percent<100`),true);
+    assert.equal(await evaluate(`!!output.querySelector('.ai-stat') && !output.querySelector('progress')`),true);
     assert.doesNotMatch(await evaluate(`output.textContent`),/Unavailable|vault/);
     await evaluate(`selectStats(current,'today')`);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat') && current.loading`),true,'ready smaller period remains usable during broader acquisition');
@@ -145,7 +145,7 @@ async function main() {
     await evaluate(`selectStats(current,'all'); api('/api/jobs/'+current.active+'/cancel',{})`);
     await until(`current.failed && !current.loading`);
     assert.match(await evaluate(`current.message`),/cancelled/i);
-    assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),false);
+    assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
     await evaluate(`selectStats(current,'today')`);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
     await fixture('stats-release-all');
@@ -163,7 +163,9 @@ async function main() {
         if(current.result.source.observed_at_ms!=null) current.result.source.observed_at_ms=current.result.observed_at_ms;
         __hold=true; current.checkedAt=Date.now()-CachedReports.cadences[current.section]-1; scheduleCachedReport();`);
       await until(`current.loading && typeof __release==='function'`);
-      assert.equal(await evaluate(`output.firstChild===__dom && !current.withheld && !output.querySelector('progress')`),true);
+      assert.deepEqual(await evaluate(`({retained:output.firstChild===__dom,
+        withheld:!!current.withheld,progress:!!output.querySelector('progress')})`),
+        {retained:true,withheld:false,progress:false},section+': aged warm refresh retains the accepted DOM');
       await evaluate(`__hold=false; __release(); window.__release=null`);
       await until(`!current.loading`);
       // TTL < age <= one hour: re-entry is immediate and quiet, one in-flight check.
@@ -179,12 +181,22 @@ async function main() {
         window.__old=CachedReports.observation(current.result); __hold=true; __fail=true; enterCachedReport(current);`);
       await until(`current.loading && typeof __release==='function'`);
       assert.equal(await evaluate(`!current.withheld && !output.querySelector('progress') &&
-        !!output.querySelector('.ai-stat,.token-mix-table') && document.getElementById('report-updating').textContent.includes('Historical snapshot as of')`),true);
+        !!output.querySelector('.ai-stat,.token-mix-table') && !document.getElementById('report-updating')`),true);
       await evaluate(`__hold=false; __release(); window.__release=null`); await until(`!current.loading && current.failed`);
       assert.equal(await evaluate(`!output.querySelector('progress') && CachedReports.observation(current.result)===__old`),true);
       await evaluate(`__fail=false; acquire(current)`); await until(`!current.loading && !current.withheld && !current.failed`);
       checks.push(section+': aged completion/re-entry retains qualified content; refresh is quiet/single; genuine failure preserves original provenance; retry restores');
     }
+    await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && !current.loading`);
+    await evaluate(`window.__savedStats=current.result; current.result=null; current.statsResults.clear();
+      window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
+    await until(`current.failed && !current.loading`);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),10);
+    assert.doesNotMatch(await evaluate(`output.textContent`),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|synthetic|snapshot interval/i);
+    assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-value')].every(node=>node.textContent.includes('0'))`),true);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
+    await evaluate(`api=__realApi; AIStatsView.remember(current,__savedStats); current.failed=false; show(current)`);
+    checks.push('cold failed acquisition has ten playful zero figures, no invented record links; warm failure retains fun results');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;
     const peer=(await command('Target.attachToTarget',{targetId:peerId,flatten:true})).sessionId;

@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from src.cache import CacheRepository
+from src.cache.session_scope import snapshot_scope
 from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession, Provenance, SessionSnapshot, TokenUsage
 from src.domain.acquisition import AcquisitionMetrics
 
@@ -264,6 +265,7 @@ class DerivedAnalysisCache:
         *,
         provenance: Provenance,
         dependencies: AnalysisDependencies,
+        snapshot: SessionSnapshot | None = None,
     ) -> None:
         if not bundle.cacheable or not self.write_enabled:
             return
@@ -275,6 +277,7 @@ class DerivedAnalysisCache:
             _bundle_to_dict(bundle, dependencies),
             source_revision=bundle.source_revision,
             algorithm_version=dependencies.algorithm_version,
+            session_scope=snapshot_scope(snapshot) if snapshot is not None else None,
         )
 
 
@@ -336,5 +339,5 @@ def analyze_with_cache(
     if bundle.cacheable:
         post_revision = source.get_session_tree_revision(root_session_id)
         if post_revision == snapshot.source_revision == revision:
-            cache.store(bundle, provenance=snapshot.root.provenance, dependencies=dependencies)
+            cache.store(bundle, provenance=snapshot.root.provenance, dependencies=dependencies, snapshot=snapshot)
     return CachedAnalysisResult(bundle, False, snapshot)

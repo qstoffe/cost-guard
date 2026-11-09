@@ -55,6 +55,20 @@ class CacheDatabase:
                     model_id TEXT PRIMARY KEY,
                     first_seen_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS cache_entry_lifecycle (
+                    namespace TEXT NOT NULL,
+                    cache_key TEXT NOT NULL,
+                    root_key TEXT NOT NULL,
+                    source_revision TEXT NOT NULL,
+                    activity_ms INTEGER,
+                    used_ms INTEGER,
+                    PRIMARY KEY (namespace, cache_key),
+                    FOREIGN KEY (namespace, cache_key) REFERENCES cache_entries(namespace, cache_key) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS cache_lifecycle_root ON cache_entry_lifecycle(root_key);
+                CREATE INDEX IF NOT EXISTS cache_lifecycle_expiry
+                    ON cache_entry_lifecycle(max(activity_ms, used_ms + 3600000), namespace, cache_key)
+                    WHERE activity_ms IS NOT NULL AND used_ms IS NOT NULL;
                 """
             )
             connection.execute(

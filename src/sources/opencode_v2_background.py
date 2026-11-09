@@ -12,6 +12,7 @@ import hashlib
 import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from src.domain import BackgroundActivity, TerminalOutcome
@@ -73,7 +74,7 @@ def running_jobs(client: Any, directory: str) -> frozenset[str] | None:
                      and str(item.get("status", "")).lower() == "running")
 
 
-def _starts(items: Iterable[Mapping[str, Any]]) -> Iterable[tuple[str, str, int, str]]:
+def _starts(items: Iterable[Mapping[str, Any]]) -> Iterable[tuple[str, str, int, str, str, str]]:
     for item in items:
         if item.get("type") != "assistant" or not isinstance(item.get("id"), str):
             continue
@@ -88,7 +89,9 @@ def _starts(items: Iterable[Mapping[str, Any]]) -> Iterable[tuple[str, str, int,
             started = _time(part_time.get("ran")) or _time(part_time.get("created")) or _time(message_time.get("created"))
             kind = str(part.get("name") or part.get("tool") or "").lower()
             if started:
-                yield job, kind if _KIND.fullmatch(kind) else "job", started, item["id"]
+                part_id = part.get("id") if isinstance(part.get("id"), str) else ""
+                call_id = part.get("callID") if isinstance(part.get("callID"), str) else ""
+                yield job, kind if _KIND.fullmatch(kind) else "job", started, item["id"], part_id, call_id
 
 
 def background_activities(
@@ -105,7 +108,7 @@ def background_activities(
     activities: dict[str, BackgroundActivity] = {}
     registry: frozenset[str] | None = None
     registry_read = False
-    for job, kind, started, owner in _starts(items):
+    for job, kind, started, owner, part_id, call_id in _starts(items):
         identity = "bg:" + hashlib.sha256(f"{session_id}\0{job}".encode("utf-8")).hexdigest()[:20]
         notice = notices.get(job)
         if notice is not None:
@@ -120,6 +123,11 @@ def background_activities(
             if not registry_read:
                 registry, registry_read = running_jobs(), True
             activity = BackgroundActivity(identity, session_id, kind, started, owner,
-                                          running=registry is None or job in registry)
-        activities.setdefault(identity, activity)
+                                          running=registry is None or job in registry,
+                                          tool_part_id=part_id if registry is not None else "",
+                                          tool_call_id=call_id if registry is not None else "")
+        previous = activities.get(identity)
+        if previous is not None and (previous.owner_message_id, previous.tool_part_id, previous.tool_call_id) != (owner, activity.tool_part_id, activity.tool_call_id):
+            activity = replace(previous, tool_part_id="", tool_call_id="")
+        activities[identity] = activity
     return tuple(sorted(activities.values(), key=lambda value: (value.started_at_ms, value.activity_id))), notice_ids

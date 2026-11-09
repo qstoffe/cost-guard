@@ -16,6 +16,7 @@ from .quota_ccost import quota_ccost_tokens
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
 from .comparisons import display_tokens as comparison_tokens
+from .reference_cost import cost_help_tokens
 
 
 def decimal(value):
@@ -24,6 +25,12 @@ def decimal(value):
 
 def amount_tokens(values):
     tokens = {}
+    if "day_start_ms" in values and "prompt_count_complete" in values:
+        # Web Today alone shows the known priced subtotal quietly. Keep the
+        # comparison's canonical facts and other scopes' partial tokens intact.
+        total = dict(values["total"].fields)
+        tokens["daily_ccost"] = ("N/A" if total["observed_requests"] and not total["priced_requests"]
+                                 else ccost_amount(decimal(total["known_ccost"])))
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
                 "next_context_cached_ccost", "next_context_fresh_ccost",
@@ -286,6 +293,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(comparison_tokens(values, timezone_id))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
+    tokens.update(cost_help_tokens(values))
     tokens.update(quota_tokens(values))
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing})

@@ -43,10 +43,10 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const title = view.body.children[0].children[0].children[0].children[0];
   assert.equal(title.tabIndex, 0); assert.equal(title.title, undefined);
   assert.equal(helpText(title), 'Concurrent\nPrompt #23 in this session');
-  const activeCost = view.body.children[0].children[1].children[0];
+  const activeCost = view.body.children[0].children[1].children[0].children[0];
   assert.equal(activeCost.tabIndex, 0);
   assert.match(helpText(activeCost), /Prompt #23\nMain model:[\s\S]*Effort:[\s\S]*Duration: 10m/);
-  assert.match(helpText(view.body.children[1].children[1].children[0]), /Prompt #24[\s\S]*Duration: 20m/);
+  assert.match(helpText(view.body.children[1].children[1].children[0].children[0]), /Prompt #24[\s\S]*Duration: 20m/);
   assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'Session contains no cost');
   const history = index => ({...active, session_id:'history-'+index, title:'Earlier '+index, focal_id:'',
     session_summary:{...summary, context:{display:{watch_next_context_tokens:String(900+index)}}},
@@ -64,7 +64,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const row = view.historyBody.children[0];
   assert.equal(row.querySelectorAll('button').length,0,'history values have no duplicate cues');
   assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
-  const detail = row.children[2].children[0];
+  const detail = row.children[2].children[0].children[0];
   const historicalTitle = row.children[1].children[0].children[0];
   assert.equal(historicalTitle.tabIndex, 0);
   assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt #23 in this session');
@@ -84,7 +84,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   Object.assign(historicalItem.prompt, {prompt_number:null, calls:null, linked_agent_count:0, has_additional_model:false,
     unresolved_cost:false, aborted:false, abort_reason:'', cost_detail:null});
   controller.update(input);
-  assert.equal(row.children[2].children[0], detail, 'detail target is stable across corrections');
+  assert.equal(row.children[2].children[0].children[0], detail, 'detail target is stable across corrections');
   assert.equal(helpText(detail), 'Prompt number unavailable\nMain model: N/A\nEffort: N/A\nDuration: N/A');
   assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt number unavailable');
   Object.assign(historicalItem, originalItem); controller.update(input);
@@ -104,7 +104,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const retry = structuredClone(input.view.history_cards[2]); retry.state='retrying';
   input.view.history_cards[2]=retry; input.view.history_state='refreshing'; input.view.history_epoch=1; controller.update(input);
   assert.equal(time.textContent,'02:30','failed source retry retains the authentic finish');
-  assert.match(view.historyBody.textContent,/Previously verified sessions/);
+  assert.doesNotMatch(view.historyBody.textContent,/Previously verified sessions|checking for changes/);
+  assert.equal(view.historyBody.children.length,3,'refresh adds no status row');
   input.view.history_state='observed'; controller.update(input);
   assert.deepEqual(view.body.children.map(node => node.textContent),running,'historical-only updates leave running semantics unchanged');
   view.earlierToggle.fire('click'); controller.update(input);
@@ -158,7 +159,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     assert.ok(view.body.children.every(row=>cost(row).endsWith(' ('+expected+')')));
     assert.equal(cost(view.historyBody.children[0], true), '2 ('+expected+')');
     assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'source captions never change Session row height');
-    if (['partial','unavailable'].includes(value.state)) assert.match(helpText(view.body.children[0].children[1].children[0]), /Source evidence:/);
+    assert.doesNotMatch(helpText(view.body.children[0].children[1].children[0].children[0]), /Source evidence:/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};
@@ -173,18 +174,22 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   input.view.history_cards[0].rows=[]; controller.update(input);
   assert.equal(view.historyBody.children[0].children[0].textContent,'—','missing representative is unknown');
   assert.equal(helpText(view.historyBody.children[0].children[0].children[0]),'Unknown finish time');
-  input.view = {...input.view,history_cards:[],history_state:'unavailable'}; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Unable to verify latest sessions','server owns retention and invalidation');
+  input.view = {...input.view,history_cards:[],history_state:'unavailable',history_epoch:1}; controller.update(input);
+  assert.equal(view.historyBody.textContent,'No earlier sessions','certified empty remains stable during retry');
   assert.equal(view.observationHelp,undefined);
   input.view.history_state='observed'; controller.update(input);
   assert.equal(view.historyBody.textContent,'No earlier sessions','canonical empty clears retained history');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='loading'; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Loading earlier sessions…');
+  assert.equal(view.historyBody.textContent,'No earlier sessions');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='unavailable'; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Unable to verify latest sessions');
+  assert.equal(view.historyBody.textContent,'No earlier sessions');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
+  input.view = {...input.view, history_epoch:0, history_source_key:'new-source', history_state:'loading'}; controller.update(input);
+  assert.equal(view.historyBody.textContent,'Loading earlier sessions…','a different source has no certified history yet');
+  input.view.history_state='unavailable'; controller.update(input);
+  assert.equal(view.historyBody.textContent,'Unable to load earlier sessions');
   input.view = {...saved,active_cards:saved.active_cards.map(card=>({...card,title:''}))}; controller.update(input);
   assert.equal(view.body.children[0].children[0].children[0].children[0].textContent,active.session_id);
   assert.equal(view.body.children[0].children[0].querySelectorAll('button').length,0);

@@ -2,7 +2,7 @@
 
 Source revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
 Checked revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
-Last checked: 2026-11-06
+Last checked: 2026-11-08
 Status: current
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
@@ -19,8 +19,9 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 - Example: `Estimated prompt cost, not your bill.\nI — First request’s incoming
   context cost.\nE — Output, later requests and linked subagents.`
 - Say **N/A = unavailable, not zero** and **? = partial pricing/data** where they
-  affect interpretation. Keep estimates, retained observations and unsupported work
-  honest. Do not repeat every caveat on each model/date cell.
+  affect interpretation. Keep intrinsic estimates and unsupported work honest. Once
+  useful content exists, ordinary retained refresh is silent, including hidden help
+  and live regions; preserve provenance internally, not as a replacement caveat.
 - Distinguish prompt/session/day scopes, reference CCost/billing/native quotas and
   token percentages/cost. A main model’s name does not describe every contributing
   model. Do not claim unlinked work is counted.
@@ -91,21 +92,33 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 ## Whole-application audit inventory
 
+FR000628 scoped delta (v80.208): actual reference-CCost N/A text is a shared help
+target, not a blanket rule for noncost N/A. Watch merges reasons into rich details;
+Mini retains stable independent prompt/session spans and compact prompt details.
+FR000634 removes even N/A help from the global daily summary in Full and Mini;
+other cost scopes retain dynamic help, whose empty content closes an open panel
+without moving focus or reopening it. Sessions initial pending acquisition remains Loading.
+Token Mix uses neutral fallback when its aggregate lacks per-request causal proof.
+`domain/reference_cost.py` owns bounded typed facts; pricing diagnoses only existing
+failed valuations, application freezes allowlisted copy and browser never acquires
+or prices on hover. A separate diagnostic signature invalidates explanation caches
+without changing the rate signature. See [classification and evidence](../../journal/web/ccost-unavailable.md).
+
 | Surface / entry points | Disposition |
 | --- | --- |
 | Full Watch: all ten active/historical headings | Shared buttons; explicit I/C/W/O and I+E lines, exactly two Model bullets, concise Effort without N/A tautology, Ictx versus next context |
 | Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; accessible model star and help expose causal linked agents even for one shared model. Main-only model switches retain help without a star. Model/CCost omit tier prose without changing tier grouping/rates; Calls copy is unchanged. CCost adds distinct canonical child-prompt count before each subagent group's category bullets, separate from sessions/requests; missing boundaries stay qualified. Token Mix remains header-only; no preview popups or generic N/A help |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
-| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Three daily targets: Today label, cost and prompt count, without daily Mix; preserve cost/count completeness and retained-source warnings. Period Capacity and nonmonthly 30-day equivalent share one intrinsic explanation. Inferred period Capacity and every numeric monthly extrapolation use `(guesstimate)`; native and unknown figures do not. Preserve native factual lower block |
+| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Global Today label, amount and prompt count are plain semantic text with no help targets, title, source aria or completeness disclaimer. Account-specific Today and quota help remain. Period Capacity and nonmonthly 30-day equivalent share one intrinsic explanation. Inferred period Capacity and every numeric monthly extrapolation use `(guesstimate)`; native and unknown figures do not. Preserve native factual lower block |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
 | Mini: both tables’ headings | Session names only; CCost (Total) explains prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
-| Mini: session title/cost and prompt/history status | Both tables' Session text reveals the full title and represented canonical Prompt # (unknown stays unavailable). Both paired-cost values use the same compact prompt model/effort/duration/known-calls renderer, with linked/mixed/pricing/outcome facts. Running uses its focal; history its actual representative. No row-wide popup, native title, cue, detailed I/C/W/O breakdown or raw prompt text. Retained source flags stay accessible without extra Session captions |
-| Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | Remove both header cues and all Earlier Sessions help; no table-level replacement or progress-bar popup. Keep useful return action help with immediate activation dismissal. Critical host/auth/source warnings stay visible, not observation logs |
+| Mini: session title/cost and prompt/history status | Both tables' Session text reveals the full title and represented canonical Prompt # (unknown stays unavailable). Both paired-cost values use the same compact prompt model/effort/duration/known-calls renderer, with linked/mixed/pricing/outcome facts. Running uses its focal; history its actual representative. No row-wide popup, native title, cue, detailed I/C/W/O breakdown, passive source-refresh flags or raw prompt text |
+| Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
 | Mini: subscriptions | Exactly two primary-window facts on the visible text: Capacity, then Next reset. Select canonical unit/provenance and reset tokens; no secondary or CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: checkboxes and multi-sort | Four semantic label-only definitions preserve full sorting click/keyboard/Shift actions and accessible action names; Relative CCost groups ratio, actual global completed sample, token categories, hidden fallback and source thresholds |
-| Models: price refresh and promotion notes | No More information/cards. Explicit price action and genuine fetch time precede the table; promotion/availability facts stay visible. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
-| Sessions/detail, Token Mix, active-hour | Shared sort help; Reading this report and Sample/price coverage are line-separated. Session context/retention and finite-capture guidance remain visible; the retired Reports date form has no help surface |
-| Accounts | Observation details stays a keyboard/touch-native disclosure with exact source/native-money/pace/billing facts; no native title explanations existed |
+| Models: price refresh and promotion help | Explicit price action and genuine fetch time precede the table. One highlighted postfix star follows the complete relative tier chain; the row's structured offer supplies multiline Price Promotion/model/discount/end/resume help. No numbered footer, native duplicate title or routine catalog/source caveat. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
+| Sessions/detail, Token Mix, active-hour | Shared sort and intrinsic metric help remain. No retained-source/as-of/refresh caveat or finite progress footer on the loaded Sessions catalog. The retired Reports date form has no help surface |
+| Accounts | Shared Watch subscription help retains exact native-money/pace/billing facts and genuine provider restrictions/auth failures; usable retained quotas have no passive source aria or timed refresh captions |
 | Settings | Intrinsic label and current-choice help replace visible paragraphs; native customizable option previews share their text with an accessible fallback disclosure. Retain native focus/selection, save feedback and changing default labels |
 | Navigation / host status | Visible action labels retained. Host warning becomes one real details disclosure, not CSS-hover plus native tooltip. Observation lines shortened; hidden status has no redundant title |
 

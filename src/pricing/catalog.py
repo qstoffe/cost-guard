@@ -11,7 +11,9 @@ from typing import Iterable
 
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.domain.ccost import CCostPricing, ccost_pricing
+from src.domain.reference_cost import ReferenceCostIssue
 from .identities import reference_identity
+from .reference_diagnostics import reference_issue
 
 _COPILOT_PREFIX = re.compile(r"^github-copilot/")
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -36,10 +38,12 @@ class PricingCatalog:
     retrieved_at_ms: int = 0
     source_revision: str = ""
     refresh_not_after_ms: int | None = None
+    reference_stale: bool = field(default=False, compare=False)
     ccost_models: tuple[CCostPricing, ...] = field(init=False, repr=False, compare=False)
     _ccost_by_model: dict[int, CCostPricing] = field(init=False, repr=False, compare=False)
     _reference_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
     _resolve_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
+    _issue_identity_memo: dict[str, ReferenceCostIssue] = field(init=False, repr=False, compare=False)
     analysis_signature: str = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -48,6 +52,7 @@ class PricingCatalog:
         object.__setattr__(self, "_ccost_by_model", {id(m): c for m, c in zip(self.models, ccost_models)})
         object.__setattr__(self, "_reference_memo", {})
         object.__setattr__(self, "_resolve_memo", {})
+        object.__setattr__(self, "_issue_identity_memo", {})
         # Estimator identity/rates, not acquisition timestamps, document labels
         # or presentation-only release/promotion metadata.
         semantics = [asdict(model) for model in self.models]
@@ -55,6 +60,10 @@ class PricingCatalog:
             model.pop("metadata", None)
         payload = json.dumps(semantics, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str)
         object.__setattr__(self, "analysis_signature", hashlib.sha256(payload.encode("utf-8")).hexdigest())
+
+    @property
+    def diagnostic_signature(self) -> str:
+        return f"{self.analysis_signature}/{bool(self.retrieved_at_ms and self.source_revision)}/{self.reference_stale}"
 
     def reference_prices(self, name: str, *, exact: bool = True) -> CCostPricing | None:
         native = self.resolve_reference(name) if exact else self.resolve(name)
@@ -132,6 +141,9 @@ class PricingCatalog:
         if model is None:
             return None
         return price_token_usage(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
+
+    def reference_issue(self, model_ref: ModelRef, tokens: TokenUsage) -> ReferenceCostIssue:
+        return reference_issue(self, model_ref, tokens)
 
     def reference_category_valuation(
         self, model_ref: ModelRef, tokens: TokenUsage,

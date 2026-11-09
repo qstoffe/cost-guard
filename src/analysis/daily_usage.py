@@ -31,11 +31,11 @@ class DailyUsage:
     prompt_count_complete: bool
 
 
-def daily_usage(entries, prompt_of, *, day_start_ms, now_ms, valuation, category_valuation):
+def daily_usage(entries, prompt_of, *, day_start_ms, now_ms, valuation, category_valuation, diagnose=None):
     records = unique_usage(entry for entry in entries if day_start_ms <= entry.completed_at_ms <= now_ms)
     prompts = {prompt_of[request_identity(entry)] for entry in records
                if prompt_of.get(request_identity(entry)) is not None}
-    return DailyUsage(day_start_ms, now_ms, comparison_cost(records, valuation),
+    return DailyUsage(day_start_ms, now_ms, comparison_cost(records, valuation, diagnose=diagnose),
         priced_token_mix(((entry.model, entry.tokens) for entry in records), category_valuation,
             sample_size=len(prompts)), len(prompts),
         all(request_identity(entry) in prompt_of for entry in records))

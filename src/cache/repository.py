@@ -7,6 +7,8 @@ from typing import Any
 
 from .database import CacheDatabase, DEFAULT_BUSY_TIMEOUT_MS
 from .model_notices import ModelSightings
+from .lifecycle import CacheLifecycle, publish
+from .session_scope import SessionScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,12 +18,14 @@ class CacheEntry:
     payload: Any
     source_revision: str | None
     algorithm_version: str | None
+    session_scope: SessionScope | None = None
 
 
 class CacheRepository:
     def __init__(self, database: CacheDatabase) -> None:
         self.database = database
         self.model_sightings = ModelSightings(self)
+        self.lifecycle = CacheLifecycle(database)
 
     def put(
         self,
@@ -32,6 +36,7 @@ class CacheRepository:
         source_revision: str | None = None,
         algorithm_version: str | None = None,
         busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+        session_scope: SessionScope | None = None,
     ) -> None:
         payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         with self.database.connect(operation="write", busy_timeout_ms=busy_timeout_ms) as connection:
@@ -46,6 +51,7 @@ class CacheRepository:
                        updated_at_utc=CURRENT_TIMESTAMP""",
                 (namespace, key, payload_json, source_revision, algorithm_version),
             )
+            publish(connection, namespace, key, source_revision, session_scope)
 
     def get(self, namespace: str, key: str, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> CacheEntry | None:
         with self.database.connect(operation="read", busy_timeout_ms=busy_timeout_ms) as connection:
@@ -103,6 +109,7 @@ class CacheRepository:
 
     def put_many(self, entries, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> None:
         """Atomically publish a caller-bounded batch of independent reconstructible entries."""
+        entries = tuple(entries)
         rows = [(entry.namespace, entry.key,
             json.dumps(entry.payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
             entry.source_revision, entry.algorithm_version) for entry in entries]
@@ -114,3 +121,5 @@ class CacheRepository:
                 VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(namespace,cache_key) DO UPDATE SET
                 payload_json=excluded.payload_json,source_revision=excluded.source_revision,
                 algorithm_version=excluded.algorithm_version,updated_at_utc=CURRENT_TIMESTAMP""", rows)
+            for entry in entries:
+                publish(connection, entry.namespace, entry.key, entry.source_revision, entry.session_scope)

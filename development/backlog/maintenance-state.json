@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "ordinaryCount": 76,
+  "ordinaryCount": 82,
   "completed": {
     "architecture": 60,
     "test-health": 75,
-    "performance": 40,
+    "performance": 80,
     "session-learning": 0
   },
   "deferred": {
@@ -13,5 +13,5 @@
       "reason": "Decision Delegate authorized deferral: supported exports succeeded but bounded fitting discarded causal windows; the one permitted identity-recovery request did not locate its original target. Prerequisite: usable supported authority/candidate/recovery/outcome windows within existing privacy, sample and context bounds. Historical assessment remains INCONCLUSIVE, not completed/PASS."
     }
   },
-  "lastOrdinaryId": "fr/000625"
+  "lastOrdinaryId": "fr/000634"
 }

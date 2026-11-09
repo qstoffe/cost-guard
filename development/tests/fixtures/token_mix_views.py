@@ -50,8 +50,9 @@ class TokenMixJobs:
         self.generation += 1
         key = uuid4().hex
         report = token_mix_report(self.generation)
+        observed = int(time.time() * 1000)
         result = dict(schema_version=1, instance_id='synthetic', sequence=self.generation,
-            observed_at_ms=int(time.time() * 1000), source=dict(status='acquired'),
+            observed_at_ms=observed, source=dict(status='acquired', observed_at_ms=observed),
             view=project(report).to_json(), error=None)
         self.jobs[key] = dict(id=key, status='running', progress=dict(phase='history', completed=0), result=result,
             error=None, ready_at=time.monotonic() + (2 if self.generation > 1 else 0))

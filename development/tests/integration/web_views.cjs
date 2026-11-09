@@ -36,7 +36,7 @@ let diagnostics = () => ({});
 async function until(condition) {
   const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
   const started = Date.now();
-  for (let i = 0; i < 500; i++) { if (condition()) return; await delay(10); }
+  for (let i = 0; i < 500; i++) { if (await condition()) return; await delay(10); }
   assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + '); ' +
     JSON.stringify({elapsed_ms: Date.now() - started, ...diagnostics()}));
 }
@@ -262,7 +262,7 @@ async function main() {
    offline = true;
    await until(() => !vm.runInContext('current.detail.busy', context));
    await vm.runInContext('current.detail.load()', context);
-   assert.match(vm.runInContext('current.detail.status.textContent', context), /retained/);
+    assert.equal(vm.runInContext('current.detail.status.textContent', context), '');
    assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
   assert.equal(all(ids.result, 'progress').length, 0);
@@ -276,7 +276,7 @@ async function main() {
   assert.equal(location.hash, '#/watch', 'legacy global Live is replaced, not pushed');
   assert.equal(ids.heading.textContent, 'Watch');
   assert.equal(nav.find(node => node.getAttribute('href') === '#/watch').attrs['aria-current'], 'page');
-  assert.match(ids.notice.textContent, /Live acquisition/);
+   assert.equal(ids.notice.textContent, '');
   assert.equal(ids.result.textContent, '', 'first Watch acquisition has no fleeting route-level progress prose');
   vm.runInContext('globalThis.originalNow=Date.now; Date.now=()=>originalNow()+180000; show(current); Date.now=originalNow', context);
   assert.equal(ids.result.textContent, '', 'elapsed startup time cannot invent a Watch failure');
@@ -384,7 +384,13 @@ async function main() {
    const column = all(all(ids.result, 'th')[3], 'button')[0];
    column.click();
    await handlers.hashchange();
-   await until(() => vm.runInContext('current.catalog.data.sort', context) === 'ccost');
+   // Drive real HTTP refreshes rather than racing the normal five-second poll
+   // against this harness's five-second wait. Cold indexing has owner tests.
+   await until(async () => {
+     if (vm.runInContext('current.catalog.data.sort', context) === 'ccost') return true;
+     await vm.runInContext('current.catalog.load()', context);
+     return vm.runInContext('current.catalog.data.sort', context) === 'ccost';
+   });
    assert.equal(all(ids.result, 'th')[3].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
@@ -406,7 +412,7 @@ async function main() {
   assert.match(ids.result.textContent, /Å日本語/);
   context.example = input.overview;
   vm.runInContext('ReportView.render(output, example, {pages: {}})', context);
-  assert.match(ids.result.textContent, /Model availability unverified/);
+  assert.doesNotMatch(ids.result.textContent, /Model availability unverified/);
   assert.equal(all(ids.result, 'section').filter(node => node.className === 'account-card').length, 0);
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   for (const account of input.overview.view.accounts_quotas.accounts) {
@@ -466,7 +472,7 @@ async function main() {
   assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
   assert.match(ids['host-details'].textContent, /Reports stay frozen/);
-  assert.match(ids.notice.textContent, /not updating/);
+  assert.equal(ids.notice.textContent, '', 'host recovery is the single terminal surface');
   assert.equal(ids.refresh.disabled, true);
   assert.equal(ids['scope-controls'].inert, true);
   assert.equal(ids.result.textContent, retained, 'terminal state retains the exact frozen report');

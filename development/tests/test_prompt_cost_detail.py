@@ -104,7 +104,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(0, row.cost_parts[1].priced_requests)
         self.assertNotIn("• Output: 0", help_text)
         self.assertIn("Some category amounts are unavailable", help_text)
-        self.assertIn("no reference price", help_text)
+        self.assertIn("Reference price data cannot currently be checked", help_text)
+        self.assertNotIn("has no listed reference price", help_text)
         self.assertIn("Total CCost: ?", help_text)
 
     def test_tiers_and_live_corrections_reconcile_unrounded_not_displayed_shares(self):

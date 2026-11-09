@@ -74,9 +74,11 @@ const MiniWatch = (() => {
         active_cards: prompts ? cards : [...oldCards.values()],
         // The producer owns atomic history retention, invalidation and source scope.
         history_cards: view.history_cards || [],
-        // A canonical null clears the previous day. Never carry it across rollover.
-        daily_usage: !daily || dailyUsable || !previous?.daily_usage ||
-          daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage,
+        // Missing refresh data retains this day's usable summary only. The
+        // configured boundary below still clears yesterday, even disconnected.
+        daily_usage: daily ? dailyUsable || !previous?.daily_usage ||
+          daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage :
+          previous?.daily_usage?.day_end_ms > now ? previous.daily_usage : null,
         accounts: accounts ? {...view.accounts, accounts} : previous?.accounts};
     }
     snapshot(now) {
@@ -226,7 +228,9 @@ const MiniWatch = (() => {
       ContextHelp.attach(this.summary, 'Return to Watch in the existing tab.\nIf the window stays minimized, use the browser’s return-to-tab control.');
       this.summary.addEventListener('click', returnToWatch);
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
-      this.daily = el('p', undefined, 'mini-daily'); this.dailyText = el('span', 'CCost Today · Loading…');
+      this.daily = el('p', undefined, 'mini-daily'); this.dailyText = el('span');
+      this.dailyLead = el('span'); this.dailyAmount = el('span');
+      this.dailyTail = el('span'); this.dailyText.append(this.dailyLead, this.dailyAmount, this.dailyTail);
       this.daily.append(this.dailyText);
       this.dailyNote = el('span', '', 'mini-daily-note'); this.daily.append(this.dailyNote);
       this.earlierToggle = el('button', 'Earlier Sessions', 'mini-earlier-toggle'); this.earlierToggle.type = 'button';
@@ -285,7 +289,10 @@ const MiniWatch = (() => {
       value.append(title);
       cell.append(value);
       const cost = this.el('span', '', 'mini-cost-value');
-      ContextHelp.value(cost, () => row.costHelp);
+      const promptCost = this.el('span'), sessionCost = this.el('span');
+      ContextHelp.value(promptCost, () => row.costHelp);
+      ContextHelp.value(sessionCost, () => row.totalCostHelp);
+      cost.append(promptCost, this.el('span', ' ('), sessionCost, this.el('span', ')'));
       row.children[historical ? 2 : 1].append(cost);
       ContextHelp.value(row.children[3], () => row.contextHelp || 'Context estimate unavailable');
       return row;
@@ -298,8 +305,10 @@ const MiniWatch = (() => {
     rowHelp(row, session, item, card) {
       const number = item?.prompt?.prompt_number;
       row.sessionHelp = `${session}\n${number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session'}`;
-      const states = [card.state, card.session_summary?.state].filter(state => ['partial', 'retrying', 'unavailable'].includes(state));
-      row.costHelp = this.promptDetails(item) + (states.length ? '\nSource evidence: ' + [...new Set(states)].join(' / ') : '');
+      row.costHelp = [ReportView.costHelp(item?.prompt), this.promptDetails(item)].filter(Boolean).join('\n\n');
+      row.totalCostHelp = ['Whole-session reference CCost, including linked subagents.',
+        ReportView.costHelp(card.session_summary?.cost || (card.session_summary?.state === 'unavailable' ? {} : null), 'known_ccost'),
+        this.promptDetails(item)].filter(Boolean).join('\n\n');
       const warning = card.session_summary?.context?.warning;
       row.children[3].dataset.guidance = warning?.guidance_state || 'ready';
       row.contextHelp = ['Estimated context for the next request. Not remaining model capacity.',
@@ -312,7 +321,8 @@ const MiniWatch = (() => {
       const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
         summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const amount = ReportView.display(prompt, 'ccost');
-      ReportView.text(cell.children[0], `${amount} (${total})`);
+      ReportView.text(cell.children[0].children[0], amount);
+      ReportView.text(cell.children[0].children[2], total);
       cell.children[0].setAttribute('aria-label', `Prompt reference CCost: ${amount}; whole-session reference CCost: ${total}`);
     }
     promptDetails(item) {
@@ -340,8 +350,7 @@ const MiniWatch = (() => {
       const text = ReportView.text;
       const state = {authorization_required: 'Authorization expired · return to Cost Guard',
         identity_changed: 'Host changed · reopen Cost Guard', stopped: 'Host stopped · restart Cost Guard'}[health.kind];
-      text(this.health, state || (observations.delayed(now) ? 'Updates unavailable' +
-        (view ? ' · showing last values' : '') : ''));
+      text(this.health, state || (health.kind === 'offline' ? 'Host unavailable · return to Cost Guard' : ''));
       this.health.hidden = !this.health.textContent;
       this.root.dataset.live = fresh && publication?.view?.cards_state === 'observed' ? 'true' : 'false';
       this.drawDaily(view);
@@ -353,17 +362,13 @@ const MiniWatch = (() => {
     drawDaily(view) {
       const value = view?.daily_usage, state = view?.daily_state;
       let label = 'CCost Today · Loading…';
-      const notes = [];
-      if (value) {
-        const cost = value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost');
-        label = `CCost Today ${cost} · ${value.prompt_count} prompts`;
-        if (!value.total.complete || !value.mix.cost_complete || value.mix.request_count && value.mix.totals.some(amount => amount == null))
-          notes.push('Partial pricing / token data');
-      }
-      else if (state === 'unavailable') label = 'CCost Today · Unavailable';
-      ReportView.text(this.dailyText, label);
-      ReportView.text(this.dailyNote, notes.join(' · '));
-      this.daily.setAttribute('aria-description', `Daily source: ${state || 'loading'}`);
+      if (!value && state === 'unavailable') label = 'CCost Today · Unavailable';
+      this.dailyValue = value;
+      const cost = value && ReportView.display(value, 'daily_ccost');
+      ReportView.text(this.dailyLead, value ? 'CCost Today ' : label);
+      ReportView.text(this.dailyAmount, value ? cost : '');
+      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
+      ReportView.text(this.dailyNote, '');
       this.daily.className = 'mini-daily';
     }
     drawPrompts(view) {
@@ -383,10 +388,9 @@ const MiniWatch = (() => {
         }
         const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
         const reason = !prompt.in_progress && prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
-        const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
         const session = this.drawSession(row.children[0], card);
         this.rowHelp(row, session, item, card);
-        row.setAttribute('aria-label', `${session} · Prompt ${prompt.prompt_number} · ${outcome}${reason}${state}`);
+        row.setAttribute('aria-label', `${session} · Prompt ${prompt.prompt_number} · ${outcome}${reason}`);
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
         const context = display(item.live_context, 'watch_next_context_tokens');
         this.drawCost(row.children[1], card, prompt);
@@ -398,7 +402,6 @@ const MiniWatch = (() => {
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
     }
     drawHistory(view) {
-      this.historyBody.setAttribute('aria-description', `History: ${view?.history_state || 'loading'}; source cause: ${view?.history_cause || 'none'}; proof epoch: ${view?.history_epoch || 0}`);
       const seen = new Set((view?.active_cards || []).map(card => card.session_id));
       // Shared history is already eligible, session-distinct and oldest-to-newest.
       // No clock/ranking/valuation or new acquisition belongs in this view.
@@ -427,7 +430,7 @@ const MiniWatch = (() => {
         const cell = row.children[3];
         ReportView.text(cell, context);
         row.setAttribute('aria-label', `Earlier session · ${session}`);
-        row.setAttribute('aria-description', `Source: ${card.state}; session total: ${card.session_summary?.state || 'loading'}`); return row;
+        return row;
       });
       const notice = WatchView.historyNotice(view, cards.length > 0);
       ReportView.text(this.emptyHistory.children[0].children[0], notice);
@@ -461,7 +464,6 @@ const MiniWatch = (() => {
           ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
         const note = notes.filter(Boolean).join(' · ');
         text(line.children[0].children[0], `${obs.label} · ${used}${period}${warning}${note ? ' · ' + note : ''}`);
-        line.setAttribute('aria-description', `Quota: ${stale ? 'retained / not current' : obs.availability}`);
         ContextHelp.refresh(line);
         line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
         const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;

@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature
+from src.domain.reference_cost import ReferenceCostIssue, REASONS
+from src.cache.session_scope import snapshot_scope
 from .models import SessionUsageRow
 
 ALGORITHM = "session-summary-2"
@@ -14,7 +16,7 @@ def summary_key(service, root):
     provenance = root.provenance
     return dependency_signature((ALGORITHM, provenance.source_type, provenance.source_generation,
         provenance.source_instance, root.session_id, service._dependencies(service._load_catalog()),
-        service._load_comparison_catalog().analysis_signature))
+        service._load_comparison_catalog().diagnostic_signature))
 
 
 def session_summary(service, root, revision, *, active=False):
@@ -31,6 +33,12 @@ def session_summary(service, root, revision, *, active=False):
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
             values["contributor_models"] = tuple(values["contributor_models"])
+            issues = tuple(ReferenceCostIssue(**issue) for issue in values["ccost_unavailable"])
+            if len(issues) > 6 or any(issue.reason not in REASONS or not all(
+                    isinstance(value, str) and len(value) <= 128 and (not value or value.isprintable())
+                    for value in (issue.model, issue.detail)) for issue in issues):
+                raise ValueError("invalid_reference_issues")
+            values["ccost_unavailable"] = issues
             row = SessionUsageRow(**values)
             if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
                     and isinstance(row.title, str) and isinstance(row.model, str)
@@ -58,7 +66,8 @@ def session_summary(service, root, revision, *, active=False):
         values["ccost"] = str(row.ccost)
         try:
             service.cache_repository.put(NAMESPACE, key, values,
-                source_revision=actual, algorithm_version=ALGORITHM, busy_timeout_ms=50)
+                source_revision=actual, algorithm_version=ALGORITHM, busy_timeout_ms=50,
+                session_scope=snapshot_scope(item.snapshot))
         except (OSError, sqlite3.Error):
             pass
     return row, actual

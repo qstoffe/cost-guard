@@ -7,6 +7,7 @@ from src.analysis.cache import dependency_signature, cached_analysis
 from src.analysis.input_identity import first_input, preview, IDENTITY_VERSION
 from src.analysis.matched_runs import MatchGroup, MatchesPage, facts, grouped
 from src.cache.repository import CacheEntry
+from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
 from .history import session_catalog_revision
 from .matched_runs import decode_run, encode_run, project_run
@@ -87,7 +88,8 @@ def build_comparisons(service, request):
             complete = complete and snapshot.complete and bundle.source_revision == revisions[root.session_id]
             if (bundle.cacheable and snapshot.complete and root.session_id not in active
                     and bundle.source_revision == revisions[root.session_id]):
-                writes.append(CacheEntry(NAMESPACE, keys[root.session_id], encode_run(run), bundle.source_revision, ALGORITHM))
+                writes.append(CacheEntry(NAMESPACE, keys[root.session_id], encode_run(run), bundle.source_revision, ALGORITHM,
+                    snapshot_scope(snapshot)))
         try:
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):

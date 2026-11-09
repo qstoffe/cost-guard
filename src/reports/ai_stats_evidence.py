@@ -6,7 +6,7 @@ from src.analysis.cache import dependency_signature
 from .token_mix_cache import encode, decode
 from .matched_runs import project_run, encode_run, decode_run
 
-ALGORITHM = 'ai-stats-evidence-4-observed-timing-1'
+ALGORITHM = 'ai-stats-evidence-5-fun-1'
 NAMESPACE = 'ai-stats-evidence'
 COVERAGE = 'ai-stats-coverage-2'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)

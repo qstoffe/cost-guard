@@ -3,10 +3,11 @@ from dataclasses import replace
 from decimal import Decimal
 import sqlite3
 
-from src.analysis.ai_stats import period_stats, windows
+from src.analysis.ai_stats import StatsObservation, windows
 from src.analysis.cache import dependency_signature
 from src.analysis.matched_runs import period_fact
 from src.cache.repository import CacheEntry
+from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
 from src.domain.session_tree import root_by_session
 from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, coverage, coverage_key,
@@ -14,7 +15,7 @@ from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, coverag
 from .migration_notice import migration_gap_notes
 from .models import ReportKind, ReportProjection
 from .token_mix_cache import cache_key
-from .history_snapshots import load as load_snapshots, warnings as history_warnings
+from .history_snapshots import load as load_snapshots
 
 BATCH_SIZE = 64
 SLICE_ROOTS = 256
@@ -67,6 +68,7 @@ class StatsAcquisition:
         self.unavailable = set()
         self.pending = []
         self.checkpoint_busy = True
+        self.checkpoint_error = None
         self.scan = getattr(service, 'stats_scan', None)
         with service.metrics.measure('ai_stats_restore'):
             self._restore()
@@ -157,18 +159,19 @@ class StatsAcquisition:
             self.revisions[root.session_id] = snapshot.source_revision
             service.metrics.add('ai_stats_valued_requests', len(bundle.trace_entries))
             namespace = TRANSIENT if volatile and self.scan else NAMESPACE if not volatile else None
+            scope = snapshot_scope(snapshot)
             if namespace:
                 saved = dict(scan=self.scan, evidence=value) if volatile else value
-                writes.append(CacheEntry(namespace, self.keys[root.session_id], saved, snapshot.source_revision, ALGORITHM))
+                writes.append(CacheEntry(namespace, self.keys[root.session_id], saved, snapshot.source_revision, ALGORITHM, scope))
             if not volatile:
                 proof = coverage(value)
-                self.bounds[coverage_key(root)] = CacheEntry(COVERAGE, coverage_key(root), proof, snapshot.source_revision, COVERAGE)
+                self.bounds[coverage_key(root)] = CacheEntry(COVERAGE, coverage_key(root), proof, snapshot.source_revision, COVERAGE, scope)
                 writes.append(self.bounds[coverage_key(root)])
                 if getattr(service, 'shared_web_evidence', False) and snapshot.complete:
                     from .shared_evidence import entries
                     # Stats and coverage are already in this batch. Publish only
                     # the other compatible products, without duplicate writes.
-                    writes.extend(entry for entry in entries(service, root, snapshot.source_revision, value)
+                    writes.extend(entry for entry in entries(service, root, snapshot.source_revision, value, scope)
                                   if entry.namespace not in (NAMESPACE, COVERAGE))
         try:
             with service.metrics.measure('ai_stats_cache_write'):
@@ -192,7 +195,7 @@ class StatsAcquisition:
                 len(self.evidence), len(self.roots), stage='history-load'))
         self.pending = self.pending[count:]
         if self.pending and limit and not persisted:
-            raise StatsCheckpointError('ai_stats_checkpoint_busy' if self.checkpoint_busy else 'ai_stats_checkpoint_unavailable')
+            self.checkpoint_error = 'ai_stats_checkpoint_busy' if self.checkpoint_busy else 'ai_stats_checkpoint_unavailable'
         # Changed/active roots cannot silently reuse a prior slice's timing. Wait
         # until stable coverage is ready, then refresh all volatile evidence once.
         volatile = [r for r in self.roots if r.session_id in self.evidence and self.evidence[r.session_id][1]
@@ -224,23 +227,22 @@ class StatsAcquisition:
         invalid = {sid for sid, revision in self.revisions.items() if revisions.get(sid) != revision}
         invalid.update(r.session_id for r in latest if r.session_id not in previous)
         invalid.update(self.active - self.fresh)
-        if getattr(service, 'allow_partial_history', False):
-            self.unavailable.update(invalid & (self.evidence.keys() | self.fresh))
-            self.unavailable.intersection_update(r.session_id for r in latest)
+        self.unavailable.update(invalid & (self.evidence.keys() | self.fresh))
+        self.unavailable.intersection_update(r.session_id for r in latest)
         for sid in invalid:
-            self._discard(sid)
+            # Keep this observation's usable slice for fun figures. Do not certify
+            # it against a newer revision or promote it to a stable cache hit.
+            service._acquisition.revisions.pop(sid, None)
         for sid in previous - {r.session_id for r in latest}:
             self._discard(sid)
         self.roots, self.revisions = latest, revisions
         self.pending = [r for r in latest if r.session_id not in self.evidence]
         for root in latest:
-            if root.session_id in self.evidence:
+            if root.session_id in self.evidence and root.session_id not in invalid:
                 service._acquisition.revisions[root.session_id] = revisions[root.session_id]
 
     def project(self):
         service = self.service
-        if self.unavailable and len(self.unavailable) == len(self.roots):
-            raise StatsCheckpointError('ai_stats_revision_churn')
         evidence, costs, matches = [], {}, []
         for root in self.roots:
             item = self.evidence.get(root.session_id)
@@ -252,7 +254,8 @@ class StatsAcquisition:
             for entry, _prompt, parts in facts:
                 costs[entry.model, entry.tokens] = None if parts is None else sum(parts, Decimal(0))
         rows, scopes = [], {}
-        selected_start = dict(self.periods)[self.scope]
+        calculation = StatsObservation(evidence, lambda model, tokens: costs[model, tokens],
+                                       now=service.now_ms, zone=service.timezone_id)
         for name, start in self.periods:
             excluded = [self.bounds.get(coverage_key(r)) for r in self.pending
                         if r.session_id not in self.unavailable and self._excludes(r, start)]
@@ -260,22 +263,18 @@ class StatsAcquisition:
             ready = len(excluded) + omitted == len(self.pending) and all(
                 not volatile or sid in self.fresh for sid, (_facts, volatile) in self.evidence.items())
             scopes[name] = dict(completed=len(self.roots) - len(self.pending) + len(excluded), total=len(self.roots), ready=ready)
-            contained = selected_start is None or start is not None and start >= selected_start
-            if not ready or not contained:
-                continue
             gaps = migration_gap_notes(service.selection.migration_gap, start_ms=start)
-            complete = not service.selection.warnings and not gaps and not omitted
-            rows.append(replace(period_stats(evidence, lambda model, tokens: costs[model, tokens], period=name,
-                start=start, now=service.now_ms, zone=service.timezone_id, source_complete=complete),
+            complete = not service.selection.warnings and not gaps and not self.unavailable and ready
+            rows.append(replace(calculation.period(period=name, start=start, source_complete=complete),
                 matched=period_fact([m for m in matches if m], start, service.now_ms,
                     complete=complete and all(r.source_complete for r in evidence) and all(matches)
                     and all(item.payload['matched'] for item in excluded))))
         gaps = migration_gap_notes(service.selection.migration_gap, start_ms=dict(self.periods)[self.scope])
         return ReportProjection(ReportKind.AI_STATS, 'AI Stats', service.selection.selected.upper(),
-            (*service.selection.warnings, *history_warnings(self.unavailable)), notes=gaps, ai_stats=tuple(rows),
-            history_omitted_roots=len(self.unavailable),
-            ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=len(self.roots) - len(self.pending),
-                               total=len(self.roots)))
+            (*service.selection.warnings, *((f'AI Stats roots not verified: {len(self.unavailable)}',) if self.unavailable else ())),
+            notes=gaps, ai_stats=tuple(rows), history_omitted_roots=len(self.unavailable - self.evidence.keys()),
+             ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=len(self.roots) - len(self.pending),
+                                total=len(self.roots), checkpoint_error=self.checkpoint_error))
 
 
 def build_ai_stats(service, scope):

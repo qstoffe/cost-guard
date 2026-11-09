@@ -21,15 +21,17 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.watch_summary import summary_watch, many_cost_groups, same_model_groups
 from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
+from development.tests.fixtures.ccost_unavailable import unavailable_frames
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
+from development.tests.fixtures.model_views import model_report
 from development.tests.fixtures.ai_stats_views import AIStatsJobs, evidence_views
 from development.tests.fixtures.stats_slices import slice_report
 from development.tests.fixtures.matched_inputs import ComparisonsJobs
 from development.tests.fixtures.report_loading import LoadingJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
-from src.application.projection import accounts as project_accounts
+from src.application.projection import accounts as project_accounts, project
 from src.analysis.timezones import local_day_start_ms
 from src.domain import QuotaComponent
 from src.analysis.valuation import ComparisonCost
@@ -97,6 +99,8 @@ def main():
             if sys.argv[2:] == ["--help-audit"] else None)
         same_model = (project_live(same_model_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
             if sys.argv[2:] == ["--help-audit"] else None)
+        ccost_frames = unavailable_frames(frame) if sys.argv[2:] == ["--help-audit"] else None
+        promotion_models = project(model_report(include_model_catalog=True)).to_json() if sys.argv[2:] == ["--help-audit"] else None
 
         def publish(state="running", value=frame, timezone_name="UTC"):
             current = int(time.time() * 1000)
@@ -105,6 +109,8 @@ def main():
                 "view": project_live(value, timezone_name).to_json(),
                 "probe_cost_groups": cost_groups,
                 "probe_same_model": same_model,
+                "probe_ccost_unavailable": ccost_frames,
+                "probe_models": promotion_models,
                 "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
 
         try:
@@ -169,7 +175,11 @@ def main():
                     publish(value=replace(frame, active_cards=current, running=running_prompts(current, "observed")))
                 elif command.startswith('models-'):
                     mode = command.removeprefix('models-')
-                    assert mode in {'unchanged', 'changed', 'offline', 'invalid', 'status'}
+                    assert mode in {'unchanged', 'changed', 'offline', 'invalid', 'status', 'hold', 'release'}
+                    if mode in {'hold', 'release'}:
+                        jobs.hold = mode == 'hold'
+                        print('{"ok":true}', flush=True)
+                        continue
                     if mode == 'status':
                         fetches = root / 'fetches.txt'
                         print(json.dumps({'fetches': len(fetches.read_text().splitlines()) if fetches.exists() else 0}), flush=True)

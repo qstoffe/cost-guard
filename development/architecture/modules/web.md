@@ -1,11 +1,16 @@
 # Optional Web runtime
 
-Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Last checked: 2026-11-07
+Source revision: 6230f00df0695c8364bf6bbff1e2432e7c4e4fe1
+Checked revision: 6230f00df0695c8364bf6bbff1e2432e7c4e4fe1
+Last checked: 2026-11-08
 Status: current
 
-FR 000617 adds a scoped v80.197 dispatcher delta to the baseline revisions above,
+FR 000627 checks only the daily presentation contract and its retained evidence,
+not every historical section. Full/validator, real V2 daily tokens and the repaired
+headless Mini probe passed; completion records prior harness failures and limits.
+Other sections retain their earlier scoped evidence.
+
+FR 000617 adds a scoped v80.197 dispatcher delta to the historical baseline,
 not a new audit of every historical section. Its deterministic, hidden-browser and
 read-only real-source evidence and limits are in the dispatcher journal.
 
@@ -37,6 +42,14 @@ boundary changes. [Writing conventions and surface inventory](web-help.md) are t
 current reference; older per-cell/native-tooltip descriptions below are historical.
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
+
+FR 000626 adds `cache_housekeeping.py` to that existing host loop: no independent
+worker/timer. Protected selected-visible delivery/interest queues coalesced root use;
+headerless polling and passive warming do not. Fresh ordinary catalog evidence and
+all foreground/Live/provider/lease protections gate the post-hour, at-most-daily
+bounded SQLite attempt. Lifecycle SQL belongs to cache, never HTTP or acquisition.
+See [cache ownership](analysis.md#session-cache-lifecycle-fr-000626) and
+[measured evidence/limits](../../journal/cache-lifecycle.md).
 
 Only validated terminal IPC (a result/error, a completed Stats slice whose logical
 job requeues, or a history continuation with its received durable checkpoint)
@@ -96,7 +109,17 @@ styles and every acquisition/refresh/filter contract above unchanged. The focuse
 `probe_models_toolbar.cjs` real-DOM matrix is called by `probe_models_refresh.cjs`;
 the pricing journal separates rendered layout evidence from real-source checks.
 
-`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+
+FR000634 keeps loaded catalog/detail content visible regardless of observation age,
+without a generic finite progress footer or routine sort/source captions. Catalog
+expiry permits one bounded reopen per poll; without membership proof, it returns to
+latest with preserved sort intent and synchronized URL/epoch/pager once usable.
+Pending global sorts retain the previous actual order/header/pager; an initial
+pending response cannot pin an empty table forever. Stale-generation replies demote
+their own interest. The backend lease, source isolation, index and acquisition owners
+are unchanged. [Quiet-refresh evidence](../../journal/web/quiet-refresh.md) records
+the scoped lifecycle matrix and its synthetic/real-source limits.
 
 Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.
 `token-mix.js` owns a retained compact summary and exactly two 13-column
@@ -110,8 +133,9 @@ Unknown old roots cannot be excluded by metadata, so earlier Today/7-day complet
 is conditional on validated coverage. `cached-reports.js`
 and `app.js` distinguish qualified historical display from freshness, including Models;
 browser publication polling never schedules heavyweight due times. Positive age alone
-never withholds completed data. Original as-of and actual AI Stats row intervals remain
-visible; proven invalid observations/dependencies still withhold data. See the
+never withholds completed data. Original provenance remains internal; actual AI Stats
+row intervals remain visible without a shared as-of/refresh strip. Proven invalid
+observations/dependencies still withhold data. See the
 [FR000624 candidate and decision](../../journal/web/foreground-recovery.md).
 AI Stats logical work is host-owned, independent of polling interest. Its one job
 retains at most five validated requested scopes: the latest selection prioritizes
@@ -292,18 +316,23 @@ the filled Watch toggle own closing; the title still returns to the existing tab
 Intrinsic metric/header minima leave all spare width to Session; only titles ellipsize,
 and narrow prompt regions scroll horizontally. Healthy/transient operational text is
 omitted, including the redundant retained/partial line below Session. Independent
-usable-observation clocks for each focal prompt, Daily and each quota
-produce one muted notice after ten minutes; definitive host/auth/identity failures
-remain immediately actionable. Partial reads retain unmatched rows but accept valid
+usable-observation clocks for each focal prompt, Daily and each quota remain internal;
+ordinary retained refresh never escalates into a timed notice. Definitive host/auth/identity
+failures remain immediately actionable. Partial reads retain unmatched rows but accept valid
 per-card corrections; observed empty publications still evict. Earlier exports canonical
 `completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
 preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
 
-The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`,
-the full Watch display tokens and daily pricing/source state. Observation times and
-retained/partial provenance are accessible, not prominent warning suffixes. Additive
+The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`.
+Full and Mini Watch select Python-prepared `daily_usage.display.daily_ccost` variants:
+plain known-priced subtotal, acquired empty zero or wholly unpriced N/A. Daily passive
+pricing/token/prompt-completeness notices are omitted; canonical comparison/mix/count
+flags, other scopes' partial display tokens, source health and diagnostics remain intact.
+The global daily label, value and count have no help targets or passive descriptions
+in either Full or Mini. No client-side stripping or valuation is added. Additive
 `daily_usage.day_end_ms` uses configured timezone/DST so disconnected Mini clears the
-previous day without calculating any usage. Loading is not zero. The left title alone returns
+previous day without calculating any usage; same-day null refresh retains the usable
+summary. Loading is not zero. The left title alone returns
 to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMeasure`
 loads the shipped styles inside an inert, invisible shadow layout, then renders current
 presentation synchronously before the opening gesture calls native PiP. Natural layout
@@ -334,20 +363,20 @@ fallback; an observed one-DIP zoom-rounding bias is compensated on subsequent el
 clicks, never by an extra/passive call. Native events/two-frame confirmation record achieved
 bounds and cancel stale work. Missing activation/refusal/clamps retain disclosure/scroll.
 No rendering/data event invokes native sizing. Shared presentation-only `ReportView.LiveStatus`
-keeps useful retained Full Watch card/day and Watch/Accounts quota values quiet for about
-60 continuous seconds of failed relevant coverage; initial missing-data guidance retains
-30 seconds. Only newer successful evidence clears a failed lane, not repeat snapshots,
+keeps useful retained Full Watch card/day and Watch/Accounts quota values quiet throughout
+ordinary failed coverage; initial missing-data guidance retains its own bounded delay.
+Only newer successful evidence clears a failed lane, not repeat snapshots,
 cost-only projections or another lane's progress. Cards export their actual capture
 `observed_at_ms` through the detached DTO (null for retained capture), without new acquisition.
 The host owns source retry notices, suppressing duplicate Watch captions; actionable
-auth/provider/host failures, genuine incomplete pricing and accessible provenance remain.
+auth/provider/host failures and intrinsic per-metric incomplete pricing remain.
 New incomplete quota observations still say Partial; brief revalidation of verified figures
-does not. Mini keeps its independent ten-minute aggregate health owner, not another minute timer.
+does not. Mini keeps independent observation clocks without a timed refresh-health notice.
 Neither app startup without a frame nor independent history/accounts/daily loading
 creates an elapsed-time global Watch warning. Only observed prompt membership on a
 healthy running source/connection establishes “No running prompts”; partial, missing
 and retained observations do not. Initial placeholders never claim observed empty/zero.
-Cached reports retain their original as-of evidence; FR000624 separates deliverability
+Cached reports retain their original provenance internally; FR000624 separates deliverability
 from refresh cadence rather than withholding completed historical data by age alone.
 Source acquisition timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
@@ -471,7 +500,7 @@ Architecture boundaries are unchanged; journal assessment: no-update. Evidence a
 browser/platform limits: [historical selector verification](../governance/verification/web-ccost-toggle.md)
 and [current Settings verification](../governance/verification/web-settings.md).
 
-FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. The explicit price action/time, New Models and two accessible checkboxes precede the table; matching Price Promotion follows. FR 000598 replaces More information/cards with semantic header help. CCost selection belongs only to Settings. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
+FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. The explicit price action/time, New Models and two accessible checkboxes precede the table. FR000634 puts one highlighted ` *` after each promoted row's complete relative tier chain, with multiline ContextHelp from allowlisted per-model offer data; no numbered Web promotion footer remains. CLI notes are unchanged. FR 000598 replaces More information/cards with semantic header help. CCost selection belongs only to Settings. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
 
 One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/name membership, notices and candidate-local supersession from the same acquired sample, without new availability/history/account calls. Every filter combination uses the same full-catalog cheapest-positive base; CLI ranking/denominator remain unchanged. Defaults: all-priced off, latest-only on, exact Relative CCost descending. Candidate scope precedes conservative supersession and stable exact tier-vector sorting; missing ratios/dates stay last. Shift mouse/keyboard supports ordered multi-sort with primary-only aria-sort; ordinary click/touch replaces keys, with no persistent additive mode or extra sort control. Unknown prices remain rows; unverified fail-open and verified-empty remain distinct, never subscription entitlement proof. Prepared tokens align tiers without browser valuation.
 

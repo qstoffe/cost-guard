@@ -302,10 +302,10 @@ async function main() {
   assert.equal(watch.active.children[0], anchored);
   context.state.connection = 'Live offline. Last observation retained; reconnecting.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.empty.textContent, /last observation retained/);
+  assert.doesNotMatch(watch.empty.textContent, /last observation retained/);
   context.state.connection = 'source_changed: host stopped. Run the launcher again.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.empty.textContent, /Live connection interrupted/);
+  assert.doesNotMatch(watch.empty.textContent, /Live connection interrupted/);
   assert.doesNotMatch(watch.empty.textContent, /Source unavailable/);
   assert.equal(watch.active.children[0], anchored);
   multiple.view.active_cards = []; context.state.connection = 'Live connected.';
@@ -315,7 +315,7 @@ async function main() {
   assert.equal(watch.history.textContent, 'No earlier sessions');
   multiple.view.history_state = 'unavailable';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(watch.history.textContent, 'Unable to verify latest sessions');
+  assert.equal(watch.history.textContent, multiple.view.history_epoch > 0 ? 'No earlier sessions' : 'Unable to load earlier sessions');
   assert.equal(watch.empty.textContent, 'No running prompts');
   assert.equal(watch.earlier.open, true);
   console.log('web live passed');

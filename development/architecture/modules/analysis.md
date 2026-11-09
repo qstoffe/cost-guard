@@ -84,7 +84,15 @@ retains the observed clock, not proof of completion. No durable ledger is added.
 
 ### Cache
 
-Disposable `cache/` uses generation-named SQLite, WAL, short transactions, 5s busy timeout and explicit close after commit/rollback. Schema changes never migrate/delete in-use generations. JSON carries source/algorithm revisions and bounded coordination, never sole history/credential ownership. Delete only while Cost Guard is stopped. Atomic `model_first_sightings` rows keep shared provider-qualified UTC Report/Watch presentation timestamps.
+Disposable `cache/` uses generation-named SQLite, WAL, short transactions, a default 5s busy timeout and explicit close after commit/rollback. Breaking schemas use a new generation; additive lifecycle tables do not rewrite existing payloads. JSON carries source/algorithm revisions and bounded coordination, never sole history/credential ownership. Manual cache deletion requires Cost Guard stopped. Atomic `model_first_sightings` rows keep shared provider-qualified UTC Report/Watch presentation timestamps.
+
+### Session-cache lifecycle (FR 000626)
+
+`cache/session_scope.py` reduces complete, quiescent source snapshots to a source-qualified root digest and nullable actual activity clock across messages, child invocations, parts and ended background work. Session creation/update/archive is not activity proof. Unknown/missing execution times remain ineligible. `CacheEntry.session_scope` opts individual derived/compact/statistics/coverage/match/summary/CCost entries into the additive indexed `cache_entry_lifecycle` table, atomically with payload publication. Unannotated old rows stay protected without startup source hydration; incomplete replacements remove old activity proof. Pricing, model sightings/discovery and separate JSON operational state are not eligible.
+
+`cache/lifecycle.py` owns bounded use updates and eviction, never source acquisition. Actual UI delivery (including job polling, retained report interest, visible Sessions/detail and Full/Mini Watch) queues root touches; the shipped UI's selected-visible header distinguishes demand from headerless probes. Explicit CLI presentation drains its own touches. Reads/passive writes do not renew use. Hourly coalescing has an extra retention-hour grace. Pending/failed touches protect their roots; flushes update at most 64 entries.
+
+`web/cache_housekeeping.py` runs from the existing host loop, not another thread/timer/service. It waits 60 continuous host minutes and attempts at most one eight-entry transaction daily, using a fresh ordinary Watch catalog's same-source inactive revisions. Foreground HTTP (not permanent SSE), finite jobs, Live/provider/acquisition pressure, detail/catalog leases, visible requests/cards, revision changes, shutdown and pending touches protect/defer work. Zero busy wait and a cooperative 20ms SQLite deadline bound attempts; errors roll back/fail soft. This is not a hard OS/filesystem latency guarantee. No VACUUM/checkpoint or startup sweep is added; freelist reuse need not shrink file bytes. See [verification and limitations](../../journal/cache-lifecycle.md).
 
 
 ## Allowed dependencies

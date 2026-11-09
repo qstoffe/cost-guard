@@ -54,7 +54,20 @@ history semantics remain unchanged. Context warnings retain canonical severity.
 
 Watch tool observations use canonical prompt/task scope and one physical-call identity. `watch/tool_contracts.py` owns conservative persisted skill-input/metadata and bounded, known-script result evidence; no source reads, commands, secret discovery or accounting changes. `ToolObservation.skills` projects exact confirmed IDs and direct failure counts. Tracker attaches activity only to each session's latest prompt while it runs or retains its existing terminal marker, then removes rows on marker expiry or same-session supersession. Terminal snapshots retain final counts without live status; the final observation is reused for an unchanged source revision and may update on new authoritative evidence. Presentation adapts tool/skill rows to terminal width independently of fixed metric geometry; [activity contracts](../../../docs/watch-activity.md) define uncertainty and omissions.
 
-`ToolObservation.tool_outcomes` aggregates distinct evidenced calls by tool name and failed/cancelled outcome inside the same observation pass; cancellation takes precedence. `failed_count` remains failure-only for CLI/skills, while derived cancellation/combined counts and explicit outcome DTOs serve Web. All-call groups stay inclusive, and terminal retention preserves the outcome tuples without extra acquisition. Full Watch renders those ordered subsets as red text and styles only its active tool line with `--watch-running`; browser code never classifies source output.
+`ToolObservation.tool_outcomes` aggregates distinct evidenced calls by tool name and failed/cancelled outcome inside the same observation pass; cancellation takes precedence. `failed_count` remains failure-only for CLI/skills, while derived cancellation/combined counts and explicit outcome DTOs serve Web. All-call groups stay inclusive, and terminal retention preserves the outcome tuples without extra acquisition. Full Watch renders those ordered subsets as red text; foreground and background Running lines both use `--watch-running`. Browser code never classifies source output.
+
+FR000632 adds `watch/invocation.py`, a Web-card-only opt-in boundary over the same
+canonical physical calls. It copies a bounded allowlist of scalar inputs, withholding
+recognized sensitive/freeform credential patterns, nested/content-bearing and oversized
+fields with explicit qualifications. No raw output/metadata/environment crosses the
+DTO. `BackgroundActivity` carries optional source-proven original part/call identities;
+one current registry-confirmed job must match exactly one scoped physical tool before
+its input is eligible. Unknown/aggregate jobs cannot borrow another command. Derived
+details are retained with capture results, not recomputed on duration ticks or persisted.
+Unverified/retained captures, catalog generations awaiting re-verification and terminal
+prompts clear live detail. Opaque source-generation/physical-call identity and call-input
+revision drive native disclosure reconciliation; body nodes remain stable on duration
+updates. Freeform screening remains conservative, not guaranteed secret detection.
 
 
 Rolling account history extends the daily plan only to usable native/trailing-window starts, never a Watch calendar-month comparison. `src/reports/history.py` retains observed requests in that process-local scope and publishes after a finite plan completes. `src/analysis/period_ccost.py` indexes shared request valuation; source-free account queries advance on idle wakes/midnight without quota-driven history scans. Timestamp-only projection changes do not trigger redraws.

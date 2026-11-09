@@ -65,7 +65,8 @@ def main():
                 if theme == 'dark':
                     command.append('--force-dark-mode')
                 command.append(f'http://127.0.0.1:{server.server_port}/')
-                result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=40)
+                result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=40,
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
                 match = re.search(r'<pre id="probe">(.*?)</pre>', result.stdout, re.S)
                 outcome = json.loads(html.unescape(match[1])) if match and match[1] != 'PENDING' else dict(outcome='FAIL', reason='no_browser_receipt')
                 outcomes.append(dict(theme=theme, requested_width=width, **outcome))

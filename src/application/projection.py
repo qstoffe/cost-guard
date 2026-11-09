@@ -7,11 +7,13 @@ import json
 
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
+from src.analysis.ai_stats import POLICY as STATS_POLICY
 
 from .contracts import ObjectValue, record
 from .display import with_display
 from .prompt_costs import cost_detail
 from .comparisons import page as comparisons_page
+from .reference_cost import issue_records
 
 
 def identity(parts) -> str:
@@ -30,6 +32,7 @@ def comparison(value):
     return record(
         known_ccost=value.known_ccost, ccost=value.ccost, complete=value.complete,
         observed_requests=value.observed_requests, priced_requests=value.priced_requests,
+        ccost_unavailable=issue_records(value.unavailable),
         by_model=record(**dict(value.by_model)), by_day_utc=record(**dict(value.by_day_utc)),
     )
 
@@ -57,6 +60,8 @@ def prompt(value, *, details=False):
         next_context_warning_severity next_context_cost_multiplier background_kinds background_started_ms
         background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort""")
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),
+                                      ("incoming_context_ccost_usage_missing", not value.incoming_context_ccost_known),
+                                      ("extra_ccost_usage_missing", not value.extra_ccost_known),
                                       ("cost_detail", cost_detail(value) if details else None),
                                       ("has_error", value.watch_error)))
 
@@ -73,6 +78,7 @@ def block(value, *, source_complete=True, details=False):
         comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier""")
     return ObjectValue(base.fields + (
         ("rows", tuple(prompt(row, details=details) for row in value.rows)),
+        ("ccost_unavailable", issue_records(value.ccost_unavailable)),
         ("current_context_sources", record(**dict(value.current_context_sources))),
         ("has_error", value.watch_error),
         ("session_context", None if value.session_context is None else record(
@@ -149,7 +155,8 @@ def model_rows(items, selectable=None):
                       for index in superseded_rows([(item.publisher, item.model) for item in selected])}
     for index, item in enumerate(items):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
-        models.append(ObjectValue(base.fields + (("evidence", fields(item.evidence,
+        models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
+            "model description through resumes") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
             ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
             ("superseded_selectable", (item.publisher, item.model) in selected_faded), ("relative_levels", tuple(
@@ -178,18 +185,20 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete")
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete").fields +
+            (("ccost_unavailable", issue_records(item.ccost_unavailable)),))
             for item in report.session_usage),
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
         active_hours=tuple(hourly(item) for item in report.active_hours),
+        ai_stats_policy=STATS_POLICY if report.kind.value == 'ai-stats' else None,
         ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
             metrics=tuple(fields(metric, 'metric value status session_id session_title detail reasons') for metric in item.metrics),
             matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
         ai_stats_work=record(scopes=record(**{key: record(**value)
             for key, value in report.ai_stats_work.get('scopes', {}).items()}),
-            **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining')
+            **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining', 'checkpoint_error')
                if key in report.ai_stats_work}) if report.ai_stats_work else None,
         comparisons=comparisons_page(report.comparisons),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,

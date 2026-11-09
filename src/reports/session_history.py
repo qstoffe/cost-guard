@@ -153,7 +153,7 @@ class SessionHistory:
             return None, "session_missing"
         dependencies = (root.provenance.source_generation, root.provenance.source_instance,
                         service._dependencies(service._load_catalog()),
-                        service._load_comparison_catalog().analysis_signature)
+                        service._load_comparison_catalog().diagnostic_signature)
         if self.dependencies is not None and self.dependencies != dependencies:
             self.__init__()  # Another source/config/price revision is not retained history.
         self.dependencies = dependencies

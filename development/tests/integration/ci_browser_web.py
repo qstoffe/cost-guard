@@ -74,7 +74,8 @@ def main():
                 # An authenticated SSE socket must not claim source readiness.
                 expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
                 assert streams, "authenticated real SSE connection was not established"
-                expect(page.locator("#host-state")).to_contain_text("source observation pending")
+                expect(page.locator("#host-state")).to_be_hidden()
+                expect(page.locator("#host-state")).to_have_text("")
                 evidence["checks"].append("one-use bootstrap, HttpOnly auth cookie, actual report table, real SSE connection")
                 assert page.url.endswith('/#/models')
                 assert page.get_by_role("link", name="Models", exact=True).count() == 1

@@ -7,6 +7,7 @@ from src.analysis.effort import interpret_effort
 from src.analysis.models import PromptRecord
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost
+from src.domain.reference_cost import ReferenceCostIssue
 from src.pricing.catalog import PricingCatalog
 
 
@@ -27,6 +28,7 @@ class PromptCostPart:
     price_tier: str = ""
     prompt_ids: tuple[tuple[str | None, str, str], ...] = ()
     prompts_complete: bool = False
+    unavailable: tuple[ReferenceCostIssue, ...] = ()
 
 
 def _price_tier(entry, catalog):
@@ -59,7 +61,7 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
         groups.setdefault(key, []).append(entry)
     result = []
     for (session, provider, model_id, variant, tier), entries in groups.items():
-        total = comparison_cost(entries, catalog.reference_valuation)
+        total = comparison_cost(entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         amounts = [Decimal(0)] * 4
         known = [True] * 4
         for entry in entries:
@@ -77,5 +79,5 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
             tuple(value if supported else None for value, supported in zip(amounts, known)), tier,
             tuple(dict.fromkeys((entry.source_instance, entry.session_id, entry.logical_prompt_id)
                 for entry in entries if entry.logical_prompt_id)),
-            all(entry.logical_prompt_id is not None for entry in entries)))
+            all(entry.logical_prompt_id is not None for entry in entries), total.unavailable))
     return tuple(result)

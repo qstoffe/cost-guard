@@ -65,7 +65,31 @@ class PriceRefreshTests(unittest.TestCase):
                     self.provider.refresh_catalog()
 
                 self.assertEqual(payload, self.cache.get(CACHE_NAMESPACE, CACHE_KEY).payload)
-                self.assertEqual(original, self.provider.get_catalog(force=True), 'legacy fail-soft behavior remains')
+                retained = self.provider.get_catalog(force=True)
+                self.assertEqual(original, retained, 'legacy fail-soft behavior remains')
+                self.assertTrue(retained.reference_stale, 'failed fetch qualifies explanatory evidence, not rates')
+                self.assertEqual(original.analysis_signature, retained.analysis_signature)
+                self.assertNotEqual(original.diagnostic_signature, retained.diagnostic_signature)
+
+    def test_metadata_only_refresh_cannot_clear_failed_price_observation(self):
+        original = self.provider.get_catalog()
+        self.now += 1000
+        self.fetch.side_effect = OSError('offline')
+        retained = self.provider.get_catalog(force=True)
+
+        with patch.object(self.provider, '_enrich', side_effect=lambda models, previous, **kwargs: models):
+            metadata_only = self.provider.refresh_release_metadata()
+
+        self.assertTrue(retained.reference_stale)
+        self.assertTrue(metadata_only.reference_stale)
+        self.assertEqual(original.analysis_signature, metadata_only.analysis_signature)
+        self.assertEqual(original.retrieved_at_ms, metadata_only.retrieved_at_ms)
+        self.fetch.side_effect = None
+
+        verified = self.provider.refresh_catalog()
+
+        self.assertFalse(verified.reference_stale)
+        self.assertEqual(original.analysis_signature, verified.analysis_signature)
 
     def test_isolated_refresh_rebuilds_prices_ratios_and_sample_valuation_without_accounts_or_watch_repricing(self):
         pinned_watch = self.provider.get_catalog()

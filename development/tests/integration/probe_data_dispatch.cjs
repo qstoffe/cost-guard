@@ -123,8 +123,8 @@ async function main() {
     await command('Runtime.enable');await command('Page.enable');
     await command('Page.navigate',{url:launch.url.split('#')[0]+'#/token-mix'});
     await until(`typeof current!=='undefined' && current.section==='token-mix' && !!current.result && !current.loading && !current.withheld`);
-    assert.equal(await evaluate(`!document.querySelector('.report-loading') && document.getElementById('report-updating').textContent.includes('Historical snapshot as of')`),true,
-      'aged qualified data remain visible with the original historical observation');
+    assert.equal(await evaluate(`!document.querySelector('.report-loading') && !document.getElementById('report-updating')`),true,
+      'aged qualified data remain visible without a passive historical disclaimer');
     const aged=await evaluate(`CachedReports.observation(current.result)`);
     await fixture('complete'); await until(`CachedReports.observation(current.result)>${aged} && !current.loading && !current.withheld`);
     facts.push('aged host result remains visible during refresh and is replaced by a coherent newer publication');

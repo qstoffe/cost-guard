@@ -26,11 +26,11 @@ const SessionDetail = (() => {
     ContextHelp.value(preview, value.preview || value.label || 'Prompt');
     label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
-      () => ReportView.display(value, 'cost_detail_help') + (value.retained ? '\nRetained source evidence.' : ''));
+      () => [ReportView.costHelp(value), ReportView.display(value, 'cost_detail_help')].filter(text => text && text !== 'N/A').join('\n\n'));
     return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,
       value.display?.calls ?? String(value.calls ?? 'N/A'), ReportView.display(value, 'duration_ms'),
-      firstContext(value), ReportView.display(value, 'incoming_context_ccost'),
-      ReportView.display(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
+      firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
+      ReportView.costValue(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
   }
   class View {
     constructor(api, id) {
@@ -109,8 +109,8 @@ const SessionDetail = (() => {
         this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        this.status.textContent = `Session unavailable (${error.message}); last observed rows retained.`;
-        this.status.hidden = false;
+        this.status.textContent = this.data ? '' : `Session unavailable (${error.message}).`;
+        this.status.hidden = !this.status.textContent;
         if (error.message === 'detail_expired') this.token = null;
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally { this.busy = false; }
@@ -122,8 +122,8 @@ const SessionDetail = (() => {
         else { this.status.textContent = ''; this.status.hidden = true; }
         return;
       }
-      this.status.textContent = data.state === 'observed' ? '' :
-        ({history_retained: 'Partial history: retained observations included.', source_unavailable: 'Source unavailable; retained observations are not current.',
+      this.status.textContent = data.state === 'observed' || this.data && ['history_retained', 'source_unavailable'].includes(data.state) ? '' :
+        ({history_retained: 'Session data unavailable.', source_unavailable: 'Source unavailable.',
           session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
       this.status.hidden = !this.status.textContent;
     }
@@ -134,8 +134,7 @@ const SessionDetail = (() => {
     }
     freshness() {
       if (!this.scroll) return;
-      const observed = this.data?.result?.observed_at_ms;
-      this.scroll.hidden = !Number.isFinite(observed) || Date.now() - observed > 3600000 || observed > Date.now();
+      this.scroll.hidden = !this.data;
       if (this.scroll.hidden) this.loading();
     }
     update(data) {
@@ -171,7 +170,9 @@ const SessionDetail = (() => {
       });
       for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
       const totals = () => { const values = ReportView.detailTotals(block); return [values[0], '', '', ...values.slice(1)]; };
-      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map((_, index) => el('td', () => totals()[index])));
+      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map(value => {
+        const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
+      }));
       else this.pendingRender = true;
       if (anchor?.isConnected && top != null) {
         const delta = anchor.getBoundingClientRect().top - top;

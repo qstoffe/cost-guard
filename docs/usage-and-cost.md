@@ -4,6 +4,13 @@ CCost examples use CLI-default AI-credit reference units. For CLI reference USD,
 
 Detailed counting and display contracts for Cost Guard. Start with the [README](../README.md#core-concepts) for the product introduction and core concepts.
 
+**Web CCost Today exception:** Full and Mini Watch show a plain known-priced daily
+subtotal, without `?` or routine completeness notices. Missing prices/tokens can
+leave that subtotal below the full reference valuation; completeness facts remain
+unchanged. Acquired empty usage is 0, wholly unpriced observed usage is N/A, and
+Loading/source failures remain distinct. Prompt/session, Token Mix and CLI partial
+markers keep their own conventions.
+
 ## What Cost Guard counts
 
 Usage includes all canonical provider IDs. **CCost** values observed tokens using replaceable GitHub reference rates, independent of subscription/billing. Unknown prices yield partial/unknown CCost, never billed-cost substitution. **Billed** needs reported spend or explicit subscription/zero-billing evidence; otherwise `N/A`. Legacy monetary fallback is not actual billing. A quota credential does **not** prove historical request-account attribution.

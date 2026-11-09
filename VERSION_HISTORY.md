@@ -1,5 +1,36 @@
 # Cost Guard version history
 
+## v80.212 — 2026-11-09
+
+- Populated Web views refresh silently, without historical/as-of strips, delayed-source captions or hidden refresh caveats. Full/Mini global CCost Today has no tooltip; certified Earlier rows and empty states stay stable.
+- Models uses one highlighted postfix promotion star after all tiers, with structured row-specific multiline offer help and no Web footnotes. CLI promotion notes are unchanged.
+- Sessions silently reopens expired catalog positions, safely returning to latest with the selected sort and synchronized URL/pager. Hour-old rows stay visible without a bottom progress widget; pending sorts retain the previous valid order.
+
+## v80.211 — 2026-11-09
+
+- AI Stats always supplies ten fun-first numeric results with playful traits across all five periods. Stats-only bounded time/cost heuristics use available activity; empty histories get friendly zeros, never invented records or session links.
+- Usable slices appear before full scanning; warm refresh and failed updates retain cards. Old evidence-state badges, caveats, technical summaries and hidden explanations are removed, with short playful help instead. Stats cache/display semantics are versioned; canonical Watch, Sessions, CLI, Token Mix, Comparisons and billing/history remain unchanged.
+
+## v80.210 — 2026-11-08
+
+- Full and Mini Watch show a plain known-priced CCost Today subtotal in Credits or USD, without daily partial-pricing/token markers or passive prompt-completeness notices. Missing evidence can still understate the full amount; canonical values, completeness, other partial markers and diagnostics remain unchanged.
+- Acquired empty usage stays zero, wholly unpriced usage stays N/A, and Loading, source failures and long-unavailable update health keep their existing meanings. No pricing, acquisition, accounting or layout policy changes.
+
+## v80.209 — 2026-11-08
+
+- Opted-in reconstructible SQLite session entries carry explicit source-qualified root/revision and actual activity evidence, separate from coalesced meaningful-use timestamps. Recent activity or use protects at least 30 rolling days; missing/legacy timing remains ineligible. Visible Web/CLI demand counts, not passive warming or diagnostic API reads; old history rebuilds normally after eviction.
+- The existing Web host loop waits at least 60 minutes of continuous uptime, then attempts one small idle transaction at most daily. Current revision/liveness, outstanding acquisition, visible demand, shutdown and contention defer/cancel work. Operational namespaces/JSON state and authoritative OpenCode data remain untouched; no automatic VACUUM or database rebuild is introduced.
+
+## v80.208 — 2026-11-08
+
+- Web and Mini Watch unavailable reference CCost values expose reason-specific shared help on the N/A text: verified available-list absence, unsafe model identity, missing rate/tier or usage, unverified/failed catalog and neutral fallback. Actual contributing requests, including children, determine bounded reasons; Mini prompt and parenthesized session costs remain independent targets with existing compact details preserved.
+- Diagnostic catalog state refreshes explanations without changing rate signatures or valuation. Metadata-only refresh cannot erase a failed price observation. Known/partial costs, zero, pending Loading, billing, quotas, defaults and upstream model selection remain unchanged; no alternative rates or inference are introduced.
+
+## v80.207 — 2026-11-08
+
+- Full Web Watch Running rows use native, initially collapsed invocation disclosures with bounded source-proven parameters, preserved command quoting/newlines and explicit privacy/availability qualifications. Unique canonical background-job links can disclose the original input; aggregates and missing links never borrow another command. No expansion fetch, execution or persistent input storage is added.
+- Foreground and background Running lines now share `--watch-running`; ordinary activity remains gold/brown and failures/cancellations red. Duration-only updates preserve disclosure state, focus and selection; changed calls/corrections and lost live evidence clear stale input. CLI/Mini, thresholds, job lifecycle and accounting are unchanged.
+
 ## v80.206 — 2026-11-08
 
 - Web and Mini Watch CCost display now defaults to USD. Omitted and symbolic Default choices inherit USD, labeled **Default (USD)** in Settings; explicit saved Credits/USD preferences remain pinned without migrating user JSONC. CLI retains its independent Credits default and overrides. Reference valuation, billing, native quotas and the 100 credits = $1 reference USD factor are unchanged.

@@ -2,6 +2,23 @@
 import json
 import time
 
+from src.domain.reference_cost import REASONS
+
+
+def reference_cost_evidence(values):
+    unavailable = 0
+    reasons = set()
+    for value in values:
+        comparison = value.get('comparison_cost') or {}
+        issues = value.get('ccost_unavailable', comparison.get('ccost_unavailable', []))
+        assert len(issues) <= 6
+        assert all(set(issue) == {'reason', 'model', 'detail'} and issue['reason'] in REASONS for issue in issues)
+        if value['display'].get('ccost', value['display'].get('total_ccost')) == 'N/A':
+            unavailable += 1
+            assert not issues or 'N/A does not mean zero' in value['display']['ccost_unavailable_help']
+            reasons.update(issue['reason'] for issue in issues)
+    return {'values': len(values), 'unavailable': unavailable, 'reasons': sorted(reasons)}
+
 
 def observe_sessions(get, cookie, host, driver):
     started = time.monotonic()
@@ -69,6 +86,7 @@ def observe_sessions(get, cookie, host, driver):
         assert max(sizes) <= 200_000
         block = detail['result']['view']['prompt_blocks'][0]
         assert 'session_context' in block and 'watch_model' in rows[0]
+        cost_evidence = reference_cost_evidence([*latest['view']['session_usage'], block, *rows])
         print(json.dumps(dict(sessions='ok', available=current['available'],
             indexed_before=coverage[0], indexed_after=coverage[-1],
             visible_indexed_before=visible_coverage[0], visible_indexed_after=visible_coverage[-1],
@@ -82,6 +100,7 @@ def observe_sessions(get, cookie, host, driver):
             natural_arrival=arrival or 'unobserved; source-to-browser arrival latency not measured',
             detail_rows=len(rows), detail_chunks=len(sizes), detail_max_bytes=max(sizes),
             detail_seconds=round(time.monotonic() - detail_started, 3),
+            reference_cost_evidence=cost_evidence,
             http_max_seconds=round(max(timings), 3), live_owner_preserved=host.live.driver is driver,
             model_calls_started_by_probe=0)))
     finally:

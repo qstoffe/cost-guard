@@ -111,11 +111,8 @@ const ComparisonsView = (() => {
         ReportLoading.show(this.content, state);
         return;
       }
-      ReportView.text(this.status, (state.failed ? state.message + ' ' : '') +
-        (ReportView.historyWarning(state.result) ? ReportView.historyWarning(state.result) + ' ' : '') +
-        (!page.complete ? 'Partial history coverage; absence of matches is not proven. ' : '') +
-        (page.total ? `${page.scanned} root sessions checked. ` : page.complete ? 'No verified exact first-input matches in available history. ' : '') +
-        `${page.excluded} sessions excluded (unsupported/missing first input or attachment content).` + (state.orderReset ? ' Ordering changed; returned to page 1.' : ''));
+      ReportView.text(this.status, !page.total && page.complete ? 'No exact first-input matches in available history.' : '');
+      this.status.hidden = !this.status.textContent;
       if (this.last !== state.result || this.content.querySelector('.report-loading')) {
         const focused = document.activeElement;
         const old = this.groups, next = [];

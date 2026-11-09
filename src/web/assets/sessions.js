@@ -54,10 +54,6 @@ const SessionsCatalog = (() => {
       }
       this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.next);
       this.root.append(this.status, pan, pager);
-      if (typeof ReportLoading !== 'undefined') {
-        this.loader = new ReportLoading.View(); this.root.append(this.loader.root);
-        this.freshness();
-      }
     }
     configure(params) {
       this.offset = Number(params?.get('offset') || 0);
@@ -68,7 +64,6 @@ const SessionsCatalog = (() => {
     }
     rememberedDestination() { return destination(this.offset || 0, this.epoch || this.data?.epoch, this.sort || 'activity', this.direction || -1); }
     attach(parent) {
-      this.freshness();
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
       this.attached = true; this.poll();
@@ -90,23 +85,29 @@ const SessionsCatalog = (() => {
       this.pagerBusy();
       const generation = this.generation;
       try {
-        const data = await this.api('/api/sessions', {token: this.token, offset: this.offset,
+        const request = () => this.api('/api/sessions', {token: this.token, offset: this.offset,
           epoch: this.epoch, sort: this.sort, direction: this.direction});
+        let data;
+        try { data = await request(); }
+        catch (error) {
+          if (error.message !== 'catalog_expired' || !this.attached || generation !== this.generation) throw error;
+          // No proof that a new lease has the old membership: safely return to
+          // latest, preserving sort intent. One reopen per poll, never a loop.
+          this.interest(false);
+          this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
+          data = await request();
+        }
         if (!this.attached || generation !== this.generation) { this.interest(false, data.token); return; }
         const opened = this.token !== data.token;
         this.token = data.token; this.update(data);
         if (opened) this.interest();
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        this.status.replaceChildren(el('span', `Sessions unavailable (${error.message}); last observed rows retained. `));
+        this.status.textContent = this.usable ? '' : `Sessions unavailable (${error.message}).`;
         if (error.message === 'catalog_expired') {
-          this.token = null;
-          this.pan.hidden = true; this.pager.hidden = true;
-          if (this.loader) this.loader.root.hidden = true;
-          this.status.replaceChildren(el('span', 'Page position changed; '));
-          const first = el('a', 'return to latest sessions'); first.href = destination(0, null, this.sort, this.direction); this.status.append(first);
+          this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
-        this.status.hidden = false;
+        this.status.hidden = !this.status.textContent;
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally {
         this.busy = false;
@@ -114,13 +115,25 @@ const SessionsCatalog = (() => {
       }
     }
     update(data) {
-       this.data = data;
-       this.observedAt = Number.isFinite(data.age_ms) ? Date.now() - data.age_ms : null;
-       this.freshness();
+      // Even a deferred sort/outage must retire unsupported running indicators.
+      const observed = new Map(data.view.session_usage.map(value => [value.session_id, value]));
+      for (const row of this.body.children) {
+        const running = data.state === 'observed' && Boolean(observed.get(row.dataset.id)?.running);
+        row.className = running ? 'session-running' : '';
+        if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
+      }
+      // A requested global sort is not applied until every key is valid. Keep
+      // the previous actual order, header and pager rather than relabeling it.
+      if (this.usable && (data.pending_sort || data.state !== 'observed' && !data.view.session_usage.length)) return;
+      this.data = data;
+      this.usable = data.state === 'observed' || data.view.session_usage.length > 0;
+      this.offset = data.offset;
       if (data.epoch) this.epoch = data.epoch;
-      this.status.textContent = [data.state === 'source_unavailable' ? 'Source unavailable; retained rows are not current.' :
-        data.state === 'loading' ? 'Waiting for the shared session source…' : '',
-        data.pending_sort ? `Global sort unavailable: indexed ${data.indexed} of ${data.available} sessions. Showing Last activity, newest first until ready.` : ''].filter(Boolean).join(' ');
+      if (this.recovering) {
+        history.replaceState(null, '', destination(data.offset, data.epoch, this.sort, this.direction));
+        this.recovering = false;
+      }
+      this.status.textContent = data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
       this.status.hidden = !this.status.textContent;
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
@@ -129,33 +142,19 @@ const SessionsCatalog = (() => {
       }
       const values = data.view.session_usage;
       // Lifecycle status must not remain falsely running while a title is selected.
-      const observed = new Map(values.map(value => [value.session_id, value]));
-      for (const row of this.body.children) {
-        const running = Boolean(observed.get(row.dataset.id)?.running);
-        row.className = running ? 'session-running' : '';
-        if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
-      }
       this.rows(values);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + 50, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / 50) + 1} of ${pages}` :
         data.state === 'observed' ? 'No sessions · Page 1 of 1' : 'Session count unavailable';
       const link = (node, offset, enabled) => {
-        node.destination = enabled ? destination(offset, data.epoch, this.sort, this.direction) : null;
+        node.destination = enabled ? destination(offset, data.epoch, data.sort, data.direction) : null;
       };
       link(this.previous, Math.max(0, data.offset - 50), data.offset > 0);
       link(this.next, data.offset + 50, data.offset + 50 < data.total);
       this.pagerBusy();
     }
-    freshness() {
-      if (!this.loader) return;
-      const old = this.observedAt == null || Date.now() - this.observedAt > 3600000;
-      this.pan.hidden = old; this.pager.hidden = old;
-      this.loader.root.hidden = !old || this.data?.state === 'source_unavailable';
-      this.loader.update({percent: 0, stage: 'Waiting for a current session catalog observation',
-        stageLabel: 'Loading requested Sessions page'});
-    }
     pagerBusy() {
-      for (const button of [this.previous, this.next]) button.disabled = this.busy || !button.destination;
+      for (const button of [this.previous, this.next]) button.disabled = this.busy || this.recovering || !button.destination;
     }
     rows(values) {
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
@@ -175,13 +174,11 @@ const SessionsCatalog = (() => {
             const node = el('span');
             ContextHelp.value(node, () => {
               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
-              const freshness = state === 'pending' ? 'Session summary acquisition is pending.' :
-                state === 'retained' ? 'Last observed summary retained; awaiting a valid current source observation.' :
-                state === 'unavailable' ? 'Session summary unavailable after source acquisition trouble.' : '';
-              if (key !== 'model' || !current.multiple_models) return freshness || 'Current observed session ' + key + '.';
+              if (key === 'ccost' && ReportView.costHelp(current)) return ReportView.costHelp(current);
+              if (key !== 'model' || !current.multiple_models) return 'Observed session ' + key + '.';
               const models = current.contributor_models || [];
               return ['Models used in this session' + (current.contributor_models_complete && state === 'ready' ? '' : ' (observed so far)'),
-                models.length ? models.join('\n') : 'Contributing model identities are not available.', freshness].filter(Boolean).join('\n');
+                models.length ? models.join('\n') : 'Contributing model identities are not available.'].filter(Boolean).join('\n');
             });
             return node;
           });

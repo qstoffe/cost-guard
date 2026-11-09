@@ -48,11 +48,12 @@ async function main() {
       await command('Page.navigate', {url: 'http://127.0.0.1:18753/case.html?theme=' +
         (theme === 'classic' ? 'classic' : 'web') + '&scheme=' + (theme === 'dark' ? 'dark' : 'light')}, sessionId);
       await loaded;
-      const evaluate = async expression => {
+       const evaluate = async expression => {
         const value = await command('Runtime.evaluate', {expression, returnByValue: true}, sessionId);
         assert.equal(value.exceptionDetails, undefined, JSON.stringify(value.exceptionDetails));
         return value.result.value;
-      };
+       };
+       const invocation = await require('./probe_watch_invocation.cjs')(evaluate, command, sessionId);
       await evaluate(`document.querySelector('.watch-active details summary').focus({preventScroll:true})`);
       await command('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r'}, sessionId);
       await command('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13}, sessionId);
@@ -79,14 +80,14 @@ async function main() {
       assert.ok(facts.lines.includes('1 × <custom-tool>'));
       assert.equal(facts.injected, 0);
       assert.equal(facts.running, facts.prompt); assert.equal(facts.running, facts.title);
-      assert.equal(facts.ordinary, facts.activity); assert.equal(facts.background, facts.activity);
+       assert.equal(facts.ordinary, facts.activity); assert.equal(facts.background, facts.running);
       assert.notEqual(facts.running, facts.activity); assert.notEqual(facts.red[0], facts.activity);
       assert.equal(facts.red[0], facts.red[1]);
       assert.equal(facts.runningBackground, 'rgba(0, 0, 0, 0)');
       assert.equal(facts.pageOverflow, false); assert.equal(facts.detailOverflow, false);
       if (theme === 'classic') assert.equal(facts.running, 'rgb(255, 255, 85)');
       const help = await evaluate(`(() => {
-        const cue=document.querySelector('.watch-active details > .help-cue'); cue.click();
+         const cue=document.querySelector('.watch-active details summary'); cue.blur(); cue.focus();
         const panel=document.getElementById('context-help');
         return {open:panel.matches(':popover-open'), text:panel.textContent,
           labelled:cue.getAttribute('aria-describedby')===panel.id}; })()`);
@@ -106,7 +107,7 @@ async function main() {
         return {hidden:card.running.hidden, text:card.running.textContent, backgroundHidden:card.background.hidden,
           open:card.tools.node.open, lines:card.tools.list.children.length}; })()`);
       assert.deepEqual(ended, {hidden: true, text: '', backgroundHidden: true, open: true, lines: 9});
-      cases.push({theme, width, ...facts, helpAccessible: true, terminalCleared: true});
+       cases.push({theme, width, ...facts, invocation, helpAccessible: true, terminalCleared: true});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'results.json'), JSON.stringify({browser: version.product, cases}, null, 2));

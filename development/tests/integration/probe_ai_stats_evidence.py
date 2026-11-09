@@ -117,7 +117,16 @@ def main():
                 sys.modules[module.__name__] = module
                 original = subprocess.check_output(['git', 'show', args.baseline + ':src/analysis/ai_stats.py'], cwd=ROOT)
                 exec(compile(original, '<baseline-formulas>', 'exec'), module.__dict__)
-                with patch('src.reports.ai_stats.period_stats', module.period_stats):
+                class HistoricalObservation:
+                    def __init__(self, roots, valuation, *, now, zone):
+                        self.roots, self.valuation = roots, valuation
+                        self.now, self.zone = now, zone
+
+                    def period(self, **scope):
+                        return module.period_stats(self.roots, self.valuation,
+                            now=self.now, zone=self.zone, **scope)
+
+                with patch('src.reports.ai_stats.StatsObservation', HistoricalObservation):
                     baseline_matrix = matrix(acquisition, acquisition.project())
             gap_matrix = None
             if args.synthetic:

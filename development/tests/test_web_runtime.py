@@ -143,6 +143,31 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
 
+    def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
+        self.login()
+        delivered = Event()
+        demand = SimpleNamespace(request=lambda _path: contextlib.nullcontext(), delivered=Mock(side_effect=lambda *_: delivered.set()))
+        result = {'id': 'a' * 32, 'status': 'complete', 'result': {'view': {'kind': 'normal'}}}
+        dispatcher = Mock(identity='source')
+        dispatcher.lookup.return_value = dict(result, terminal=False)
+        self.server.lifecycle = SimpleNamespace(cache_housekeeping=demand, dispatcher=dispatcher,
+            source_startup=None, observations=Mock(), nonce='test-instance', stopping=Event())
+        with patch.object(self.jobs, 'snapshot', return_value=result):
+            self.assertEqual(200, self.request('/api/jobs/' + 'a' * 32)[0])
+            demand.delivered.assert_not_called()
+            self.assertEqual(401, self.request('/api/jobs/' + 'a' * 32,
+                headers={'X-CG-Viewed': '1'}, authenticated=False)[0])
+            demand.delivered.assert_not_called()
+            self.assertEqual(200, self.request('/api/jobs/' + 'a' * 32, headers={'X-CG-Viewed': '1'})[0])
+            self.assertTrue(delivered.wait(2))
+            self.assertEqual('/api/jobs/' + 'a' * 32, demand.delivered.call_args.args[1])
+        demand.delivered.reset_mock()
+        delivered.clear()
+        self.assertEqual(200, self.request('/api/data', {'request': {'kind': 'normal'}, 'retry': False},
+            headers={'X-CG-Viewed': '1'})[0])
+        self.assertTrue(delivered.wait(2))
+        self.assertEqual('/api/data', demand.delivered.call_args.args[1])
+
     def test_source_readiness_admission_is_typed_protected_and_does_not_allocate_jobs(self):
         self.login()
         startup = Mock()

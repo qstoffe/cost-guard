@@ -34,6 +34,21 @@ shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
 pricing/data. CCost is an estimated reference cost, not your bill or native quota.
 
+When an actual reference **CCost N/A** is shown, hover/focus/tap that text for the
+supported reason. An acquired, verified catalog can establish that a recognized
+model (including Claude Sonnet 4) has no listed reference price in the available
+GitHub Copilot list. An uncertain identity, missing required rate/tier, missing
+usage or unavailable/unverified price catalog gets a different explanation; without
+enough evidence the help stays neutral. Contributing child models are included,
+not blamed on the visible main model. This explains unavailable valuation; it does
+not fix model selection, invent rates or reprice historical work.
+Full Watch, Mini, Sessions list/detail and other reference-cost cells reuse the
+same help. Mini's prompt and parenthesized session amounts are separate targets,
+retaining useful prompt details. Reasons update with the displayed snapshot and
+unit changes. Positive partial subtotals, true zero and genuinely pending Loading
+remain unchanged. An N/A daily amount can explain itself; ordinary positive partial
+daily amounts gain no new help or warning.
+
 Hover/focus the **CCost value** in either Watch table for Input, Cached input,
 Cache write, Output and Subtotal, grouped into **Main prompt** and **Subagents**
 by provider/model, actual effort and price tier (tier names/boundaries are not shown).
@@ -255,8 +270,8 @@ Stop loading or Abort is added. One host dispatcher owns route priority, retaine
 results and staggered inactive warming; browser hiding demotes interest without
 discarding useful work. Watch/Mini/Accounts keep their protected Live owner.
 Reloads and other authenticated tabs reuse valid host results, but no fresh result
-is promised across host restart. Quiet **Updating…** retains usable content, sort,
-selection, scroll and focus. Navigation/heartbeats never renew observation age.
+is promised across host restart. Background refresh is silent once useful content
+exists, retaining sort, selection, scroll and focus. Navigation/heartbeats never renew observation age.
 
 Above the table, **Refresh price list** precedes **Prices last fetched: YYYY-MM-DD HH:mm**
 in the configured timezone (or **Unavailable**). This is the last successful upstream
@@ -277,9 +292,12 @@ Without a qualifying sample, the hidden 2/96/1/1 ranking fallback is explained a
 observed ratios remain blank. Credits and reference USD (`100 credits = $1.00`) are
 display units on a Copilot AI-credit-equivalent reference basis, not native quota or billing.
 Sorting arrows, click/keyboard/Shift actions and accessible names remain separate.
-Genuine **Price Promotion** notices follow the table; **New Models** notices sit above
-it, with the two filters grouped at the right (wrapping on mobile). Partial and
-unverified-source warnings remain explicit. **Accounts** retains full supported quota,
+Active promotions retain their highlight and one unnumbered postfix star after the
+complete Relative CCost tier chain. Hover, keyboard focus or touch opens multiline
+**Price Promotion** help for that model's actual offer, discount and end/resume dates.
+There are no numbered promotion footnotes below the table. **New Models** notices sit
+above it, with the two filters grouped at the right (wrapping on mobile).
+Routine source/catalog-verification caveats are not displayed. **Accounts** retains full supported quota,
 billing, subscription and attribution details and its canonical acquisition behavior.
 
 Healthy connections have no visible status label or banner. An unhealthy loaded page
@@ -289,110 +307,39 @@ global footer is removed; guarantees remain in relevant optional report help.
 
 ## AI Stats
 
-v80.183 replaces the old hourly-cost page with Web-only **AI Stats** at `/#/ai-stats`.
-Old `/#/cost-per-hour` bookmarks resolve here without acquiring the retired report.
-The reusable canonical rate analysis/API and independent session-detail rate remain
-supported; this is not a CLI, Sessions or Watch redesign.
+**AI Stats** at `/#/ai-stats` turns your robot adventures into ten numbers and a
+little friendly banter. Old `/#/cost-per-hour` bookmarks arrive here too.
 
-Ten equal emoji cards form **Overview** (AI Hourly Rate, Total AI Cost, AI Working
-Time, Average Cost per Session) and **Fun Facts** (Most Expensive Session, Longest
-Session, Busiest Day, Night Owl, Coding Streak, Peak Parallel Sessions). Record cards
-link actual root-session names. Short original trait lines follow the measured
-values, stay stable across unit/theme changes and distinguish empty from unknown.
-Focus, tap or hover the actual titles for metric-specific shared contextual help.
-Card detail rows grow with their text: session names, dates and long descriptions
-wrap without cutting off line height or focus outlines. Siblings share a height
-within each responsive grid row; longer or enlarged text can make that row taller.
+The emoji cards keep two sections:
 
-Comparisons adds a conditional **Biggest AI Speed Gap** eleventh card to Fun Facts,
-without replacing the original ten cards. It uses only reliably finished matched
-first-prompt runs starting and finishing within the selected period. Same-model
-repeats qualify. Fully checked supported input with no repeats can show **Original
-Thinker** for that period; missing/partial match coverage omits the extra card.
-AI Stats reuses its own legitimate period acquisition, never starts an independent
-all-history Comparisons scan and never claims intrinsic model speed or answer quality.
+- **Overview:** AI Hourly Rate, Total AI Cost, AI Working Time, Average Cost per Session.
+- **Fun Facts:** Most Expensive Session, Longest Session, Busiest Day, Night Owl,
+  Coding Streak, Peak Parallel Sessions.
 
-The exact selector is **Today | 7 days | 30 days | This month | All time**, initially
-**30 days**. Entry starts resumable acquisition for that period. Changing selection
-immediately changes presentation and prioritizes its missing evidence after the
-current finite slice, sharing completed work rather than starting another archive
-scan. Today and 7 days can publish before wider periods **only when independent
-coverage is proved**. On a cold or invalidated archive, metadata cannot exclude old
-roots: unknown execution ends or recent work in old trees may require checking the
-entire archive before even Today is coherent. Recent-first ordering is not a promise
-of earlier short-period completion. Rolling windows mean precisely 7/30 × 24 hours.
-Today/month use the configured timezone, including DST. All time includes available
-archived roots, not deleted/pruned history or guaranteed complete lifetime history.
-This month and All time have
-label-bound hover, keyboard-focus and touch help, including while selected. All five
-buttons retain the same readable selected colors without foreground/background cross-fades.
-First/broader acquisition
-shows the shared 0–100% progress control without user cancellation; healthy cards
-have no permanent Load/Refresh toolbar. Smaller cached periods remain usable during All time.
+Every card gets a number and a playful trait, even when the silicon crew has taken
+the whole period off. Real session records link to their session pages. Hover,
+focus or tap a card title for a short explanation of its meaning. Long names and
+enlarged text wrap naturally, with equal-height cards within each responsive row.
+An extra **Biggest AI Speed Gap** or **Original Thinker** fact can join the party,
+with the existing Comparisons link.
 
-Python owns all arithmetic: canonical event-time deduplicated reference CCost, exact
-Decimal ratios, clipped unioned execution time and deterministic record ties.
-Concurrent requests each cost tokens, but simultaneous execution counts once for
-Working Time/Busiest Day. Root sessions—not child agents—determine average and peak
-parallel count. Night Owl measures unioned execution from 22:00–06:00 local time;
-Coding Streak is the longest run of local dates with positive activity, not commits
-or a current streak. Known zero, missing/partial pricing, unknown duration, source
-gaps and provisional running evidence remain distinct. No unknown denominator can
-create an exact rate. Reference CCost is neither billing nor measured human work,
-salary savings or consultant invoices.
+Choose **Today | 7 days | 30 days | This month | All time**, starting at **30 days**.
+The rolling choices cover 7/30 × 24 hours; Today and This month follow your configured
+local calendar. All five buttons have friendly hover, keyboard-focus and touch help.
+Switch Credits/USD to change the money display while keeping your period and cards.
 
-After acquisition, each card explains its own evidence. **No data** means a completely
-observed period has no applicable requests or positive execution-time denominator;
-real zero totals still show zero. **Partial** qualifies an observed subtotal,
-never an exact full total. With incomplete timing, Working Time shows **≥** the
-measured overlap-safe subtotal (a lower bound, rounded down); Longest Session and
-Busiest Day show **Observed** leaders, not verified overall winners. Most Expensive
-Session can likewise retain its observed subtotal when pricing/usage is incomplete.
-Missing prices do not erase independently known execution; missing execution ends
-do not erase independently known costs. Averages, hourly rates, Night Owl, Coding
-Streak and Peak Parallel Sessions remain unavailable when their required evidence
-cannot be proved; no unknown denominator or overlap is guessed. Complete histories
-retain their original values and traits. **Provisional** qualifies timing while executions remain
-in progress. **Unavailable** names missing source coverage, execution boundaries,
-reference-price evidence or token telemetry; an unknown cause is explicitly unknown.
-The concise explanation stays in the card and joins its title's contextual help.
-Playful trait lines are reserved for supported complete values. **Loading** belongs
-only to an active/waiting acquisition, not a returned incomplete metric. Switching
-Credits/USD changes formatting, not these states or the underlying evidence.
+Working Time counts overlapping robot activity once. Night Owl follows the
+22:00–06:00 shift; Coding Streak celebrates consecutive active calendar dates.
+Session records, busiest dates and parallel parties keep their familiar places.
 
-AI Stats targets about **15 minutes** while foreground and **30 minutes** inactive. Compact
-revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded
-historical batches. Ordinary updates retain every card/link, period, focus and scroll
-until one coherent result is ready. The historical snapshot/as-of policy below also
-applies. AI Stats computation has **no arbitrary elapsed-work expiry**:
-each fresh worker handles at most 256 missing roots, using batches of at most 64 and
-the existing maximum four overlapping V2 source reads. Nonadvancing coverage uses
-capped automatic backoff, not attempt exhaustion. Every slice rechecks complete catalog membership
-and revisions before publishing a coherent selected-period result. Progress counts
-verified roots; growing/changing coverage may hold its monotonic percentage while
-the displayed denominator changes. No fabricated ETA or partial-scan 100% is shown.
-
-Stable compact evidence is disposable and contains no prompts/session text. Source,
-revision, pricing and algorithm dependencies govern reuse across period changes,
-reload and host restart. Active evidence is refreshed, not reused as stable history.
-Navigating away or hiding the document does not abandon requested work. The host
-retains at most five requested period goals in the same shared logical job. A new
-selection prioritizes its next slice without erasing an earlier 30-day/All time goal;
-after a coherent narrow milestone, remaining requested work resumes from checkpoints
-even without polling interest. Cards can show that narrow result while broader work
-finishes. No new periodic history daemon is installed. Internal authenticated
-cancellation, parent loss and host shutdown still terminate owned children. This
-supersedes only FR000614's voluntary user-cancellation/inactivity behavior, not its
-resource safety. Revision proof churn remains pending with controlled retry. Checkpoint
-storage contention (confirmed SQLite BUSY/LOCKED) keeps the requested acquisition
-pending with capped automatic backoff; no manual Retry is needed after the lock
-clears. Other checkpoint storage failures, actual source/authentication failure and resource exhaustion produce honest
-errors, never silently truncated totals. Limits remain four pending jobs, one active
-child, sixteen retained results and 8 MiB/result; AI Stats additionally bounds roots
-at 100,000 and retained request/interval facts at 250,000. Other report kinds retain
-the same no-computation-duration-fallback policy. Security and source read-only ownership remain.
-No new settings, account/provider calls, inference, external assets or browser-stored
-private history are added. [Verification and limits](../development/journal/web/ai-stats.md).
+A cold visit may briefly say the robots are warming up. Numbers arrive as the
+history is collected and improve along the way. Already loaded cards stay visible
+during refresh, period changes and interrupted updates; an empty period gets ten
+cheerful zeros. There is no permanent Load/Refresh toolbar or Cancel button.
+Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**
+inactive, reusing collected history across periods, reloads and host restarts.
+Leaving the page does not discard requested work. Watch, Sessions, CLI, Token Mix
+and Comparisons retain their own behavior. No new settings or model calls are added.
 
 ## Comparisons
 
@@ -443,7 +390,7 @@ analysis can be read, but matching does not create a new raw-prompt analysis cac
 The host targets quiet cache-first checks approximately every **five minutes**
 foreground and **twenty minutes** inactive, staggered behind Live/foreground demand.
 Retained DOM/focus, real observation
-times and the shared historical snapshot/as-of policy apply. Complete no-matches, excluded
+times remain internal; populated reports have no passive as-of/refresh strip. Complete no-matches, excluded
 inputs, changing/partial coverage, loading and unavailable results remain distinct.
 [Verification and limitations](../development/journal/web/comparisons.md).
 
@@ -487,6 +434,21 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and host-cached reports
 
+### Disposable historical cache
+
+SQLite is acceleration, not the source of session history. Opted-in session entries
+stay hot when actual root/child activity **or** meaningful use is within the last
+30 rolling days. Selected visible reports, Sessions/detail and Full/Mini Watch
+count as use; hidden polling and passive warming do not. Unknown/legacy clocks
+remain protected, without scanning all history at startup.
+
+The existing host loop may attempt a small idle cleanup only after **60 minutes
+of continuous host uptime**, at most daily. Active work, visible demand, source
+changes and contention defer/cancel it. Pruned old history rebuilds on demand;
+All time/history completeness, source sessions and operational JSON are unchanged.
+Freed SQLite pages can be reused without making the physical file smaller. There
+is no automatic VACUUM, database reset or user cleanup step.
+
 The Beta shell provides Models, global Watch, live Accounts, a Sessions catalog, Token Mix, AI Stats, Comparisons, Settings and live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts shares Watch's publication, not a finite report. Models and the three historical reports share host-owned caching, priority and freshness; their distinct report populations/totals remain independent.
 
 Sessions is the historical navigation entry point. The former `/#/reports` page is retired: old links, including date queries, replace that history entry with `/#/sessions` without starting a date report or applying a filter. Sessions has no date-range filter; sort on Last activity or its other catalog columns. CLI date/date-range reporting and the shared backend report APIs remain supported.
@@ -518,7 +480,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five selectable periods, resumable bounded acquisition, conditional shorter-period milestones; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten playful numeric cards plus an optional matched-input fact, five periods, early figures and retained refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
 | Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
 | Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
@@ -527,18 +489,18 @@ Generic finite report tables retain search/filter/page controls and ascending/de
 
 Token Mix targets **five-minute** foreground and **twenty-minute** inactive checks. The host, not hidden browser timers, owns due times. Compact revision/config/price-keyed facts can be shared with AI Stats and Comparisons without sharing their final totals. Changed roots are revalidated; removed roots disappear. Catalog metadata is not usage. Fork deduplication, publisher grouping and pricing tiers retain canonical Python semantics. No new account polling, inference or browser history ledger is introduced.
 
-During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
+During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failed background refresh retains the actual old observation silently; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; intrinsic partial costs/volumes retain their semantics. Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
 
 ### Host-owned freshness and background warming
 
-**Models, AI Stats, Token Mix and Comparisons** share these bands, measured from
+**Models, Token Mix and Comparisons** share these presentation bands, measured from
 successful source observation—not visits, timers, cache writes or failed attempts:
 
 | Retained scope age on visible re-entry | Behavior |
 | --- | --- |
 | Up to its normal cadence | Display immediately; no unnecessary scan |
-| Older than cadence, including hours/days-long completed work | Display the qualified historical snapshot with its original as-of; host-owned cadence/backoff controls quiet refresh |
-| Genuine acquisition/source failure or cancellation | Retain qualified data and original provenance with honest recovery feedback; never fabricate zero/freshness |
+| Older than cadence, including hours/days-long completed work | Keep qualified content visible; host-owned cadence/backoff controls silent refresh |
+| Failed background acquisition or cancellation | Retain qualified data silently and keep provenance internally; never fabricate zero/freshness |
 | Proven source/dependency invalidation or malformed observation | Withhold invalid values until qualified evidence is available |
 
 The initial selected route wins before speculative heavy warming. Thereafter the
@@ -550,12 +512,11 @@ under 100 completed priceable prompts targets 15 minutes foreground / 45 inactiv
 Comparisons 5/20. Due times are staggered and can be postponed by foreground/Live
 pressure, not promised at an exact second. Successful completion schedules the next
 cadence; neither old observation age nor midnight causes immediate recomputation loops.
-The visible historical as-of label distinguishes updating, queued/scheduled refresh,
-delayed retry and not-updating. A successful publication lookup is not a new source
-observation. AI Stats shows each selected row's exact original configured-timezone
-interval: an earlier-day **Today** or earlier-month **This month** snapshot never
-pretends to cover the current interval. Missing interval evidence withholds that scope
-only. Failed attempts, completion and navigation never renew observation age.
+There is no historical as-of strip, reserved gap, passive refresh tooltip or live-region
+announcement on populated reports. A successful publication lookup is not a new source
+observation. AI Stats shares host-owned cadence and warming, but keeps its playful
+cards and quiet refresh behavior described above instead of historical status labels.
+Failed attempts, completion and navigation never renew observation age.
 Sessions/details use their own source-backed age and bounded leases; Watch/Accounts
 remain Live rather than becoming real-time merely from a historical snapshot.
 
@@ -564,7 +525,7 @@ Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, 
 Every finite result retains observation time, source status and per-root revision evidence. A running prompt is **running at that observation**, with provisional values. Models' explicit **Refresh price list** remains separate from routine cache-first background work: successful retrieval invalidates related warm projections; failed retrieval preserves old valid data/prices. Missing, empty, partial, source failure and unavailable accounts remain distinct from acquired zero.
 
 A continuously changing root can remain unverifiable after bounded source retries.
-Managed historical reports may omit that root and display **Partial history**, with
+Precision-oriented historical reports may omit that root and display **Partial history**, with
 the omitted-root count; totals/groups then cover only verified evidence. Mixed
 snapshots are never used. Healthy unresolved proof remains pending with bounded
 retry; genuine source faults are reported rather than showing invented zeros.
@@ -595,13 +556,13 @@ ContextHelp handles Escape/leave and refreshes an open list in place. Running, i
 retained or bounded/truncated lists say **observed so far**; missing identities are explicit.
 There is no extra column, question-mark button, native title popup or per-row browser fetch.
 
-Last activity descending is the default. All six server comparators use canonical values, not formatted strings; exact CCost, numeric count/millisecond duration and deterministic ID ties span the entire available catalog. Activity/name work immediately. A cold or invalidated scalar index explicitly reports **Global sort unavailable: indexed X of N sessions**, retaining activity order until all metric keys are valid; it never labels a page-only order as global. Canonically unknown/partial keys sort last. This temporary metric-sort limitation is intentional, not evidence that every historical root is already indexed.
+Last activity descending is the default. All six server comparators use canonical values, not formatted strings; exact CCost, numeric count/millisecond duration and deterministic ID ties span the entire available catalog. Activity/name work immediately. While a cold or invalidated scalar index finishes, the previous usable order/header/pager stays unchanged without a polling caption; the requested global sort applies only when all metric keys are valid. A first-ever response may initially use the actual activity order. The table never labels a page-only order as global. Canonically unknown/partial keys sort last; not every historical root is already indexed.
 
-Pending summary cells show **Loading…**, not unknown/zero. An acquired zero stays zero and canonical unknown stays N/A. Failed acquisition shows **Unavailable** or keeps last valid values with retained-evidence help; bounded retries do not restart known values. The most recently viewed page gets seven admissions per background fairness turn, still at most four roots per slice with a two-second admission budget. Unchanged validated summaries are reused. Slow individual source reads retain their transport limits, so this is priority, not an instant-readiness guarantee.
+Initially pending summary cells show **Loading…**, not unknown/zero. An acquired zero stays zero and canonical unknown stays N/A. Failed acquisition shows **Unavailable** or silently keeps last valid values; bounded retries do not restart known values or add retained-evidence help. The most recently viewed page gets seven admissions per background fairness turn, still at most four roots per slice with a two-second admission budget. Unchanged validated summaries are reused. Slow individual source reads retain their transport limits, so this is priority, not an instant-readiness guarantee.
 
 Detail's **Ictx** is only the prompt's first-request incoming context, never a delta/next-context arrow; Watch and CLI retain their richer context displays. Prompt previews yield before metric columns, grow on roomy screens and retain complete text in help. One horizontal region handles genuine minimum-width overflow; the document owns vertical scrolling. Initial capture and pinned-chunk acquisition show an indeterminate **Loading session…** progress bar, never a fabricated percentage. Complete retained history stays usable during background checks; explicit source errors replace loading rather than looping forever.
 
-Visible Sessions reads about every five seconds. Page 1 follows arrivals; older pages retain epoch membership/order. The main Sessions nav restores the last viewed offset/sort/epoch (including page 10), not an implicit page 1. Back/Forward/direct pagination links remain authoritative. Expired or invalid positions say **Page position changed; return to latest sessions** instead of substituting rows. Activity/name work covers requested fifty-row pages only; global scalar indexing is admitted only for a requested metric sort. Hidden/navigation interest demotes that work; inactive warming covers only the first or last viewed page. A background slice schedules another after 15 seconds while that page is incomplete, or a quiet 15-minute check when current; a briefly visited abandoned page can inherit that quiet delay. Returning to a visible page bypasses it and automatically completes missing summaries without Retry. Source failure and expired observation ages remain explicit; no cross-root atomic snapshot is claimed.
+Visible Sessions reads about every five seconds. Page 1 follows arrivals; older pages retain epoch membership/order. Navigation restores the last requested offset/sort/epoch. Expired leases/positions recover silently with one bounded reopen per poll: without proof of the old membership, return safely to latest while preserving sort/direction and synchronizing URL, pager, rows and epoch. No position-change banner or bottom finite-report/0% widget is present; an hour-old observation never hides usable rows. While a requested global sort is pending, keep the previous actual order/header/pager until all keys are valid. Activity/name acquisition covers requested fifty-row pages only; hidden interest demotes scalar indexing. Initial missing content may show loading; retained content and stable empty sets refresh silently. No cross-root atomic snapshot is claimed.
 
 ## Complete live session history
 
@@ -641,9 +602,11 @@ get separate cards, oldest focal first, with one row even during terminal grace.
 
 Earlier membership is published only after revision-matched complete evidence covers
 every potentially displacing root. Until then both Watch and Mini show **Loading
-earlier sessions…** with grounded coverage, not plausible catalog candidates.
+earlier sessions…** only before the first usable set, not plausible catalog candidates.
 One source-scoped proof epoch carries the five/three population atomically; ordinary
-refresh retains qualified previously verified cards. Computational duration never
+refresh retains qualified previously verified cards silently, with no appended footer,
+checked-root counter or accessible refresh announcement. Verified empty history stays
+**No earlier sessions** during revalidation. Computational duration never
 turns healthy pending proof into **Unable to verify latest sessions**: bounded work
 continues automatically, including after transient revision churn. Genuine sustained
 I/O failures or immediate authentication/schema errors remain typed and actionable;
@@ -666,13 +629,13 @@ from cold, retained-cache, warm and promotion timings.
 Session title alone links to that canonical Sessions route. The footer keeps whole-session
 CCost separate from prompt-local costs; duration remains prompt-local. Canonical child/compaction/context evidence still feeds
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
-ordinary refresh. Brief retained/partial source captions stay quiet while supported
-values remain; after about 60 seconds without usable relevant evidence, a concise
-delay notice may appear. Initial loading keeps its existing 30-second guidance.
-Mini retains its separate ten-minute health owner. Replayed snapshots, another
-lane's progress and cost-only updates cannot prove source recovery. Pricing gaps,
+ordinary refresh. Retained source values remain quiet through retries and long delays;
+only genuine initial acquisition can show loading. The global **CCost Today** label,
+amount and prompt count in Full/Mini have no tooltip, partial disclaimer or help target.
+Host-wide actionable outages use one connection recovery surface. Replayed snapshots,
+another lane's progress and cost-only updates cannot prove source recovery. Pricing gaps,
 N/A and actionable provider/auth/host failures remain explicit. Finite historical
-results retain their original as-of time; positive age alone does not withhold
+results retain their original observation internally; positive age alone does not withhold
 qualified completed data, and their refresh cadence is not a live retry caption.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
@@ -747,7 +710,17 @@ summaries with five named groups and truthful other totals; native disclosures
 expand every group and retain their state/focus across updates. The longest
 running tool appears at the shared ten-second threshold, in the same semantic yellow
 as the running prompt (theme-aware in Web light/dark). Separate background/subagent
-lines retain ordinary activity color. Both start **Running:** and clear on completion.
+**Running:** lines now share that same foreground; counts/Skills remain gold/brown.
+Running rows are initially collapsed native disclosures of available invocation
+input. Safe command text retains quoting/newlines and available options; other
+tools show named parameters, never an invented shell command. A single background
+job needs a verified original-call link; aggregates or missing links show details
+unavailable. Sensitive, unsupported and oversized fields are explicitly withheld,
+not presented as complete arguments. Freeform screening cannot guarantee detection
+of every private value. Details are bounded, memory-only and authenticated/local;
+expanding executes nothing and does not fetch source data. Duration updates retain
+expansion/selection; changed calls, corrections and lost live evidence clear stale
+input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
 The compact **N failed / cancelled** count includes only evidenced, distinct tool
 outcomes. Expanded Tool Calls shows red tool-name/outcome subsets, for example
 **2 × grep failed** and **1 × execute cancelled**, below the ordinary all-call groups.
@@ -764,10 +737,12 @@ and the dedicated Token Mix page retain them unchanged.
 It includes pre-Watch history, running requests and unassigned-account usage, not just
 visible cards or subscription sums. Requests use completion/attribution dates; continuing
 prompts count once per relevant day, children under their initiator, compaction as usage
-only. The known integer displays **N prompts**, with an explicit incomplete-count
-warning when boundaries are missing, retaining all unassigned cost/tokens. Partial
-CCost pricing and accessible retained-source qualifications remain; empty differs from
-loading. Source changes/minute fallback update retained history and publish cost/count/mix
+only. The acquired integer displays **N prompts**. Full and Mini Watch show the plain
+known-priced daily subtotal without partial-cost markers or passive pricing/token/prompt
+completeness notices; missing prices/tokens can mean it understates the full amount.
+Underlying completeness and unassigned cost/tokens remain intact. Acquired empty usage
+is zero; wholly unpriced usage is **N/A**; neither is loading or source failure.
+Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
@@ -904,12 +879,10 @@ Watch data remains quiet; elapsed time or independent Earlier/account/daily load
 creates a global Watch failure warning. **No running prompts** requires observed membership
 and a healthy running source/connection, not partial or retained evidence.
 Initial missing-data guidance keeps 30 seconds. Useful retained prompt/daily/quota values
-stay quiet during brief failures; after about 60 continuous seconds, a restrained delay
-notice may appear under one relevant source/host owner. Only genuinely newer successful
-evidence clears that failure clock. Actionable host/auth/connection failures, unknown
-critical values and pricing gaps remain explicit; raw transient partial states stay accessible.
-Routine session-total checks have no delayed timer. These are presentation clocks only, not source
-observations or lifecycle changes. Optional cache
+stay quiet through sustained background failures too, including accessible descriptions
+and help. Actionable host/auth/connection failures, provider restrictions, unknown critical
+values and intrinsic pricing gaps remain explicit. Observation clocks remain internal,
+not a delayed-message timer or a change to source/lifecycle truth. Optional cache
 failure safely computes from source; disposable-cache details are not default metric help.
 No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain
 their existing meanings. Mini consumes this same session-cost/context projection below.

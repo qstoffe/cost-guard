@@ -139,8 +139,8 @@ async function main() {
      await emptyNotice();
      await evaluate(`current.result=structuredClone(__comparisonResult);current.result.view.comparisons.complete=false;
        current.failed=true;current.message='Synthetic background failure; retained report.';show(current)`);
-     assert.match(await evaluate(`current.comparisons.status.textContent`),/Synthetic background failure.*Partial history coverage/);
-     assert.equal(await evaluate(`current.comparisons.status.getBoundingClientRect().height>0 && document.querySelectorAll('.comparison-group').length===10`),true);
+      assert.equal(await evaluate(`current.comparisons.status.textContent`),'');
+      assert.equal(await evaluate(`current.comparisons.status.hidden && document.querySelectorAll('.comparison-group').length===10`),true);
      await emptyNotice();
      await evaluate(`current.result=null;show(current)`);
      assert.equal(await evaluate(`document.querySelector('.comparison-groups [role="alert"]').textContent===current.message`),true);

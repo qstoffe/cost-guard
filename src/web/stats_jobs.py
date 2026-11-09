@@ -28,7 +28,10 @@ def is_stats(job):
 
 
 def ready(job, scope):
-    return any(row['period'] == scope for row in (job.get('result') or {}).get('view', {}).get('ai_stats', ()))
+    view = (job.get('result') or {}).get('view', {})
+    coverage = view.get('ai_stats_work', {}).get('scopes') if view.get('ai_stats_work') else None
+    return (coverage.get(scope, {}).get('ready', False) if coverage is not None else
+            any(row['period'] == scope for row in view.get('ai_stats', ())))
 
 
 def request(job, key):
@@ -59,6 +62,13 @@ def accept(job, result):
     previous = job.get('covered', -1)
     job['stalls'] = 0 if completed > previous else min(6, job.get('stalls', 0) + 1)
     job['covered'] = completed
+    # Settling a fun snapshot is not a claim that every root was scanned. Leave
+    # remaining/ready truthful; a later scheduled refresh can improve the figures.
+    if work.get('checkpoint_error') == 'ai_stats_checkpoint_unavailable' or job['stalls'] >= 6:
+        job['status'] = 'complete'
+        return
     now = time.monotonic()
     delay = min(60, 2 ** min(6, job['stalls'])) if job['stalls'] else 0
+    if work.get('checkpoint_error') == 'ai_stats_checkpoint_busy':
+        delay = max(2, delay)
     job.update(status='queued', queued_at=now, not_before=now + delay)

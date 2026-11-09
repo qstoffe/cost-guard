@@ -63,9 +63,13 @@ Exact measurements and verification limits are in the [Mini journal](../developm
 - **CCost Today**, on the right, is the same global configured-local-day CCost and
   distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
   across sessions/providers. It is not a sum of Mini rows or subscription periods.
-   Only the left title navigates; the daily summary is non-clickable. Loading and unknown
-   pricing remain explicit; pricing/token gaps stay visible without transient source captions. Genuine
-  observed zero is zero; the next canonical day/correction replaces the prior value.
+  Only the left title navigates; the daily summary is non-clickable and has no
+  tooltip on its label, amount or prompt count (including N/A). A plain daily
+  amount can be the known-priced subtotal when prices or tokens are missing, without
+  a partial marker or routine completeness notice. Acquired empty usage is zero;
+  wholly unpriced usage is **N/A**, not zero. Loading, genuine unavailability and
+  host failure remain distinct. The next canonical day/correction
+  replaces the prior value.
 - **Session:** the name only (canonical session ID if unnamed). Only the title
   ellipsizes; its full text remains selectable and in the row’s accessible name.
   In **both tables**, Session hover, keyboard focus or touch exposes the full name and
@@ -103,7 +107,7 @@ their final prompt-local metrics for Watch's existing ~30-second grace, then lea
 An acquired empty set shows a compact empty message, never dummy zero-cost rows.
 Initial/partial/unavailable acquisition is not an empty success.
 Brief delays and reconnects quietly retain the last usable figures without retry banners.
-Retained/partial source evidence stays in accessible values and targeted help, not
+Intrinsic partial pricing stays in accessible values and targeted help, not
 an extra caption below the session name. Pricing gaps, N/A, unknown usage and genuine
 provider/authentication restrictions remain meaningful; internal timestamps are not default help.
 Retention is **not** a new live observation. Valid empty publications still remove rows after the shared
@@ -129,15 +133,16 @@ grace a session may enter history; resuming moves it back out coherently.
 
 Both views use one server-owned verified population: five eligible distinct sessions in
 Full Watch and the newest three of those in Mini. Before all potentially displacing
-roots have revision-matched complete evidence, **Loading earlier sessions…** reports
-grounded checked/total root counts, not provisional cards or a false empty result.
+roots have revision-matched complete evidence, **Loading earlier sessions…** may
+appear only before the first usable set, not provisional cards or a false empty result.
 Active prompts, Today and subscriptions remain available independently. After proof,
-ordinary refreshes retain the same coherent set with **Previously verified sessions;
-checking for changes** until atomic replacement. Unresolved healthy proof and
+ordinary refreshes retain the same coherent set silently until atomic replacement.
+No status/footer row is appended below populated history. Verified empty history
+stays **No earlier sessions**, not a new loading loop. Unresolved healthy proof and
 transient revision churn remain meaningfully pending with bounded automatic retry,
 never failure solely because computation is old. Genuine sustained source I/O,
-authentication or schema faults show **Unable to verify latest sessions**, retaining
-only safe previously verified cards. Source switching, removal and resumption cannot
+authentication or schema faults retain only safe previously verified cards; actionable
+host/authentication failures use the single host recovery surface. Source switching, removal and resumption cannot
 resurrect stale history. Metadata is only an admission hint, not a safe finish-time
 bound or a promise of instant cold startup.
 
@@ -157,8 +162,9 @@ never borrowed from another prompt. No raw prompt text is exposed.
 The **latest valid session/current-next Ctx** remains distinct from historical prompt
 context or a sum of contexts. Ctx keeps N/A and accessible heading help, without an
 added `~`. No ordinal, model, effort, duration or calls column is added.
-Empty, loading and unavailable history are
-explicit; retained/partial totals remain qualified in values/help without a flashing extra row caption. Collapsing
+Initial empty, loading and unavailable history are
+explicit; loaded history and certified empty history refresh silently. Intrinsic partial
+pricing stays qualified in cost values/help, without source-refresh prose. Collapsing
 does not revalue or reacquire history.
 
 Earlier Sessions has no tooltip. Both tables use their actual headings for help;
@@ -185,10 +191,8 @@ window. Later content exceeding its opening reserve scrolls normally. Missing ac
 refusal and clamps preserve disclosure and accessible document scrolling. There is no
 activation spoofing, retry loop, automatic reopen, programmatic move or vertical lock.
 
-After **10 continuous minutes** without a usable new observation, one muted, separate
-“Updates unavailable · showing last values” notice appears. Prompt, daily and native
-quota observation clocks are independent: retries or progress elsewhere do not hide
-a stuck lane. A genuinely fresh usable observation resets its clock. Definitive host
+Ordinary refresh/retry retains usable values silently even through long delays.
+Observation clocks remain internal; no timer adds a retained-data disclaimer. Definitive host
 stop, expired authorization or changed host identity instead show concise action guidance
 immediately. Before first usable data, Mini shows neutral Loading/empty states, not
 invented numbers. At configured-local midnight, Yesterday's total is cleared even if
@@ -201,7 +205,7 @@ depleted secondary. Names retain account distinctions. Unlimited and exhausted
 values retain native semantics. Each text row has a thin full-width primary Used
 bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%.
 Unlimited/unknown quota has no fabricated bar. Routine retained/partial refresh copy
-stays quiet under Mini's existing ten-minute health owner; authentication problems and genuine provider restrictions
+stays quiet; authentication problems and genuine provider restrictions
 remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
 The visible subscription text, not a `?` or progress track, exposes its primary
 **Capacity** and **Next reset** in two compact help lines. Rich native/secondary

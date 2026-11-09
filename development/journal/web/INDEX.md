@@ -17,6 +17,9 @@ Status: current
 - [Watch tool outcomes](watch-polish.md): canonical failed/cancelled subsets,
   focus-coherent disclosures, semantic running-tool colors, six-case browser and
   read-only V2 evidence with real cancellation/Daily proof limits.
+- [Running invocation disclosure](watch-invocation.md): bounded private source inputs,
+  canonical background links, stable native interaction/uniform Running ink,
+  focused V2 proof and the scoped inconclusive Earlier-history probe exception.
 - [Watch account physical-width correction](watch-account-pixels.md): CSS/raster
   mismatch, scale-aware cap, independent screenshot measurements and the scoped
   unverified native/owner-desktop acceptance exception.

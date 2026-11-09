@@ -274,6 +274,9 @@ class BackgroundActivity:
     ended_at_ms: int | None = None
     outcome: TerminalOutcome | None = None
     completion_event_id: str | None = None
+    # Original canonical tool identity, only when supplied by the source.
+    tool_part_id: str = ""
+    tool_call_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)

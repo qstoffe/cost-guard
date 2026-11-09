@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from src.numbers import ccost_amount
 from .contracts import record
+from .reference_cost import issue_records, unavailable_help
 
 MAX_PARTS = 24
 
@@ -29,7 +30,8 @@ def grouped_parts(parts):
             calls=sum(item.calls for item in items),
             known_ccost=sum((item.known_ccost for item in items), Decimal(0)),
             priced_requests=sum(item.priced_requests for item in items),
-            complete=all(item.complete for item in items), categories=categories))
+            complete=all(item.complete for item in items), categories=categories,
+            ccost_unavailable=issue_records(issue for item in items for issue in item.unavailable)))
     return tuple(result)
 
 
@@ -81,7 +83,7 @@ def detail_tokens(values):
                 "N/A — prompt boundaries unrecorded")
             lines.append("• Number of prompts: " + count)
         if not part["priced_requests"]:
-            sections.append("\n".join(lines) + "\nCost unavailable — no reference price for recorded usage.\n"
+            sections.append("\n".join(lines) + "\n" + unavailable_help(part["ccost_unavailable"]) + "\n"
                 + "\n".join(f"• {label}: N/A" for label in ("Input", "Cached input", "Cache write", "Output"))
                 + "\nSubtotal: N/A")
             continue

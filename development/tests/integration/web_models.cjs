@@ -62,8 +62,10 @@ assert.ok(!output.textContent.includes('GitHub USD/M'));
 check(1, false);
 const old = rows().find(row => row.children[1].textContent === 'GPT-5.1');
 assert.ok(!old.className.includes('superseded'));
-assert.equal(old.children[2].textContent, fallback ? '*1 ' : '*1 8.0x → 16.0x (>200K) → 32.0x (≥1M)');
-assert.ok(output.textContent.includes('*1 Fixture promotional terms'));
+assert.equal(old.children[2].textContent, fallback ? ' *' : '8.0x → 16.0x (>200K) → 32.0x (≥1M) *');
+assert.ok(!output.textContent.includes('*1 Fixture promotional terms'));
+assert.equal(helpText(old.children[2].children[0]), 'Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11');
+assert.equal(old.children[2].children[0].attrs.title, undefined);
 assert.ok(!output.textContent.includes('8.040000'));
 if (fallback) assert.match(explanations[2], /hidden fixed 2\/96\/1\/1[\s\S]*ratios remain blank/);
 else assert.ok(explanations[2].includes(`latest ${view.model_comparison_sample_size} qualifying completed`));
@@ -134,7 +136,7 @@ for (const count of [0, 1, 51, 123]) {
   draw(); assert.equal(rows().length, count); assert.ok(!button('Next'));
 }
 view.model_availability_unverified = true; draw();
-assert.ok(output.textContent.includes('Model availability unverified'));
+assert.ok(!output.textContent.includes('Model availability unverified'));
 view.model_availability_unverified = false; view.model_availability_empty = true; draw();
 assert.ok(output.textContent.includes('No available OpenCode models match'));
 for (const hash of ['', '#/overview', '#/models/all', '#/models']) {

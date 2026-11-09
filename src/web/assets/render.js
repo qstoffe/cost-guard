@@ -39,7 +39,7 @@ const ReportView = (() => {
       (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
       (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'reset') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
-      ({partial: '\nPartial quota data.', stale: '\nRetained quota · not current.', unavailable: '\nQuota unavailable.', error: '\nQuota refresh failed.'}[quota.availability] || '') +
+      ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
   }
   const mixText = row => Object.entries(row?.display?.token_categories || {})
@@ -84,6 +84,16 @@ const ReportView = (() => {
   }
   const ccost = (row, key = 'ccost') => display(row, key) +
     (row?.cost_estimated && key === 'ccost' ? ' (estimated)' : '');
+  function costHelp(row, key = 'ccost') {
+    if (!row || display(row, key) !== 'N/A') return '';
+    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. N/A does not mean zero cost.';
+    return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. N/A does not mean zero cost.';
+  }
+  function costValue(row, key = 'ccost') {
+    const node = element('span', () => ccost(row, key));
+    if (costHelp(row, key)) ContextHelp.value(node, () => costHelp(row, key));
+    return node;
+  }
   function element(tag, content, className) {
     const node = document.createElement(tag);
     if (content !== undefined) text(node, content);
@@ -164,7 +174,9 @@ const ReportView = (() => {
     const body = element('tbody'); grid.append(body);
     if (totals) {
       const foot = element('tfoot'), row = element('tr');
-      for (let index = 0; index < totals().length; index++) row.append(element('td', () => totals()[index]));
+      totals().forEach((value, index) => {
+        const cell = element('td'); cell.append(typeof value === 'object' ? value : element('span', () => totals()[index])); row.append(cell);
+      });
       foot.append(row); grid.append(foot);
     }
     scroll.append(grid); section.append(scroll); parent.append(section);
@@ -279,7 +291,6 @@ const ReportView = (() => {
     const width = parts => Math.max(0, ...parts.map(value => value.length)) + 'ch';
     grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
     grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
-    grid.style?.setProperty('--marker-width', width(models.map(row => row.promotion_marker == null ? '' : '*' + row.promotion_marker)));
     grid.setAttribute('role', 'table');
     grid.setAttribute('aria-label', 'Reference models');
     const head = element('thead'), header = element('tr'), body = element('tbody');
@@ -307,7 +318,7 @@ const ReportView = (() => {
       cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button, label]);
     });
     head.append(header);
-    const promotion = element('div'), empty = element('p', undefined, 'warning');
+    const empty = element('p', undefined, 'warning');
     const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
     function dateKey(value) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
@@ -352,20 +363,13 @@ const ReportView = (() => {
       const recent = catalog?.recent_notices.filter(note => visible.has(note.model)) || [];
       if (recent.length) notices.append(element('p', '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; '), 'new'));
       if (!catalog && view.recent_model_notice && shown.some(row => row.recent)) notices.append(element('p', view.recent_model_notice, 'new'));
-      const markers = new Set(shown.map(row => row.promotion_marker).filter(marker => marker != null));
-      promotion.replaceChildren();
-      for (const note of catalog?.promotion_notes || view.model_comparison_promotion_notes || []) {
-        const marker = /^\*(\d+)\b/.exec(note);
-        if (!marker || markers.has(Number(marker[1]))) promotion.append(element('p', note, 'promotion'));
-      }
       text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
     grid.append(head, body); scroll.append(grid); parent.append(scroll);
-    parent.append(promotion, empty); draw();
+    parent.append(empty); draw();
   }
   function modelRelative(row, sampled, evidence = true) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
-    cell.append(element('span', row.promotion_marker != null ? `*${row.promotion_marker} ` : '', 'model-marker'));
     const [base, ...tiers] = sampled ? display(row, 'relative_cost').split(' → ') : [''];
     cell.append(element('span', base, 'model-ratio'));
     const levels = element('span', undefined, 'model-tiers');
@@ -376,7 +380,13 @@ const ReportView = (() => {
       levels.append(level);
     }
     cell.append(levels);
-    if (evidence) ContextHelp.value(cell, display(row, 'evidence'));
+    if (row.promotional) {
+      cell.append(element('span', ' *', 'model-marker'));
+      const offer = row.promotion;
+      if (offer) ContextHelp.value(cell, ['Price Promotion', offer.model, offer.description,
+        offer.through && 'Promotion ends: ' + offer.through,
+        offer.resumes && 'Standard prices resume: ' + offer.resumes].filter(Boolean).join('\n'));
+    } else if (evidence) ContextHelp.value(cell, display(row, 'evidence'));
     return cell;
   }
   function accountQuota(card, quota, compact = false) {
@@ -495,7 +505,9 @@ const ReportView = (() => {
   }
   function prompts(parent, block, state, index) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
-    parent.append(element('p', () => `Full-session CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    const totals = element('p', 'Full-session CCost ');
+    totals.append(costValue(block, 'total_ccost'), element('span', () => ` · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    parent.append(totals);
     if (block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
       () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
@@ -504,7 +516,7 @@ const ReportView = (() => {
     table(parent, 'Prompts · complete session totals, independent of page',
       ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %'], block.rows,
       row => detailCells(row),
-       () => ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
+        () => ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
       state, 'prompts-' + index,
       row => [row.prompt_number, row.ccost, row.calls, row.duration_ms, row.incoming_context_tokens,
@@ -532,10 +544,7 @@ const ReportView = (() => {
     const overview = ['models', 'overview'].includes(section) && ['normal', 'all-models'].includes(view.kind);
     if (overview) {
       overviewModels(parent, view, state);
-      if (result.source.status !== 'acquired') parent.append(element('p', 'Partial source data. Values may be incomplete. Check the local source and reload to retry.', 'warning'));
-      if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified; catalog is not a verified selectable list.', 'warning'));
       if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
-      for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
       return;
     }
     parent.append(element('p', `Snapshot: ${new Date(result.observed_at_ms).toLocaleString()} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
@@ -552,7 +561,7 @@ const ReportView = (() => {
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
         row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'),
             element('span', [!row.complete && 'Incomplete pricing', row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
-          return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), ccost(row), known(row.prompt_count), display(row, 'duration_ms')]; },
+          return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), costValue(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index));
@@ -577,13 +586,13 @@ const ReportView = (() => {
   function detailCells(row, live = false) {
     const label = promptLabel(row, live);
     if (row.retained) label.append(element('span', `Last observed ${new Date(row.last_observed_at_ms).toLocaleString()}; source history omitted this row`, 'detail'));
-    return [label, ccost(row), row.display?.calls ?? known(row.calls),
-      display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), ccost(row, 'incoming_context_ccost'),
-      ccost(row, 'extra_ccost'), display(row, 'token_mix_percent')];
+    return [label, costValue(row), row.display?.calls ?? known(row.calls),
+      display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), costValue(row, 'incoming_context_ccost'),
+      costValue(row, 'extra_ccost'), display(row, 'token_mix_percent')];
   }
   function detailTotals(block) {
-    return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
+    return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus, costHelp, costValue};
 })();

@@ -5,6 +5,7 @@ presentation. They contain already-derived display semantics and never expose
 native OpenCode/provider payloads.
 """
 from __future__ import annotations
+from src.domain.reference_cost import ReferenceCostIssue
 
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -138,6 +139,7 @@ class SessionPromptBlock:
     rate_usage_complete: bool = True
     rate_provisional: bool = False
     session_context: WatchContextGuidance | None = None
+    ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +158,7 @@ class SessionUsageRow:
     contributor_models: tuple[str, ...] = ()
     contributor_models_complete: bool = False
     model_pending: bool = False
+    ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +167,14 @@ class SessionListPage:
     size: int
     total: int
     catalog_revision: str
+
+
+@dataclass(frozen=True, slots=True)
+class ModelPromotion:
+    model: str
+    description: str
+    through: str
+    resumes: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +189,7 @@ class ModelComparisonProjection:
     promotion_marker: int | None = None
     relative_levels: tuple[RelativePriceLevel, ...] = ()
     evidence: MixEvidence = MixEvidence()
+    promotion: ModelPromotion | None = None
 
 
 @dataclass(frozen=True, slots=True)

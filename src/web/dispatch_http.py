@@ -30,6 +30,14 @@ def handle(handler, value):
                 raise ValueError('invalid_interest')
             handler.reply(200, dispatcher.interest(value['tab'], value['section'], value['visible'], request,
                 history=value.get('history', False)))
+            housekeeping = getattr(owner, 'cache_housekeeping', None)
+            if housekeeping and value['visible'] and handler.headers.get('X-CG-Viewed') == '1':
+                if request:
+                    with dispatcher.lock:
+                        result = dispatcher.entries.get(request, {}).get('result')
+                    housekeeping.delivered(owner, '/api/data', {'result': result})
+                elif value['section'] == 'watch':
+                    housekeeping.use_watch(owner, history=value.get('history', False))
         else:
             if set(value) != {'request', 'retry'} or type(value['retry']) is not bool:
                 raise ValueError('invalid_request')

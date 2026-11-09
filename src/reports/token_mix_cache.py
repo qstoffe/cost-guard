@@ -11,6 +11,7 @@ import sqlite3
 from src.analysis.cache import dependency_signature
 from src.analysis.models import TraceEntry
 from src.cache.repository import CacheEntry
+from src.cache.session_scope import snapshot_scope
 from src.domain import ModelRef, TokenUsage
 from src.domain.progress import WorkProgress
 from .token_mix_history import history_projection
@@ -146,7 +147,8 @@ def build_cached_token_mix(service, progress):
                     and item.bundle.source_revision == versions[root.session_id]
                     and service.source.get_session_tree_revision(root.session_id)
                     == item.bundle.source_revision):
-                writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM))
+                writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM,
+                    snapshot_scope(item.snapshot) if item.snapshot is not None else None))
             service._analyzed.pop(root.session_id, None)
         try:
             service.cache_repository.put_many(writes, busy_timeout_ms=50)

@@ -1,6 +1,7 @@
 // Real pointer/focus proof for direct text targets and delayed rich prompt detail.
 const assert = require('node:assert/strict');
 module.exports = async function values({command,evaluate,until,owner,mini,checks,layouts}) {
+  await evaluate(owner,`ReportView.setUnit('credits',current.watch.root);ReportView.setUnit('credits',miniWatch.view.root)`);
   const pause = (id,ms) => evaluate(id,`new Promise(resolve=>setTimeout(resolve,${ms}))`);
   const move = (id,point) => command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},id);
   for (const [id,selector] of [[owner,'.watch-active tbody td:nth-child(6) .help-value'],

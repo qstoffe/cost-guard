@@ -23,6 +23,7 @@ class LiveRuntime:
         self.driver = None
         self.source_failure = None
         self.observed = Event()
+        self.working = Event()
 
     def start(self):
         if self.thread is not None:
@@ -54,18 +55,26 @@ class LiveRuntime:
                         # turn remains signalled. Callbacks never mutate owners.
                         ready.clear()
                         if driver.error is None:
-                            driver.coordinator.service_completed()
+                            self.working.set()
+                            try:
+                                driver.coordinator.service_completed()
+                            finally:
+                                self.working.clear()
                     else:
                         ready.wait(publication_due - now)
                     continue
-                frame = driver.tick()
-                if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
-                    driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
-                if callable(getattr(type(driver.coordinator), "tick_details", None)):
-                    driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
-                else:
-                    self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
-                self._publish_frame(driver, frame)
+                self.working.set()
+                try:
+                    frame = driver.tick()
+                    if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
+                        driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
+                    if callable(getattr(type(driver.coordinator), "tick_details", None)):
+                        driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
+                    else:
+                        self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
+                    self._publish_frame(driver, frame)
+                finally:
+                    self.working.clear()
                 if driver.terminal:
                     break
                 # Yield between history slices and keep account-only updates timely.

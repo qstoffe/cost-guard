@@ -100,6 +100,12 @@ class WatchCardBatchTests(unittest.TestCase):
             add_roots(server)
             before = registration.read_text(encoding='utf-8')
             restart_lock = Lock()
+            original_endpoint = source._current_endpoint
+            def endpoint():
+                # Isolate generation-change proof from Windows sharing races
+                # while the synthetic registration is atomically replaced.
+                with restart_lock:
+                    return original_endpoint()
             def restart(_session_id):
                 with restart_lock:
                     if server.before_message is None:
@@ -112,7 +118,7 @@ class WatchCardBatchTests(unittest.TestCase):
                     server.before_message = None
             server.before_message = restart
 
-            with self.assertRaises(SourceConcurrentChangeError):
+            with patch.object(source, '_current_endpoint', side_effect=endpoint), self.assertRaises(SourceConcurrentChangeError):
                 source.load_card_snapshots(('ses_batch_0', 'ses_batch_1'))
 
     def test_preacquired_capture_is_identical_and_does_not_read_again(self):
