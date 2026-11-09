@@ -1,0 +1,86 @@
+name: Cost Guard native Web revalidation
+# Native APIs/launch are platform risks, not a matrix for every application edit.
+# Keep shared host/security/configuration dependencies conservative. The Linux
+# workflow retains Quick units, package validation and rendered browser smoke.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: &native-paths
+      - '*cost-guard*.py'
+      - 'windows/**'
+      - 'macos/**'
+      - 'config/**'
+      - 'src/product_entry.py'
+      - 'src/bootstrap.py'
+      - 'src/cli.py'
+      - 'src/config.py'
+      - 'src/runtime_errors.py'
+      - 'src/launcher_feedback.py'
+      - 'src/windows_launcher.ps1'
+      - 'src/application/live.py'
+      - 'src/web/**'
+      - '!src/web/assets/**'
+      - '!src/web/stats_jobs.py'
+      - '!src/web/history_jobs.py'
+      - '!src/web/session_catalog.py'
+      - '!src/web/session_export.py'
+      - '!src/web/settings.py'
+      - 'development/tools/run_tests.py'
+      - 'development/tools/ci_web_beta.py'
+      - 'development/tests/test_ci_web_beta.py'
+      - 'development/tests/test_*windows*.py'
+      - 'development/tests/test_macos*.py'
+      - 'development/tests/test_web_lifecycle.py'
+      - 'development/tests/test_web_browser_links.py'
+      - 'development/tests/fixtures/**'
+      - 'development/tests/integration/ci_native_web.py'
+      - 'development/tests/integration/probe_windows_web.py'
+      - '.github/workflows/*.yml'
+  push:
+    branches: [main]
+    paths: *native-paths
+permissions:
+  contents: read
+concurrency:
+  group: native-web-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONIOENCODING: utf-8
+  COST_GUARD_TEST_MODE: '1'
+jobs:
+  native:
+    # No private-repository paid-minute fallback. Reassess terms before changing this.
+    if: github.event.repository.private == false
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Focused native Web-launch regressions
+        run: python development/tools/ci_web_beta.py native-regression --scope native
+      - name: Isolated native APIs and launcher smoke (never workstation probe)
+        if: ${{ !cancelled() }}
+        run: python development/tools/ci_web_beta.py native --scope native
+      - name: Coverage summary (includes missing/not-run phases)
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python development/tools/ci_web_beta.py summary --scope native
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: web-beta-${{ matrix.os }}
+          path: ci-results/*.json
+          retention-days: 7
+          if-no-files-found: error

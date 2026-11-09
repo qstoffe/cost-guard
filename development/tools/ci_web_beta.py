@@ -90,7 +90,7 @@ def summary(scope):
         notice(name, value)
         lines.append(f"- {name}: **{value['outcome']}** — {value.get('reason', 'see bounded JSON artifact')}")
     elsewhere = PLANS["native" if scope == "common" else "common"]
-    lines.append("- Assigned elsewhere (not executed here): " + ", ".join(elsewhere))
+    lines.append("- Assigned elsewhere (separate risk-triggered workflow; not executed here): " + ", ".join(elsewhere))
     lines.append("- **NOT VERIFIED**: physical clicks, visual tray/status bar, Finder/Gatekeeper, default-browser page rendering, accessibility and consumer desktop behavior.")
     try:
         suite_ok, description = suite_summary(scope)
@@ -108,13 +108,20 @@ def summary(scope):
     return int(not success)
 
 
+def common_suite():
+    # Deep integration/scale coverage remains explicitly available. Ordinary PR
+    # and default checks use the unit foundation, not two unchanged Full sweeps.
+    return "full" if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" else "quick"
+
+
 def suite_summary(scope):
     sys.path.insert(0, str(ROOT))
     from development.tools import run_tests
-    report = RESULTS / ("full.json" if scope == "common" else "native-tests.json")
+    suite = common_suite()
+    report = RESULTS / (suite + ".json" if scope == "common" else "native-tests.json")
     files = json.loads(report.read_text(encoding="utf-8"))["files"]
-    expected = (run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS if scope == "common"
-                else run_tests.NATIVE_WEB_PATTERNS[sys.platform])
+    expected = ((run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS if suite == "full" else run_tests.QUICK_PATTERNS)
+                if scope == "common" else run_tests.NATIVE_WEB_PATTERNS[sys.platform])
     if [row["file"] for row in files] != list(expected):
         raise ValueError("incomplete selection evidence")
     totals = {key: sum(row.get(key) or 0 for row in files) for key in ("tests", "passed", "failures", "errors", "skipped")}
@@ -153,8 +160,9 @@ def main(argv=None):
             # Hosted Windows shell startup is contended by concurrent launcher
             # fixtures. Preserve all tests/deadlines; remove only cross-file load.
             jobs = "1" if sys.platform == "win32" else "4"
-            suite = run([sys.executable, "development/tools/run_tests.py", "--suite", "full",
-                         "--jobs", jobs, "--json-report", "ci-results/full.json"], 900)
+            selection = common_suite()
+            suite = run([sys.executable, "development/tools/run_tests.py", "--suite", selection,
+                         "--jobs", jobs, "--json-report", "ci-results/" + selection + ".json"], 900)
             validation = subprocess.run([sys.executable, "development/tools/validate_package.py", "--working-tree"],
                 cwd=ROOT, timeout=180, capture_output=True, text=True, encoding="utf-8")
             print(validation.stdout)

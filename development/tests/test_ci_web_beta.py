@@ -1,6 +1,7 @@
 """CI evidence accounting and fail-closed workstation UI boundary; no UI invocation."""
 import contextlib
 import argparse
+import fnmatch
 import io
 import json
 from pathlib import Path
@@ -15,9 +16,14 @@ from types import SimpleNamespace
 from development.tools import ci_web_beta, run_tests
 
 
+@patch.dict('os.environ', {'GITHUB_EVENT_NAME': 'pull_request'})
 class CiEvidenceTests(unittest.TestCase):
     def test_workflow_assigns_shared_work_once_without_native_browser_tools(self):
-        workflow = (ci_web_beta.ROOT / ".github/workflows/web-beta.yml").read_text()
+        common = (ci_web_beta.ROOT / ".github/workflows/web-beta.yml").read_text()
+        native = (ci_web_beta.ROOT / ".github/workflows/native-web.yml").read_text()
+        # Independently triggered workflows retain one shared Linux job and the
+        # existing native matrix; their job names are not the trigger contract.
+        workflow = common + native.split('jobs:', 1)[1]
         equivalent = workflow.replace('common:', 'shared-checks:').replace('native:', 'platform-checks:')
         equivalent = equivalent.replace('[windows-2025, macos-15, macos-15-intel]',
                                         '[macos-15-intel, windows-2025, macos-15]')
@@ -30,6 +36,55 @@ class CiEvidenceTests(unittest.TestCase):
                        workflow.replace('os: [windows-2025, macos-15, macos-15-intel]', 'os: [windows-2025]')):
             with self.assertRaises(AssertionError):
                 self.assert_workflow_topology(broken)
+
+    def test_native_trigger_follows_platform_risk_not_every_product_or_test_edit(self):
+        workflow = (ci_web_beta.ROOT / '.github/workflows/native-web.yml').read_text()
+        patterns = re.findall(r"^      - '([^']+)'$", workflow, re.MULTILINE)
+        self.assertIn('paths: &native-paths', workflow)
+        self.assertIn('paths: *native-paths', workflow)
+        for path, expected in (
+                ('src/web/native_macos.py', True), ('src/web/windows_launch.ps1', True),
+                ('src/web/lifecycle.py', True), ('src/web/process_identity.py', True),
+                ('src/web/jobs.py', True), ('src/web/security.py', True),
+                ('src/web/host.py', True), ('src/web/composition.py', True),
+                ('src/web/benchmark.py', True), ('src/application/live.py', True),
+                ('src/config.py', True), ('config/default-config.jsonc', True),
+                ('cost-guard.py', True), ('macos/launcher.applescript', True),
+                ('windows/Legacy/Cost-Guard.cmd', True),
+                ('development/tests/test_windows_web.py', True),
+                ('development/tests/fixtures/web_reports.py', True),
+                ('development/tests/integration/ci_native_web.py', True),
+                ('development/tools/run_tests.py', True),
+                ('.github/workflows/native-web.yml', True),
+                ('src/analysis/ai_stats_rates.py', False),
+                ('src/application/benchmark.py', False), ('src/web/assets/mini.js', False),
+                ('src/web/assets/app.css', False), ('src/web/settings.py', False),
+                ('development/tests/test_ai_stats_rates.py', False),
+                ('development/journal/test-health.md', False)):
+            with self.subTest(path=path):
+                selected = False
+                for pattern in patterns:
+                    if fnmatch.fnmatchcase(path, pattern.lstrip('!')):
+                        selected = not pattern.startswith('!')
+                self.assertEqual(expected, selected)
+
+    def test_quick_foundation_and_full_integration_are_disjoint_without_lost_registration(self):
+        full = run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS
+        self.assertEqual(len(full), len(set(full)))
+        self.assertTrue(set(run_tests.QUICK_PATTERNS) <= set(run_tests.REGRESSION_PATTERNS))
+        self.assertTrue(set(run_tests.REGRESSION_PATTERNS) <= set(full))
+        for pattern in ('test_domain.py', 'test_analysis_core.py', 'test_v2_normalization.py',
+                        'test_watch_grouping.py', 'test_web_quota_ccost.py'):
+            self.assertIn(pattern, run_tests.QUICK_PATTERNS)
+        for pattern in ('test_web_runtime.py', 'test_web_dispatch.py', 'test_web_views.py',
+                        'test_claude_alias_cache.py', 'test_windows_web.py', 'test_foundation.py'):
+            self.assertNotIn(pattern, run_tests.QUICK_PATTERNS)
+            self.assertIn(pattern, run_tests.FULL_ONLY_PATTERNS)
+        with patch.object(run_tests, '_run_pattern', side_effect=lambda pattern, **_: (pattern, 0, .1, '')) as run, \
+                contextlib.redirect_stdout(io.StringIO()):
+            result = run_tests.main(['--suite', 'quick', '--jobs', '1'])
+        self.assertEqual(0, result)
+        self.assertEqual(list(run_tests.QUICK_PATTERNS), [call.args[0] for call in run.call_args_list])
 
     def assert_workflow_topology(self, workflow):
         # A narrow static topology guard is useful here. Ignore indentation width,
@@ -143,7 +198,7 @@ class CiEvidenceTests(unittest.TestCase):
 
     def test_suite_report_cannot_lose_selected_files_or_counts(self):
         for scope in ("common", "native"):
-            expected = (run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS if scope == "common"
+            expected = (run_tests.QUICK_PATTERNS if scope == "common"
                         else run_tests.NATIVE_WEB_PATTERNS["win32"])
             rows = [dict(file=name, tests=1, passed=1, exit_code=0, skips=[]) for name in expected]
             for mutation in ("none", "drop", "empty", "null", "missing-count", "missing-report"):
@@ -156,7 +211,7 @@ class CiEvidenceTests(unittest.TestCase):
                         altered = []
                     if mutation == "missing-count":
                         altered[0]["passed"] = None
-                    report = results / ("full.json" if scope == "common" else "native-tests.json")
+                    report = results / ("quick.json" if scope == "common" else "native-tests.json")
                     if mutation != "missing-report":
                         report.write_text(json.dumps(dict(files=None if mutation == "null" else altered)))
                     with patch.object(ci_web_beta, "RESULTS", results), patch("sys.platform", "win32"), \
@@ -176,7 +231,7 @@ class CiEvidenceTests(unittest.TestCase):
                      diagnostics=["AssertionError: bounded UI condition timed out"])]
         with tempfile.TemporaryDirectory() as temporary:
             results = Path(temporary)
-            (results / "full.json").write_text(json.dumps(dict(files=rows)))
+            (results / "quick.json").write_text(json.dumps(dict(files=rows)))
             with patch.object(ci_web_beta, "RESULTS", results), \
                     patch.object(run_tests, "FULL_ONLY_PATTERNS", ()), \
                     patch.object(run_tests, "QUICK_PATTERNS", ("test_skip.py", "test_late.py")), \
@@ -204,27 +259,49 @@ class CiEvidenceTests(unittest.TestCase):
             self.assertEqual(["/usr/bin/open", url], run.call_args.args[0])
             self.assertEqual(5, run.call_args.kwargs["timeout"])
 
-    def test_regression_workers_preserve_full_suite_and_deadlines(self):
-        for platform, jobs in (("win32", "1"), ("darwin", "4"), ("linux", "4")):
-            with self.subTest(platform=platform), \
-                    patch.object(ci_web_beta, "hosted_only"), \
-                    patch.object(ci_web_beta, "facts", return_value={}), \
-                    patch.object(ci_web_beta, "save"), \
-                    patch.object(ci_web_beta, "run", return_value=0) as suite, \
-                    patch.object(ci_web_beta.subprocess, "run") as validator, \
-                    patch("sys.platform", platform), \
-                    patch("sys.argv", ["ci", "regression", "--scope", "common"]), \
+    def test_regression_uses_quick_for_ordinary_delivery_and_full_for_explicit_deep_check(self):
+        for event, selection in (("pull_request", "quick"), ("push", "quick"), ("workflow_dispatch", "full")):
+            for platform, jobs in (("win32", "1"), ("darwin", "4"), ("linux", "4")):
+                with self.subTest(platform=platform, event=event), \
+                        patch.dict('os.environ', {'GITHUB_EVENT_NAME': event}), \
+                        patch.object(ci_web_beta, "hosted_only"), \
+                        patch.object(ci_web_beta, "facts", return_value={}), \
+                        patch.object(ci_web_beta, "save"), \
+                        patch.object(ci_web_beta, "run", return_value=0) as suite, \
+                        patch.object(ci_web_beta.subprocess, "run") as validator, \
+                        patch("sys.platform", platform), \
+                        patch("sys.argv", ["ci", "regression", "--scope", "common"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    validator.return_value.returncode = 0
+                    validator.return_value.stdout = "PASS"
+
+                    result = ci_web_beta.main()
+
+                    self.assertEqual(0, result)
+                    suite.assert_called_once_with(
+                        [ci_web_beta.sys.executable, "development/tools/run_tests.py", "--suite", selection,
+                         "--jobs", jobs, "--json-report", "ci-results/" + selection + ".json"], 900)
+                    self.assertEqual(180, validator.call_args.kwargs["timeout"])
+
+    def test_manual_full_summary_cannot_accept_only_the_quick_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary)
+            rows = [dict(file=name, tests=1, passed=1, exit_code=0, skips=[])
+                    for name in run_tests.QUICK_PATTERNS]
+            (results / 'quick.json').write_text(json.dumps(dict(files=rows)))
+            with patch.object(ci_web_beta, 'RESULTS', results), \
+                    patch.dict('os.environ', {'GITHUB_EVENT_NAME': 'workflow_dispatch'}), \
                     contextlib.redirect_stdout(io.StringIO()):
-                validator.return_value.returncode = 0
-                validator.return_value.stdout = "PASS"
-
-                result = ci_web_beta.main()
-
-                self.assertEqual(0, result)
-                suite.assert_called_once_with(
-                    [ci_web_beta.sys.executable, "development/tools/run_tests.py", "--suite", "full",
-                     "--jobs", jobs, "--json-report", "ci-results/full.json"], 900)
-                self.assertEqual(180, validator.call_args.kwargs["timeout"])
+                with self.assertRaises(FileNotFoundError):
+                    ci_web_beta.suite_summary('common')
+                (results / 'full.json').write_text(json.dumps(dict(files=rows)))
+                with self.assertRaises(ValueError):
+                    ci_web_beta.suite_summary('common')
+                rows = [dict(file=name, tests=1, passed=1, exit_code=0, skips=[])
+                        for name in run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS]
+                (results / 'full.json').write_text(json.dumps(dict(files=rows)))
+                success, _ = ci_web_beta.suite_summary('common')
+            self.assertTrue(success)
 
     def test_workstation_cannot_enter_hosted_probe(self):
         with patch.dict("os.environ", {}, clear=True):

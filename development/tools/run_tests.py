@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Run Cost Guard tests as bounded per-file suites.
 
-`quick` is the default for constrained/hosted AI environments. Each test file is
-an isolated subprocess with a hard timeout, and files run concurrently to keep
-wall-clock time low. `full` adds package mutation and
-benchmark checks and is intended for Diagnostics or unrestricted local use; its
-slowest (full-only) files start first so they overlap the many quick files.
+`quick` is the fast unit/component foundation for constrained/hosted environments.
+`full` retains every registered regression, including HTTP, spawned workers, Node
+VMs, native launchers, package mutation and scale checks. Each group runs in an
+isolated subprocess with a hard timeout. Slow Full-only groups start first.
 """
 from __future__ import annotations
 
@@ -22,7 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "development/tests"
 
-QUICK_PATTERNS: tuple[str, ...] = (
+# Complete ordinary regression registration; Quick is an explicit small subset,
+# not Full minus a handful of expensive cases. Focused patterns remain available.
+REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_active_hour.py",
     "test_ai_stats.py",
     "test_ai_stats_rates.py",
@@ -199,6 +200,60 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_claude_code_accounts.py",
     "test_claude_transport.py",
 )
+QUICK_PATTERNS: tuple[str, ...] = (
+    "test_domain.py",
+    "test_config.py",
+    "test_ci_web_beta.py",
+    "test_session_tree.py",
+    "test_analysis_core.py",
+    "test_active_hour.py",
+    "test_ai_stats_rates.py",
+    "test_report_sampling.py",
+    "test_report_sample_acquisition.py",
+    "test_v2_normalization.py",
+    "test_v2_tool_continuations.py",
+    "test_prompt_projection.py",
+    "test_step6_context_comparisons.py",
+    "test_context_history_projection.py",
+    "test_child_links.py",
+    "test_context_warning_presentation.py",
+    "test_startup_progress.py",
+    "test_watch_screen.py",
+    "test_watch_grouping.py",
+    "test_watch_session_groups.py",
+    "test_watch_terminal_recency.py",
+    "test_watch_tool_activity.py",
+    "test_watch_skills.py",
+    "test_watch_activity_lifecycle.py",
+    "test_watch_account_refresh.py",
+    "test_watch_today_ccost.py",
+    "test_watch_rendering.py",
+    "test_card_service_timeline.py",
+    "test_live_update_timeline.py",
+    "test_owner_cost_timeline.py",
+    "test_watch_completion_service.py",
+    "test_token_mix.py",
+    "test_token_mix_economics.py",
+    "test_priced_token_mix.py",
+    "test_account_period_ccost.py",
+    "test_quota_period_lifecycle.py",
+    "test_copilot_unaccounted_usage.py",
+    "test_account_ordering.py",
+    "test_quota_used.py",
+    "test_account_status_layout.py",
+    "test_report_polish.py",
+    "test_model_comparison_tiers.py",
+    "test_model_supersession.py",
+    "test_report_definitions.py",
+    "test_model_availability.py",
+    "test_pricing_identities.py",
+    "test_claude_alias_identity.py",
+    "test_prompt_cost_detail.py",
+    "test_ccost_unavailable.py",
+    "test_web_quota_ccost.py",
+    "test_web_quota_estimates.py",
+    "test_web_quota_pace.py",
+)
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
     "test_historical_reports.HistoricalReportScaleTests",
     "test_web_session_detail.py",
@@ -207,7 +262,7 @@ FULL_ONLY_PATTERNS: tuple[str, ...] = (
     "test_foundation.py",
     "test_rc2_public_diagnostics.py",
     "test_step9_parity_performance.py",
-)
+) + tuple(pattern for pattern in REGRESSION_PATTERNS if pattern not in QUICK_PATTERNS)
 PROFILES: dict[str, tuple[str, ...]] = {
     "native-web": (),  # Explicit platform cases below; never expands to Full.
     "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_screen.py", "test_watch_rendering.py", "test_watch_startup_recovery.py", "test_web_source_startup.py"),
