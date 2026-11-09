@@ -105,3 +105,85 @@ There is no unconditional history scan, purge, manual reset, paid replay or TTL 
 Local detailed evidence: `scratch:/live-alias-probe.jsonl` (failed attempt),
 `scratch:/stable-live-alias-probe.jsonl`, `scratch:/alias-browser-evidence.json`
 and `scratch:/final-full-tests.log`. Only sanitized scalar results are published.
+
+## FR 000651 — executed identity investigation and hold
+
+2026-11-09, Cost Guard base `d2d22ea9faea5fa3ddd9b4a941010ce14a4cfc4d`.
+This section is a fresh source investigation, not an extension of the earlier
+PASS claims. **Decision Delegate authorized On Hold for FR 000651 only**: the
+existing safeguard is not the requested recovery, and no useful independently
+verified product subset was identified. The original requirements remain open.
+
+### Exact loss boundary
+
+Read-only upstream checkout: `a17fab50a151c602243d31b4be1f5b4915d6437e`.
+The running service reported OpenCode 2.2.6; its public `/openapi.json` exposes
+assistant `model: Model.Ref` and optional `native`, without a dedicated executed
+model field. Source comparison with
+[v2.2.6, dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06](https://github.com/anomalyco/opencode/tree/dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06)
+confirmed the following behavior also exists in that release. This is a
+release-source comparison, not proof of the installed binary's build hash.
+
+| Stage | Fresh source finding |
+| --- | --- |
+| Claude stream conversion | `packages/core/src/plugin/provider/claude-agent/language-model/convert-claude-stream.ts` emits `{type:"response-metadata", id:messageID, modelId:event.message.model}` at main-session `message_start`. Nested parent-tool streams are excluded by its guard. |
+| **Loss** | [`packages/core/src/aisdk.ts::streamPartEvents`](https://github.com/anomalyco/opencode/blob/dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06/packages/core/src/aisdk.ts) explicitly handles `response-metadata` with `Effect.succeed([])`. Neither response model nor response ID survives as an LLMEvent through this branch. |
+| Durable publication | `session/runner/step.ts` passes selected `input.model.ref` to `createLLMEventPublisher`; `publish-llm-event.ts` writes that selection in `Step.Started`. Claude finish provider metadata contains rate limits, not the executed model. |
+| Projection/storage | `session/message-updater.ts` creates/updates the assistant using the started event's selected model; terminal updates add native/usage/cost. `session/projector.ts` encodes that envelope and assistant parts into SQLite. It cannot restore an event already discarded by the adapter. |
+| Transfer/history | `session/transfer.ts::export` exports the same settled session messages. This is not an independent provider-response archive. Public history/export does not repair the above loss. No private database was inspected. |
+| Desktop | `packages/session-ui/src/message/message-content.tsx::modelItems` reads `provider.models[model.id].name` from the current catalog. A changed catalog can therefore change a historical alias's visible name without changing its request evidence. |
+| Current catalog | `claude-agent/provider.ts` refreshes saved `id/name/resolvedModel` on provider-ready state and uses `resolvedModel` for current prices. This has no demonstrated individual historical response binding. |
+
+These are full-chain source findings, not an inference from a missing schema
+property or a publisher switch alone. There was **no actual captured Claude
+history fixture or end-to-end historical recovery demonstration** in this run.
+
+### Evidence classes and remaining alternative
+
+| Request evidence | Permissible conclusion | Status in this investigation |
+| --- | --- | --- |
+| Concrete ID persisted on the individual assistant | Existing explicit-ID handling remains usable; do not borrow a session-wide selection. | Source inspection only; no fresh execution test. |
+| Selected alias plus separately persisted executed ID at the exact response scope | Could establish that response's version, preserving the alias/provider/effort separately. | No supported real historical example established; this is a required case, not implemented or verified here. |
+| Alias plus today's catalog display name/resolvedModel | Does not establish the old execution; keep it unverified and unpriceable. | Desktop/catalog and adapter source explain the discrepancy; no claim of actual owner-row recovery. |
+
+The [official TypeScript SDK reference](https://platform.claude.com/docs/en/agent-sdk/typescript#getsessionmessages)
+documents `getSessionMessages(sessionId, {dir, limit, offset})`, returning transcript
+UUID, native session ID, parent IDs and `message: unknown`. This is a plausible
+**different** recovery path, not evidence that all transcripts lack model data.
+OpenCode's converter attaches native session/message UUIDs to tool calls and
+nonstreamed text; streamed response IDs differ from transcript UUIDs, and ordinary
+streamed text cannot be assumed to retain the join. `sync/record.ts` saves native
+session/checkpoint IDs for continuation, not executed models. Forks can change
+transcript UUIDs; side calls need not persist transcripts. The fork helper is
+mutating, not a history-read workaround.
+
+No authorized exact historical target, supported bounded transport and complete
+source/request join were established. No enumeration of private Claude sessions,
+other-session storage, raw prompts, credential access, SDK/Claude execution,
+paid replay, new server or installed-source modification was attempted. The
+public OpenCode history path's loss does **not** establish irrecoverability of
+every SDK transcript. Sanitization after collection would not grant access.
+
+### Minimal integration prerequisite, not an invented implemented field
+
+Upstream must preserve actual response model and response correlation through the
+AI-SDK adapter, durable events, projector and supported historical API/export,
+separately from selected `Model.Ref`. It must attribute **each physical response**,
+not simply overwrite a step with its last observed model: retries, fallback,
+multiple responses, tool continuations, compaction and subagents need correct
+ownership and usage association. Interrupted/failed responses must not lose
+already observed evidence. A versioned optional response-evidence record can
+carry this contract; no such hypothetical field is accepted by Cost Guard here.
+
+For older history, a supported request-qualified recovery path to retained
+executed identity is additionally necessary, potentially through an exact SDK
+transcript join. Prospective persistence alone cannot backfill old requests.
+Reconsideration needs that path and an authorized exact historical target, or
+an explicit owner scope change; only owner release restores Ready status.
+
+Historical/new recovery is **UNVERIFIED**. Cache reconciliation, cold/warm/restart,
+reference-cost and rendered parity acceptance are **NOT RUN**. No product source,
+cache semantics, architecture boundary, version or maintenance progress changed;
+no upstream issue/patch was published. Development-only hold documentation needs
+no product test/release gates under the active workflow and Delegate decision.
+The FR and branch are retained, with no completion record or duplicate Suggestion.
