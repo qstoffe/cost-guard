@@ -30,7 +30,7 @@ const WatchView = (() => {
   function invocationDisclosure() {
     const target = disclosure(); target.node.className = 'watch-running-tool';
     target.note = el('p', undefined, 'detail'); target.input = el('pre', undefined, 'watch-invocation');
-    target.list.append(target.note, target.input);
+    target.list.append(target.input, target.note);
     return target;
   }
   function drawInvocation(target, label, detail) {
@@ -40,7 +40,8 @@ const WatchView = (() => {
     if (changed) {
       target.node.open = false; target.identity = identity;
       text(target.input, detail?.text || '');
-      text(target.note, label ? detail?.qualification || 'Invocation details unavailable from the current source.' : '');
+      text(target.note, label ? detail ? detail.qualification : 'Invocation details unavailable from the current source.' : '');
+      target.note.hidden = !target.note.textContent;
     }
     if (changed || !protectedNode(target.summary) || !label) text(target.summary, label);
     target.node.hidden = !label;

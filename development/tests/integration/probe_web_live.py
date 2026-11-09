@@ -133,7 +133,7 @@ def main():
         jobs = ReportJobs(target=measured_report)
     host = WebHost(ROOT, jobs=jobs, live_factory=factory)
     streams = []
-    observations = ProbeObservations()
+    observations = ProbeObservations(tool_invocations=args.tool_invocations)
     with observations.installed(), probe_lifecycle(host, streams, observations):
         host.start()
         shell_seconds = time.monotonic() - started
@@ -300,13 +300,16 @@ def main():
                             assert set(detail) == {'identity', 'revision', 'text', 'qualification'}
                             assert len(detail['identity']) == len(detail['revision']) == 64
                             assert len(json.dumps(detail)) < 10_000
-                            assert detail['qualification']
+                            assert isinstance(detail['qualification'], str)
+                            assert detail['text'] or detail['qualification'], 'input or factual absence reason'
                             observed += 1
                 if observed:
                     break
                 time.sleep(1)
             print(json.dumps(dict(tool_invocations='observed' if observed else 'unobserved',
-                observed_details=observed, scalar_evidence_only=True, model_calls_started_by_probe=0)))
+                observed_details=observed, native_commands_preserved=len(observations.invocation_commands),
+                native_timeouts_labeled=len(observations.invocation_timeouts),
+                scalar_evidence_only=True, model_calls_started_by_probe=0)))
             if not observed:
                 raise RuntimeError('probe_no_live_invocation_observed')
         if args.prompt_cost:

@@ -3,6 +3,7 @@ from collections import Counter
 from contextlib import contextmanager, ExitStack
 from functools import wraps
 import json
+import math
 import multiprocessing
 from pathlib import Path
 import sys
@@ -13,7 +14,7 @@ from unittest.mock import patch
 
 
 class ProbeObservations:
-    def __init__(self):
+    def __init__(self, *, tool_invocations=False):
         self.started = time.monotonic()
         self.lock = Lock()
         self.pending = {}
@@ -24,6 +25,27 @@ class ProbeObservations:
         self.stage = 'startup'
         self.http_maximum = 0
         self.http_requests = 0
+        self.tool_invocations = tool_invocations
+        self.invocation_commands = set()
+        self.invocation_timeouts = set()
+
+    def observe_invocation(self, original, part):
+        """Compare already-acquired native text in memory; retain only opaque IDs."""
+        from src.watch.tool_contracts import tool_input
+        detail = original(part)
+        inputs = tool_input(part.data)
+        command = inputs.get('command')
+        if isinstance(command, str) and command and detail.text.startswith('command:\n' + command):
+            with self.lock:
+                self.invocation_commands.add(detail.identity)
+            timeout = inputs.get('timeout')
+            if (str(part.data.get('tool') or part.data.get('name')).lower() in
+                    {'shell', 'bash', 'functions.shell', 'functions.bash'} and
+                    type(timeout) in {int, float} and math.isfinite(timeout) and timeout > 0):
+                assert f'timeout:\n{timeout} ms' in detail.text, 'observed native timeout units'
+                with self.lock:
+                    self.invocation_timeouts.add(detail.identity)
+        return detail
 
     @contextmanager
     def phase(self, name):
@@ -69,6 +91,12 @@ class ProbeObservations:
         from src.web.events import EventHub
         from src.web.http import LoopbackServer
         with ExitStack() as stack:
+            if self.tool_invocations:
+                from src.watch import tools, invocation
+                original = invocation.invocation
+                observed = lambda part: self.observe_invocation(original, part)
+                stack.enter_context(patch.object(tools, 'invocation', observed))
+                stack.enter_context(patch.object(invocation, 'invocation', observed))
             for owner, methods in (
                 (WebHost, ('close',)), (LiveRuntime, ('close', '_publish_frame')),
                 (AccountAcquisition, ('close',)), (AccountRefreshLoop, ('close',)),

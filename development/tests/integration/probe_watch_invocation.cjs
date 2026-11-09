@@ -6,10 +6,20 @@ module.exports = async (evaluate, command, session) => {
     const target=card.runningDetail;
     target.summary.focus({preventScroll:true});
     return {collapsed:!target.node.open, text:target.input.textContent,
+      noteHidden:target.note.hidden, note:target.note.textContent,
+      commandFirst:target.list.firstElementChild===target.input,
       background:card.backgroundDetail.input.textContent}; })()`);
   assert.equal(initial.collapsed, true);
-  assert.match(initial.text, /git grep "hello world"\nWrite-Output/);
-  assert.match(initial.background, /git grep/);
+  assert.ok(initial.text.startsWith('command:\n"C:\\Python313\\python.exe" "D:\\dev\\scripts\\tokenizer.py" --mode=fast --limit=25\n'));
+  assert.match(initial.text, /timeout:\n120000 ms \(2 min\)/);
+  assert.match(initial.background, /tokenizer\.py/);
+  assert.equal(initial.noteHidden, true); assert.equal(initial.note, ''); assert.equal(initial.commandFirst, true);
+  await command('Input.dispatchKeyEvent', {type:'keyDown', key:'Enter', code:'Enter', windowsVirtualKeyCode:13, text:'\r'}, session);
+  await command('Input.dispatchKeyEvent', {type:'keyUp', key:'Enter', code:'Enter', windowsVirtualKeyCode:13}, session);
+  assert.equal(await evaluate(`[...state.watch.cards.values()].find(c=>c.value.session_id==='root').running.open`), true);
+  await command('Input.dispatchKeyEvent', {type:'keyDown', key:' ', code:'Space', windowsVirtualKeyCode:32, text:' '}, session);
+  await command('Input.dispatchKeyEvent', {type:'keyUp', key:' ', code:'Space', windowsVirtualKeyCode:32}, session);
+  assert.equal(await evaluate(`[...state.watch.cards.values()].find(c=>c.value.session_id==='root').running.open`), false);
   await command('Input.dispatchKeyEvent', {type:'keyDown', key:'Enter', code:'Enter', windowsVirtualKeyCode:13, text:'\r'}, session);
   await command('Input.dispatchKeyEvent', {type:'keyUp', key:'Enter', code:'Enter', windowsVirtualKeyCode:13}, session);
   const retained = await evaluate(`(() => {

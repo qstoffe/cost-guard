@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.228 — 2026-11-09
+
+- Full Watch's collapsed Running details preserve native commands, quoting, Windows paths and harmless CLI assignments. Recognized credential values are redacted where safe; ambiguous credentials and unsupported/oversized/absent input get specific explanations instead of a blanket warning.
+- Supplied positive numeric shell/bash timeouts show milliseconds and a compact equivalent, separate from running elapsed time. No default, countdown, source acquisition, execution or CLI/Mini behavior changes.
+
 ## v80.227 — 2026-11-09
 
 - Full Watch's Running and Earlier prompt tables show a compact **CCost** total only. The same value tooltip starts with independently verified Incoming Context CCost (I) and Extra CCost (E), retaining the complete grouped main/subagent breakdown and unavailable-cost reasons.
