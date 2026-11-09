@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths: ['src/**', 'config/default-config.jsonc', '*cost-guard*.py', 'windows/**', 'macos/**', 'development/tests/**', 'development/tools/**', '.github/workflows/web-beta.yml']
+    paths: ['src/**', 'config/default-config.jsonc', '*cost-guard*.py', 'windows/**', 'macos/**', 'development/tests/**', 'development/tools/**', '.github/workflows/*.yml']
   push:
     branches: [main]
-    paths: ['src/**', 'config/default-config.jsonc', '*cost-guard*.py', 'windows/**', 'macos/**', 'development/tests/**', 'development/tools/**', '.github/workflows/web-beta.yml']
+    paths: ['src/**', 'config/default-config.jsonc', '*cost-guard*.py', 'windows/**', 'macos/**', 'development/tests/**', 'development/tools/**', '.github/workflows/*.yml']
 permissions:
   contents: read
 concurrency:
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Full registered suite and package validation (once)
+      - name: Quick units and package validation (Full on manual dispatch)
         run: python development/tools/ci_web_beta.py regression --scope common
       - name: CI-only browser tooling and Linux dependencies
         if: ${{ !cancelled() }}
@@ -53,41 +53,6 @@ jobs:
         if: always()
         with:
           name: web-beta-common-linux
-          path: ci-results/*.json
-          retention-days: 7
-          if-no-files-found: error
-  native:
-    # No private-repository paid-minute fallback. Reassess terms before changing this.
-    if: github.event.repository.private == false
-    strategy:
-      fail-fast: false
-      # At most three jobs including common; keep all native architectures.
-      max-parallel: 2
-      matrix:
-        os: [windows-2025, macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Focused native Web-launch regressions
-        run: python development/tools/ci_web_beta.py native-regression --scope native
-      - name: Isolated native APIs and launcher smoke (never workstation probe)
-        if: ${{ !cancelled() }}
-        run: python development/tools/ci_web_beta.py native --scope native
-      - name: Coverage summary (includes missing/not-run phases)
-        if: always()
-        env:
-          CI_JOB_STATUS: ${{ job.status }}
-        run: python development/tools/ci_web_beta.py summary --scope native
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: web-beta-${{ matrix.os }}
           path: ci-results/*.json
           retention-days: 7
           if-no-files-found: error

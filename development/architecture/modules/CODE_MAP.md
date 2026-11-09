@@ -9,10 +9,10 @@ Scoped v80.200 update: canonical subagent prompt counts and shared subscription 
 responsive alignment; earlier dispatcher/evidence/partial-history and Sessions restoration
 owners and tests. Baseline revisions above retain the other module checks.
 
-Test Health 90 scoped check on `139c25f3292f33f71b8ac57bff856af07860c48b`
-(2026-11-09): provider pricing Markdown joins its existing fixture owner; two
-remaining sibling-test edges. Earlier snapshot/row routes and restored AI Stats
-recovery admission remain; no runtime boundary or runner selection change.
+Test Health 105 on `70462006910b0507c7f21412ef87330c3f675e2f` (2026-11-09):
+Quick 52 unit groups; Full retains all 181. Ordinary CI uses Quick; manual Full
+and platform-triggered native checks retain deeper coverage. Fixture ownership
+and two sibling-test edges remain; runtime boundaries are unchanged.
 
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 

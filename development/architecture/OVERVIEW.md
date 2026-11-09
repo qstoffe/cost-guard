@@ -90,7 +90,7 @@ Start with [CODE_MAP.md](modules/CODE_MAP.md) for exact entrypoints, platform wr
 
 ## Validation, review and delivery flow
 
-Descriptive route: installed contract revision 6, selected worker workflow, `development/repository.json` and CI owners below. No new gate, scheduler, registry, paid inference or self-review. Native safety remains separate from product checks. Failed checks mean unfinished work; uncertain merge needs reconciliation, not replay.
+Test Health 105 scoped verification update on `70462006910b0507c7f21412ef87330c3f675e2f` (2026-11-09); unchanged runtime claims keep their metadata above. Contract revision 6 and `development/repository.json` retain authority. No new gate, scheduler, paid inference or self-review. Failed required checks remain unfinished; uncertain merge needs reconciliation, not replay.
 
 ```mermaid
 flowchart TD
@@ -110,8 +110,8 @@ flowchart TD
     repair --> scope
     outcome -->|yes| pr["PR to actual default; inspect blockers"]
     skip --> pr
-    pr --> ci{"Configured CI triggered?"}
-    ci -->|yes| checks["Hosted Web jobs; report actual failures / skips"]
+    pr --> ci{"Risk-triggered CI?"}
+    ci -->|yes| checks["Quick / validator / browser; native on platform paths; manual Full"]
     ci -->|no| merge["Normal protected merge"]
     checks --> permitted{"Checks / protections permit merge?"}
     permitted -->|no| repair
@@ -126,10 +126,10 @@ flowchart TD
 
 | Stage | Scope / activation | Disposition | Exact source owner | Failure handling |
 | --- | --- | --- | --- | --- |
-| FR publication / selection | FR-only authoring or fresh Backlog | Scoped authority; fixed task; sync when outdated | Installed `shared-repo/references/fr-authoring.md`, `shared-repo/references/backlog-worker.md`, `shared-repo/references/contract-sync.md`; `development/applied-contract.json` | Preserve unrelated work; no reselect; no due work/Ready ends no-work |
-| Development-only | Changes confined to development | Product tests, validator, budgets and version work disabled | `development/README.md`; installed `shared-repo/references/maintenance.md` | Check changed facts/routes; do not invent product PASS |
-| Product verification | Shipped-source changes | Applicable tests/security/release checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`; `development/repository.json`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Repair required failures; no weakened assertion/baseline |
-| Real installation / inference | Relevant local proof; inference separately authorized | Conditional read-only probes; inference default-denied | `development/tools/collect_diagnostics.py`; exact probes in CODE_MAP; `development/tests/integration/live/` reserved, not a runner | Never stop shared OpenCode; disclose unavailable proof; no invented model dispatch/freeze owner |
-| Hosted CI | Cumulative product/test/tool/workflow paths on main PR/push, or manual dispatch; public repo only | Linux plus native Windows/macOS jobs; docs/state-only diff does not trigger | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py` dispatch / `hosted_only`; `development/tests/integration/ci_browser_web.py`, `development/tests/integration/ci_native_web.py` | Bounded phases, explicit missing/failed/skipped evidence; no private paid fallback or workstation spoofing |
-| PR / merge | Authorized delivery | Actual checks/protections required; quarantined PR review not automatic | Installed `/repo-backlog`; actual GitHub default / protection state | No force/bypass; uncertain effect needs read-back, not duplicate mutation |
-| Delivery / handoff | Confirmed merge and default read-back | Truthful report; native bounded cleanup attempt, deletion success not required | Installed native `repo_backlog` finish | Partial/skipped cleanup does not block; no cleanup retry or second task here |
+| FR publication / selection | Authoring or fresh Backlog | Scoped authority; fixed task; sync if outdated | Installed `shared-repo` authoring/worker/sync references; `development/applied-contract.json` | Preserve unrelated work; no reselect |
+| Development-only | Development/docs changes | No product gates/version work | `development/README.md`; installed maintenance method | Verify changed tooling/facts; no invented product PASS |
+| Product verification | Shipped-source changes | Applicable tests/security/release facts | `development/tools/run_tests.py`, `development/tools/validate_package.py`; `development/repository.json` | Repair required failures; focused development checks remain available |
+| Installation / inference | Relevant local evidence | Conditional read-only probes; inference default-denied | CODE_MAP probes; `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` reserved | Never stop shared OpenCode; disclose gaps |
+| Common CI | Cumulative product/test/tool/workflow PR/push paths; public only | Quick units + validator + Chromium; explicit manual dispatch selects Full | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py`; `development/tests/integration/ci_browser_web.py` | Exact selected report required; missing/failed/cancelled is not PASS; no workstation spoofing |
+| Native CI | Platform-sensitive entry/config/host/security/jobs/Live/launcher and native test/tool paths; manual dispatch | Conditional Windows/macOS ARM/Intel profile + native smoke, unchanged mechanisms | `.github/workflows/native-web.yml`; `development/tools/ci_web_beta.py`; `development/tests/integration/ci_native_web.py` | No private paid fallback; retain deadlines, phases and missing/failed truth; isolated assets/calculations do not trigger |
+| PR / merge / handoff | Authorized delivery, then confirmed default read-back | Normal checks/protections; native finish/cleanup attempt | Installed `/repo-backlog`; actual GitHub state | No force, replay, cleanup success gate or second task |
