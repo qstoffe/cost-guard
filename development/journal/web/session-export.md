@@ -100,3 +100,59 @@ prose/design-budget warnings** (Web guide, root README, version history and four
 existing Python modules); no hard-cap or baseline was raised. Only release metadata
 and documentation changed after the passing runtime suite; version consistency,
 syntax/imports, boundaries and file budgets were then validated on that tree.
+
+## FR000646 — compact action/help polish, 2026-11-09
+
+v80.226 replaces the old caption/help-button cluster with one neutral compact
+**Export Sanitized JSON** action. Shared action help attaches before the save
+listener, so activation cancels pending/open help synchronously before the native
+picker. Programmatic focus restoration dismisses help in the same synchronous
+turn. Empty ready status uses no layout space; cancellation, progress, success and
+real failure announcements remain. No native/source/HTTP/security semantics changed.
+
+Fresh verification:
+
+- Full registered suite: **179 file targets passed, zero failures, 115.6 s**.
+  Focused export/help checks: seven tests passed. Package validator: **11 passes,
+  zero failures, seven existing advisory warnings**; no budget/baseline changes.
+- Integrated browser disconnected; owned hidden fresh-profile **Edge 157.0.4341.42**
+  used shipped host/auth/assets with the synthetic native source. All **24**
+  Classic/Web-light/Web-dark × 360/1280 px × CSS zoom 1/1.5 × fine/coarse cases
+  match the actual rendered Models refresh button: system UI 12 px, line-height
+  18.6 px, padding 3.75/9.75 px, weight 600, height 30 px fine / 44.25 px coarse
+  (scaled bounds at zoom). No page overflow or empty idle status gap.
+- Real trusted pointer, Tab/Enter/Space and touch input dismiss action-owned help
+  before deferred picker invocation. Pending hover cancels; help remains closed
+  beyond the hover delay while pending and after cancellation/focus restoration.
+  Escape and intentional re-entry pass. Deferred native handle success commits
+  correct synthetic content and leaves help closed. These are browser/double tests,
+  not OS dialog proof. Initial keyboard probe used incomplete raw CDP key events;
+  adding normal keyDown/text input fixed the probe, not product code.
+- Actual browser native picker invocation retains user activation and yields a
+  headless AbortError with zero source reads. Actual authenticated fallback file
+  preserves selected native content/lifecycle/Unicode; malformed output creates
+  no second file. Focus/navigation/object-URL retirement pass.
+- Installed **OpenCode 2.2.6**, this worker's own ongoing session only:
+  native `sanitize=true` transfer **70,118 bytes / 41 messages / 0.0253 s**.
+  Only scalars retained; no transcript staging, other-session inspection,
+  inference, shared service mutation or release ZIP. Official CLI command docs
+  freshly confirm sensitive transcript/file redaction; exhaustive removal is not
+  promised and review-before-sharing remains in help.
+
+**Decision Delegate exception (2026-11-09):** fresh real Windows Save As tooltip
+observations during opening, Cancel, successful Save and native focus return/layering
+are **NOT RUN / UNVERIFIED**. Browser/double/headless/fallback proof is not equivalent
+native-OS proof. After inspecting authorized repository resources, no retained
+isolated-desktop/UIA harness exists; historical scratch is another session's and was
+not accessed. Reconstructing native automation is disproportionate to this remaining
+low-risk UI uncertainty. The Delegate approved this minor isolated evidence caveat,
+not removal of native-save/cancellation/security requirements, with no Suggestion,
+hold, user interruption or visible desktop authority. Real modality could still
+produce an unobserved focus sequence that reopens help; any discovered defect must
+be repaired. FR000631's separate historical owner exception remains attributed
+above and is not treated as new authority or a fresh native PASS.
+
+Durable conclusions are here; disposable scalar evidence was recorded as
+`scratch:/session-export-browser.json`, `scratch:/installed-export.json` and
+`scratch:/full-tests.json`. Architecture and Web guide updated; no other boundary
+change or architecture audit is claimed.

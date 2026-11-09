@@ -1,7 +1,7 @@
 'use strict';
 // Native Save As is requested synchronously from the click, before source work.
 const SessionExport = (() => {
-  const help = 'Native sanitized JSON; review before sharing. Running sessions are point-in-time exports. Without Save As support, your browser chooses the download location.';
+  const help = 'Exports this session as native OpenCode JSON using sanitized mode.\nOpenCode redacts sensitive transcript and file data. Review the file before sharing.\nRunning sessions are saved as a point-in-time snapshot.\nSupported browsers open Save As; otherwise your browser handles the download.';
   const messages = {
     export_unavailable: 'Export unavailable for this source/version. CLI alternative: opencode session export <session-id> --sanitize.',
     export_source_changed: 'Source changed. Reopen this session before exporting.',
@@ -16,17 +16,18 @@ const SessionExport = (() => {
     constructor(api, id) {
       Object.assign(this, {api, id, token: null, available: false, operation: null});
       this.root = ReportView.element('div', undefined, 'session-export');
-      this.button = ReportView.element('button', 'Export JSON'); this.button.type = 'button'; this.button.disabled = true;
+      this.button = ReportView.element('button', 'Export Sanitized JSON'); this.button.type = 'button'; this.button.disabled = true;
       this.notice = ReportView.element('span', 'Export unavailable until the selected session is observed.');
       this.notice.setAttribute('role', 'status');
-      this.root.append(this.button, ContextHelp.button('About export', help), this.notice);
+      this.root.append(this.button, this.notice);
+      ContextHelp.attach(this.button, help);
       this.button.addEventListener('click', () => this.save());
     }
     update(token, available) {
       const changed = this.token !== token || this.available !== available;
       this.token = token; this.available = available;
       this.button.disabled = !token || !available || !!this.operation;
-      if (changed && !this.operation) this.notice.textContent = available ? 'Sanitized; review before sharing.' : messages.export_unavailable;
+      if (changed && !this.operation) this.notice.textContent = available && token ? '' : messages.export_unavailable;
     }
     close() {
       this.token = null; this.operation?.abort();
@@ -71,8 +72,11 @@ const SessionExport = (() => {
       } finally {
         if (this.operation === operation) this.operation = null;
         this.button.disabled = !this.token || !this.available;
-        if (focused && token === this.token && window.document.activeElement === window.document.body)
+        if (focused && token === this.token && window.document.activeElement === window.document.body) {
           this.button.focus({preventScroll: true});
+          // Restoring picker focus is not a new request for keyboard help.
+          ContextHelp.dismiss(this.button);
+        }
       }
     }
   }

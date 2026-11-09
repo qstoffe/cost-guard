@@ -285,7 +285,8 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
 .session-export { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-block: .5rem; }
 .session-export > span { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
-.session-export > button { min-height: 2rem; }
+.session-export > button { min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
+.session-export > [role="status"]:empty { display: none; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .live-account-cards .account-card { box-shadow: none; font-size: .85rem; }
 .live-account-cards .account-card p { margin-block: var(--space-2); }
@@ -409,7 +410,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .model-filters span { min-width: 0; overflow-wrap: anywhere; }
 .model-filters input { flex: 0 0 auto; min-height: auto; margin: 0; }
 @media (pointer: coarse) {
-  .model-price-controls button, .model-filters label { min-height: 2.95rem; }
+  .model-price-controls button, .model-filters label, .session-export > button { min-height: 2.95rem; }
 }
 .warning:empty { display: none; }
 .compact-accounts { grid-auto-rows: 1fr; gap: .75rem; margin-top: .75rem; }

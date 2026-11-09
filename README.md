@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.225, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.226, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -365,7 +365,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.225 (2026-11-09):** Mini Watch's Ctx help includes Next Ctx and the representative prompt's signed Δ Ctx, retaining threshold guidance. Session help adds a short Unicode-safe prompt preview without changing visible rows or window size. See [Mini Watch](docs/web-mini-watch.md).
+**v80.226 (2026-11-09):** Session detail has one compact **Export Sanitized JSON** action with contextual help that dismisses on activation. Idle captions are removed; operational feedback and native export/save safeguards remain. See [Web Beta](docs/web-beta.md#export-a-session-as-json).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
