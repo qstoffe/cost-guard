@@ -18,7 +18,7 @@ from threading import Timer
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from development.tests.fixtures.watch_summary import summary_watch, many_cost_groups, same_model_groups
+from development.tests.fixtures.watch_summary import summary_watch, many_cost_groups, same_model_groups, authoritative_allowances
 from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.ccost_unavailable import unavailable_frames
@@ -218,6 +218,8 @@ def main():
                         row["display"]["watch_duration_ms"] = f"{seconds}s"
                     host.events.publish("live", {"state": "running", "view": payload,
                         "source_observed_at_ms": int(time.time() * 1000)})
+                elif command == 'quota-authoritative':
+                    publish(value=authoritative_allowances(frame))
                 elif command in {"quota-idle", "quota-ratio"}:
                     base_account = frame.quota.accounts[0]
                     idle_window = command == 'quota-idle'

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.220 — 2026-11-09
+
+- Web Watch, Accounts and Mini Watch pair quota Used/Remaining percentages with matching provider-reported amounts for verified convertible finite allowances, including Copilot's monthly AI credits. Capacity and remaining pace use that same snapshot; Credits/USD formats reference equivalents, never provider cash.
+- Percentage-only plans retain their disclosed OpenCode-observed period CCost estimates. Invalid, stale or contradictory native balances never substitute local spending; CCost Today and prompt/session valuation remain independent.
+
 ## v80.219 — 2026-11-09
 
 - Mini Watch's Earlier Sessions pressed fill reaches the bottom without an inset stripe. Disclosure adds only its measured layout delta at the current width, then restores achieved expansion in either size mode; changed content/manual bounds reconcile the current delta without a global fit or opening reserve.

@@ -182,7 +182,7 @@ async function main() {
            monthlyDivider:monthly.querySelector('.watch-account-details')!==null,
            secondary:cards[1].querySelector('.watch-secondary-quota').textContent}; })()`);
         assert.equal(quotas.native, 'Monthly · 8.4% used');
-        assert.equal(quotas.cost, ' (1814)'); assert.equal(quotas.usd, ' ($18.14)');
+        assert.equal(quotas.cost, ' (2088)'); assert.equal(quotas.usd, ' ($20.88)');
         assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
         assert.equal(quotas.costHelp, true);
         assert.ok(quotas.resetGaps.every(gap=>gap>=0 && gap<=4), JSON.stringify(quotas.resetGaps));

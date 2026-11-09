@@ -1,4 +1,4 @@
-"""Reference-cost quota displays; never provider allocation or billing arithmetic."""
+"""Reference equivalents of verified quota facts, or explicitly estimated period costs."""
 from decimal import Decimal
 
 from src.numbers import ccost_amount
@@ -28,7 +28,6 @@ def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
     if monthly:
         return {"capacity_label": label, "monthly_capacity": "", "monthly_capacity_help": ""}
     deadline = values.get("reset_at_ms")
-    fraction = values.get("remaining_fraction")
     reason = None
     if values.get("unlimited"):
         reason = "No finite quota limit."
@@ -39,11 +38,7 @@ def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
     elif (values.get("window_active") is False or deadline is None or now_ms is None
             or not deadline - duration * 1000 <= now_ms < deadline):
         reason = "No verified active recurring quota window."
-    elif not coherent or fraction is not None and not 0 <= Decimal(fraction) <= 1:
-        reason = "Contradictory native quota amounts or fractions."
-    elif (fraction is not None and values.get("limit") is not None and Decimal(values["limit"]) > 0
-            and ((values.get("used") is not None and Decimal(fraction) != 1 - Decimal(values["used"]) / Decimal(values["limit"]))
-                 or (values.get("remaining") is not None and Decimal(fraction) != Decimal(values["remaining"]) / Decimal(values["limit"])))):
+    elif not coherent:
         reason = "Contradictory native quota amounts or fractions."
     elif cost and not cost.get("complete"):
         reason = "Same-window usage has incomplete attribution or pricing."
@@ -54,6 +49,39 @@ def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
         "Assumes repeated full windows; not a monthly entitlement, bill or spending forecast.\n"
         "Other quotas may constrain usage; compare each separately, never add their monthly equivalents.")
     return {"capacity_label": label, "monthly_capacity": value, "monthly_capacity_help": explanation}
+
+
+def coherent_native(limit, used, remaining, fraction):
+    """Reject contradictions, not rounded UI percentages or independent local costs."""
+    if any(value is not None and (not value.is_finite() or value < 0)
+           for value in (limit, used, remaining, fraction)):
+        return False
+    if fraction is not None and fraction > 1:
+        return False
+    if limit is None:
+        return True
+    if (limit <= 0 or used is not None and used > limit or remaining is not None and remaining > limit
+            or used is not None and remaining is not None and used + remaining != limit):
+        return False
+    # Normalized raw fractions must match amounts; either Decimal division order
+    # is valid when both complementary amounts exist.
+    ratios = ([1 - used / limit] if used is not None else []) + ([remaining / limit] if remaining is not None else [])
+    return fraction is None or not ratios or fraction in ratios
+
+
+def native_reference_amounts(capacity, limit, used, remaining, fraction, *, direct):
+    """Convert one coherent native snapshot, with complements only on this basis."""
+    if not direct:
+        used = capacity * used / limit if limit is not None and used is not None else None
+        remaining = capacity * remaining / limit if limit is not None and remaining is not None else None
+    if used is None and remaining is not None:
+        used = capacity - remaining
+    elif remaining is None and used is not None:
+        remaining = capacity - used
+    elif used is None and fraction is not None:
+        remaining = capacity * fraction
+        used = capacity - remaining
+    return used, remaining
 
 
 def quota_ccost_values(values, now_ms):
@@ -72,32 +100,35 @@ def quota_ccost_values(values, now_ms):
     basis = "unknown"
     deadline = values.get("reset_at_ms")
     current = (values.get("availability") in {"available", "partial"} and values.get("origin") == "provider_native" and
-               values.get("status") not in {"stale", "unavailable", "error", "paused"} and
+               values.get("status") not in {"stale", "unavailable", "error", "paused", "invalid"} and
                (deadline is None or now_ms is None or deadline > now_ms))
     limit = values.get("limit")
     limit = None if limit is None else Decimal(limit)
     native_used, native_remaining, fraction = (None if values.get(key) is None else Decimal(values[key])
         for key in ("used", "remaining", "remaining_fraction"))
-    coherent = (limit is None or limit > 0) and not (limit is not None and limit > 0 and (
-        native_used is not None and native_used > limit or
-        native_remaining is not None and native_remaining > limit or
-        native_used is not None and native_remaining is not None and native_used + native_remaining != limit))
+    coherent = coherent_native(limit, native_used, native_remaining, fraction)
+    # Recognize the conversion separately from freshness/validity. A failed native
+    # mapping must not fall through to independently observed OpenCode Used.
+    direct = (context["provider_id"] in {"github-copilot", "github-copilot-enterprise"} and
+              values.get("scope") == "account" and values.get("model_id") is None and
+              values.get("period") == "fixed" and values.get("label", "").casefold() in {"monthly", "month"} and
+              (values.get("unit") or "").casefold() == "ai credits")
+    verified = values.get("reference_ccost_capacity")
+    convertible = direct or verified is not None
+    if convertible and not values.get("unlimited"):
+        used = None
     if values.get("unlimited"):
         basis = "unlimited"
     elif current and coherent:
-        # Only the normalized, account-scoped Copilot included allowance is on
-        # the CCost reference scale. A matching unit name alone is not evidence.
-        direct = (context["provider_id"] in {"github-copilot", "github-copilot-enterprise"} and
-                  values.get("scope") == "account" and values.get("model_id") is None and
-                  values.get("period") == "fixed" and values.get("label", "").casefold() in {"monthly", "month"} and
-                   (values.get("unit") or "").casefold() == "ai credits" and limit is not None and limit > 0)
-        verified = values.get("reference_ccost_capacity")
-        if verified is not None and Decimal(verified) > 0:
-            basis, capacity = "native", Decimal(verified)
-        elif direct:
-            basis, capacity = "native", limit
-            remaining = native_remaining if native_remaining is not None else (
-                limit - native_used if native_used is not None else None)
+        if convertible:
+            if values.get("status") != "blocked" and values.get("window_active") is not False:
+                capacity = Decimal(verified) if verified is not None else limit
+                if capacity is not None and capacity.is_finite() and capacity > 0:
+                    basis = "native"
+                    used, remaining = native_reference_amounts(capacity, limit, native_used, native_remaining,
+                        fraction, direct=direct and verified is None)
+                else:
+                    capacity = None
         else:
             if limit is not None and limit > 0 and native_used is not None:
                 fraction = 1 - native_used / limit
@@ -149,38 +180,41 @@ def quota_ccost_tokens(values, now_ms):
     basis = reference["basis"]
     amount = lambda value: "?" if value is None else ccost_amount(value)
     explanation = {
-        "native": "Provider-reported included AI-credit limit.\n"
-                  "Observed Used CCost is separate; Used + Remaining need not equal Capacity.",
-        "ratio": "Guesstimated full-period CCost: observed CCost ÷ native fraction used.\n"
+        "native": "Provider-reported quota Used/Remaining, converted to reference CCost units.\n"
+                  "Used + Remaining = Capacity for coherent finite allowances; not provider cash or billing.\n"
+                  "OpenCode-observed period CCost is separate and may differ (including usage in other clients).",
+        "ratio": "OpenCode-observed period CCost estimate.\n"
+                 "Guesstimated full-period CCost: observed CCost ÷ native fraction used.\n"
                  "Changes with model usage; not a guaranteed budget.",
         "unlimited": "Capacity: N/A — The provider reports no finite usage limit.\n"
                      "Remaining mode keeps the observed Used CCost; no finite remaining amount applies.",
         "unknown": "No reliable same-window CCost Capacity / Remaining estimate.\n"
                    "A native quota percentage alone is not enough.",
     }[basis]
-    if cost and not cost.get("complete"):
+    if basis != "native" and cost and not cost.get("complete"):
         explanation += "\nUsed CCost has partial attribution / pricing."
-    if context["estimated"]:
+    if basis != "native" and context["estimated"]:
         explanation += "\nUsed CCost has estimated attribution, not verified account attribution."
-    if context["note"]:
+    if basis != "native" and context["note"]:
         explanation += "\n" + context["note"]
     if values.get("reference_ccost_capacity") is not None and basis == "native":
-        explanation = "Source-verified full-period reference CCost Capacity.\nObserved Used CCost is independent."
+        explanation = "Source-verified full-period reference CCost Capacity.\n" + explanation
     brief = {
-        "native": "Reference Remaining uses native AI credits; Used + Remaining need not equal Capacity.",
+        "native": "Provider-reported quota Used/Remaining in reference CCost units; OpenCode-observed CCost is separate.",
         "ratio": "Reference Capacity estimates a full period from observed CCost ÷ native fraction used; not a guaranteed budget.",
         "unlimited": "Unlimited quota; no finite reference Remaining applies.",
         "unknown": "Reference Capacity / Remaining unavailable; a native percentage alone is not enough.",
     }[basis]
-    if cost and not cost.get("complete"):
+    if basis != "native" and cost and not cost.get("complete"):
         brief += "\nUsed CCost has partial attribution / pricing."
-    if context["estimated"]:
+    if basis != "native" and context["estimated"]:
         brief += "\nUsed CCost has estimated attribution."
-    if context["note"]:
+    if basis != "native" and context["note"]:
         brief += "\n" + context["note"]
     if values.get("reference_ccost_capacity") is not None and basis == "native":
-        brief = "Source-verified reference Capacity; observed Used CCost is independent."
-    return {**monthly_tokens(values, capacity, cost, reference["coherent"], reference["current"], now_ms),
+        brief = "Source-verified reference Capacity. " + brief
+    return {**monthly_tokens(values, capacity, {} if basis == "native" else cost,
+                            reference["coherent"], reference["current"], now_ms),
             "ccost_used": amount(used), "ccost_remaining": amount(remaining),
             "ccost_capacity": ("N/A" if basis == "unlimited" else amount(capacity)) +
                 (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),

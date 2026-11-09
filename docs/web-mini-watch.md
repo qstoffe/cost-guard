@@ -229,7 +229,7 @@ invented numbers. At configured-local midnight, Yesterday's total is cleared eve
 the connection is down; Mini waits for the new canonical day. Its day-end metadata
 respects configured timezone/DST, not the browser's calendar or a fixed 24-hour guess.
 
-Each subscription appears once as **name · N% used (same-period CCost)**. The
+Each subscription appears once as **name · N% used (reference quota amount)**. The
 provider-declared stable primary wins; a missing primary never promotes a more
 depleted secondary. Names retain account distinctions. Unlimited and exhausted
 values retain native semantics. Each text row has a thin full-width primary Used
@@ -246,9 +246,14 @@ disclosed in help; the compact cost has no visible estimate decoration.
 
 **Settings → Quota display** offers **Default (Used) / Used / Remaining**.
 Remaining switches this already-open window along with Accounts and full Watch, without
-quota refresh, restart or another stream. A Copilot quota can show **91.6% remaining
-(22912)** beside independently observed Used **(1814)** and native Capacity 25000.
-Help explains why these do not reconcile. Other valid windows extrapolate Capacity
+quota refresh, restart or another stream. Verified convertible finite allowances use
+provider-reported Used, Remaining and Capacity, never independently observed OpenCode
+cost. For example, a synthetic Copilot allowance of 10,000 Credits with 3,000 used
+and 7,000 remaining shows **30% used (3000)** or **70% remaining (7000)**;
+USD shows **($30.00)** or **($70.00)** with Capacity **$100.00** in help.
+These are reference equivalents (100 Credits = $1.00), not provider cash or bills.
+OpenCode-observed CCost Today and prompt/session costs stay independent.
+Other eligible percentage-only windows extrapolate Capacity
 from observed CCost divided by the unrounded fraction Used, then subtract observed
 CCost for Remaining. These are reference proxies, not guaranteed allocation or bills.
 Capacity stays in help, not an extra visible Mini row. Numeric ratio-derived Capacity
@@ -260,8 +265,9 @@ Unlimited keeps Used with no bar, and missing capacity/usage stays unknown rathe
 inventing Remaining. A provider-confirmed idle window still shows **100% remaining**
 with a full healthy bar, but unknown reference Remaining **(?)** and Capacity **?**;
 Used preserves independently proven **(0)**. Credits/USD updates all reference figures.
-Default follows the shipped Used orientation; explicit Used pins it. CLI, remaining
-pace, period attribution and native money are unaffected.
+Default follows the shipped Used orientation; explicit Used pins it. Full Watch/Accounts
+remaining pace uses that same accepted reference Remaining. CLI, period attribution
+and native money are unaffected.
 
 Cost uses verified native boundaries and acquired history **before Watch/Mini
 opened**, including earlier days of a supported fixed UTC calendar month.

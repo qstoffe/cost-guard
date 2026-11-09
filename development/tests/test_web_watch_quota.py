@@ -8,10 +8,12 @@ import shutil
 import subprocess
 import unittest
 
-from development.tests.fixtures.watch_summary import summary_watch
+from development.tests.fixtures.watch_summary import summary_watch, authoritative_allowances
+from development.tests.integration.probe_web_live import check_reference_quotas
 from src.analysis.valuation import ComparisonCost
 from src.application.display import with_display
 from src.application.live_projection import project_live
+from src.application.projection import account
 from src.application.watch_accounts import watch_account, watch_quota
 from src.domain import QuotaComponent
 from src.display import format_reset
@@ -22,6 +24,43 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebWatchQuotaTests(unittest.TestCase):
+    def test_read_only_native_probe_oracle_handles_missing_slots_and_detects_local_used(self):
+        accounts = project_live(authoritative_allowances(summary_watch())).to_json()['accounts']
+        accounts['accounts'].extend(project_live(summary_watch()).to_json()['accounts']['accounts'][1:])
+
+        counts = check_reference_quotas(accounts)
+
+        self.assertEqual(dict(native_capacities=2, native_amount_pairs=2, native_pace=2), counts)
+        accounts['accounts'][0]['primary']['quota']['display_units']['credits']['ccost_used'] = '450'
+        with self.assertRaisesRegex(AssertionError, 'native reference tokens'):
+            check_reference_quotas(accounts)
+
+    def test_authoritative_primary_and_verified_secondary_agree_across_exports_and_reset(self):
+        frame = authoritative_allowances(summary_watch())
+        item = frame.quota.accounts[0]
+
+        watch = project_live(frame).to_json()['accounts']['accounts'][0]
+        accounts = with_display(account(item), now_ms=frame.now_ms).to_json()['observation']['quotas']
+
+        for index, slot in enumerate((watch['primary'], watch['secondary'][0])):
+            quota = slot['quota']
+            with self.subTest(index=index):
+                self.assertEqual(accounts[index], quota)
+                self.assertEqual(('3000', '7000', '10000') if index == 0 else ('600', '1400', '2000'),
+                    tuple(quota['display']['ccost_' + key] for key in ('used', 'remaining', 'capacity')))
+                self.assertEqual(('30%', '70%'), tuple(quota['quota_display'][mode]['percent'] for mode in ('used', 'remaining')))
+                self.assertEqual('450' if index == 0 else '999', slot['cost']['known_ccost'])
+                self.assertEqual('7000' if index == 0 else '1400', quota['ccost_pace']['ccost_remaining'])
+        self.assertNotEqual(watch['primary']['quota']['reset_at_ms'], watch['secondary'][0]['quota']['reset_at_ms'])
+        self.assertEqual('12.5', watch['ccost_scopes'][0]['cost']['known_ccost'])
+        reset = replace(item.account.quotas[0], used=D(0), remaining=D(10000), reset_at_ms=frame.now_ms + 30 * 86400000)
+
+        fresh = with_display(watch_quota(reset, item.quota_periods[0], provider_id='github-copilot'), now_ms=frame.now_ms).to_json()
+
+        self.assertIsNone(fresh['cost'], 'old local window cannot donate cost or calendar')
+        self.assertEqual(('0', '10000', '10000'), tuple(fresh['quota']['display']['ccost_' + key]
+            for key in ('used', 'remaining', 'capacity')))
+
     def test_web_orientation_variants_preserve_canonical_fields_and_native_evidence(self):
         base = QuotaComponent('Monthly', used=D(5608), limit=D(25000), remaining=D(19392), unit='AI credits')
         cases = (

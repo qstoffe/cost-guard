@@ -197,7 +197,7 @@ function setup() {
      ['stylesheet', undefined, 'http://127.0.0.1:1234/app.css'], ['stylesheet', undefined, 'http://127.0.0.1:1234/mini.css']]);
    assert.equal(owner.document.head.children.length, 0, 'Mini never changes the owning tab head');
   assert.equal(view.accounts.children.length, 6);
-  assert.match(view.accounts.textContent, /GitHub Copilot Pro · 8.4% used \(1814\)/);
+  assert.match(view.accounts.textContent, /GitHub Copilot Pro · 8.4% used \(2088\)/);
   assert.match(view.accounts.textContent, /Primary temporarily missing · Usage unavailable \(\?\)/);
   assert.match(view.accounts.textContent, /OpenAI Pro Lite · 42% used \(\?\)/);
   assert.ok(!/Reset|Weekly|Today|Provisional/.test(view.accounts.textContent));
@@ -219,7 +219,7 @@ function setup() {
   assert.doesNotMatch(retained.helpText, /Period CCost unavailable/);
   assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);
   vm.runInContext('ReportView.setQuotaMode("used")', context); controller.settings();
-  assert.match(retained.textContent, /8.4% used \(1814\)/);
+  assert.match(retained.textContent, /8.4% used \(2088\)/);
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
   const scopedDisplay = scopedPrimary.display;
@@ -265,7 +265,7 @@ function setup() {
   const savedQuota = primary.quota;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   primary.quota = {...savedQuota,display_units:{},display:{...savedQuota.display,ccost_brief:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
-  controller.update(input); assert.match(retained.textContent,/8.4% used \(1814\)/);
+  controller.update(input); assert.match(retained.textContent,/8.4% used \(2088\)/,'provider Used does not depend on partial OpenCode pricing');
   assert.equal(retained.helpText.split('\n').length, 2, 'attribution prose is not repeated in Mini help');
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
@@ -285,7 +285,7 @@ function setup() {
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; primary.quota = savedQuota; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-   assert.equal(view.body.children[0].children[1].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$18.14\)/);
+   assert.equal(view.body.children[0].children[1].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$20.88\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   const themeStyle = child.document.documentElement.style;
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');

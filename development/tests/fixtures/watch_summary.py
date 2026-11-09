@@ -88,6 +88,22 @@ def summary_watch():
         cards_state="observed", history_state="observed", daily_usage=daily, daily_state="observed")
 
 
+def authoritative_allowances(frame):
+    """External provider usage differs from local cost; two independent native mappings."""
+    base = frame.quota.accounts[0]
+    primary = QuotaComponent('Monthly', 'fixed', used=D(3000), remaining=D(7000), limit=D(10000),
+        unit='AI credits', reset_at_ms=frame.now_ms + 6 * 86400000, primary=True)
+    secondary = QuotaComponent('Model allowance', 'fixed', used=D(3), remaining=D(7), limit=D(10),
+        unit='requests', scope='model', model_id='synthetic-model', reference_ccost_capacity=D(2000),
+        reset_at_ms=frame.now_ms + 2 * 86400000)
+    quotas = (primary, secondary)
+    periods = tuple(QuotaPeriodProjection(q, ComparisonCost(D(cost), 1, 1),
+        quota_pace(q, now_ms=frame.now_ms, timezone_id='UTC', workday_calendar='SE'))
+        for q, cost in zip(quotas, (450, 999)))
+    item = replace(base, account=replace(base.account, quotas=quotas), quota_periods=periods)
+    return replace(frame, quota=replace(frame.quota, accounts=(item,)))
+
+
 def many_cost_groups(frame):
     """Thirty distinct synthetic groups through the real bounded cost exporter."""
     card = frame.active_cards[0]
