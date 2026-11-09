@@ -55,6 +55,7 @@ async function main() {
   assert.equal(view.root.querySelector('label').htmlFor, theme.id);
   assert.match(help.get(view.root.querySelector('label')), /Appearance.*Terminal colors/);
   assert.equal(view.enhanced, false, 'unsupported browsers retain native selects and a choice-help disclosure');
+  assert.equal(theme.events.wheel,undefined,'fallback never gets native popup wheel interception');
   assert.ok(view.root.querySelector('summary'));
   const save = select => select.events.change();
   view.attach(output); const root = output.firstChild;
@@ -147,6 +148,7 @@ async function main() {
   assert.throws(() => Settings.apply({webSettings: defaults}), /settings_unavailable/);
    assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/mini-size', '/api/settings/quota-display'].includes(call.path)));
   assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).length === 1));
+  require('../fixtures/settings_wheel.cjs')(Settings,context);
   console.log('Web settings state machine passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.214 — 2026-11-09
+
+- Mini Watch uses coordinated header typography, grouped responsive reflow and an outlined/filled Earlier Sessions toggle with stable text and synchronized accessible pressed/disclosure state. Measured opening fit and bounded user-activated height adjustment remain; passive updates never resize.
+- Settings' native enhanced picker scrolls a visible long explanation from its option label without selecting/saving another value. Direct help scrolling, native keyboard behavior, narrow/touch layouts and fallback selects remain independent.
+
 ## v80.213 — 2026-11-09
 
 - Web session detail exports the selected full native sanitized OpenCode JSON, including running point-in-time sessions, through the registered V2 source. Click-time Save As in supported browsers has an ordinary download fallback; privacy help, cancellation and actionable failures remain explicit.

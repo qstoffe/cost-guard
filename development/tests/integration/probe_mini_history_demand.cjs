@@ -45,7 +45,9 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
         text,unmodifiedText:text},pipSession);
       await command('Input.dispatchKeyEvent', {type:'keyUp',key,code,windowsVirtualKeyCode:keyCode},pipSession);
       await until(`!miniWatch.view.earlier.hidden === ${expanded}`);
-      assert.equal(await evaluate('miniWatch.view.earlierToggle.getAttribute("aria-expanded")'),String(expanded));
+       assert.equal(await evaluate('miniWatch.view.earlierToggle.getAttribute("aria-expanded")'),String(expanded));
+       assert.equal(await evaluate('miniWatch.view.earlierToggle.getAttribute("aria-pressed")'),String(expanded));
+       assert.equal(await evaluate('miniWatch.view.prompts.dataset.expanded'),String(expanded));
       acknowledged = await accepted(firstTab,offset,true,expanded);
       checks.push(`${code} ${expanded?'expands':'collapses'} actual PiP and promptly updates accepted history demand`);
     }

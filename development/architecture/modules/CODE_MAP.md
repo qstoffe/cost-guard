@@ -20,6 +20,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000635 scoped navigation: `mini.js`/`mini.css` own the grouped measured header
+and pressed disclosure; `settings.js`/`app.css` own native sibling help panes and
+wheel delegation. `fixtures/settings_wheel.cjs` covers units/guards/preview;
+`integration/probe_settings_wheel.cjs` covers trusted native wheel/scrollbar input;
+`probe_mini_width.cjs` captures typography/pressed contrast and `probe_mini_clamp.cjs`
+covers both sizing modes under compounded zoom/DPR clamps. Existing full probes
+remain the lifecycle owners. [Evidence and exceptions](../../journal/web/header-picker.md).
+
 1. Use the installed OpenCode Toolkit `/repo-backlog` command and currently loaded skills for development workflow; the current filesystem, including unrelated uncommitted work, remains authoritative.
 2. Find the responsibility below, read its boundary types and focused tests, then the affected implementation. Do not put integration details into analysis or presentation.
 3. The runner exposes focused patterns/profiles and Quick/Full suites. Installed Toolkit determines which verification is applicable; remote publication and UI retain independent authorization.

@@ -78,25 +78,23 @@
     gap: .6rem; align-items: start; padding: .5rem; border-radius: .3rem; cursor: pointer; }
   .settings-picker option::checkmark { grid-column: 1; }
   .settings-choice-label { grid-column: 2; }
-  .settings-picker option .settings-choice-help { position: absolute; inset: .8rem .8rem auto 46%;
+  .settings-picker > .settings-choice-help { position: absolute; inset: .8rem .8rem auto 46%;
     max-height: calc(100% - 1.6rem); overflow: auto; font-size: .85rem; color: var(--muted); white-space: normal; }
   .settings-picker option:is(:hover, :focus) { background: var(--hover); outline: 1px solid var(--accent); outline-offset: -1px; }
   @media (hover: hover) {
-    .settings-picker option .settings-choice-help { visibility: hidden; }
-    .settings-picker option:focus .settings-choice-help { visibility: visible; }
-    .settings-picker:not([data-help-input="keyboard"]):has(option:hover) option:not(:hover) .settings-choice-help { visibility: hidden; }
-    .settings-picker:not([data-help-input="keyboard"]) option:hover .settings-choice-help { visibility: visible; }
+    .settings-picker > .settings-choice-help { visibility: hidden; }
+    .settings-picker > .settings-choice-help[data-preview="true"] { visibility: visible; }
   }
 }
 @media (pointer: coarse) { .web-settings select { height: 2.95rem; min-height: 2.95rem; } }
 @media (hover: none) {
   .settings-picker option { width: 100%; }
-  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; }
+  .settings-picker > .settings-choice-help { position: static; display: block; padding: .2rem .5rem .5rem 2.1rem; max-height: none; }
 }
 @media (max-width: 32rem) {
   .settings-grid { gap: .6rem 1rem; grid-template-columns: max-content minmax(0, 1fr); }
   .settings-picker option { width: 100%; }
-  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; visibility: visible; }
+  .settings-picker > .settings-choice-help { position: static; display: block; padding: .2rem .5rem .5rem 2.1rem; max-height: none; visibility: visible; }
 }
 @media (max-width: 24rem) {
   .settings-grid { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
@@ -108,7 +106,7 @@
   .settings-column { display: none; }
   .settings-value { margin-bottom: .5rem; }
   .settings-picker option { width: 100%; }
-  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; visibility: visible; }
+  .settings-picker > .settings-choice-help { position: static; display: block; padding: .2rem .5rem .5rem 2.1rem; max-height: none; visibility: visible; }
 }
 [data-section="settings"] #refresh,
 [data-section="settings"] .toolbar, [data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }

@@ -48,6 +48,26 @@ const WebSettings = (() => {
       CSS.supports('selector(select::picker(select))') && CSS.supports('max-width', 'stretch') &&
       typeof HTMLSelectedContentElement !== 'undefined';
   }
+  function previewChoice(select, option) {
+    if (!option?.choiceHelp) return;
+    for (const item of select.options) item.choiceHelp.dataset.preview = String(item === option);
+  }
+  function scrollChoiceHelp(event) {
+    const select = event.currentTarget;
+    // Native popup/focus/commit remain browser-owned. Never intercept page zoom,
+    // horizontal wheels, closed selects or in-flow touch/narrow descriptions.
+    if (!select.matches(':open') || event.ctrlKey || !event.deltaY ||
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    if (event.target.closest('.settings-choice-help')) return; // Native direct scrolling.
+    const option = select.dataset.helpInput === 'keyboard' ? select.querySelector('option:focus') : event.target.closest('option');
+    if (!option || option.parentNode !== select) return;
+    const description = option.choiceHelp;
+    const style = getComputedStyle(description);
+    if (style.visibility !== 'visible' || style.position !== 'absolute' ||
+        !description.clientHeight || description.scrollHeight <= description.clientHeight) return;
+    const unit = event.deltaMode === 1 ? parseFloat(style.lineHeight) : event.deltaMode === 2 ? description.clientHeight : 1;
+    description.scrollTop += event.deltaY * unit;
+  }
   function apply(value, root) {
     const settings = value?.webSettings, choices = value?.webSettingsChoices, defaults = value?.webSettingsDefaults;
     if (fields.some(field => {
@@ -80,9 +100,16 @@ const WebSettings = (() => {
         const select = e('select'); select.id = field.id;
         select.className = this.enhanced ? 'settings-picker' : '';
         select.addEventListener('keydown', () => { select.dataset.helpInput = 'keyboard'; });
-        select.addEventListener('pointermove', () => { select.dataset.helpInput = 'pointer'; });
+        select.addEventListener('pointermove', event => {
+          select.dataset.helpInput = 'pointer';
+          if (this.enhanced) previewChoice(select, event.target.closest('option'));
+        });
         if (this.enhanced) {
           const button = e('button'); button.type = 'button'; button.append(e('selectedcontent')); select.append(button);
+          // Chromium's native picker delivers noncancelable wheel input to passive
+          // listeners. It does not commit a choice; keep its boundary scrolling native.
+          select.addEventListener('wheel', scrollChoiceHelp, {passive: true});
+          select.addEventListener('focusin', event => { previewChoice(select, event.target.closest('option')); });
         }
         const label = e('label', field.label); label.htmlFor = select.id;
         ContextHelp.value(label, field.explanation + ' Changes save immediately and apply only to Web.');
@@ -99,9 +126,15 @@ const WebSettings = (() => {
           if (value === 'default') this.defaultHelp.set(field.key, this.enhanced ? [description, accessible] : [description]);
           option.setAttribute('aria-describedby', accessible.id);
           if (this.enhanced) {
-            option.append(e('span', text, 'settings-choice-label'), description);
+            option.append(e('span', text, 'settings-choice-label'));
+            // A pane inside an option inherits native option activation: dragging
+            // its scrollbar can commit the setting. Keep it in the same picker,
+            // but outside that ancestry, retaining preview while entering the pane.
+            option.choiceHelp = description; description.dataset.choice = value;
+            description.dataset.preview = String(value === 'default');
           } else { option.textContent = text; reference.append(e('dt', text), description); }
           select.append(option);
+          if (this.enhanced) select.append(description);
         }
         if (!this.enhanced) {
           const details = e('details', undefined, 'settings-choice-fallback');

@@ -325,8 +325,12 @@ Both Session text targets preserve the full title and exact represented prompt o
 Active rows use their own focal item; history uses its canonical singleton representative's
 model/effort, duration, known calls and linked/mixed/partial/outcome evidence, never another
 prompt or Full Watch's valuation breakdown. Stable value nodes use shared ContextHelp without
-native titles, row-wide help or dedicated cues. Its header's neutral
-Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
+native titles, row-wide help or dedicated cues. FR000635's header groups the title
+and Earlier action, with shared type/line height and a whole-readout secondary row
+when narrow. Earlier Sessions is outlined/filled with stable text, no marker and
+atomic pressed/expanded/hidden/dataset state before measurement; it starts collapsed
+per new PiP document and survives publications. Inert header measurements include
+both pressed states, the real/reference daily text and existing rounding/gutter reserve.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
 active/grace session IDs, and uses `session_summary.context`, never historical prompt Ctx.
 Both keyed tables retain intrinsic heading/metric widths and horizontal panning.
@@ -481,6 +485,16 @@ current values; save locking dismisses their pending/open help. Native focus,
 typeahead, preview/commit and cancellation are not reimplemented. Confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.
+FR000635 keeps painted descriptions as non-option siblings inside the native picker:
+option ancestry caused scrollbar release to commit a setting in real Chromium.
+Hidden external description IDs still supply option accessibility without selectedcontent
+clones. Scoped pointer/focus events retain preview identity while entering its pane;
+they never focus, select or save. One passive select wheel listener forwards pixel/line/page
+deltas only to the associated visible overflowing absolute pane. Direct pane scrolling
+and boundary behavior stay native; in-flow narrow/touch and fallback selects are untouched.
+The tested native popup delivered noncancelable wheels to passive listeners, not the
+attempted nonpassive listeners. This is observed Chromium behavior, not a universal guarantee.
+See [header/picker evidence and scoped exceptions](../../journal/web/header-picker.md).
 Explicit nested theme, including inheriting `default`, overrides legacy user `webTheme`; normalization happens before
 shipped nested defaults merge. Web CCost ships as USD for omitted or symbolic Default
 choices; explicit Credits/USD choices remain pinned. The independent CLI default stays

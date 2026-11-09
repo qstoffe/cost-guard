@@ -126,6 +126,7 @@ const MiniWatch = (() => {
         daily.textContent = text;
         for (const expanded of ['false', 'true']) {
           toggle.setAttribute('aria-expanded', expanded);
+          toggle.setAttribute('aria-pressed', expanded);
           width = Math.max(width, copy.getBoundingClientRect().width);
         }
       }
@@ -190,6 +191,8 @@ const MiniWatch = (() => {
       const before = this.bounds();
       earlier.hidden = !earlier.hidden;
       view.prompts.dataset.expanded = String(!earlier.hidden);
+      view.earlierToggle.setAttribute('aria-expanded', String(!earlier.hidden));
+      view.earlierToggle.setAttribute('aria-pressed', String(!earlier.hidden));
       if (this.pending) this.confirm(this.pending);
       this.pending = null;
       const restore = this.restore; this.restore = null;
@@ -236,15 +239,17 @@ const MiniWatch = (() => {
       this.earlierToggle = el('button', 'Earlier Sessions', 'mini-earlier-toggle'); this.earlierToggle.type = 'button';
       this.earlierToggle.id = 'mini-earlier-toggle';
       this.earlierToggle.setAttribute('aria-expanded', 'false');
+      this.earlierToggle.setAttribute('aria-pressed', 'false');
       this.earlierToggle.setAttribute('aria-controls', 'mini-earlier-sessions');
       this.earlierToggle.addEventListener('click', () => {
         this.disclosureSize.toggle(this.earlier);
-        this.earlierToggle.setAttribute('aria-expanded', String(!this.earlier.hidden));
         this.historyChanged?.();
       });
-      const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.earlierToggle, this.daily);
+      const actions = el('div', undefined, 'mini-actions'); actions.append(this.summary, this.earlierToggle);
+      const top = el('header', undefined, 'mini-header'); top.append(actions, this.daily);
       this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
+      this.prompts.dataset.expanded = 'false';
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Earlier sessions and active or recently ended prompts');
       this.earlier = el('section'); this.earlier.id = 'mini-earlier-sessions'; this.earlier.hidden = true;
       this.earlier.setAttribute('role', 'region'); this.earlier.setAttribute('aria-labelledby', this.earlierToggle.id);

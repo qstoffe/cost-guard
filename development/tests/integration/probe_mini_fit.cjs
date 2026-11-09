@@ -67,15 +67,19 @@ async function main() {
       bodyHeight:d.body.getBoundingClientRect().height,rootHeight:v.root.getBoundingClientRect().height,
       promptRows:[...v.body.children].map(n=>n.getBoundingClientRect().height)};})()`);
     const layouts=evidence.layouts;
-    const captureOpening=async()=>{
+    const captureOpening=async(label='opening')=>{
       for(const target of (await command('Target.getTargets')).targetInfos.filter(t=>t.targetId!==targetId && t.type==='page')) {
         const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
         if(!await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId))continue;
         const image=await command('Page.captureScreenshot',{format:'png'},attached.sessionId);
-        await fs.writeFile(output.replace(/\.json$/,'-opening.png'),Buffer.from(image.data,'base64'));return;
+        await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));return;
       }
       throw new Error('No native PiP screenshot target');
-    };
+     };
+     if(scope==='high-scale'){
+       await require('./probe_mini_clamp.cjs')({evaluate,command,targetId,open,close,read,capture:captureOpening,fixture,until,layouts,checks:evidence.checks});
+       evidence.outcome='PASS';return;
+     }
      await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
      if(scope==='width-only'){evidence.outcome='PASS';return;}
     for(const [prompts,accounts,flags] of [[0,0,''],[1,1,''],[2,3,''],[4,6,'-long'],[2,6,'-long-warning']]) {
@@ -100,7 +104,9 @@ async function main() {
       if(prompts<2) {
         const before=value.outer;
         await fixture(`density-2-${accounts}`);await until('miniWatch.view.promptRows.size===2');
-        const two=await read(); assert.deepEqual(two.outer,before);assert.deepEqual(two.scroll,[],JSON.stringify(two));
+        const two=await read(); assert.deepEqual(two.outer,before);
+        if(!value.widthLimitedByBrowser && !value.limitedByBrowser)assert.deepEqual(two.scroll,[],JSON.stringify(two));
+        else if(two.scroll.length)assert.ok(two.scroll.some(n=>n.tag==='HTML'),'native clamps retain document scrolling');
       }
       await close();
     }

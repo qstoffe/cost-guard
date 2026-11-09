@@ -1,8 +1,9 @@
 // Real hidden Chromium native picker input/layout; disposable HTTP/config/profile only.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output] = process.argv.slice(2);
+const [browser, output, scope='all'] = process.argv.slice(2);
 async function main() {
+  assert.ok(['all','native-scrollbar','without-drag'].includes(scope));
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output)); await fs.stat(browser);
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'settings-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'settings-config-'));
@@ -53,6 +54,8 @@ async function main() {
     const version = await command('Browser.getVersion');
     const {targetId} = await command('Target.createTarget',{url:'about:blank'});
     ({sessionId:owner} = await command('Target.attachToTarget',{targetId,flatten:true}));
+    const initialWindow=await command('Browser.getWindowForTarget',{targetId});
+    await command('Browser.setWindowBounds',{windowId:initialWindow.windowId,bounds:{width:1280,height:1000}});
     await command('Page.enable',{},owner); await command('Runtime.enable',{},owner);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
     await command('Page.navigate',{url:launch.url},owner);
@@ -70,7 +73,7 @@ async function main() {
       for (const value of values) {
         const selector = `#${id} option[value="${value}"]`;
         await command('Input.dispatchMouseEvent',{type:'mouseMoved',...await point(selector)},owner);
-        const facts = await evaluate(`(() => {const o=document.querySelector(${JSON.stringify(selector)}),d=o.querySelector('.settings-choice-help'),r=d.getBoundingClientRect();return {text:d.textContent,visible:getComputedStyle(d).visibility,hover:o.matches(':hover'),left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};})()`);
+        const facts = await evaluate(`(() => {const o=document.querySelector(${JSON.stringify(selector)}),d=o.choiceHelp,r=d.getBoundingClientRect();return {text:d.textContent,visible:getComputedStyle(d).visibility,hover:o.matches(':hover'),left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};})()`);
         assert.equal(facts.hover,true); assert.equal(facts.visible,'visible'); assert.ok(facts.text.length>30);
         assert.ok(facts.right>facts.left && facts.bottom>facts.top,'description actually has painted layout, not just a hidden DOM string');
         assert.ok(facts.left>=0&&facts.top>=0&&facts.right<=facts.width&&facts.bottom<=facts.height,JSON.stringify(facts));
@@ -79,11 +82,16 @@ async function main() {
       await key('Escape'); assert.equal(await evaluate(`settingWrites.length`),0,'hover/open/Escape never save');
     }
     checks.push('All 15 native options: real pointer hover reveals their own bounded explanation; open/hover/Escape saves nothing');
+    if(scope==='native-scrollbar')await command('Emulation.clearDeviceMetricsOverride',{},owner);
+    await require('./probe_settings_wheel.cjs')({evaluate,command,owner,until,click,point,key,checks,layouts});
+    if(scope==='native-scrollbar'){
+      evidence={outcome:'PASS',browser:version.product,checks,layouts,limits:['Focused native-viewport scrollbar/wheel test, not the complete Settings matrix.']};return;
+    }
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1},owner);
     await key('Tab'); await evaluate(`document.getElementById('web-theme').focus()`);
     await key(' ' ,'Space'); await until(`document.getElementById('web-theme').matches(':open')`);
     await key('ArrowDown');
-    const active = await evaluate(`(() => {const o=document.querySelector('#web-theme option:focus');return {value:o?.value,description:o?.getAttribute('aria-describedby'),visible:o&&getComputedStyle(o.querySelector('.settings-choice-help')).visibility};})()`);
+    const active = await evaluate(`(() => {const o=document.querySelector('#web-theme option:focus');return {value:o?.value,description:o?.getAttribute('aria-describedby'),visible:o&&getComputedStyle(o.choiceHelp).visibility};})()`);
     assert.ok(active.value); assert.equal(active.visible,'visible'); assert.ok(active.description);
     assert.equal(await evaluate(`settingWrites.length`),0,'keyboard preview never saves');
     await key('Escape'); assert.equal(await evaluate(`document.getElementById('web-theme').value`),'default');
@@ -105,13 +113,13 @@ async function main() {
       await click('#mini-size'); await until(`document.getElementById('mini-size').matches(':open')`);
       await evaluate(`document.querySelector('#mini-size option[value="fit-on-open"]').scrollIntoView({block:'nearest'})`);
       await command('Input.dispatchMouseEvent',{type:'mouseMoved',...await point('#mini-size option[value="fit-on-open"]')},owner);
-      const bounds = await evaluate(`(() => {const r=document.querySelector('#mini-size option[value="fit-on-open"] .settings-choice-help').getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};})()`);
+      const bounds = await evaluate(`(() => {const n=document.querySelector('#mini-size > .settings-choice-help[data-choice="fit-on-open"]'),r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight,inFlow:getComputedStyle(n).position==='static'};})()`);
       assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width,JSON.stringify({theme,width,zoom,...bounds}));
-      if (bounds.bottom>bounds.height && bounds.bottom-bounds.top>bounds.height) {
+      if (bounds.bottom>bounds.height && bounds.inFlow) {
         // Narrow native pickers stack the complete descriptions in their own
         // scrollport. A tall description need not fit all at once, but its end
         // must be reachable without document overflow or clipped text.
-        const end=await evaluate(`(()=>{const n=document.querySelector('#mini-size option[value="fit-on-open"] .settings-choice-help');n.scrollIntoView({block:'end'});const r=n.getBoundingClientRect();return {bottom:r.bottom,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
+        const end=await evaluate(`(()=>{const n=document.querySelector('#mini-size > .settings-choice-help[data-choice="fit-on-open"]');n.scrollIntoView({block:'end'});const r=n.getBoundingClientRect();return {bottom:r.bottom,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
         assert.ok(end.bottom>0&&end.bottom<=bounds.height,JSON.stringify({theme,width,zoom,...end}));
         assert.equal(end.overflow,false);
       } else assert.ok(bounds.bottom<=bounds.height,JSON.stringify({theme,width,zoom,...bounds}));
@@ -124,7 +132,7 @@ async function main() {
     const p = await point('#quota-display');
     for (const type of ['touchStart','touchEnd']) await command('Input.dispatchTouchEvent',{type,touchPoints:type==='touchStart'?[p]:[]},owner);
     await until(`document.getElementById('quota-display').matches(':open')`);
-    assert.equal(await evaluate(`[...document.querySelectorAll('#quota-display option .settings-choice-help')].every(n=>getComputedStyle(n).visibility==='visible')`),true,'touch can inspect all descriptions before a committing tap');
+    assert.equal(await evaluate(`[...document.querySelectorAll('#quota-display > .settings-choice-help')].every(n=>getComputedStyle(n).visibility==='visible')`),true,'touch can inspect all descriptions before a committing tap');
     await key('Escape'); await command('Emulation.setTouchEmulationEnabled',{enabled:false},owner);
     checks.push('Real emulated touch opens native picker with every description visible before selection');
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
@@ -157,7 +165,8 @@ async function main() {
     await fs.writeFile(defaultPath,originalDefaults.replace('"theme": "classic"','"theme": "web"'));
     await evaluate(`settingsView.read()`);
     assert.equal(await evaluate(`document.getElementById('web-theme').value`),'classic','equal explicit choice stays pinned when the shipped default changes');
-    assert.match(await evaluate(`document.querySelector('#web-theme option').textContent`),/Default \(Web\).*currently Web.*system’s light or dark/);
+    assert.equal(await evaluate(`document.querySelector('#web-theme option').textContent`),'Default (Web)');
+    assert.match(await evaluate(`document.querySelector('#web-theme > .settings-choice-help[data-choice="default"]').textContent`),/currently Web.*system’s light or dark/);
     await click('#web-theme'); await click('#web-theme option[value="default"]');
     await until(`!settingsView.busy && settingsView.confirmed.theme==='default'`);
     assert.equal(await evaluate(`document.documentElement.dataset.theme`),'web');
@@ -201,7 +210,9 @@ async function main() {
     await until(`!settingsView.busy && settingsView.feedback.className==='success'`);
     checks.push('Feature-disabled native fallback: accessible Choice help disclosure before commitment and working native keyboard save');
     assert.deepEqual(errors,[]);
-    evidence = {outcome:'PASS',browser:version.product,checks,layouts,limits:['Headless Chromium, not physical OS input or a screen-reader session.','Fallback is feature-disabled Chromium, not proof from Firefox or Safari.']};
+    evidence = {outcome:scope==='without-drag'?'PARTIAL':'PASS',browser:version.product,checks,layouts,limits:[
+      ...(scope==='without-drag'?['Native scrollbar drag excluded here; prior Edge failure remains unresolved.']:[]),
+      'Headless Chromium, not physical OS input or a screen-reader session.','Fallback is feature-disabled Chromium, not proof from Firefox or Safari.']};
   } catch(error) {evidence = {...evidence,checks,layouts,error:error.message}; throw error;}
   finally {
     await fs.writeFile(output,JSON.stringify(evidence,null,2)+'\n');
