@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.4 — 2026-11-09
+
+- AI Hourly Rate now compares Calendar average, Workday average and Active AI average in consistent per-hour units. The active row uses the existing raw cost divided by unioned AI Working Time, not an eight-hour shift total.
+- Title help keeps three short playful paragraphs, each ending with its matching compact formula. Calendar/workday math, fallback behavior, currency formatting, other cards and raw compatibility fields stay unchanged.
+
 ## v81.3 — 2026-11-09
 
 - Shared Accounts/Full Watch cards omit unknown period and unavailable derived Monthly Capacity rows, retain native usage/reset/warnings, and capitalize only a quota label’s first letter. Numeric capacity estimates use leading `~`; verified native amounts remain unmarked.

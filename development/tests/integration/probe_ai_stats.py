@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.integration.historical_report_observations import measured_report
 from src.reports import ReportKind, ReportRequest
+from src.numbers import ccost_amount
 from src.web.jobs import ReportJobs
 
 
@@ -38,8 +39,13 @@ def check_rates(result):
         assert (Decimal(rates['workday_rate']) if rates['workday_rate'] is not None else None) == (
             total / rates['workday_hours'] if rates['workday_hours'] else None)
         for unit in ('credits', 'usd'):
-            for key in ('calendar_rate', 'workday_rate', 'robot_day', 'rate_help'):
+            for key in ('calendar_rate', 'workday_rate', 'active_rate', 'rate_help'):
                 assert isinstance(hourly.get('display_units', {}).get(unit, {}).get(key, hourly['display'].get(key)), str)
+            display = {**hourly['display'], **hourly['display_units'][unit]}
+            expected = ccost_amount(min(Decimal('1e12'), active), unit=unit) + (' CCost/h' if unit == 'credits' else '/h')
+            assert display['active_rate'] == expected
+            assert len(display['rate_help'].split('\n\n')) == 3
+            assert display['rate_help'].endswith('(Total CCost ÷ active AI hours)')
         checks.append(row['period'])
     return checks
 
@@ -69,6 +75,8 @@ def main():
                     job = jobs.snapshot(key)
                     if job['status'] not in ('queued', 'running'):
                         result = job.get('result') or {}
+                        assert job['status'] == 'complete' and not job['error'] and not result.get('error')
+                        assert len((result.get('view') or {}).get('ai_stats', [])) == 5
                         states = {row['period']: [dict(metric=metric['metric'], status=metric['status'],
                             reasons=metric.get('reasons', []), value_present=metric['value'] is not None)
                             for metric in row['metrics']] for row in (result.get('view') or {}).get('ai_stats', [])}

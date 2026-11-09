@@ -1,4 +1,4 @@
-"""Independent calendar denominators, robot intensity and both-unit projection oracles."""
+"""Independent calendar denominators, active intensity and both-unit projection oracles."""
 from dataclasses import replace
 from decimal import Decimal
 import unittest
@@ -43,23 +43,24 @@ class AIStatsRateTests(unittest.TestCase):
             rate.rates.calendar_hours, rate.rates.workday_hours, rate.rates.active_hours))
         self.assertEqual((Decimal('5'), Decimal('21'), Decimal('240'), Decimal('1200')),
             (rate.rates.calendar_rate, rate.rates.workday_rate, rate.rates.robot_day, rate.rates.robot_period))
-        self.assertEqual(('5 CCost/h', '21 CCost/h', '240 CCost/8h day'),
-            tuple(dto['display'][key] for key in ('calendar_rate', 'workday_rate', 'robot_day')))
-        self.assertEqual(('$0.05/h', '$0.21/h', '$2.40/8h day'),
-            tuple(dto['display_units']['usd'][key] for key in ('calendar_rate', 'workday_rate', 'robot_day')))
-        self.assertIn('charging dock and a promotion', dto['display']['rate_help'])
+        self.assertEqual(('5 CCost/h', '21 CCost/h', '30 CCost/h'),
+            tuple(dto['display'][key] for key in ('calendar_rate', 'workday_rate', 'active_rate')))
+        self.assertEqual(('$0.05/h', '$0.21/h', '$0.30/h'),
+            tuple(dto['display_units']['usd'][key] for key in ('calendar_rate', 'workday_rate', 'active_rate')))
+        self.assertIn("hourly appetite when it's actually working", dto['display']['rate_help'])
         self.assertNotIn('rate_help', dto['display_units']['usd'])
         self.assertEqual('30', dto['rates']['active_rate'])
-        faster, _dto = calculate((replace(root, intervals=((root.intervals[0][0], 7 * HOUR_MS, False),)),), now)
-        self.assertEqual((Decimal('5'), Decimal('21'), Decimal('960')),
-            (faster.metrics[0].rates.calendar_rate, faster.metrics[0].rates.workday_rate, faster.metrics[0].rates.robot_day))
+        faster, faster_dto = calculate((replace(root, intervals=((root.intervals[0][0], 7 * HOUR_MS, False),)),), now)
+        self.assertEqual((Decimal('5'), Decimal('21'), Decimal('120')),
+            (faster.metrics[0].rates.calendar_rate, faster.metrics[0].rates.workday_rate, faster.metrics[0].rates.active_rate))
+        self.assertEqual('120 CCost/h', faster_dto['display']['active_rate'])
 
-    def test_christmas_and_weekend_only_calendar_change_workdays_not_robot_intensity(self):
+    def test_christmas_and_weekend_only_calendar_change_workdays_not_active_intensity(self):
         now = epoch('2026-12-27T20:00:00+00:00')
         root = evidence(epoch('2026-12-21T06:00:00+00:00'), 32, 960)
 
-        holiday, _dto = calculate((root,), now)
-        weekdays, _dto = calculate((root,), now, calendar='')
+        holiday, holiday_dto = calculate((root,), now)
+        weekdays, weekdays_dto = calculate((root,), now, calendar='')
 
         se, plain = holiday.metrics[0].rates, weekdays.metrics[0].rates
         self.assertEqual((4, Decimal('30'), Decimal('240'), Decimal('960')),
@@ -68,8 +69,12 @@ class AIStatsRateTests(unittest.TestCase):
                          (plain.workdays, plain.workday_rate, plain.robot_day, plain.robot_period))
         self.assertEqual(Decimal('960') / 168, se.calendar_rate)
         self.assertEqual(se.calendar_rate, plain.calendar_rate)
+        self.assertEqual(('30 CCost/h', '24 CCost/h'),
+            (holiday_dto['display']['workday_rate'], weekdays_dto['display']['workday_rate']))
+        for key in ('calendar_rate', 'active_rate'):
+            self.assertEqual(holiday_dto['display'][key], weekdays_dto['display'][key])
 
-    def test_today_is_nominal_even_in_morning_and_weekend_keeps_one_robot_shift(self):
+    def test_today_is_nominal_even_in_morning_and_weekend_keeps_active_rate(self):
         for day, expected_workdays in (('2026-11-09', 1), ('2026-11-07', 0), ('2026-12-25', 0)):
             with self.subTest(day=day):
                 root = evidence(epoch(day + 'T03:00:00+00:00'), 4, 240)
@@ -80,6 +85,7 @@ class AIStatsRateTests(unittest.TestCase):
                     (rates.calendar_days, rates.workdays, rates.calendar_rate, rates.robot_day))
                 self.assertEqual(Decimal('30') if expected_workdays else None, rates.workday_rate)
                 self.assertEqual('30 CCost/h' if expected_workdays else 'No workdays', dto['display']['workday_rate'])
+                self.assertEqual('60 CCost/h', dto['display']['active_rate'])
                 self.assertEqual(Decimal('480') if expected_workdays else 0, rates.robot_period)
 
     def test_dst_rolling_slots_month_to_date_and_year_rollover_preserve_cost_windows(self):
@@ -121,7 +127,7 @@ class AIStatsRateTests(unittest.TestCase):
         self.assertEqual((4, 5), (se.workdays, plain.workdays))
         self.assertEqual(se.robot_day, plain.robot_day)
 
-    def test_tiny_positive_active_time_keeps_raw_intensity_without_formula_help(self):
+    def test_tiny_positive_active_time_keeps_raw_intensity_with_compact_formula(self):
         now = epoch('2026-11-09T12:00:00+00:00')
         root = evidence(now - HOUR_MS, 1, 1)
         root = replace(root, intervals=((now - HOUR_MS, 1, False),))
@@ -129,25 +135,26 @@ class AIStatsRateTests(unittest.TestCase):
         stats, dto = calculate((root,), now, 'today')
 
         self.assertEqual(3_600_000, stats.metrics[0].rates.active_rate)
-        self.assertIn("HR just shredded the robot's job application", dto['display']['rate_help'])
-        self.assertNotRegex(dto['display']['rate_help'], r'[÷×=]|active hours')
+        self.assertEqual('3600000 CCost/h', dto['display']['active_rate'])
+        self.assertIn('deluxe hourly buffet', dto['display']['rate_help'])
+        self.assertTrue(dto['display']['rate_help'].endswith('(Total CCost ÷ active AI hours)'))
 
-    def test_copy_tiers_use_unrounded_shift_credits_and_leave_numeric_tokens_unchanged(self):
+    def test_copy_tiers_use_unrounded_active_credits_and_leave_trait_unchanged(self):
         now = epoch('2026-11-09T12:00:00+00:00')
-        for shift, punchline in (('0', "hasn't started"), ('0.0001', 'parking spot'),
-                ('79.9999', 'parking spot'), ('80', 'charging dock'), ('799.9999', 'charging dock'),
-                ('800', 'shredded'), ('800.0001', 'shredded')):
-            with self.subTest(shift=shift):
-                root = evidence(now - 8 * HOUR_MS, 8, Decimal(shift))
+        for rate, punchline in (('0', "hasn't started"), ('0.0001', 'nibbles'),
+                ('9.9999', 'nibbles'), ('10', 'hourly appetite'), ('99.9999', 'hourly appetite'),
+                ('100', 'buffet'), ('100.0001', 'buffet')):
+            with self.subTest(rate=rate):
+                root = evidence(now - HOUR_MS, 1, Decimal(rate))
 
                 stats, dto = calculate((root,), now, 'today')
 
-                self.assertEqual(Decimal(shift), stats.metrics[0].rates.robot_day)
-                self.assertEqual(Decimal(shift) / 8, stats.metrics[0].value)
+                self.assertEqual(Decimal(rate), stats.metrics[0].rates.active_rate)
+                self.assertEqual(Decimal(rate), stats.metrics[0].value)
                 self.assertIn(punchline, dto['display']['rate_help'])
                 self.assertNotIn('rate_help', dto['display_units']['usd'])
-                self.assertEqual('Budget build. Dangerous potential.' if Decimal(shift) / 8 < Decimal('.3') else
-                    'Premium silicon has expensive tastes.' if Decimal(shift) / 8 >= 3 else
+                self.assertEqual('Budget build. Dangerous potential.' if Decimal(rate) < Decimal('.3') else
+                    'Premium silicon has expensive tastes.' if Decimal(rate) >= 3 else
                     'Standard-issue silicon. Surprisingly functional.', dto['display']['trait'])
 
     def test_all_periods_both_units_have_three_short_plain_text_paragraphs(self):
@@ -159,23 +166,55 @@ class AIStatsRateTests(unittest.TestCase):
                 display = {**dto['display'], **dto['display_units'][unit]}
                 paragraphs = display['rate_help'].split('\n\n')
                 self.assertEqual(3, len(paragraphs))
-                for paragraph, label in zip(paragraphs, ('24h:', 'Workday:', 'Robot 8h shift:')):
+                formulas = ('(Total CCost ÷ (calendar days × 24))', '(Total CCost ÷ (workdays × 8))',
+                            '(Total CCost ÷ active AI hours)')
+                for paragraph, label, formula in zip(paragraphs,
+                        ('Calendar average:', 'Workday average:', 'Active AI average:'), formulas):
                     self.assertTrue(paragraph.startswith(label))
                     self.assertEqual(paragraph.strip(), paragraph)
                     self.assertNotIn('\n', paragraph)
-                    self.assertLessEqual(len(paragraph.split()), 22)
-                self.assertNotRegex(display['rate_help'], r'[÷×=$]|CCost|active hours|Partial|Unavailable|Estimated')
+                    sentence, _formula = paragraph.rsplit(' (', 1)
+                    self.assertEqual(1, sentence.count('.'))
+                    self.assertTrue(paragraph.endswith(formula))
+                    self.assertLessEqual(len(paragraph.split()), 25)
+                self.assertNotRegex(display['rate_help'], r'shift|salary|replacement|weekend|holiday|DST|Partial|Unavailable|Estimated')
 
-    def test_missing_or_weak_basis_avoids_replacement_comparisons_without_status_prose(self):
-        raw = dict(calendar_rate=1, workday_rate=3, workdays=1, robot_day=8, total=24, active_hours=24)
+    def test_missing_or_weak_basis_uses_neutral_active_copy_without_status_prose(self):
+        raw = dict(calendar_rate=1, workday_rate=3, workdays=1, active_rate=1, total=24, active_hours=24)
         for reasons in (('unknown-duration',), ('missing-price',), ('source-incomplete',), ('running-executions',)):
-            self.assertIn('charging dock', rate_tokens(raw, reasons)['rate_help'])
-        for missing in ('active_hours', 'total', 'robot_day'):
+            self.assertIn('hourly appetite', rate_tokens(raw, reasons)['rate_help'])
+        for missing in ('active_hours', 'total', 'active_rate'):
             self.assertIn("hasn't started", rate_tokens({**raw, missing: None})['rate_help'])
         no_workdays = rate_tokens({**raw, 'workdays': 0, 'workday_rate': None})
         self.assertEqual('No workdays', no_workdays['workday_rate'])
-        self.assertIn('No scheduled workdays', no_workdays['rate_help'])
-        self.assertIn('parking spot', no_workdays['rate_help'])
+        self.assertIn('office calendar is taking a nap', no_workdays['rate_help'])
+        self.assertIn('nibbles', no_workdays['rate_help'])
+
+    def test_two_hours_and_one_minute_use_elapsed_union_not_agent_duration_sum(self):
+        now = epoch('2026-11-09T12:00:00+00:00')
+        for duration, expected in ((2 * HOUR_MS, '50 CCost/h'), (60_000, '6000 CCost/h')):
+            with self.subTest(duration=duration):
+                at = now - duration
+                first = evidence(at, 1, 40)
+                first = replace(first, intervals=((at, duration, False),))
+                second = evidence(at, 1, 60)
+                second = replace(second, session_id='parallel',
+                    entries=(replace(second.entries[0], session_id='parallel'),),
+                    intervals=((at, duration, False),))
+
+                stats, dto = calculate((first, second), now, 'today')
+
+                self.assertEqual(duration, stats.metrics[2].value)
+                self.assertEqual(100, stats.metrics[1].value)
+                self.assertEqual(expected, dto['display']['active_rate'])
+
+    def test_display_uses_raw_active_rate_not_rounded_shift_or_capped_metric(self):
+        raw = dict(calendar_rate=1, workday_rate=3, workdays=1,
+            active_rate=Decimal('50.000000001'), robot_day=Decimal('400'), total=100, active_hours=2)
+
+        display = rate_tokens(raw)
+
+        self.assertEqual('51 CCost/h', display['active_rate'])
 
 
 if __name__ == '__main__':

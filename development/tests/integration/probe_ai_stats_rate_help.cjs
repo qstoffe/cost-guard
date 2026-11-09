@@ -22,11 +22,13 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
   const paragraphs=copy=>{
     const parts=copy.split('\n\n'); assert.equal(parts.length,3);
     parts.forEach((part,index)=>{
-      assert.ok(part.startsWith(['24h:','Workday:','Robot 8h shift:'][index]));
+      assert.ok(part.startsWith(['Calendar average:','Workday average:','Active AI average:'][index]));
       assert.equal(part.trim(),part); assert.doesNotMatch(part,/\n/);
-      assert.ok(part.split(/\s+/).length<=22);
+      assert.ok(part.split(/\s+/).length<=25);
+      assert.ok(part.endsWith(['(Total CCost ÷ (calendar days × 24))','(Total CCost ÷ (workdays × 8))',
+        '(Total CCost ÷ active AI hours)'][index]));
     });
-    assert.doesNotMatch(copy,/[÷×=$]|CCost|active hours|\\n/);
+    assert.doesNotMatch(copy,/shift|salary|replacement|weekend|holiday|DST|\\n/);
   };
   for(const theme of ['classic','light','dark']) for(const width of [360,1280])
     for(const [font,zoom] of [['15px','1'],['30px','1'],['15px','1.25']]) {
@@ -34,9 +36,9 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};
         document.documentElement.style.fontSize=${JSON.stringify(font)}; document.documentElement.style.zoom=${JSON.stringify(zoom)};`);
-      for(const [name,punchline] of [['complete',/parking spot/],['three-rates',/charging dock/],
-          ['faster-robot',/shredded/],['empty',/hasn't started/],['unknown-duration',/charging dock/],
-          ['no-workdays',/No scheduled workdays/]]) {
+      for(const [name,punchline] of [['complete',/nibbles/],['three-rates',/hourly appetite/],
+          ['faster-robot',/buffet/],['empty',/hasn't started/],['unknown-duration',/hourly appetite/],
+          ['no-workdays',/office calendar is taking a nap/]]) {
         await escape(); await select(name); await focus();
         const copy=await text(); paragraphs(copy); assert.match(copy,punchline);
         for(const unit of ['credits','usd']) {
@@ -64,7 +66,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
   await escape(); await select('complete'); await focus();
   await evaluate(`window.__rateFocus=document.activeElement; window.__rateCards=[...document.querySelectorAll('.ai-stat')];`);
   await select('faster-robot');
-  assert.match(await text(),/shredded/);
+  assert.match(await text(),/buffet/);
   assert.equal(await evaluate(`document.activeElement===__rateFocus&&__rateCards.every((c,i)=>c===document.querySelectorAll('.ai-stat')[i])`),true);
   await escape(); await select('three-rates');
   assert.equal(await evaluate(`document.getElementById('context-help').hidden`),true,'refresh does not reopen dismissed help');
@@ -86,5 +88,5 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
   await until(`!document.getElementById('context-help').hidden`); paragraphs(await text()); await escape();
   await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
   await evaluate(`current.result=${JSON.stringify(original)}; current.period=${JSON.stringify(period)}; current.stats.update(current);`);
-  checks.push('rate title: three actual visually separated short paragraphs, six scenarios × three themes × two widths × three scales × both units; no tooltip scrolling/clipping; retained focused live tier/period updates, Escape suppression, real hover and emulated touch');
+  checks.push('rate title: three short paragraphs with trailing formulas, six scenarios × three themes × two widths × three scales × both units; no tooltip scrolling/clipping; retained focused live tier/period updates, Escape suppression, real hover and emulated touch');
 };

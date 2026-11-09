@@ -111,7 +111,7 @@ async function main() {
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Robot 8h shift:/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Active AI average:/);
     await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
       ReportView.setUnit('usd',output);`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
@@ -207,7 +207,7 @@ async function main() {
     await until(`!document.getElementById('context-help').hidden`);
     const idleHelp=await evaluate(`document.getElementById('context-help').textContent`);
     assert.equal(idleHelp.split('\n\n').length,3);
-    assert.match(idleHelp,/No scheduled workdays/); assert.match(idleHelp,/hasn't started/);
+    assert.match(idleHelp,/office calendar is taking a nap/); assert.match(idleHelp,/hasn't started/);
     await evaluate(`api=__realApi; AIStatsView.remember(current,__savedStats); current.failed=false; show(current)`);
     checks.push('cold failed acquisition has ten playful zero figures, no invented record links; warm failure retains fun results');
     // Server-side coalescing is exercised from independent browser documents.

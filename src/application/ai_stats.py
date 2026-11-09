@@ -35,23 +35,24 @@ def rate_tokens(raw, reasons=()):
         return ccost_amount(number(rates[key])) + ('' if ccost_unit() == 'usd' else ' CCost')
     calendar = amount('calendar_rate') + '/h'
     workday = amount('workday_rate') + '/h' if rates['workdays'] else 'No workdays'
-    robot = amount('robot_day') + '/8h day'
-    workday_help = ('Workday: The same tab squeezed into eight-hour days, skipping weekends and configured holidays; HR calls that mercy.'
-        if rates['workdays'] else 'Workday: No scheduled workdays to carry the tab; even imaginary payroll gets weekends and holidays off.')
-    shift = number(rates['robot_day'])
-    robot_help = 'Robot 8h shift: Imagine eight hours of nonstop silicon; the robot wants a charging dock and a promotion.'
-    if not number(rates['active_hours']) or not number(rates['total']) or not shift:
-        robot_help = "Robot 8h shift: The imaginary shift hasn't started; HR is still writing the robot's job description."
-    # Fictional copy tiers in raw reference Credits, not wages or rounded currency.
+    active = amount('active_rate') + '/h'
+    workday_help = ('The same robot bill, squeezed into ordinary office hours.'
+        if rates['workdays'] else "The robot's office calendar is taking a nap.")
+    rate = number(rates['active_rate'])
+    active_help = "The silicon's hourly appetite when it's actually working."
+    if not number(rates['active_hours']) or not number(rates['total']) or not rate:
+        active_help = "The silicon's hourly snack break hasn't started."
+    # Playful intensity tiers use raw reference Credits, not wages or rounded currency.
     elif not reasons:
-        if shift < 80:
-            robot_help = 'Robot 8h shift: At this imaginary eight-hour bargain, your replacement has already requested your parking spot.'
-        elif shift >= 800:
-            robot_help = "Robot 8h shift: Imagine eight nonstop hours at this price. Relax, HR just shredded the robot's job application."
+        if rate < 10:
+            active_help = 'The silicon nibbles through its hourly snack budget.'
+        elif rate >= 100:
+            active_help = 'The silicon orders the deluxe hourly buffet.'
     help_text = '\n\n'.join((
-        '24h: The same robot tab, spread around the clock; even your beauty sleep gets a budget line.',
-        workday_help, robot_help))
-    return {'calendar_rate': calendar, 'workday_rate': workday, 'robot_day': robot, 'rate_help': help_text}
+        'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))',
+        f'Workday average: {workday_help} (Total CCost ÷ (workdays × 8))',
+        f'Active AI average: {active_help} (Total CCost ÷ active AI hours)'))
+    return {'calendar_rate': calendar, 'workday_rate': workday, 'active_rate': active, 'rate_help': help_text}
 
 
 def stat_tokens(values):

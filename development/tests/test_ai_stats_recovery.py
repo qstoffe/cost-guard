@@ -160,7 +160,7 @@ class ObservedStatsTests(unittest.TestCase):
             for metric in dto['ai_stats'][0]['metrics']:
                 self.assertTrue(Decimal(metric['value']).is_finite())
                 self.assertGreaterEqual(Decimal(metric['value']), 0)
-                self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'robot_day', 'rate_help'}
+                self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
                                  if metric['metric'] == 'hourly-rate' else {'value', 'trait'}, set(metric['display']))
                 for unit in ('usd', 'credits'):
                     text = metric.get('display_units', {}).get(unit, metric['display'])['value']
@@ -170,7 +170,7 @@ class ObservedStatsTests(unittest.TestCase):
             self.assertGreaterEqual(stats.metrics[2].value, HOUR)
             self.assertEqual(stats.metrics[0].value * 8, stats.metrics[0].rates.robot_day)
 
-    def test_zero_active_duration_preserves_calendar_cost_without_inventing_robot_basis(self):
+    def test_zero_active_duration_preserves_calendar_cost_without_inventing_active_basis(self):
         measured_zero = replace(root('zero', NOW - HOUR, 24), intervals=((NOW - HOUR, 0, False),))
 
         values = calculate((measured_zero,))
@@ -181,7 +181,8 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertEqual(0, values['working-time'].value)
         self.assertEqual((1, 0, 0), (hourly.rates.calendar_rate, hourly.rates.active_rate, hourly.rates.robot_day))
         self.assertEqual('No workdays', tokens['workday_rate'])
-        self.assertIn("The imaginary shift hasn't started", tokens['rate_help'])
+        self.assertEqual('0 CCost/h', tokens['active_rate'])
+        self.assertIn("hourly snack break hasn't started", tokens['rate_help'])
         self.assertNotIn('replacement', tokens['rate_help'])
 
     def test_unanchored_or_extreme_history_never_invents_records_or_nonfinite_values(self):
