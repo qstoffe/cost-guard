@@ -51,6 +51,14 @@ Implemented 2026-11-09 on `fr-000634`, based on main's FR000633/v80.211.
 
 ## Limits
 
+First hosted PR run 42540941903: Linux Full/validator, Windows native and macOS ARM
+native passed; Linux browser failed an obsolete hidden-banner text assertion, and
+macOS Intel failed the detached `.command` exit check after its earlier phases passed.
+The follow-up fixes the hidden/empty-banner assertion and adds sanitized native
+command failure evidence without changing launch deadlines or bypassing checks.
+New-head hosted outcomes belong to the PR/run; no macOS root cause or CI PASS is
+inferred from local success. See the journal's CI section for evidence/access limits.
+
 No delegated requirement/test waiver was used. Synthetic Sessions/detail replies
 are presentation proof, not real acquisition or completed global indexing. The
 real probe observed pending global sort, not its completion or a full-history oracle.

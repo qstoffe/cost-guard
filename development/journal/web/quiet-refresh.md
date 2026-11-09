@@ -138,3 +138,26 @@ Today label; that obsolete target was removed, not restored as a tooltip.
 Its corrected `--watch-only` run saved PASS before the host restart notification;
 the saved artifact was read, not rerun. The final Full process also survived that
 restart and its completed JSON and zero-failure summary were read without replay.
+
+## First hosted CI run and follow-up
+
+The first PR run (42540941903, head `5ec253a`) was **not all-green**. Linux Full
+and package validation passed (2,134 tests, 21 platform skips), but browser smoke
+still expected passive text inside the deliberately cleared hidden host banner.
+That assertion now requires a hidden **and empty** banner while preserving the
+starting-status and authenticated real-SSE checks. It does not claim source readiness.
+
+Windows and macOS ARM native jobs passed. macOS Intel passed its native regression,
+AppKit adapter, fresh-process HTTP-fault cleanup and osacompile/cache checks, then
+failed the real `.command` return-code assertion. The last child stage was
+`sharedApplication:returned` at 14.524 seconds; this alone does not establish a
+timeout or another root cause. The follow-up preserves every launch deadline and
+assertion, adding only allowlisted lifecycle error-code/exit-status evidence when
+the command fails. Raw captured output, paths and bootstrap URLs are not published.
+Job-log downloads returned HTTP 401; official check annotations supplied the
+reported phase/failure locations. No alternate credential or denied-log route was
+used. A new-head hosted run remains required; local fixtures cannot prove macOS.
+Follow-up local checks passed: Windows native-web profile (14 case groups),
+`test_web_connection.py`, `test_web_views.py`, both smoke modules' syntax, and
+package validation (11 passes, zero failures, the same seven advisory warnings).
+The already-passing final local Full was not replayed for these test-only edits.
