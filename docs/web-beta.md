@@ -227,17 +227,20 @@ full Remaining bar is healthy. Unrounded native evidence determines exhaustion.
 Unlimited plans keep Used with no finite bar; unknown limits/usage never acquire a
 synthetic remaining amount. Stale/partial evidence remains qualified in accessible help;
 brief live revalidation does not add a flashing status sentence.
-The bare CCost parentheses switch too: Used is observed period reference cost;
-Remaining is a same-window reference-capacity proxy. Full Watch and Accounts show **Capacity**
-above each quota bar. A verified Copilot included AI-credit limit supplies nominal
-Capacity and native Remaining; other valid windows extrapolate `observed CCost / raw
-fraction used`. These are not guaranteed budgets or billed balances. Unknown evidence
+The bare CCost parentheses switch too. For verified convertible finite allowances
+(including Copilot's monthly included AI credits), Used, Remaining and **Capacity**
+above each quota bar all use the same provider snapshot, converted to reference CCost.
+Usage in other clients counts here, but never changes OpenCode-observed **CCost Today**
+or prompt/session costs. Other eligible percentage-only windows retain the
+`observed period CCost / raw fraction used` Capacity guesstimate and estimated Remaining.
+Reference USD is not provider cash, a guaranteed budget or a billed balance. Unknown evidence
 shows **?**, Unlimited Capacity **N/A**. Focus/tap the visible label/value for native amounts,
 attribution and limitations. Credits/USD converts all three reference figures together.
 A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
 its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
 Native money and CLI orientation remain independent. Full Web Watch and Accounts
-Remaining/day/workday lines use reference CCost in the selected USD/Credits unit.
+Remaining/day/workday lines divide that same accepted reference Remaining by the
+native calendar counts, in the selected USD/Credits unit (100 Credits = $1.00).
 
 Only these five nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved

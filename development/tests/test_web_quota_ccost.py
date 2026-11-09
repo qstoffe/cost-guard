@@ -8,7 +8,7 @@ from src.accounts.claude_code import normalize_claude_usage
 from src.analysis.valuation import ComparisonCost
 from src.application.display import with_display
 from src.application.projection import account
-from src.application.quota_ccost import quota_ccost_tokens
+from src.application.quota_ccost import quota_ccost_tokens, quota_ccost_values
 from src.application.watch_accounts import watch_account, watch_quota
 from src.domain import QuotaComponent
 from src.reports.models import QuotaPeriodProjection
@@ -105,18 +105,20 @@ class WebQuotaCCostTests(unittest.TestCase):
         self.assertEqual('0%', exact['quota_display']['used']['percent'])
         self.assertEqual(('100000 (guesstimate)', '99999'), (exact['display']['ccost_capacity'], exact['display']['ccost_remaining']))
 
-    def test_copilot_native_remaining_never_subtracts_independent_observed_cost(self):
-        for limit, used, remaining, observed in ((7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):
+    def test_copilot_native_amounts_never_use_independent_observed_cost(self):
+        for limit, used, remaining, observed in ((10000, 3000, 7000, 450), (7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):
             quota = QuotaComponent('Monthly', 'fixed', used=D(used), limit=D(limit), remaining=D(remaining), unit='AI credits')
 
             wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(observed), 2, 2), None),
                 provider_id='github-copilot')).to_json()['quota']
 
             with self.subTest(limit=limit):
-                self.assertEqual((str(observed), str(remaining), str(limit)), tuple(wire['display']['ccost_' + key]
+                self.assertEqual((ccost_amount(D(used)), ccost_amount(D(remaining)), ccost_amount(D(limit))), tuple(wire['display']['ccost_' + key]
                     for key in ('used', 'remaining', 'capacity')))
-                self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_help'])
-                self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_brief'])
+                self.assertIn('Provider-reported quota Used/Remaining', wire['display']['ccost_help'])
+                self.assertIn('OpenCode-observed CCost is separate', wire['display']['ccost_brief'])
+                self.assertEqual((f'${D(used) / 100:.2f}', f'${D(remaining) / 100:.2f}', f'${D(limit) / 100:.2f}'),
+                    tuple(wire['display_units']['usd']['ccost_' + key] for key in ('used', 'remaining', 'capacity')))
                 self.assertEqual(f'${D(limit) / 100:.2f}', wire['display_units']['usd']['ccost_capacity'])
                 self.assertEqual('native', wire['display']['capacity_basis'])
 
@@ -127,7 +129,70 @@ class WebQuotaCCostTests(unittest.TestCase):
             wire = with_display(watch_quota(quota, provider_id='github-copilot')).to_json()['quota']['display']
             with self.subTest(quota=quota):
                 self.assertEqual(('7000', expected), (wire['ccost_capacity'], wire['ccost_remaining']))
-                self.assertEqual('?', wire['ccost_used'])
+                self.assertEqual('?' if quota.used is None else str(quota.used), wire['ccost_used'])
+
+    def test_native_complements_fraction_and_external_only_usage_ignore_local_pricing(self):
+        base = QuotaComponent('Monthly', 'fixed', used=D(3000), remaining=D(7000), limit=D(10000), unit='AI credits')
+        for quota in (base, replace(base, used=None), replace(base, remaining=None),
+                replace(base, used=None, remaining=None, remaining_fraction=D('.7')),
+                replace(base, used=D(0), remaining=D(10000)), replace(base, used=D(10000), remaining=D(0))):
+            for cost in (None, ComparisonCost(D(450), 1, 1), ComparisonCost(D(0), 3, 0)):
+                wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, cost, None),
+                    provider_id='github-copilot-enterprise', estimated=True, note='Observed attribution only')).to_json()['quota']
+                expected = ('0', '10000') if quota.used == 0 else ('10000', '0') if quota.remaining == 0 else ('3000', '7000')
+                with self.subTest(quota=quota, cost=cost):
+                    self.assertEqual((*expected, '10000'), tuple(wire['display']['ccost_' + key]
+                        for key in ('used', 'remaining', 'capacity')))
+                    self.assertNotIn('partial attribution', wire['display']['ccost_help'])
+                    self.assertNotIn('Observed attribution only', wire['display']['ccost_help'])
+
+    def test_verified_conversion_scales_native_ratio_before_display_rounding(self):
+        for used, remaining, fraction in ((D(3), D(7), None), (None, D(7), None),
+                (D(3), None, None), (None, None, D('.7'))):
+            quota = QuotaComponent('Weekly', 'fixed', used=used, remaining=remaining, limit=D(10),
+                remaining_fraction=fraction, unit='requests', duration_seconds=604800, reset_at_ms=20000,
+                reference_ccost_capacity=D('10000.123456789'))
+            values = dict(dict(watch_quota(quota).fields)['quota'].fields)
+
+            reference = quota_ccost_values(values, 1000)
+            wire = with_display(watch_quota(quota), now_ms=1000).to_json()['quota']
+
+            self.assertEqual((D('3000.0370370367'), D('7000.0864197523'), D('10000.123456789')),
+                tuple(reference[key] for key in ('used', 'remaining', 'capacity')))
+            self.assertEqual(('$30.00', '$70.00', '$100.00'), tuple(wire['display_units']['usd']['ccost_' + key]
+                for key in ('used', 'remaining', 'capacity')))
+        fraction_only = replace(quota, limit=None)
+        wire = with_display(watch_quota(fraction_only), now_ms=1000).to_json()['quota']['display']
+        self.assertEqual(('3001', '7001'), (wire['ccost_used'], wire['ccost_remaining']))
+
+    def test_invalid_or_unavailable_native_allowance_never_falls_back_to_observed_used(self):
+        base = QuotaComponent('Monthly', 'fixed', used=D(3000), remaining=D(7000), limit=D(10000),
+            unit='AI credits', reset_at_ms=20000)
+        for quota, availability in ((replace(base, used=D(11000)), 'available'),
+                (replace(base, remaining=D(9000)), 'available'),
+                (replace(base, remaining_fraction=D('.6')), 'available'),
+                (replace(base, limit=D(0)), 'available'), (replace(base, limit=None), 'available'),
+                (replace(base, status='blocked'), 'available'), (replace(base, status='paused'), 'available'),
+                (replace(base, window_active=False), 'available'), (replace(base, reset_at_ms=1000), 'available'),
+                (base, 'stale'), (base, 'error'), (base, 'unavailable')):
+            wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(450), 1, 1), None),
+                provider_id='github-copilot', availability=availability), now_ms=1000).to_json()['quota']
+            with self.subTest(quota=quota, availability=availability):
+                self.assertEqual(('?', '?', '?'), tuple(wire['display']['ccost_' + key]
+                    for key in ('used', 'remaining', 'capacity')))
+                self.assertEqual(str(quota.used), wire['used'], 'native diagnostics are not clamped or discarded')
+
+    def test_partial_native_snapshot_retains_large_exact_amounts_without_local_pricing(self):
+        quota = QuotaComponent('Monthly', 'fixed', used=D('3000000000000000.125'),
+            remaining=D('7000000000000000.875'), limit=D('10000000000000001'), unit='AI credits')
+        values = dict(dict(watch_quota(quota, provider_id='github-copilot', availability='partial').fields)['quota'].fields)
+
+        reference = quota_ccost_values(values, 1000)
+
+        self.assertEqual((quota.used, quota.remaining, quota.limit), tuple(reference[key]
+            for key in ('used', 'remaining', 'capacity')))
+        self.assertEqual(reference['capacity'], reference['used'] + reference['remaining'])
+        self.assertEqual('native', reference['basis'])
 
     def test_no_unit_name_guesswork_pooled_scope_or_billing_budget_conversion(self):
         base = QuotaComponent('Monthly', 'fixed', limit=D(7000), used=D(16), unit='AI credits')

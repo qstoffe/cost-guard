@@ -15,7 +15,44 @@ sys.path.insert(0, str(ROOT))
 from src.web.composition import live_acquisition
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
+from src.numbers import ccost_amount
 from development.tests.integration.web_live_observations import ProbeObservations, probe_lifecycle
+
+
+def check_reference_quotas(accounts):
+    """Independent native-fact oracle; export only counts, never private balances."""
+    counts = dict(native_capacities=0, native_amount_pairs=0, native_pace=0)
+    for item in accounts['accounts']:
+        for slot in (item['primary'], *item['secondary']):
+            quota = slot['quota']
+            if quota.get('display', {}).get('capacity_basis') != 'native':
+                continue
+            tokens = quota['display_units']['credits']
+            counts['native_capacities'] += 1
+            capacity = Decimal(quota['reference_ccost_capacity'] or quota['limit'])
+            limit = None if quota['limit'] is None else Decimal(quota['limit'])
+            used = None if quota['used'] is None else Decimal(quota['used'])
+            remaining = None if quota['remaining'] is None else Decimal(quota['remaining'])
+            if quota['reference_ccost_capacity'] is not None:
+                used = None if used is None or limit is None else used * capacity / limit
+                remaining = None if remaining is None or limit is None else remaining * capacity / limit
+            if used is None and remaining is None and quota['remaining_fraction'] is not None:
+                remaining = capacity * Decimal(quota['remaining_fraction'])
+            if used is None and remaining is not None:
+                used = capacity - remaining
+            if remaining is None and used is not None:
+                remaining = capacity - used
+            expected = tuple('?' if value is None else ccost_amount(value) for value in (used, remaining, capacity))
+            assert tuple(tokens['ccost_' + key] for key in ('used', 'remaining', 'capacity')) == expected, 'native reference tokens'
+            if used is not None and remaining is not None:
+                counts['native_amount_pairs'] += 1
+                assert used + remaining == capacity, 'native reference reconciliation'
+            pace = quota['ccost_pace']
+            if pace:
+                counts['native_pace'] += 1
+                assert Decimal(pace['ccost_remaining']) == remaining, 'native remaining pace basis'
+                assert Decimal(pace['ccost_per_day']) == remaining / pace['days'], 'native daily pace'
+    return counts
 
 
 def main():
@@ -135,6 +172,7 @@ def main():
             assert state['sequence'] > first_sequence
             print(json.dumps(dict(accounts='ok', account_cards=len(current['accounts']['accounts']),
                 account_refresh_owners=1, live_owners=len(owners), publication_advanced=True,
+                reference_quotas=check_reference_quotas(current['accounts']),
                 finite_jobs_started=0, model_calls_started_by_probe=0)))
         if args.sessions:
             from development.tests.integration.session_catalog_observations import observe_sessions

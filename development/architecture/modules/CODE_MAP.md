@@ -48,6 +48,14 @@ FR000638: Web-only reference-CCost remaining pace is owned by
 `test_web_quota_pace.py`, `test_quota_period_lifecycle.py`, Accounts/quota VM tests
 and `probe_quota_pace.cjs` through `probe_accounts_live.cjs`. Native/CLI pace is unchanged.
 
+FR000640: that same `quota_ccost.py` owner converts coherent verified finite native
+allowances into matching reference Used/Remaining/Capacity; percentage-only ratio
+estimates and independent observed costs remain separate. `test_web_quota_ccost.py`,
+`test_web_watch_quota.py`, `test_web_quota_pace.py` and `probe_quota_display.cjs` cover
+the shared Accounts/Watch/open-Mini tokens and independent native mappings.
+`probe_web_live.py --accounts` adds a count-only real native-fact oracle.
+[Evidence and limitations](../../journal/web/quota-reference-amounts.md).
+
 FR000635 scoped navigation: `mini.js`/`mini.css` own the grouped measured header
 and pressed disclosure; `settings.js`/`app.css` own native sibling help panes and
 wheel delegation. `fixtures/settings_wheel.cjs` covers units/guards/preview;

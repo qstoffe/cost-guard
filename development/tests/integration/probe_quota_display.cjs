@@ -15,7 +15,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
   const initial = await evaluate(`(() => {window.quotaProbe={source:JSON.stringify(liveValue.view.accounts),
     bar:miniWatch.view.accounts.querySelector('progress'),cost:views.get('#/watch')?.watch?.accounts.querySelector('.watch-period-cost')};
     return {streams:probeStreams,mini:miniWatch.view.accounts.children[0].textContent};})()`);
-  assert.match(initial.mini,/8.4% used \(1814\)/);
+  assert.match(initial.mini,/8.4% used \(2088\)/);
   await change('quota-display','remaining');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/91.6% remaining \(22912\)/);
   assert.equal(await evaluate(`miniWatch.view.accounts.querySelector('progress')===quotaProbe.bar`),true);
@@ -75,8 +75,38 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
   assert.equal(await evaluate(`miniWatch.view.accounts.children[0].textContent`),initial.mini);
   assert.equal(await evaluate(`JSON.stringify(liveValue.view.accounts)===quotaProbe.source`),true);
   assert.equal(await evaluate('probeStreams'),initial.streams);
-   assert.deepEqual(await evaluate(`({local:localStorage.length,session:sessionStorage.length})`),{local:0,session:0});
-   await fixture('quota-idle');
+    assert.deepEqual(await evaluate(`({local:localStorage.length,session:sessionStorage.length})`),{local:0,session:0});
+   await fixture('quota-authoritative');
+   await until(`liveValue.view.accounts.accounts.length===1 && liveValue.view.accounts.accounts[0].primary.quota.used==='3000'`);
+   const authoritative = await evaluate(`({raw:JSON.stringify(liveValue.view.accounts),streams:probeStreams,reports:probeReports})`);
+   for (const mode of ['used','remaining']) for (const unit of ['credits','usd']) {
+     await change('quota-display',mode); await change('ccost-unit',unit);
+     const amount = unit==='usd' ? (mode==='used'?'$30.00':'$70.00') : (mode==='used'?'3000':'7000');
+     const secondary = unit==='usd' ? (mode==='used'?'$6.00':'$14.00') : (mode==='used'?'600':'1400');
+     const percent = mode==='used'?'30%':'70%', capacity=unit==='usd'?'$100.00':'10000';
+     for (const section of ['accounts','watch']) {
+       await route(section);
+       const rendered = await evaluate(`(() => {const card=document.querySelector('.watch-subscription');return {
+         labels:[...card.querySelectorAll('.watch-quota-summary')].map(n=>n.textContent),
+         capacities:[...card.querySelectorAll('.watch-quota-capacity')].map(n=>n.textContent),
+         bars:[...card.querySelectorAll('progress')].map(n=>n.value),
+         mini:miniWatch.view.accounts.children[0].textContent,help:miniWatch.view.accounts.children[0].helpText,
+         local:liveValue.view.accounts.accounts[0].primary.cost.known_ccost,
+         today:liveValue.view.daily_usage.total.known_ccost,
+         raw:JSON.stringify(liveValue.view.accounts),streams:probeStreams,reports:probeReports};})()`);
+       assert.deepEqual(rendered.labels,[`Monthly · ${percent} ${mode} (${amount})`,`Model allowance · ${percent} ${mode} (${secondary})`]);
+       assert.equal(rendered.capacities[0],`Monthly Capacity: ${capacity}`);
+       assert.deepEqual(rendered.bars,mode==='used'?[.3,.3]:[.7,.7]);
+       assert.ok(rendered.mini.includes(`${percent} ${mode} (${amount})`));
+       assert.ok(rendered.help.startsWith(`Capacity: ${capacity}\nNext reset: `));
+       assert.equal(rendered.local,'450');assert.equal(rendered.today,'34');
+       assert.equal(rendered.raw,authoritative.raw);assert.equal(rendered.streams,authoritative.streams);
+       assert.equal(rendered.reports,authoritative.reports);
+     }
+   }
+   checks.push('Synthetic 10000/3000/7000 provider allowance versus 450 local Credits: both shared routes and already-open PiP match in Used/Remaining × Credits/USD; independent verified request-to-reference secondary, native bars/capacity/reset, unchanged Today/source/stream/report count');
+   await change('ccost-unit','credits');await change('quota-display','used');
+    await fixture('quota-idle');
    await until(`liveValue.view.accounts.accounts.length===1 && liveValue.view.accounts.accounts[0].primary.quota.window_active===false`);
    await change('quota-display','remaining');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/100% remaining \(\?\)/);
@@ -123,5 +153,5 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
    await fixture('running'); await until(`liveValue.view.accounts.accounts.length===6`);
    await change('quota-display','default');
    await route('watch'); await until(`document.querySelector('.watch-account-grid')!==null`);
-   checks.push('Quota CCost/Capacity: independent native credit allowance and observed Used, immediate Remaining/USD in Accounts/Watch/open PiP, healthy provider-confirmed idle primary/secondary 100% bars with unknown estimates, reset label and Used zero preserved; light/dark narrow/zoom and one SSE');
+   checks.push('Quota CCost/Capacity: provider-based native Used/Remaining, immediate Remaining/USD in Accounts/Watch/open PiP, healthy provider-confirmed idle primary/secondary 100% bars with unknown estimates, reset label and Used zero preserved; light/dark narrow/zoom and one SSE');
 };
