@@ -44,7 +44,22 @@ There is no Earlier Sessions button, separate history section or Duration column
    signs, zero and **N/A** are preserved, never calculated from rounded values. Existing
    approaching/**exceeded** threshold wording, price impact and refresh guidance follow
    these numbers. Neither number means remaining model capacity. The compact cell still
-   shows only Next Ctx; full Watch's first-request Ictx and layout are unchanged.
+    shows only Next Ctx; full Watch's first-request Ictx and layout are unchanged.
+
+Next and Δ use separate short tooltip paragraphs. A first prompt with evidenced
+incoming **100,000** and its own compatible next estimate **112,000** has **Δ +12k**,
+not +112k; exact zero reads **0**. A richer comparable prior session/compaction
+anchor still takes precedence. Running tool loops update from their latest supported
+root request without waiting for the prompt to finish. Before the first request,
+only a proven prior baseline permits a disclosed provisional text estimate.
+
+Leaving current active history does not erase a retained, complete same-epoch
+prompt-local pair. A historical row can therefore show session **300k** with prompt
+**Δ +12k**, never +200k calculated from different times. **N/A** means the comparison
+lacks evidence: missing input/usage/history, an incompatible model or context rewrite,
+or an unexplained shrink. A short reason appears when available. Removed evidence
+cannot be reconstructed from displayed numbers, and a move/compaction cannot revive
+stale live context or price guidance.
 
 Every canonical session appears **once**, even with several concurrent prompts or
 identical display names. If several prompts run in one session, the latest genuinely

@@ -110,6 +110,7 @@ class WatchContextState:
     cached_ccost: Decimal | None = None
     fresh_ccost: Decimal | None = None
     price_basis: ContextPriceBasis | None = None
+    detail: str = ""
 
 
 def estimate_text_tokens(text: str) -> int:
@@ -266,7 +267,8 @@ class ContextEpochs:
         if self.active_entry(previous) is False or self.active_prompt(record) is False:
             return False
         if not boundaries:
-            return True
+            return (previous.model == current.model if current is not None else
+                    previous.model.provider == record.main_provider_id and previous.model.model == record.main_model_id)
         return (current is not None and all(item.kind == "model-selection" for item in boundaries)
                 and self._history.comparable_selection(previous, current))
 
@@ -348,6 +350,31 @@ def _latest_meaningful_watch_root(record: PromptRecord) -> TraceEntry | None:
     if not candidates:
         return None
     return max(candidates, key=lambda entry: (entry.completed_at_ms, entry.sort_order))
+
+
+def _prompt_context_baseline(record, current, bundle, epochs):
+    """An event-local pair needs retained root input and one compatible epoch.
+
+    Current active-history membership is not historical evidence. Conversely,
+    missing input, another model/root, or an in-prompt rewrite cannot establish
+    this pair merely because the final request has a usable Next estimate.
+    """
+    roots = [entry for entry in record.entries if entry.session_id == record.session_id]
+    if current is None or not roots:
+        return None
+    first = roots[0]
+    fields = {"input", "cache_read", "cache_write"}
+    if first.request_input_approx <= 0 or not fields.issubset(first.tokens.known_fields):
+        return None
+    if any(entry.model != first.model for entry in roots):
+        return None
+    if epochs.crossed(record.session_id, first.completed_at_ms, current.completed_at_ms + 1):
+        return None
+    if any(item.session_id == record.session_id
+           and first.completed_at_ms <= item.created_at_ms <= current.completed_at_ms
+           for item in bundle.compactions):
+        return None
+    return first.request_input_approx
 
 
 def _latest_completed_compaction_before(snapshot: SessionSnapshot, before_ms: int,
@@ -498,9 +525,8 @@ def watch_context_state(
 
     # Historical completion and current future-use eligibility are separate.
     epochs = epochs or ContextEpochs(snapshot, bundle)
-    if epochs.active_prompt(record) is False:
-        estimate = estimate_event_context(record, catalog, epochs=epochs) if catalog is not None else epochs.estimate(record, None)
-        return WatchContextState(estimate.tokens, None)
+    if record.in_progress and epochs.active_prompt(record) is False:
+        return WatchContextState(None, None, detail="request context no longer active")
     prior_entry = record.pre_prompt_entry
     prior_tokens: int | None = None
     prior_time = 0
@@ -554,6 +580,7 @@ def watch_context_state(
     # A running prompt may cross a compaction boundary.  Until a newer root
     # request exists after that rewrite, the old pre-compaction request is not a
     # meaningful live Next-Ictx anchor.
+    latest_live_compaction = None
     if record.in_progress:
         latest_live_compaction = max(
             (
@@ -574,18 +601,21 @@ def watch_context_state(
 
     # If OpenCode persisted the new user prompt but has not produced a root
     # request yet, retain the v77 provisional baseline+prompt estimate.
-    if current_tokens is None and (record.in_progress or record.aborted):
+    provisional = False
+    if (current_entry is None and (record.in_progress or record.aborted)
+            and not latest_live_compaction
+            and not epochs.crossed(record.session_id, record.prompt_time_ms, None)
+            and epochs.active_prompt(record) is not False):
         if prior_tokens is not None and prior_tokens > 0 and record.prompt_context_tokens_approx > 0:
             current_tokens = prior_tokens + record.prompt_context_tokens_approx
+            provisional = True
 
     if current_tokens is None or current_tokens <= 0:
-        return WatchContextState(None, None)
+        return WatchContextState(None, None, detail="waiting for comparable request context")
 
     baseline = prior_tokens
-    first_ms = min((entry.completed_at_ms for entry in record.entries), default=0)
-    mixed = current_entry is not None and epochs.crossed(record.session_id, first_ms, current_entry.completed_at_ms)
-    if (baseline is None or baseline <= 0) and not mixed:
-        baseline = record.input_context_tokens if record.input_context_tokens > 0 else None
+    if baseline is None or baseline <= 0:
+        baseline = _prompt_context_baseline(record, current_entry, bundle, epochs)
     delta = current_tokens - baseline if baseline is not None and baseline > 0 else None
     if delta is not None and delta < 0:
         delta = None  # only explicit compaction owns a supported reduction
@@ -596,6 +626,7 @@ def watch_context_state(
         estimate.cached_ccost if estimate is not None else None,
         estimate.fresh_ccost if estimate is not None else None,
         estimate.price_basis if estimate is not None else None,
+        "provisional text estimate" if provisional else "comparison baseline unavailable" if delta is None else "",
     )
 
 
@@ -651,8 +682,9 @@ def build_context_timeline(
             if epochs.active_prompt(record) is False:
                 estimate = (_estimate_entry_next_context(record.last_root_entry, catalog)
                             if record.last_root_entry else NextContextEstimate(None))
+                delta = watch_context_state(snapshot, bundle, record, catalog, epochs).delta_tokens
                 states.append(ContextTimelineState(kind, record.prompt_id, at_ms, incoming, estimate.tokens,
-                                                   None, estimate.tokens is not None))
+                                                   delta, estimate.tokens is not None))
                 completed_compaction_follows = any(
                     item.session_id == record.session_id and not item.in_progress
                     and item.created_at_ms > at_ms

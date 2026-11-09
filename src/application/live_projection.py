@@ -21,7 +21,7 @@ def card_row(row, now_ms, invocation_verified=True):
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
         watch_duration_ms=row.prompt.duration_ms,
-        live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens"),
+        live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens watch_context_detail"),
         tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
             cancelled_count=tool.cancelled_count, failed_or_cancelled_count=tool.failed_or_cancelled_count,
             outcomes=tuple(fields(item, "tool_name outcome count") for item in tool.tool_outcomes),
@@ -82,7 +82,7 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
             next_context_warning=row.next_context_warning,
             next_context_warning_severity=row.next_context_warning_severity,
             live_context=fields(row.prompt, """watch_next_context_tokens watch_next_context_warning
-                watch_next_context_cached_ccost watch_next_context_fresh_ccost watch_delta_context_tokens""")))
+                watch_next_context_cached_ccost watch_next_context_fresh_ccost watch_delta_context_tokens watch_context_detail""")))
     return with_display(record(source_label=value.source_label, source_warning_count=len(value.source_warnings),
         ccost_display_unit=ccost_display_unit,
         active_cards=tuple(card(item, value.now_ms) for item in value.active_cards),

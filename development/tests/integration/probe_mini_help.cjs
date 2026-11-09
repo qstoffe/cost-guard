@@ -1,6 +1,6 @@
 // Synthetic value-help acceptance in real headless Document PiP; no desktop claims.
 const assert = require('node:assert/strict');
-module.exports = async function help({evaluate,until,command,pip,checks}) {
+module.exports = async function help({evaluate,until,fixture,command,pip,checks}) {
   const input = (method,params) => command(method,params,pip);
   const key = async key => {
     for (const type of ['keyDown','keyUp']) await input('Input.dispatchKeyEvent',{
@@ -25,7 +25,7 @@ module.exports = async function help({evaluate,until,command,pip,checks}) {
     table:[miniWatch.view.prompts.clientWidth,miniWatch.view.prompts.clientHeight]})`);
   const before = await read();
   assert.equal(before.session,'Example Session\nPrompt #21 in this session: Implement pagination for…');
-  assert.match(before.context,/^Next Ctx: 128k .*\nΔ Ctx: \+4k[\s\S]*Approaching price threshold >200k\n2.4x more expensive$/);
+  assert.match(before.context,/^Next Ctx: 128k .*\n\nΔ Ctx: \+4k[\s\S]*Approaching price threshold >200k\n2.4x more expensive$/);
   assert.equal(before.visible,'128k');assert.equal(before.columns,4);assert.equal(before.buttons,0);assert.equal(before.native,false);
   await command('Page.bringToFront',{},pip);
   await key('Tab');await evaluate('helpRow.cells[0].firstChild.focus()');await key('Tab');
@@ -63,4 +63,23 @@ module.exports = async function help({evaluate,until,command,pip,checks}) {
   await key('Escape');assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
   await evaluate('miniWatch.update(liveValue)');
   checks.push('Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; unchanged four-column geometry');
+  await fixture('context-running');
+  await until(`miniWatch.view.promptRows.has('root') && liveValue.view.active_cards[0]?.rows[0]?.live_context.watch_next_context_tokens===112000`);
+  await evaluate(`window.sourceRow=miniWatch.view.promptRows.get('root');sourceRow.cells[3].focus()`);
+  await until(`${panel}.matches(':popover-open')`);
+  assert.match(await evaluate(`${panel}.textContent`),/^Next Ctx: 112k[^\n]*\n\nΔ Ctx: \+12k/);
+  assert.equal(await evaluate(`document.querySelector('.watch-card .watch-prompt-table')?.textContent.includes('+12k')`),true,'Full Watch uses same canonical delta');
+  for(const [phase,next,delta] of [['later','117k','+17k'],['boundary','N/A','N/A'],
+      ['running','112k','+12k'],['history','300k','+12k'],['zero','300k','0'],['waiting','N/A','N/A']]) {
+    await fixture('context-'+phase);
+    await until(`miniWatch.view.promptRows.get('root')?.cells[3].textContent===${JSON.stringify(next)} &&
+      miniWatch.view.promptRows.get('root')?.contextHelp.includes(${JSON.stringify('Δ Ctx: '+delta+' (')})`);
+    assert.equal(await evaluate(`miniWatch.view.promptRows.get('root')===sourceRow && miniWatch.view.doc.activeElement===sourceRow.cells[3]`),true);
+    assert.match(await evaluate(`${panel}.textContent`),new RegExp('Δ Ctx: '+delta.replace('+','\\+')+' \\('));
+    assert.equal(await evaluate('sourceRow.cells.length'),4);
+    if(phase==='history')assert.match(await evaluate(`${panel}.textContent`),/historical prompt change; session estimate may be later/);
+    if(phase==='waiting')assert.match(await evaluate(`${panel}.textContent`),/waiting for comparable request context/);
+  }
+  await key('Escape');
+  checks.push('Normalized V2 → analysis → report → Live SSE → Full/Mini DOM: 100k incoming, running 112k/+12k then 117k/+17k, move invalidation/recovery, inactive historical 300k/+12k, exact zero, missing first request; stable row/focus/open tooltip and paragraph separation');
 };

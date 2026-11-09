@@ -95,6 +95,7 @@ def main():
     parser.add_argument('--benchmark', action='store_true', help='Observe the independent public Harbor lane via authenticated local HTTP.')
     parser.add_argument('--benchmark-cold', action='store_true', help='Ignore this probe host\'s cached benchmark in memory; keep the on-disk last-good file.')
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument('--context-deltas', action='store_true', help='Check real card context export/formatting; counts only, no prompt text or source mutation.')
     parser.add_argument("--watch-seconds", type=int, default=90,
         help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
     parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
@@ -232,7 +233,7 @@ def main():
             observations.stage = 'sessions'
             observe_sessions(get, cookie, host, owners[0])
         card_evidence = None
-        if args.watch_cards or args.tool_outcomes:
+        if args.watch_cards or args.tool_outcomes or args.context_deltas:
             observations.stage = 'watch_cards'
             first_rows = None
             publications = []
@@ -249,6 +250,15 @@ def main():
                     first_rows = round(time.monotonic() - started, 3)
                 if any('totals' in card or 'provisional' in card for card in cards):
                     raise RuntimeError('probe_watch_card_legacy_totals')
+                if args.context_deltas and not args.watch_cards and any(
+                        row['live_context']['watch_delta_context_tokens'] is not None
+                        for card in cards for row in card['rows']):
+                    # Context proof is independent of certifying every Earlier
+                    # winner in a large installation. Do not label that history PASS.
+                    card_evidence = dict(scope='observed_context_only', active_cards=len(view['active_cards']),
+                        history_cards=len(view['history_cards']), history_state=view['history_state'],
+                        first_rows_seconds=first_rows)
+                    break
                 if first_rows is not None and view.get('history_state') == 'observed':
                     assert view['history_checked'] == view['history_total']
                     assert view['history_epoch'] > 0 and view['history_verified_at_ms'] is not None
@@ -288,6 +298,20 @@ def main():
                     checked=view.get('history_checked'), total=view.get('history_total'),
                     cause=view.get('history_cause'), deadline_seconds=args.watch_seconds)))
                 raise RuntimeError('probe_watch_cards_timeout')
+        if args.context_deltas:
+            from src.display import context_delta, context_tokens
+            counts = dict(known=0, unavailable=0, running_known=0, historical_known=0)
+            for card in cards:
+                for row in card['rows']:
+                    context = row['live_context']
+                    delta = context['watch_delta_context_tokens']
+                    assert context['display']['watch_delta_context_tokens'] == context_delta(delta)
+                    assert context['display']['watch_next_context_tokens'] == context_tokens(context['watch_next_context_tokens'])
+                    counts['unavailable' if delta is None else 'known'] += 1
+                    if delta is not None:
+                        assert context['watch_next_context_tokens'] is not None
+                        counts['running_known' if row['prompt']['in_progress'] else 'historical_known'] += 1
+            print(json.dumps(dict(context_deltas='export_checked', **counts)))
         if args.tool_outcomes:
             activities = [row['tool'] for card in cards for row in card['rows'] if row.get('tool')]
             for activity in activities:

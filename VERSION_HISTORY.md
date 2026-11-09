@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.2 — 2026-11-09
+
+- Retain a completed prompt's supported incoming/next context pair after it leaves current active history, without reviving live continuation or warnings. Missing input/categories, incompatible epochs/models and unexplained shrink remain unavailable; a single prompt never implies a zero baseline.
+- Running Watch/Mini deltas follow completed root requests and source corrections. A later compaction/move cannot resurrect a pre-rewrite provisional estimate; provisional text and unavailable comparisons have short canonical explanations.
+- Mini keeps its session-scoped historical Next Ctx and prompt-specific Δ, with separate concise tooltip paragraphs. Exact zero delta displays 0. No new column, acquisition loop, billing, quota or CCost change.
+
 ## v81.1 — 2026-11-09
 
 - Models separates unchanged GitHub reference-price analysis, now titled **Models Reference Pricing**, from an optional **Coding Benchmark – Cost per Task** table. Each has independent expensive-first sorting; benchmark USD/attempt and Solved describe published model/client/effort configurations, not bills or CCost.

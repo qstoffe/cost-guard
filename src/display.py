@@ -123,6 +123,8 @@ def context_tokens(value: int | None) -> str:
 def context_delta(value: int | None) -> str:
     if value is None:
         return "N/A"
+    if value == 0:
+        return "0"
     if abs(value) < 500:
         return "0k"
     return ("+" if value > 0 else "-") + context_tokens(abs(value))

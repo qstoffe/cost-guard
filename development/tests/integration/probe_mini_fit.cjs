@@ -61,7 +61,7 @@ async function main() {
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
     if(scope==='help-only') {
-      await open();await require('./probe_mini_help.cjs')({evaluate,until,command,pip:await pipSession(),checks:evidence.checks});
+      await open();await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
       evidence.outcome='PASS';return;
     }
     await require('./probe_mini_theme.cjs')({evaluate,until,fixture,command,sessionId,open,close,capture,layouts:evidence.layouts,checks:evidence.checks});
@@ -85,7 +85,7 @@ async function main() {
     await fixture('history-5-1-1');await until('liveValue.view.history_cards.length===5');await open();
     assert.equal(await evaluate('miniWatch.view.promptRows.size'),5);
     await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
-    await require('./probe_mini_help.cjs')({evaluate,until,command,pip:await pipSession(),checks:evidence.checks});
+    await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
     await close();await require('./probe_history_readiness.cjs')({fixture,evaluate,until,command,sessionId,open,close,checks:evidence.checks});
     }
     await fixture('density-10-1');await until('liveValue.view.active_cards.length===10');

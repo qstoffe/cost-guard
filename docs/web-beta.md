@@ -982,6 +982,14 @@ estimated/approximate evidence and N/A for missing first-request evidence. Help 
 on hover, focus or touch/click; only the prompt preview ellipsizes, with horizontal pan
 for narrow tables.
 
+**Δ Ctx** uses the prompt's supported next estimate minus a comparable prior
+session/compaction anchor, or its own evidenced incoming context. A first prompt is
+not a zero-baseline prompt: 100,000 incoming → 112,000 next means **+12k**, and exact
+zero means **0**. Running tool loops update from the latest supported root request.
+Complete retained historical pairs survive leaving current active history; this does
+not restore present continuation or warnings. Missing input/categories, incompatible
+models/rewrites and unexplained shrinks remain **N/A**, never fabricated zero.
+
 Two lines directly below each table, before active activity, read
 **Context: 123k** then **Total CCost: 4582**, each with a space after its colon. Context is the canonical
 estimated next incoming context for the latest valid continuation, including hidden
@@ -1040,18 +1048,19 @@ valuation disclosure and model announcements. Exceptional host/source/offline no
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
-compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
-The name-only Session column stays separate from paired prompt CCost (whole-session
-CCost). A collapsed-by-default **Earlier Sessions** header button shows up to three
-verified canonical finished sessions as **Finished | Session | CCost (Total) | Ctx**
-above running prompts. Finished uses configured-local HH:mm finish tokens with full
-date/offset help, or a truthful unknown; running stays **Session | CCost (Total) | Duration | Ctx**.
-Default opening fit targets approximately 650 outer DIPs with a two-prompt height reserve.
-Explicit expansion/collapse permits one native height adjustment, retaining current width
-where native clamps permit; Fit collapse remeasures, while Remember last size restores
-eligible pre-expansion bounds. Live updates never auto-fit. Refusal/clamping retains
-accessible document scrolling and narrow table panning. It reuses this tab's live publication and persisted session aggregate,
-not another Watch engine, acquisition loop or browser-side valuation.
+one **Activity | Session | CCost (Total) | Ctx** table and thin primary-subscription
+bars on supported desktop browsers. All distinct running sessions appear once;
+canonical finished sessions fill remaining slots up to five. Activity uses configured-local
+start/finish HH:mm with date/offset help. Prompt cost and whole-session cost remain separate.
+Ctx help separates the exact visible Next and represented prompt's Δ into short paragraphs.
+Historical visible Next is session-scoped and can be later than its prompt delta: **300k**
+and **+12k** are compatible, not grounds to calculate +200k from an older 100k input.
+Running source revisions refresh the same open tooltip; provisional/missing comparisons
+get concise canonical explanations. No fifth column or browser-owned calculation.
+Default opening measures five rows; extra running rows scroll within the table. Explicit
+Fit changes height only; live updates never auto-fit. Native clamping retains document
+scrolling and narrow table panning. Mini reuses the tab's live publication and persisted
+session aggregate, not another Watch engine or acquisition loop.
 
 Four isolated session workers publish coherent canonical rows independently, without
 waiting for the separate session-cost lane; generations reject superseded work. Account-history and detail

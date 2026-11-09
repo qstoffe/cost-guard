@@ -80,6 +80,7 @@ class PromptProjection:
     watch_effort: str = ""
     watch_delta_context_tokens: int | None = None
     watch_next_context_tokens: int | None = None
+    watch_context_detail: str = ""
     watch_next_context_cached_ccost: Decimal | None = None
     watch_next_context_fresh_ccost: Decimal | None = None
     watch_next_context_warning: str = ""

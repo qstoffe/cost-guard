@@ -11,6 +11,8 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfoNotFoundError
 
 from development.tests.fixtures.watch_summary import summary_watch
+from development.tests.fixtures.context_deltas import context_snapshot, context_frame
+from development.tests.fixtures.pricing_catalog import catalog
 from src.analysis.session_cost import SessionCost
 from src.analysis.valuation import ComparisonCost
 from src.application.live_projection import project_live
@@ -78,7 +80,7 @@ class MiniWatchTests(unittest.TestCase):
         self.assertEqual((1, D("1.25"), 600_000), (result.count, result.ccost, result.duration_ms))
 
     def test_active_and_historical_help_fields_keep_prepared_prompt_delta_and_preview(self):
-        for delta, token in ((0, "0k"), (4000, "+4k"), (-12000, "-12k"), (None, "N/A")):
+        for delta, token in ((0, "0"), (4000, "+4k"), (-12000, "-12k"), (None, "N/A")):
             prompt = replace(self.first, preview="Bounded representative hint", watch_delta_context_tokens=delta,
                 watch_next_context_tokens=17000)
             card = replace(self.cards[0], rows=(replace(self.cards[0].rows[0], prompt=prompt),))
@@ -94,6 +96,31 @@ class MiniWatchTests(unittest.TestCase):
                     self.assertEqual(token, item["live_context"]["display"]["watch_delta_context_tokens"])
                     self.assertEqual("17k", item["live_context"]["display"]["watch_next_context_tokens"])
                     self.assertEqual("120k", wire[kind][0]["session_summary"]["context"]["display"]["watch_next_context_tokens"])
+
+    def test_source_driven_running_history_and_revision_corrections_reach_live(self):
+        for outputs, historical, next_tokens, delta, token in (
+                ((12_000,), False, 112_000, 12_000, "+12k"),
+                ((12_000, 5_000), False, 117_000, 17_000, "+17k"),
+                ((12_000,), True, 112_000, 12_000, "+12k"),
+                ((0,), True, 100_000, 0, "0"),
+                ((), False, None, None, "N/A")):
+            snapshot = context_snapshot(outputs=outputs, running=not historical, active=not historical)
+            frame = context_frame(self.frame, snapshot, catalog(), historical=historical,
+                                  session_next=300_000 if historical else None)
+            wire = project_live(frame).to_json()
+            card = wire['history_cards' if historical else 'active_cards'][0]
+            row = card['rows'][0]
+            with self.subTest(outputs=outputs, historical=historical):
+                self.assertEqual(next_tokens, row['live_context']['watch_next_context_tokens'])
+                self.assertEqual(delta, row['live_context']['watch_delta_context_tokens'])
+                self.assertEqual(token, row['live_context']['display']['watch_delta_context_tokens'])
+                self.assertEqual(delta, wire['rows'][0]['live_context']['watch_delta_context_tokens'])
+                self.assertEqual(300_000 if historical else next_tokens,
+                    card['session_summary']['context']['watch_next_context_tokens'])
+                if outputs:
+                    self.assertEqual(100_000, row['prompt']['incoming_context_tokens'])
+                else:
+                    self.assertIn('waiting', row['live_context']['watch_context_detail'])
 
     def test_historical_cost_and_help_export_the_same_representative_prompt(self):
         latest = replace(self.second, in_progress=False, watch_model="Historical model",

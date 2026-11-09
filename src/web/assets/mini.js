@@ -347,11 +347,13 @@ const MiniWatch = (() => {
       const warning = card.session_summary?.context?.warning;
       row.children[3].dataset.guidance = warning?.guidance_state || 'ready';
       const delta = ReportView.display(item?.live_context, 'watch_delta_context_tokens');
-      row.contextHelp = [`Next Ctx: ${context} (estimated next incoming context)`,
-        `Δ Ctx: ${delta} (${historical ? 'historical prompt change; session estimate may be later' : 'represented prompt change'})`,
-        'Not remaining model capacity.',
+      const detail = item?.live_context?.watch_context_detail;
+      const guidance = [
         warning?.text?.replace(/^\[|\]$/g, ''),
         warning && ReportView.display(warning, 'warning_cost').replace(/^\(|\)$/g, '')].filter(Boolean).join('\n');
+      row.contextHelp = [`Next Ctx: ${context} (estimated next incoming context${detail === 'provisional text estimate' && !historical ? '; provisional text estimate' : ''}). Not remaining model capacity.`,
+        `Δ Ctx: ${delta} (${delta === 'N/A' && detail ? detail : historical ? 'historical prompt change; session estimate may be later' : 'represented prompt change'})`,
+        guidance].filter(Boolean).join('\n\n');
     }
     drawCost(cell, card, prompt) {
       const summary = card.session_summary, cost = summary?.cost;
