@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 module.exports = async function lifecycle({command,evaluate,until,owner,mini,checks}) {
   const events = [];
   for (const [id, selector] of [[mini,'.mini-summary'],[mini,'.mini-prompts > table th:first-child button'],
-      [mini,'.mini-accounts .help-value'],[owner,'.watch-active th:nth-child(6) button'],[owner,'.watch-daily > strong']]) {
+      [mini,'.mini-accounts .help-value'],[owner,'.watch-active th:nth-child(6) button']]) {
     await command('Page.bringToFront',{},id);
     await evaluate(id,`(() => {window.helpEvents=[];if(window.helpEventsInstalled)return;window.helpEventsInstalled=true;for(const type of ['pointerout','pointerleave'])document.addEventListener(type,e=>{if(!e.relatedTarget&&!helpEvents.includes(type+':null'))helpEvents.push(type+':null');},true);window.addEventListener('blur',()=>helpEvents.push('blur'));})()`);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1},id);

@@ -12,6 +12,7 @@ from src.cache.repository import CacheRepository
 from src.analysis.models import PromptRecord
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.promotions import model_promotion
+from .models import ModelPromotion
 
 
 def prompt_has_additional_model(record: PromptRecord) -> bool:
@@ -140,6 +141,26 @@ def recent_model_notice(
     catalog: PricingCatalog, *, now_ms: int, cache_repository: CacheRepository | None = None,
 ) -> str:
     return recent_model_notice_details(catalog, now_ms=now_ms, cache_repository=cache_repository)[0]
+
+
+def active_model_promotion(model, now_ms: int) -> ModelPromotion | None:
+    """Freeze one row's actual offer; Web never parses numbered CLI notes."""
+    promotion = model_promotion(model) if model is not None else None
+    if promotion is None or not promotion.active(now_ms):
+        return None
+    expires = datetime.fromtimestamp(promotion.expires_ms / 1000, tz=timezone.utc)
+    description = "Temporary GitHub Copilot promotional pricing"
+    if promotion.discount_percent:
+        try:
+            discount = Decimal(promotion.discount_percent)
+            if discount.is_finite() and 0 <= discount <= 100:
+                text = format(discount, "f")
+                text = text.rstrip("0").rstrip(".") if "." in text else text
+                description = f"{text}% off standard GitHub Copilot rates"
+        except (ValueError, ArithmeticError):
+            pass
+    return ModelPromotion(model.model.display_name or model.model.model, description,
+        (expires - timedelta(days=1)).strftime("%Y-%m-%d"), expires.strftime("%Y-%m-%d"))
 
 
 def active_promotion_notes(

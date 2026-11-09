@@ -59,6 +59,7 @@ class ModelsRefreshJobs:
         self.root = root
         self.jobs = {}
         self.lock = RLock()
+        self.hold = False
 
     def submit(self, request):
         with self.lock:
@@ -76,7 +77,7 @@ class ModelsRefreshJobs:
             if job is None:
                 return None
             job['polls'] += 1
-            if job['status'] == 'running' and job['polls'] > 1:
+            if job['status'] == 'running' and job['polls'] > 1 and not self.hold:
                 class Sender:
                     def send(self, value):
                         kind, payload = value

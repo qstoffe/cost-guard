@@ -52,7 +52,7 @@ async function main() {
       throw new Error('Condition not reached: '+expression+' '+JSON.stringify(await evaluate(`({hash:location.hash,section:document.body.dataset.section,current:current?.section,health:hostState.kind})`)));
     };
     const navigate = async section => {
-      await evaluate(`document.querySelector('nav a[href="#/${section}"]').click()`);
+      await evaluate(`location.hash='#/${section}'`);
       await until(`document.body.dataset.section === '${section}'`);
     };
     await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;
@@ -133,10 +133,10 @@ async function main() {
     await fixture('accounts-stale');
     await until(`liveValue.view.accounts.accounts[0].observation.availability==='stale'`);
     assert.doesNotMatch(await evaluate(`document.querySelector('.watch-subscription').textContent`),/Stale|Connection failed|retained/i);
-    assert.match(await evaluate(`document.querySelector('.watch-subscription').getAttribute('aria-description')`),/not current|stale/);
+    assert.equal(await evaluate(`document.querySelector('.watch-subscription').getAttribute('aria-description')`),null);
     const sustained=await evaluate(`(()=>{const clock=Date.now;Date.now=()=>clock()+60001;
       try{current.accounts.update(liveValue.view);return current.accounts.root.textContent;}finally{Date.now=clock;}})()`);
-    assert.match(sustained,/Updates delayed · showing last values/);
+    assert.doesNotMatch(sustained,/Updates delayed|Stale|Connection failed|retained/i);
     await fixture('accounts-failed-empty');
     await until(`liveValue.view.accounts.accounts.length===0`);
     assert.equal(await evaluate(`document.querySelectorAll('.watch-subscription').length`),6);
@@ -158,7 +158,7 @@ async function main() {
     await evaluate(`const select=document.getElementById('ccost-unit');select.value='default';select.dispatchEvent(new Event('change'));`);
     await until(`document.getElementById('settings-feedback').textContent==='CCost display saved.'`);
     await navigate('accounts');
-    assert.doesNotMatch(await evaluate(`document.querySelector('.watch-quota-summary').textContent`),/\$/);
+    assert.match(await evaluate(`document.querySelector('.watch-quota-summary').textContent`),/\$/);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     // The server's real terminal event is not hidden with the Accounts report shell.
     await fixture('stop');

@@ -140,9 +140,7 @@ const TokenMixView = (() => {
       ReportView.text(this.title, () => `Total Token Mix % · ${ReportView.display(this.result.view.token_mix, tokenKey)} tokens`);
       this.metrics.forEach(value => ReportView.syncUnits(value));
       const view = result.view;
-      const issues = [ReportView.historyWarning(result),
-        view.historical_source_gap && 'Legacy history is missing from this source; sources are not merged.',
-        view.model_availability_unverified && 'Selectable models unverified.',
+      const issues = [
         !view.token_mix.cost_complete && 'Partial pricing.',
         view.token_mix.exact_total_tokens == null && 'Incomplete token telemetry.',
         !view.model_token_mix.length && 'No available historical usage.'];

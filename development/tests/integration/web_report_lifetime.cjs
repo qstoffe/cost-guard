@@ -159,8 +159,9 @@ async function main(){
   await tick();
   assert.equal(aged.result,historical);assert.equal(aged.withheld,false);assert.equal(aged.failed,false);
   assert.equal(ids.result.firstChild,historical,'aged first completion is displayed');
-  assert.match(ids['report-updating'].textContent,/Historical snapshot as of/);
-  assert.ok(ids['report-updating'].textContent.includes(new Clock(started).toLocaleString()));
+  assert.ok(!ids['report-updating'].textContent);
+  assert.ok(!fs.readFileSync('src/web/assets/index.html','utf8').includes('id="report-updating"'));
+  assert.ok(!ids['report-updating'].textContent);
   const revision=aged.dataRevision,content=ids.result.firstChild,ownedCount=jobs.size;
   for(const refresh of ['running','queued','scheduled','delayed','stopped']) {
     managedResponse={id:'distinct-refresh-job',result_id:owned,result:historical,refresh};
@@ -169,8 +170,7 @@ async function main(){
     assert.equal(ids.result.firstChild,content);assert.equal(aged.withheld,false);
     assert.equal(historical.source.observed_at_ms,started);
     assert.equal(jobs.size,ownedCount,'publication lookups do not acquire source work');
-    assert.match(ids['report-updating'].textContent,({running:/Updating/,queued:/queued/,
-      scheduled:/scheduled/,delayed:/automatic retry/,stopped:/Not updating/})[refresh]);
+    assert.ok(!ids['report-updating'].textContent);
   }
   managedResponse={id:owned,result_id:owned,result:historical,refresh:'scheduled'};
   await go('watch');await go('models');
@@ -186,14 +186,14 @@ async function main(){
     run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
     assert.equal(ids['host-state'].hidden,true);
     assert.equal(ids.status.textContent,'Live connected.');
-    assert.equal(ids.status.attrs['aria-description'],'Retrying source read');
+    assert.equal(ids.status.attrs['aria-description'],'');
   }
   now=graceStart+60000;
   run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
-  assert.equal(ids['host-state'].hidden,false,'sustained source retry has one host notice');
+  assert.equal(ids['host-state'].hidden,true,'sustained background retry remains silent');
   run(`connectionStatus('Live connected.', {kind:'connected',observedAt:100});
     connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
-  assert.equal(ids['host-state'].hidden,false,'same source replay never resets failure clock');
+  assert.equal(ids['host-state'].hidden,true,'same source replay adds no warning');
   run(`connectionStatus('Live connected.', {kind:'connected',observedAt:101});
     connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:101})`);
   assert.equal(ids['host-state'].hidden,true,'genuinely newer evidence restores grace');

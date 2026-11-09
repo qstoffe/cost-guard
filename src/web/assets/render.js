@@ -39,7 +39,7 @@ const ReportView = (() => {
       (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
       (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'reset') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
-      ({partial: '\nPartial quota data.', stale: '\nRetained quota · not current.', unavailable: '\nQuota unavailable.', error: '\nQuota refresh failed.'}[quota.availability] || '') +
+      ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
   }
   const mixText = row => Object.entries(row?.display?.token_categories || {})
@@ -291,7 +291,6 @@ const ReportView = (() => {
     const width = parts => Math.max(0, ...parts.map(value => value.length)) + 'ch';
     grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
     grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
-    grid.style?.setProperty('--marker-width', width(models.map(row => row.promotion_marker == null ? '' : '*' + row.promotion_marker)));
     grid.setAttribute('role', 'table');
     grid.setAttribute('aria-label', 'Reference models');
     const head = element('thead'), header = element('tr'), body = element('tbody');
@@ -319,7 +318,7 @@ const ReportView = (() => {
       cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button, label]);
     });
     head.append(header);
-    const promotion = element('div'), empty = element('p', undefined, 'warning');
+    const empty = element('p', undefined, 'warning');
     const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
     function dateKey(value) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
@@ -364,20 +363,13 @@ const ReportView = (() => {
       const recent = catalog?.recent_notices.filter(note => visible.has(note.model)) || [];
       if (recent.length) notices.append(element('p', '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; '), 'new'));
       if (!catalog && view.recent_model_notice && shown.some(row => row.recent)) notices.append(element('p', view.recent_model_notice, 'new'));
-      const markers = new Set(shown.map(row => row.promotion_marker).filter(marker => marker != null));
-      promotion.replaceChildren();
-      for (const note of catalog?.promotion_notes || view.model_comparison_promotion_notes || []) {
-        const marker = /^\*(\d+)\b/.exec(note);
-        if (!marker || markers.has(Number(marker[1]))) promotion.append(element('p', note, 'promotion'));
-      }
       text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
     grid.append(head, body); scroll.append(grid); parent.append(scroll);
-    parent.append(promotion, empty); draw();
+    parent.append(empty); draw();
   }
   function modelRelative(row, sampled, evidence = true) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
-    cell.append(element('span', row.promotion_marker != null ? `*${row.promotion_marker} ` : '', 'model-marker'));
     const [base, ...tiers] = sampled ? display(row, 'relative_cost').split(' → ') : [''];
     cell.append(element('span', base, 'model-ratio'));
     const levels = element('span', undefined, 'model-tiers');
@@ -388,7 +380,13 @@ const ReportView = (() => {
       levels.append(level);
     }
     cell.append(levels);
-    if (evidence) ContextHelp.value(cell, display(row, 'evidence'));
+    if (row.promotional) {
+      cell.append(element('span', ' *', 'model-marker'));
+      const offer = row.promotion;
+      if (offer) ContextHelp.value(cell, ['Price Promotion', offer.model, offer.description,
+        offer.through && 'Promotion ends: ' + offer.through,
+        offer.resumes && 'Standard prices resume: ' + offer.resumes].filter(Boolean).join('\n'));
+    } else if (evidence) ContextHelp.value(cell, display(row, 'evidence'));
     return cell;
   }
   function accountQuota(card, quota, compact = false) {
@@ -546,10 +544,7 @@ const ReportView = (() => {
     const overview = ['models', 'overview'].includes(section) && ['normal', 'all-models'].includes(view.kind);
     if (overview) {
       overviewModels(parent, view, state);
-      if (result.source.status !== 'acquired') parent.append(element('p', 'Partial source data. Values may be incomplete. Check the local source and reload to retry.', 'warning'));
-      if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified; catalog is not a verified selectable list.', 'warning'));
       if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
-      for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
       return;
     }
     parent.append(element('p', `Snapshot: ${new Date(result.observed_at_ms).toLocaleString()} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));

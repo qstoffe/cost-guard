@@ -176,8 +176,11 @@ function setup() {
     input.view.daily_state=state; parity(); assert.equal(view.dailyText.textContent,'CCost Today 34 · 37 prompts');
     assert.equal(view.daily.className,'mini-daily'); assert.equal(view.health.hidden,true);
   }
-  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Unavailable');
-  input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
+  input.view.daily_usage=null;
+  for (const state of ['unavailable','loading','retrying']) {
+    input.view.daily_state=state; controller.update(input);
+    assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts','same-day null refresh retains usable daily data');
+  }
   input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,
     display:{daily_ccost:'0'},display_units:{credits:{daily_ccost:'0'},usd:{daily_ccost:'$0.00'}},
     total:{...daily.total,known_ccost:'0',observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
@@ -296,7 +299,7 @@ function setup() {
   assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind});
-    assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
+    assert.equal(view.health.hidden, ['reconnecting','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
      assert.equal(view.body.children[1].children[2].textContent, '20m');
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
@@ -316,9 +319,9 @@ function setup() {
     daily_usage:{...daily,total:{...daily.total,display_units:{usd:{known_ccost:'$999'}}}}};
   controller.update(input); assert.equal(view.body.textContent,retainedText); assert.equal(view.daily.textContent,beforeDaily);
   assert.doesNotMatch(view.accounts.textContent,/Retained quota|not current/i,'short retries remain visually quiet');
-  assert.match(retained.attributes['aria-description'],/retained \/ not current/);
+  assert.equal(retained.attributes['aria-description'], undefined);
   now = 600999; controller.health({kind:'reconnecting'}); assert.equal(view.health.hidden,true);
-  now = 601000; controller.update(input); assert.equal(view.health.textContent,'Updates unavailable · showing last values');
+  now = 601000; controller.update(input); assert.equal(view.health.textContent,'');
   const warning = view.health.textContent; now += 5000; controller.health({kind:'connected'});
   input.view.now_ms++; controller.update(input); assert.equal(view.health.textContent,warning,'retry publications cannot fake recovery');
   assert.equal(view.body.textContent,retainedText); assert.equal(view.observationHelp,undefined);

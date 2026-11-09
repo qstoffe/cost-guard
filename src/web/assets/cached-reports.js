@@ -21,17 +21,5 @@ const CachedReports = (() => {
       return `${row.start_ms === null ? 'All available history' : format(row.start_ms)} → ${format(row.end_ms)} (${zone})`;
     } catch (_) { return null; }
   }
-  function summary(state, writable, managed) {
-    if (state.section === 'ai-stats') return '';
-    if (!state.result || state.withheld) return '';
-    const observed = observation(state.result);
-    if (entry(state.result, state.section) === 'withhold') return '';
-    const refresh = !writable ? 'Not updating.' : managed ? ({running: 'Updating…', queued: 'Refresh queued.',
-      scheduled: 'Refresh scheduled.', delayed: 'Update delayed; automatic retry scheduled.',
-      waiting: 'Waiting for source recovery.', stopped: 'Not updating; see source error.'}[state.dispatchRefresh] ||
-      'Checking refresh status…') : state.failed ? 'Update delayed; last completed report retained.' :
-      state.loading ? 'Updating…' : 'Refresh scheduled.';
-    return `Historical snapshot as of ${new Date(observed).toLocaleString()}. ${refresh}`;
-  }
-  return {cadences, observation, entry, interval, summary};
+  return {cadences, observation, entry, interval};
 })();

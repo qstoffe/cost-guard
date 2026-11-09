@@ -51,7 +51,7 @@ async function main() {
          summary.click();const expanded=view.earlier.open;
          const cards=[...view.history.children];view.update(INPUT);
          const stable=cards.every((card,i)=>view.history.children[i]===card);
-         p.view.history_cards=[];p.view.history_state='observed';view.update(p);
+          p.view.history_cards=[];p.view.history_state='observed';p.view.history_epoch=1;view.update(p);
          const empty=view.history.textContent;
          p.view.history_state='unavailable';view.update(p);const unavailable=view.history.textContent;
          p.view.history_state='loading';view.update(p);const loading=view.history.textContent;
@@ -59,7 +59,7 @@ async function main() {
          return {heading,collapsed,expanded,stable,empty,unavailable,loading,stillExpanded};
        })()`);
        assert.deepEqual(historyLabels,{heading:'Earlier Sessions',collapsed:true,expanded:true,stable:true,
-         empty:'No earlier sessions',unavailable:'Earlier sessions unavailable',loading:'',stillExpanded:true});
+          empty:'No earlier sessions',unavailable:'No earlier sessions',loading:'No earlier sessions',stillExpanded:true});
        const layouts = [], checks = [];
       await require('./probe_watch_quiet.cjs')({evaluate,layouts,checks});
       await require('./probe_watch_loading.cjs')({evaluate,layouts,checks});

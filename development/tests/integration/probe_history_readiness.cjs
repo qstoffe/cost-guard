@@ -17,7 +17,8 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
     assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
     assert.equal(await evaluate('miniWatch.view.historyRows.size'),0);
     for (const session of [sessionId,pip]) {
-      const names = await ax(session); assert.match(names,/Loading earlier sessions….*4\/12 checked/);
+      const names = await ax(session); assert.match(names,/Loading earlier sessions…/);
+      assert.doesNotMatch(names,/checked|4\/12/);
       assert.doesNotMatch(names,/Latest sample/);
     }
   };
@@ -31,11 +32,11 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
   for (const state of ['refreshing','unavailable']) {
     await fixture('proof-'+state); await until(`liveValue.view.history_state==='${state}'`);
     assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),5);
-    for (const session of [sessionId,pip]) assert.match(await ax(session),/Previously verified sessions/);
+    for (const session of [sessionId,pip]) assert.doesNotMatch(await ax(session),/Previously verified sessions|Loading earlier sessions|checking for changes|Unable to verify latest sessions/);
   }
   assert.deepEqual(await evaluate('({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight})'),size,
     'background proof publications never resize the popup');
   await fixture('proof-switch'); await until(`liveValue.view.history_scope==='other-source'`); await loading();
   await close();
-  checks.push('Actual Full/Mini DOM and accessibility: initial/halfway loading hides provisional rows, atomic five/three, qualified refresh/failure, source switch, no background popup resize');
+  checks.push('Actual Full/Mini DOM and accessibility: initial loading without counters, atomic five/three, silent refresh/failure, source switch, no background popup resize');
 };

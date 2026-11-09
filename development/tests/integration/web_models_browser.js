@@ -23,11 +23,11 @@
       check(rows().length === view.model_catalog.rows.length, 'all priced rows, all versions, no paging');
       const old = rows().find(row => row.cells[1].textContent === 'GPT-5.1');
       check(!old.classList.contains('superseded') && old.querySelector('.promotion'), 'old stable full contrast with promotion');
-      check(old.cells[2].textContent === (view.model_comparison_sample_size ? '*1 8.0x → 16.0x (>200K) → 32.0x (≥1M)' : '*1 '), 'canonical tiers and blank fallback');
+       check(old.cells[2].textContent === (view.model_comparison_sample_size ? '8.0x → 16.0x (>200K) → 32.0x (≥1M) *' : ' *'), 'canonical tiers and one postfix star');
        check(!output.querySelector('details') && !output.textContent.includes('More information'), 'Models explanation cards removed');
        const refresh = output.querySelector('[data-model-control="refresh"]');
        check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('Prices last fetched:'), 'button precedes true fetch timestamp');
-      check(output.textContent.includes('*1 Fixture promotional terms'), 'visible matching promotion note');
+       check(!output.textContent.includes('*1 Fixture promotional terms') && !old.cells[2].querySelector('[title]'), 'no promotion footer or native duplicate tooltip');
       check(table.tBodies[0].scrollHeight <= table.tBodies[0].clientHeight + 1, 'no nested vertical body scrolling');
       check(document.documentElement.scrollWidth <= innerWidth, 'no document horizontal overflow');
       const scroll = output.querySelector('.overview-models');

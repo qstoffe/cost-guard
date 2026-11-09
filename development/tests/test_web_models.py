@@ -45,6 +45,29 @@ class ModelsTests(unittest.TestCase):
         self.assertIn('50% off', frozen.promotion_notes[0])
         self.assertEqual('New model', frozen.recent_notices[0][0])
         self.assertIn('released 2026-11-01', frozen.recent_notices[0][1])
+        dto = project(replace(model_report(), model_comparison=frozen.rows)).to_json()
+        self.assertEqual({'model': 'New model', 'description': '50% off standard GitHub Copilot rates',
+            'through': '2026-11-01', 'resumes': '2026-11-02'}, dto['model_comparison'][0]['promotion'])
+        expired = web_model_catalog((), catalog, catalog, now_ms=now + 86400000, cache_repository=None)
+        self.assertIsNone(expired.rows[0].promotion)
+        self.assertFalse(expired.rows[0].promotional)
+
+    def test_simultaneous_offers_stay_bound_to_their_model_not_group_marker(self):
+        now = 1793491200000
+        models = tuple(ModelPricing(ModelRef('github-copilot', name, name), 'USD',
+            tiers=(PricingTier(per_million_input=Decimal('1')),), metadata={
+                'publisher': 'Test', 'promotion_active': 'true', 'private_extra': 'not exported',
+                'promotion_expires_ms': str(now + days * 86400000), 'promotion_discount_percent': discount})
+            for name, discount, days in [('Alpha', '50', 1), ('Beta', '25', 2), ('Gamma', '50', 1)])
+        catalog = PricingCatalog(models)
+        frozen = web_model_catalog((), catalog, catalog, now_ms=now, cache_repository=None)
+        dto = project(replace(model_report(), model_comparison=frozen.rows)).to_json()
+        offers = {row['model']: row['promotion'] for row in dto['model_comparison']}
+        self.assertEqual('25% off standard GitHub Copilot rates', offers['Beta']['description'])
+        self.assertEqual('2026-11-03', offers['Beta']['resumes'])
+        self.assertEqual('Gamma', offers['Gamma']['model'])
+        self.assertEqual('2026-11-02', offers['Gamma']['resumes'])
+        self.assertNotIn('private_extra', json.dumps(dto))
 
     def test_full_frozen_catalog_keeps_unknown_prices_and_selectable_supersession(self):
         dto = project(model_report(include_model_catalog=True)).to_json()

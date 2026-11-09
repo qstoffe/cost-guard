@@ -97,7 +97,8 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     });
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
-    assert.doesNotMatch(await evaluate(`output.textContent+document.getElementById('report-updating').textContent`),forbidden);
+    assert.doesNotMatch(await evaluate(`output.textContent`),forbidden);
+    assert.equal(await evaluate(`document.getElementById('report-updating')`),null);
     for (const affected of theme==='classic' && unit==='credits' ? expected.map((_,i)=>i) : [0]) {
       await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
         document.querySelectorAll('.ai-stat h4 button')[${affected}].focus();`);

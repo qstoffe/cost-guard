@@ -38,6 +38,7 @@ from src.sources.model_availability import ModelAvailabilitySource
 from src.sources.selection import SourceSelection
 
 from .semantics import (
+    active_model_promotion,
     active_promotion_notes,
     model_is_recent,
     recent_model_notice_details,
@@ -406,6 +407,7 @@ class ReportService:
                 marker is not None, model_is_recent(row.release_date, now_ms=self.now_ms), marker,
                 row.relative_levels,
                 row.evidence,
+                active_model_promotion(comparison_catalog.resolve_reference(row.model_name), self.now_ms),
             ))
             self.progress(WorkProgress("Comparing model prices", "projection", index + 1, len(candidates), stage="comparison"))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)

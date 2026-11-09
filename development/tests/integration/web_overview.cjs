@@ -35,10 +35,8 @@ assert.equal(all(output, 'details').length, 0, 'no Models explanations disclosur
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);
 assert.equal(all(output, 'button').length, 5);
-for (const [first, second] of [['Release date', 'Promotion terms'],
-  ['Promotion terms', 'Final note']]) {
-  assert.ok(output.textContent.indexOf(first) < output.textContent.indexOf(second));
-}
+assert.ok(!output.textContent.includes('Promotion terms'));
+assert.ok(!output.textContent.includes('Final note'));
 for (const forbidden of ['CCost today:', 'Billed month:', '5-hour', '36% used']) assert.ok(!output.textContent.includes(forbidden));
 assert.ok(!output.textContent.includes('Report Today CCost'), 'no unrelated whole-report totals');
 const warnings = all(output, 'p').filter(n => n.className === 'warning').map(n => n.textContent);
@@ -46,10 +44,10 @@ assert.ok(!warnings.includes('CCost account attribution unknown.'));
 assert.ok(!warnings.includes('Attribution incomplete'));
 const relatives = all(output, 'tbody')[0].children.map(row => row.children[2].textContent);
 if (fallback) {
-  assert.deepEqual(relatives, ['', '', '', '*1 ', '']);
+  assert.deepEqual(relatives, ['', '', '', ' *', '']);
   assert.ok(relativeHelp.includes('hidden fixed 2/96/1/1'));
 } else {
-  assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '*1 8.0x → 16.0x (>200K)', '1.0x']);
+  assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '8.0x → 16.0x (>200K) *', '1.0x']);
   assert.ok(relativeHelp.includes(`latest ${view.model_comparison_sample_size} qualifying completed`));
 }
 // Both names resolve to one presentation; header clicks toggle without a third state.
@@ -67,13 +65,13 @@ draw(); click('Relative CCost'); click('Relative CCost');
 assert.deepEqual(names(), ['Lower', 'Equal', 'Higher', 'Unknown']);
 click('Relative CCost');
 assert.deepEqual(names(), ['Higher', 'Lower', 'Equal', 'Unknown']);
-// Partial sources and failed accounts stay visible, not hidden in disclosure widgets.
+// Passive source caveats do not accompany usable Models; account failures belong to Accounts.
 context.state.section = 'overview';
 context.result.source.status = 'partial';
 view.accounts_quotas.accounts[0].observation.has_error = true;
 view.accounts_quotas.accounts[0].observation.error_code = 'transport_failure';
 draw();
-assert.ok(all(output, 'p').some(n => n.className === 'warning' && n.textContent.includes('Partial source data')));
+assert.ok(!output.textContent.includes('Partial source data'));
 assert.ok(!all(output, 'p').some(n => n.textContent.includes('Connection failed')), 'account-only warnings stay on Accounts');
 
 // Overview is one coherent table, including every row beyond the former 50-row cap.
