@@ -1,6 +1,14 @@
 'use strict';
 // App-owned PiP presentation. No auth, source calls, totals or lifecycle inference.
 const MiniWatch = (() => {
+  const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, {granularity: 'grapheme'}) : null;
+  function promptPreview(prompt) {
+    if (!graphemes || !prompt?.event_id || prompt.is_compaction || typeof prompt.preview !== 'string') return '';
+    const text = prompt.preview.replace(/[\s\p{Cc}]+/gu, ' ').trim();
+    const parts = [...graphemes.segment(text)];
+    if (parts.length <= 25) return text;
+    return parts.slice(0, 25).map(part => part.segment).join('').trimEnd().replace(/(?:…|\.{3})+$/u, '').trimEnd() + '…';
+  }
   function reconcile(parent, wanted) {
     const keep = new Set(wanted);
     for (const node of [...parent.children]) if (!keep.has(node)) node.remove();
@@ -327,19 +335,23 @@ const MiniWatch = (() => {
       ReportView.text(cell.children[0].children[0], title);
       return title;
     }
-    rowHelp(row, session, item, card) {
+    rowHelp(row, session, item, card, context, historical) {
       const number = item?.prompt?.prompt_number;
-      row.sessionHelp = `${session}\n${number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session'}`;
+      const preview = promptPreview(item?.prompt);
+      const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session';
+      row.sessionHelp = `${session}\n${identity}${preview ? (number == null ? '\nPrompt preview: ' : ': ') + preview : ''}`;
       row.costHelp = [ReportView.costHelp(item?.prompt), this.promptDetails(item)].filter(Boolean).join('\n\n');
       row.totalCostHelp = ['Whole-session reference CCost, including linked subagents.',
         ReportView.costHelp(card.session_summary?.cost || (card.session_summary?.state === 'unavailable' ? {} : null), 'known_ccost'),
         this.promptDetails(item)].filter(Boolean).join('\n\n');
       const warning = card.session_summary?.context?.warning;
       row.children[3].dataset.guidance = warning?.guidance_state || 'ready';
-      row.contextHelp = ['Estimated context for the next request. Not remaining model capacity.',
+      const delta = ReportView.display(item?.live_context, 'watch_delta_context_tokens');
+      row.contextHelp = [`Next Ctx: ${context} (estimated next incoming context)`,
+        `Δ Ctx: ${delta} (${historical ? 'historical prompt change; session estimate may be later' : 'represented prompt change'})`,
+        'Not remaining model capacity.',
         warning?.text?.replace(/^\[|\]$/g, ''),
         warning && ReportView.display(warning, 'warning_cost').replace(/^\(|\)$/g, '')].filter(Boolean).join('\n');
-      ContextHelp.refresh(row.children[3]);
     }
     drawCost(cell, card, prompt) {
       const summary = card.session_summary, cost = summary?.cost;
@@ -412,14 +424,14 @@ const MiniWatch = (() => {
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
-        this.rowHelp(row, session, item, card);
+        const context = display(historical ? card.session_summary?.context : item?.live_context, 'watch_next_context_tokens');
+        this.rowHelp(row, session, item, card, context, historical);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
         const known = running ? prompt?.at_ms != null : prompt?.completed_at_ms != null;
         row.activityHelp = known ? (running ? prompt.display?.start_date_time : prompt.display?.finished_date_time) : null;
         text(row.children[0].children[0], known ? (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—' : '—');
         row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
-        const context = display(historical ? card.session_summary?.context : item?.live_context, 'watch_next_context_tokens');
         this.drawCost(row.children[2], card, prompt);
         text(row.children[3], context); wanted.push(row);
       }

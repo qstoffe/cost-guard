@@ -30,6 +30,11 @@ def main():
                 time.sleep(.25)
                 continue
             wire = project_live(frame).to_json()
+            help_rows = [row for card in wire['active_cards'] + wire['history_cards'] for row in card['rows']]
+            for row in help_rows:
+                assert isinstance(row['prompt']['preview'], str) and len(row['prompt']['preview']) <= 120
+                assert all(key in row['live_context']['display'] for key in
+                    ('watch_next_context_tokens', 'watch_delta_context_tokens'))
             history = wire['history_cards']
             assert len(history) <= 5 and len({card['session_id'] for card in history}) == len(history)
             finishes = []
@@ -73,6 +78,7 @@ def main():
                     "numeric_capacities": sum(q['display']['ccost_capacity'] not in {'?', 'N/A'} for q in quotas),
                     "idle_windows_observed": sum(q['window_active'] is False for q in quotas),
                     "finished_history_cards": len(history), "known_finish_times": sum(bool(value) for value in finishes),
+                    "bounded_preview_and_context_help_rows_checked": len(help_rows),
                     "single_acquisition_owner": True, "seconds": round(time.monotonic() - started, 3)}))
                 break
             time.sleep(.25)

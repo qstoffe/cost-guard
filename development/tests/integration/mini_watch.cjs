@@ -124,7 +124,8 @@ function setup() {
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
    assert.equal(api.requests[0].height,500); assert.equal(api.requests[0].width,628);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
-   require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+    require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+    require('../fixtures/mini_help.cjs')(controller,view,input,helpText);
    const demandCalls = [];
    controller.setDemandFactory(win => {
      assert.equal(win, child, 'Mini demand belongs to the actual PiP document');

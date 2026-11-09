@@ -5,6 +5,58 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Value-help additions (FR000645)
+
+Scoped v80.225 delta on `0997b8b9e0b9e592db29153a7bceb85d9efba13a`,
+checked locally 2026-11-09. Earlier sections and their revision header retain their
+historical scope, not a fresh audit of unrelated behavior.
+
+`mini.js` selects the existing displayed next-context token once for both cell and
+help. The delta is the chosen prompt's prepared token, never a subtraction of rounded
+context values. Historical help names the prompt scope and potentially later session
+estimate. Canonical session warning text/cost/refresh notes remain untouched, including
+exceeded thresholds. All row help refreshes after the coherent row update through the
+existing root `ContextHelp.refresh`, preserving target identity/focus.
+
+Session help adds only the selected row's existing `prompt.preview`, normalized to one
+line and trimmed at 25 `Intl.Segmenter` graphemes. Truncation adds one ellipsis; absent,
+non-prompt or unsupported previews add nothing. The unsupported-Segmenter fallback
+omits the optional hint safely. No raw content acquisition, logging/cache, new endpoint,
+layout/column/visible-value, lifecycle or Full Watch change was introduced.
+
+Fresh evidence (not inferred from earlier results):
+
+- `test_mini_watch.py` passed 10 tests, including active/history projection tokens.
+  `mini_help.cjs` covers independent next/delta owners, zero/signed/unknown/source-format
+  cases, no/approaching/exceeded/pending/refreshing/unavailable warning states,
+  history/resumption/concurrent representatives, full title/ordinal, 25-boundary,
+  combining marks/family/skin-tone emoji, whitespace/controls/ellipsis and literal HTML.
+  An initial expected HTML-like snippet counted 27 rather than 25 characters; fixing
+  that fixture expectation repaired the exploratory failed test, not product code.
+- Local Full passed **179 files, zero failures, 124.8s**. One existing macOS shell test
+  was skipped because zsh/PTY is unavailable on Windows; no all-platform PASS is claimed.
+  Package validation passed **11 checks, zero failures, seven advisory warnings**
+  (existing prose/module budget debt). No caps or structural baselines were raised.
+- Integrated OpenCode browser smoke loaded shipped assets in an isolated real-DOM
+  fixture and confirmed the expected labels/preview, four columns, unchanged visible
+  next value and no native titles. This was not native PiP or interaction proof.
+- `probe_mini_watch.cjs` passed in owned **headless Edge 157.0.4341.42**, DPR/zoom 1:
+  **91 existing layouts** plus `probe_mini_help.cjs`'s real PiP Tab focus, delayed hover,
+  touch, Escape, literal HTML, live preview/delta/warning updates and active→history
+  source handoff while help remained open. Focus/row identity and table geometry stayed
+  stable. Existing four-theme, Credits/USD, scroll/Fit/history checks also passed.
+- Extended `probe_mini_source.py` passed against real **V2**: three coherent captures,
+  one running row with bounded preview and both prepared context-help tokens, three
+  accounts, **1.569s**. Owned acquisition closed in **0.112s**; shared OpenCode was
+  untouched. No model calls. It observed **zero historical cards**: history correctness
+  comes from deterministic and synthetic PiP cases, not a claimed real transition.
+
+Compact durable summary: [mini-help-645.json](../../architecture/governance/verification/mini-help-645.json).
+Raw local test/browser artifacts remain session-local (`scratch:/full-tests.json`,
+`scratch:/mini-browser.json`), without personal prompt text or bootstrap capabilities
+in this publication. Physical desktop/work-area, macOS and screen-reader behavior
+were not verified; none changed here. No acceptance waiver or substantial deferral.
+
 ## Historical foreground correction (FR000643)
 
 v80.223 fixes a category-versus-outcome regression: `View.drawSessions` previously

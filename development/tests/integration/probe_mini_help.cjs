@@ -1,0 +1,66 @@
+// Synthetic value-help acceptance in real headless Document PiP; no desktop claims.
+const assert = require('node:assert/strict');
+module.exports = async function help({evaluate,until,command,pip,checks}) {
+  const input = (method,params) => command(method,params,pip);
+  const key = async key => {
+    for (const type of ['keyDown','keyUp']) await input('Input.dispatchKeyEvent',{
+      type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27});
+  };
+  await evaluate(`window.helpPublication=structuredClone(liveValue);
+    {const v=helpPublication.view,c=v.active_cards[0],r=c.rows[0];
+    v.active_cards=[c];v.history_cards=[];v.history_state='observed';v.history_epoch=1;
+    c.session_id='help-synthetic';c.title='Example Session';c.focal_id=r.prompt.event_id;
+    Object.assign(r.prompt,{prompt_number:21,preview:'Implement pagination for this table'});
+    r.live_context.display={watch_next_context_tokens:'128k',watch_delta_context_tokens:'+4k'};
+    c.session_summary.context={display:{watch_next_context_tokens:'900k'},warning:{
+      text:'[Approaching price threshold >200k]',display:{warning_cost:'(2.4x more expensive)'}}};
+    miniWatch.update(helpPublication);}
+    window.helpRow=miniWatch.view.promptRows.get('help-synthetic');
+    window.helpTitle=helpRow.querySelector('.mini-session');window.helpCtx=helpRow.cells[3];`);
+  const panel = `miniWatch.view.doc.getElementById('context-help')`;
+  const read = () => evaluate(`({session:helpRow.sessionHelp,context:helpRow.contextHelp,
+    visible:helpRow.cells[3].textContent,columns:helpRow.cells.length,
+    buttons:helpRow.querySelectorAll('button').length,native:!!helpRow.querySelector('[title]'),
+    overflow:miniWatch.view.doc.documentElement.scrollWidth>miniWatch.window.innerWidth+1,
+    table:[miniWatch.view.prompts.clientWidth,miniWatch.view.prompts.clientHeight]})`);
+  const before = await read();
+  assert.equal(before.session,'Example Session\nPrompt #21 in this session: Implement pagination for…');
+  assert.match(before.context,/^Next Ctx: 128k .*\nΔ Ctx: \+4k[\s\S]*Approaching price threshold >200k\n2.4x more expensive$/);
+  assert.equal(before.visible,'128k');assert.equal(before.columns,4);assert.equal(before.buttons,0);assert.equal(before.native,false);
+  await command('Page.bringToFront',{},pip);
+  await key('Tab');await evaluate('helpRow.cells[0].firstChild.focus()');await key('Tab');
+  await until(`${panel}?.matches(':popover-open') && miniWatch.view.doc.activeElement===helpTitle`);
+  assert.equal(await evaluate(`${panel}.textContent`),before.session);
+  await evaluate(`{const c=helpPublication.view.active_cards[0],r=c.rows[0];
+    Object.assign(r.prompt,{prompt_number:22,preview:'a'.repeat(24)+'👨‍👩‍👧‍👦 tail'});
+    r.live_context.display={watch_next_context_tokens:'256k',watch_delta_context_tokens:'-4k'};
+    c.session_summary.context.warning.text='[Price threshold >200k exceeded]';miniWatch.update(helpPublication);}`);
+  assert.equal(await evaluate(`${panel}.textContent`),'Example Session\nPrompt #22 in this session: '+'a'.repeat(24)+'👨‍👩‍👧‍👦…');
+  assert.equal(await evaluate('miniWatch.view.doc.activeElement===helpTitle'),true);
+  await key('Escape');await evaluate('helpTitle.blur()');
+  await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+  const point = await evaluate(`(()=>{const r=helpCtx.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  await input('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+  assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false,'hover keeps its delay');
+  await until(`${panel}.matches(':popover-open')`);
+  assert.match(await evaluate(`${panel}.textContent`),/^Next Ctx: 256k[\s\S]*Δ Ctx: -4k[\s\S]*Price threshold >200k exceeded\n2.4x more expensive$/);
+  await evaluate(`{const v=helpPublication.view,c=v.active_cards[0];c.focal_id='';
+    c.rows[0].prompt.in_progress=false;c.rows[0].prompt.completed_at_ms=1000;
+    v.active_cards=[];v.history_cards=[c];miniWatch.update(helpPublication);}`);
+  assert.equal(await evaluate(`miniWatch.view.promptRows.get('help-synthetic')===helpRow`),true);
+  assert.match(await evaluate(`${panel}.textContent`),/^Next Ctx: 900k[\s\S]*Δ Ctx: -4k \(historical prompt change; session estimate may be later\)/);
+  await evaluate(`helpPublication.view.history_cards[0].rows[0].live_context=null;miniWatch.update(helpPublication)`);
+  assert.match(await evaluate(`${panel}.textContent`),/Next Ctx: 900k[\s\S]*Δ Ctx: N\/A/);
+  await key('Escape');await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+  const titlePoint = await evaluate(`(()=>{const r=helpTitle.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  for(const type of ['touchStart','touchEnd'])await input('Input.dispatchTouchEvent',{
+    type,touchPoints:type==='touchStart'?[{...titlePoint,id:1,radiusX:1,radiusY:1,force:1}]:[]});
+  await until(`${panel}.matches(':popover-open')`);
+  await evaluate(`helpPublication.view.history_cards[0].rows[0].prompt.preview='<img src=x onerror=alert(1)>';miniWatch.update(helpPublication)`);
+  assert.equal(await evaluate(`${panel}.textContent`),'Example Session\nPrompt #22 in this session: <img src=x onerror=alert(…');
+  assert.equal(await evaluate(`${panel}.children.length`),0,'preview is literal text, not HTML');
+  const after = await read();assert.deepEqual(after.table,before.table);assert.equal(after.overflow,false);
+  await key('Escape');assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
+  await evaluate('miniWatch.update(liveValue)');
+  checks.push('Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; unchanged four-column geometry');
+};
