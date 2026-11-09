@@ -7,6 +7,7 @@ from src.analysis.input_identity import first_input, fingerprint
 from src.analysis.matched_runs import MatchedRun
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost, unique_usage
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .prompt_rows import PromptRowProjector
 
 DECIMALS = ('ccost', 'main_ccost', 'subagent_ccost', 'incoming_context_ccost', 'extra_ccost')
@@ -60,6 +61,7 @@ def encode_run(run):
     for name in DECIMALS:
         payload[name] = None if payload[name] is None else str(payload[name])
     payload['contributors'] = [(*group[:4], str(group[4]), group[5]) for group in run.contributors]
+    payload['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
     return payload
 
 
@@ -67,6 +69,11 @@ def decode_run(payload):
     if payload is None:
         return None
     values = dict(payload)
+    semantics = values.pop('model_identity_semantics', None)
+    models = [(values.get('provider', ''), values.get('model', ''))]
+    models.extend((group[0], group[1]) for group in values.get('contributors', ()))
+    if not identity_cache_current(semantics, models):
+        raise ValueError('outdated_model_identity')
     if set(values) != {field.name for field in fields(MatchedRun)} - {'title', 'activity_ms'}:
         raise ValueError('invalid_match_fields')
     if any(not isinstance(values[name], str) for name in ('session_id', 'provider', 'model', 'effort')):

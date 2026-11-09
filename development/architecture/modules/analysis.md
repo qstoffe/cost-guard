@@ -88,6 +88,16 @@ Disposable `cache/` uses generation-named SQLite, WAL, short transactions, a def
 
 ### Session-cache lifecycle (FR 000626)
 
+FR000629 scoped identity delta (2026-11-09): optional per-entry identity semantics
+reject legacy alias-derived full analyses, summaries, compact Token Mix/AI Stats
+facts and matched runs on ordinary access. Original provider/model IDs detect the
+affected entries; raw snapshots are unchanged and unaffected legacy entries remain
+hits. Legacy nonempty scalar labels without contributor identity are reacquired
+rather than trusted. Root-tree CCost salts only moving-alias request fingerprints,
+preserving pinned contributions and aggregate checkpoints. No global algorithm bump,
+purge, startup sweep or retention change. Tests: `test_claude_alias_identity.py`,
+`test_claude_alias_cache.py`; [dependency/evidence detail](../../journal/claude-alias-identity.md).
+
 `cache/session_scope.py` reduces complete, quiescent source snapshots to a source-qualified root digest and nullable actual activity clock across messages, child invocations, parts and ended background work. Session creation/update/archive is not activity proof. Unknown/missing execution times remain ineligible. `CacheEntry.session_scope` opts individual derived/compact/statistics/coverage/match/summary/CCost entries into the additive indexed `cache_entry_lifecycle` table, atomically with payload publication. Unannotated old rows stay protected without startup source hydration; incomplete replacements remove old activity proof. Pricing, model sightings/discovery and separate JSON operational state are not eligible.
 
 `cache/lifecycle.py` owns bounded use updates and eviction, never source acquisition. Actual UI delivery (including job polling, retained report interest, visible Sessions/detail and Full/Mini Watch) queues root touches; the shipped UI's selected-visible header distinguishes demand from headerless probes. Explicit CLI presentation drains its own touches. Reads/passive writes do not renew use. Hourly coalescing has an extra retention-hour grace. Pending/failed touches protect their roots; flushes update at most 64 entries.

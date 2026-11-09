@@ -12,6 +12,7 @@ from src.cache import CacheRepository
 from src.cache.session_scope import snapshot_scope
 from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession, Provenance, SessionSnapshot, TokenUsage
 from src.domain.acquisition import AcquisitionMetrics
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
@@ -150,6 +151,7 @@ def _compaction_from_dict(data: Mapping[str, Any]) -> CompactionRecord:
 def _bundle_to_dict(bundle: RootAnalysisBundle, dependencies: AnalysisDependencies) -> dict[str, Any]:
     return {
         "root_session_id": bundle.root_session_id,
+        "model_identity_semantics": MODEL_IDENTITY_SEMANTICS,
         "source_revision": bundle.source_revision,
         "cacheable": bundle.cacheable,
         "config_signature": dependencies.config_signature,
@@ -231,6 +233,12 @@ class DerivedAnalysisCache:
         try:
             with self.metrics.measure('cache_decode') if self.metrics is not None else nullcontext():
                 bundle = _bundle_from_dict(payload)
+            if payload.get("model_identity_semantics") != MODEL_IDENTITY_SEMANTICS:
+                models = [(entry.model.provider, entry.model.model) for entry in bundle.trace_entries]
+                models.extend((record.main_provider_id, record.main_model_id) for record in bundle.prompts)
+                models.extend((record.provider_id, record.model_id) for record in bundle.compactions)
+                if not identity_cache_current(None, models):
+                    return None
         except (KeyError, TypeError, ValueError, InvalidOperation):
             return None
         return (bundle if bundle.cacheable and bundle.root_session_id == root_session_id

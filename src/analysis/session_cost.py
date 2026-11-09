@@ -13,6 +13,7 @@ from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
 from src.domain.reference_cost import bounded_issues
 from src.cache.session_scope import snapshot_scope
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, unverified_alias
 
 NAMESPACE = "session-ccost-v1"
 ALGORITHM = ANALYSIS_ALGORITHM_VERSION + "/root-tree-reference-1"
@@ -79,6 +80,8 @@ def reconcile_session_cost(repository, snapshot, catalog):
         invocation = snapshot.invocations[entry.sort_order]
         identity = dependency_signature((entry.source_instance, entry.session_id, invocation.invocation_id))
         fingerprint = dependency_signature((entry.model, entry.tokens, entry.completed_at_ms))
+        if unverified_alias(entry.model.model, entry.model.provider):
+            fingerprint = dependency_signature((fingerprint, MODEL_IDENTITY_SEMANTICS))
         prior = old.get(identity)
         if prior is not None and prior["fingerprint"] == fingerprint:
             current[identity] = prior

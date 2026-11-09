@@ -12,7 +12,7 @@ from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import unique_usage
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
-from src.pricing.identities import reference_identity
+from src.pricing.identities import reference_identity, unverified_alias
 from src.pricing.publishers import publisher_for
 
 from .migration_notice import migration_gap_notes
@@ -27,6 +27,8 @@ HISTORY_NOTE = ("History includes OpenCode usage data that is still available; "
 
 
 def _model_key(model: ModelRef) -> str:
+    if unverified_alias(model.model, model.provider):
+        return f"{model.provider.lower()}/{reference_identity(model.model)}"
     return reference_identity(model.model) or (model.model or "").lower()
 
 
@@ -81,7 +83,8 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         # Fail open: hiding usable history is worse than an unverified filter.
         warnings += ("⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",)
     else:
-        selectable = {reference_identity(value) for value in available}
+        selectable = {_model_key(ModelRef(*value.split("/", 1))) if "/" in value
+                      else _model_key(ModelRef("", value)) for value in available}
         shown = tuple(group for group in groups if _model_key(group.model) in selectable)
         if len(shown) != len(groups):
             notes.append(f"Only currently selectable OpenCode models are shown; "
@@ -89,8 +92,7 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         groups = shown
     rows = []
     for group in groups:
-        resolved = reference.resolve_reference(group.model.model)
-        name = resolved.model.display_name if resolved and resolved.model.display_name else (group.model.model or "N/A")
+        name = reference.display_name(group.model.model, group.model.provider, exact=True)
         rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.

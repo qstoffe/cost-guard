@@ -20,7 +20,7 @@ const ComparisonsView = (() => {
         group.runs.every(run => /^[A-Za-z0-9_-]{1,200}$/.test(run.session_id) && run.match_run));
   }
   function provenance(run) {
-    return run.contributors.map(item => `${item.provider}/${item.model} · ${item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n') || 'No attributable request evidence.';
+    return run.contributors.map(item => `${item.provider}/${item.model_label} [${item.model}] · ${item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n') || 'No attributable request evidence.';
   }
   function help(run, column) {
     const state = `Run status: ${run.status}.`;
@@ -46,7 +46,7 @@ const ComparisonsView = (() => {
     update(run) {
       this.run = run;
       const values = [run.title || 'Untitled session', () => d(this.run, 'started'),
-        `${run.provider || '?'}/${run.model || 'Unknown'}${run.mixed ? ' *' : ''}`,
+        `${run.provider || '?'}/${run.model_label || 'Unknown'}${run.mixed ? ' *' : ''}`,
         `${run.effort || 'N/A'}${run.mixed ? ' *' : ''}`, () => d(this.run, 'ccost'),
         () => d(this.run, 'duration_ms'), () => d(this.run, 'context'),
         () => d(this.run, 'token_mix_percent'), `${run.calls}${run.status === 'complete' ? '' : '?'}`];

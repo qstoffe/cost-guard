@@ -14,6 +14,7 @@ from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain import ModelRef, TokenUsage
 from src.domain.progress import WorkProgress
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current, unverified_alias
 from .token_mix_history import history_projection
 from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
 from .history_snapshots import load as load_snapshots, warnings as history_warnings
@@ -45,6 +46,8 @@ def encode(bundle, reference):
             tokens=[tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning],
             known=list(tokens.known_fields), reported=str(entry.reported_cost), instance=entry.source_instance,
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
+        if unverified_alias(entry.model.model, entry.model.provider):
+            facts[-1]['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
     return facts
 
 
@@ -53,6 +56,9 @@ def decode(facts):
     if not isinstance(facts, list):
         raise ValueError('invalid_evidence')
     for fact in facts:
+        provider, model, _display = fact['model']
+        if not identity_cache_current(fact.get('model_identity_semantics'), ((provider, model),)):
+            raise ValueError('outdated_model_identity')
         counts = fact['tokens']
         if len(counts) != 5 or any(type(value) is not int or value < 0 for value in counts):
             raise ValueError('invalid_tokens')

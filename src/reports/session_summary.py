@@ -6,6 +6,7 @@ import sqlite3
 from src.analysis.cache import dependency_signature
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
 from src.cache.session_scope import snapshot_scope
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .models import SessionUsageRow
 
 ALGORITHM = "session-summary-2"
@@ -29,6 +30,15 @@ def session_summary(service, root, revision, *, active=False):
     if not active and cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
         try:
             values = dict(cached.payload)
+            semantics = values.pop("model_identity_semantics", None)
+            # Older zero-request summaries retain only a derived label, not the
+            # selected source ID. Reacquire this root rather than trust that label.
+            if (semantics != MODEL_IDENTITY_SEMANTICS and not values.get("contributor_models")
+                    and values.get("model") != "N/A"):
+                raise ValueError("unproven_model_label")
+            models = (value.split("/", 1) for value in values.get("contributor_models", ()))
+            if not identity_cache_current(semantics, models):
+                raise ValueError("outdated_model_identity")
             if set(values) != {field.name for field in fields(SessionUsageRow)}:
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
@@ -63,6 +73,7 @@ def session_summary(service, root, revision, *, active=False):
     actual = item.bundle.source_revision
     if item.bundle.cacheable and not row.running:
         values = asdict(row)
+        values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values["ccost"] = str(row.ccost)
         try:
             service.cache_repository.put(NAMESPACE, key, values,

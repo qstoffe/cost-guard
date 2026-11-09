@@ -21,6 +21,15 @@ Usage includes all canonical provider IDs. **CCost** values observed tokens usin
 
 Successful reference/current-price fallback is Diagnostics-only. Missing reference pricing still warns of incomplete CCost, even when actual billing is known.
 
+**Claude model identity:** moving aliases such as `claude-agent/sonnet` show
+**Claude Sonnet (version unverified)**, not a release guessed from a catalog match.
+The assistant request's explicit concrete model ID supports normal exact pricing;
+today's picker, provider catalog, SDK default or mutable session selection does not
+resolve historical aliases. Unresolved requests retain N/A/partial reference CCost
+and identity-unverified help. Existing affected cached labels/cost projections repair
+automatically when accessed, including after restart, without deleting source history
+or replaying prompts. Unaffected cached requests, counts and tokens are preserved.
+
 Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Model work that OpenCode resumes after a background job (for example a backgrounded shell) ends, or after another invisible synthetic notice such as a subagent completion, stays on the prompt that was running; waiting adds Duration only, never Calls or CCost, and native job IDs are never shown. Only explicit completion/failure/cancellation notices or the service no longer listing the job end that wait. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries. `Calls` counts model requests, not OpenCode assistant records: when one response emits several tool calls, OpenCode V2 may store each further call as a tool-only record with zero usage; it counts only with its response when the same provider response id or, without ids, the absent model latency proves that. Ambiguous zero-usage records still count, and their tools, failures and durations always remain visible.
 
 OpenCode V2 `subagent` and legacy `task` tools share one child-link interpretation for prompt accounting and linked Watch activity. Structured tool-state `sessionID`/`sessionId` metadata takes precedence; an exact native tool-result wrapper is only a fallback. A real parent-child relationship and valid invocation times are required. Nested/background requests remain on the initiating prompt, and repeated or overlapping observations do not add Calls twice. If that child is invoked again later, the later invocation opens a separate window. Missing ancestry/timing cannot be repaired from copied prose or a cost difference. Whole-session totals independently include available root-tree usage: compactions, unallocatable work, missing history or unknown prices can legitimately keep a total different from visible prompt rows.

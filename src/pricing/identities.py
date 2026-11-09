@@ -19,6 +19,48 @@ CONTEXT_MODELS = frozenset({
 })
 DATED_ALIASES = {"claude-haiku-4-5-20251001": "claude-haiku-4-5"}
 
+# Per-entry semantic admission, not a global pricing/cache generation. Old
+# unaffected entries remain reusable; alias-derived conclusions rebuild lazily.
+MODEL_IDENTITY_SEMANTICS = 1
+_CLAUDE_ROUTES = frozenset({"claude-agent", "claude-code", "anthropic", "github-copilot",
+    "amazon-bedrock", "google-vertex-anthropic", "openrouter"})
+_FAMILY_ALIAS = re.compile(r"^(?:claude-)?(sonnet|opus|haiku|fable)(?:-latest)?(?:\[1m\])?$")
+
+
+@lru_cache(maxsize=8192)
+def unverified_alias(value: str, provider: str = "") -> str | None:
+    """Moving selections are never concrete execution or reference-rate proof.
+
+    A familiar word on an unknown/custom route does not prove its publisher.
+    Neither today's provider catalog nor SDK default can resolve past requests.
+    """
+    raw = (value or "").strip().lower()
+    if "/" in raw:
+        provider, raw = raw.split("/", 1)
+    route = provider.strip().lower()
+    match = _FAMILY_ALIAS.fullmatch(raw)
+    if match:
+        family = match[1].title()
+        name = f"Claude {family}" if raw.startswith("claude-") or route in _CLAUDE_ROUTES else raw
+        return f"{name} (version unverified)"
+    if route in _CLAUDE_ROUTES and raw in {"default", "best", "opusplan"}:
+        return f"Claude {raw} (version unverified)"
+    return None
+
+
+def identity_cache_current(semantics, models) -> bool:
+    """Admit legacy derived entries only when no moving selection influenced them.
+
+    ``models`` contains original (provider, model) pairs, never display labels.
+    Source snapshots themselves do not need invalidation or rewriting.
+    """
+    if semantics == MODEL_IDENTITY_SEMANTICS:
+        return True
+    for provider, model in models:
+        if not isinstance(provider, str) or not isinstance(model, str) or unverified_alias(model, provider):
+            return False
+    return True
+
 
 @lru_cache(maxsize=8192)
 def reference_identity(value: str) -> str:

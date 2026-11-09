@@ -1,6 +1,6 @@
 """Explain failed reference valuation using the exact acquired catalog only."""
 from src.domain.reference_cost import ReferenceCostIssue
-from .identities import CONTEXT_MODELS, reference_identity
+from .identities import CONTEXT_MODELS, reference_identity, unverified_alias
 
 _RECOGNIZED = CONTEXT_MODELS | {"claude-sonnet-4", "claude-opus-4"}
 _CATEGORIES = (("input", "input"), ("cache_read", "cached input"),
@@ -13,6 +13,8 @@ def reference_issue(catalog, model, tokens):
         return ReferenceCostIssue("usage", detail=", ".join(missing))
     if not catalog.retrieved_at_ms or not catalog.source_revision or catalog.reference_stale:
         return ReferenceCostIssue("catalog")
+    if unverified_alias(model.model, model.provider):
+        return ReferenceCostIssue("identity")
     native = catalog.resolve_reference(model.model)
     if native is None:
         if model.model not in catalog._issue_identity_memo:

@@ -1,7 +1,6 @@
 """Provider-neutral model repricing and model timeline labels."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Iterable
@@ -131,23 +130,18 @@ def _effort_label(variant: str) -> str:
     return mapping.get(value.lower(), value[:1].upper() + value[1:])
 
 
-def _model_display_name(catalog: PricingCatalog, model_id: str) -> str:
-    model = catalog.resolve(model_id)
-    return (model.model.display_name if model and model.model.display_name else re.sub(r"^github-copilot/", "", model_id or "")) or "N/A"
-
-
-def effort_model_name(catalog: PricingCatalog, model_id: str, effort: EffortSelection) -> str:
-    name = _model_display_name(catalog, model_id)
+def effort_model_name(catalog: PricingCatalog, model_id: str, effort: EffortSelection, provider_id: str = "") -> str:
+    name = catalog.display_name(model_id, provider_id)
     return f"{name} ({_effort_label(effort.level)})" if effort.level else name
 
 
-def effort_model_parts(catalog: PricingCatalog, model_id: str, effort: EffortSelection) -> tuple[str, str]:
+def effort_model_parts(catalog: PricingCatalog, model_id: str, effort: EffortSelection, provider_id: str = "") -> tuple[str, str]:
     """Structured display values; consumers must not split a formatted model name."""
-    return _model_display_name(catalog, model_id), _effort_label(effort.level) if effort.level else "N/A"
+    return catalog.display_name(model_id, provider_id), _effort_label(effort.level) if effort.level else "N/A"
 
 
 def model_timeline_name(catalog: PricingCatalog, model_id: str, provider_id: str, variant: str) -> str:
-    return effort_model_name(catalog, model_id, interpret_effort(variant, attributable=bool(model_id)))
+    return effort_model_name(catalog, model_id, interpret_effort(variant, attributable=bool(model_id)), provider_id)
 
 
 def watch_model_timeline_name(catalog: PricingCatalog, model_id: str, provider_id: str, variant: str) -> str:
@@ -155,8 +149,8 @@ def watch_model_timeline_name(catalog: PricingCatalog, model_id: str, provider_i
     return model_timeline_name(catalog, model_id, provider_id, variant)
 
 
-def compaction_model_timeline_name(catalog: PricingCatalog, model_id: str, variant: str) -> str:
+def compaction_model_timeline_name(catalog: PricingCatalog, model_id: str, variant: str, provider_id: str = "") -> str:
     """A /compact event may display only its own explicit effort."""
     return effort_model_name(catalog, model_id, interpret_effort(
         variant, attributable=bool(model_id), compaction=True,
-    ))
+    ), provider_id)

@@ -301,12 +301,10 @@ class ReportService:
             if primary == "N/A":
                 primary = next((record.main_model_id for record in reversed(item.bundle.prompts)
                                 if record.main_model_id), "N/A")
-            resolved = catalog.resolve(primary)
-            name = primary
-            if resolved and resolved.model.display_name:
-                name = resolved.model.display_name
-            elif primary in models:
-                name = models[primary].display_name or primary
+            provider = models[primary].provider if primary in models else next((
+                record.main_provider_id for record in reversed(item.bundle.prompts)
+                if record.main_model_id == primary), "")
+            name = catalog.display_name(primary, provider)
             prompt_count = len(item.bundle.prompts)
             identities = sorted({f"{entry.model.provider}/{entry.model.model}"
                 for entry in item.bundle.trace_entries if entry.model.provider and entry.model.model})
