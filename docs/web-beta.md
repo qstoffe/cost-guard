@@ -424,13 +424,14 @@ Switch Credits/USD to change the money display while keeping your period and car
 
 The first **💸 AI Hourly Rate** card has three compact rows, not three cards:
 
-- **24h average:** the period's Total AI Cost divided by 24 nominal hours per selected local date.
+- **Calendar average:** the period's Total AI Cost divided by 24 nominal hours per selected local date.
 - **Workday average:** the same total (including night/weekend spending) divided by eight scheduled hours per eligible workday. Weekends and configured `SE` public holidays are excluded; an empty `workdayCalendar` excludes weekends only. With none, the row says **No workdays**.
-- **Robot · 8h shift:** the original cost per actively running AI hour × eight. This is the **hypothetical** price of a full robot shift at that period's intensity, not actual cost per workday. Title help keeps these three perspectives to three short, playful paragraphs rather than repeating the calculations. Robot jokes use fixed reference-Credit tiers, not your salary; idle or uncertain inputs avoid replacement comparisons.
+- **Active AI average:** the same total divided by AI Working Time in hours. Overlapping agents count once in elapsed active time, while their costs still add up. This is cost intensity during activity, not a salary, billed charge or predicted day/shift total. Title help has three short, playful paragraphs in row order, each ending with its compact formula. Idle or uncertain inputs keep neutral robot copy.
 
 For 840 Credits and 28 active hours over seven dates/five workdays, these are
-**5 CCost/h**, **21 CCost/h** and **240 CCost/8h day** (USD: **$0.05/h**,
-**$0.21/h**, **$2.40/8h day**). Robot is not Workday × eight.
+**5 CCost/h**, **21 CCost/h** and **30 CCost/h** (USD: **$0.05/h**,
+**$0.21/h**, **$0.30/h**). 100 Credits over two active hours gives **50 CCost/h**;
+over one active minute it gives **6000 CCost/h**, regardless of selected calendar days.
 Today always has one nominal date, even in the morning. Rolling 7/30-day cost
 windows stay exact trailing hours, but normalization uses exactly 7/30 local dates
 ending today. Month counts only dates through today; All time includes cost-free

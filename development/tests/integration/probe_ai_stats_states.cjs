@@ -97,12 +97,12 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     });
     const rates=await evaluate(`[...document.querySelectorAll('.ai-stat-rate')].map(row=>({
       label:row.getAttribute('aria-label'),value:row.querySelector('.ai-stat-rate-value').textContent}))`);
-    assert.deepEqual(rates.map(row=>row.label),['24h average','Workday average','Robot · 8h shift']);
-    assert.deepEqual(rates.map(row=>row.value),['calendar_rate','workday_rate','robot_day'].map(key=>
+    assert.deepEqual(rates.map(row=>row.label),['Calendar average','Workday average','Active AI average']);
+    assert.deepEqual(rates.map(row=>row.value),['calendar_rate','workday_rate','active_rate'].map(key=>
       expected[0].display_units?.[unit]?.[key] || expected[0].display[key]));
     if (item.name==='three-rates') assert.deepEqual(rates.map(row=>row.value),unit==='credits' ?
-      ['5 CCost/h','21 CCost/h','240 CCost/8h day'] : ['$0.05/h','$0.21/h','$2.40/8h day']);
-    if (item.name==='faster-robot') assert.equal(rates[2].value,unit==='credits'?'960 CCost/8h day':'$9.60/8h day');
+      ['5 CCost/h','21 CCost/h','30 CCost/h'] : ['$0.05/h','$0.21/h','$0.30/h']);
+    if (item.name==='faster-robot') assert.equal(rates[2].value,unit==='credits'?'120 CCost/h':'$1.20/h');
     if (item.name==='no-workdays') assert.equal(rates[1].value,'No workdays');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
@@ -126,7 +126,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='unknown-duration').result)};
     current.stats.update(current); ReportView.setUnit('credits',output);`);
   assert.equal(await evaluate(`document.activeElement===__focusedStat`),true);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Imagine eight hours of nonstop silicon/);
+   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hourly appetite when it's actually working/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
   checks.push('twelve canonical evidence cases: ten cards with three Python-prepared rates, example/faster robot/no-workdays, both units/three themes; no state/reason DOM, focused heading retained');

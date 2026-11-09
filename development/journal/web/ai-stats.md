@@ -5,7 +5,54 @@ Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
 Last checked: 2026-11-09
 Status: current
 
-## Three perspectives on the first card — FR000644
+## Comparable hourly rates — FR000655
+
+Scoped delta against `791e0f45e6eeca1a3a184635ffcfdbe5c125ad3c` (2026-11-09):
+the first retained card now shows Calendar average, Workday average and Active AI
+average, all per hour. `application/ai_stats.py::rate_tokens` formats the existing
+raw `active_rate` directly, never the rounded shift or capped legacy `Stat.value`.
+Calendar/workday denominators, period membership, unioned elapsed activity and the
+Stats-only best-effort policy are unchanged. Typed raw `robot_day`/`robot_period`
+compatibility fields remain; their prepared card tokens are no longer emitted.
+
+One safe plain-text title tooltip retains three short paragraphs in row order,
+each ending with a compact formula. Reference-Credit active-intensity tiers retain
+gentle snack/buffet jokes without salary/replacement claims. Idle and uncertain
+inputs keep neutral copy; the browser's cold-failure help matches prepared idle
+help. Existing ContextHelp, DOM identity and currency bindings own live refresh.
+No acquisition, source, pricing, dependency, layout or other-card behavior changes.
+
+Deterministic oracles cover 840 Credits / 7 dates / 5 workdays / 28 active hours =
+5/21/30 CCost/h ($0.05/$0.21/$0.30 per hour), independent denominator changes,
+100 Credits / two overlapping active hours = 50 CCost/h and one minute = 6000
+CCost/h, raw Decimal-before-formatting, tier boundaries, zero active time,
+no-workdays, all five periods and both units. The rates file is now explicitly
+registered in Quick/Full so its regressions also run in the normal suite.
+
+The integrated browser was disconnected. The existing hidden Edge probe is the
+non-disruptive alternative; no physical desktop, screen-reader speech or real
+touch-device proof is inferred. The historical FR000644 results do not prove this delta.
+
+Current verification: Full **181 files, 2,217 passed, two macOS-only skips, zero
+failures/errors, 133.9s**. Validator **11 passes, zero failures, seven existing
+advisory warnings**, no budget increase. `scratch:/full-tests.log`,
+`scratch:/full-tests.json`, `scratch:/validation.log`.
+
+Hidden Edge **PASS, 17 checks, 72 state/theme/unit cases, nine layouts, 80 text
+layouts, 1,350 contrast samples, zero runtime errors**. Three formula paragraphs
+fit at 360/1280 widths, enlarged text/zoom and all themes/units; real keyboard,
+hover, emulated touch, live focused help, Escape suppression, retained failures,
+ten-card identity and production finite slices/two-tab association passed. Owned
+browser/server exited cleanly. `scratch:/ai-stats-browser.json`.
+
+Read-only real installation: four error-free completed requests, five periods ×
+ten metrics; raw rate identities and both-unit active-rate tokens/formula help
+checked. Cold30 **135.612s**, warm30 **5.054s**, All reuse **0s** (not a cold scan),
+fresh warmAll **5.462s**. Disposable own cache, no OpenCode writes/stops. Timings
+overlapped Full/browser checks and mutable source, not a paired performance claim.
+`scratch:/ai-stats-live.jsonl`. No acceptance exception or deferral was needed.
+
+## Historical first-card implementation — FR000644 (presentation superseded by FR000655)
 
 Implementation delta from `a835c7881f368cb82fd1363e856183b1d45f7d45` (2026-11-09),
 not a fresh audit of unchanged reports. `analysis/ai_stats_rates.py` computes

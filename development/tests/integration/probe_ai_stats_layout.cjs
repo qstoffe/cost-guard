@@ -63,9 +63,9 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
         metric.display_units={credits:{...metric.display,value:index%2 ? 'N/A' : '12345678901234567890 credits'},
           usd:{...metric.display,value:index%2 ? 'N/A' : '$123456789012345678.90'}};
         if(metric.metric==='hourly-rate') for(const unit of ['credits','usd'])
-          for(const key of ['calendar_rate','workday_rate','robot_day'])
+          for(const key of ['calendar_rate','workday_rate','active_rate'])
             metric.display_units[unit][key]=(unit==='usd'?'$':'')+'123456789012345678.90'+
-              (unit==='credits'?' CCost':'')+(key==='robot_day'?'/8h day':'/h');
+              (unit==='credits'?' CCost':'')+'/h';
         metric.detail=metric.metric==='busiest-day' ? 'September 30, 2026' : '';
         if(metric.session_id) metric.session_title=index%2 ? 'Short gjpqy' : 'LongSessionWithNoBreaks'.repeat(8)+' — gjpqy Åé';
       });

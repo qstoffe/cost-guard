@@ -1,9 +1,9 @@
 'use strict';
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
-  const idleRateHelp = '24h: The same robot tab, spread around the clock; even your beauty sleep gets a budget line.\n\n' +
-    'Workday: No scheduled workdays to carry the tab; even imaginary payroll gets weekends and holidays off.\n\n' +
-    "Robot 8h shift: The imaginary shift hasn't started; HR is still writing the robot's job description.";
+  const idleRateHelp = 'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))\n\n' +
+    "Workday average: The robot's office calendar is taking a nap. (Total CCost ÷ (workdays × 8))\n\n" +
+    "Active AI average: The silicon's hourly snack break hasn't started. (Total CCost ÷ active AI hours)";
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
@@ -17,7 +17,7 @@ const AIStatsView = (() => {
     ['parallel', '🔀', 'Peak Parallel Sessions', 'The biggest robot party running at once.']
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
-  const rateRows = [['calendar_rate', '24h average'], ['workday_rate', 'Workday average'], ['robot_day', 'Robot · 8h shift']];
+  const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-1' &&
@@ -157,11 +157,11 @@ const AIStatsView = (() => {
       const value = index < 2 || index === 3 || index === 4 ? '0 CCost' + suffix :
         [2, 5, 6].includes(index) ? '0s' : index === 7 ? '0%' : index === 8 ? '0 days' : '0';
       const display = {value, trait: traits[index], ...(index === 0 ? {
-        calendar_rate: '0 CCost/h', workday_rate: 'No workdays', robot_day: '0 CCost/8h day',
+        calendar_rate: '0 CCost/h', workday_rate: 'No workdays', active_rate: '0 CCost/h',
         rate_help: idleRateHelp} : {})};
       return {metric, value: 0, display, display_units: {credits: display,
         usd: {...display, value: index < 2 || index === 3 || index === 4 ? '$0.00' + suffix : value,
-          ...(index === 0 ? {calendar_rate: '$0.00/h', robot_day: '$0.00/8h day'} : {})}}};
+          ...(index === 0 ? {calendar_rate: '$0.00/h', active_rate: '$0.00/h'} : {})}}};
     })};
   }
   return {View, valid, remember, observe, prioritize};

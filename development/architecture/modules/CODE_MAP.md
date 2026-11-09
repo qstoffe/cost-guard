@@ -55,11 +55,12 @@ command-first text and no safe-input warning. Coverage: `test_watch_invocation.p
 `test_watch_cards.py`, `test_web_live.py`, `probe_watch_invocation.cjs`; the real Live
 probe compares already-acquired native commands in memory and exports counts only.
 
-FR000644: `analysis/ai_stats_rates.py` owns nominal configured-local date/workday
-normalization and fictional robot shifts over existing period totals/durations.
+FR000644/FR000655: `analysis/ai_stats_rates.py` owns nominal configured-local date/workday
+normalization and raw active-hour intensity over existing period totals/durations.
 `ai_stats.py` retains the original active-hour value; reports thread the configured
-calendar; application allowlists raw rates and prepares both units/help. The retained
-first Web card alone gets three rows. Coverage: `test_ai_stats_rates.py`, existing
+calendar; projection keeps raw compatibility shifts while application prepares three
+per-hour values and compact formula help. The retained first Web card alone gets
+Calendar/Workday/Active AI average rows. Coverage: `test_ai_stats_rates.py`, existing
 Stats/recovery tests, `probe_ai_stats.cjs`, layout/state probes and real read-only
 `probe_ai_stats.py`. No new history acquisition or valuation boundary.
 

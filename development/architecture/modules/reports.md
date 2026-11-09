@@ -188,13 +188,14 @@ explanation and technical-summary DOM. Shared historical summaries skip Stats on
 JS never revalues. Canonical valuation/duration, Watch, Sessions, CLI, Token Mix,
 Comparisons and independent `active_hour.py` contracts remain unchanged.
 
-FR000644 delta (2026-11-09, base `a835c7881f368cb82fd1363e856183b1d45f7d45`):
-`analysis/ai_stats_rates.py` adds nominal configured-local calendar/workday rates and
-an eight-active-hour hypothetical robot shift over each already-calculated period's
-same cost/duration. It reuses `quota_pace.is_workday`, never source/account data or
+FR000644/FR000655 delta (2026-11-09): `analysis/ai_stats_rates.py` owns nominal
+configured-local calendar/workday rates and raw active-hour intensity over each
+already-calculated period's same cost/unioned duration. Raw hypothetical shift fields
+remain for compatibility, not card presentation. It reuses `quota_pace.is_workday`, never source/account data or
 JavaScript holiday logic. `StatsAcquisition` threads `workdayCalendar`; observation
 retains the original active-hour `value` and adds typed `rates`. Projection explicitly
-allowlists those scalars; application prepares three values plus unit-aware math help.
+allowlists those scalars; application prepares Calendar/Workday/Active AI average
+per-hour values plus three short playful paragraphs with trailing plain-text formulas.
 No-workday is a distinct neutral label; zero active duration never erases the other
 rows. Rolling membership, source/cache lifetimes and the other nine metrics stay
 unchanged. Only the first retained Web card gains three accessible label/value rows.

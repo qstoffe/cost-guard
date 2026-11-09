@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.3, 2026-11-09), the supported distribution.
+Use **current `main`** (v81.4, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.3 (2026-11-09):** Shared subscription cards omit unknown capacity rows, mark estimates with `~` and use concise capacity help. Mini separates prompt **CCost** and session **Total** into five real columns without widening its opening fit. Only a genuinely running prompt’s Duration line is yellow in both live-updating cost tooltips. [Mini Watch](docs/web-mini-watch.md).
+**v81.4 (2026-11-09):** AI Hourly Rate compares **Calendar average**, **Workday average** and **Active AI average** with consistent hourly units. The active rate uses existing cost divided by unioned working time, without multiplying by eight. Title help has three playful paragraphs with compact trailing formulas. [AI Stats](docs/web-beta.md#ai-stats).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
