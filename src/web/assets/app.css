@@ -385,17 +385,24 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 [data-section="comparisons"] #notice:empty, [data-section="comparisons"] .report-search { display: none; }
 .comparisons-view > p { min-height: 3.6em; }
 .overview-models { overflow-x: auto; background: var(--panel); scrollbar-color: var(--control-line) var(--surface); }
-.benchmark-section { margin-top: 1.5rem; min-width: 0; }
-.benchmark-provenance { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-bottom: .65rem; color: var(--muted); }
-.benchmark-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: .4rem; background: var(--panel); scrollbar-color: var(--control-line) var(--surface); }
-.benchmark-table { width: 100%; min-width: 52rem; border-collapse: collapse; }
+.benchmark-section { margin-top: 2.5rem; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.benchmark-scroll { overflow-x: auto; max-width: 100%; scrollbar-color: var(--control-line) var(--surface); }
+.benchmark-table { display: grid; grid-template-columns: repeat(4, max-content) minmax(max-content, 1fr); min-width: 100%; width: max-content; border-collapse: collapse; }
+.benchmark-table :is(thead, tbody, tr) { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .benchmark-table :is(th, td) { position: static; padding: .4rem .65rem; vertical-align: top; }
 .benchmark-table :is(th, td):not(:last-child) { border-right: 1px solid var(--line); }
 .benchmark-table th { background: var(--surface); }
 .benchmark-table th button { width: auto; min-height: 0; padding: 0; border: 0; border-radius: 0; font: inherit; color: inherit; text-align: inherit; }
 .benchmark-table th[aria-sort] button::after { content: none; }
 .benchmark-table :is(th, td):nth-child(n+4) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.benchmark-table :is(th, td):nth-child(-n+2) { min-width: 12ch; max-width: 30ch; overflow-wrap: anywhere; white-space: normal; }
+.benchmark-table :is(th, td) { min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal; text-align: left; }
+.benchmark-tools { flex-direction: column; align-items: stretch; }
+.benchmark-tools .model-price-controls { flex: 0 1 auto; }
+.benchmark-filters { margin-left: 0; justify-content: start; }
+.effort-picker { position: relative; font-size: inherit; margin: 0; }
+.effort-picker summary { cursor: pointer; max-width: 100%; overflow-wrap: anywhere; padding: .3rem .5rem; border: 1px solid var(--control-line); border-radius: .3rem; }
+.effort-options { position: absolute; z-index: 3; width: max-content; min-width: 100%; max-width: min(20rem, calc(100vw - 4rem)); max-height: 16rem; overflow-y: auto; padding: .4rem .65rem; background: var(--surface); border: 1px solid var(--control-line); border-radius: .3rem; box-shadow: 0 .3rem .7rem #0003; }
+.effort-options label { display: flex; }
 .overview-model-table { display: grid; grid-template-columns: max-content max-content max-content minmax(max-content, 1fr); min-width: 100%; width: max-content; }
 .overview-model-table thead, .overview-model-table tbody, .overview-model-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .overview-model-table th, .overview-model-table td { position: static; padding: .4rem .65rem; text-align: left; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal; }

@@ -140,6 +140,21 @@ def metric_time_tokens(values, timezone_id, now_ms):
 
 def metric_tokens(values, timezone_id, now_ms=None, *, times=None):
     tokens = {}
+    if 'model_comparison_mix' in values:
+        mix, count = values['model_comparison_mix'], values['model_comparison_sample_size']
+        if not count:
+            tokens['model_comparison_mix_help'] = 'Token Mix unavailable · no completed priceable sample'
+        elif mix is None or not sum(map(decimal, mix)):
+            tokens['model_comparison_mix_help'] = 'Token Mix unavailable · comparison percentages not established'
+        else:
+            # Shares come directly from the comparison sample, not the broader report.
+            # Convert finite Decimals to common-denominator integers for exact balancing.
+            shares = tuple(map(decimal, mix))
+            scale = 10 ** max(0, -min(value.as_tuple().exponent for value in shares))
+            percentages = balanced_share_percents(tuple(int(value * scale) for value in shares))
+            tokens['model_comparison_mix_help'] = (f'Token Mix · {count} completed priced prompts\n'
+                f'Input {percentages[0]} · Cached input {percentages[1]}\n'
+                f'Cache write {percentages[2]} · Output {percentages[3]}')
     if "source_label" in values or "token_mix_percent" in values or ("totals" in values and "shares" in values):
         tokens["token_categories"] = record(**dict(TOKEN_CATEGORIES))
         tokens["token_category_legend"] = TOKEN_CATEGORY_LEGEND

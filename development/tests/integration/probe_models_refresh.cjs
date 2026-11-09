@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const {probeToolbar} = require('./probe_models_toolbar.cjs');
+const {probeModelsValues} = require('./probe_models_values.cjs');
 const [browser, output, baseline] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
@@ -59,7 +60,12 @@ async function main() {
     const read=()=>evaluate(id,`({date:current.result.view.pricing_retrieved_at_ms,revision:current.result.view.model_catalog,
       sample:current.result.view.token_mix,models:current.result.view.model_comparison,choice:current.models})`);
     const initial=await read(); assert.equal((await mode('status')).fetches,1);
-    await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===5`);
+    await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===4`);
+    checks.push(...await probeModelsValues({command,evaluate,until,id,fixture:async command=>{
+      server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);
+    }}));
+    const benchmarkImage=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},id);
+    await fs.writeFile(output.replace(/\.json$/,'')+'-benchmark.png',Buffer.from(benchmarkImage.data,'base64'));
     const referenceChoice = await evaluate(id,`JSON.stringify(current.models)`);
     for (const [key, code, windowsVirtualKeyCode, expected] of [['Enter','Enter',13,'ascending'],[' ','Space',32,'descending']]) {
       await evaluate(id,`document.querySelector('[data-benchmark-control="3"]').focus()`);
@@ -106,6 +112,10 @@ async function main() {
     await until(id,`!current.loading`);
     const changed=await read(); assert.ok(changed.date>unchanged.date);
     assert.notDeepEqual(changed.models,unchanged.models); assert.notDeepEqual(changed.sample.costs,unchanged.sample.costs);
+    assert.ok(changed.models.find(row=>row.model==='GPT-Test').price_help.includes('Input $10'));
+    await evaluate(id,`[...document.querySelectorAll('.overview-model-table tbody tr')].find(row=>row.cells[1].textContent==='GPT-Test').querySelector('.model-relative').focus()`);
+    await until(id,`document.querySelector('#context-help')?.matches(':popover-open') && document.querySelector('#context-help').textContent.includes('Input $10')`);
+    assert.equal(await evaluate(id,`document.querySelector('#context-help').textContent.includes('Output $40\\n\\nToken Mix')`),true);
     assert.equal(await evaluate(id,`JSON.stringify(current.models)`),choice);
     assert.equal(await evaluate(id,`document.querySelector('.overview-model-table th:nth-child(2)').textContent.includes('↑ 2')`),true);
     checks.push('Changed source rebuilds coherent Models rows, relative ratios and sample valuation; filters, multi-sort and USD retained');
@@ -162,9 +172,9 @@ async function main() {
         await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
         const text=await evaluate(id,`document.querySelector('#context-help').textContent`);
         assert.ok(!text.includes('Hold Shift')); assert.ok(text.length>20);
-        if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.');
+        if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.');
       }
-      const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls span').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
+      const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls').children[3].getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
       assert.equal(layout.overflow,false);assert.equal(layout.helpFits,true);assert.equal(layout.buttonFirst,true);
       layouts.push({width,theme,...layout});
       const image=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},id);
@@ -182,7 +192,7 @@ async function main() {
     checks.push('240 toolbar cases: 360/800/1280/1366/1920, Classic/Web light/dark, 100/125/150/200% text scaling, normal/refreshing/long-error/unavailable states; separate coarse-pointer target check; exact computed Watch toggle parity');
     evidence={outcome:'PASS',browser:(await command('Browser.getVersion')).product,checks,layouts,
       limitations:['Canonical Python report pipeline with synthetic upstream/source and controlled in-memory jobs. This does not prove production process startup/lifecycle or concurrency; those have separate backend tests.',
-        'Original combined browser/spawned synthetic fixture stalled before target entry. Decision Delegate authorized split verification; cause remains unknown.',
+        'Production spawn, cancellation and actual source reads require the separate backend/real-installation checks, not this controlled browser fixture.',
         'Headless Chromium, not physical desktop/screen-reader or other-engine acceptance.']};
   } finally {
     clearTimeout(deadline);await fs.writeFile(output,JSON.stringify(evidence,null,2));

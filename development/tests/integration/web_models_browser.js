@@ -11,7 +11,7 @@
       ReportView.render(output, {view, observed_at_ms: 1, source: {status: 'acquired'}}, state);
       const table = output.querySelector('table'), rows = () => [...table.tBodies[0].rows];
       const names = () => rows().map(row => row.cells[1].textContent);
-      const inputs = output.querySelectorAll('input[type="checkbox"]');
+      const inputs = output.querySelectorAll('.model-tools:not(.benchmark-tools) input[type="checkbox"]');
       const toggle = (index, value) => { inputs[index].checked = value; inputs[index].dispatchEvent(new Event('change')); };
       const header = index => table.tHead.rows[0].cells[index].querySelector('button');
       check(inputs.length === 2 && output.querySelector('.model-filters').querySelectorAll('button').length === 0 && !('additive' in state.models), 'two filters without additive-mode control or state');
@@ -24,9 +24,9 @@
       const old = rows().find(row => row.cells[1].textContent === 'GPT-5.1');
       check(!old.classList.contains('superseded') && old.querySelector('.promotion'), 'old stable full contrast with promotion');
        check(old.cells[2].textContent === (view.model_comparison_sample_size ? '8.0x → 16.0x (>200K) → 32.0x (≥1M) *' : ' *'), 'canonical tiers and one postfix star');
-       check(!output.querySelector('details') && !output.textContent.includes('More information'), 'Models explanation cards removed');
+       check(!output.querySelector('details:not(.effort-picker)') && !output.textContent.includes('More information'), 'Models explanation cards removed');
        const refresh = output.querySelector('[data-model-control="refresh"]');
-        check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('GitHub Copilot · Prices last fetched:'), 'button precedes true fetch timestamp');
+         check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('Last fetched:'), 'button precedes true fetch timestamp');
        check(!output.textContent.includes('*1 Fixture promotional terms') && !old.cells[2].querySelector('[title]'), 'no promotion footer or native duplicate tooltip');
       check(table.tBodies[0].scrollHeight <= table.tBodies[0].clientHeight + 1, 'no nested vertical body scrolling');
       check(document.documentElement.scrollWidth <= innerWidth, 'no document horizontal overflow');
@@ -54,15 +54,20 @@
        check(!names().includes('GPT-5.1') && header(1).textContent === 'Model ↑ 1', 'filter preserves custom sort');
        state.benchmark.data = BENCHMARK; state.benchmark.draw();
        const benchmark = output.querySelector('.benchmark-table');
-       check(output.querySelectorAll('h2').length === 2 && benchmark.tHead.rows[0].cells.length === 6, 'two independent titled tables');
-       check(benchmark.tBodies[0].rows.length === 5 && benchmark.tBodies[0].rows[0].cells[3].textContent === '4.0x', 'all benchmark configurations default most expensive first');
+       check(output.querySelectorAll('h2').length === 2 && benchmark.tHead.rows[0].cells.length === 5, 'two independent titled tables');
+       check(benchmark.tBodies[0].rows.length === 4 && benchmark.tBodies[0].rows[0].cells[3].textContent === '4.0x', 'matched configurations default most expensive first');
        const before = names().join('|'), referenceSort = JSON.stringify(state.models);
        benchmark.tHead.querySelector('button').click();
        check(names().join('|') === before && JSON.stringify(state.models) === referenceSort, 'benchmark sorting cannot reorder reference pricing');
        check(!benchmark.querySelector('.promotion'), 'no benchmark price promotion');
        for (const theme of ['classic', 'web']) for (const zoom of [1, 1.25]) {
          document.documentElement.dataset.theme = theme; document.documentElement.style.zoom = zoom;
-         const pan = output.querySelector('.benchmark-scroll');
+          const pan = output.querySelector('.benchmark-scroll');
+          const sectionStyle = getComputedStyle(output.querySelector('.benchmark-section'));
+          check(sectionStyle.borderTopWidth === '0px' && sectionStyle.backgroundColor === 'rgba(0, 0, 0, 0)' && sectionStyle.paddingTop === '0px', 'unboxed benchmark '+theme+' '+zoom);
+          check(getComputedStyle(pan).borderTopWidth === '0px' && getComputedStyle(pan).backgroundColor === 'rgba(0, 0, 0, 0)', 'no redundant table frame '+theme+' '+zoom);
+          const last = benchmark.tHead.rows[0].cells[4].getBoundingClientRect(), first = benchmark.tHead.rows[0].cells[0].getBoundingClientRect();
+          check(benchmark.tHead.rows[0].cells[0].scrollWidth === benchmark.tHead.rows[0].cells[0].clientWidth && last.width > 0 && first.width > 0, 'intrinsic readable tracks '+theme+' '+zoom);
          check(pan.clientHeight >= benchmark.clientHeight && getComputedStyle(pan).overflowY !== 'scroll', 'benchmark document vertical scrolling '+theme+' '+zoom);
          if (innerWidth < 500) {
            pan.scrollLeft = pan.scrollWidth;
@@ -74,7 +79,17 @@
            check(button.getBoundingClientRect().width >= label.getBoundingClientRect().width, 'header label fits action '+theme+' '+zoom);
          }
        }
-       document.documentElement.style.zoom = 1;
+        document.documentElement.style.zoom = 1;
+        const b = state.benchmark, effortInputs = [...b.options.querySelectorAll('input')];
+        effortInputs.forEach(input=>{input.checked=false;input.dispatchEvent(new Event('change'));});
+        check(b.body.rows.length===0 && b.empty.textContent==='No matching benchmark rows','zero effort selection is retained');
+        const high = [...b.options.querySelectorAll('label')].find(label=>label.textContent==='High').querySelector('input');
+        high.checked=true;high.dispatchEvent(new Event('change'));
+        check(b.body.rows.length===1 && b.body.rows[0].cells[2].textContent==='high','source-backed High only');
+        b.picker.open=true; document.body.click(); check(!b.picker.open,'outside-click dismisses effort menu');
+        b.picker.open=true;b.picker.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        check(!b.picker.open && document.activeElement===b.summary,'Escape restores summary focus');
+        check(b.body.rows[0].cells[1].querySelector('[tabindex="0"]') && b.body.rows[0].cells[3].querySelector('[tabindex="0"]'),'intrinsic model and task value keyboard help');
      }
     top.document.getElementById('probe').textContent = JSON.stringify({outcome: 'PASS', checks,
       width: innerWidth, background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()});

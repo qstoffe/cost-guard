@@ -27,6 +27,11 @@ def payload():
     return dict(schema=1, fetched_at_ms=1794182400000, pages=[page(rows)])
 
 
+def references(**changes):
+    return [dict(publisher='Anthropic', model='Claude Opus 5.5', release_date='2026-11-09',
+        selectable=True, superseded=False, superseded_selectable=False) | changes]
+
+
 def finite_benchmark(sender, request):
     import json
     sender.send(('result', json.dumps(dict(error=None, source=dict(status='acquired'), benchmark=payload())).encode()))

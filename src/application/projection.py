@@ -167,7 +167,7 @@ def model_rows(items, selectable=None):
     selected_faded = {(selected[index].publisher, selected[index].model)
                       for index in superseded_rows([(item.publisher, item.model) for item in selected])}
     for index, item in enumerate(items):
-        base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
+        base = fields(item, "publisher model relative_cost price_summary price_help release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
             "model description through resumes") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
@@ -182,6 +182,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
     return with_display(record(
         kind=report.kind, title=report.title, source_label=report.source_label,
         ccost_display_unit=ccost_display_unit,
+        timezone_id=timezone_id,
         # Source messages can contain transport/private details. Preserve status, not raw prose.
         source_warning_count=len(report.source_warnings),
         model_availability_empty="⚠ No available OpenCode models match the pricing catalog." in report.source_warnings,
@@ -193,6 +194,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
          } for warning in report.source_warnings),
          historical_source_gap=any(note.startswith('OpenCode V1 has session(s) relevant to this report') for note in report.notes),
         model_comparison=model_rows(report.model_comparison), model_comparison_sample_size=report.model_comparison_sample_size,
+        model_comparison_mix=report.model_comparison_mix,
         model_catalog=record(rows=model_rows(catalog.rows, set(catalog.selectable)),
             promotion_notes=catalog.promotion_notes,
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,

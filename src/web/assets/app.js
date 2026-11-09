@@ -252,6 +252,7 @@ function show(state) {
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
     state.priceControls?.(!!csrf && hostState.writable);
+    state.benchmark?.controls(!!csrf && hostState.writable, api);
     if (state.section === 'models' && csrf && hostState.writable && !document.hidden) state.benchmark?.load(api);
   }
   else if (state.loading) {

@@ -90,6 +90,7 @@ def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository, pro
             row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
             markers.get(row.model_name), row.relative_levels, row.evidence,
             active_model_promotion(catalog.resolve_reference(row.model_name), now_ms),
+            price_help(catalog, row.model_name),
         ))
         if progress is not None:
             progress(index + 1, len(candidates))
@@ -123,3 +124,23 @@ def price_summary(catalog: PricingCatalog, model_name: str) -> str:
         suffix = f" ({bound[0]}{bound[1]})" if bound else ""
         parts.append("/".join(values) + suffix)
     return "→".join(parts)
+
+
+def price_help(catalog: PricingCatalog, model_name: str) -> str:
+    """Exact native rates from this comparison snapshot, not amount formatting."""
+    model = catalog.resolve_reference(model_name)
+    tiers = ordered_tiers(model) if model is not None and model.currency == 'USD' else ()
+    lines = ['GitHub Copilot · USD / 1M tokens']
+    if not tiers:
+        return lines[0] + '\nPublished rates unavailable'
+    def rate(value):
+        return 'N/A' if value is None else '$' + reference_rate(value)
+    for index, tier in enumerate(tiers):
+        bound = lower_bound(tier, tiers[index - 1] if index else None)
+        if bound:
+            lines.append(f'Input context {bound[0]}{bound[1]} tokens:')
+        elif len(tiers) > 1:
+            lines.append(f'Base context tier (≤{tier.max_input_tokens} tokens):' if tier.max_input_tokens else 'Base context tier:')
+        lines.append(f'Input {rate(tier.per_million_input)} · Cached input {rate(tier.per_million_cache_read)}')
+        lines.append(f'Cache write {rate(tier.per_million_cache_write)} · Output {rate(tier.per_million_output)}')
+    return '\n'.join(lines)

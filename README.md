@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.4, 2026-11-09), the supported distribution.
+Use **current `main`** (v81.5, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.4 (2026-11-09):** AI Hourly Rate compares **Calendar average**, **Workday average** and **Active AI average** with consistent hourly units. The active rate uses existing cost divided by unioned working time, without multiplying by eight. Title help has three playful paragraphs with compact trailing formulas. [AI Stats](docs/web-beta.md#ai-stats).
+**v81.5 (2026-11-09):** Models pairs **GitHub Reference Pricing** with an unboxed five-column **Coding Benchmark – Cost per Task**. Independent source refreshes, Copilot/effort filters and row-value tooltips preserve source prices and full-edition benchmark ratios. Reference-price help shows exact published token rates and the actual shared comparison Token Mix. [Models](docs/web-beta.md#unified-models).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

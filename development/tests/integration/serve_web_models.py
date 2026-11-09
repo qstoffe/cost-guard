@@ -19,7 +19,7 @@ from development.tests.fixtures.model_views import model_report
 from src.application.projection import project
 from src.application.projection import benchmark_view
 from src.benchmarks import parse_pages
-from development.tests.fixtures.benchmark import payload
+from development.tests.fixtures.benchmark import payload, references
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
 
     resources['/case.html'] = resources['/case.html'].replace(b'<script src="/render.js">', b'<script src="/help.js"></script><script src="/render.js">')
     resources['/case.html'] = resources['/case.html'].replace(b'<script src="/data.js">', b'<script src="/benchmark.js"></script><script src="/data.js">')
-    benchmark = benchmark_view(parse_pages(payload()['pages'], payload()['fetched_at_ms']), now_ms=payload()['fetched_at_ms'])
+    benchmark = benchmark_view(parse_pages(payload()['pages'], payload()['fetched_at_ms']), references(), now_ms=payload()['fetched_at_ms'])
     resources['/data.js'] += ('const BENCHMARK = ' + json.dumps(benchmark) + ';').encode()
     resources['/case.html'] = resources['/case.html'].replace(b'if(new URLSearchParams', b'state.benchmark.data=BENCHMARK;state.benchmark.draw();if(new URLSearchParams')
 

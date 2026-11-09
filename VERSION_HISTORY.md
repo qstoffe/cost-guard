@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.5 — 2026-11-09
+
+- Models uses matching source toolbars, official links and configured-local last-successful-fetch dates. The unboxed five-column benchmark has independent forced Harbor refresh, Copilot/latest filters and a source-driven multiselect Effort menu; only exact GitHub-catalog matches appear.
+- Model-value help identifies each configuration's coding client; Relative Task Cost help retains source USD per attempt, including failures. Full-edition normalization, zero/partial semantics, independent sorting and source data remain unchanged.
+- Every GitHub Relative Price List Cost value exposes exact labeled published USD/1M-token tiers, promotion facts and the same actual pooled comparison Token Mix/sample count. Empty history never presents the hidden sorting mix as observed usage. No pricing math, inference, dependency, CLI or billing change.
+
 ## v81.4 — 2026-11-09
 
 - AI Hourly Rate now compares Calendar average, Workday average and Active AI average in consistent per-hour units. The active row uses the existing raw cost divided by unioned AI Working Time, not an eight-hour shift total.

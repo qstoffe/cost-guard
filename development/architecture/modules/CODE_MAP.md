@@ -30,15 +30,22 @@ Next/Δ/guidance paragraphs without changing scope or columns. Source-shaped fix
 `probe_web_live.py --context-deltas --detail` checks real export/formatting, not the
 owner's private incident or an independent reconstruction of every baseline.
 
-FR000652: `src/benchmarks.py` validates fixed public Harbor Terminal-Bench 4.0
+FR000652/FR000656: `src/benchmarks.py` validates fixed public Harbor Terminal-Bench 4.0
 aggregates; `cache/benchmark.py` owns its separate versioned last-good file.
 `web/benchmark.py` reuses an independent `ReportJobs` instance under the existing
 host tick/close owner, without source/price-job dependency. `application/benchmark.py`
-prepares raw Decimal keys, per-attempt values and exact reference-release-only New;
-`web/assets/benchmark.js` owns the independent retained six-column table.
+prepares raw Decimal keys, per-attempt values, exact unique catalog eligibility and
+reference-release-only New. `web/assets/benchmark.js` owns the retained five-column
+table, independent Copilot/effort filters and value help. The existing lane also
+coalesces authenticated forced manual refresh, retaining the 24-hour automatic path.
+`reports/model_comparison.py` freezes exact labeled native USD tier help;
+`service.py` exports the actual comparison shares/count, `application/display.py`
+balances their help percentages without changing ratio math or broader Token Mix.
 Coverage: `test_web_benchmark.py`, existing Models/tiers/price-refresh/overview tests,
 `web_models.cjs`, hidden Chrome/Edge Models and toolbar/help probes, and read-only
-`probe_web_live.py --benchmark --benchmark-cold`. [Evidence](../../journal/web/models-benchmark.md).
+`probe_web_live.py --benchmark --benchmark-cold`, `probe_models_values.cjs` through
+the authenticated refresh probe. [Original](../../journal/web/models-benchmark.md)
+and [FR000656 evidence](../../journal/web/models-controls.md).
 
 FR000650: `cost-guard.py` / `src/product_entry.py` route default desktop intent to
 existing managed Web; `cost-guard-cli.py` preserves independent report/Watch.
