@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.215, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.216, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -363,7 +363,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.215 (2026-11-09):** Web Watch and Accounts show remaining reference CCost per day/workday in the selected USD or Credits unit, without changing native quota bars or CLI pace. Unsupported reference balances omit these pace lines. See [account support](docs/account-support.md) and [Web Watch](docs/web-beta.md).
+**v80.216 (2026-11-09):** Mini Watch's small ↕ action fits the currently visible content by growing or shrinking height only. Opening reserves, disclosure, preferences and passive updates remain unchanged. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

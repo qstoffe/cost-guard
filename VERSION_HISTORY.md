@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.216 — 2026-11-09
+
+- Mini Watch's compact ↕ header action fits the currently visible content vertically, growing or shrinking without deliberately changing width. It shares the bounded native resize owner and includes accessible hover/focus/touch help; passive publications never resize.
+- Default/Fit-on-open measures all four header components and retains its two-row opening reserve. Manual Fit Height excludes that reserve, preserves disclosure/preferences and leaves normal scrolling available under native limits.
+
 ## v80.215 — 2026-11-09
 
 - Web Watch and Accounts remaining per-day/workday lines now use each quota's accepted reference CCost Remaining and the selected USD/Credits display unit. Switching units updates existing nodes without fetching or reanalysis; native quota amounts, bars, reset calendars, Mini and CLI pace remain unchanged.

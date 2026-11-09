@@ -95,7 +95,9 @@ function setup() {
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
    assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
    assert.equal(view.earlierToggle.attributes['aria-pressed'],'false');
-   assert.equal(view.prompts.dataset.expanded,'false');
+    assert.equal(view.prompts.dataset.expanded,'false');
+   assert.equal(view.fitButton.textContent,'↕');assert.equal(view.fitButton.attributes['aria-label'],'Fit Mini Watch height');
+   assert.match(helpText(view.fitButton),/currently visible content\. Width stays unchanged/);
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;

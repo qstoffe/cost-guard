@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 function inspect(view) {
   const w=view.doc.defaultView, header=view.root.firstElementChild, bounds=header.getBoundingClientRect();
-  const parts=[view.summary.querySelector('.mini-brand'),view.earlierToggle,view.dailyText].map(node=>{
+  const parts=[view.summary.querySelector('.mini-brand'),view.earlierToggle,view.fitButton,view.dailyText].map(node=>{
     const range=view.doc.createRange();range.selectNodeContents(node);
     // Split value/help spans can yield duplicate or adjacent rects on one line.
     // Group their actual vertical bands; wrapping must still create another line.
@@ -92,6 +92,9 @@ async function disclosure({evaluate,command,pip,read,layouts,label,required,capt
 async function probe({evaluate,command,sessionId,targetId,open,close,read,capture,layouts,checks}) {
   const widths=[];
   const inspectSource=inspect.toString();
+  // Pin each synthetic layout input across repeated HTTP/SSE snapshots. Otherwise
+  // a baseline replay can replace the long value between opening and inspection.
+  await evaluate(`window.headerUpdate=miniWatch.update.bind(miniWatch);miniWatch.update=value=>headerUpdate(window.headerPublication||value)`);
   for(const theme of ['classic','web'])for(const color of ['light','dark'])for(const font of ['system-ui','serif']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},sessionId);
     await evaluate(`(async()=>applySettings(await api('/api/settings/mini-size',{miniWatchSize:'${theme==='classic'?'default':'fit-on-open'}'})))()`);
@@ -105,7 +108,7 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
         else {p.view.daily_usage.prompt_count=${count};p.view.daily_usage.display_units={${unit}:{daily_ccost:'${cost}'}};
           p.view.daily_usage.total.complete=false;p.view.daily_usage.total.display_units={${unit}:{known_ccost:'?${cost}'}};
           p.view.daily_usage.mix.cost_complete=false;p.view.daily_usage.prompt_count_complete=false;}
-        p.view.daily_state='${state}';miniWatch.observations.view=null;miniWatch.update(p);})()`);
+        p.view.daily_state='${state}';miniWatch.observations.view=null;window.headerPublication=p;miniWatch.update(p);})()`);
       await open();
       const pip=await pipSession({evaluate,command,targetId});
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},pip);
@@ -120,8 +123,10 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
         const result={widths,real,maximum:Math.max(...widths.map(n=>n.width)),horizontal:parseFloat(s.paddingLeft)+parseFloat(s.paddingRight),
           gutter:w.innerWidth-d.documentElement.getBoundingClientRect().width,scale:(outerWidth-16)/innerWidth};h.remove();return result;})()`);
       const m=value.measurement;
-      assert.equal(value.header.parts[2].text,m.real,'synthetic reserve must never replace actual UI data');
-      if(state==='observed')assert.equal(value.header.parts[2].text,`CCost Today ${cost} · ${count} prompts`);
+      assert.equal(value.header.parts[2].text,'↕');
+      assert.equal(await evaluate(`miniWatch.view.root.querySelectorAll('.mini-fit-height').length`),1);
+      assert.equal(value.header.parts[3].text,m.real,'synthetic reserve must never replace actual UI data');
+      if(state==='observed')assert.equal(value.header.parts[3].text,`CCost Today ${cost} · ${count} prompts`);
       assert.equal(await evaluate('miniWatch.view.dailyNote.textContent'),'');
       assert.equal(await evaluate('miniWatch.measure.view.earlier.hidden'),true);
       const slack=value.request.width/m.scale-m.horizontal-m.gutter-m.maximum;
@@ -154,7 +159,7 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
       assert.equal(narrower.fits,false,JSON.stringify({value,narrower}));
       assert.equal(narrower.documentOverflow,false);
       assert.ok(Math.abs(narrower.parts[0].lines[0].top-narrower.parts[1].lines[0].top)<=1.5,'actions stay grouped');
-      assert.ok(narrower.parts[2].lines[0].top>=narrower.parts[1].lines[0].bottom,'whole readout uses the secondary row');
+      assert.ok(narrower.parts[3].lines[0].top>=narrower.parts[2].lines[0].bottom,'whole readout uses the secondary row');
       layouts.push({case:'intrinsic-width',theme,color,font,unit,state,...value,narrower});
       if(cost==='90 000')await disclosure({evaluate,command,pip,read,layouts,label:{theme,color,font},required:m.maximum,capture});
       widths.push(value.request.width);
@@ -162,7 +167,8 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
     }
   }
   assert.ok(Math.max(...widths)-Math.min(...widths)>30,'snapshot/fonts must change the measured width');
-  await evaluate(`window.probeFont='';miniWatch.measure.body.style.fontFamily='';ReportView.setUnit('credits');miniWatch.update(liveValue)`);
+  await evaluate(`miniWatch.update=window.headerUpdate;delete window.headerPublication;delete window.headerUpdate;
+    window.probeFont='';miniWatch.measure.body.style.fontFamily='';ReportView.setUnit('credits');miniWatch.update(liveValue)`);
   await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'default'})))()`);
   await evaluate(`(async()=>applySettings(await api('/api/settings/mini-size',{miniWatchSize:'default'})))()`);
   checks.push('56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded');
