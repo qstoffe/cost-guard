@@ -43,13 +43,39 @@ async function main() {
     while (Date.now()<end) { if (await check()) return; await new Promise(resolve=>setTimeout(resolve,50)); }
     throw new Error('Condition timeout: '+label);
   };
+  const point = () => evaluate('(() => {const r=current.detail.exporter.button.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');
+  const hover = async () => command('Input.dispatchMouseEvent', {type:'mouseMoved',...await point()});
+  const leave = () => command('Input.dispatchMouseEvent', {type:'mouseMoved',x:1,y:1});
   const click = async () => {
-    const point = await evaluate('(() => {const r=current.detail.exporter.button.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');
-    await command('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...point});
-    await command('Input.dispatchMouseEvent', {type:'mouseReleased',button:'left',clickCount:1,...point});
+    const position = await point();
+    await command('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...position});
+    await command('Input.dispatchMouseEvent', {type:'mouseReleased',button:'left',clickCount:1,...position});
   };
+  const key = async (key, code, windowsVirtualKeyCode) => {
+    await command('Input.dispatchKeyEvent', {type:'keyDown',key,code,windowsVirtualKeyCode,
+      ...(key==='Enter'?{text:'\r'}:key===' '?{text:' '}:{})});
+    await command('Input.dispatchKeyEvent', {type:'keyUp',key,code,windowsVirtualKeyCode});
+  };
+  const helpVisible = '!!document.querySelector("#context-help:not([hidden])")';
+  const quiet = async () => {
+    assert.equal(await evaluate(helpVisible), false, 'help closes synchronously');
+    assert.equal(await evaluate(`new Promise(resolve => setTimeout(() => resolve(${helpVisible}), ContextHelp.HOVER_DELAY + 100))`), false,
+      'stationary pointer and picker focus restoration cannot reopen help');
+  };
+  const configure = async (theme, width, zoom, coarse) => {
+    await command('Emulation.setDeviceMetricsOverride', {width,height:900,deviceScaleFactor:1,mobile:false});
+    await command('Emulation.setTouchEmulationEnabled', {enabled:coarse});
+    await command('Emulation.setEmulatedMedia', {features:[{name:'prefers-color-scheme',value:theme==='web-light'?'light':'dark'}]});
+    await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.documentElement.style.zoom=${zoom}`);
+  };
+  const measure = selector => evaluate(`(() => {
+    const button=document.querySelector(${JSON.stringify(selector)}), s=getComputedStyle(button), r=button.getBoundingClientRect();
+    return {fontFamily:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,
+      padding:s.padding,minHeight:s.minHeight,height:r.height,width:r.width,
+      coarse:matchMedia('(pointer:coarse)').matches,noPageOverflow:document.documentElement.scrollWidth<=innerWidth};
+  })()`);
   let evidence = {outcome:'FAIL'};
-  const deadline = setTimeout(() => {child.kill();server.kill();}, 90000);
+  const deadline = setTimeout(() => {child.kill();server.kill();}, 120000);
   try {
     const ready = await lines.next();
     if (ready.done) throw new Error('Fixture failed: '+serverError);
@@ -60,14 +86,33 @@ async function main() {
     await command('Page.enable');
     await command('Page.navigate', {url:launch.url});
     await until(()=>evaluate('typeof csrf !== "undefined" && !!csrf && hostState.kind === "connected"'), 'authorization');
+    await evaluate('location.hash="#/models"');
+    await until(()=>evaluate('!!document.querySelector("[data-model-control=refresh]")'), 'Models toolbar');
+    const layouts = [];
+    for (const theme of ['classic','web-light','web-dark']) for (const width of [1280,360])
+      for (const zoom of [1,1.5]) for (const coarse of [false,true]) {
+        await configure(theme,width,zoom,coarse);
+        layouts.push({theme,width,zoom,coarse,models:await measure('[data-model-control=refresh]')});
+      }
     await evaluate(`location.hash='#/sessions/${launch.session}'`);
     await until(()=>evaluate('!!current?.detail?.data && !current.detail.exporter.button.disabled'), 'observed selection');
-    const layouts = [];
-    for (const width of [1280,360]) {
-      await command('Emulation.setDeviceMetricsOverride', {width,height:900,deviceScaleFactor:1,mobile:false});
-      layouts.push(await evaluate('({width:innerWidth,noPageOverflow:document.documentElement.scrollWidth<=innerWidth,buttonHeight:current.detail.exporter.button.getBoundingClientRect().height,rows:current.detail.body.children.length})'));
+    for (const value of layouts) {
+      await configure(value.theme,value.width,value.zoom,value.coarse);
+      value.export=await measure('.session-export > button');
+      for (const property of ['fontFamily','fontSize','fontWeight','lineHeight','padding','minHeight','height'])
+        assert.equal(value.export[property],value.models[property],property+' parity: '+JSON.stringify(value));
+      assert.equal(value.export.coarse,value.coarse);
+      assert.equal(value.export.noPageOverflow,true);
+      assert.ok(value.export.width<=value.width);
     }
-    assert.ok(layouts.every(value=>value.noPageOverflow && value.rows===3));
+    await configure('classic',1280,1,false);
+    assert.equal(await evaluate(`(() => {const a=current.detail.exporter;
+      return a.button.textContent==='Export Sanitized JSON' && !a.button.hasAttribute('title') &&
+        a.root.querySelectorAll('button').length===1 && a.notice.textContent==='' &&
+        getComputedStyle(a.notice).display==='none' && current.detail.body.children.length===3;})()`),true);
+    await hover(); await until(()=>evaluate(helpVisible),'delayed action help');
+    assert.equal(await evaluate('current.detail.exporter.button.getAttribute("aria-describedby")'),'context-help');
+    assert.match(await evaluate('document.querySelector("#context-help").textContent'),/Review the file before sharing/);
     const before = (await fixture('count')).requests;
     // Real API invoked from trusted user activation. Headless Chromium aborts its
     // unsupported native dialog; record this separately from mocked save proof.
@@ -76,8 +121,52 @@ async function main() {
         pickerProbe.activation=navigator.userActivation.isActive;try{return await original(options);}catch(error){pickerProbe.error=error.name;throw error;}};}`);
     await click();
     await until(()=>evaluate('!current.detail.exporter.operation'), 'native picker cancellation');
+    await quiet();
     const picker = await evaluate('pickerProbe');
     assert.equal((await fixture('count')).requests, before, 'cancelled picker performs no native export');
+    const activations = [];
+    // Deferred picker doubles preserve the real trusted input/event ordering, but
+    // are explicitly not OS dialog success/cancellation evidence.
+    for (const activation of ['pointer','Enter','Space','touch','pending-hover']) {
+      evidence.stage=activation;
+      await leave();
+      await evaluate(`window.showSaveFilePicker=() => {window.pickerState={hidden:!(${helpVisible}),active:navigator.userActivation.isActive};
+        return new Promise((resolve,reject)=>{window.cancelPicker=()=>reject(new DOMException('Cancelled','AbortError'));});};
+        current.detail.exporter.button.blur();`);
+      if (activation==='Enter' || activation==='Space' || activation==='touch') {
+        await evaluate(`window.tabStart=document.createElement('button');current.detail.exporter.root.before(tabStart);tabStart.focus()`);
+        await key('Tab','Tab',9);
+        await until(()=>evaluate(helpVisible),'keyboard focus help');
+        assert.equal(await evaluate('document.activeElement===current.detail.exporter.button'),true,'Tab reaches the export action');
+        if (activation==='touch') {
+          await command('Emulation.setTouchEmulationEnabled',{enabled:true});
+          await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...await point(),radiusX:1,radiusY:1}]});
+          await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+        } else await key(activation==='Space'?' ':activation,activation,activation==='Space'?32:13);
+      } else {
+        await hover();
+        if (activation!=='pending-hover') await until(()=>evaluate(helpVisible),'new intentional hover');
+        await click();
+      }
+      await until(()=>evaluate('!!current.detail.exporter.operation'),'picker pending: '+activation);
+      assert.deepEqual(await evaluate('pickerState'),{hidden:true,active:true});
+      await quiet(); await evaluate('cancelPicker()');
+      await until(()=>evaluate('!current.detail.exporter.operation'),'picker double cancelled');
+      await quiet();
+      assert.match(await evaluate('current.detail.exporter.notice.textContent'),/cancelled/);
+      if (activation==='touch') await command('Emulation.setTouchEmulationEnabled',{enabled:false});
+      await evaluate('window.tabStart?.remove()');
+      activations.push(activation);
+    }
+    assert.equal((await fixture('count')).requests,before,'all cancelled activations perform no native export');
+    await leave(); await hover(); await until(()=>evaluate(helpVisible),'hover rearms');
+    await key('Escape','Escape',27); await quiet();
+    // Native-handle double verifies successful commit and synchronous focus help
+    // dismissal; actual destination selection is not simulated as an OS PASS.
+    await evaluate(`window.saved=[];window.showSaveFilePicker=async()=>({createWritable:async()=>({
+      write:async blob=>saved.push(JSON.parse(await blob.text()).info.id),close:async()=>saved.push('closed')})});`);
+    await click(); await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("JSON saved")'),'handle double committed');
+    await quiet(); assert.deepEqual(await evaluate('saved'),[launch.session,'closed']);
     // Actual authenticated standard browser download, no picker support.
     await evaluate('window.showSaveFilePicker=undefined');
     await command('Browser.setDownloadBehavior', {behavior:'allow',downloadPath:downloads}, null);
@@ -96,8 +185,11 @@ async function main() {
     assert.deepEqual(await fs.readdir(downloads),[filename], 'no corrupt second download');
     await evaluate('location.hash="#/settings"');
     await until(()=>evaluate('current.section === "settings"'), 'navigation');
-    evidence = {outcome:'PASS',browser:version.product,layouts,native_picker:picker,
+    evidence = {outcome:'PASS',browser:version.product,layouts,activations,native_picker:picker,
       checks:['canonical selected detail','trusted-click picker activation/cancel without source work',
+        'quiet one-action idle layout','computed Models parity across themes/width/zoom/coarse pointer',
+        'pointer/Tab/Enter/Space/touch/pending-hover dismissal and stationary suppression','Escape and intentional re-entry',
+        'handle-double commit and picker-focus suppression',
         'authenticated fallback file has native lifecycle/types/unicode','focus retained','object URL released',
         'malformed export saves no partial file','navigation preserved'],
       limitations:['Hidden native picker abort only; actual visible destination selection/write/cancel remains unverified.',

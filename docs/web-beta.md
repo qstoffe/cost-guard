@@ -102,11 +102,15 @@ errors unless the source supports a specific abort/quota cause.
 
 ## Export a session as JSON
 
-Open **Sessions → a session → Export JSON** to save that selected session's full
+Open **Sessions → a session → Export Sanitized JSON** to save that selected session's full
 native OpenCode export, not just the displayed prompt rows. Exports use OpenCode's
 native **sanitized** mode; review the file before sharing because sanitization is
 not a guarantee that all private information is removed. A running session exports
 its current point-in-time state and can change afterwards.
+
+The compact action itself owns contextual help (hover or keyboard focus), rather
+than a separate help button or idle caption. Activation dismisses help before
+Save As; cancellation, progress, success and genuine failures remain announced.
 
 Supported Edge/Chrome browsers request **Save As** immediately from your click.
 Choose a destination and `.json` filename, or Cancel without starting an export.

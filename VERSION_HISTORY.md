@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.226 — 2026-11-09
+
+- Session detail: compact **Export Sanitized JSON** matches the Models refresh control. Contextual help belongs to the action and dismisses on activation/picker focus return; no separate helper or idle caption. Operational feedback and native sanitized export/save semantics are preserved.
+
 ## v80.225 — 2026-11-09
 
 - Mini Watch's Ctx value help pairs the exact displayed Next Ctx with the selected representative prompt's signed Δ Ctx, preserving canonical approaching/exceeded price guidance. Historical prompt deltas stay distinct from potentially later session estimates; unknown and zero remain source-formatted.

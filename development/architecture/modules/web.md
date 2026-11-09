@@ -125,6 +125,11 @@ the scoped lifecycle matrix and its synthetic/real-source limits.
 
 `assets/session-export.js` owns the selected-detail action, synchronous click-time
 Save As activation, optional normal download and abort/object-URL cleanup.
+FR000646 labels this compact neutral action **Export Sanitized JSON**, with shared
+action help instead of a separate trigger/passive caption. The empty status region
+occupies no space; real operation/error feedback remains. Shared help attaches
+before the save listener, dismissing synchronously without delaying the picker;
+restored picker focus is dismissed in the same synchronous turn.
 `app.js` keeps attachment bytes separate from analytics DTOs and validates host
 identity, MIME, disposition and complete length before exposing a Blob.
 `session_detail.py` binds an unexpired detail lease to its canonical source,
