@@ -4,8 +4,10 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const [browser, output] = process.argv.slice(2);
 const quotaOnly = process.argv[4] === '--quota-only';
+const browserZoom = Number(process.argv.find(value=>value.startsWith('--browser-zoom='))?.split('=')[1] || '1');
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
+  assert.ok([1,1.25].includes(browserZoom));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'accounts-live-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'accounts-live-config-'));
@@ -17,7 +19,7 @@ async function main() {
   const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
     '--user-data-dir='+profile, 'about:blank'], {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending = new Map(), errors = []; let sequence = 0, buffer = '';
+  const pending = new Map(), errors = [], openEvents = []; let sequence = 0, buffer = '';
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
     while ((index = buffer.indexOf('\0')) >= 0) {
@@ -26,6 +28,7 @@ async function main() {
         const entry = pending.get(value.id); pending.delete(value.id);
         if (entry) { clearTimeout(entry.timer); value.error ? entry.reject(new Error(JSON.stringify(value.error))) : entry.resolve(value.result); }
       } else if (value.method === 'Runtime.exceptionThrown') errors.push(value.params.exceptionDetails.text);
+      else if (value.method === 'Page.windowOpen') openEvents.push(value.params);
     }
   });
   const command = (method, params = {}, sessionId) => new Promise((resolve,reject) => {
@@ -55,9 +58,17 @@ async function main() {
       await evaluate(`location.hash='#/${section}'`);
       await until(`document.body.dataset.section === '${section}'`);
     };
-    await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;window.probeFetches=0;
+    if(browserZoom!==1) {
+      // This is the disposable hidden profile, never the person's browser settings.
+      await command('Page.navigate',{url:'chrome://settings/appearance'},sessionId);
+      await until(`typeof chrome.settingsPrivate?.getDefaultZoom==='function'`);
+      await evaluate(`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(${browserZoom},resolve))`);
+      assert.equal(await evaluate('new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))'),browserZoom);
+    }
+    await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;window.probeFetches=0;window.probeURLs=[];
       const Stream=EventSource;window.EventSource=class extends Stream {constructor(...args){super(...args);window.probeStreams++;}};
-      const request=fetch;window.fetch=(url,options)=>{window.probeFetches++;if(url==='/api/reports')window.probeReports++;return request(url,options);};`}, sessionId);
+      const request=fetch;window.fetch=(url,options)=>{window.probeFetches++;window.probeURLs.push(new URL(url,location.href).pathname);
+        if(url==='/api/reports')window.probeReports++;return request(url,options);};`}, sessionId);
     await command('Page.navigate', {url:launch.url}, sessionId);
     await until(`typeof current !== 'undefined' && csrf && liveConnection`);
     let reportCount = await evaluate('probeReports');
@@ -83,6 +94,7 @@ async function main() {
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    await require('./probe_account_links.cjs')({command,evaluate,sessionId,navigate,checks,layouts,openEvents,browserZoom});
     await require('./probe_quota_pace.cjs')({evaluate,navigate,checks});
     await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'})))()`);
     await command('Page.reload',{},sessionId);
@@ -92,7 +104,7 @@ async function main() {
     checks.push('Explicit Credits reference pace survives a real Settings save and page reload');
     await evaluate(`window.savedCard=document.querySelector('.watch-subscription');window.savedBar=savedCard.querySelector('progress');
       window.savedHelp=savedCard.querySelector('.watch-quota-capacity span');savedHelp.focus();
-      window.savedText=savedCard.querySelector('h4').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
+      window.savedText=savedCard.querySelector('h4 a').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
       window.mutations=0;window.observer=new MutationObserver(events=>mutations+=events.filter(e=>e.type==='childList').length);
       observer.observe(document.querySelector('.watch-account-grid'),{subtree:true,childList:true});`);
     for (let n=0;n<5;n++) await fixture('running');
@@ -178,7 +190,7 @@ async function main() {
     assert.equal(await evaluate(`document.querySelectorAll('.watch-subscription').length`),6);
     assert.deepEqual(errors,[]);
     checks.push('Settings default applies to retained route; actual host-stop SSE keeps cards and visible failure feedback');
-    evidence={outcome:'PASS',browser:version.product,checks,layouts,streams:1,route_report_jobs:0,
+    evidence={outcome:'PASS',browser:version.product,browserZoom,checks,layouts,streams:1,route_report_jobs:0,
       limitations:['Synthetic acquisition; real-installation account-owner proof is separate.',
         'Headless DOM/layout/input, not physical desktop, assistive technology or macOS proof.']};
   } catch(error) { evidence={outcome:'FAIL',checks,layouts,reason:error.message,errors};process.exitCode=1; }

@@ -100,6 +100,46 @@ const ReportView = (() => {
     if (className) node.className = className;
     return node;
   }
+  // Reviewed official destinations; never derive a host/path from account text.
+  const accountDestinations = new Map(Object.entries({
+    'github-copilot': 'https://github.com/settings/copilot/features',
+    'github-copilot-enterprise': 'https://github.com/settings/copilot/features',
+    'claude-code': 'https://claude.ai/settings/usage',
+    openai: 'https://chatgpt.com/settings/usage',
+    anthropic: 'https://console.anthropic.com/',
+    openrouter: 'https://openrouter.ai/activity',
+    deepseek: 'https://platform.deepseek.com/',
+    minimax: 'https://platform.minimax.io/user-center/payment/balance',
+    'minimax-cn': 'https://platform.minimax.cn/user-center/payment/balance',
+    'minimax-coding-plan': 'https://platform.minimax.io/user-center/payment/token-plan',
+    'minimax-cn-coding-plan': 'https://platform.minimax.cn/user-center/payment/token-plan',
+  }));
+  function accountDestination(obs) {
+    const plan = typeof obs.plan === 'string' ? obs.plan.toLowerCase() : '';
+    const api = ['api pay as you go', 'pay as you go'].includes(plan);
+    if (obs.provider_id === 'openai' && api) return 'https://platform.openai.com/usage';
+    if (obs.provider_id === 'claude-code' && api) return accountDestinations.get('anthropic');
+    if (obs.provider_id === 'anthropic' && obs.capacity_kind !== 'credit' && ['pro', 'max', 'team', 'enterprise'].includes(plan))
+      return accountDestinations.get('claude-code');
+    return accountDestinations.get(obs.provider_id);
+  }
+  function accountHeading(observation) {
+    const heading = element('h4'); let label, linked;
+    bind(heading, () => {
+      const obs = observation(), href = accountDestination(obs);
+      if (!label || linked !== Boolean(href)) {
+        linked = Boolean(href); label = element(linked ? 'a' : 'span', undefined, linked ? 'account-provider-link' : undefined);
+        if (linked) { label.target = '_blank'; label.rel = 'noopener noreferrer'; }
+        heading.replaceChildren(label);
+      }
+      text(label, obs.label);
+      if (linked) {
+        label.href = href;
+        label.setAttribute('aria-label', `${obs.label} — provider usage or settings (opens in a new tab)`);
+      }
+    });
+    return heading;
+  }
   function link(id) {
     const node = element('a', id);
     // Match the API locator allowlist; never turn arbitrary source text into a URL.
@@ -453,7 +493,7 @@ const ReportView = (() => {
       if (detailed) card.setAttribute('data-availability', obs.availability);
       const details = element('details');
       details.append(element('summary', compact ? 'Details' : 'Observation details'));
-      card.append(element('h4', obs.label));
+      card.append(accountHeading(() => obs));
       (compact ? details : card).append(element('p', [obs.provider_label, obs.plan].filter(Boolean).join(' · '), 'detail'));
       if (detailed && (!compact || obs.has_error || obs.has_warning || obs.status === 'blocked' || obs.availability !== 'available')) card.append(element('p', accountStatus(obs, compact),
         obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
@@ -595,5 +635,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus, costHelp, costValue};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus, costHelp, costValue, accountHeading};
 })();

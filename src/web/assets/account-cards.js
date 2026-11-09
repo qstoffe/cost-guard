@@ -105,7 +105,7 @@ const AccountCards = (() => {
       });
       if (item().secondary.length) this.lower.append(secondary);
       const track = quotaTrack(() => item().primary); this.primaryTrack = track.at(-1);
-      this.root.replaceChildren(el('h4', () => item().observation.label), cost, ...track, primary);
+      this.root.replaceChildren(ReportView.accountHeading(() => item().observation), cost, ...track, primary);
       this.warningSignature = null;
     }
     update(value, stale) {

@@ -20,6 +20,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000636: `render.js::accountHeading` owns the reviewed static provider destinations
+and bound text-only external heading links for shared `account-cards.js` and legacy
+cards. `fixtures/account_links.cjs` (via `web_watch_summary.cjs`) covers every supported
+ID, API/subscription distinctions, hostile labels/IDs and stable refresh/redraws;
+`probe_account_links.cjs` runs through the shipped Accounts/Watch browser probe.
+No projection, acquisition, authentication or accounting boundary changes.
+
 FR000637: Mini's ↕ manual actual-content fit stays in `mini.js` / `mini.css` and
 the existing `DisclosureSize` owner. `fixtures/mini_opening.cjs` pins reserve-free
 measurement/frame/zoom; `mini_disclosure.cjs` pins bounded explicit-fit races/guards.

@@ -523,4 +523,5 @@ vm.runInContext('accountsPage.update(shared)', context);
 assert.equal(page.root.textContent, 'No configured accounts detected.', 'observed empty actually removes cards');
 assert.equal(page.cards.size, 0);
 require('../fixtures/live_status.cjs')(vm, context, value => value == null ? now : (now = value));
+require('../fixtures/account_links.cjs')(vm, context, monthly);
 console.log('watch summary passed');

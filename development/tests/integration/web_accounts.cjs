@@ -20,6 +20,12 @@ const cards = all(output, 'section');
 assert.equal(cards.length, 7);
 assert.equal(all(output, 'table').length, 0, 'no quota filter/pager wall');
 assert.deepEqual(cards.map(n => all(n, 'h4')[0].textContent), view.accounts_quotas.accounts.map(a => a.observation.label));
+cards.forEach((card, index) => {
+  const heading = all(card, 'h4')[0], link = all(heading, 'a')[0];
+  assert.equal(link.href, index ? 'https://chatgpt.com/settings/usage' : 'https://github.com/settings/copilot/features');
+  assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
+  assert.match(link.attrs['aria-label'], /provider usage or settings/);
+});
 for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
   'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
   'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2', 'Rate limited',
