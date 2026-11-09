@@ -90,7 +90,7 @@ const MiniWatch = (() => {
       return keys.some(key => now - (this.clocks.get(key)?.at ?? this.started) >= 600000);
     }
   }
-  // Natural visible layout; opening/disclosure alone reserve two running rows.
+  // Natural visible layout; only opening reserves two running rows.
   // Clones are invisible, inert measurement artifacts, never published prompt data.
   function contentHeight(view, width, reserve = true) {
     const {doc, root} = view, win = doc.defaultView;
@@ -113,6 +113,23 @@ const MiniWatch = (() => {
   }
   function heightCap(win) {
     return Math.min(1000, win.screen?.availHeight > 0 ? win.screen.availHeight : 1000);
+  }
+  function disclosureLayout(view) {
+    const {root} = view, width = root.getBoundingClientRect().width;
+    const copy = root.cloneNode(true); copy.classList.add('mini-measuring');
+    copy.inert = true; copy.setAttribute('aria-hidden', 'true');
+    copy.style.width = width / (root.currentCSSZoom || 1) + 'px';
+    root.parentNode.append(copy);
+    try {
+      const earlier = copy.querySelector('#mini-earlier-sessions'), prompts = copy.querySelector('.mini-prompts');
+      const toggle = copy.querySelector('.mini-earlier-toggle'), heights = [];
+      for (const expanded of [false, true]) {
+        earlier.hidden = !expanded; prompts.dataset.expanded = String(expanded);
+        toggle.setAttribute('aria-pressed', String(expanded)); toggle.setAttribute('aria-expanded', String(expanded));
+        heights.push(copy.getBoundingClientRect().height);
+      }
+      return {width, collapsed: heights[0], expanded: heights[1], scale: geometry(view.doc.defaultView, 16).scale};
+    } finally { copy.remove(); }
   }
   function headerWidth(view, reserve = false) {
     // Only inert header clones: never change real totals/disclosure or size to tables.
@@ -158,57 +175,58 @@ const MiniWatch = (() => {
   }
   // One bounded native adjustment per user disclosure/fit, never per publication.
   class DisclosureSize {
-    constructor(view, mode) {
-      this.view = view; this.win = view.doc.defaultView; this.mode = mode;
-      this.restore = null; this.pending = null; this.widthCorrection = 0;
+    constructor(view) {
+      this.view = view; this.win = view.doc.defaultView;
+      this.restore = null; this.pending = null;
       this.win.addEventListener('resize', () => {
         if (this.pending) this.confirm(this.pending);
         else if (this.restore && !this.same(this.bounds(), this.restore.after)) {
-          this.restore = null; this.widthCorrection = 0;
+          this.restore = null;
         }
       });
     }
     bounds() { return {width: this.win.outerWidth, height: this.win.outerHeight}; }
-    same(a, b) { return Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1; }
-    resize(width, height, heightOnly) {
-      // Start vertical-only. Some real page-zoom/native-DPI combinations still
-      // round width upward; compensate that observed single DIP on the NEXT
-      // eligible click, never by a second call, loop or passive correction.
-      const correction = heightOnly ? 0 : this.widthCorrection;
-      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(correction, height - this.win.outerHeight);
-      else this.win.resizeTo(width + correction, height);
+    same(a, b) { return a.width === b.width && a.height === b.height; }
+    resize(width, height) {
+      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(0, height - this.win.outerHeight);
+      else this.win.resizeTo(width, height);
     }
     confirm(request) {
       const after = this.bounds();
-      if (request.after && !this.same(after, request.after)) { this.restore = null; this.widthCorrection = 0; return; }
-      if (!request.after) {
-        if (Math.abs(after.width - request.before.width) <= 1)
-          this.widthCorrection = Math.max(-1, Math.min(1, this.widthCorrection + request.before.width - after.width));
-        else this.widthCorrection = 0; // Native clamp, not rounding; no width repair.
-        request.after = after;
-      }
-      if (request.expanded && Math.abs(after.width - request.before.width) <= 1 && after.height > request.before.height) {
-        this.restore = {before: request.before, after};
-      }
+      if (request.after && !this.same(after, request.after)) { this.restore = null; return; }
+      // Native height-only requests can also change width. Qualify restoration
+      // against that achieved layout, not an obsolete pre-clamp width. A source
+      // publication during the request must not silently become the old baseline.
+      if (!request.after && request.layout && after.width !== request.before.width &&
+          this.view.root.textContent === request.content) request.layout = this.view.disclosureLayout();
+      request.after = after;
+      if (request.layout) this.restore = {before: request.before, after, layout: request.layout};
     }
     toggle(earlier) {
-      const {win, view} = this;
-      const before = this.bounds();
+      const {view} = this;
+      if (this.pending) this.confirm(this.pending);
+      this.pending = null;
+      const before = this.bounds(), restore = this.restore;
+      const layout = this.available() ? view.disclosureLayout() : null;
+      this.restore = null;
       earlier.hidden = !earlier.hidden;
       view.prompts.dataset.expanded = String(!earlier.hidden);
       view.earlierToggle.setAttribute('aria-expanded', String(!earlier.hidden));
       view.earlierToggle.setAttribute('aria-pressed', String(!earlier.hidden));
-      if (this.pending) this.confirm(this.pending);
-      this.pending = null;
-      const restore = this.restore; this.restore = null;
-      // Remembered mode must not restore stale bounds after an intervening resize.
-      if (earlier.hidden && this.mode === 'remember-last' &&
-          (!restore || !this.same(before, restore.after))) return;
-      if (!this.available()) return;
-      const compact = view.fitHeight();
-      const height = earlier.hidden ? this.mode === 'remember-last' ?
-        Math.min(heightCap(win), restore.before.height) : compact : Math.max(before.height, compact);
-      this.adjust(before, height, !earlier.hidden);
+      if (!layout) {
+        if (!earlier.hidden) this.restore = {before, after: before, layout: null};
+        return;
+      }
+      const delta = Math.max(0, (layout.expanded - layout.collapsed) * layout.scale);
+      // Stable layout restores the ACHIEVED contribution, including zero/refused
+      // or clamped growth. Changed content/width/manual bounds use today's delta.
+      const stable = restore && this.same(before, restore.after) &&
+        (!restore.layout || Object.keys(layout).every(key => layout[key] === restore.layout[key]));
+      const height = earlier.hidden ? stable ? restore.before.height : before.height - delta : before.height + delta;
+      if (!earlier.hidden) this.restore = {before, after: before, layout};
+      const target = earlier.hidden ? Math.max(1, Math.round(height)) :
+        Math.max(before.height, Math.min(heightCap(this.win), Math.round(height)));
+      this.adjust(before, target, earlier.hidden ? null : layout);
     }
     available() {
       const win = this.win;
@@ -227,14 +245,14 @@ const MiniWatch = (() => {
       // within the small rounding margin must not oscillate on identical clicks.
       if (scroll && scroll.scrollHeight <= scroll.clientHeight + 1 &&
           Math.abs(height - before.height) <= 4 * geometry(this.win, 16).scale) return;
-      this.adjust(before, height, false, true);
+      this.adjust(before, height);
     }
-    adjust(before, height, expanded, heightOnly = false) {
+    adjust(before, height, layout = null) {
       const win = this.win;
-      if (Math.abs(height - before.height) <= 1) return;
-      const request = {before, expanded}; this.pending = request;
-      try { this.resize(before.width, height, heightOnly); }
-      catch (_) { this.pending = null; return; }
+      if (height === before.height) return;
+      const request = {before, layout, content: this.view.root.textContent}; this.pending = request;
+      try { this.resize(before.width, height); }
+      catch (_) { this.confirm(request); this.pending = null; return; }
       // Observe achieved bounds, not API return success. No later resize/retry.
       win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
         if (this.pending !== request) return;
@@ -244,7 +262,7 @@ const MiniWatch = (() => {
     }
   }
   class View {
-    constructor(doc, returnToWatch, mount = doc.body, mode = 'fit-on-open') {
+    constructor(doc, returnToWatch, mount = doc.body) {
       this.doc = doc;
       const el = (tag, text, name) => {
         const node = doc.createElement(tag);
@@ -275,7 +293,7 @@ const MiniWatch = (() => {
       });
       this.fitButton = el('button', '↕', 'mini-fit-height'); this.fitButton.type = 'button';
       this.fitButton.setAttribute('aria-label', 'Fit Mini Watch height');
-      ContextHelp.attach(this.fitButton, 'Fit Mini Watch height — shrink or grow the window to show all currently visible content. Width stays unchanged.', true);
+      ContextHelp.attach(this.fitButton, 'Fit Mini Watch height — shrink or grow the window to show all currently visible content. Width stays unchanged.');
       this.fitButton.addEventListener('click', () => this.disclosureSize?.fit());
       const actions = el('div', undefined, 'mini-actions'); actions.append(this.summary, this.earlierToggle, this.fitButton);
       const top = el('header', undefined, 'mini-header'); top.append(actions, this.daily);
@@ -290,7 +308,7 @@ const MiniWatch = (() => {
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(4); this.emptyHistory = this.emptyRow(4);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
-      this.disclosureSize = mount === doc.body ? new DisclosureSize(this, mode) : null;
+      this.disclosureSize = mount === doc.body ? new DisclosureSize(this) : null;
       this.root.append(top, this.health, this.prompts, this.accounts); mount.replaceChildren(this.root);
     }
     table(parent, historical) {
@@ -312,6 +330,7 @@ const MiniWatch = (() => {
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }
     fitHeight(reserve = true) { return targetHeight(this, reserve); }
+    disclosureLayout() { return disclosureLayout(this); }
     emptyRow(columns) {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
@@ -614,7 +633,7 @@ const MiniWatch = (() => {
           this.returnToWatch();
           try { this.owner.focus(); }
           catch (_) { this.view.health.textContent = 'Use the browser’s native return-to-tab control.'; }
-        }, doc.body, size);
+        });
         this.view.historyChanged = () => { if (this.window === win) this.demand?.update(); };
         if (this.demandFactory) { this.demand = this.demandFactory(win); this.demand.update(); }
         // A visible PiP document owns this freshness timer, not a hidden main rAF.

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.219 — 2026-11-09
+
+- Mini Watch's Earlier Sessions pressed fill reaches the bottom without an inset stripe. Disclosure adds only its measured layout delta at the current width, then restores achieved expansion in either size mode; changed content/manual bounds reconcile the current delta without a global fit or opening reserve.
+- The ↕ Fit Height action dismisses visible/pending help synchronously on pointer, keyboard or touch activation, including no-op/refused sizing. Native clamps retain scrolling; no passive resize or width-correction request is added.
+
 ## v80.218 — 2026-11-09
 
 - Moving Claude aliases no longer inherit a concrete release from fuzzy catalog matching. Sessions, CLI, Watch/Mini, timelines, Token Mix and Comparisons retain the raw request identity and show version-unverified labels; CCost help reports unresolved identity rather than an invented missing Sonnet 4 rate.

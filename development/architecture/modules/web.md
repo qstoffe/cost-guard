@@ -382,19 +382,23 @@ Fit on open requests initial sizing on every opening, which can reset remembered
 Standard position can reset remembered size. Only both Remember choices permit browser
 cached bounds after the first opening within the same opener/host nonce. Preferences
 never reposition an open PiP; reload/new openers start fresh.
-`DisclosureSize` alone measures expansion and compact two-row targets within pointer or
-native keyboard activation. Fit collapse shrinks to current content; remembered mode
-restores achieved pre-expansion bounds unless manually resized. One native call preserves
-current width where unclamped. Vertical-only `resizeBy` is preferred, with `resizeTo`
-fallback; an observed one-DIP zoom-rounding bias is compensated on subsequent eligible
-clicks, never by an extra/passive call. Native events/two-frame confirmation record achieved
-bounds and cancel stale work. Missing activation/refusal/clamps retain disclosure/scroll.
+FR000639 keeps `DisclosureSize` as the single native owner. One inert clone measures
+both disclosure states at the same effective width, retaining fractional layout height
+until conversion to native DIPs. Expansion adds only that delta, never a whole-window
+fit or synthetic running-row reserve. Both size modes restore achieved expansion
+(including zero/refusal/clamp) when layout/bounds remain unchanged; changed content,
+width or manual bounds reconcile the current delta. One vertical-only `resizeBy(0, dy)`
+or same-width `resizeTo` request is permitted per activation, with no width correction.
+Native events/two-frame confirmation record achieved bounds and cancel stale work.
+Missing activation/refusal/clamps retain disclosure/scroll. Earlier's accent fill has
+no contrasting inset shadow; Fit Height attaches shared action-dismiss help rather
+than passive/pinning help. [Delta verification](../../journal/web/mini-disclosure-delta.md).
 FR000637 adds one measured ↕ action to the same header group and `DisclosureSize` owner.
 Its explicit fit uses an inert clone at the current actual width, with CSS zoom/padding,
 visible history/messages/accounts and no synthetic running-row reserve or help overlay.
 It grows or shrinks in either size mode, clears stale disclosure restoration, and makes
 at most one native call: `resizeBy(0, delta)` or `resizeTo(actualOuterWidth, height)`.
-Only disclosure retains the historical one-DIP width-correction policy. Manual fit's
+Neither disclosure nor manual fit requests width-rounding correction. Manual fit's
 side-frame-adjusted zoom estimate avoids old-height-dependent shrink targets; an already
 scroll-free snug fit tolerates small native quantization rather than oscillating.
 Native frame/work-area estimates remain platform-dependent, not physical OS proof.

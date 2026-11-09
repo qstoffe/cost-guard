@@ -1,15 +1,21 @@
 // Actual hidden PiP user activation and outer/inner bounds; no OS desktop input.
 const assert = require('node:assert/strict');
-module.exports = async function disclosure({evaluate,until,fixture,command,pipSession,layouts,checks}) {
+module.exports = async function disclosure({evaluate,until,fixture,command,pipSession,layouts,checks,capture}) {
   const read = () => evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {
     outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],
     session:[v.prompts.clientHeight,v.prompts.scrollHeight],accounts:[v.accounts.clientHeight,v.accounts.scrollHeight],
     expanded:!v.earlier.hidden,pressed:v.earlierToggle.getAttribute('aria-pressed'),attempts:w.probeResizeCalls.length,
-    restore:v.disclosureSize.restore,pending:!!v.disclosureSize.pending};})()`);
+    restore:v.disclosureSize.restore,pending:!!v.disclosureSize.pending,
+    layout:v.disclosureLayout(),root:v.root.getBoundingClientRect().height,earlier:v.earlier.getBoundingClientRect().height,
+    zoom:w.document.body.currentCSSZoom||1,dpr:w.devicePixelRatio,
+    calls:w.probeResizeCalls,scrollY:w.scrollY,focus:w.document.activeElement?.className,
+    document:[w.document.documentElement.clientHeight,w.document.documentElement.scrollHeight],
+    clones:w.document.querySelectorAll('.mini-measuring').length};})()`);
   const click = async () => {
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},pipSession);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},pipSession);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pipSession);
+    await evaluate(`miniWatch.view.earlierToggle.scrollIntoView({block:'nearest',inline:'nearest'})`);
     const point=await evaluate(`(() => {const r=miniWatch.view.earlierToggle.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
     for (const type of ['mousePressed','mouseReleased'])
       await command('Input.dispatchMouseEvent',{type,button:'left',clickCount:1,...point},pipSession);
@@ -30,57 +36,93 @@ module.exports = async function disclosure({evaluate,until,fixture,command,pipSe
     await evaluate(`new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))`);
     await evaluate(`miniWatch.window.probeResizeCalls=[]`);
   };
-  await fixture('history-3-1'); await until(`miniWatch.view.historyRows.size===3 && miniWatch.view.promptRows.size===1`);
-  for (const activate of [click,keyboard,click]) {
-    await size(560,300);
-    const before=await read(); assert.equal(before.expanded,false);
-    assert.ok(before.session[1]<=before.session[0]+1,JSON.stringify(before));
-    await activate(); const after=await read();
-    assert.equal(after.attempts,1,JSON.stringify({before,after})); assert.equal(after.outer[0],before.outer[0]);
-    assert.equal(before.pressed,'false'); assert.equal(after.pressed,'true');
-    assert.ok(after.outer[1]>before.outer[1],JSON.stringify(after)); assert.ok(after.restore);
-    assert.ok(after.session[1]<=after.session[0]+1,JSON.stringify(after));
-    await fixture('history-1-1'); await until(`miniWatch.view.historyRows.size===1`);
-    assert.deepEqual((await read()).outer,after.outer,'ordinary history updates never resize');
-    await activate(); const collapsed=await read(); collapsed.outer.forEach((n,i)=>assert.ok(Math.abs(n-before.outer[i])<=1));
-    layouts.push({case:activate===keyboard?'disclosure-keyboard':'disclosure-pointer',before,after,collapsed});
-    await fixture('history-3-1'); await until(`miniWatch.view.historyRows.size===3`);
+  const roundTrip=async(label,activate=click)=>{
+    const before=await read();assert.equal(before.expanded,false);
+    const delta=(before.layout.expanded-before.layout.collapsed)*before.layout.scale;
+    await activate();const after=await read();assert.equal(after.pressed,'true',JSON.stringify({label,before,after}));
+    assert.equal(after.attempts-before.attempts,1);assert.equal(after.calls.at(-1)[0],0);
+    if(after.outer[0]===before.outer[0] && after.outer[1]<Math.min(1000,await evaluate('miniWatch.window.screen.availHeight')))
+      assert.ok(Math.abs(after.outer[1]-before.outer[1]-delta)<=2,JSON.stringify({before,after,delta}));
+    else after.nativeClamp=true;
+    await activate();const collapsed=await read();assert.equal(collapsed.pressed,'false');
+    if(!after.nativeClamp && after.layout.width===before.layout.width)
+      assert.equal(collapsed.outer[1],before.outer[1],JSON.stringify({before,after,collapsed}));
+    assert.ok(collapsed.attempts-after.attempts<=1);assert.equal(collapsed.clones,0);
+    layouts.push({case:label,before,after,collapsed,delta});return collapsed;
+  };
+  for(const mode of ['fit-on-open','remember-last']) {
+    await evaluate(`miniWatch.window.document.documentElement.dataset.miniSize='${mode}'`);
+    for(const rows of [0,1,3]) for(const running of [0,1,4]) {
+      await fixture(`history-${rows}-${running}-1`);await until(`miniWatch.view.historyRows.size===${rows} && miniWatch.view.promptRows.size===${running}`);
+      for(const baseline of [220,400,650]) {await size(560,baseline);await roundTrip(`delta-${mode}-${rows}-${running}-${baseline}`,rows===1?keyboard:click);}
+    }
+    await fixture('history-3-1-1');await until('miniWatch.view.historyRows.size===3 && miniWatch.view.promptRows.size===1');
+    await size(560,650);await evaluate('miniWatch.view.fitButton.click()',true);await until('!miniWatch.view.disclosureSize.pending');
+    for(let cycle=0;cycle<4;cycle++)await roundTrip(`fit-before-delta-${mode}-${cycle}`);
+    const fitted=await read();await evaluate('miniWatch.view.fitButton.click()',true);await until('!miniWatch.view.disclosureSize.pending');
+    assert.deepEqual((await read()).outer,fitted.outer,'Fit after collapse must not shrink again');
   }
-  await size(560,650); const fit=await read(); await click();
-  assert.equal((await read()).attempts,0); await click(); assert.deepEqual((await read()).outer,fit.outer);
-  await fixture('history-3-12'); await until(`miniWatch.view.promptRows.size===12`);
-  await size(560,300); const scroll=await read(); assert.ok(scroll.session[1]>scroll.session[0]+1);
-  await click(); assert.equal((await read()).attempts,0); await click();
-  await fixture('history-3-1'); await until(`miniWatch.view.promptRows.size===1`);
-  await size(560,300);
-  const beforeManual=await read(); await click(); const grownManual=await read();
-  assert.ok(grownManual.restore,JSON.stringify({beforeManual,grownManual}));
-  await size(600,460); const manual=await read(); await click(); assert.deepEqual((await read()).outer,manual.outer,'manual CDP/native bounds win');
-  await size(560,300);
+  for(const theme of ['classic','web'])for(const color of ['light','dark'])for(const zoom of [1,1.25,1.5,2]) {
+    await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},pipSession);
+    await evaluate(`miniWatch.window.document.documentElement.dataset.theme='${theme}';miniWatch.window.document.body.style.zoom='${zoom}'`);
+    for(const font of ['system-ui','serif']) {
+      await evaluate(`miniWatch.window.document.body.style.fontFamily='${font}'`);await size(560,300);
+      await roundTrip(`delta-appearance-${theme}-${color}-${zoom}-${font}`);
+    }
+    await click();
+    layouts.push({case:'pressed-fill',theme,color,zoom,states:[]});const filled=layouts.at(-1);
+    for(const state of ['expanded','hover','focus']) {
+      if(state==='hover') {
+        const point=await evaluate(`(()=>{const r=miniWatch.view.earlierToggle.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+        await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pipSession);
+      }
+      if(state==='focus')await evaluate('miniWatch.view.earlierToggle.focus()');
+      const style=await evaluate(`(()=>{const w=miniWatch.window,b=miniWatch.view.earlierToggle,s=w.getComputedStyle(b);return {shadow:s.boxShadow,fill:s.backgroundColor,ink:s.color,pressed:b.getAttribute('aria-pressed')};})()`);
+      assert.equal(style.shadow,'none');assert.notEqual(style.fill,style.ink);assert.equal(style.pressed,'true');
+      filled.states.push({state,...style});
+      if(capture)await capture(`fill-${theme}-${color}-${zoom}-${state}`,await evaluate(`(()=>{const r=miniWatch.view.earlierToggle.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};})()`));
+    }
+    await click();
+  }
+  await command('Emulation.setEmulatedMedia',{features:[{name:'forced-colors',value:'active'}]},pipSession);await click();
+  assert.equal(await evaluate(`miniWatch.window.getComputedStyle(miniWatch.view.earlierToggle).outlineStyle`),'solid');await click();
+  await command('Emulation.setEmulatedMedia',{features:[]},pipSession);
+  await evaluate(`miniWatch.window.document.body.style.zoom='';miniWatch.window.document.body.style.fontFamily=''`);
+  for(const command of ['empty','watch-delay-0']) {
+    await fixture(command);await until('miniWatch.publication.view.now_ms===liveValue.view.now_ms');await size(560,300);await roundTrip(`delta-${command}`);
+  }
+  await size(280,300);await roundTrip('delta-narrow-wrapping');
+  await size(560,300);await click();await fixture('history-1-4-3');await until('miniWatch.view.historyRows.size===1 && miniWatch.view.promptRows.size===4');
+  const changed=await read();await click();const reconciled=await read();
+  assert.ok(Math.abs(changed.outer[1]-reconciled.outer[1]-(changed.layout.expanded-changed.layout.collapsed)*changed.layout.scale)<=2);
+  layouts.push({case:'delta-changed-content',changed,reconciled});
+  await click();await size(600,460);const manual=await read();await click();
+  assert.ok(Math.abs(manual.outer[1]-(await read()).outer[1]-(manual.layout.expanded-manual.layout.collapsed)*manual.layout.scale)<=2);
+  await fixture('history-3-1-1');await until('miniWatch.view.historyRows.size===3 && miniWatch.view.promptRows.size===1');await size(560,300);
   await until(`!miniWatch.window.navigator.userActivation.isActive && !navigator.userActivation.isActive`);
   const noActivationBefore=await read();
   await evaluate(`miniWatch.view.earlierToggle.click()`);
   await until(`!miniWatch.view.disclosureSize.pending`);
-  const noActivation=await read(); assert.equal(noActivation.restore,null);
+  const noActivation=await read(); assert.deepEqual(noActivation.restore.before,noActivation.restore.after);
   assert.deepEqual(noActivation.outer,noActivationBefore.outer); assert.equal(noActivation.expanded,true);
   await evaluate(`miniWatch.view.earlierToggle.click();miniWatch.window.probeResizeCalls=[]`);
+  await size(560,220);
   await evaluate(`miniWatch.window.resizeBy=(...args)=>{miniWatch.window.probeResizeCalls.push(args);return miniWatch.window.probeNativeResizeBy(args[0],Math.min(args[1],10));}`);
   const shortBefore=await read(); await click(); const short=await read();
-  assert.equal(short.attempts,1); assert.ok(short.restore); assert.ok(short.session[1]>short.session[0]);
+  assert.equal(short.attempts,1); assert.ok(short.restore); assert.ok(short.document[1]>short.document[0]);
   await click(); (await read()).outer.forEach((n,i)=>assert.ok(Math.abs(n-shortBefore.outer[i])<=1));
   await evaluate(`miniWatch.window.probeResizeCalls=[]`);
   await evaluate(`miniWatch.window.resizeBy=undefined;miniWatch.window.resizeTo=(...args)=>{miniWatch.window.probeResizeCalls.push(args);throw new Error('blocked resize');}`);
-  await click(); const refused=await read(); assert.equal(refused.restore,null); assert.equal(refused.expanded,true);
-  assert.ok(refused.session[1]>refused.session[0]); await click(); assert.equal((await read()).attempts,1);
-  await evaluate(`miniWatch.window.resizeTo=undefined`); await click(); assert.equal((await read()).restore,null); await click();
+  await click(); const refused=await read(); assert.deepEqual(refused.restore.before,refused.restore.after); assert.equal(refused.expanded,true);
+  await click(); assert.equal((await read()).attempts,1);
+  await evaluate(`miniWatch.window.resizeTo=undefined`); await click(); assert.equal((await read()).restore.layout,null); await click();
   await evaluate(`miniWatch.window.resizeTo=(...args)=>miniWatch.window.probeResizeCalls.push(args)`);
-  await click(); const clamped=await read(); assert.equal(clamped.restore,null); await click();
+  await click(); const clamped=await read(); assert.deepEqual(clamped.restore.before,clamped.restore.after); await click();
   await evaluate(`miniWatch.window.resizeTo=(...args)=>{miniWatch.window.probeResizeCalls.push(args);return miniWatch.window.probeNativeResize(...args);}`);
   await evaluate(`miniWatch.window.resizeBy=(...args)=>{miniWatch.window.probeResizeCalls.push(args);return miniWatch.window.probeNativeResizeBy(...args);}`);
-  await size(280,650); await click(); const narrow=await read(); assert.equal(narrow.attempts,0); await click();
-  layouts.push({case:'disclosure-fit-existing-scroll-manual-refused-clamped-narrow',fit,scroll,noActivation,short,refused,clamped,narrow});
+  layouts.push({case:'disclosure-no-activation-short-refused-clamped',noActivation,short,refused,clamped});
   await size(560,300); await fixture('running'); await until(`miniWatch.view.promptRows.size===2`);
-  checks.push('Native pointer/keyboard disclosure grows height once only for new vertical overflow; achieved outer/inner bounds fit rows and collapse restores; existing-scroll, fit, narrow horizontal-only, manual bounds, refused/unsupported/unchanged clamp and SSE never cause repeated resizing');
+  checks.push('Relative rendered Earlier delta, both modes and fitted/tall/short baselines; repeated no-drift cycles, 0/1/3 history x 0/1/4 running, themes/fonts/zoom, narrow wrapping, changed content/manual bounds, activation/refusal/clamps and one height-only call');
 };
 
 // Same owned browser/fixture and resize owner; no second orchestration or stream.
@@ -90,6 +132,7 @@ module.exports.fit = async function fit({evaluate,until,fixture,command,sessionI
   let pip;
   const density=async(rows,accounts)=>{await fixture(`density-${rows}-${accounts}`);await until(`miniWatch.view.promptRows.size===${rows} && miniWatch.view.lines.size===${accounts}`);};
   const instrument=()=>evaluate(`(()=>{const w=miniWatch.window;w.fitCalls=[];w.fitNativeBy=w.resizeBy;w.fitNativeTo=w.resizeTo;
+    miniWatch.view.fitButton.addEventListener('click',()=>{w.fitHelpDismissed=!w.document.querySelector('.context-help:not([hidden])');});
     for(const name of ['resizeBy','resizeTo']){const native=w[name].bind(w);w[name]=(...args)=>{w.fitCalls.push({name,args,active:w.navigator.userActivation.isActive});return native(...args);};}})()`);
   const size=async(width,height)=>{await evaluate(`miniWatch.window.resizeTo(${width},${height})`,true);await settle();await evaluate('miniWatch.window.scrollTo(0,0);miniWatch.window.fitCalls=[]');};
   const snapshot=async()=>({...await read(),...await evaluate(`(()=>{const w=miniWatch.window,v=miniWatch.view,s=w.getComputedStyle(w.document.body),r=v.root.getBoundingClientRect();return {
@@ -97,7 +140,7 @@ module.exports.fit = async function fit({evaluate,until,fixture,command,sessionI
     calls:w.fitCalls,focus:w.document.activeElement===v.fitButton,scrollY:w.scrollY,help:w.document.querySelector('.context-help:not([hidden])')?.textContent||'',
     clones:w.document.querySelectorAll('.mini-measuring,.mini-header-measuring').length};})()`)});
   const activate=async(kind='pointer')=>{
-    await evaluate('ContextHelp.dismiss(miniWatch.view.fitButton);miniWatch.window.fitCalls=[]');
+    await evaluate('miniWatch.window.fitCalls=[];miniWatch.window.fitHelpDismissed=null');
     if(kind==='pointer'||kind==='touch') {
       const point=await evaluate(`(()=>{const r=miniWatch.view.fitButton.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
       if(kind==='touch') {
@@ -108,7 +151,8 @@ module.exports.fit = async function fit({evaluate,until,fixture,command,sessionI
       await evaluate('miniWatch.view.fitButton.focus()');
       for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',{type,key:kind,code:kind===' '?'Space':kind,windowsVirtualKeyCode:kind===' '?32:13,...(type==='keyDown'?{text:kind===' '?' ':'\r'}:{})},pip);
     }
-    await settle();return snapshot();
+    assert.equal(await evaluate('miniWatch.window.fitHelpDismissed'),true,'help closes synchronously in the activation');
+    await settle();const result=await snapshot();assert.equal(result.help,'');return result;
   };
   const assertFit=(before,after)=>{
     assert.ok(after.calls.length<=1,JSON.stringify(after));assert.equal(after.expanded,before.expanded);
@@ -155,10 +199,16 @@ module.exports.fit = async function fit({evaluate,until,fixture,command,sessionI
     await until(`miniWatch.window.document.querySelector('.context-help:not([hidden])')?.textContent.startsWith('Fit Mini Watch height')`);
     const hovered=await snapshot();assert.equal(hovered.desiredManual,hoverBefore.desiredManual);assert.equal(hovered.calls.length,0);
     layouts.push({case:'manual-fit-help',mode,...hovered});
+    await activate();await evaluate('new Promise(resolve=>miniWatch.window.setTimeout(resolve,700))');
+    assert.equal((await snapshot()).help,'','stationary pointer/focus must not reopen action help');
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pip);
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pip);
+    await until(`miniWatch.window.document.querySelector('.context-help:not([hidden])')?.textContent.startsWith('Fit Mini Watch height')`);
+    await activate('Enter');
     await fixture('history-3-1-3');await until('miniWatch.view.historyRows.size===3 && miniWatch.view.promptRows.size===1');
     await evaluate('miniWatch.view.earlierToggle.click()',true);await settle();await size(600,220);
     const expanded=await snapshot(),fitted=await activate('touch');assertFit(expanded,fitted);assert.equal(fitted.expanded,true);
-    assert.match(fitted.help,/currently visible content\. Width stays unchanged/);
+    assert.equal(fitted.help,'','touch activation dismisses action help');
     await size(600,850);const repeated=await evaluate(`(()=>{miniWatch.view.fitButton.click();miniWatch.view.fitButton.click();return miniWatch.window.fitCalls.length;})()`,true);
     assert.ok(repeated<=1,'rapid synchronous clicks share pending resize ownership');await settle();
     const passive=await snapshot();await density(4,1);await density(1,0);assert.deepEqual((await snapshot()).outer,passive.outer);

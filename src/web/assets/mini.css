@@ -16,7 +16,7 @@ body { padding: .5rem; max-width: none; }
 .mini-header .mini-earlier-toggle[aria-pressed="true"],
 .mini-header button.mini-earlier-toggle[aria-pressed="true"]:not(:disabled):hover {
   color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
-  box-shadow: inset 0 -2px 0 var(--accent-ink); }
+  box-shadow: none; }
 .mini-header :focus-visible { outline-offset: 1px; }
 @media (forced-colors: active) {
   .mini-header .mini-earlier-toggle[aria-pressed="true"] { border: 1px solid Highlight; outline: 2px solid Highlight; }
