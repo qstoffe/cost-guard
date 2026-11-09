@@ -74,11 +74,28 @@ preservation. No acceptance waiver or access expansion was requested or granted.
 - Hidden Edge shipped Comparisons/help: **PASS**, two browser process restarts,
   exact `Sonnet 5.5` label, stable redraw, selected `sonnet` and historical-estimate
   help. Integrated browser was disconnected; no external desktop was disturbed.
+- Real-installation Sessions/detail: **PASS**, 3,051 available roots, 34 scalar
+  rows ready/16 pending and one detail row/chunk. The first combined probe's Watch
+  phase timed out at 90 seconds after checking 953 roots; its overall result was
+  a failure, not a successful whole-probe acceptance.
+- The focused longer Watch probe completed **PASS**: all 3,051 history roots
+  checked, five known finished history cards and one active card, first verified
+  history at 139.814 seconds. Prompt-cost CLI/raw components and session-cost
+  reports reconciled. It started no model calls or cache writes; final lifecycle
+  output reports no cleanup failures and confirms owned workers closed with shared
+  OpenCode untouched. This is bounded integration evidence, not an exact private
+  owner-incident recovery or a new historical execution certificate.
+- Final Full repeat: **181/181 groups PASS**, 2,233 tests passed and two skipped,
+  zero failures/errors, 124.1 seconds. The earlier 180/181 run and causal static
+  decoder compatibility repair remain recorded in `COMPLETION.md`.
+- Final-tree validator: **PASS**, 11 passes, zero failures, seven existing/advisory
+  warnings; no hard cap or debt baseline was raised. `git diff --check` passed.
 - Final Full-suite, validator and live read-only installation outcomes are recorded
   in the task's `COMPLETION.md`; no unperformed check is implied by this section.
 
-Evidence: `scratch:/alias-desktop-browser.json`, `scratch:/full-tests.json` and the
-final live-probe output. No ZIP, tag, GitHub Release or paid model call.
+Evidence: `scratch:/alias-desktop-browser-final.json`, `scratch:/full-tests.json`,
+`scratch:/final-full-tests.json`, `scratch:/live-identity-probe.jsonl` and
+`scratch:/watch-identity-probe.jsonl`. No ZIP, tag, GitHub Release or paid model call.
 
 ## Historical FR 000629 findings (retained)
 
