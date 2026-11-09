@@ -62,18 +62,18 @@ class PublicRepoLayoutTests(unittest.TestCase):
 
 class WindowsLauncherTests(unittest.TestCase):
     def test_normal_launcher_keeps_powershell_open(self) -> None:
-        text = (ROOT / "windows/Cost-Guard.cmd").read_text(encoding="utf-8")
+        text = (ROOT / "windows/Legacy/Cost-Guard.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-NoExit", text)
         self.assertIn('start "Cost Guard" %costguard_shell%', text)
         self.assertNotIn("/b %costguard_shell%", text)
         self.assertIn("-Mode report", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
-        self.assertIn("cost-guard.py", driver)
+        self.assertIn("cost-guard-cli.py", driver)
         self.assertIn("sys.version_info >= (3,11)", driver)
 
     def test_watch_launcher_exits_batch_before_ctrl_c_path(self) -> None:
-        text = (ROOT / "windows/Cost-Guard-Watch.cmd").read_text(encoding="utf-8")
+        text = (ROOT / "windows/Legacy/Cost-Guard-Watch.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-Mode watch", text)
         self.assertIn("-NoExit", text)
@@ -94,14 +94,14 @@ class WindowsLauncherTests(unittest.TestCase):
 
 class LauncherPlacementTests(unittest.TestCase):
     def test_public_folders_hold_only_everyday_launchers(self) -> None:
-        self.assertEqual({"Cost-Guard.cmd", "Cost-Guard-Watch.cmd", "Beta"},
+        self.assertEqual({"Cost-Guard-Web.cmd", "Legacy"},
                          {path.name for path in (ROOT / "windows").iterdir()})
-        self.assertEqual({"Cost-Guard-Web.cmd"},
-                         {path.name for path in (ROOT / "windows/Beta").iterdir()})
-        self.assertEqual({"Cost-Guard.command", "Cost-Guard-Watch.command", "Beta"},
+        self.assertEqual({"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
+                         {path.name for path in (ROOT / "windows/Legacy").iterdir()})
+        self.assertEqual({"Cost-Guard-Web.command", "launcher.applescript", "Legacy"},
                          {path.name for path in (ROOT / "macos").iterdir()})
-        self.assertEqual({"Cost-Guard-Web.command", "launcher.applescript"},
-                         {path.name for path in (ROOT / "macos/Beta").iterdir()})
+        self.assertEqual({"Cost-Guard.command", "Cost-Guard-Watch.command"},
+                         {path.name for path in (ROOT / "macos/Legacy").iterdir()})
 
     def test_validator_rejects_diagnostics_launcher_in_public_folder(self) -> None:
         from development.tools.validate_package import check_required_layout
@@ -119,8 +119,8 @@ class LauncherPlacementTests(unittest.TestCase):
 class MacOSLauncherTests(unittest.TestCase):
     def test_macos_launchers_exist_are_executable_and_relative(self) -> None:
         expected = {
-            "macos/Cost-Guard.command": "cost-guard.py",
-            "macos/Cost-Guard-Watch.command": "--watch",
+            "macos/Legacy/Cost-Guard.command": "cost-guard-cli.py",
+            "macos/Legacy/Cost-Guard-Watch.command": "--watch",
             "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command": "/development/tools/collect_diagnostics.py",
         }
         for name, needle in expected.items():
@@ -135,7 +135,7 @@ class MacOSLauncherTests(unittest.TestCase):
             self.assertIn('dirname "$0"', text, name)
             self.assertIn("sys.version_info >= (3,11)", text, name)
             self.assertIn(needle, text, name)
-        watch = (ROOT / "macos/Cost-Guard-Watch.command").read_text(encoding="utf-8")
+        watch = (ROOT / "macos/Legacy/Cost-Guard-Watch.command").read_text(encoding="utf-8")
         self.assertIn('exec "$PYTHON"', watch)
         diagnostics = (ROOT / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command").read_text(encoding="utf-8")
         self.assertIn('CG_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"', diagnostics)

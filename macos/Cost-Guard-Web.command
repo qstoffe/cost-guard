@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -u
 printf 'Launching web… Checking requirements (native macOS validation pending).\n'
-CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" || exit 1
+CG_ROOT="$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 # This display-only child never owns/restarts the detached Web host.
 activity() {
   while true; do
@@ -42,7 +42,7 @@ find_python() {
 PYTHON="$(find_python)" || {
   stop_activity
   printf 'Cost Guard Web requires macOS and already-installed Python 3.11+. Nothing was installed.\n'
-  printf 'Existing CLI/Watch launchers are unchanged.\n'
+   printf 'Legacy CLI: macos/Legacy/Cost-Guard.command or python3 cost-guard-cli.py (also requires Python 3.11+).\n'
   if [[ -t 0 ]]; then read -r '?Press Return to close…'; fi
   exit 1
 }

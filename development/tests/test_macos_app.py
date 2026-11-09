@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import plistlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -42,7 +43,7 @@ class MacAppTests(unittest.TestCase):
         executable = app / "Contents/MacOS/applet"
         executable.write_bytes(b"synthetic compiled fixture; never executed")
         executable.chmod(0o700)
-        (app / "Contents/Info.plist").write_text("synthetic plist")
+        (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "applet"}))
         self.assertEqual(arguments[:2], ["/usr/bin/osacompile", "-o"])
         self.assertIn("--launch-macos", Path(arguments[3]).read_text())
         self.assertEqual(options["timeout"], 30)
@@ -56,6 +57,10 @@ class MacAppTests(unittest.TestCase):
             self.assertEqual(first, macos_app.prepare_app(self.root, self.store))
             self.assertEqual(compiler.call_count, 1)
             self.assertTrue(first.is_relative_to(self.store.directory))
+            self.assertEqual("Cost Guard.app", first.name)
+            metadata = plistlib.loads((first / "Contents/Info.plist").read_bytes())
+            self.assertEqual("Cost Guard", metadata["CFBundleDisplayName"])
+            self.assertEqual(macos_app.VERSION, metadata["CFBundleShortVersionString"])
             self.assertFalse(first.is_relative_to(self.root))
             source = self.root / "src/web/native_macos.py"
             source.write_text(source.read_text() + "\n# changed\n")
@@ -82,7 +87,7 @@ class MacAppTests(unittest.TestCase):
         self.assertEqual(executable.read_bytes(), b"tampered")
 
     def test_hyphenated_launcher_name_and_bytes_invalidate_finder_cache(self):
-        launcher = "macos/Beta/Cost-Guard-Web.command"
+        launcher = "macos/Cost-Guard-Web.command"
         self.assertIn(launcher, macos_app.SOURCES)
         before = macos_app.fingerprint(self.root)
         source = self.root / launcher
@@ -91,7 +96,7 @@ class MacAppTests(unittest.TestCase):
         # Identical content at another basename still gives a different identity.
         renamed = source.with_name("renamed.command")
         source.rename(renamed)
-        changed = tuple("macos/Beta/renamed.command" if name == launcher else name
+        changed = tuple("macos/renamed.command" if name == launcher else name
                         for name in macos_app.SOURCES)
         with patch.object(macos_app, "SOURCES", changed):
             renamed_key = macos_app.fingerprint(self.root)
@@ -102,7 +107,7 @@ class MacAppTests(unittest.TestCase):
         guard = SourceGuard(self.root, interval=0)
         (self.store.directory / "unrelated-cache").write_text("local data")
         self.assertEqual(guard.check(), "unchanged")
-        source = self.root / "macos/Beta/launcher.applescript"
+        source = self.root / "macos/launcher.applescript"
         source.write_text(source.read_text() + "\n-- changed\n")
         self.assertEqual(guard.check(), "source_changed")
 

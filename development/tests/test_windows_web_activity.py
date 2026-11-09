@@ -30,7 +30,7 @@ print('untrusted raw exception https://private/#secret', flush=True)
 time.sleep(0.4)
 print('Cost Guard startup: Opening your default browser (0.4s elapsed)', flush=True)
 if {code}:
-    print('Cost Guard Web Beta: Web is running; use Open Cost Guard to retry.', flush=True)
+    print('Cost Guard: Web is running; use Open Cost Guard to retry.', flush=True)
 raise SystemExit({code})
 ''', encoding='utf-8')
                 probe = root / 'probe.ps1'
@@ -44,7 +44,7 @@ function Get-Command {
     return @()
 }
 # Test only the non-UI fallback; never display a dialog or write a real profile log.
-function Add-Type { throw 'UI disabled by test' }
+function Add-Type { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'unexpected-ui'), 'called'); throw 'UI disabled by test' }
 function Read-Host { throw 'Redirected launch must never prompt' }
 $env:LOCALAPPDATA = $PSScriptRoot
 & $Source
@@ -61,6 +61,7 @@ exit $LASTEXITCODE
                 self.assertNotIn('Cost Guard startup:', text)
                 self.assertNotIn('private', text)
                 self.assertEqual(result.stderr, b'')
+                self.assertFalse((root / 'unexpected-ui').exists(), 'Redirected failure must not attempt a dialog')
                 if code:
                     if mode in ('browser', 'startup'):
                         self.assertIn('Web is running; use Open Cost Guard to retry.', text)

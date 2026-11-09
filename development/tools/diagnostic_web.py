@@ -90,5 +90,5 @@ def web_evidence(root, *, data_home=None):
         pass
     except (OSError, ValueError, UnicodeError):
         result["lifecycle_status"] = "unavailable"
-    result["action"] = "Use Beta launcher to restart; CLI remains independent. Recorded facts do not prove current readiness."
+    result["action"] = "Use windows/Cost-Guard-Web.cmd or macos/Cost-Guard-Web.command to restart; Legacy CLI remains independent. Recorded facts do not prove current readiness."
     return result

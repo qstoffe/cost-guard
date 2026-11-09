@@ -111,7 +111,7 @@ class Tray:
         if not self.atom or not self.taskbar_created:
             raise InstanceConflict("tray_unavailable")
         # Hidden top-level window receives Explorer's TaskbarCreated broadcast.
-        self.hwnd = self.user.CreateWindowExW(0, self.class_name, "Cost Guard Web Beta",
+        self.hwnd = self.user.CreateWindowExW(0, self.class_name, "Cost Guard",
                                              0, 0, 0, 0, 0, None, None, self.instance, None)
         if not self.hwnd:
             raise InstanceConflict("tray_unavailable")
@@ -125,7 +125,7 @@ class Tray:
                 raise InstanceConflict("tray_unavailable")
         self.data = NotifyData(cbSize=c.sizeof(NotifyData), hWnd=self.hwnd, uID=1,
                                uFlags=7, uCallbackMessage=CALLBACK, hIcon=self.icon,
-                               szTip=f"Cost Guard Web Beta v{VERSION}")
+                                szTip=f"Cost Guard v{VERSION}")
 
     def install(self):
         if not self.shell.Shell_NotifyIconW(0, c.byref(self.data)):
@@ -235,7 +235,7 @@ class Tray:
 
     def _notify(self, message, flags):
         self.data.uFlags = 0x10
-        self.data.szInfoTitle = "Cost Guard Web Beta"
+        self.data.szInfoTitle = "Cost Guard"
         self.data.szInfo = message
         self.data.dwInfoFlags = flags
         self.shell.Shell_NotifyIconW(1, c.byref(self.data))

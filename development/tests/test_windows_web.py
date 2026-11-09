@@ -1,4 +1,4 @@
-"""Synthetic Windows Beta contracts; no real icon, browser or UI is started."""
+"""Synthetic Windows Web contracts; no real icon, browser or UI is started."""
 import contextlib
 import ctypes as c
 from ctypes import wintypes as w
@@ -272,9 +272,9 @@ class WindowsWebTests(unittest.TestCase):
         owner.publish_ready.assert_not_called()
 
     def test_launcher_is_relative_and_does_not_change_stable_terminal_contract(self):
-        command = (ROOT / "windows/Beta/Cost-Guard-Web.cmd").read_text()
+        command = (ROOT / "windows/Cost-Guard-Web.cmd").read_text()
         script = (ROOT / "src/web/windows_launch.ps1").read_text()
-        self.assertIn('%~dp0..\\..\\src\\web\\windows_launch.ps1', command)
+        self.assertIn('%~dp0..\\src\\web\\windows_launch.ps1', command)
         self.assertNotIn("-NoExit", command)
         self.assertNotIn("Set-ExecutionPolicy", script)
         self.assertNotIn("Set-Location", script)
@@ -290,12 +290,12 @@ class WindowsWebTests(unittest.TestCase):
         # Non-UI source-shaped Unicode/space fixture. Native visibility is separate.
         with tempfile.TemporaryDirectory(prefix='web handoff å ') as directory:
             root = Path(directory)
-            beta = root / 'windows/Beta'
+            beta = root / 'windows'
             web = root / 'src/web'
             beta.mkdir(parents=True)
             web.mkdir(parents=True)
             batch = beta / 'Cost-Guard-Web.cmd'
-            shutil.copyfile(ROOT / 'windows/Beta/Cost-Guard-Web.cmd', batch)
+            shutil.copyfile(ROOT / 'windows/Cost-Guard-Web.cmd', batch)
             (web / 'windows_launch.ps1').write_text('''param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
 if ($Detached) { throw 'Unexpected hidden mode' }
@@ -355,7 +355,7 @@ while not Path(__file__).with_name('release').exists() and time.monotonic() < de
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
-$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-BetaPython'}, $true)
+$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-WebPython'}, $true)
 Invoke-Expression $function.Extent.Text
 function Write-LaunchActivity { }
 function Get-Command {
@@ -365,7 +365,7 @@ function Get-Command {
 }
 $env:PYTHONPATH = $PSScriptRoot
 $timer = [Diagnostics.Stopwatch]::StartNew()
-if (Find-BetaPython) { throw 'Stalled interpreter accepted' }
+if (Find-WebPython) { throw 'Stalled interpreter accepted' }
 if ($timer.Elapsed.TotalSeconds -gt 9) { throw 'Discovery exceeded bound' }
 $ownedPid = [int][IO.File]::ReadAllText((Join-Path $PSScriptRoot 'pid'))
 try { $process = [Diagnostics.Process]::GetProcessById($ownedPid) } catch { $process = $null }
@@ -406,20 +406,20 @@ $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
 $realLauncher = (Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue).Source
-$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-BetaPython'}, $true)
+$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-WebPython'}, $true)
 Invoke-Expression $function.Extent.Text
 # Discovery timing may cross its 120ms activity turn. This isolated harness
 # extracts discovery only; startup activity rendering is tested separately.
 function Write-LaunchActivity {}
 function Get-Command { return @() }
-if (Find-BetaPython) { throw 'Missing Python must not succeed' }
+if (Find-WebPython) { throw 'Missing Python must not succeed' }
 Write-Output 'STAGE:direct-python'
 function Get-Command {
     param($Name, [switch]$All, $CommandType, $ErrorAction)
     if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$OldPython}) }
     return @([pscustomobject]@{Source=$OldPython}, [pscustomobject]@{Source=$Python})
 }
-$found = Find-BetaPython
+$found = Find-WebPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
 if ($realLauncher) {
     Write-Output 'STAGE:py-launcher'
@@ -428,7 +428,7 @@ if ($realLauncher) {
         if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$realLauncher}) }
         return @([pscustomobject]@{Source=$Python})
     }
-    $found = Find-BetaPython
+    $found = Find-WebPython
     if (-not $found) { throw 'Neither real launcher nor supported PATH interpreter accepted' }
     if ($found.Executable -eq $realLauncher) {
         if ($found.Arguments.Count -ne 1 -or $found.Arguments[0] -ne '-3') { throw 'Launcher must retain single -3 argument' }
@@ -436,11 +436,11 @@ if ($realLauncher) {
         throw 'Unusable real launcher must fall back to the supported interpreter'
     }
 }
-$logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-BetaStartupRecord'}, $true)
+$logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-WebStartupRecord'}, $true)
 Write-Output 'STAGE:private-log'
 Invoke-Expression $logging.Extent.Text
 $directory = Join-Path (Split-Path -Parent $OldPython) 'private log'
-Write-BetaStartupRecord -Directory $directory -Failure python_unavailable
+Write-WebStartupRecord -Directory $directory -Failure python_unavailable
 $acl = [IO.DirectoryInfo]::new($directory).GetAccessControl()
 if (-not $acl.AreAccessRulesProtected) { throw 'Log directory must be private' }
 $text = [IO.File]::ReadAllText((Join-Path $directory 'startup.log'))

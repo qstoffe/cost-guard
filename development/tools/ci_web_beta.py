@@ -1,4 +1,4 @@
-"""Bounded hosted-only Web Beta evidence. No workstation UI or private artifacts."""
+"""Bounded hosted-only Web evidence. No workstation UI or private artifacts."""
 import json
 import argparse
 import hashlib
@@ -28,13 +28,29 @@ def run(command, timeout):
     return subprocess.run(command, cwd=ROOT, timeout=timeout, check=False).returncode
 
 
+def observe_preflight(run, record):
+    """Observe the actual bounded child call without changing its contract."""
+    def observed(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            result = run(*args, **kwargs)
+        except (subprocess.TimeoutExpired, OSError) as error:
+            outcome = 'TimeoutExpired' if isinstance(error, subprocess.TimeoutExpired) else 'OSError'
+            record(dict(outcome=outcome, seconds=round(time.monotonic() - started, 3)))
+            raise
+        record(dict(outcome='returned', returncode=result.returncode,
+                    seconds=round(time.monotonic() - started, 3)))
+        return result
+    return observed
+
+
 def notice(name, value):
     # Structured read-only Checks API evidence as well as downloadable artifacts.
     # This contains allowlisted facts/counts/test names, never raw subprocess logs.
     text = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
     if len(text) > 60000:
         raise ValueError("evidence_notice_too_large")
-    print("::notice title=Web Beta " + name + "::" + text.replace("%", "%25"), flush=True)
+    print("::notice title=Cost Guard Web " + name + "::" + text.replace("%", "%25"), flush=True)
 
 
 def facts(scope):
@@ -58,7 +74,7 @@ def facts(scope):
 def summary(scope):
     plan = PLANS[scope]
     notice("platform", facts(scope))
-    lines = ["## Web Beta — " + scope + " / " + platform.system() + " / " + platform.machine()]
+    lines = ["## Cost Guard Web — " + scope + " / " + platform.system() + " / " + platform.machine()]
     success = os.environ.get("CI_JOB_STATUS", "success") == "success"
     for name in plan:
         path = RESULTS / (name + ".json")

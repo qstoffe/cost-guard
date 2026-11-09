@@ -19,6 +19,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Test system health](test-health.md): retained critical risks, real hosted cross-platform revalidation, causal fixture/runtime repairs and desktop-proof limits.
 - [Feature opportunities](feature-discovery.md): milestone-40 no-suggestion assessment, seven pending UX owners, implemented publisher history and external/platform evidence limits.
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
+- [Default Web product / Legacy coexistence](web/product-promotion.md): v81 routing, moved launchers, unchanged data/security boundaries, rendered/real-source evidence and native verification limits.
 - [Shared CG branding and native DPI](web/branding.md): canonical icon generation, scoped UI-thread context, browser/native-resource evidence and explicitly unverified physical appearance.
 - [Windows browser links](web/browser-links.md): independent one-use native handoffs, bounded Unicode clipboard ownership/privacy and actual verification limits.
 - [Sliding browser sessions](web/browser-sessions.md): per-browser seven-day inactivity, throttled cookie renewal, explicit storage-grace exception and simulated/browser/real-source evidence limits.

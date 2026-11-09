@@ -7,9 +7,9 @@ import time
 
 class SourceGuard:
     # Explicit runtime surface; documentation/configuration and development are not code.
-    FILES = ("cost-guard.py", "cost-guard-web.py", "pyproject.toml", "requirements.txt",
-             "config/default-config.jsonc")
-    TREES = ("src", "windows/Beta", "macos/Beta")
+    FILES = ("cost-guard.py", "cost-guard-cli.py", "cost-guard-web.py", "pyproject.toml",
+             "requirements.txt", "config/default-config.jsonc")
+    TREES = ("src", "windows", "macos")
     SUFFIXES = {".py", ".pyw", ".html", ".css", ".js", ".json", ".svg", ".ico",
                 ".png", ".ps1", ".cmd", ".command", ".applescript", ".cs"}
     SKIP = {"__pycache__", ".git", ".venv", "venv", "node_modules", "cache", "logs",
@@ -78,7 +78,7 @@ class SourceGuard:
             except FileNotFoundError:
                 pass
         for name in self.TREES:
-            # Check each ancestor; even a new Beta parent must not escape through a link.
+            # Check each ancestor; native launcher parents must not escape through a link.
             path = self.root
             for part in Path(name).parts:
                 path /= part

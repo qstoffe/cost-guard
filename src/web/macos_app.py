@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import plistlib
 import shlex
 import stat
 import subprocess
@@ -14,7 +15,7 @@ from src.version import VERSION
 from .instance_state import _private, _safe
 from .process_identity import InstanceConflict
 
-SOURCES = ("macos/Beta/launcher.applescript", "macos/Beta/Cost-Guard-Web.command",
+SOURCES = ("macos/launcher.applescript", "macos/Cost-Guard-Web.command",
            "cost-guard-web.py", "src/web/macos_app.py", "src/web/macos_launch.py",
            "src/web/native_macos.py", "src/web/macos_status.py", "src/web/objc_bridge.py")
 
@@ -69,7 +70,7 @@ def prepare_app(root, store):
     root = Path(root).resolve(strict=True)
     key = fingerprint(root)
     destination = store.directory / ("finder-" + key)
-    app = destination / "Cost Guard Web.app"
+    app = destination / "Cost Guard.app"
     # Same transition lock as restart, but released before launch acquires it.
     with store.lock(timeout=35):
         if destination.exists() or destination.is_symlink():
@@ -103,6 +104,12 @@ def prepare_app(root, store):
             if result.returncode:
                 raise InstanceConflict("app_preparation_failed")
             _private(generated)
+            metadata = generated / "Contents/Info.plist"
+            _safe(metadata)
+            values = plistlib.loads(metadata.read_bytes())
+            values.update(CFBundleName="Cost Guard", CFBundleDisplayName="Cost Guard",
+                          CFBundleShortVersionString=VERSION, CFBundleVersion=VERSION)
+            metadata.write_bytes(plistlib.dumps(values))
             manifest = {"fingerprint": key, "files": app_inventory(generated)}
             if key != fingerprint(root):
                 raise InstanceConflict("app_preparation_failed")

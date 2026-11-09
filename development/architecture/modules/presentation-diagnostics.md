@@ -29,7 +29,7 @@ FR000525 keeps provider capacity and Remaining pace canonical; `src/display.py` 
 
 ## Software-failure boundaries
 
-`cost-guard.py` and Diagnostics guard imports with stdlib-only `src/runtime_errors.py` (only version metadata may cross in). It owns logs/crashes, deduplication/30-day retention, hooks, emergency stderr and the Diagnostics hint. Faults default fatal; isolated owners may expose ERROR and continue. [Failure policy/root audit](../governance/policies/runtime-failures.md) owns details; new roots need explicit ownership/tests.
+`cost-guard.py`, independent `cost-guard-cli.py` and Diagnostics guard imports with stdlib-only `src/runtime_errors.py` (only version metadata may cross in). The product entry routes desktop intent through `src/product_entry.py`; Legacy CLI still composes directly through bootstrap. The reporter owns logs/crashes, deduplication/30-day retention, hooks, emergency stderr and the Diagnostics hint. Faults default fatal; isolated owners may expose ERROR and continue. [Failure policy/root audit](../governance/policies/runtime-failures.md) owns details; new roots need explicit ownership/tests.
 
 ## Diagnostics boundary
 

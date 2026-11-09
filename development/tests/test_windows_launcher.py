@@ -51,10 +51,10 @@ exit $LASTEXITCODE
                 self.assertEqual(17, result.returncode, result.stderr)
                 expected = ['old:1:-3', 'supported:0:-c'] if scenario == 'fallback' else ['supported:0:-3']
                 self.assertEqual(expected, (root / 'probes').read_text().splitlines())
-                self.assertIn('APP:' + ('-3,' if scenario == 'launcher' else '') + 'cost-guard.py,--watch', result.stdout)
+                self.assertIn('APP:' + ('-3,' if scenario == 'launcher' else '') + 'cost-guard-cli.py,--watch', result.stdout)
 
     def test_terminal_entrypoints_keep_separate_persistent_console(self):
-        for path in ("windows/Cost-Guard.cmd", "windows/Cost-Guard-Watch.cmd",
+        for path in ("windows/Legacy/Cost-Guard.cmd", "windows/Legacy/Cost-Guard-Watch.cmd",
                      "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd"):
             with self.subTest(path=path):
                 text = (ROOT / path).read_text(encoding="utf-8")
@@ -67,7 +67,7 @@ exit $LASTEXITCODE
 
     @unittest.skipUnless(os.name == 'nt', 'Windows batch shell fallback')
     def test_entrypoints_select_available_shell_and_propagate_start_result(self):
-        for relative in ('windows/Cost-Guard.cmd', 'windows/Cost-Guard-Watch.cmd',
+        for relative in ('windows/Legacy/Cost-Guard.cmd', 'windows/Legacy/Cost-Guard-Watch.cmd',
                          'development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd'):
             for available, expected in ((0, 'pwsh.exe'), (1, 'powershell.exe')):
                 with self.subTest(path=relative, available=available), tempfile.TemporaryDirectory() as temporary:

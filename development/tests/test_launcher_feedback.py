@@ -20,10 +20,10 @@ ROOT = Path(__file__).resolve().parents[2]
 class LauncherFeedbackTests(unittest.TestCase):
     def test_all_eight_launchers_have_whitespace_free_names_without_aliases(self):
         expected = {
-            "windows": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
-            "windows/Beta": {"Cost-Guard-Web.cmd"},
-            "macos": {"Cost-Guard.command", "Cost-Guard-Watch.command"},
-            "macos/Beta": {"Cost-Guard-Web.command"},
+            "windows/Legacy": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
+            "windows": {"Cost-Guard-Web.cmd"},
+            "macos/Legacy": {"Cost-Guard.command", "Cost-Guard-Watch.command"},
+            "macos": {"Cost-Guard-Web.command"},
             "development/user-tools/diagnostics/windows": {"Cost-Guard-Diagnostics.cmd"},
             "development/user-tools/diagnostics/macos": {"Cost-Guard-Diagnostics.command"},
         }
@@ -37,7 +37,7 @@ class LauncherFeedbackTests(unittest.TestCase):
 
     def test_windows_wrappers_leave_feedback_to_the_owned_console(self):
         for filename in ("Cost-Guard.cmd", "Cost-Guard-Watch.cmd"):
-            text = (ROOT / "windows" / filename).read_text(encoding="utf-8")
+            text = (ROOT / "windows/Legacy" / filename).read_text(encoding="utf-8")
             self.assertNotIn("Checking requirements...", text)
             self.assertNotIn('<nul set /p', text)
             self.assertEqual(1, text.count("start \""))
@@ -45,7 +45,7 @@ class LauncherFeedbackTests(unittest.TestCase):
 
     def test_all_macos_launcher_directories_pin_lf_for_windows_source_exports(self):
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
-        for pattern in ("macos/*.command", "macos/Beta/*.command",
+        for pattern in ("macos/*.command", "macos/Legacy/*.command",
                         "development/user-tools/diagnostics/macos/*.command"):
             self.assertIn(pattern + " text eol=lf", attributes)
 
@@ -61,7 +61,7 @@ class LauncherFeedbackTests(unittest.TestCase):
 
     def test_macos_feedback_precedes_root_resolution_and_python_checks(self):
         for filename in ("Cost-Guard.command", "Cost-Guard-Watch.command"):
-            text = (ROOT / "macos" / filename).read_text(encoding="utf-8")
+            text = (ROOT / "macos/Legacy" / filename).read_text(encoding="utf-8")
             self.assertLess(text.index("Checking requirements..."), text.index("CG_ROOT="))
             self.assertLess(text.index("Checking requirements..."), text.index("find_python()"))
             self.assertIn("[[ -t 1 ]]", text)
@@ -114,7 +114,7 @@ class LauncherFeedbackTests(unittest.TestCase):
             shell = shutil.which(executable)
             if shell is None:
                 continue
-            for mode, argument in (("report", "cost-guard.py"), ("watch", "--watch"),
+            for mode, argument in (("report", "cost-guard-cli.py"), ("watch", "--watch"),
                                    ("diagnostics", "--test-service-start")):
                 with self.subTest(shell=executable, mode=mode), tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)

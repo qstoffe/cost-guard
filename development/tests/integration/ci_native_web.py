@@ -26,34 +26,60 @@ from src.web.lifecycle import control, launch, stop_existing
 from src.web.process_identity import process_identity
 
 LAUNCH_ERRORS = {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
-                 "instance_start_timeout", "instance_start_conflict", "gui_or_server_start_failed",
-                 "safe_force_stop_unavailable"}
+                  "instance_start_timeout", "instance_start_conflict", "gui_or_server_start_failed",
+                  "safe_force_stop_unavailable", "configuration_unavailable", "instance_conflict"}
 
 SHIM = '''import os, sys
 import socket
 import time, json
 from pathlib import Path
 started = time.monotonic()
-trace = Path(os.environ['CG_CI_STATE']) / 'ci-startup.json'
+mode = 'wrapper' if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']) else 'preflight' if sys.argv[1:] == ['--preflight-macos'] else 'host'
+case = os.environ['CG_CI_CASE']
+trace = Path(os.environ['CG_CI_STATE']) / ('ci-startup-' + case + '-' + mode + '.json')
+marks = []
 def mark(stage):
-    trace.write_text(json.dumps(dict(stage=stage, seconds=round(time.monotonic()-started, 3))))
+    elapsed = round(time.monotonic()-started, 3)
+    marks.append(dict(stage=stage, seconds=elapsed))
+    trace.write_text(json.dumps(dict(stage=stage, seconds=elapsed, events=marks[-24:])))
 mark('imports')
-from unittest.mock import patch
-from src.web.host import WebHost
-from src.web.jobs import ReportJobs
-from src.web.instance_state import InstanceStore
-from src.web.lifecycle import launch
 from src.web.main import main
-mark('imports_complete')
+mark('main_imported')
+from development.tools.ci_web_beta import hosted_only, observe_preflight
+hosted_only()
 if sys.platform == 'darwin':
-    from src.web.objc_bridge import ObjC
-    original_send = ObjC.send
-    def traced_send(api, receiver, selector, *args):
-        mark(selector)
-        result = original_send(api, receiver, selector, *args)
-        mark(selector + ':returned')
-        return result
-    ObjC.send = traced_send
+    from src.web.macos_status import StatusItem
+    def native_boundary(method, phase):
+        def observed(item, *args, **kwargs):
+            flag = '_ci_observed_' + phase
+            if getattr(item, flag, False):
+                return method(item, *args, **kwargs)
+            setattr(item, flag, True)
+            mark('native_' + phase)
+            result = method(item, *args, **kwargs)
+            mark('native_' + phase + ':returned')
+            return result
+        return observed
+    for phase in ('install', 'poll', 'close'):
+        setattr(StatusItem, phase, native_boundary(getattr(StatusItem, phase), phase))
+    from src.web.startup import StartupProgress, STAGES
+    progress_call = StartupProgress.__call__
+    def progress(self, stage):
+        if stage in STAGES:
+            mark('launcher_' + stage)
+        return progress_call(self, stage)
+    StartupProgress.__call__ = progress
+    if mode == 'wrapper':
+        import subprocess
+        real_run = subprocess.run
+        receipt = Path(os.environ['CG_CI_STATE']) / ('ci-preflight-' + case + '.json')
+        observed = observe_preflight(real_run, lambda value: receipt.write_text(json.dumps(value)))
+        def traced_run(*args, **kwargs):
+            command = args[0] if args else kwargs.get('args')
+            if isinstance(command, (list, tuple)) and len(command) == 3 and command[-1] == '--preflight-macos':
+                return observed(*args, **kwargs)
+            return real_run(*args, **kwargs)
+        subprocess.run = traced_run
 root = Path(__file__).resolve().parent
 real_connect = socket.socket.connect
 def offline_connect(stream, address):
@@ -61,6 +87,19 @@ def offline_connect(stream, address):
         raise OSError('offline_ci_probe')
     return real_connect(stream, address)
 socket.socket.connect = offline_connect
+if mode == 'preflight':
+    # Production main owns native preflight; no host/acquisition/state is used.
+    mark('imports_complete')
+    raise SystemExit(main())
+from unittest.mock import patch
+mark('mock_imported')
+from src.web.host import WebHost
+mark('host_imported')
+from src.web.jobs import ReportJobs
+from src.web.instance_state import InstanceStore
+from src.web.lifecycle import launch
+mark('core_imported')
+mark('imports_complete')
 original = WebHost.__init__
 def isolated(self, *args, **kwargs):
     kwargs['jobs'] = ReportJobs()
@@ -68,11 +107,28 @@ def isolated(self, *args, **kwargs):
 store_init = InstanceStore.__init__
 def private(self, root, **kwargs):
     store_init(self, root, data_home=Path(os.environ['CG_CI_STATE']))
-with patch.object(WebHost, '__init__', isolated), patch.object(WebHost, 'open_browser', return_value=False), patch.object(InstanceStore, '__init__', private):
-    if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']):
-        module = 'src.web.native_windows' if os.name == 'nt' else 'src.web.native_macos'
-        launch(root, module, opener=lambda url: False)
-        raise SystemExit(0)
+def registered_once(url):
+    # The existing one-handoff budget now exercises the actual shell/main/wrapper.
+    hosted_only()
+    receipt = Path(os.environ['CG_CI_STATE']) / 'handoff.json'
+    if receipt.exists():
+        return False
+    store = InstanceStore(root)
+    state = store.read()
+    assert state and url.startswith(f"http://127.0.0.1:{state['port']}/#bootstrap=")
+    try:
+        accepted = bool(real_opener(url))
+        result = dict(outcome='ACCEPTED' if accepted else 'UNAVAILABLE', accepted=accepted)
+    except OSError as error:
+        result = dict(outcome='UNAVAILABLE', accepted=False, reason=type(error).__name__)
+    result.update(attempts=1, owned_loopback_destination=True, page_rendering='NOT VERIFIED')
+    receipt.write_text(json.dumps(result))
+    return result['accepted']
+module = 'src.web.native_windows' if os.name == 'nt' else 'src.web.native_macos'
+import importlib
+adapter = importlib.import_module(module)
+real_opener = adapter.open_registered_browser
+with patch.object(WebHost, '__init__', isolated), patch.object(WebHost, 'open_browser', return_value=False), patch.object(InstanceStore, '__init__', private), patch.object(adapter, 'open_registered_browser', registered_once):
     raise SystemExit(main())
 '''
 
@@ -86,34 +142,45 @@ def until(predicate, seconds=25):
     raise AssertionError("bounded_native_condition_timeout")
 
 
+def command_failure(result, store):
+    # The production wrapper handles exceptions and prints user guidance. Its
+    # bounded lifecycle log retains the exact safe code even without a traceback.
+    evidence = dict(returncode=result.returncode)
+    path = store.directory / 'lifecycle.log'
+    if path.is_file():
+        codes = [line.split()[-1] for line in path.read_text(encoding='ascii').splitlines()[-16:] if line.split()]
+        evidence['lifecycle_errors'] = [code for code in codes if code in LAUNCH_ERRORS]
+    for code in sorted(LAUNCH_ERRORS):
+        suffix = b'InstanceConflict: ' + code.encode('ascii')
+        if any(line.endswith(suffix) for line in result.stderr.splitlines()):
+            evidence['error_code'] = code
+            break
+    return evidence
+
+
+def preflight_observations(home):
+    values = []
+    for case in ('shell-1', 'shell-2'):
+        path = home / ('ci-preflight-' + case + '.json')
+        if path.is_file():
+            value = dict(case=case, **json.loads(path.read_text()))
+            trace = home / ('ci-startup-' + case + '-preflight.json')
+            if trace.is_file():
+                value['child'] = json.loads(trace.read_text())
+            values.append(value)
+    return values
+
+
 def detached(root, home):
     store = InstanceStore(root, data_home=home)
     module = "src.web.native_windows" if os.name == "nt" else "src.web.native_macos"
-    environment = dict(os.environ, CG_CI_STATE=str(home))
+    case = 'lifecycle-first'
+    environment = dict(os.environ, CG_CI_STATE=str(home), CG_CI_CASE=case)
     original_spawn = subprocess.Popen
     identities = {}
     identity_checks = []
     handoff = {}
     result = None
-
-    def open_once(url):
-        # One real production OS handoff, only on this disposable hosted runner.
-        # Never retain bootstrap URLs or infer that an accepted handoff painted.
-        hosted_only()
-        owned = store.read()
-        assert owned and url.startswith(f"http://127.0.0.1:{owned['port']}/#bootstrap=")
-        if os.name == "nt":
-            from src.web.native_windows import open_registered_browser
-        else:
-            from src.web.native_macos import open_registered_browser
-        try:
-            accepted = bool(open_registered_browser(url))
-            handoff.update(outcome="ACCEPTED" if accepted else "UNAVAILABLE", accepted=accepted)
-        except OSError as error:
-            handoff.update(outcome="UNAVAILABLE", accepted=False, reason=type(error).__name__)
-        handoff.update(owned_loopback_destination=True, attempts=1,
-                       page_rendering="NOT VERIFIED", browser_process="NOT VERIFIED")
-        return handoff["accepted"]
 
     def observed_identity(pid):
         current = process_identity(pid)
@@ -129,12 +196,13 @@ def detached(root, home):
     try:
         with patch("src.web.lifecycle.InstanceStore", return_value=store), patch("src.web.lifecycle.subprocess.Popen", side_effect=spawn), \
                 patch("src.web.lifecycle.process_identity", side_effect=observed_identity):
-            first = launch(root, module, opener=open_once)
+            first = launch(root, module, opener=lambda url: False)
             state = store.read()
             assert state and control(state, "status")["ready"]
-            assert first.browser_opened == handoff["accepted"]
+            assert not first.browser_opened
             assert control(state, "open")["ready"]
             assert store.read()["nonce"] == first.instance
+            case = environment['CG_CI_CASE'] = 'lifecycle-restart'
             second = launch(root, module, opener=lambda url: False)
             assert not second.browser_opened and control(store.read(), "status")["ready"]
             assert second.instance != first.instance
@@ -149,18 +217,33 @@ def detached(root, home):
             # Do not hold read handles against Windows' delete-on-close cleanup.
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
-            # Actual executable .command plumbing, but shim suppresses Finder/browser.
-            if sys.platform == "darwin":
-                entry = root / "macos/Beta/Cost-Guard-Web.command"
+            # Actual moved shell -> production main -> launch wrapper, including
+            # config/native preflight and macOS helper preparation. Only acquisition
+            # and private test state are isolated; one OS handoff remains the budget.
+            preferences = root / 'config/user-config.jsonc'
+            saved = '{"webSettings":{"theme":"classic","miniWatchSize":"remember-last"}}\n'
+            preferences.write_text(saved)
+            entry = root / ('macos/Cost-Guard-Web.command' if sys.platform == 'darwin' else 'windows/Cost-Guard-Web.cmd')
+            command = [str(entry)] if sys.platform == 'darwin' else ['cmd.exe', '/d', '/c', str(entry)]
+            if sys.platform == 'darwin':
                 assert os.access(entry, os.X_OK)
-                result = subprocess.run([str(entry)], cwd=home, env=environment,
-                                        capture_output=True, timeout=45)
-                assert result.returncode == 0
-            else:
-                entry = root / "windows/Beta/Cost-Guard-Web.cmd"
-                result = subprocess.run(["cmd.exe", "/d", "/c", str(entry)], cwd=home,
-                                        env=environment, capture_output=True, timeout=45)
-                assert result.returncode == 0
+            for attempt in range(2):
+                case = environment['CG_CI_CASE'] = 'shell-' + str(attempt + 1)
+                previous = store.read()
+                result = subprocess.run(command, cwd=home, env=environment, capture_output=True, timeout=60)
+                assert result.returncode in (0, 4), 'production_launch_wrapper_failed'
+                handoff = json.loads((home / 'handoff.json').read_text())
+                expected_exit = 0 if attempt == 0 and handoff['accepted'] else 4
+                assert result.returncode == expected_exit, 'browser_handoff_exit_mismatch'
+                state = store.read()
+                assert state and control(state, 'status')['ready']
+                assert preferences.read_text() == saved
+                assert InstanceStore(root, data_home=home).directory == store.directory
+                if previous:
+                    assert previous['nonce'] != state['nonce']
+                    assert process_identity(previous['pid']) != previous['process']
+                if sys.platform == 'darwin':
+                    assert b'Cost Guard.app' in result.stdout, 'production_helper_preparation_not_observed'
             state = store.read()
             assert state and control(state, "status")["ready"]
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
@@ -170,24 +253,24 @@ def detached(root, home):
         if result is not None and result.returncode:
             # The captured traceback can contain private state/paths. Publish only
             # the exit status and exact known lifecycle code, never raw output.
-            error.ci_command = dict(returncode=result.returncode)
-            for code in sorted(LAUNCH_ERRORS):
-                suffix = b"InstanceConflict: " + code.encode("ascii")
-                if any(line.endswith(suffix) for line in result.stderr.splitlines()):
-                    error.ci_command["error_code"] = code
-                    break
-        trace = home / "ci-startup.json"
-        if trace.is_file():
-            error.ci_trace = json.loads(trace.read_text())
+            error.ci_command = command_failure(result, store)
+        error.ci_trace = {}
+        for mode in ('wrapper', 'preflight', 'host'):
+            trace = home / ('ci-startup-' + case + '-' + mode + '.json')
+            if trace.is_file():
+                error.ci_trace[mode] = json.loads(trace.read_text())
+        error.ci_preflight = preflight_observations(home)
         raise
     finally:
         current = store.read()
         if current:
             stop_existing(store, current)
-    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
+    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks,
+        preflight_observations=preflight_observations(home), checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
-        "spaces and Unicode source path", "source change removes native host and private record"],
-        command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "PASS (real .cmd/PowerShell; offline entry shim)")
+         "spaces and Unicode source path", "production launcher preflight / restart / unchanged preferences and checkout identity",
+         "source change removes native host and private record"],
+        command="PASS (real moved shell / production wrapper; offline acquisition only)")
 
 
 def macos_cache(root, home):
@@ -197,7 +280,7 @@ def macos_cache(root, home):
     stamp = (first / "Contents/MacOS/applet").stat().st_mtime_ns
     assert prepare_app(root, store) == first
     assert (first / "Contents/MacOS/applet").stat().st_mtime_ns == stamp
-    with (root / "macos/Beta/launcher.applescript").open("a") as stream:
+    with (root / "macos/launcher.applescript").open("a") as stream:
         stream.write("\n-- synthetic fingerprint change\n")
     assert prepare_app(root, store) != first
     return dict(outcome="PASS", checks=["in-box osacompile", "verified cache reuse", "source fingerprint rebuild"],
@@ -231,7 +314,7 @@ def macos_fault(root):
 def main():
     hosted_only()
     evidence = dict(outcome="NOT RUN", checks={}, limitations=["NOT VERIFIED: physical desktop clicks, visual icon/menu, Finder/Gatekeeper, default-browser rendering, accessibility",
-        "Synthetic entry bypasses real source/provider acquisition and stubs menu browser dispatch; one separate production OS handoff is recorded, not end-to-end consumer launcher proof"])
+        "Synthetic entry bypasses real source/provider acquisition and stubs menu browser dispatch; moved shell calls production launch wrapper with one recorded OS handoff, not physical consumer-desktop proof"])
     try:
         with tempfile.TemporaryDirectory(prefix="cg-ci-native-") as temporary:
             base = Path(temporary).resolve()
@@ -239,6 +322,9 @@ def main():
             root.mkdir()
             for name in ("src", "macos", "windows", "config"):
                 shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__", "user-config.jsonc"))
+            support = root / 'development/tools'
+            support.mkdir(parents=True)
+            shutil.copyfile(ROOT / 'development/tools/ci_web_beta.py', support / 'ci_web_beta.py')
             (root / "cost-guard-web.py").write_text(SHIM, encoding="utf-8")
             home = base / "private"
             home.mkdir()
@@ -289,6 +375,8 @@ def main():
             evidence["command_failure"] = error.ci_command
         if hasattr(error, "ci_trace"):
             evidence["last_child_stage"] = error.ci_trace
+        if hasattr(error, "ci_preflight"):
+            evidence['preflight_observations'] = error.ci_preflight
         # Preserve causal source locations, not raw paths/state/exception payloads.
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)

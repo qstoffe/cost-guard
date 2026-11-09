@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Optional Web entry; preserve the CLI's independent startup/import graph."""
+"""Managed Web runtime and explicit foreground developer entry."""
 from pathlib import Path
 import sys
 
@@ -17,7 +17,7 @@ def run():
         except Exception:
             return 1
     from src.runtime_errors import RuntimeErrors
-    return RuntimeErrors(Path(__file__).resolve().parent, mode="Web Beta").run(start)
+    return RuntimeErrors(Path(__file__).resolve().parent, mode="Web").run(start)
 
 
 if __name__ == "__main__":

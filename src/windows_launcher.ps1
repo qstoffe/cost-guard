@@ -65,7 +65,7 @@ public static class CostGuardLauncherConsole {
         return
     }
 
-    $target = 'cost-guard.py'
+    $target = 'cost-guard-cli.py'
     $programArgs = @()
     if ($Mode -eq 'watch') { $programArgs = @('--watch') }
     if ($Mode -eq 'diagnostics') {

@@ -231,6 +231,49 @@ class CiEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):
                 ci_web_beta.hosted_only()
 
+    def test_native_command_failure_keeps_only_allowlisted_lifecycle_codes(self):
+        from development.tests.integration.ci_native_web import command_failure
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / 'lifecycle.log').write_text(
+                '1 starting\n2 private-source-value\n3 tray_unavailable\n4 instance_conflict\n', encoding='ascii')
+            result = SimpleNamespace(returncode=1, stderr=b'private traceback/path\nInstanceConflict: instance_start_timeout\n')
+
+            evidence = command_failure(result, SimpleNamespace(directory=directory))
+
+        self.assertEqual(dict(returncode=1, lifecycle_errors=['tray_unavailable', 'instance_conflict'],
+                              error_code='instance_start_timeout'), evidence)
+
+    def test_preflight_observer_preserves_call_deadline_result_and_exceptions(self):
+        from unittest.mock import Mock
+
+        command = ['python', 'entry.py', '--preflight-macos']
+        result = SimpleNamespace(returncode=3)
+        timeout = ci_web_beta.subprocess.TimeoutExpired(command, 10, output='private-output')
+        unavailable = OSError('private-path')
+        for outcome in (result, timeout, unavailable, FileNotFoundError('private-executable')):
+            with self.subTest(outcome=type(outcome).__name__):
+                run = Mock(return_value=outcome if outcome is result else None,
+                           side_effect=outcome if isinstance(outcome, Exception) else None)
+                records = []
+                observed = ci_web_beta.observe_preflight(run, records.append)
+
+                with patch.object(ci_web_beta.time, 'monotonic', side_effect=[1, 11.125]):
+                    if isinstance(outcome, Exception):
+                        with self.assertRaises(type(outcome)) as raised:
+                            observed(command, timeout=10, stdin=-3, stdout=-3, stderr=-3, check=False)
+                        self.assertIs(outcome, raised.exception)
+                    else:
+                        self.assertIs(result, observed(command, timeout=10, stdin=-3, stdout=-3, stderr=-3, check=False))
+
+                run.assert_called_once_with(command, timeout=10, stdin=-3, stdout=-3, stderr=-3, check=False)
+                classification = 'TimeoutExpired' if isinstance(outcome, ci_web_beta.subprocess.TimeoutExpired) else 'OSError'
+                expected = dict(outcome=classification, seconds=10.125)
+                if outcome is result:
+                    expected = dict(outcome='returned', returncode=3, seconds=10.125)
+                self.assertEqual([expected], records)
+
     def test_synthetic_sessions_fixture_captures_and_joins_without_watch_publication(self):
         import shutil
         from development.tests.fixtures.web_reports import SyntheticSessionsRuntime

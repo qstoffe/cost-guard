@@ -158,6 +158,24 @@ class BrokenPackageTests(unittest.TestCase):
         failures = self.failures(validate_package.check_required_layout, copy)
         self.assertIn(("runtime artifact", "forbidden packaged top-level path: cache"), failures)
 
+    def test_validator_requires_web_and_legacy_and_rejects_old_distribution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = copy_package(Path(temporary))
+            for relative in ("windows/Cost-Guard-Web.cmd", "macos/Legacy/Cost-Guard.command"):
+                path = root / relative
+                original = path.read_bytes()
+                path.unlink()
+                failures = self.failures(validate_package.check_required_layout, root)
+                self.assertIn(("required layout", "missing required file: " + relative), failures)
+                path.write_bytes(original)
+            for relative in ("windows/Beta/Cost-Guard-Web.cmd", "macos/Cost-Guard.command"):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("stale launcher", encoding="utf-8")
+            failures = self.failures(validate_package.check_required_layout, root)
+            self.assertTrue(any("windows/Beta" in detail for _, detail in failures))
+            self.assertTrue(any("macos/Cost-Guard.command" in detail for _, detail in failures))
+
     def test_validator_rejects_report_layer_import_of_concrete_provider(self) -> None:
         copy = self.broken_copy("src/reports/service.py", "\nimport src.pricing.github_copilot\n")
         failures = self.failures(validate_package.check_architecture_imports, copy)

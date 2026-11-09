@@ -17,6 +17,7 @@ from development.tests.fixtures.web_reports import current_report, SyntheticSess
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.web.http import RequestHandler
+from src.version import DISPLAY_VERSION
 
 
 def main():
@@ -67,6 +68,8 @@ def main():
                 page.on("pageerror", lambda error: errors.append(type(error).__name__))
                 page.goto(owner.browser_url())
                 expect(page.locator("#result .overview-models")).to_be_visible(timeout=30000)
+                expect(page.locator("header h1")).to_have_text(f"Cost Guard {DISPLAY_VERSION}")
+                expect(page).to_have_title("Models · Cost Guard")
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0
@@ -87,6 +90,7 @@ def main():
                     expect(page.get_by_role("link", name="Models", exact=True)).to_have_attribute('aria-current', 'page')
                 expect(page.locator("#heading")).to_contain_text("Models")
                 page.get_by_role("link", name="Accounts", exact=True).click()
+                expect(page).to_have_title("Accounts · Cost Guard")
                 expect(page.locator("#heading")).to_contain_text("Accounts")
                 page.go_back()
                 expect(page.locator("#heading")).to_contain_text("Models")
