@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000644: `analysis/ai_stats_rates.py` owns nominal configured-local date/workday
+normalization and fictional robot shifts over existing period totals/durations.
+`ai_stats.py` retains the original active-hour value; reports thread the configured
+calendar; application allowlists raw rates and prepares both units/help. The retained
+first Web card alone gets three rows. Coverage: `test_ai_stats_rates.py`, existing
+Stats/recovery tests, `probe_ai_stats.cjs`, layout/state probes and real read-only
+`probe_ai_stats.py`. No new history acquisition or valuation boundary.
+
 FR000643: `mini.js::View.drawSessions` gates terminal foreground on the existing
 historical category, matching Full Watch without a second grace clock. Coverage:
 `mini_sessions.cjs`, `mini_watch.cjs`, synthetic `fixtures/mini_lifecycle.py` and

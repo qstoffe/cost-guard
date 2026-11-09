@@ -47,7 +47,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
             display = stat_tokens(asdict(item))
             self.assertRegex(display['value'], r'0')
             self.assertTrue(display['trait'])
-            self.assertEqual({'value', 'trait'}, set(display))
+            self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'robot_day', 'rate_help'}
+                             if key == 'hourly-rate' else {'value', 'trait'}, set(display))
             self.assertIsNone(item.session_id)
             self.assertEqual('', item.detail)
 
@@ -71,7 +72,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
                 self.assertEqual((value, status), (item.value, item.status))
                 self.assertIn(reason, item.reasons)
                 display = stat_tokens(asdict(item))
-                self.assertEqual({'value', 'trait'}, set(display))
+                self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'robot_day', 'rate_help'}
+                                 if key == 'hourly-rate' else {'value', 'trait'}, set(display))
                 self.assertTrue(display['trait'])
                 self.assertNotIn('Loading', str(display))
                 self.assertNotIn('vault', str(display))
@@ -130,6 +132,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
         self.assertEqual(Decimal(18), result['total-cost'].value)
         self.assertEqual(3 * HOUR_MS, result['working-time'].value)
         self.assertEqual(Decimal(6), result['hourly-rate'].value)
+        self.assertEqual(Decimal(48), result['hourly-rate'].rates.robot_day)
+        self.assertEqual(Decimal(6), result['hourly-rate'].rates.active_rate)
         self.assertEqual(Decimal(9), result['average-cost'].value)
         self.assertEqual('a', result['expensive-session'].session_id)
         self.assertEqual('a', result['longest-session'].session_id)
@@ -354,6 +358,10 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         self.assertIn('CCost', metric['display']['value'])
         self.assertIn('$', metric['display_units']['usd']['value'])
         self.assertIn('trait', metric['display'])
+        hourly = result['view']['ai_stats'][0]['metrics'][0]
+        self.assertIn('calendar_rate', hourly['display'])
+        self.assertIn('robot_day', hourly['display_units']['usd'])
+        self.assertEqual(24, hourly['rates']['calendar_hours'])
         with self.assertRaises(ValueError):
             parse_report({'kind': 'token-mix', 'stats_scope': 'all'})
         with self.assertRaises(ValueError):

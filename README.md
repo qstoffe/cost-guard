@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.223, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.224, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -365,7 +365,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.223 (2026-11-09):** Mini Watch historical session rows use the theme's normal foreground. Green success and red abort/error highlights last only through the existing recent-terminal grace; resumed sessions turn yellow in the same keyed row. See [Mini Watch](docs/web-mini-watch.md).
+**v80.224 (2026-11-09):** AI Stats' first card shows 24h and workday hourly averages plus a hypothetical eight-hour robot shift, with shared Credits/USD help. Active AI time, actual cost and the other nine cards keep their existing calculations. See [AI Stats](docs/web-beta.md#ai-stats).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

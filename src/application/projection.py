@@ -70,6 +70,15 @@ def hourly(value):
     return fields(value, "scope start_ms end_ms known_ccost cost_complete duration_ms rate status observed_requests")
 
 
+def ai_stat(value):
+    base = fields(value, 'metric value status session_id session_title detail reasons')
+    if value.rates is None:
+        return base
+    rates = fields(value.rates, 'total calendar_days workdays calendar_hours workday_hours active_hours '
+                   'calendar_rate workday_rate active_rate robot_day robot_period')
+    return ObjectValue(base.fields + (('rates', rates),))
+
+
 def block(value, *, source_complete=True, details=False):
     base = fields(value, """session_id title total_ccost total_calls total_ictx_cost_text total_extra_cost_text
         total_mix_text current_context_tokens next_context_tokens next_context_cached_ccost
@@ -196,7 +205,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         active_hours=tuple(hourly(item) for item in report.active_hours),
         ai_stats_policy=STATS_POLICY if report.kind.value == 'ai-stats' else None,
         ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
-            metrics=tuple(fields(metric, 'metric value status session_id session_title detail reasons') for metric in item.metrics),
+            metrics=tuple(ai_stat(metric) for metric in item.metrics),
             matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
         ai_stats_work=record(scopes=record(**{key: record(**value)

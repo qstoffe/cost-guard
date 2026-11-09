@@ -204,6 +204,10 @@ section > label input { min-width: 0; }
 .ai-stat h4 button { text-align: left; }
 .ai-stat-icon { font-size: 1.3rem; }
 .ai-stat-value { margin: 0; font-size: 1.65rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ai-stat-rates { display: grid; gap: .4rem; font-size: 1rem; }
+.ai-stat-rate { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .15rem .6rem; min-width: 0; }
+.ai-stat-rate-label { font-size: .8rem; }
+.ai-stat-rate-value { font-size: 1.1rem; font-weight: 600; max-width: 100%; }
 .ai-stat-detail { margin: .25rem 0; }
 .ai-stat-trait { margin: .7rem 0 0; font-size: .85rem; color: var(--muted); }
 .token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }

@@ -47,6 +47,20 @@ def evidence_views():
                               zone='UTC', source_complete=complete)
         view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,))).to_json()
         result.append(dict(name=name, result={**base, 'view': view}))
+    # Fixed seven local date slots; these are calculated in Python, never in JS.
+    from .active_hour import epoch
+    fixed_now, start = epoch('2026-11-08T20:00:00+00:00'), epoch('2026-11-02T06:00:00+00:00')
+    for name, hours, period_name, clock, stamp in (
+        ('three-rates', 28, '7-days', fixed_now, start),
+        ('faster-robot', 7, '7-days', fixed_now, start),
+        ('no-workdays', 4, 'today', epoch('2026-11-07T12:00:00+00:00'), epoch('2026-11-07T06:00:00+00:00'))):
+        synthetic = replace(root, entries=(replace(entry, completed_at_ms=stamp),),
+                            intervals=((stamp, hours * 3_600_000, False),))
+        period = period_stats((synthetic,), lambda *_: Decimal(840), period=period_name,
+            start=clock - 7 * 86_400_000 if period_name == '7-days' else epoch('2026-11-06T23:00:00+00:00'),
+            now=clock, zone='Europe/Stockholm')
+        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,))).to_json()
+        result.append(dict(name=name, result={**base, 'view': view}))
     return result
 
 

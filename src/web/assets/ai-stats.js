@@ -2,7 +2,7 @@
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
   const definitions = [
-    ['hourly-rate', '💸', 'AI Hourly Rate', 'How much the silicon crew burns per hour.'],
+    ['hourly-rate', '💸', 'AI Hourly Rate', 'Three ways to feed the silicon crew: around the clock, scheduled hours, or a hypothetical robot shift.'],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
     ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Coffee breaks excluded.'],
     ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
@@ -14,6 +14,7 @@ const AIStatsView = (() => {
     ['parallel', '🔀', 'Peak Parallel Sessions', 'The biggest robot party running at once.']
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
+  const rateRows = [['calendar_rate', '24h average'], ['workday_rate', 'Workday average'], ['robot_day', 'Robot · 8h shift']];
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-1' &&
@@ -21,7 +22,9 @@ const AIStatsView = (() => {
       periods.some(([id]) => id === row.period) && row.metrics?.length === 10 && definitions.every(([key]) =>
         row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
           typeof metric.display?.value === 'string' && typeof metric.display?.trait === 'string' &&
-          ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string')).length === 1));
+          ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
+            (key !== 'hourly-rate' || [...rateRows.map(([id]) => id), 'rate_help'].every(id =>
+              typeof (metric.display_units?.[unit]?.[id] ?? metric.display[id]) === 'string')))).length === 1));
   }
   function remember(state, result) {
     if (!valid(result)) return;
@@ -77,12 +80,23 @@ const AIStatsView = (() => {
         for (const [key, icon, title, help] of items) {
           const card = e('article', undefined, 'ai-stat'), heading = e('h4');
           const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
-          const helpButton = ContextHelp.button(title, () => help);
+          const retained = {metric: null, rates: new Map()};
+          const helpButton = ContextHelp.button(title, () => key === 'hourly-rate' && retained.metric ?
+            ReportView.display(retained.metric, 'rate_help') : help);
           heading.append(symbol, helpButton);
-          const value = e('p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
+          const value = e(key === 'hourly-rate' ? 'div' : 'p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
+          if (key === 'hourly-rate') {
+            value.classList.add('ai-stat-rates');
+            for (const [id, label] of rateRows) {
+              const row = e('div', undefined, 'ai-stat-rate'), amount = e('span', '', 'ai-stat-rate-value');
+              row.setAttribute('role', 'group'); row.setAttribute('aria-label', label);
+              row.append(e('span', label, 'ai-stat-rate-label'), amount); value.append(row);
+              retained.rates.set(id, amount);
+            }
+          }
           const trait = e('p', '', 'ai-stat-trait');
           card.append(heading, value, detail, trait); grid.append(card);
-          this.cards.set(key, {value, detail, trait});
+          this.cards.set(key, Object.assign(retained, {value, detail, trait}));
         }
       }
       this.root.append(this.selector, this.content);
@@ -107,7 +121,10 @@ const AIStatsView = (() => {
       // Mutate the ten retained cards in one synchronous commit; never touch focus/scroll.
       for (const metric of row.metrics) {
         const card = this.cards.get(metric.metric);
-        ReportView.text(card.value, () => ReportView.display(metric, 'value'));
+        card.metric = metric;
+        if (card.rates.size) {
+          for (const [id, node] of card.rates) ReportView.text(node, () => ReportView.display(metric, id));
+        } else ReportView.text(card.value, () => ReportView.display(metric, 'value'));
         ReportView.text(card.trait, metric.display.trait);
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {
@@ -136,9 +153,12 @@ const AIStatsView = (() => {
       const suffix = index === 0 ? '/h' : '';
       const value = index < 2 || index === 3 || index === 4 ? '0 CCost' + suffix :
         [2, 5, 6].includes(index) ? '0s' : index === 7 ? '0%' : index === 8 ? '0 days' : '0';
-      const display = {value, trait: traits[index]};
+      const display = {value, trait: traits[index], ...(index === 0 ? {
+        calendar_rate: '0 CCost/h', workday_rate: 'No workdays', robot_day: '0 CCost/8h day',
+        rate_help: '24h spreads the tab around the clock. Workday uses scheduled hours. Robot day imagines a hypothetical eight-hour shift. The robot clock is taking a nap.'} : {})};
       return {metric, value: 0, display, display_units: {credits: display,
-        usd: {...display, value: index < 2 || index === 3 || index === 4 ? '$0.00' + suffix : value}}};
+        usd: {...display, value: index < 2 || index === 3 || index === 4 ? '$0.00' + suffix : value,
+          ...(index === 0 ? {calendar_rate: '$0.00/h', robot_day: '$0.00/8h day'} : {})}}};
     })};
   }
   return {View, valid, remember, observe, prioritize};

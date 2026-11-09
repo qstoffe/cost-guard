@@ -60,8 +60,12 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
         metric.display.trait='A long readable trait with descenders gjpqy and accents Åé — '.repeat(3);
         metric.status=['complete','unknown','partial'][index%3];
         metric.display.value=index%2 ? 'N/A' : '12345678901234567890';
-        metric.display_units={credits:{value:index%2 ? 'N/A' : '12345678901234567890 credits'},
-          usd:{value:index%2 ? 'N/A' : '$123456789012345678.90'}};
+        metric.display_units={credits:{...metric.display,value:index%2 ? 'N/A' : '12345678901234567890 credits'},
+          usd:{...metric.display,value:index%2 ? 'N/A' : '$123456789012345678.90'}};
+        if(metric.metric==='hourly-rate') for(const unit of ['credits','usd'])
+          for(const key of ['calendar_rate','workday_rate','robot_day'])
+            metric.display_units[unit][key]=(unit==='usd'?'$':'')+'123456789012345678.90'+
+              (unit==='credits'?' CCost':'')+(key==='robot_day'?'/8h day':'/h');
         metric.detail=metric.metric==='busiest-day' ? 'September 30, 2026' : '';
         if(metric.session_id) metric.session_title=index%2 ? 'Short gjpqy' : 'LongSessionWithNoBreaks'.repeat(8)+' — gjpqy Åé';
       });
@@ -69,7 +73,7 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
         detail:'Matched first inputs on September 30, 2026 — '+ 'detail'.repeat(30)};
     }
     current.result=__statsStress; current.stats.update(current);`);
-  for (const theme of ['classic','light','dark']) for (const width of [360,1366,1920]) {
+  for (const theme of ['classic','light','dark']) for (const width of [360,520,1280]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
     for (const scale of [1,1.25,1.5,2]) {
