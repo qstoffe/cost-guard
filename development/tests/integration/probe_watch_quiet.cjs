@@ -27,10 +27,10 @@ module.exports = async function quiet({evaluate,layouts,checks}) {
     assert.doesNotMatch(card.summary,/refreshing|retrying|retained total/i);
   });
   // App-owned source retry feedback is not duplicated in card/day notices.
-  if(result.source) assert.match(result.source,/Source updates delayed.*not current/);
-  for(const card of result.sustained) {assert.match(card.message,/Updates delayed · showing last values/); assert.doesNotMatch(card.summary,/partial source evidence/);}
+  assert.equal(result.source,'');
+  for(const card of result.sustained) {assert.equal(card.message,''); assert.doesNotMatch(card.summary,/partial source evidence/);}
   for(const card of result.unavailable) assert.equal(card.message,'');
   result.recovered.forEach((card,i)=>assert.equal(card.height,result.before[i].height));
   layouts.push({case:'quiet-watch-refresh',...result});
-  checks.push('Five real DOM refresh/revaluation cycles retain prompt/session figures and exact card heights without retry/refresh labels in active/earlier cards; virtual sustained delay, unavailable source and recovery remain explicit');
+  checks.push('Five real DOM refresh/revaluation cycles retain prompt/session figures and exact card heights; sustained delay, unavailable source and recovery remain silent after useful content');
 };

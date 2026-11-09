@@ -25,6 +25,10 @@ from src.web.jobs import ReportJobs
 from src.web.lifecycle import control, launch, stop_existing
 from src.web.process_identity import process_identity
 
+LAUNCH_ERRORS = {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
+                 "instance_start_timeout", "instance_start_conflict", "gui_or_server_start_failed",
+                 "safe_force_stop_unavailable"}
+
 SHIM = '''import os, sys
 import socket
 import time, json
@@ -90,6 +94,7 @@ def detached(root, home):
     identities = {}
     identity_checks = []
     handoff = {}
+    result = None
 
     def open_once(url):
         # One real production OS handoff, only on this disposable hosted runner.
@@ -162,6 +167,15 @@ def detached(root, home):
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
     except Exception as error:
+        if result is not None and result.returncode:
+            # The captured traceback can contain private state/paths. Publish only
+            # the exit status and exact known lifecycle code, never raw output.
+            error.ci_command = dict(returncode=result.returncode)
+            for code in sorted(LAUNCH_ERRORS):
+                suffix = b"InstanceConflict: " + code.encode("ascii")
+                if any(line.endswith(suffix) for line in result.stderr.splitlines()):
+                    error.ci_command["error_code"] = code
+                    break
         trace = home / "ci-startup.json"
         if trace.is_file():
             error.ci_trace = json.loads(trace.read_text())
@@ -269,9 +283,10 @@ def main():
         evidence["outcome"] = "PASS"
     except Exception as error:
         evidence.update(outcome="FAIL", reason=type(error).__name__)
-        if str(error) in {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
-                          "instance_start_timeout", "gui_or_server_start_failed", "safe_force_stop_unavailable"}:
+        if str(error) in LAUNCH_ERRORS:
             evidence["error_code"] = str(error)
+        if hasattr(error, "ci_command"):
+            evidence["command_failure"] = error.ci_command
         if hasattr(error, "ci_trace"):
             evidence["last_child_stage"] = error.ci_trace
         # Preserve causal source locations, not raw paths/state/exception payloads.

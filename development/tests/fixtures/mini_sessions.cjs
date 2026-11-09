@@ -104,7 +104,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const retry = structuredClone(input.view.history_cards[2]); retry.state='retrying';
   input.view.history_cards[2]=retry; input.view.history_state='refreshing'; input.view.history_epoch=1; controller.update(input);
   assert.equal(time.textContent,'02:30','failed source retry retains the authentic finish');
-  assert.match(view.historyBody.textContent,/Previously verified sessions/);
+  assert.doesNotMatch(view.historyBody.textContent,/Previously verified sessions|checking for changes/);
+  assert.equal(view.historyBody.children.length,3,'refresh adds no status row');
   input.view.history_state='observed'; controller.update(input);
   assert.deepEqual(view.body.children.map(node => node.textContent),running,'historical-only updates leave running semantics unchanged');
   view.earlierToggle.fire('click'); controller.update(input);
@@ -158,7 +159,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     assert.ok(view.body.children.every(row=>cost(row).endsWith(' ('+expected+')')));
     assert.equal(cost(view.historyBody.children[0], true), '2 ('+expected+')');
     assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'source captions never change Session row height');
-    if (['partial','unavailable'].includes(value.state)) assert.match(helpText(view.body.children[0].children[1].children[0].children[0]), /Source evidence:/);
+    assert.doesNotMatch(helpText(view.body.children[0].children[1].children[0].children[0]), /Source evidence:/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};
@@ -173,18 +174,22 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   input.view.history_cards[0].rows=[]; controller.update(input);
   assert.equal(view.historyBody.children[0].children[0].textContent,'—','missing representative is unknown');
   assert.equal(helpText(view.historyBody.children[0].children[0].children[0]),'Unknown finish time');
-  input.view = {...input.view,history_cards:[],history_state:'unavailable'}; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Unable to verify latest sessions','server owns retention and invalidation');
+  input.view = {...input.view,history_cards:[],history_state:'unavailable',history_epoch:1}; controller.update(input);
+  assert.equal(view.historyBody.textContent,'No earlier sessions','certified empty remains stable during retry');
   assert.equal(view.observationHelp,undefined);
   input.view.history_state='observed'; controller.update(input);
   assert.equal(view.historyBody.textContent,'No earlier sessions','canonical empty clears retained history');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='loading'; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Loading earlier sessions…');
+  assert.equal(view.historyBody.textContent,'No earlier sessions');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='unavailable'; controller.update(input);
-  assert.equal(view.historyBody.textContent,'Unable to verify latest sessions');
+  assert.equal(view.historyBody.textContent,'No earlier sessions');
   assert.equal(view.historyBody.children[0].children[0].colSpan,4);
+  input.view = {...input.view, history_epoch:0, history_source_key:'new-source', history_state:'loading'}; controller.update(input);
+  assert.equal(view.historyBody.textContent,'Loading earlier sessions…','a different source has no certified history yet');
+  input.view.history_state='unavailable'; controller.update(input);
+  assert.equal(view.historyBody.textContent,'Unable to load earlier sessions');
   input.view = {...saved,active_cards:saved.active_cards.map(card=>({...card,title:''}))}; controller.update(input);
   assert.equal(view.body.children[0].children[0].children[0].children[0].textContent,active.session_id);
   assert.equal(view.body.children[0].children[0].querySelectorAll('button').length,0);

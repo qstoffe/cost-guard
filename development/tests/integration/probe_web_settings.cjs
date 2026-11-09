@@ -106,7 +106,15 @@ async function main() {
       await evaluate(`document.querySelector('#mini-size option[value="fit-on-open"]').scrollIntoView({block:'nearest'})`);
       await command('Input.dispatchMouseEvent',{type:'mouseMoved',...await point('#mini-size option[value="fit-on-open"]')},owner);
       const bounds = await evaluate(`(() => {const r=document.querySelector('#mini-size option[value="fit-on-open"] .settings-choice-help').getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};})()`);
-      assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify({theme,width,zoom,...bounds}));
+      assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width,JSON.stringify({theme,width,zoom,...bounds}));
+      if (bounds.bottom>bounds.height && bounds.bottom-bounds.top>bounds.height) {
+        // Narrow native pickers stack the complete descriptions in their own
+        // scrollport. A tall description need not fit all at once, but its end
+        // must be reachable without document overflow or clipped text.
+        const end=await evaluate(`(()=>{const n=document.querySelector('#mini-size option[value="fit-on-open"] .settings-choice-help');n.scrollIntoView({block:'end'});const r=n.getBoundingClientRect();return {bottom:r.bottom,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
+        assert.ok(end.bottom>0&&end.bottom<=bounds.height,JSON.stringify({theme,width,zoom,...end}));
+        assert.equal(end.overflow,false);
+      } else assert.ok(bounds.bottom<=bounds.height,JSON.stringify({theme,width,zoom,...bounds}));
       await key('Escape');
     }
     checks.push('Classic/Web light/dark × 1280/520/360 × CSS zoom 100/200%: no page overflow, aligned controls, unframed rows, bounded native option help');
@@ -173,7 +181,8 @@ async function main() {
     await command('Page.navigate',{url:origin+'/#/settings'},owner);
     await until(`typeof settingsView!=='undefined' && settingsView?.loaded && !settingsView.busy`);
     assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true);
-    await click('#mini-size'); await until(`document.getElementById('mini-size').matches(':open')`);
+    await key('Tab');await evaluate(`document.getElementById('mini-size').focus()`);await key(' ','Space');
+    await until(`document.getElementById('mini-size').matches(':open')`);
     await evaluate(`document.querySelector('#mini-size option[value="fit-on-open"]').scrollIntoView({block:'nearest'})`);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',...await point('#mini-size option[value="fit-on-open"]')},owner);
     const image = await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},owner);

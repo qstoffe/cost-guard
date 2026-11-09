@@ -67,12 +67,14 @@ async function main() {
     await evaluate(id,`document.querySelector('[data-model-control="all"]').click();document.querySelector('[data-model-control="latest"]').click();
       document.querySelector('[data-model-control="column-1"]').dispatchEvent(new MouseEvent('click',{shiftKey:true}));
       ReportView.setUnit('usd',document.getElementById('result'));window.oldTable=document.querySelector('.overview-model-table');`);
-    const choice=await evaluate(id,`JSON.stringify(current.models)`);
+     const choice=await evaluate(id,`JSON.stringify(current.models)`);
+     await mode('hold');
     await evaluate(id,`document.querySelector('[data-model-control="refresh"]').click();document.querySelector('[data-model-control="refresh"]').click()`);
     assert.equal(await evaluate(id,`current.loading && document.querySelector('[data-model-control="refresh"]').disabled && document.querySelector('.model-price-controls').textContent.includes('Refreshing…') && oldTable===document.querySelector('.overview-model-table')`),true);
     // Two simultaneous tab actions share one queued/running refresh, not the Normal job.
     const same=await evaluate(id,`(async()=>{const [a,b]=await Promise.all([api('/api/models/refresh',{}),api('/api/models/refresh',{})]);return a.id===b.id&&a.id===current.active;})()`);
-    assert.equal(same,true);
+     assert.equal(same,true);
+     await mode('release');
     await until(id,`!current.loading`);
     const unchanged=await read(); assert.ok(unchanged.date>initial.date);
     assert.deepEqual(unchanged.models,initial.models); assert.equal((await mode('status')).fetches,2);

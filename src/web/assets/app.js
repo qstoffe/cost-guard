@@ -78,7 +78,6 @@ function applySettings(value) {
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }
-const connectionGrace = new ReportView.LiveStatus();
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
@@ -87,10 +86,9 @@ function connectionStatus(message, state = {}) {
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
   miniWatch?.health(hostState);
-  const late = connectionGrace.update(hostState.kind === 'connected', hostState.observedAt);
-  const quiet = hostState.kind === 'source_retrying' && liveValue?.view && hostState.observedAt != null && !late;
-  if (!quiet) statusLine.textContent = ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
-  statusLine.setAttribute('aria-description', message);
+  const quiet = hostState.kind === 'source_retrying' && liveValue?.view && hostState.observedAt != null;
+  statusLine.textContent = quiet ? 'Live connected.' : ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
+  statusLine.setAttribute('aria-description', quiet ? '' : message);
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
@@ -99,12 +97,12 @@ function connectionStatus(message, state = {}) {
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
     const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\n${demand ? 'Reports refresh through the host; retained results keep their source observation time.' : 'Reports stay frozen.'} Account updates are separate.`;
-    if (summary && details) { summary.textContent = message; details.textContent = timing; }
-    else banner.textContent = `${message} · ${timing}`;
+    if (summary && details) { summary.textContent = banner.hidden ? '' : message; details.textContent = banner.hidden ? '' : timing; }
+    else banner.textContent = banner.hidden ? '' : `${message} · ${timing}`;
     const warning = document.getElementById('host-warning');
     if (warning) {
       const recovery = ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ? 'Use a fresh OS launcher link.' : 'Check the local source/host; reload to retry.';
-      warning.textContent = hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
+      warning.textContent = banner.hidden ? '' : hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
     }
   }
   if (hostState.terminal) for (const view of views.values()) { view.detail?.detach(); view.catalog?.detach(); }
@@ -158,14 +156,11 @@ function show(state) {
   if (state !== current) return;
   refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
-  notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  notice.textContent = '';
   const finite = ReportLoading.sections.includes(state.section);
   if (finite) output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
   state.interrupted = ReportLoading.interrupted(hostState) ?
     'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
-  const updating = document.getElementById('report-updating');
-  if (updating) ReportView.text(updating, finite ? CachedReports.summary(state, hostState.writable, !!demand) : '');
-  if (finite && hostState.writable) notice.textContent = state.result && !state.withheld && state.section === 'models' ? state.message : '';
   if (state.section === 'token-mix') {
     refresh.textContent = 'Retry Token Mix';
     refresh.hidden = !state.failed;

@@ -87,8 +87,11 @@ assert.equal(card.title.className, '', 'terminal title stops looking running');
 assert.equal(watch.daily.attributes['aria-label'], 'CCost Today');
 assert.deepEqual(watch.daily.children.map(node => node.textContent), ['CCost Today', '34', '37 prompts']);
 assert.equal(watch.daily.querySelectorAll('button').length,0);
-assert.match(helpText(watch.daily.children[0]),/Reference cost[\s\S]*local day/);
-assert.match(helpText(watch.daily.children[2]),/including activity before Watch opened/);
+for (const node of watch.daily.children) {
+  assert.equal(node.events.focus, undefined, 'daily label, amount and count have no help target');
+  assert.equal(node.attributes['aria-describedby'], undefined);
+  assert.equal(node.attributes.title, undefined);
+}
 assert.doesNotMatch(watch.daily.textContent,/Token Mix|Cached input|Cache write|Output/);
 for (const table of [card, earlier]) {
   const headers = table.root.querySelectorAll('th');
@@ -243,7 +246,8 @@ assert.match(card.summary.children[1].textContent, /^Total CCost: N\/A.*unavaila
 summaryValue.cost = {...savedCost, priced_requests:0, complete:false}; summaryValue.state = 'partial';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.summary.children[1].textContent, 'Total CCost: N/A');
-assert.match(helpText(card.costHelp), /Partial pricing or source data[\s\S]*Source evidence: partial/);
+assert.match(helpText(card.costHelp), /Partial pricing or source data/);
+assert.doesNotMatch(helpText(card.costHelp), /Source evidence:/);
 summaryValue.cost = savedCost; summaryValue.state = 'observed';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 for (const complete of [true, false]) {
@@ -269,7 +273,7 @@ assert.equal(watch.daily.children[2].textContent, '182 prompts');
 context.input.view.daily_state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.doesNotMatch(watch.daily.textContent, /Source unavailable|retained/i);
-assert.match(watch.daily.attributes['aria-description'], /Daily source: unavailable/);
+assert.equal(watch.daily.attributes['aria-description'], undefined);
 assert.match(watch.daily.textContent, /182 prompts/);
 assert.equal(watch.daily.children[0].textContent, 'CCost Today');
 assert.deepEqual(watch.daily.children.slice(0,2).map(node => node.textContent), dailyValues.slice(0,2));
@@ -282,7 +286,7 @@ assert.equal(watch.daily.children[0].textContent, 'CCost Today');
 assert.equal(watch.daily.children[1].textContent, '34');
 assert.doesNotMatch(watch.daily.textContent,/Token Mix|Cached input|Cache write|Output/);
 assert.doesNotMatch(watch.daily.textContent, /Partial|[?≥~]/);
-assert.doesNotMatch(helpText(watch.daily.children[1]), /Partial|\?/);
+assert.equal(watch.daily.children[1].events.focus, undefined, 'daily amount has no help interaction');
 assert.equal(context.input.view.daily_usage.total.complete, false);
 vm.runInContext('ReportView.setUnit("usd", parent)', context);
 assert.equal(watch.daily.children[1].textContent, '$0.34');
@@ -326,7 +330,7 @@ context.input.state = 'running';
 context.input.view.daily_state = 'observed';
 context.state.connectionKind = 'reconnecting';
 vm.runInContext("state.connection = 'RECONNECTING'; ReportView.renderLive(parent, input, state)", context);
-assert.match(watch.empty.textContent, /Live connection interrupted/);
+assert.doesNotMatch(watch.empty.textContent, /Live connection interrupted/);
 assert.ok(!/Source unavailable/.test(watch.empty.textContent));
 context.input.view.daily_usage = null;
 context.input.view.daily_state = 'loading';
@@ -338,7 +342,14 @@ assert.equal(watch.daily.attributes['aria-label'], 'CCost Today');
 assert.ok(!/0 prompts/.test(watch.daily.textContent));
 context.input.view.daily_state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.deepEqual(watch.daily.children.map(node => node.textContent), ['CCost Today', 'Daily activity unavailable']);
+assert.match(watch.daily.textContent, /182 prompts/);
+for (const node of [watch.daily, ...watch.daily.children]) {
+  assert.equal(node.attributes.title, undefined);
+  assert.equal(node.attributes['aria-describedby'], undefined);
+  assert.equal(node.attributes['aria-description'], undefined);
+  assert.equal(node.attributes.tabindex, undefined);
+  assert.ok(!node.className?.includes('help-value'));
+}
 // A fresh initial acquisition stays neutral, never an observed empty/zero state.
 const initial = structuredClone(context.input);
 Object.assign(initial.view, {active_cards:[], history_cards:[], cards_state:'loading', history_state:'loading',
@@ -362,14 +373,14 @@ assert.doesNotMatch(context.fresh.root.textContent, /delayed/i);
 now++;
 vm.runInContext('fresh.update(initial)', context);
 assert.equal(context.fresh.empty.textContent, '', 'elapsed startup time is not a global failure');
-assert.match(context.fresh.daily.textContent, /Daily updates delayed/);
+assert.equal(context.fresh.daily.textContent, 'CCost Today—');
 assert.match(initialCard.message.textContent, /Prompt updates delayed/);
 Object.assign(initial.view, {cards_state:'observed', history_state:'observed', daily_state:'unavailable', accounts:{accounts:[]}});
 initial.view.active_cards = [];
 vm.runInContext('fresh.update(initial)', context);
 assert.equal(context.fresh.empty.textContent, 'No running prompts');
 assert.equal(context.fresh.history.textContent, 'No earlier sessions');
-assert.match(context.fresh.daily.textContent, /Daily activity unavailable/);
+assert.equal(context.fresh.daily.textContent, 'CCost TodayUnavailable');
 // Independent sublanes cannot turn advancing prompt observations into a global delay.
 const advancing = structuredClone(input);
 advancing.view.active_cards[0].rows[0].prompt.in_progress = true;
@@ -404,12 +415,12 @@ for (const sourceState of ['retrying', 'unavailable', 'failed']) {
   vm.runInContext('healthy.update(advancing)', context);
   now += 180000;
   vm.runInContext('healthy.update(advancing)', context);
-  assert.match(healthy.empty.textContent, /not current/);
+  assert.doesNotMatch(healthy.empty.textContent, /not current|Source updates delayed/);
   assert.doesNotMatch(healthy.empty.textContent, /No running prompts|Still loading Watch data/);
 }
 advancing.state = 'running';
 vm.runInContext('healthy.state.connection="RECONNECTING"; healthy.state.connectionKind="reconnecting"; healthy.update(advancing)', context);
-assert.match(healthy.empty.textContent, /interrupted.*not live/);
+assert.equal(healthy.empty.textContent, '');
 vm.runInContext('healthy.state.connection="Live connected."; healthy.state.connectionKind="connected"; healthy.update(advancing)', context);
 assert.equal(healthy.empty.textContent, 'No running prompts');
 const baseHistory = context.input.view.history_cards[0];
@@ -426,7 +437,7 @@ vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.deepEqual([...watch.history.children].map(node => node.dataset.session), ['middle', 'newest', 'newly-eligible']);
 for (const fixture of context.input.quota_cases || []) {
   context.input.view.accounts.accounts = [{...monthly, primary: fixture.value, secondary: [],
-    observation: {...monthly.observation, availability: 'stale'}}];
+    observation: {...monthly.observation, id:'quota-case-'+fixture.name, availability: 'stale'}}];
   vm.runInContext('ReportView.renderLive(parent, input, state)', context);
   const account = watch.accounts.children[0].children[0], label = account.children[2].textContent;
   const expected = fixture.percent === '—' ? '—' : fixture.percent + ' used';
@@ -435,7 +446,7 @@ for (const fixture of context.input.quota_cases || []) {
   assert.ok(helpText(account.children[3].children[0]).includes(fixture.native), fixture.name);
   assert.ok(!/CCost:|estimated|partial|[~≈]/.test(label), 'compact value has no visible provenance marker');
   assert.equal(primaryDetails(account).children[0].textContent, 'Reset unknown');
-  assert.match(account.attributes['aria-description'], /Quota: stale/);
+  assert.equal(account.attributes['aria-description'], undefined);
   assert.equal(account.querySelectorAll('progress').length,
     fixture.value.used_fraction == null || fixture.value.quota.unlimited ? 0 : 1, fixture.name);
   assert.equal(account.dataset.exhausted, String(fixture.value.exhausted), fixture.name);
@@ -487,7 +498,7 @@ assert.equal(sharedCard.children[2], sharedLabel, 'changed clocks and warnings p
 assert.equal(primaryTrack(sharedCard).children[0], sharedBar);
 assert.match(sharedCard.textContent, /Reset in 15m/);
 assert.doesNotMatch(sharedCard.textContent, /Stale|not current/);
-assert.match(sharedCard.attributes['aria-description'], /Quota: stale/);
+assert.equal(sharedCard.attributes['aria-description'], undefined);
 vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.setUnit("usd", accountsPage.root)', context);
 assert.match(sharedLabel.textContent, /remaining.*\$/);
 const other = structuredClone(context.shared.accounts.accounts[0]); other.observation.id = 'another-account';
@@ -504,7 +515,7 @@ assert.doesNotMatch(page.message.textContent, /retained|delayed/i);
 now += 60000;
 vm.runInContext('accountsPage.update(shared)', context);
 assert.equal(page.message.textContent, '', 'do not duplicate a card-owned source warning as a global retained warning');
-assert.match(page.grid.textContent, /Stale|Updates delayed/);
+assert.doesNotMatch(page.grid.textContent, /Stale|Updates delayed/);
 context.shared.quota_stale = false;
 vm.runInContext('accountsPage.update(shared)', context);
 assert.equal(page.root.textContent, 'No configured accounts detected.', 'observed empty actually removes cards');

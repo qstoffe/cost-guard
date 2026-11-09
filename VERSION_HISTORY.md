@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.212 — 2026-11-09
+
+- Populated Web views refresh silently, without historical/as-of strips, delayed-source captions or hidden refresh caveats. Full/Mini global CCost Today has no tooltip; certified Earlier rows and empty states stay stable.
+- Models uses one highlighted postfix promotion star after all tiers, with structured row-specific multiline offer help and no Web footnotes. CLI promotion notes are unchanged.
+- Sessions silently reopens expired catalog positions, safely returning to latest with the selected sort and synchronized URL/pager. Hour-old rows stay visible without a bottom progress widget; pending sorts retain the previous valid order.
+
 ## v80.211 — 2026-11-09
 
 - AI Stats always supplies ten fun-first numeric results with playful traits across all five periods. Stats-only bounded time/cost heuristics use available activity; empty histories get friendly zeros, never invented records or session links.

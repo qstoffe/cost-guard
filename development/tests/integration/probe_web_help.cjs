@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable','--quiet-refresh'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -55,7 +55,15 @@ async function main() {
     await command('Page.navigate',{url:launch.url},owner);
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===2`);
     await evaluate(owner,`location.hash='#/watch'`);
-    await until(owner,`current?.watch?.cards.size>0`);
+     await until(owner,`current?.watch?.cards.size>0`);
+     if(scope==='--quiet-refresh') {
+       await require('./probe_quiet_refresh.cjs')({command,evaluate,until,owner,checks,layouts});
+       assert.deepEqual(errors,[]);
+       evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+         limitations:['Canonical synthetic finite reports and Live publications; injected Sessions/detail API responses, not real catalog acquisition.',
+           'Headless DOM, input and AX evidence; not physical desktop or assistive-technology acceptance.']};
+       console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
+     }
     await evaluate(owner,`miniWatch.toggle()`,true);
     assert.equal(await evaluate(owner,`!!miniWatch.window`),true);
     const targets=await command('Target.getTargets');
@@ -149,7 +157,7 @@ async function main() {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
       await evaluate(owner,`document.documentElement.style.zoom='${zoom}'`);
        const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily');return {cues:document.querySelectorAll('.help-cue').length,targets:d.querySelectorAll('.help-value').length,overlaps:[...d.children].some((n,i)=>[...d.children].slice(i+1).some(m=>{const a=n.getBoundingClientRect(),b=m.getBoundingClientRect();return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
-       assert.equal(layout.cues,0);assert.equal(layout.targets,3);
+       assert.equal(layout.cues,0);assert.equal(layout.targets,0);
       assert.equal(layout.overlaps,false);assert.equal(layout.pageOverflow,false);
        layouts.push({case:'daily-value-targets',width,zoom,...layout});
        for (const table of ['watch-active','watch-history']) {
@@ -172,7 +180,8 @@ async function main() {
     const title=await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-session').textContent`);
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
-    assert.match(await focus(mini,'.mini-prompts > table .mini-cost-value > span:first-child'),/Prompt #[\s\S]*Main model:[\s\S]*Source evidence: retrying \/ unavailable/);
+    const retainedHelp=await focus(mini,'.mini-prompts > table .mini-cost-value > span:first-child');
+    assert.match(retainedHelp,/Prompt #[\s\S]*Main model:/);assert.doesNotMatch(retainedHelp,/Source evidence:/);
     assert.match(await focus(mini,'.mini-prompts > table .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+ in this session$/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:first-child button');
@@ -182,7 +191,7 @@ async function main() {
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update=helpMiniUpdate;delete window.helpMiniUpdate;delete window.helpMiniEpoch;miniWatch.update(liveValue)`);
-     for (const selector of ['.watch-active tbody td:first-child .help-value','.watch-daily > strong']) {
+     for (const selector of ['.watch-active tbody td:first-child .help-value']) {
       const metadata=await focus(owner,selector);assert.ok(metadata.length>0);await key(owner,'Escape');
     }
     await evaluate(mini,`document.documentElement.style.fontSize='150%'`);
@@ -190,7 +199,7 @@ async function main() {
     assert.equal(await evaluate(mini,`(() => {const r=document.querySelector('#context-help').getBoundingClientRect();return r.right<=innerWidth&&r.bottom<=innerHeight;})()`),true);
     await key(mini,'Escape');await evaluate(mini,`document.documentElement.style.fontSize=''`);
     assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
-     checks.push('Verbatim selectable/accessible long hostile session title without row cues; separate Session/cost help, quiet retained row with source evidence in help, no HTML injection and Mini 150% text zoom');
+     checks.push('Verbatim selectable/accessible long hostile session title without row cues; separate Session/cost help, quiet retained row without source-status help, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
     const routes = scope === '--watch-only' ? [] : scope === '--live-status' ?
       ['models','accounts','token-mix','ai-stats','comparisons','settings'] :

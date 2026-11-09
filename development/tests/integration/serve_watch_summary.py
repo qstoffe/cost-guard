@@ -2,10 +2,12 @@
 
 No real source, credentials, settings or inference; stops after ten minutes.
 """
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sys
+import time
 from threading import Thread, Timer
 from urllib.parse import parse_qs, urlsplit
 
@@ -14,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.watch_summary import summary_watch
 from src.application.live_projection import project_live
+from src.analysis.timezones import local_day_start_ms
 
 
 def main():
@@ -23,6 +26,9 @@ def main():
         frame = outcome_watch()
     else:
         frame = summary_watch()
+    now = int(time.time() * 1000)
+    frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
+        day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
     resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'account-cards.js', 'watch.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(frame).to_json())) + ';').encode()
 

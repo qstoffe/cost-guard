@@ -155,7 +155,8 @@ def model_rows(items, selectable=None):
                       for index in superseded_rows([(item.publisher, item.model) for item in selected])}
     for index, item in enumerate(items):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
-        models.append(ObjectValue(base.fields + (("evidence", fields(item.evidence,
+        models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
+            "model description through resumes") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
             ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
             ("superseded_selectable", (item.publisher, item.model) in selected_faded), ("relative_levels", tuple(

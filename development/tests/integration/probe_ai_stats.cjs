@@ -181,8 +181,7 @@ async function main() {
         window.__old=CachedReports.observation(current.result); __hold=true; __fail=true; enterCachedReport(current);`);
       await until(`current.loading && typeof __release==='function'`);
       assert.equal(await evaluate(`!current.withheld && !output.querySelector('progress') &&
-        !!output.querySelector('.ai-stat,.token-mix-table') && (current.section==='ai-stats' ?
-        document.getElementById('report-updating').textContent==='' : document.getElementById('report-updating').textContent.includes('Historical snapshot as of'))`),true);
+        !!output.querySelector('.ai-stat,.token-mix-table') && !document.getElementById('report-updating')`),true);
       await evaluate(`__hold=false; __release(); window.__release=null`); await until(`!current.loading && current.failed`);
       assert.equal(await evaluate(`!output.querySelector('progress') && CachedReports.observation(current.result)===__old`),true);
       await evaluate(`__fail=false; acquire(current)`); await until(`!current.loading && !current.withheld && !current.failed`);

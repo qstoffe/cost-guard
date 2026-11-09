@@ -36,16 +36,16 @@ module.exports = function liveStatus(vm, context, clock) {
     assert.doesNotMatch(quota.textContent, /Partial quota|Retained|Updates delayed/);
   }
   update(60000);
-  assert.equal(rendered.message.textContent, 'Updates delayed · showing last values');
-  assert.match(view.daily.textContent, /Updates delayed · showing last values/);
-  assert.match(quota.textContent, /Updates delayed · showing last values/);
+  assert.equal(rendered.message.textContent, '');
+  assert.doesNotMatch(view.daily.textContent, /Updates delayed/);
+  assert.doesNotMatch(quota.textContent, /Updates delayed/);
   // Cost-only changes and unchanged observed states do not prove successful coverage.
   card.state = 'observed'; card.session_summary.cost.display.known_ccost = '999';
   value.view.daily_state = 'observed'; account.observation.availability = 'available';
   update(61000);
-  assert.match(rendered.message.textContent, /Updates delayed/);
-  assert.match(view.daily.textContent, /Updates delayed/);
-  assert.match(quota.textContent, /Updates delayed/);
+  assert.equal(rendered.message.textContent, '');
+  assert.doesNotMatch(view.daily.textContent, /Updates delayed/);
+  assert.doesNotMatch(quota.textContent, /Updates delayed/);
   card.observed_at_ms++; value.view.daily_usage.observed_at_ms++; account.observation.observed_at_ms++;
   update(62000);
   assert.equal(rendered.message.textContent, '');

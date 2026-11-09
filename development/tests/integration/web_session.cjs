@@ -21,7 +21,8 @@ async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null};
-  const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
+   const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
+     history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
     clearTimeout: id => timers.delete(id),
     window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected}), scrollBy: (...args) => scrolls.push(args)},
@@ -77,7 +78,7 @@ async function main() {
   assert.ok(!view.body.children.at(-1).textContent.includes('[RUNNING]'));
   assert.equal(view.body.children.at(-1).className, '');
   const retained = view.body.textContent; offline = true; await view.load();
-  assert.equal(view.body.textContent, retained); assert.match(view.status.textContent, /retained/);
+   assert.equal(view.body.textContent, retained); assert.equal(view.status.textContent, '');
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
   view.detach();
@@ -169,7 +170,15 @@ async function main() {
      }
    } finally { if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ; Date.prototype.toLocaleString = originalLocaleString; }
    assert.equal(timestamp(null), 'N/A');
-   const cold = Array.from({length:50}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
+    // An initial pending response is not useful content and cannot pin an empty
+    // table forever while the requested global sort finishes.
+    vm.runInContext('globalThis.coldCatalog = new SessionsCatalog.View(catalogApi)', context);
+    context.coldCatalog.update({...catalogData,state:'loading',pending_sort:true});
+    assert.equal(context.coldCatalog.usable,false);
+    context.coldCatalog.update({...catalogData,pending_sort:true,total:1,view:{session_usage:[{
+      session_id:'first',title:'First usable row',indexed:false,metric_state:'pending'}]}});
+    assert.equal(context.coldCatalog.body.children.length,1);
+    const cold = Array.from({length:50}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
    catalog.update({...catalogData,total:51,view:{session_usage:cold}});
    assert.equal(catalog.body.children.length, 50);
@@ -184,8 +193,53 @@ async function main() {
    assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
-   assert.equal(catalog.body.children[0].className,'');
-   assert.ok(!catalog.body.children[0].children[1].textContent.includes('[RUNNING]'));
+    assert.equal(catalog.body.children[0].className,'');
+    // Age and failed background work never hide the list or append finite progress.
+    const usable = {...catalogData,total:51,age_ms:7200000,view:{session_usage:cold.map((row, index) =>
+      ({...known,session_id:row.session_id,title:'Loaded '+index}))}};
+    catalog.update(usable);
+    const firstRow = catalog.body.children[0], labelBefore = catalog.label.textContent;
+    catalog.update({...usable,pending_sort:true,sort:'activity',indexed:1,available:51,view:{session_usage:[]}});
+    assert.equal(catalog.body.children[0],firstRow);
+    assert.equal(catalog.label.textContent,labelBefore);
+    assert.equal(catalog.status.textContent,'');
+    assert.notEqual(catalog.pan.hidden,true); assert.notEqual(catalog.pager.hidden,true);
+     assert.equal(catalog.loader,undefined);
+     catalog.configure(new URLSearchParams('sort=ccost&direction=1'));
+     catalog.update({...usable,pending_sort:true});
+     assert.match(catalog.next.destination,/sort=activity&direction=-1/,'retained pager belongs to the actual displayed order');
+    catalog.attached=true;
+    for (const offset of [0,50]) {
+      const requests=[]; let expire=true;
+      catalog.configure(new URLSearchParams(`offset=${offset}&epoch=expired&sort=ccost&direction=1`));
+      catalog.token='expired';
+      catalog.api=async (_,request) => {
+        if(request.action==='interest') return {};
+        requests.push({...request});
+        if(expire) {expire=false; throw new Error('catalog_expired');}
+        return {...usable,token:'reopened',epoch:'new-epoch',sort:'ccost',direction:1,offset:0};
+      };
+      await catalog.load();
+      assert.equal(requests.length,2);
+      assert.equal(requests[1].token,null); assert.equal(requests[1].offset,0);
+      assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,1);
+      assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
+      assert.equal(context.location.hash,'#/sessions?sort=ccost&direction=1');
+      assert.match(catalog.label.textContent,/Page 1 of 2/);
+      assert.equal(catalog.status.textContent,'');
+      assert.equal(catalog.body.children[0],firstRow,'reopening retains keyed rows and focus targets');
+    }
+    let failures=0;
+    catalog.api=async (_,request)=> {if(request.action==='interest')return {}; failures++;throw new Error('catalog_expired');};
+    await catalog.load();
+    assert.equal(failures,2,'one bounded reopen even when the source keeps expiring');
+    assert.equal(catalog.body.children.length,50); assert.equal(catalog.status.textContent,'');
+    catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
+    assert.equal(catalog.body.children.length,50); assert.equal(catalog.status.textContent,'');
+    catalog.detach();
+    catalog.recovering=false;
+    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
+    assert.ok(!catalog.body.children[0].children[1].textContent.includes('[RUNNING]'));
     assert.equal(catalog.body.children[0].children[1],selected,'status changes preserve selected title DOM');
     selected=null;
     const liveRow=catalog.body.children[0], link=liveRow.children[1].children[0], model=liveRow.children[2].children[0];

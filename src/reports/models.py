@@ -170,6 +170,14 @@ class SessionListPage:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelPromotion:
+    model: str
+    description: str
+    through: str
+    resumes: str
+
+
+@dataclass(frozen=True, slots=True)
 class ModelComparisonProjection:
     publisher: str
     model: str
@@ -181,6 +189,7 @@ class ModelComparisonProjection:
     promotion_marker: int | None = None
     relative_levels: tuple[RelativePriceLevel, ...] = ()
     evidence: MixEvidence = MixEvidence()
+    promotion: ModelPromotion | None = None
 
 
 @dataclass(frozen=True, slots=True)
