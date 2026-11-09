@@ -15,6 +15,22 @@ from src.reports.models import QuotaPeriodProjection
 
 
 class WebQuotaPaceTests(unittest.TestCase):
+    def test_ratio_pace_rounds_each_unrounded_rate_not_the_display_balance(self):
+        quota = QuotaComponent('Monthly', 'fixed', used=D(10), remaining=D(90), limit=D(100),
+            unit='messages', reset_at_ms=NOW + 9 * 86400000)
+        native = QuotaPace('Monthly', 'messages', D(10), 9, 3, D(30))
+        period = QuotaPeriodProjection(quota, ComparisonCost(D(613), 1, 1), native)
+
+        wire = with_display(watch_quota(quota, period), now_ms=NOW).to_json()['quota']
+        pace = wire['ccost_pace']
+
+        self.assertEqual('5517', pace['ccost_remaining'])
+        self.assertEqual(('613', '1839'), (pace['ccost_per_day'], pace['ccost_per_workday']))
+        self.assertEqual(('600', '2000'), tuple(pace['display'][key] for key in ('ccost_per_day', 'ccost_per_workday')))
+        self.assertEqual('$6.00', pace['display_units']['usd']['ccost_per_day'])
+        self.assertIn('613 Credits ($6.13)', pace['display_units']['usd']['ccost_per_day_help'])
+        self.assertEqual('ratio', pace['capacity_basis'])
+
     def test_same_reference_budget_and_full_precision_on_both_surfaces(self):
         base = account_report().accounts_quotas.accounts[0]
         quota = QuotaComponent('Monthly', 'fixed', remaining=D(10000), used=D(10000),

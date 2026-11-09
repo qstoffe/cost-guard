@@ -834,7 +834,8 @@ The bar is followed by a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. These two pace amounts divide this quota's unrounded
 reference CCost Remaining by its existing remaining calendar days/workdays, counting
-configured-local today. USD shows `$` and two decimals; Credits remaining rounds down.
+configured-local today. Provider-confirmed pace keeps normal precision (Credits remaining
+rounds down); genuinely ratio-estimated pace follows the estimate-only policy below.
 Changing Settings updates both routes immediately without a fetch or replacing cards.
 Unknown, stale, unlimited, inactive or expired reference budgets omit pace; native
 messages/tokens are never silently converted. Native quota bars, reset/calendar rules,
@@ -847,19 +848,40 @@ on hover). Accessible help retains native Used/Total and Remaining/Total, native
 reset and partial/estimated attribution without raw source/observation logs.
 Each quota’s Capacity label and number share one compact help target explaining usage
 and reference capacity. Account CCost Today label and number explain daily scope and real attribution notes.
-For Copilot the observed Used cost and native Remaining need not sum to Capacity.
-For other quotas Capacity/Remaining are explicitly explained extrapolations, not
+Copilot's verified reference Used and Remaining use one provider snapshot and sum to
+Capacity internally; independent OpenCode-observed period cost can differ.
+For percentage-only quotas Capacity/Remaining are explicitly explained extrapolations, not
 provider-promised allocation. Numeric ratio-derived Capacity shows exactly **(guesstimate)**
 after the number; verified directly comparable native allowances do not. Unknown **?**,
 missing and **N/A** never get the suffix. Provenance follows each quota across units
 and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
 changes CCost, not native units. Accounts shares Full Watch's identity-matched
 period costs and reference figures; Mini keeps one compact primary line with
-exactly **Capacity: value** then **Next reset: value** in its subscription-text help.
+**Capacity: value** then **Next reset: value** in its subscription-text help,
+followed only by applicable primary unrounded-estimate help.
 Both facts belong only to the visible primary window, with canonical local reset/countdown,
-**Window not started** or honest unknowns. No secondary-quota or CCost explanation prose
+**Window not started** or honest unknowns. No secondary-quota or unrelated CCost prose
 is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts retain
 their richer help. All three follow the same choice immediately, without more polling.
+
+**Quota guesstimate precision:** ratio-derived Remaining/Capacity, every theoretical
+30-day Monthly Capacity and genuinely estimated Remaining/day or /workday use the
+nearest one significant decimal digit when its difference from the raw calculation
+is at most 10%; otherwise they use two significant digits (decimal half up).
+Each quantity starts from its own unrounded reference Credits: never derive pace or
+monthly equivalents from a rounded display. For example, 613 → **600 / $6.00**,
+2,343 → **2300 / $23.00**, 52,343 → **50000 / $500.00**, 250 → **250 / $2.50**.
+Conversion to USD happens after Credit-space rounding and keeps `$` plus two decimals.
+Fractional Credits retain necessary precision; positive amounts below USD display
+precision use **<$0.01**, not zero. Help explains when two-decimal USD cannot represent
+the 10% Credit-space tolerance.
+
+Focus, hover or tap the rounded amount for its **guesstimate before display rounding**
+in full retained Decimal Credits (plus ordinary USD in USD mode), not verified provider
+usage. Capacity and Monthly Capacity have their own help; Mini extends its existing
+primary-line help. Used/Remaining, unit switches and Live updates refresh the same
+bound help without fetching. Source-confirmed allowances, observed period Used, Today,
+prompt/session costs, native percentages/bars, billing and CLI formatting are unchanged.
 
 Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire

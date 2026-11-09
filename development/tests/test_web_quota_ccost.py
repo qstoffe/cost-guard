@@ -17,19 +17,20 @@ from src.numbers import ccost_amount
 
 class WebQuotaCCostTests(unittest.TestCase):
     def test_factual_labels_and_decimal_thirty_day_equivalents_in_both_units(self):
-        for duration, used, fraction, label, capacity, monthly in (
-                (18000, 100, '.9', '5-hour Capacity', '1000', D(144000)),
-                (604800, 840, '0', 'Weekly Capacity', '840', D(3600)),
-                (86400, 1, '.9', 'Daily Capacity', '10', D(300)),
-                (604800, 1, '.7', 'Weekly Capacity', None, D(100) / D(7))):
+        for duration, used, fraction, label, capacity, monthly, rounded in (
+                (18000, 100, '.9', '5-hour Capacity', '1000', D(144000), D(140000)),
+                (604800, 840, '0', 'Weekly Capacity', '800', D(3600), D(3600)),
+                (86400, 1, '.9', 'Daily Capacity', '10', D(300), D(300)),
+                (604800, 1, '.7', 'Weekly Capacity', None, D(1) / D('.3') * D(2592000) / D(604800), D(14))):
             quota = QuotaComponent('arbitrary plan name', 'rolling', remaining_fraction=D(fraction),
                 duration_seconds=duration, reset_at_ms=20000)
             wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(used), 1, 1), None)),
                 now_ms=1000).to_json()['quota']
             with self.subTest(duration=duration, fraction=fraction):
                 self.assertEqual(label, wire['display']['capacity_label'])
-                self.assertEqual(ccost_amount(monthly) + ' (guesstimate)', wire['display']['monthly_capacity'])
-                self.assertEqual(f'${monthly / 100:.2f} (guesstimate)', wire['display_units']['usd']['monthly_capacity'])
+                self.assertEqual(ccost_amount(rounded) + ' (guesstimate)', wire['display']['monthly_capacity'])
+                self.assertEqual(f'${rounded / 100:.2f} (guesstimate)', wire['display_units']['usd']['monthly_capacity'])
+                self.assertEqual(monthly, D(wire['ccost_reference']['monthly_capacity']))
                 self.assertIn('2,592,000', wire['display']['monthly_capacity_help'])
                 self.assertIn('never add', wire['display']['monthly_capacity_help'])
                 if capacity:
@@ -103,10 +104,27 @@ class WebQuotaCCostTests(unittest.TestCase):
         exact = with_display(watch_quota(tiny, QuotaPeriodProjection(tiny, ComparisonCost(D(1), 1, 1), None)),
             now_ms=1000).to_json()['quota']
         self.assertEqual('0%', exact['quota_display']['used']['percent'])
-        self.assertEqual(('100000 (guesstimate)', '99999'), (exact['display']['ccost_capacity'], exact['display']['ccost_remaining']))
+        self.assertEqual(('100000 (guesstimate)', '100000'), (exact['display']['ccost_capacity'], exact['display']['ccost_remaining']))
+        self.assertEqual('99999', exact['ccost_reference']['remaining'])
+
+    def test_estimates_keep_raw_calculations_observed_used_and_identity_in_both_units(self):
+        quota = QuotaComponent('Weekly', 'rolling', remaining_fraction=D('.9'), duration_seconds=604800, reset_at_ms=20000)
+        period = QuotaPeriodProjection(quota, ComparisonCost(D(613), 1, 1), None)
+
+        wire = with_display(watch_quota(quota, period), now_ms=1000).to_json()['quota']
+
+        self.assertEqual(('613', '6000', '6000 (guesstimate)'), tuple(wire['display']['ccost_' + key]
+            for key in ('used', 'remaining', 'capacity')))
+        self.assertEqual(('613', '5517', '6.13E+3'), tuple(wire['ccost_reference'][key]
+            for key in ('used', 'remaining', 'capacity')))
+        self.assertEqual('0.9', wire['remaining_fraction'])
+        self.assertIn('5517 Credits', wire['display']['ccost_remaining_help'])
+        self.assertIn('6130 Credits ($61.30)', wire['display_units']['usd']['ccost_capacity_help'])
+        self.assertIn('not verified provider usage', wire['display']['ccost_capacity_help'])
+        self.assertEqual('$60.00', wire['display_units']['usd']['ccost_remaining'])
 
     def test_copilot_native_amounts_never_use_independent_observed_cost(self):
-        for limit, used, remaining, observed in ((10000, 3000, 7000, 450), (7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):
+        for limit, used, remaining, observed in ((10000, 3123, 6877, 450), (10000, 3000, 7000, 450), (7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):
             quota = QuotaComponent('Monthly', 'fixed', used=D(used), limit=D(limit), remaining=D(remaining), unit='AI credits')
 
             wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(observed), 2, 2), None),
@@ -121,6 +139,8 @@ class WebQuotaCCostTests(unittest.TestCase):
                     tuple(wire['display_units']['usd']['ccost_' + key] for key in ('used', 'remaining', 'capacity')))
                 self.assertEqual(f'${D(limit) / 100:.2f}', wire['display_units']['usd']['ccost_capacity'])
                 self.assertEqual('native', wire['display']['capacity_basis'])
+                self.assertEqual('', wire['display']['ccost_remaining_help'])
+                self.assertEqual('', wire['display']['ccost_capacity_help'])
 
     def test_known_native_limit_survives_missing_usage_but_does_not_invent_remaining(self):
         base = QuotaComponent('Monthly', 'fixed', limit=D(7000), unit='AI credits')

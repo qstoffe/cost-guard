@@ -9,7 +9,7 @@ from src.accounts.base import normalize_quota
 from src.accounts.openai_subscription import convert_usage_payload
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
-from src.analysis.quota_pace import quota_pace
+from src.analysis.quota_pace import QuotaPace, quota_pace
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.session_cost import SessionCost
@@ -101,6 +101,20 @@ def authoritative_allowances(frame):
         quota_pace(q, now_ms=frame.now_ms, timezone_id='UTC', workday_calendar='SE'))
         for q, cost in zip(quotas, (450, 999)))
     item = replace(base, account=replace(base.account, quotas=quotas), quota_periods=periods)
+    return replace(frame, quota=replace(frame.quota, accounts=(item,)))
+
+
+def estimated_allowances(frame, used=D(613)):
+    """Independent raw parent/rates and a shorter secondary window for browser help."""
+    base = frame.quota.accounts[0]
+    primary = QuotaComponent('Monthly', 'fixed', used=D(10), remaining=D(90), limit=D(100),
+        unit='messages', reset_at_ms=frame.now_ms + 9 * 86400000, primary=True)
+    secondary = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'), duration_seconds=18000,
+        reset_at_ms=frame.now_ms + 3600000)
+    periods = (QuotaPeriodProjection(primary, ComparisonCost(used, 1, 1), QuotaPace('Monthly', 'messages', D(10), 9, 3, D(30))),
+        QuotaPeriodProjection(secondary, ComparisonCost(D('61.3'), 1, 1), None))
+    item = replace(base, account=replace(base.account, ref=AccountRef('fixture', 'other', account_id='estimate'),
+        quotas=(primary, secondary), primary_quota_label='Monthly'), quota_periods=periods)
     return replace(frame, quota=replace(frame.quota, accounts=(item,)))
 
 

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from src.numbers import ccost_amount
 from .contracts import record
+from .quota_estimates import estimate_amount, estimate_help
 
 
 def capacity_period(values):
@@ -23,10 +24,10 @@ def capacity_period(values):
     return monthly, duration, (label + " Capacity" if label else "Capacity")
 
 
-def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
+def monthly_values(values, capacity, cost, coherent, current, now_ms):
     monthly, duration, label = capacity_period(values)
     if monthly:
-        return {"capacity_label": label, "monthly_capacity": "", "monthly_capacity_help": ""}
+        return dict(capacity_label=label, monthly_capacity=None, monthly_reason="", monthly_applicable=False)
     deadline = values.get("reset_at_ms")
     reason = None
     if values.get("unlimited"):
@@ -44,11 +45,18 @@ def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
         reason = "Same-window usage has incomplete attribution or pricing."
     elif capacity is None or not capacity.is_finite() or capacity <= 0:
         reason = "No compatible same-window reference CCost Capacity."
-    value = "N/A" if reason else ccost_amount(capacity * Decimal(30 * 24 * 3600) / Decimal(duration)) + " (guesstimate)"
+    raw = None if reason else capacity * Decimal(30 * 24 * 3600) / Decimal(duration)
+    return dict(capacity_label=label, monthly_capacity=raw, monthly_reason=reason, monthly_applicable=True)
+
+
+def monthly_tokens(reference):
+    raw, reason = reference["monthly_capacity"], reference["monthly_reason"]
     explanation = (reason or "Theoretical 30-day guesstimate: full-period CCost Capacity × 2,592,000 ÷ full-window seconds.\n"
         "Assumes repeated full windows; not a monthly entitlement, bill or spending forecast.\n"
         "Other quotas may constrain usage; compare each separately, never add their monthly equivalents.")
-    return {"capacity_label": label, "monthly_capacity": value, "monthly_capacity_help": explanation}
+    return {"capacity_label": reference["capacity_label"],
+            "monthly_capacity": ("N/A" if raw is None else estimate_amount(raw) + " (guesstimate)") if reference["monthly_applicable"] else "",
+            "monthly_capacity_help": ("Monthly Capacity — " + estimate_help(raw) + "\n" + explanation if raw is not None else explanation) if reference["monthly_applicable"] else ""}
 
 
 def coherent_native(limit, used, remaining, fraction):
@@ -142,11 +150,12 @@ def quota_ccost_values(values, now_ms):
                     and (values.get("scope") != "model" or values.get("model_id"))):
                 basis, capacity = "ratio", used / (1 - fraction)
                 remaining = capacity - used
-    return dict(context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
+    return dict(**monthly_values(values, capacity, {} if basis == "native" else cost, coherent, current, now_ms),
+                context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
                 basis=basis, coherent=coherent, current=current)
 
 
-def quota_ccost_pace(values, now_ms):
+def quota_ccost_pace(values, now_ms, reference=None):
     """Spread only this quota's accepted reference Remaining over its native calendar."""
     pace = values.get("native_pace")
     if (pace is None or values.get("period") != "fixed" or values.get("duration_seconds")
@@ -159,7 +168,7 @@ def quota_ccost_pace(values, now_ms):
         value = values.get(key)
         if value is not None and (not Decimal(value).is_finite() or Decimal(value) < 0):
             return None
-    reference = quota_ccost_values(values, now_ms)
+    reference = quota_ccost_values(values, now_ms) if reference is None else reference
     remaining = reference.get("remaining")
     counts = dict(pace.fields)
     days, workdays = counts["days"], counts["workdays"]
@@ -168,11 +177,12 @@ def quota_ccost_pace(values, now_ms):
         return None
     return record(ccost_remaining=remaining, ccost_per_day=remaining / days,
                   ccost_per_workday=remaining / workdays if workdays else None,
+                  capacity_basis=reference["basis"],
                   days=days, workdays=workdays)
 
 
-def quota_ccost_tokens(values, now_ms):
-    reference = quota_ccost_values(values, now_ms)
+def quota_ccost_tokens(values, now_ms, reference=None):
+    reference = quota_ccost_values(values, now_ms) if reference is None else reference
     if not reference:
         return {}
     context, cost = reference["context"], reference["cost"]
@@ -213,10 +223,12 @@ def quota_ccost_tokens(values, now_ms):
         brief += "\n" + context["note"]
     if values.get("reference_ccost_capacity") is not None and basis == "native":
         brief = "Source-verified reference Capacity. " + brief
-    return {**monthly_tokens(values, capacity, {} if basis == "native" else cost,
-                            reference["coherent"], reference["current"], now_ms),
-            "ccost_used": amount(used), "ccost_remaining": amount(remaining),
-            "ccost_capacity": ("N/A" if basis == "unlimited" else amount(capacity)) +
+    estimated = basis == "ratio"
+    return {**monthly_tokens(reference),
+            "ccost_used": amount(used), "ccost_remaining": estimate_amount(remaining) if estimated else amount(remaining),
+            "ccost_remaining_help": "Remaining — " + estimate_help(remaining) if estimated and remaining is not None else "",
+            "ccost_capacity_help": "Capacity — " + estimate_help(capacity) if estimated and capacity is not None else "",
+            "ccost_capacity": ("N/A" if basis == "unlimited" else estimate_amount(capacity) if estimated else amount(capacity)) +
                 (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),
             "capacity_basis": basis,
             "ccost_help": explanation, "ccost_brief": brief}

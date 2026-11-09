@@ -238,7 +238,8 @@ Unlimited/unknown quota has no fabricated bar. Routine retained/partial refresh 
 stays quiet; authentication problems and genuine provider restrictions
 remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
 The visible subscription text, not a `?` or progress track, exposes its primary
-**Capacity** and **Next reset** in two compact help lines. Rich native/secondary
+**Capacity** and **Next reset** first, with applicable primary unrounded-estimate help
+following those two compact facts. Rich native/secondary
 quota explanations remain on full Watch and Accounts.
 No `Last quota update` or raw source enums appear. Unavailable cost
 shows **(?)** without hiding a known percentage. Partial observed subtotals are
@@ -258,6 +259,16 @@ from observed CCost divided by the unrounded fraction Used, then subtract observ
 CCost for Remaining. These are reference proxies, not guaranteed allocation or bills.
 Capacity stays in help, not an extra visible Mini row. Numeric ratio-derived Capacity
 includes **(guesstimate)**; verified comparable native limits and unknown figures do not.
+Only these quota guesstimates round to the nearest one significant digit when within
+10% of raw Credits, otherwise two (decimal half up), before USD conversion. For example,
+613 Credits → **600 / $6.00**, while 250 → **250 / $2.50**. USD keeps two decimals;
+fractional Credits keep needed precision and tiny positive USD uses **<$0.01**.
+Hover, keyboard focus or touch the subscription text for the original calculated
+Capacity and, in Remaining mode, Remaining estimate in full retained Decimal Credits.
+USD mode also supplies ordinary USD in help and explains any two-decimal display limit.
+These are unrounded calculations, not exact provider balances. Help follows the current
+primary account/window, mode, units and Live values without a new request; observed
+Used, provider-confirmed amounts, Today and prompt/session costs are not rounded this way.
 Full remaining
 bars are healthy; empty, truly exhausted bars retain a red text warning and accessible
 exhaustion description. Tiny positive capacity is not marked exhausted by rounding.

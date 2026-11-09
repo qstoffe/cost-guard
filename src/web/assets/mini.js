@@ -516,6 +516,9 @@ const MiniWatch = (() => {
         const warning = primary.restricted ? ' · provider restriction' : '';
         const period = ` (${amount})`;
         line.helpText = `Capacity: ${display(primary.quota, 'ccost_capacity')}\nNext reset: ${display(primary, 'watch_reset')}`;
+        for (const field of ['ccost_capacity', ...(quota.mode === 'remaining' ? ['ccost_remaining'] : [])]) {
+          if (primary.quota.display?.[field + '_help']) line.helpText += '\n' + display(primary.quota, field + '_help');
+        }
         const notes = [obs.has_warning && 'Provider warning',
           ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
         const note = notes.filter(Boolean).join(' · ');
