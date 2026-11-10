@@ -162,10 +162,12 @@ const SessionsCatalog = (() => {
     showProgress(stage, stageLabel = stage) {
       if (!this.operation) return;
       this.loader.update({percent: this.operation.percent, stage, stageLabel});
-      this.loader.root.hidden = false; this.pan.hidden = this.pager.hidden = !this.operation.failed;
+      this.loader.root.hidden = false;
       this.retry.hidden = !this.operation.failed;
       this.status.hidden = true;
-      if (this.pan.contains(document.activeElement) || this.pager.contains(document.activeElement)) this.cancel.focus?.({preventScroll: true});
+      if (this.pan.contains(document.activeElement) || this.pager.contains(document.activeElement) ||
+        this.actionFocus && document.activeElement === document.body) this.cancel.focus?.({preventScroll: true});
+      this.pan.hidden = this.pager.hidden = !this.operation.failed;
     }
     failNavigation(reason) {
       if (!this.operation) return;
@@ -224,6 +226,7 @@ const SessionsCatalog = (() => {
       // the previous actual order, header and pager rather than relabeling it.
       if (this.pendingNavigation(data) || data.pending_sort) return;
       const completed = this.operation;
+      const restoreFocus = completed && this.loader.root.contains(document.activeElement);
       this.operation = null; clearTimeout(this.admission);
       this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
       this.data = data;
@@ -249,8 +252,8 @@ const SessionsCatalog = (() => {
         if (this.body.contains(document.activeElement)) document.activeElement.blur?.();
       }
       this.rows(values);
-      if (completed && !this.loader.root.contains(document.activeElement)) ContextHelp.refresh(this.root);
-      if (completed && this.loader.root.contains(document.activeElement)) completed.focus?.focus?.({preventScroll: true});
+      if (completed && !restoreFocus) ContextHelp.refresh(this.root);
+      if (restoreFocus) this.actionFocus = completed.focus;
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + 50, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / 50) + 1} of ${pages}` :
         data.state === 'observed' ? 'No sessions · Page 1 of 1' : 'Session count unavailable';
@@ -266,7 +269,8 @@ const SessionsCatalog = (() => {
       if (this.busy && [this.previous, this.next].includes(document.activeElement)) this.actionFocus = document.activeElement;
       for (const button of [this.previous, this.next]) button.disabled = this.busy || this.recovering || !button.destination;
       if (!this.busy && this.actionFocus) {
-        if (document.activeElement === document.body || document.activeElement === this.actionFocus) {
+        if (document.activeElement === document.body || document.activeElement === this.actionFocus ||
+          this.loader.root.contains(document.activeElement)) {
           (this.actionFocus.disabled ? this.actionFocus === this.next ? this.previous : this.next : this.actionFocus).focus({preventScroll: true});
         }
         this.actionFocus = null;

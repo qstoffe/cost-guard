@@ -60,7 +60,8 @@ wait or a 15-second unresponsive HTTP request produce visible Retry/Cancel.
   reissuing an expensive sort. **Final-tree focused VM PASS** after Full, including
   explicit assertions that a timed-out late answer sends `interest(false)` and
   sends no new Model request. Legitimate current reattachment remains covered.
-  Full was not rerun after that final narrow refinement.
+   Full had not been rerun after that narrow refinement at initial PR submission;
+   the later post-CI verification below supersedes that ordering limitation.
 - Real hidden Edge `--catalog-detail-only`: **PASS**, 156 layout observations,
   seven check groups and zero runtime exceptions. Includes six-column catalog,
   cold metric completion, 120→121 arrival/stable older page, 1,001→1,002 detail
@@ -95,6 +96,35 @@ Raw sanitized local evidence: `scratch:/sessions-before.log`,
 `scratch:/sessions-after.log`, `scratch:/catalog-browser.json`,
 `scratch:/catalog-detail-browser.json`, `scratch:/full-tests.log`,
 `scratch:/full-tests-final.log`.
+
+## CI pager-focus regression and repair
+
+The initial PR common job failed its unchanged rendered pager `to_be_focused`
+assertion; Quick/validator and all three native jobs passed. Checks API annotations
+identified `ci_browser_web.py::check_pagers`, line 73. The separate job-log endpoint
+returned HTTP 401; no logs or alternate authentication route were used.
+
+A deterministic delayed-answer browser case reproduced focus loss. Busy pager
+disabling can leave focus on the body; showing progress must transfer that saved
+intent before hiding the old controls. Completion must capture loading-action focus
+before hiding it and restore the initiating control only after re-enabling the
+pager. Chromium can still report the just-hidden Cancel as active in that turn,
+so the existing guarded handoff also recognizes that owned loading action. Focus
+deliberately moved elsewhere is never reclaimed; last-page Next falls back to
+enabled Previous. Warm-path assertions and the CI focus assertion are unchanged.
+
+The first delayed test failed before the repair, and the first partial repair still
+failed Next restoration; neither is counted as a pass. Final hidden Edge navigation
+passed the new trusted mouse/Enter, delayed Cancel-to-Next, Previous, no-focus-theft
+and last-page fallback assertions, plus the existing 24-layout/sort/Cancel/Retry
+matrix with zero runtime exceptions. Held results are post-HTTP delay evidence,
+not proof of network cancellation. Evidence: `scratch:/pager-focus-verified.json`.
+
+Post-repair final-source Full **PASS**, all 181 files, 135.3 seconds, including the
+late-failure-demand guard and focus repair. Final-source package validation **PASS**,
+zero failures/seven pre-existing advisory warnings; no budgets were changed.
+Evidence: `scratch:/full-tests-ci-repair.log`, `scratch:/validate-ci-repair.log`.
+GitHub rerun and merge outcomes belong to the PR/run, not a reporting-only commit.
 
 ## Limits
 

@@ -16,14 +16,17 @@ Implemented in v81.14, 2026-11-10.
 
 ## Verification and limitations
 
-- Full: all 181 files passed in 132.7 seconds; final narrow late-failure demand
-  refinement additionally passed focused VM regressions. See exact ordering below.
+- Final-source Full: all 181 files passed in 135.3 seconds after the CI-discovered
+  pager-focus repair, including the late-failure-demand guard. Earlier runs and
+  causal repairs remain distinguished in the journal.
 - Catalog/detail focused suite: 40 tests passed. Synthetic 3,217-root coverage
   verifies every sort/direction, scalar reuse and exact 17-row last page.
 - Real hidden browser: scoped catalog/detail/table parity passed 156 layout
   observations with zero runtime exceptions. Navigation acceptance covers the
   three available themes, four widths and two zooms (24 combinations), keyboard,
   touch, cancellation/retry, warm paths, last page and Back/Forward.
+  The post-CI rerun also passes delayed-page mouse/Enter focus restoration,
+  Previous, no deliberate-focus theft and enabled last-page fallback assertions.
 - Package validator passed with seven existing advisory warnings. No ZIP built.
 - Read-only real V2 observations covered 3,090 roots and source-stage counters,
   preserved the shared OpenCode service and started no inference. This bounded

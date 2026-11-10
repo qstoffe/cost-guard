@@ -4,6 +4,7 @@
 
 - Sessions replaces silent pending global sorts and uncached page navigation with shared determinate progress, real index/page counts and operation-specific Cancel help. Warm qualified pages apply directly without a loading layout swap.
 - Cancel restores the last applied sort, exact page, URL and focus, aborting only local HTTP intent. Late generations cannot overwrite it; shared scalar caches and host indexing survive. Terminal source failures, repeated failed reads and no-forward-progress waits expose Retry/Cancel instead of silent polling.
+- Pending paging transfers keyboard focus to Cancel, then restores the enabled initiating pager on completion, without stealing focus deliberately moved elsewhere.
 - Complete canonical scalar keys still prove every metric's global ordering. Qualified older-page epochs survive new arrivals, actual last-page counts remain exact, and sanitized cache/attempt/retry evidence distinguishes work from missing source proof.
 
 ## v81.13 - 2026-11-10

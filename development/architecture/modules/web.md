@@ -184,7 +184,10 @@ Typed source failures, bounded failed attempts, explicit source rebases and
 no-forward-count recovery replace indefinite silent navigation. Qualified older
 epochs are not globally gated by newly arrived roots. Scalar cache hit/miss and
 attempt/retry counters contain no source content. The backend lease, source isolation,
-index and acquisition owners are unchanged. [Navigation evidence](../../journal/web/sessions-navigation.md)
+index and acquisition owners are unchanged. Loading actions receive focus before
+the old controls hide; completion restores the initiating pager after re-enabling
+it, with an enabled last-page fallback and no theft of deliberately moved focus.
+[Navigation evidence](../../journal/web/sessions-navigation.md)
 records current checks and limitations; [quiet-refresh evidence](../../journal/web/quiet-refresh.md) records
 the scoped lifecycle matrix and its synthetic/real-source limits.
 
