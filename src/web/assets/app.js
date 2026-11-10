@@ -436,6 +436,14 @@ async function acquire(state, background = false, prices = false) {
          JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }
 }
+function focusReport(options) {
+  const content = document.getElementById('content');
+  // The browser may treat initial scripted focus as focus-visible. Only an
+  // intentional keyboard transfer gets the landmark's inset focus cue.
+  content.classList.toggle('keyboard-focus', document.activeElement !== content &&
+    !!document.activeElement?.matches(':focus-visible'));
+  content.focus(options);
+}
 function navigate() {
   // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
   if (/^#\/live(?:\?|$)/.test(location.hash)) history.replaceState(null, '', '/#/watch' + location.hash.slice(6));
@@ -502,9 +510,9 @@ function navigate() {
   demand?.update();
   if (current !== previous) enterCachedReport(current);
   scheduleCachedReport();
-    if (redirected) document.getElementById('content').focus();
-    if (route.section === 'models' && current !== previous) {
-      document.getElementById('content').focus({preventScroll: true});
+     if (redirected) focusReport();
+     if (route.section === 'models' && current !== previous) {
+       focusReport({preventScroll: true});
       window.scrollTo(0, 0); // New-route policy only; never refresh/filter/sort arrival.
     }
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
@@ -602,6 +610,6 @@ document.addEventListener('toggle', event => {
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }
 });
-document.getElementById('skip').addEventListener('click', () => document.getElementById('content').focus());
+document.getElementById('skip').addEventListener('click', () => focusReport());
 navigate();
 connect();

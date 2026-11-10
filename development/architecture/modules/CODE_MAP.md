@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000668: `assets/app.js::focusReport`, `app.css` and the named `index.html` main
+target separate automatic Models focus from intentional keyboard transfers. Existing
+route top/scroll and centered loader lifetimes are unchanged. Coverage: loading VM,
+`probe_models_startup.cjs` / `probe_models_focus.cjs`, Models-only report-loading,
+pricing/layout and hosted `ci_browser_web.py` focus assertions.
+[Diagnosis and verification limits](../../journal/web/models-focus.md).
+
 FR000667: `reports/session_summary.py::context_fields` prepares root-scoped CTX
 using canonical `analysis/context.py::session_watch_context`; scalar algorithm 3
 qualifies source/revision/epoch facts. `application/session_catalog.py` extends its

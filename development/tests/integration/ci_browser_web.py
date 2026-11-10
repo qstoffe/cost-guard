@@ -137,6 +137,10 @@ def main():
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0
+                expect(page.locator('#content')).to_be_focused()
+                assert page.locator('#content').evaluate("el => getComputedStyle(el).outlineStyle") == 'none'
+                assert page.locator('#content').evaluate("el => getComputedStyle(el).boxShadow") == 'none'
+                assert page.locator('#result progress').count() == 0
                 # Synthetic Sessions acquisition publishes no Watch observation.
                 # An authenticated SSE socket must not claim source readiness.
                 expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
@@ -173,9 +177,11 @@ def main():
                 assert not page.locator(".toolbar").is_visible()
                 evidence["checks"].append("live complete ten-column session history and canonical footer; hostile title remains literal text")
                 page.set_viewport_size({"width": 360, "height": 844})
+                page.keyboard.press('Tab')
                 page.locator("#skip").focus()
                 page.keyboard.press("Enter")
                 expect(page.locator("#content")).to_be_focused()
+                assert 'inset' in page.get_by_role('main', name='Report content').evaluate("el => getComputedStyle(el).boxShadow")
                 assert not page.locator("#refresh").is_visible()
                 evidence["narrow_layout"] = page.evaluate('''() => {
                     const heading=document.querySelector('#result h1'), pan=document.querySelector('.sessions-table-pan');

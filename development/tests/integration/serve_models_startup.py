@@ -22,7 +22,7 @@ from src.web.source_startup import SourceStartup
 class StartupJobs(LoadingJobs):
     def __init__(self):
         super().__init__()
-        self.mode = 'complete'
+        self.mode = 'hold'
         self.submissions = []
 
     def submit(self, request):
@@ -102,6 +102,10 @@ def main():
                 break
             if action == 'release':
                 driver.release.set()
+            elif action == 'step':
+                jobs.step += 1
+            elif action == 'complete':
+                jobs.mode = 'complete'
             elif action == 'status':
                 with host.dispatcher.lock:
                     print(json.dumps(dict(startup=startup.report_status(),

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.18 - 2026-11-10
+
+- Models removes the initial full-width blue focus outline that resembled a leftover loading track. Automatic entry keeps its page focus and new-route top scroll, without resetting same-route interactions.
+- Keyboard route entry and Skip to report retain focus on the named Report content landmark with an inset leading-edge cue. Buttons, links and controls retain their existing focus rings; the genuine centered loader and all report/source/pricing semantics are unchanged.
+
 ## v81.17 - 2026-11-10
 
 - Sessions adds CTX after Duration: compact server-formatted estimated next incoming session context, not capacity or a sum of prompts. Hover, focus and touch help retain the same working sort button.

@@ -2,9 +2,10 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const {setTimeout: pause} = require('node:timers/promises');
+const {probeModelsFocus} = require('./probe_models_focus.cjs');
 
 async function main() {
-  const [browser, directory, width='1366', theme='web'] = process.argv.slice(2);
+  const [browser, directory, width='1366', theme='web', scheme='light'] = process.argv.slice(2);
   const output=path.resolve(directory); await fs.mkdir(output,{recursive:true}); await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(output,'browser-')), config=await fs.mkdtemp(path.join(output,'config-'));
   const server=spawn('py',['-3','development/tests/integration/serve_models_startup.py',config],
@@ -37,12 +38,27 @@ async function main() {
   const snapshot=()=>evaluate(`({kind:hostState.kind,loading:current.loading,failed:!!current.failed,
     message:current.message,stage:current.stage,percent:current.percent,retry:!refresh.hidden,
     result:!!current.result,withheld:!!current.withheld,dispatchError:current.dispatchError||null})`);
+  const focusSnapshot=async phase=>{
+    const focus=await evaluate(`(()=>{const main=document.getElementById('content'),style=getComputedStyle(main);
+      const box=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
+      return {active:document.activeElement.id||document.activeElement.tagName,focusVisible:main.matches(':focus-visible'),
+        outline:{style:style.outlineStyle,width:style.outlineWidth,color:style.outlineColor,offset:style.outlineOffset},
+        shadow:style.boxShadow,keyboard:main.classList.contains('keyboard-focus'),scroll:scrollY,
+        observed:liveValue?.source_observed_at_ms ?? null,
+        main:box(main),nav:box(document.querySelector('nav')),progress:[...document.querySelectorAll('progress')]
+          .filter(node=>node.getClientRects().length).map(node=>({value:node.value,box:box(node)}))};})()`);
+    trace.push({phase,focus});
+    const image=await command('Page.captureScreenshot',{format:'png'});
+    await fs.writeFile(path.join(output,phase+'.png'),Buffer.from(image.data,'base64'));
+    return focus;
+  };
   const deadline=setTimeout(()=>{child.kill();server.kill();},90000);
   try {
     const launch=JSON.parse((await lines.next()).value), target=await command('Target.createTarget',{url:'about:blank'});
     tab=(await command('Target.attachToTarget',{targetId:target.targetId,flatten:true})).sessionId;
     await command('Runtime.enable');await command('Page.enable');await command('Network.enable');
     await command('Emulation.setDeviceMetricsOverride',{width:Number(width),height:900,deviceScaleFactor:1,mobile:false});
+    await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]});
     await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.__startup=[];
       new MutationObserver(()=>{if(typeof current!=='undefined'&&current) __startup.push({at:performance.now(),
         failed:!!current.failed,retry:!document.getElementById('refresh').hidden,percent:current.percent,
@@ -52,6 +68,7 @@ async function main() {
     await until(`typeof current!=='undefined' && current?.attempted && (current.failed || current.stage==='Waiting for source…')`);
     await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)};true`);
     await pause(650);
+    await focusSnapshot('initial-focus');
     const before=await snapshot(), host=await fixture('status'); trace.push({phase:'held',browser:before,host});
     assert.equal(host.startup.ready,true);assert.equal(host.identity,true);assert.equal(host.observed,false);
     assert.deepEqual(host.jobs,[],'no work before first healthy Live observation');
@@ -63,8 +80,8 @@ async function main() {
         const bounds=loader.getBoundingClientRect(),track=bar.getBoundingClientRect();return {
           width:innerWidth,theme:document.documentElement.dataset.theme,
           centered:Math.abs((bounds.left+bounds.right-track.left-track.right)/2)<2,
-          inside:track.left>=0&&track.right<=innerWidth,label:bar.getAttribute('aria-label'),value:bar.value};})()`);
-      assert.equal(layout.centered,true);assert.equal(layout.inside,true);assert.equal(layout.value,5);
+           inside:track.left>=0&&track.right<=innerWidth,label:bar.getAttribute('aria-label'),waiting:!bar.hasAttribute('value')};})()`);
+       assert.equal(layout.centered,true);assert.equal(layout.inside,true);assert.equal(layout.waiting,true);
       assert.equal(layout.label,'Report loading progress');assert.equal(layout.theme,theme);
       trace.push({phase:'loader-layout',layout});
       const accessibility=await command('Accessibility.getFullAXTree');
@@ -78,10 +95,17 @@ async function main() {
     await command('Runtime.enable');await command('Page.enable');
     await command('Page.navigate',{url:launch.url.split('#')[0]+'#/models'});
     await until(`typeof current!=='undefined' && current?.attempted && (current.failed || current.stage==='Waiting for source…')`);
-    const secondary=tab;tab=primary;
+     const secondary=tab;tab=primary;
+     await command('Target.activateTarget',{targetId:target.targetId});
     await fixture('release');
     await until(`hostState.kind==='connected'`);
-    await pause(1200);
+    await until(`!!current.active && document.querySelector('.report-loading progress')?.hasAttribute('value')`);
+    await fixture('step');await until(`current.progressSequence>=2`);
+    const loadingFocus=await focusSnapshot('determinate-focus');
+    assert.equal(loadingFocus.progress.length,1);assert.ok(loadingFocus.progress[0].value>0 && loadingFocus.progress[0].value<100);
+    assert.ok(Math.abs(loadingFocus.progress[0].box.x+loadingFocus.progress[0].box.width/2-loadingFocus.main.width/2)<2);
+    await fixture('complete');
+    await until(`!!current.result && !current.loading`);
     const after=await snapshot(); trace.push({phase:'released',browser:after,host:await fixture('status')});
     // Record both sides of the causal failure before asserting desired UX (RED on old assets).
     if(before.failed) console.log(JSON.stringify({trace}));
@@ -100,18 +124,34 @@ async function main() {
     assert.equal(observations.some(value=>value.percent===100&&!value.result),false,'100% requires a coherent result');
     assert.equal(await evaluate(`!!document.querySelector('#cancel')`),false);
     assert.equal(await evaluate(`!!document.querySelector('.overview-models')`),true);
+    const completedFocus=await focusSnapshot('completed-focus');
+    await until(`liveValue.source_observed_at_ms>${completedFocus.observed}`);
+    const laterFocus=await focusSnapshot('later-status-focus');
+    assert.equal(laterFocus.outline.style,'none');assert.equal(laterFocus.progress.length,0);
+    await evaluate(`location.hash='#/watch'`);await until(`current.section==='watch'`);
+    await focusSnapshot('watch-focus');
+    await evaluate(`document.querySelector('nav a[href="#/models"]').click()`);
+    await until(`current.section==='models' && !current.loading`);await focusSnapshot('returned-focus');
+    assert.equal(completedFocus.progress.length,0,'completed Models removes the loader');
+    assert.ok(!completedFocus.focusVisible || completedFocus.outline.style==='none' || completedFocus.outline.width==='0px',
+      'automatic Models focus must not paint a page-width outline');
+    assert.equal(completedFocus.shadow,'none','initial script focus has no intentional keyboard cue');
+    await probeModelsFocus({command,evaluate,until,focusSnapshot});
     const image=await command('Page.captureScreenshot',{format:'png'});
     await fs.writeFile(path.join(output,'ready.png'),Buffer.from(image.data,'base64'));
-    tab=secondary;await until(`!!current.result && !current.loading`);
+    tab=secondary;await command('Target.activateTarget',{targetId:peer.targetId});
+    await until(`!!current.result && !current.loading`);
     assert.equal((await snapshot()).failed,false,'second tab shares automatic startup recovery');
     await command('Page.reload');await until(`typeof current!=='undefined' && !!current?.result && !current.loading`);
     assert.equal((await snapshot()).failed,false,'authenticated warm deep link reuses the result');
+    const deepFocus=await focusSnapshot('deep-link-focus');
+    assert.equal(deepFocus.outline.style,'none');assert.equal(deepFocus.shadow,'none');assert.equal(deepFocus.progress.length,0);
     assert.equal((await fixture('status')).jobs.filter(job=>job.kind==='normal').length,1);
     assert.deepEqual(errors,[]);outcome='PASS';console.log(JSON.stringify({outcome,width,theme,
       seconds:status.seconds,modelsJobs:status.jobs.filter(job=>job.kind==='normal').length,
       falseFailure:observations.some(value=>value.failed||value.retry)}));
   } finally {
-    clearTimeout(deadline);await fs.writeFile(path.join(output,'startup.json'),JSON.stringify({outcome,width,theme,trace,network,errors,serverErrors},null,2));
+    clearTimeout(deadline);await fs.writeFile(path.join(output,'startup.json'),JSON.stringify({outcome,width,theme,scheme,trace,network,errors,serverErrors},null,2));
     server.stdin.end('{"command":"stop"}\n');await command('Browser.close').catch(()=>{});
     if(server.exitCode===null)await new Promise(resolve=>server.once('exit',resolve));
   }

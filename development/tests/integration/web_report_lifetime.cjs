@@ -2,8 +2,14 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 let now = 1000000000, sequence = 0, busy = 0, sourceWait = 0, managedResponse = null, liveUpdate = null;
 const timers = new Map(), jobs = new Map(), admissions = [], handlers = {}, ids = {}, jobFetches = {};
-const node = () => ({dataset:{}, attrs:{}, setAttribute(key,value){this.attrs[key]=value;}, removeAttribute(){}, addEventListener(){}, focus(){},
-  replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}});
+const node = () => {
+  const classes=new Set();
+  return {dataset:{}, attrs:{}, classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name)},
+    setAttribute(key,value){this.attrs[key]=value;}, getAttribute(key){return this.attrs[key];}, removeAttribute(){}, addEventListener(){},
+    matches(selector){return selector===':focus-visible' && this.keyboardVisible===true;},
+    focus(){document.activeElement=this;},
+    replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}};
+};
 for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
   querySelector:()=>null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
@@ -54,6 +60,16 @@ const go = async section=>{location.hash='#/'+section;handlers.hashchange();awai
 const hide = async hidden=>{document.hidden=hidden;handlers.visibilitychange();await settle();};
 async function main(){
   await settle();assert.equal(run('hostState.writable'),true);
+  run('focusReport({preventScroll:true})');
+  assert.equal(document.activeElement,ids.content);
+  assert.equal(ids.content.classList.contains('keyboard-focus'),false,'initial scripted focus has no keyboard cue');
+  document.activeElement=ids.skip;ids.skip.keyboardVisible=true;
+  run('focusReport()');
+  assert.equal(document.activeElement,ids.content);
+  assert.equal(ids.content.classList.contains('keyboard-focus'),true,'intentional keyboard transfer keeps a visible cue');
+  ids.content.keyboardVisible=true;
+  run('focusReport()');
+  assert.equal(ids.content.classList.contains('keyboard-focus'),false,'a script cannot infer keyboard intent from the already-focused landmark');
   for(const section of ['models','token-mix','ai-stats','comparisons']){
     busy=1;const before=admissions.length;
     await go(section);

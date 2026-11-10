@@ -1,0 +1,2388 @@
+{
+  "baseline": [
+    {
+      "phase": "initial-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "color": "rgb(36, 87, 197)",
+          "offset": "3px"
+        },
+        "main": {
+          "x": 0,
+          "y": 123.25,
+          "width": 1366,
+          "height": 437.25
+        },
+        "nav": {
+          "x": 0,
+          "y": 64.5,
+          "width": 1366,
+          "height": 58.75
+        },
+        "progress": [
+          {
+            "value": 0,
+            "box": {
+              "x": 488,
+              "y": 284.578125,
+              "width": 390,
+              "height": 16.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "phase": "completed-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "color": "rgb(36, 87, 197)",
+          "offset": "3px"
+        },
+        "main": {
+          "x": 0,
+          "y": 123.25,
+          "width": 1366,
+          "height": 730.046875
+        },
+        "nav": {
+          "x": 0,
+          "y": 64.5,
+          "width": 1366,
+          "height": 58.75
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "later-status-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "color": "rgb(36, 87, 197)",
+          "offset": "3px"
+        },
+        "main": {
+          "x": 0,
+          "y": 123.25,
+          "width": 1366,
+          "height": 730.046875
+        },
+        "nav": {
+          "x": 0,
+          "y": 64.5,
+          "width": 1366,
+          "height": 58.75
+        },
+        "progress": []
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "outcome": "PASS",
+      "theme": "classic",
+      "scheme": "light",
+      "width": "360",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 214,
+            "main": {
+              "x": 0,
+              "y": 0.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": -142,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "classic",
+      "scheme": "light",
+      "width": "1366",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "classic",
+      "scheme": "dark",
+      "width": "360",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 214,
+            "main": {
+              "x": 0,
+              "y": 0.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": -142,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "classic",
+      "scheme": "dark",
+      "width": "1366",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(120, 220, 232) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(229, 229, 229)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "web",
+      "scheme": "light",
+      "width": "360",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(36, 87, 197) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(36, 87, 197) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 214,
+            "main": {
+              "x": 0,
+              "y": 0.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": -142,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "web",
+      "scheme": "light",
+      "width": "1366",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(36, 87, 197) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(36, 87, 197) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(23, 37, 59)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "web",
+      "scheme": "dark",
+      "width": "360",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 360,
+              "height": 429.75
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 360,
+              "height": 142.25
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 31.5,
+                  "y": 375.578125,
+                  "width": 297,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1106.609375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 214,
+            "main": {
+              "x": 0,
+              "y": 0.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": -142,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 214.25,
+              "width": 345,
+              "height": 1138.859375
+            },
+            "nav": {
+              "x": 0,
+              "y": 72,
+              "width": 345,
+              "height": 142.25
+            },
+            "progress": []
+          }
+        }
+      ]
+    },
+    {
+      "outcome": "PASS",
+      "theme": "web",
+      "scheme": "dark",
+      "width": "1366",
+      "focus": [
+        {
+          "phase": "initial-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 0,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "determinate-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 437.25
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": [
+              {
+                "value": 46,
+                "box": {
+                  "x": 488,
+                  "y": 284.578125,
+                  "width": 390,
+                  "height": 16.5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "phase": "completed-focus",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "mouse-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 730.046875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "keyboard-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "skip-keyboard",
+          "focus": {
+            "active": "content",
+            "focusVisible": true,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "3px"
+            },
+            "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+            "keyboard": true,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        },
+        {
+          "phase": "touch-return",
+          "focus": {
+            "active": "content",
+            "focusVisible": false,
+            "outline": {
+              "style": "none",
+              "width": "3px",
+              "color": "rgb(230, 237, 248)",
+              "offset": "0px"
+            },
+            "shadow": "none",
+            "keyboard": false,
+            "scroll": 0,
+            "main": {
+              "x": 0,
+              "y": 123.25,
+              "width": 1366,
+              "height": 762.296875
+            },
+            "nav": {
+              "x": 0,
+              "y": 64.5,
+              "width": 1366,
+              "height": 58.75
+            },
+            "progress": []
+          }
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "phase": "initial-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": null,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 360,
+          "height": 429.75
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 360,
+          "height": 142.25
+        },
+        "progress": [
+          {
+            "value": 0,
+            "box": {
+              "x": 31.5,
+              "y": 375.578125,
+              "width": 297,
+              "height": 16.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "phase": "determinate-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335644985,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 360,
+          "height": 429.75
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 360,
+          "height": 142.25
+        },
+        "progress": [
+          {
+            "value": 46,
+            "box": {
+              "x": 31.5,
+              "y": 375.578125,
+              "width": 297,
+              "height": 16.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "phase": "completed-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335644985,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1106.609375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "later-status-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1106.609375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "watch-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 2201.03125
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": [
+          {
+            "value": 0.08352,
+            "box": {
+              "x": 29.5,
+              "y": 787.640625,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 0.25,
+            "box": {
+              "x": 29.5,
+              "y": 1088.875,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 1,
+            "box": {
+              "x": 29.5,
+              "y": 1219.578125,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 0.99999,
+            "box": {
+              "x": 29.5,
+              "y": 1430.78125,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 1,
+            "box": {
+              "x": 29.5,
+              "y": 1561.484375,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 1,
+            "box": {
+              "x": 29.5,
+              "y": 2125.25,
+              "width": 286,
+              "height": 12.4375
+            }
+          },
+          {
+            "value": 0.42,
+            "box": {
+              "x": 29.5,
+              "y": 2336.453125,
+              "width": 286,
+              "height": 12.4375
+            }
+          }
+        ]
+      }
+    },
+    {
+      "phase": "returned-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1106.609375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "mouse-return",
+      "focus": {
+        "active": "content",
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "0px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1106.609375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "keyboard-return",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+        "keyboard": true,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1138.859375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "skip-keyboard",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "3px"
+        },
+        "shadow": "rgb(156, 191, 255) 4px 0px 0px 0px inset",
+        "keyboard": true,
+        "scroll": 214,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 0.25,
+          "width": 345,
+          "height": 1138.859375
+        },
+        "nav": {
+          "x": 0,
+          "y": -142,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "touch-return",
+      "focus": {
+        "active": "content",
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(230, 237, 248)",
+          "offset": "0px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 214.25,
+          "width": 345,
+          "height": 1138.859375
+        },
+        "nav": {
+          "x": 0,
+          "y": 72,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "forced-keyboard",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "color": "rgb(55, 0, 110)",
+          "offset": "-3px"
+        },
+        "shadow": "none",
+        "keyboard": true,
+        "scroll": 214,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 0.25,
+          "width": 345,
+          "height": 1138.859375
+        },
+        "nav": {
+          "x": 0,
+          "y": -142,
+          "width": 345,
+          "height": 142.25
+        },
+        "progress": []
+      }
+    },
+    {
+      "phase": "deep-link-focus",
+      "focus": {
+        "active": "content",
+        "focusVisible": true,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "color": "rgb(229, 229, 229)",
+          "offset": "3px"
+        },
+        "shadow": "none",
+        "keyboard": false,
+        "scroll": 0,
+        "observed": 1794335646003,
+        "main": {
+          "x": 0,
+          "y": 164.25,
+          "width": 743,
+          "height": 769.046875
+        },
+        "nav": {
+          "x": 0,
+          "y": 64.5,
+          "width": 743,
+          "height": 99.75
+        },
+        "progress": []
+      }
+    }
+  ]
+}
