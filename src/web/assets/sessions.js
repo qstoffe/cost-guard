@@ -39,7 +39,7 @@ const SessionsCatalog = (() => {
         th.append(button); header.append(th); this.headers.push({key, name, th, label});
       }
       head.append(header); this.body = el('tbody'); table.append(head, this.body); pan.append(table);
-      const pager = el('div', undefined, 'pager sessions-pager');
+      const pager = el('div', undefined, 'pager page-navigation');
       this.pan = pan; this.pager = pager;
       this.previous = el('button', 'Previous'); this.next = el('button', 'Next'); this.label = el('span');
       for (const button of [this.previous, this.next]) {
@@ -47,6 +47,9 @@ const SessionsCatalog = (() => {
         button.addEventListener('click', () => { if (!button.disabled && button.destination) location.hash = button.destination; });
       }
       this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.next);
+      for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
+        if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
+      });
       this.root.append(this.status, pan, pager);
     }
     configure(params) {
@@ -148,7 +151,14 @@ const SessionsCatalog = (() => {
       this.pagerBusy();
     }
     pagerBusy() {
+      if (this.busy && [this.previous, this.next].includes(document.activeElement)) this.actionFocus = document.activeElement;
       for (const button of [this.previous, this.next]) button.disabled = this.busy || this.recovering || !button.destination;
+      if (!this.busy && this.actionFocus) {
+        if (document.activeElement === document.body || document.activeElement === this.actionFocus) {
+          (this.actionFocus.disabled ? this.actionFocus === this.next ? this.previous : this.next : this.actionFocus).focus({preventScroll: true});
+        }
+        this.actionFocus = null;
+      }
     }
     rows(values) {
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));

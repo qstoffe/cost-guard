@@ -388,7 +388,10 @@ USD/Task divides the published total USD by all task attempts, including failure
 Relative Task Cost divides by the cheapest **strictly positive, complete-cost** run
 across the entire paginated edition. Zero-cost rows show $0.00 with no ratio; source-
 declared partial costs show N/A. Tiny positive amounts never display as exact zero.
-Default sorting is **Relative Task Cost descending**, most expensive first.
+Default sorting is **Solved descending**, using raw numeric scores with unknowns
+last and stable configuration ties. Manual sorting remains independent and retained.
+Entering Models from another route starts at the top; ordinary refresh, filtering
+and sorting do not reset the user's document scroll.
 Sorting uses raw decimal keys, unknowns last, with stable model/client/effort/row-ID
 tie-breaks. All five headers sort independently of the reference table and preserve
 their state through navigation. USD stays USD regardless of Credits/USD settings.
@@ -520,7 +523,16 @@ Previous/Next pages groups, not runs; all repeated runs remain separately linked
 including three executions of the same provider/model/effort. Groups and rows sort
 by newest supported session-tree activity, with deterministic ties. If a page's
 revision changes, a bounded retry returns to page 1 rather than silently skipping
-or duplicating groups. Narrow tables pan horizontally; the document scrolls vertically.
+or duplicating groups. Sessions and Comparisons share the same responsive pager:
+Previous left, a centered **Showing 11–20 of 321 groups · Page 2 of 33** summary,
+and Next right. The summary moves above the edge buttons on narrow screens.
+Pending navigation disables both buttons and preserves the last successful page.
+Measured index/preview stages explain ongoing work; waiting shows a reason and
+recovery attempt, not a frozen work percentage. Explicit page navigation allows
+three recoveries and fails after **45 seconds without forward stage/count progress**,
+offering **Retry Comparisons**. Progressing work has no total computation deadline;
+the policy does not cancel host-owned work or alter initial/background report lifetimes.
+Narrow tables pan horizontally; the document scrolls vertically.
 
 Columns are **Session | Started | Model | Effort | CCost | Duration | Context |
 Token Mix | Calls**. All metrics belong only to the first prompt's canonical causal

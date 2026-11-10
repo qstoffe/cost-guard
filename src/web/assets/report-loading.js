@@ -13,12 +13,15 @@ const ReportLoading = (() => {
     'account-projection': [88, 94, 'Preparing account periods'], finalizing: [94, 99, 'Preparing report']};
   const history = {'history-cache': [30, 45, 'Checking history cache'],
     'history-load': [45, 80, 'Updating changed history'], 'history-projection': [80, 94, 'Preparing report'],
+    'comparison-verify': [80, 84, 'Verifying history revisions'],
+    'comparison-groups': [84, 86, 'Preparing matched groups'],
+    'comparison-previews': [86, 94, 'Reading page previews'],
     finalizing: [94, 99, 'Preparing report']};
   const nested = {'date-cache': 'Checking batch cache', 'date-load': 'Loading history batch',
     'date-catalog-before': 'Reading before-catalog', 'date-messages': 'Reading session trees',
     'date-catalog-after': 'Verifying after-catalog', 'date-analysis': 'Analyzing history batch'};
   function reset(state) {
-    Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false,
+    Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false, waitingReason: null,
       stage: 'Authorizing browser session', stageLabel: 'Authorizing browser session'});
   }
   function observe(state, progress = {}) {
@@ -26,6 +29,7 @@ const ReportLoading = (() => {
       if (progress.sequence <= (state.progressSequence || 0)) return;
       state.progressSequence = progress.sequence;
     }
+    state.waitingReason = null;
     const measured = Number.isFinite(progress.completed) && Number.isFinite(progress.total) && progress.total > 0;
     const completed = Math.max(0, progress.completed || 0);
     const counts = measured ? ` (${completed.toLocaleString()}/${progress.total.toLocaleString()})` : '';
@@ -49,9 +53,10 @@ const ReportLoading = (() => {
     state.stageLabel = label;
     state.stage = label + (counts || (progress.stage === 'sampling' && completed ? ` (${completed} completed)` : ''));
   }
-  function waiting(state, code) {
+  function waiting(state, code, attempt) {
+    state.waitingReason = code;
     state.stageLabel = code === 'busy' ? 'Waiting for report slot…' : 'Waiting for source…';
-    state.stage = state.stageLabel; // Waiting never advances the bar.
+    state.stage = state.stageLabel + (attempt ? ` Recovery ${Math.min(3, attempt)}/3 (${code}).` : '');
   }
   class View {
     constructor(root) {
@@ -72,9 +77,10 @@ const ReportLoading = (() => {
     }
     update(state) {
       const percent = state.percent || 0;
-      this.bar.value = percent;
-      this.bar.setAttribute('aria-valuetext', `${percent} percent`);
-      ReportView.text(this.percent, `${percent}%`);
+      if (state.waitingReason) this.bar.removeAttribute('value');
+      else this.bar.value = percent;
+      this.bar.setAttribute('aria-valuetext', state.waitingReason ? state.stage : `${percent} percent`);
+      ReportView.text(this.percent, state.waitingReason ? 'Waiting' : `${percent}%`);
       ReportView.text(this.stage, state.stage || 'Authorizing browser session');
       // Announce stage transitions, not every count/poll/percentage mutation.
       ReportView.text(this.status, state.stageLabel || 'Authorizing browser session');
@@ -121,17 +127,26 @@ const ReportLoading = (() => {
     return host.terminal || ['offline', 'stopped', 'identity_changed', 'authorization_required'].includes(host.kind);
   }
   class Attempt {
-    constructor() {
+    constructor({paging = false} = {}) {
       this.retries = 0;
+      this.paging = paging; this.advancedAt = Date.now(); this.work = new Map();
       this.controller = new AbortController(); this.reason = null;
       this.waiting = null; this.hint = null; this.woken = null;
     }
     cancel(reason = 'cancelled') { this.reason = reason; this.controller.abort(); }
-    check(host) {
+    check(host, pending = false) {
       if (this.reason) throw new Error(this.reason);
       // Stream reconnect is not failed HTTP/source readiness. Admission and typed
       // replies prove the finite source independently of the Live connection.
       if (interrupted(host)) throw new Error(host.kind);
+      if (pending && this.paging && Date.now() - this.advancedAt >= 45000) throw new Error('comparison_page_no_progress');
+    }
+    observe(progress) {
+      if (!this.paging || !progress) return;
+      const key = progress.stage || progress.phase, completed = progress.completed || 0;
+      if (!this.work.has(key) || completed > this.work.get(key)) {
+        this.work.set(key, completed); this.advancedAt = Date.now();
+      } // New sequence numbers or revisiting old counts are not forward progress.
     }
     pause(milliseconds, job) {
       return new Promise((resolve, reject) => {
@@ -165,6 +180,7 @@ const ReportLoading = (() => {
     }
     async backoff(error) {
       if (!retryable(error)) throw error;
+      if (this.paging && this.retries >= 3) throw new Error('comparison_page_retries');
       this.retries = Math.min(4, this.retries + 1);
       await this.pause(Math.min(4000, 500 * 2 ** (this.retries - 1)));
     }

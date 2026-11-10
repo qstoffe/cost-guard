@@ -34,10 +34,10 @@ def source(groups=11, repeats=3, *, start=1_790_000_000_000):
     return result
 
 
-def browser_result(request):
+def browser_result(request, *, groups=11):
     with tempfile.TemporaryDirectory() as tmp:
         database = CacheDatabase(Path(tmp)); database.initialize()
-        history = source(start=BROWSER_START)
+        history = source(groups, start=BROWSER_START)
 
         def factory(now, progress):
             return ReportService(selection=SourceSelection(history, 'v2', (), history.probe()),
@@ -54,11 +54,15 @@ def finite_comparisons(sender, request):
 
 class ComparisonsJobs(TokenMixJobs):
     """Actual canonical projections, immediate fixture transport with optional delay."""
+    def __init__(self, *, groups=11):
+        super().__init__()
+        self.groups = groups
+
     def submit(self, request):
         if request.kind not in (ReportKind.COMPARISONS, ReportKind.AI_STATS):
             return super().submit(request)
         key = uuid4().hex
         self.jobs[key] = dict(id=key, status='running', error=None,
-            progress=dict(phase='history', completed=1, total=33), result=browser_result(request),
+            progress=dict(phase='history', completed=1, total=self.groups * 3), result=browser_result(request, groups=self.groups),
             ready_at=time.monotonic() + .2)
         return key

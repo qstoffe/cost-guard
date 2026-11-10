@@ -29,7 +29,8 @@ _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "a
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
                      "account-load", "account-analysis", "account-projection", "finalizing",
                      "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis",
-                     "history-cache", "history-load", "history-projection", "history-verify"})
+                     "history-cache", "history-load", "history-projection", "history-verify",
+                     "comparison-verify", "comparison-groups", "comparison-previews"})
 
 
 class ReportApplication:
@@ -151,7 +152,8 @@ class ReportApplication:
                                 error=ReportError("pricing_unavailable", True))
         except SessionCatalogChangedError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
-                                error=ReportError("session_catalog_changed", True))
+                                error=ReportError("session_catalog_changed",
+                                    not (request.kind is ReportKind.COMPARISONS and request.comparison_revision)))
         except SessionNotFoundError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("session_not_found"))

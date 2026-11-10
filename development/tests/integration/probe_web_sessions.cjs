@@ -173,7 +173,7 @@ async function main() {
     assert.equal(await evaluate('current.catalog.data.total'),120);
     checks.push('cold-to-global-metric-sort-ready');
     await evaluate("location.hash='#/sessions'"); await until('current.catalog.data.sort === "activity"');
-     const older=await evaluate('document.querySelector(".sessions-pager button:last-child").destination');
+     const older=await evaluate('document.querySelector(".page-navigation button:last-child").destination');
     await evaluate(`location.hash=${JSON.stringify(older)}`);
     await until('current.catalog.data.offset === 50');
     const membership=await evaluate('[...document.querySelectorAll("#result tbody tr")].map(row=>row.dataset.id)');
@@ -286,7 +286,7 @@ async function main() {
              const original=current.catalog.data,rows=original.view.session_usage;
              const value=structuredClone(original);value.total=1234567;value.view.session_usage[0].running=true;
              current.catalog.update(value);
-             const bar=document.querySelector('.sessions-pager'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
+             const bar=document.querySelector('.page-navigation'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
              const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
              const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
              current.catalog.update(original);return result;})()`);

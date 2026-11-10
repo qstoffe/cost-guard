@@ -44,7 +44,7 @@ const BenchmarkView = (() => {
       this.scroll.setAttribute('role', 'region'); this.scroll.setAttribute('aria-label', 'Coding benchmark — scroll horizontally on narrow screens');
       this.table = el('table', undefined, 'benchmark-table'); this.table.setAttribute('aria-label', 'Coding Benchmark – Cost per Task');
       const head = el('thead'), row = el('tr'); this.body = el('tbody'); this.headers = [];
-      this.sort = {index: 3, direction: -1}; this.data = {rows: [], efforts: []}; this.effortSignature = '';
+      this.sort = {index: 4, direction: -1}; this.data = {rows: [], efforts: []}; this.effortSignature = '';
       names.forEach((name, index) => {
         const th = el('th'), button = el('button', name); th.scope = 'col';
         button.setAttribute('data-benchmark-control', String(index));

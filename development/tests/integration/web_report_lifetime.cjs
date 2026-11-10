@@ -11,7 +11,7 @@ const location = {hash:'#/watch'}, history = {replaceState(){}};
 class Clock extends Date {static now(){return now;}}
 const context = vm.createContext({document, location, history, URLSearchParams, AbortController, Date:Clock,
   setTimeout(fn,ms){const id=++sequence;timers.set(id,{fn,ms});return id;}, clearTimeout:id=>timers.delete(id),
-  window:{addEventListener:(key,fn)=>{handlers[key]=fn;}},
+  window:{addEventListener:(key,fn)=>{handlers[key]=fn;},scrollTo(){}},console,
   ReportRoutes:{resolve(hash){const section=hash.slice(2);return {section,title:section,
     live:section==='watch',request:['models','token-mix','ai-stats','comparisons'].includes(section)?
       {kind:section==='models'?'normal':section}:null};},controls(){}},
@@ -151,6 +151,36 @@ async function main(){
   assert.equal(polls(),0,'completion releases the last poll timer');
   assert.equal(typeof retryAttempt.woken,'string','wake state stores one identity, not a growing history');
   assert.equal(retryAttempt.woken,recoveredJob,'wake state retains only the last identity, not retired jobs');
+  // A changed pinned Comparisons revision must rebase once, never readmit that pin.
+  await go('watch');run(`views.delete('#/comparisons')`);
+  await go('comparisons');const paging=run('current');
+  const firstPage={view:{kind:'comparisons',comparisons:{offset:0,total:321,revision:'a'.repeat(64)}},source:{status:'acquired',observed_at_ms:now}};
+  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=firstPage;await tick();
+  run(`current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
+  const staleJob=paging.active;
+  jobs.get(staleJob).status='complete';jobs.get(staleJob).result={error:{code:'session_catalog_changed',retryable:true}};
+  await tick();
+  console.log(JSON.stringify({trace:'changed-pin',request:paging.request,retries:paging.attempt?.retries,stage:paging.stage}));
+  assert.equal(paging.request.comparison_revision,undefined,'changed pinned revision is retired before any generic retry');
+  assert.equal(paging.orderReset,true);
+  assert.equal(paging.result,firstPage,'last-good page survives rebase');
+  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=firstPage;await tick();
+  // Explicit page faults are bounded; timers never silently retry a failed page.
+  busy=20;
+  run(`current.pageNavigation=true;current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
+  for(let i=0;i<3;i++)await tick();
+  assert.equal(paging.loading,false);assert.equal(paging.failed,true);
+  assert.match(paging.message,/three recovery attempts/);assert.equal(paging.result,firstPage);
+  const failedAdmissions=admissions.length;run('scheduleCachedReport();enterCachedReport(current)');await settle();
+  assert.equal(admissions.length,failedAdmissions,'only explicit Retry can restart failed navigation');
+  busy=0;run('acquire(current)');await settle();
+  now+=45001;await tick();
+  assert.equal(paging.loading,false);assert.equal(paging.failed,true);
+  assert.match(paging.message,/45 seconds/);assert.equal(paging.result,firstPage);
+  run('acquire(current)');await settle();
+  const nextPage={...firstPage,view:{...firstPage.view,comparisons:{...firstPage.view.comparisons,offset:10}}};
+  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=nextPage;await tick();
+  assert.equal(paging.result,nextPage);assert.equal(paging.failed,false);assert.equal(paging.pageNavigation,false);
   // Managed first completion preserves an actually old as-of, not only a shifted worker timer.
   await go('watch');run(`views.delete('#/models');demand={update(){}};`);
   const started=now;await go('models');const aged=run('current'),owned=aged.active;

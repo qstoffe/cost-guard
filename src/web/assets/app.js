@@ -29,7 +29,7 @@ function firstReport(state = current) {
 function scheduleCachedReport() {
   clearTimeout(cachedReportTimer);
   const state = current;
-  if (!historical(state) || !state.result || state.loading || document.hidden || !hostState.writable) return;
+  if (!historical(state) || !state.result || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) return;
   if (demand) {
     cachedReportTimer = setTimeout(() => { if (current === state) { state.benchmark?.load(api); acquire(state, true); } }, 5000);
     return; // Lookup a publication, never schedule a browser-owned source refresh.
@@ -42,6 +42,7 @@ function scheduleCachedReport() {
 }
 function enterCachedReport(state) {
   if (!historical(state)) return;
+  if (state.pageNavigation && state.failed) return; // Explicit Retry owns failed paging, not a lookup timer.
   const band = CachedReports.entry(state.result, state.section);
   state.withheld = state.section === 'ai-stats' ? !!state.result && !AIStatsView.valid(state.result) : band === 'withhold';
   if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
@@ -197,7 +198,8 @@ function show(state) {
     state.comparisons ||= new ComparisonsView.View((offset, revision) => {
       if (state.loading) return;
       state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
-      state.orderReset = false; acquire(state);
+      state.pageNavigation = true; state.orderRetried = false; state.orderReset = false;
+      demand?.update(); acquire(state);
     });
     state.comparisons.update(state); state.comparisons.attach(output);
     return;
@@ -249,7 +251,7 @@ function show(state) {
       const focused = document.activeElement?.getAttribute('data-model-control');
       ReportView.render(output, state.result, state);
       if (scroll != null && state.section === 'models') output.querySelector('.overview-models').scrollLeft = scroll;
-      if (focused && state.section === 'models') output.querySelector(`[data-model-control="${focused}"]`)?.focus();
+      if (focused && state.section === 'models') output.querySelector(`[data-model-control="${focused}"]`)?.focus({preventScroll: true});
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
     state.priceControls?.(!!csrf && hostState.writable);
@@ -273,7 +275,9 @@ function failure(code) {
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
     cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope or limits; no alternate scope was substituted.',
-    session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
+      session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
+      comparison_page_no_progress: 'Page navigation made no forward progress for 45 seconds. Last page retained; Retry Comparisons to try again.',
+      comparison_page_retries: 'Page navigation exhausted three recovery attempts. Last page retained; Retry Comparisons to try again.',
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry when a slot is available.',
      ai_stats_revision_churn: 'History kept changing without verified forward progress. Saved stable work is retained; Retry when the source settles.',
      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space, then Retry.',
@@ -307,7 +311,7 @@ async function acquire(state, background = false, prices = false) {
   let publication = null;
   let retry = !!state.failed && !background;
   state.loading = true;
-  const attempt = state.attempt = new ReportLoading.Attempt();
+  const attempt = state.attempt = new ReportLoading.Attempt({paging: state.pageNavigation === true});
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   state.dispatchError = null;
@@ -318,7 +322,7 @@ async function acquire(state, background = false, prices = false) {
   show(state);
   async function admit() {
     while (true) {
-      attempt.check(hostState);
+      attempt.check(hostState, true);
       try {
         const scope = state.section === 'ai-stats' ? state.request : request;
         const retryOnce = retry;
@@ -326,11 +330,12 @@ async function acquire(state, background = false, prices = false) {
         const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
           demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
         state.active = admission.id;
+        if (attempt.retries) ReportLoading.reset(state);
         if (demand && !prices) {
           // Retained publication identity is independent of an active refresh.
           state.dispatchRefresh = admission.refresh;
           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
-          if (!admission.result && state.result && state.section !== 'ai-stats') { state.withheld = true; show(state); }
+          if (!admission.result && state.result && state.section !== 'ai-stats' && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
             publication_id: admission.result_id || admission.id};
           else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
@@ -338,9 +343,9 @@ async function acquire(state, background = false, prices = false) {
         state.progressSequence = 0;
         return;
       } catch (error) {
-        if (!ReportLoading.retryable(error)) throw error;
+        if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
         if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
-        ReportLoading.waiting(state, error.message); show(state);
+        ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
         await attempt.backoff(error);
       }
     }
@@ -362,16 +367,16 @@ async function acquire(state, background = false, prices = false) {
          if (job.status !== 'complete' || !job.result || job.result.error) {
           const error = new Error(job.result?.error?.code || job.error || job.status);
           error.retryable = job.result?.error?.retryable === true;
-           if (!ReportLoading.retryable(error)) throw error;
+            if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
            if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
-          state.active = null; ReportLoading.waiting(state, error.message); show(state);
+           state.active = null; ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
           await attempt.backoff(error); await admit(); continue;
         }
         if (hostState.terminal) break;
          if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
-         if (state.section === 'comparisons') state.orderRetried = false;
+          if (state.section === 'comparisons') state.pageNavigation = false;
          if (state.section === 'ai-stats' && !job.result.view.ai_stats.some(row => row.period === state.period)) {
            await admit(); continue; // A simultaneous scope change finished a different period.
          }
@@ -398,17 +403,20 @@ async function acquire(state, background = false, prices = false) {
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-          if (!statsProgress) ReportLoading.observe(state, job.progress);
+       attempt.observe(job.progress);
+       attempt.check(hostState, true);
+           if (!statsProgress) ReportLoading.observe(state, job.progress);
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
          if (state === current && (!background || statsProgress)) show(state);
-       await attempt.poll(state.active, 500);
+        await attempt.poll(state.active, state.pageNavigation ? 1000 : 500);
     }
   } catch (error) {
     if (attempt.reason) error = new Error(attempt.reason);
     if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
       state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
       state.orderRetried = true;
+      demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
     }
     state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
@@ -494,7 +502,11 @@ function navigate() {
   demand?.update();
   if (current !== previous) enterCachedReport(current);
   scheduleCachedReport();
-  if (redirected) document.getElementById('content').focus();
+    if (redirected) document.getElementById('content').focus();
+    if (route.section === 'models' && current !== previous) {
+      document.getElementById('content').focus({preventScroll: true});
+      window.scrollTo(0, 0); // New-route policy only; never refresh/filter/sort arrival.
+    }
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   firstReport();
 }
@@ -563,7 +575,6 @@ window.addEventListener('hashchange', () => {
       body: JSON.stringify({credential: handoff})}).catch(() => {}).then(() => location.reload());
   }
   navigate();
-  if (current?.section === 'models') document.getElementById('content').focus();
 });
 window.addEventListener('pageshow', () => liveConnection?.resync());
 for (const link of document.querySelectorAll('nav a')) {
