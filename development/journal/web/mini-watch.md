@@ -19,9 +19,10 @@ the existing time wrapper still owns date/offset hover/focus/touch help. A compa
 glyph fits inside Activity's existing header width. No lifecycle inference, source
 call, new control, native minimum, opening measurement or Fit change is introduced.
 
-Verification so far (final delivery checks still in progress):
+Verification:
 
-- Initial focused Mini: 13 tests passed. Extended fixtures cover simultaneous
+- Local Full: **182 bounded groups, zero failures, 145.0 s**. Focused Mini:
+  **13 tests passed**. Extended fixtures cover simultaneous
   running sessions, same-row running/terminal/history/next-prompt updates,
   unverified and contradictory terminal flags, unknown times, removed/replacement
   sessions, source correction, rejected older snapshots and repeated draws.
@@ -32,6 +33,16 @@ Verification so far (final delivery checks still in progress):
   native PiP, immediate terminal cue removal, decorative accessibility, stable
   focus, hover/touch help and full date/offset invariance. Activity remains nowrap,
   unclipped and header-aligned within its existing 57.3 CSS-pixel metric width.
+- The complete native PiP portfolio passed **131 layouts** in the same Chrome at
+  100% zoom/DPR 1, including measured opening sizes, sticky headings, five-row
+  internal scrolling, selection, help/AX, source transitions, explicit Fit,
+  remembered size and no passive resize. The glyph remains inside the Activity
+  header minimum; opening/Fit calculations and native width were not increased.
+  [Synthetic running Web-light sample](../../architecture/governance/verification/mini-running-671/web-light.png)
+  and [Classic-dark sample](../../architecture/governance/verification/mini-running-671/classic-dark.png)
+  retain the compact rendering. Raw reports: `scratch:/mini-chrome-100-full.json`,
+  `scratch:/mini-chrome-125-lifecycle.json`, `scratch:/mini-chrome-125-activity.json`
+  and `scratch:/full-tests.log`.
 - Read-only installed V2 probe: 62 coherent publications, one running prompt,
   three accounts and five quota projections, 22.882 s; owned acquisition closed
   in 0.087 s and shared OpenCode was untouched. No historical rows were observed:
