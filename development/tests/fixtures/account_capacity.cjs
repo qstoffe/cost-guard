@@ -25,14 +25,19 @@ module.exports=(vm,context,sample,helpText)=>{
     savedRows=lines(card);savedBar=card.querySelectorAll('progress')[0];
     assert.equal(card.children.some(n=>n.className==='watch-capacity-spacer'),false);
     assert.match(card.children[2].textContent,/^Weekly Mixed CASE/);
-    assert.match(helpText(card.children[2].children[0]),/^Weekly Mixed CASE/);
+    const usage=helpText(card.children[2].children[0]);
+    assert.match(usage,/of this quota window remaining/);
+    assert.doesNotMatch(usage,/Capacity|CCost|÷|rolling|scope|pricing/i);
     assert.equal(card.querySelectorAll('progress')[0].attributes['aria-label'],'Weekly Mixed CASE remaining');
     assert.match(secondary.children[1].textContent,/^5-hour/);
     assert.equal(secondary.children[0].className,'watch-quota-divider');
     assert.equal(JSON.stringify(source),raw,'presentation never rewrites provider identifiers');
     for(const line of [...lines(card),...lines(secondary)]){
       assert.match(line.textContent,phase==='unknown'?/: \?$/:unit==='usd' ? /: ~\$/ : /: ~/);
-      assert.doesNotMatch(helpText(line.children[0]),/rounding|÷|×|guesstimate/i);
+      const help=helpText(line.children[0]);
+      assert.doesNotMatch(help,/Native Used|Native Remaining|rolling|scope/);
+      assert.match(help,phase==='unknown'?/No reliable/:/Unrounded .*Capacity/);
+      if(phase==='known')assert.match(help,line.className.includes('monthly')?/× \(30 days ÷/:/÷/);
     }
   }
   context.capacityView.accounts.accounts.push({...structuredClone(source),observation:{...source.observation,id:'second'}});

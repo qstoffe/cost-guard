@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.13 - 2026-11-10
+
+- Accounts/Full Watch quota Usage help retains native status/reset facts without Capacity prose. Period Capacity shows the matching unrounded reference Credits and observed-cost/usage-fraction formula or verified native provenance; theoretical Monthly Capacity explains its separate raw 30-day extrapolation.
+- Estimate-only rounding tightens from 10% to an inclusive 5%, retaining nearest half-up one/two significant digits, exact raw help and honest small-USD limitations. Observed Used, native allowances/percentages, canonical calculations, Mini layout, billing and CLI formatting are unchanged.
+
 ## v81.12 - 2026-11-10
 
 - Session detail replaces its yellow indeterminate loader with the shared centered report-loading visual. Verified history rows advance a documented 0–95% transfer phase with exact counts; applied complete rows finish at 100%, without decorative timers or a forced completion delay.

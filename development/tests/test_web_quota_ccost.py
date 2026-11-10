@@ -32,9 +32,10 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertEqual(f'~${rounded / 100:.2f}', wire['display_units']['usd']['monthly_capacity'])
                 self.assertEqual(monthly, D(wire['ccost_reference']['monthly_capacity']))
                 self.assertTrue(wire['ccost_reference']['monthly_applicable'])
-                self.assertIn('Approximate 30-day equivalent', wire['display']['monthly_capacity_help'])
-                self.assertIn('not a guaranteed monthly entitlement', wire['display']['monthly_capacity_help'])
-                self.assertNotRegex(wire['display']['monthly_capacity_help'], r'rounding|÷|×|guesstimate')
+                self.assertIn('Theoretical standardized 30-day reference equivalent', wire['display']['monthly_capacity_help'])
+                self.assertIn('not an actual monthly provider entitlement', wire['display']['monthly_capacity_help'])
+                self.assertIn(f'× (30 days ÷ {duration} seconds) = ', wire['display']['monthly_capacity_help'])
+                self.assertIn(format(monthly, 'f') + ' Credits', wire['display']['monthly_capacity_help'])
                 if capacity:
                     self.assertEqual('~' + capacity, wire['display']['ccost_capacity'])
 
@@ -47,6 +48,28 @@ class WebQuotaCCostTests(unittest.TestCase):
         self.assertIn('Source-verified', wire['ccost_help'])
         unverified = with_display(watch_quota(replace(quota, reference_ccost_capacity=None)), now_ms=1000).to_json()['quota']['display']
         self.assertEqual('N/A', unverified['monthly_capacity'], 'requests and native money are not reference credits')
+
+    def test_capacity_help_keeps_exact_snapshot_inputs_and_distinct_native_provenance(self):
+        raw_used = D('613.1234567890123456789012345')
+        quota = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.8'), duration_seconds=18000, reset_at_ms=20000)
+        period = QuotaPeriodProjection(quota, ComparisonCost(raw_used, 1, 1), None)
+
+        wire = with_display(watch_quota(quota, period), now_ms=1000).to_json()['quota']
+
+        help_text = wire['display']['capacity_help']
+        self.assertIn('Observed same-window CCost used: 613.1234567890123456789012345 Credits', help_text)
+        self.assertIn('613.1234567890123456789012345 ÷ 0.2 = 3065.617283945061728394506172 Credits', help_text)
+        self.assertIn('3065.617283945061728394506172 × (30 days ÷ 18000 seconds)', wire['display']['monthly_capacity_help'])
+        self.assertNotIn('Observed', wire['display']['monthly_capacity_help'])
+        self.assertIn('Credits ($30.66)', wire['display_units']['usd']['capacity_help'])
+        verified = replace(quota, reference_ccost_capacity=D('949.1234567890123456789012345'))
+
+        native = with_display(watch_quota(verified), now_ms=1000).to_json()['quota']['display']
+
+        self.assertIn('Unrounded Capacity: 949.1234567890123456789012345 Credits', native['capacity_help'])
+        self.assertIn('Source-verified reference CCost allowance.', native['capacity_help'])
+        self.assertNotRegex(native['capacity_help'], r'÷|estimate|Observed')
+        self.assertEqual('950', native['ccost_capacity'], 'normal verified formatter, not estimate rounding or ~')
 
     def test_native_monthly_is_one_capacity_even_when_original_is_ratio_estimated(self):
         for provider in ('github-copilot', 'other'):
@@ -117,17 +140,18 @@ class WebQuotaCCostTests(unittest.TestCase):
 
         wire = with_display(watch_quota(quota, period), now_ms=1000).to_json()['quota']
 
-        self.assertEqual(('613', '6000', '~6000'), tuple(wire['display']['ccost_' + key]
+        self.assertEqual(('613', '5500', '~6000'), tuple(wire['display']['ccost_' + key]
             for key in ('used', 'remaining', 'capacity')))
         self.assertEqual(('613', '5517', '6.13E+3'), tuple(wire['ccost_reference'][key]
             for key in ('used', 'remaining', 'capacity')))
         self.assertEqual('0.9', wire['remaining_fraction'])
         self.assertIn('5517 Credits', wire['display']['ccost_remaining_help'])
         self.assertIn('6130 Credits ($61.30)', wire['display_units']['usd']['ccost_capacity_help'])
-        self.assertEqual('Estimated full-window reference CCost from observed same-window CCost and the provider’s reported usage fraction.',
-            wire['display']['capacity_help'])
+        self.assertIn('Observed same-window CCost used: 613 Credits', wire['display']['capacity_help'])
+        self.assertIn('Provider-reported fraction used: 0.1', wire['display']['capacity_help'])
+        self.assertIn('Unrounded Capacity (estimate): 613 ÷ 0.1 = 6130 Credits', wire['display']['capacity_help'])
         self.assertIn('not verified provider usage', wire['display']['ccost_capacity_help'])
-        self.assertEqual('$60.00', wire['display_units']['usd']['ccost_remaining'])
+        self.assertEqual('$55.00', wire['display_units']['usd']['ccost_remaining'])
 
     def test_copilot_native_amounts_never_use_independent_observed_cost(self):
         for limit, used, remaining, observed in ((10000, 3123, 6877, 450), (10000, 3000, 7000, 450), (7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):

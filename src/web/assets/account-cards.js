@@ -26,11 +26,11 @@ const AccountCards = (() => {
     const quota = () => value().quota, view = () => ReportView.quotaView(quota(), value());
     const amount = monthly => !monthly && quota().unlimited ? 'Unlimited' :
       current() && ReportView.capacityKnown(quota(), monthly) ? display(quota(), monthly ? 'monthly_capacity' : 'ccost_capacity') : '?';
-    const help = monthly => ReportView.quotaHelp(quota(), false, monthly) +
-      (current() ? '' : '\nReference CCost unavailable for a stale or unavailable observation.');
+    const help = monthly => current() ? ReportView.quotaCapacityHelp(quota(), monthly) :
+      'Reference CCost unavailable for a stale or unavailable observation.';
     const summary = () => quota().unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
     const label = el('div'); label.append(ContextHelp.value(el('span', () => `${ReportView.quotaLabel(quota())} · ${summary()}`),
-      () => ReportView.quotaHelp(quota(), true)));
+      () => ReportView.quotaUsageHelp(quota()) + (current() ? '' : '\nQuota observation is stale or unavailable.')));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
     label.append(ReportView.estimateValue(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'),
       quota, () => 'ccost_' + view().mode));

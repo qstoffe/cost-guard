@@ -16,7 +16,7 @@ class QuotaEstimateTests(unittest.TestCase):
                 ('613', '600', '$6.00'), ('2343', '2300', '$23.00'), ('49000', '50000', '$500.00'),
                 ('51000', '50000', '$500.00'), ('52343', '50000', '$500.00'), ('250', '250', '$2.50'),
                 ('149', '150', '$1.50'), ('0', '0', '$0.00'), ('350', '350', '$3.50'),
-                ('550', '600', '$6.00'),
+                ('550', '550', '$5.50'), ('949', '950', '$9.50'),
                 ('245', '250', '$2.50'), ('1000', '1000', '$10.00'), ('999', '1000', '$10.00'),
                 ('0.25', '.25', '<$0.01'), ('0.0000613', '.00006', '<$0.01'),
                 ('1.49', '1.5', '$0.02')):
@@ -24,7 +24,7 @@ class QuotaEstimateTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(D(rounded), rounded_estimate(value))
                 if value:
-                    self.assertLessEqual(abs(rounded_estimate(value) - value) / value, D('.1'))
+                    self.assertLessEqual(abs(rounded_estimate(value) - value) / value, D('.05'))
                 with ccost_display('credits'):
                     credits = estimate_amount(value)
                     self.assertEqual(D(rounded), D(credits))
@@ -34,16 +34,21 @@ class QuotaEstimateTests(unittest.TestCase):
                     self.assertEqual(credits, estimate_amount(value))
 
     def test_inclusive_exact_tolerance_and_just_over_without_context_drift(self):
-        self.assertTrue(within_tolerance(D(1000), D(900)))
-        self.assertFalse(within_tolerance(D('1000.000000000000000000000000001'), D(900)))
-        # The exact nearest-one-digit threshold 200 / .9 repeats: straddle it
+        self.assertTrue(within_tolerance(D(1000), D(950)))
+        self.assertTrue(within_tolerance(D(1000), D(1050)))
+        self.assertTrue(within_tolerance(D('999.999999999999999999999999999'), D(950)))
+        self.assertFalse(within_tolerance(D('1000.000000000000000000000000001'), D(950)))
+        self.assertFalse(within_tolerance(D('999.999999999999999999999999999'), D(1050)))
+        # The exact nearest-one-digit threshold 200 / .95 repeats: straddle it
         # with supported finite Decimals, rather than claiming an exact finite input.
         with localcontext() as context:
             context.prec = 6
-            self.assertEqual(D(200), rounded_estimate(D('222.22222222222222222222222222')))
-            self.assertEqual(D(220), rounded_estimate(D('222.22222222222222222222222223')))
+            self.assertEqual(D(200), rounded_estimate(D('210.52631578947368421052631578')))
+            self.assertEqual(D(210), rounded_estimate(D('210.52631578947368421052631579')))
             self.assertEqual(D('6E+80'), rounded_estimate(D('6.13E+80')))
             self.assertEqual(D('6E-80'), rounded_estimate(D('6.13E-80')))
+            self.assertEqual(D('5.5E+80'), rounded_estimate(D('5.5E+80')))
+            self.assertEqual(D('9.5E-80'), rounded_estimate(D('9.49E-80')))
 
     def test_missing_invalid_nonfinite_negative_and_known_zero(self):
         for value in (None, '', 'invalid', True, D('-1'), D('NaN'), D('sNaN'), D('Infinity'), D('-Infinity')):
@@ -62,7 +67,7 @@ class QuotaEstimateTests(unittest.TestCase):
             self.assertEqual('0.00006', estimate_amount(D('.0000613')))
         with ccost_display('usd'):
             self.assertIn('613.1234567890123456789012345678 Credits ($6.13)', estimate_help(raw))
-            self.assertIn('cannot retain the 10%', estimate_help(D('.25')))
+            self.assertIn('cannot retain the 5%', estimate_help(D('.25')))
             self.assertEqual('$6.13', ccost_amount(raw))
 
     def test_count_only_installation_oracle_covers_independent_fields_and_rejects_wrong_display(self):
