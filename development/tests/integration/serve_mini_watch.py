@@ -294,15 +294,20 @@ def main():
                         history_epoch=0 if state in {'loading', 'switch'} else 1,
                         history_total=12, history_checked=12 if state == 'observed' else 4,
                         history_verified_at_ms=None if state in {'loading', 'switch'} else 1000))
-                elif command in {'history-times', 'history-dst'}:
+                elif command in {'history-times', 'history-dst', 'history-ages'}:
                     instants = ((2026, 11, 5, 22, 47), (2026, 11, 5, 23, 8), None) if command == 'history-times' else (
                         (2026, 10, 25, 0, 30), (2026, 10, 25, 1, 30), (2026, 11, 5, 23, 8))
+                    activity_cards = cards[:1]
+                    if command == 'history-ages':
+                        instants = ((2023, 11, 5, 12, 0), (2024, 11, 5, 12, 0), (2026, 7, 25, 12, 0), (2026, 11, 9, 12, 0))
+                        activity_cards = (replace(cards[0], rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
+                            at_ms=int(datetime(2026, 11, 9, 22, tzinfo=timezone.utc).timestamp() * 1000))),)),)
                     history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',
                         title='Earlier long session title ' * 20, rows=(replace(frame.history_cards[0].rows[0],
                             prompt=replace(frame.history_cards[0].rows[0].prompt,
                                 completed_at_ms=int(datetime(*instant, tzinfo=timezone.utc).timestamp() * 1000) if instant else None)),))
                         for index, instant in enumerate(instants))
-                    publish(value=replace(frame, active_cards=cards[:1], history_cards=history,
+                    publish(value=replace(frame, active_cards=activity_cards, history_cards=history,
                         quota=replace(frame.quota, accounts=frame.quota.accounts[:1])), timezone_name='Europe/Stockholm')
                 elif command.startswith('mini-lifecycle-'):
                     from development.tests.fixtures.mini_lifecycle import lifecycle_frame

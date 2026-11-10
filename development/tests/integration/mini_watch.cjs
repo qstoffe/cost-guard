@@ -128,6 +128,7 @@ function setup() {
    assert.equal(api.requests[0].height,500); assert.equal(api.requests[0].width,628);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
     require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+    require('../fixtures/mini_activity.cjs')(vm,context,controller,view,input,helpText,{get:()=>now,set:value=>{now=value;}});
      require('../fixtures/mini_help.cjs')(controller,view,input,helpText);
      require('../fixtures/mini_context.cjs')(controller,view,input,helpText);
    const demandCalls = [];

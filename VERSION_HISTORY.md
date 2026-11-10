@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.22 - 2026-11-10
+
+- Mini Watch Activity retains configured-local HH:mm on today's date or under twelve elapsed hours, then uses floored lowercase h/d/m/y ago: elapsed hours, days, fixed 30-day months and fixed 365-day years.
+- The existing five-second PiP render advances labels without source updates or extra polling. Exact local date/offset help, running-only ▶, unknown/future clocks, keyed rows, all eligible old history and native window sizing are preserved.
+
 ## v81.21 - 2026-11-10
 
 - Mini Watch Activity adds a small decorative ▶ before the start time only for verified running prompts. Terminal updates immediately clear it in the existing keyed row; unverified and historical work never acquire a false running cue.

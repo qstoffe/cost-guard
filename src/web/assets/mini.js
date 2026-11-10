@@ -141,6 +141,20 @@ const MiniWatch = (() => {
     // slice(-0) would select everything when five or more sessions are active.
     return [...active.values(), ...(active.size < 5 ? fillers : [])].sort(compare);
   }
+  function activityLabel(prompt, running, now, today) {
+    const at = running ? prompt?.at_ms : prompt?.completed_at_ms;
+    if (!Number.isSafeInteger(at) || at < 0) return '—';
+    const clock = (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—';
+    const full = running ? prompt.display?.start_date_time : prompt.display?.finished_date_time;
+    const hour = 3600000, day = 24 * hour, age = now - at;
+    // Future times keep their supported clock, never a negative "ago". Without
+    // configured-local day evidence, conservatively retain the prepared clock.
+    if (age < 12 * hour || !today || !/^\d{4}-\d{2}-\d{2} /.test(full || '') || full.startsWith(today + ' ')) return clock;
+    if (age < day) return Math.floor(age / hour) + 'h ago';
+    if (age < 30 * day) return Math.floor(age / day) + 'd ago';
+    if (age < 365 * day) return Math.floor(age / (30 * day)) + 'm ago';
+    return Math.floor(age / (365 * day)) + 'y ago';
+  }
   // Five real styled row metrics, plus the header and any horizontal scrollbar.
   // This changes only the internal viewport, never native window bounds.
   function measurementRow(view) {
@@ -295,7 +309,7 @@ const MiniWatch = (() => {
       table.setAttribute('aria-label', 'Session activity: representative prompt CCost, whole-session Total CCost and estimated next incoming context (Ctx)');
       for (const name of ['Activity', 'Session', 'CCost', 'Total', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Activity: 'Start time for a running prompt; finish time for a completed prompt/session.\nConfigured local time; focus or hover the value for the full local date and UTC offset.', Session: 'The name of the session.',
+        const explanation = {Activity: 'Start time for a running prompt; finish time for a completed prompt/session.\nConfigured-local HH:mm today or under 12 hours old; otherwise floored h/d/m/y ago (30-day months, 365-day years). Focus, hover or touch for the exact date and UTC offset.', Session: 'The name of the session.',
           CCost: 'The represented prompt’s reference cost, not provider billing. N/A means unavailable; ? means partial pricing.',
           Total: 'The entire session’s reference cost, including attributed linked subagents.',
           Ctx: 'Estimated context for this prompt’s next request; for historical sessions, the last valid session-level estimate.\nNot historical prompt context or a sum. N/A means unavailable, not zero.'}[name];
@@ -398,7 +412,7 @@ const MiniWatch = (() => {
       this.health.hidden = !this.health.textContent;
       this.root.dataset.live = fresh && publication?.view?.cards_state === 'observed' ? 'true' : 'false';
       this.drawDaily(view);
-      this.drawSessions(view);
+      this.drawSessions(view, now);
       this.drawAccounts(view);
       ContextHelp.refresh(this.root);
     }
@@ -414,8 +428,9 @@ const MiniWatch = (() => {
       ReportView.text(this.dailyNote, '');
       this.daily.className = 'mini-daily';
     }
-    drawSessions(view) {
+    drawSessions(view, now = Date.now()) {
       const wanted = [], seen = new Set(), text = ReportView.text, display = ReportView.display;
+      const localNow = ReportView.timestamp(now), today = localNow === 'N/A' ? null : localNow.slice(0, 10);
       const values = sessions(view);
       const needsHistory = values.filter(value => value.running).length < 5;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
@@ -444,13 +459,14 @@ const MiniWatch = (() => {
         this.rowHelp(row, session, item, card, context, historical, retained);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
-        const known = running ? prompt?.at_ms != null : prompt?.completed_at_ms != null;
+        const at = running ? prompt?.at_ms : prompt?.completed_at_ms;
+        const known = Number.isSafeInteger(at) && at >= 0;
         row.activityHelp = known ? (running ? prompt.display?.start_date_time : prompt.display?.finished_date_time) : null;
         const time = row.children[0].children[0];
         const verifiedRunning = !historical && prompt?.in_progress && !prompt.execution_unverified &&
           !prompt.aborted && !prompt.has_error && !prompt.completed_successfully;
         text(time.children[0], verifiedRunning ? '▶ ' : '');
-        text(time.children[1], known ? (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—' : '—');
+        text(time.children[1], activityLabel(prompt, running, now, today));
         row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
         this.drawCost(row, card, prompt);
         text(row.children[4], context); wanted.push(row);

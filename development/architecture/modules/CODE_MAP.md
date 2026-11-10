@@ -21,6 +21,12 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000672: `mini.js::activityLabel` formats the selected absolute start/finish using
+the prepared local date and configured-zone `ReportView.timestamp` current day.
+The existing Controller render clock owns age transitions; selection, source access,
+help and native sizing retain their owners. Coverage: `fixtures/mini_activity.cjs`
+through the Mini Controller VM, plus `probe_mini_activity.cjs` via the real PiP driver.
+
 FR000671: `assets/mini.js::View.sessionRow` / `drawSessions` render the decorative
 running Activity triangle from canonical prompt flags; `mini.css` keeps it compact
 inside the existing metric width. Selection, lifecycle, time help and native sizing
