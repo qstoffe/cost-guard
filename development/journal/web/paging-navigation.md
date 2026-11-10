@@ -155,6 +155,21 @@ regression plus25 existing catalog tests pass. Earlier pager geometry/input evid
 is valid, but did not establish healthy large-catalog scalar acquisition; the new
 complete run must establish that too. Clock alignment alone was not the cause.
 
+Seventh head `cf3c08a`: all three native jobs passed; Quick645/645 and validator
+passed. Catalog/detail refresh now retained70rows and500px. Actual per-tab browser
+zoom was1.25: un-emulated innerWidth780→624 and DPR1→1.25; scrolled Sessions1456px
+→ cold/delayed Models0px, including rendered publication frames. The run reached
+the paging fault/rebase cases but timed out waiting for a particular progress label
+before the deliberate stall. A local actual-job probe proved the source reached
+`comparison-groups` with that event still pending76ms after the last IPC; published
+progress correctly remained `pricing`. ProgressRelay intentionally coalesces events
+inside100ms without a timer. The test now synchronizes on a content-free owned source
+marker, not a stage that need not be published before blocking. It still requires
+the real45s no-progress failure, retained page, interactive route change and explicit
+successful Retry. Navigability does not require a different finite report to finish
+while the deliberately blocked source owns the worker. This is a harness correction,
+not a shortened production timeout or fabricated progress; final browser outcome pending.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.

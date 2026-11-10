@@ -67,6 +67,7 @@ def application(request, *, read_admission=None, history_checkpoint=None):
                 if mode == 'source-error':
                     raise SourceConcurrentChangeError('Synthetic source retry')
                 if mode == 'stalled':
+                    (root / 'stall-reached').write_text('comparison-groups')
                     until = time.monotonic() + 60
                     while (root / 'mode').read_text() == 'stalled' and time.monotonic() < until:
                         time.sleep(.05)

@@ -171,6 +171,7 @@ def paging(page, host, root, evidence):
         if offset == 320:
             assert page.get_by_role('button', name='Next', exact=True).is_disabled()
         ranges.append(page.locator('.page-navigation').inner_text())
+    notice('paging ranges', ranges)
     (root / 'mode').write_text('slow')
     host.dispatcher.invalidate()
     page.evaluate('''() => {
@@ -207,6 +208,7 @@ def paging(page, host, root, evidence):
         page_at(page, 0)
         # Rejecting host entries may retain a completed page10; discard only fixture jobs.
         host.dispatcher.invalidate()
+    notice('paging faults', faults)
     (root / 'mode').write_text('changed')
     evidence['scenario'] = 'paging-changed-pin'
     page.get_by_role('button', name='Next', exact=True).click()
@@ -219,14 +221,21 @@ def paging(page, host, root, evidence):
     page.evaluate('() => acquire(current)')
     page_at(page, 0)
     (root / 'mode').write_text('stalled')
+    (root / 'stall-reached').unlink(missing_ok=True)
     evidence['scenario'] = 'paging-no-progress'
     host.dispatcher.invalidate()
     started = time.monotonic()
     page.get_by_role('button', name='Next', exact=True).click()
-    page.wait_for_function('() => current.loading && current.stage.includes("Preparing matched groups")', timeout=30000)
+    # Progress IPC coalesces callbacks inside 100ms. The real source may block
+    # before that pending stage is published; synchronize on source, not UI text.
+    while not (root / 'stall-reached').exists():
+        assert time.monotonic() - started < 30, 'synthetic source never reached its stall'
+        page.wait_for_timeout(50)
+    assert page.evaluate('current.loading && !current.failed')
     route(page, 'models')
-    ready(page)
-    assert page.locator('.overview-models').is_visible()
+    # Navigation stays interactive; a different finite report need not finish
+    # while the same worker is deliberately blocked inside source acquisition.
+    assert page.get_by_role('link', name='Models', exact=True).get_attribute('aria-current') == 'page'
     route(page, 'comparisons')
     page.wait_for_function('() => !current.loading && current.failed', timeout=60000)
     seconds = time.monotonic() - started
@@ -237,6 +246,7 @@ def paging(page, host, root, evidence):
     (root / 'mode').write_text('stable')
     page.get_by_role('button', name='Retry Comparisons', exact=True).click()
     page_at(page, 10)
+    notice('paging stalled recovery', dict(seconds=round(seconds, 2), retained_offset=0, retry_offset=10))
     empty = []
     for count in (0, 1):
         evidence['scenario'] = 'paging-groups-' + str(count)
