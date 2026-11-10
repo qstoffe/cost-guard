@@ -12,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from development.tools.ci_web_beta import hosted_only, save
+from development.tools.ci_web_beta import hosted_only, notice, save
 from development.tests.fixtures.web_reports import current_report, SyntheticSessionsRuntime
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
@@ -336,6 +336,9 @@ def main():
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
                                          for frame in traceback.extract_tb(error.__traceback__)]
+        failure = {key: evidence[key] for key in ('outcome', 'reason', 'scenario', 'observed', 'failure_locations') if key in evidence}
+        notice('browser failure', failure)
+        evidence = {**failure, **evidence}
         # Playwright exception text can contain a one-use bootstrap URL.
         # Retain only source locations and type, never its raw call log.
     finally:

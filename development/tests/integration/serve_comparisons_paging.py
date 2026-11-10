@@ -29,6 +29,7 @@ from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.benchmark import payload
 from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
 from development.tests.fixtures.token_mix_views import token_mix_report
+from development.tests.fixtures.synthetic_month import make_root_snapshot
 from src.application import ReportApplication
 from src.application.projection import project
 from src.application.live_projection import project_live
@@ -61,7 +62,7 @@ def application(request, *, read_admission=None, history_checkpoint=None):
         def observe(event):
             progress(event)
             if mode == 'slow' and getattr(event, 'stage', None) == 'comparison-previews':
-                time.sleep(.15)
+                time.sleep(.3)
             if mode in {'slow', 'stalled', 'source-error'} and getattr(event, 'stage', None) == 'comparison-groups':
                 if mode == 'source-error':
                     raise SourceConcurrentChangeError('Synthetic source retry')
@@ -141,6 +142,8 @@ def fixture():
         host.dispatcher = FixtureDispatcher(jobs)
         host.live = SyntheticSessionsRuntime(root)
         host.live.service.source = source(321, start=int((root / 'start').read_text()))
+        host.live.service.source.snapshots['root-0000'] = make_root_snapshot(0, 70,
+            month_start_ms=int((root / 'start').read_text()))
         host.live.driver = None
         host.live.source_failure = None
         host.benchmark.snapshot = parse_pages(payload()['pages'], int(time.time() * 1000))

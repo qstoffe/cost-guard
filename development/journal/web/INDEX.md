@@ -73,6 +73,9 @@ Status: current
 - Exact first-input comparisons: `development/journal/web/comparisons.md` records
   causal per-run boundaries, private compact indexing, bounded catalog batching,
   responsive/help/paging evidence and explicitly partial real-source coverage.
+- [Explicit paging and Models entry](paging-navigation.md): FR000658's reproduced
+  stale-pin retry loop, bounded page-only recovery, shared pagers, route-only top
+  policy and separately attributed synthetic/real/hosted evidence and limits.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

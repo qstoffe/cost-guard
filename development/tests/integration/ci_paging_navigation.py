@@ -3,6 +3,7 @@ import subprocess
 import time
 
 from development.tests.integration.serve_comparisons_paging import ROOT, fixture
+from development.tools.ci_web_beta import notice
 
 BASELINE = '288b08358ad3b543d86447c68f40677ecb92fe25'
 TRACE = '''() => {
@@ -37,11 +38,12 @@ def page_at(page, offset):
     page.wait_for_function('offset=>current.section==="comparisons" && !current.loading && !current.failed && current.result?.view.comparisons.offset===offset', arg=offset, timeout=30000)
 
 
-def navigation(page, origin, *, enforce):
+def navigation(page, evidence, *, enforce):
     ready(page)
     page.evaluate(TRACE)
     observations = []
     for section in ('comparisons', 'sessions', 'token-mix', 'accounts', 'watch'):
+        evidence['scenario'] = ('current-' if enforce else 'baseline-') + section + '-models'
         route(page, section)
         ready(page)
         if section == 'comparisons':
@@ -54,17 +56,20 @@ def navigation(page, origin, *, enforce):
             document.activeElement?.blur();scrollTo(0,document.documentElement.scrollHeight);
             navigationTrace.length=0;recordNavigation('activation');return scrollY;
         }''')
+        evidence['observed'] = dict(before=before)
         assert before > 100, section + ' must actually be scrolled'
         route(page, 'models')  # Page-local native anchor activation; no auto-reveal.
         ready(page)
         page.wait_for_function('() => current.benchmark && !current.benchmark.loading')
         page.evaluate('() => renderedFrames()')
         after = page.evaluate('() => ({y:scrollY,focus:document.activeElement.id,trace:navigationTrace})')
+        evidence['observed'] = dict(before=before, **after)
         if enforce:
             assert after['y'] == 0
             assert after['focus'] == 'content'
             assert all(item['y'] == 0 for item in after['trace'] if item['phase'].startswith('frame-'))
         observations.append(dict(origin=section, before=before, **after))
+        notice('Models entry', dict(scenario=evidence['scenario'], before=before, y=after['y'], focus=after['focus'], trace=after['trace']))
     # Cached browser Back/Forward must apply the same new-route policy.
     route(page, 'comparisons')
     page.go_back()
@@ -114,7 +119,15 @@ def cold_models(context, host, root):
         page.wait_for_function('() => current.section==="models"')
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
-        return dict(before=before, trace=trace, same_route_y=500, keyboard=True)
+        page.evaluate('() => {location.hash="#/sessions/root-0000";}')
+        page.wait_for_function('() => current.detail?.data?.result.view.prompt_blocks[0].rows.length===70', timeout=30000)
+        page.evaluate('() => scrollTo(0,500)')
+        detail_y = page.evaluate('scrollY')
+        assert detail_y == 500
+        page.evaluate('() => current.detail.poll()')
+        page.evaluate('() => renderedFrames()')
+        assert page.evaluate('scrollY') == detail_y
+        return dict(before=before, trace=trace, same_route_y=500, keyboard=True, detail_refresh_y=detail_y)
     finally:
         page.close()
         (root / 'models-delay').write_text('0')
@@ -141,6 +154,24 @@ def paging(page, host, root):
         if offset == 320:
             assert page.get_by_role('button', name='Next', exact=True).is_disabled()
         ranges.append(page.locator('.page-navigation').inner_text())
+    (root / 'mode').write_text('slow')
+    host.dispatcher.invalidate()
+    page.evaluate('''() => {
+        window.pagingProgress=[];const render=show;
+        show=state=>{render(state);if(state.section==='comparisons' && state.loading) {
+            const value={stage:state.stage,percent:state.percent};
+            if(JSON.stringify(pagingProgress.at(-1))!==JSON.stringify(value)) pagingProgress.push(value);
+        }};
+    }''')
+    page.get_by_role('button', name='Next', exact=True).click()
+    page_at(page, 10)
+    progress = page.evaluate('pagingProgress')
+    previews = [item for item in progress if item['stage'].startswith('Reading page previews (')]
+    assert len(previews) >= 2
+    assert [item['percent'] for item in progress] == sorted(item['percent'] for item in progress)
+    (root / 'mode').write_text('stable')
+    page.get_by_role('button', name='Previous', exact=True).click()
+    page_at(page, 0)
     # Actual source failure/admission faults, not only immediate fake jobs.
     faults = []
     for mode in ('busy', 'source-error', 'preview-error'):
@@ -198,7 +229,7 @@ def paging(page, host, root):
         else:
             assert page.get_by_role('button', name='Next', exact=True).is_disabled()
         empty.append(dict(groups=count, total=page.evaluate('current.result.view.comparisons.total')))
-    return dict(ranges=ranges, faults=faults, stalled_seconds=round(seconds, 2), retry=True, empty=empty)
+    return dict(ranges=ranges, progress=progress, faults=faults, stalled_seconds=round(seconds, 2), retry=True, empty=empty)
 
 
 def check_navigation_paging(browser, evidence):
@@ -217,15 +248,19 @@ def check_navigation_paging(browser, evidence):
             if baseline.returncode == 0:
                 host.server.assets['app.js'] = (baseline.stdout, current_asset[1])
                 page.reload()
-                evidence['models_baseline'] = navigation(page, host.server.origin, enforce=False)
+                evidence['models_baseline'] = navigation(page, evidence, enforce=False)
             else:
                 evidence['models_baseline'] = dict(outcome='NOT RUN', reason='historical object absent in shallow checkout')
             host.server.assets['app.js'] = current_asset
             page.goto(host.server.origin + '/#/models')
             expect(page.locator('.overview-models')).to_be_visible(timeout=30000)
-            evidence['models_navigation'] = navigation(page, host.server.origin, enforce=True)
+            evidence['models_navigation'] = navigation(page, evidence, enforce=True)
+            evidence['scenario'] = 'models-delayed-same-route-detail'
             evidence['models_delayed'] = cold_models(context, host, root)
+            notice('Models delayed', evidence['models_delayed'])
+            evidence['scenario'] = 'real-source-paging-lifetime'
             evidence['paging_lifetime'] = paging(page, host, root)
+            notice('paging lifetime', evidence['paging_lifetime'])
             assert not errors
             evidence['checks'].append('real job/dispatcher/source lifecycle: pinned321-group pages, bounded faults/45s no-progress/Retry, empty/one; Models anchor navigation and delayed publication')
         finally:

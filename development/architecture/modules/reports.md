@@ -18,6 +18,14 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000658: `matched_inputs.py` emits actual comparison verification/groups/previews
+stages while preserving all-history revision/index checks and ephemeral page-only
+preview hydration. No offset-only or unqualified pinned-index cache is added.
+`application/service.py` exports rejected pinned Comparisons catalog revisions as
+terminal for that immutable request; the browser owns its deliberate unpinned rebase.
+Other reports and healthy managed continuations keep their existing recovery policy.
+[Evidence and source-churn limits](../../journal/web/paging-navigation.md).
+
 FR000629 scoped delta (2026-11-09): Sessions, prompt/effort/compaction projections
 and Token Mix share `PricingCatalog.display_name` with the actual request provider.
 Unresolved alias groups retain provider-qualified keys and unknown publisher evidence.

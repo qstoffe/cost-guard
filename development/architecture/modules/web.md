@@ -16,6 +16,17 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000658 preserves the host/job/report ownership below. `app.js` escapes a rejected
+Comparisons pin to one deliberate page1 rebase and updates demand. Only explicit
+page navigation uses three recoveries/45s without new stage or increasing work;
+completed publications win over idle checks, healthy work has no total deadline,
+and no unrelated host job is cancelled. Failed paging retains its page until Retry.
+`report-loading.js` presents real stages/counts and explicit waiting reasons;
+Sessions/Comparisons share `.page-navigation` responsive CSS and guarded action
+focus. Models focuses without scrolling and starts top only on a new route, not
+refresh/filter/sort. Benchmark's initial key alone becomes numeric Solved descending.
+[Causal trace, verification and limits](../../journal/web/paging-navigation.md).
+
 FR000657 keeps these boundaries: `assets/render.js::timestamp` formats unavoidable
 browser-side instants with explicit configured zone, Gregorian/Latin numeric fields
 and a 24-hour clock. Settings exports only the effective `timezone_id` alongside its
