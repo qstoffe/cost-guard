@@ -18,12 +18,19 @@ The always-visible table has exactly five columns:
 
 There is no Earlier Sessions button, separate history section or Duration column.
 
-- **Activity:** configured-local **HH:mm**, using the representative prompt's real
-  **start** while running or execution-unverified, and its supported **finish** when
-  ended. Hover, keyboard focus or touch the time for the full local date/time and UTC
+- **Activity:** uses the representative prompt's real **start** while running or
+  execution-unverified, and its supported **finish** when ended. Keep configured-local
+  **HH:mm** when the event is on today's configured-local date **or under 12 elapsed
+  hours old**. Otherwise show floored **12h ago** through **23h ago**, then **1d ago**
+  through day 29, **1m ago** from day 30, and **1y ago** from day 365. Months are fixed
+  30-day buckets; years are fixed 365-day buckets. Units are lowercase; **m means
+  months**, not minutes. Absolute elapsed time stays independent of DST/offset changes.
+  Future timestamps retain their supported clock, never a negative age. Labels update
+  on Mini's existing five-second render, without another fetch, timer or source scan.
+  Hover, keyboard focus or touch either format for the full local date/time and UTC
   offset, distinguishing repeated daylight-saving hours. Unknown finish is **—** with
    **Unknown finish time** help, never source-refresh time or an inferred ending.
-   A small decorative **▶** precedes the start time only for a verified running
+   A small decorative **▶** precedes the Activity value only for a verified running
    prompt. It is not a control; completion, abort, failure, execution-unverified
    work and historical-only rows have no play symbol. Existing time help stays on
    the complete value, with no additional focus stop or status announcement.
@@ -99,6 +106,8 @@ and verified historical sessions compete by supported finish time for **max(0, 5
 remaining slots, where R is the number of distinct running sessions. Thus 0/1/3/4 running
 sessions allow up to 5/4/2/1 finished fillers; 5 or more allow none. Fewer eligible
 sessions produce fewer real rows, never duplicates or fabricated entries.
+There is **no age exclusion**: eligible 100+ day and multi-year sessions still fill
+these historical slots. Relative formatting changes neither membership nor ranking.
 
 The selected rows are ordered by **Activity ascending**, oldest at the top, newest at
 the bottom, with deterministic identity ties and a conservative unknown-time fallback.

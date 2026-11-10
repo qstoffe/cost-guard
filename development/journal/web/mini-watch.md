@@ -5,6 +5,76 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Relative Activity ages (FR000672)
+
+Scoped v81.22 delta against `2fd4375360ca0ebf1d100fc2af270f3fb9486163`,
+checked locally 2026-11-10. Earlier sections retain their own evidence scopes.
+
+`mini.js::activityLabel` reads the selected absolute start/finish, its prepared
+configured-local date/clock and the current configured-zone date from the existing
+`ReportView.timestamp` helper. Same-day OR under-12-hour events retain their clock;
+older values floor absolute milliseconds into h/d/30-day m/365-day y buckets.
+Missing/invalid timestamps remain unknown; future timestamps keep their supported
+clock. Missing configured-day evidence conservatively retains the prepared clock,
+never substitutes the browser zone. Exact date/offset help and the running-only
+triangle remain on the existing value wrapper. Selection, history age eligibility,
+keys, source acquisition, CSS, opening measurement and native Fit are unchanged.
+The already-existing five-second Controller render supplies the current instant.
+
+Verification:
+
+- Local Full: **182 bounded groups, zero failures, 153.2 s**. Focused Mini also
+  passed. Controller VM cases independently assert exact 12h/24h/48h/30d/60d/365d/
+  730d boundaries and their preceding milliseconds, flooring, lowercase units,
+  same configured date even after 20+ hours, midnight, configured/browser date
+  mismatch, both DST changes/repeated 02:30 offsets, invalid/missing/future time,
+  all five old-history slots, terminal/unverified/resumed rows and sole-timer ticks.
+- Package validator: **11 passes, zero failures, seven existing advisory warnings**;
+  no budget, baseline or dependency changes.
+- Hidden Chrome **157.0.8103.39**: full native Document PiP portfolio **131 layouts
+  passed** at 100% zoom/DPR 1; focused Activity **24 layouts passed** at 125% zoom/
+  DPR 1.5. Clock and relative tokens retain exact focus/hover/touch help under
+  en-US/sv-SE and New York/Tokyo browser zones; four Classic/Web light/dark themes,
+  Credits/USD and narrow/wide windows remain nowrap, aligned and unclipped.
+  Multi-year/100+ day history and a running relative token fit without native
+  width growth. Synthetic time crosses 24h on the existing callback with the same
+  row, focused help and serialized source view, no render fetch/new timer/resize.
+  The first full run's test-only reference-equality assertion rejected an identical
+  retained HTTP snapshot; checking unchanged serialized source values corrected
+  that harness assumption. The entire portfolio then passed; product code was not
+  changed for that repair. Raw: `scratch:/mini-full-100.json` (failed assertion),
+  `scratch:/mini-full-100-repaired.json`, `scratch:/mini-activity-100.json`,
+  `scratch:/mini-activity-125.json` and its synthetic `-activity.png` screenshot.
+- Relevant real-input seam **PASS**: authenticated installed V2 produced a verified
+  running prompt within **1.169 s**. An independent Python datetime oracle matched
+  the selected absolute start, configured-local clock and exact date/UTC offset;
+  unchanged flags/time/display fields passed through the Mini Controller seam at
+  actual observation time, including the running cue, exact help and sole timer.
+  Owned host close **0.146 s**, immediately **zero owned threads/processes**; no
+  natural-retirement wait needed. Only sanitized assertions/counts were exported.
+  Raw: `scratch:/real-activity-result-repaired.json`; task-specific harness stays
+  in scratch, with no source payload/identity publication.
+- Earlier installation checks remain **not PASS**: `scratch:/live-probe.json`
+  reached the 90 s operational history cap while **488/3103** roots were checked;
+  the source remained healthy and no provisional history escaped, but completed
+  real-history proof was inconclusive. `scratch:/live-basic.json` verified V2/one
+  owner/two streams but failed its remaining-worker assertion: one native Claude
+  quota worker was still waiting after host close. The first narrow scratch run
+  passed the independent timestamp oracle but failed its VM harness's relative
+  fixture import; the import was repaired and synthetically checked before the
+  successful real-input run. Raw: `scratch:/real-activity-result.json`.
+- Decision Delegate authorized the bounded Activity-specific alternative, then
+  confirmed ordinary delivery/progress 122 with **no acceptance exception**:
+  completed installation-wide history and naturally observed aging are not extra
+  acceptance requirements for this presentation-only change. No broader history
+  rerun, backend repair, Suggestion or hold was warranted. Original failures above
+  are not erased by the narrower success.
+
+Integrated browser was disconnected; permitted hidden Chromium supplied rendered
+evidence. These checks do **not** verify completed real-history enumeration, natural
+age transitions, physical desktop/work-area frames, macOS or screen-reader speech.
+No paid inference, source writes, shared OpenCode stop, ZIP, tag or GitHub Release.
+
 ## Running Activity indicator (FR000671)
 
 Scoped v81.21 delta against `bfb164e87913cb53f45e6dec84b5f902b8ab916d`,

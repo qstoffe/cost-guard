@@ -9,6 +9,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   const key = async key => {
     for(const type of ['keyDown','keyUp']) await input('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27});
   };
+  await evaluate(`window.activityNativeNow=Date.now;window.activityNow=Date.parse('2026-11-06T00:00:00Z');Date.now=()=>activityNow`);
   await fixture('history-times'); await until(`liveValue.view.history_cards[0].rows[0].prompt.display.finished_clock==='23:47'`);
   await until(`miniWatch.view.promptRows.has('earlier-0')`);
   await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
@@ -22,23 +23,44 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   const help = `miniWatch.view.doc.getElementById('context-help')`;
   await until(`${help}?.matches(':popover-open')`);
   assert.equal(await evaluate(`${help}.textContent`),'2026-11-05 23:47 +0100');
+  await evaluate(`activityNow=Date.parse('2026-10-25T02:00:00Z')`);
   await fixture('history-dst'); await until(`miniWatch.view.promptRows.get('earlier-0').activityHelp==='2026-10-25 02:30 +0200'`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
     ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100'],['00:08','2026-11-06 00:08 +0100']]);
   assert.equal(await evaluate(`miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','focused help refreshes in place');
+  await evaluate(`activityNow=Date.parse('2026-10-26T00:30:00Z')-1;miniWatch.render()`);
+  assert.deepEqual((await values()).slice(0,2).map(row=>row.time),['23h ago','22h ago']);
+  const before = await evaluate(`({rows:[...miniWatch.view.promptRows.keys()],outer:[miniWatch.window.outerWidth,miniWatch.window.outerHeight],streams:probeStreams})`);
+  await evaluate(`window.activityPublication=JSON.stringify(miniWatch.publication.view);window.activityFetches=0;window.activityTimers=0;
+    window.activityNativeRender=miniWatch.render;window.activityNativeInterval=miniWatch.window.setInterval;
+    const render=miniWatch.render.bind(miniWatch),fetch=window.fetch,set=miniWatch.window.setInterval.bind(miniWatch.window);
+    miniWatch.render=()=>{const native=window.fetch;window.fetch=(...args)=>{activityFetches++;return fetch(...args)};
+      try{return render()}finally{window.fetch=native}};
+    miniWatch.window.setInterval=(...args)=>{activityTimers++;return set(...args)};
+    activityNow++`);
+  // No direct render or publication: the already-open PiP's existing 5s callback
+  // crosses exactly 24 elapsed hours while focused help and the DOM row stay put.
+  await until(`activityTime.textContent==='1d ago'`);
+  assert.equal(await evaluate(`JSON.stringify(miniWatch.publication.view)===activityPublication && miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
+  assert.deepEqual(await evaluate(`({rows:[...miniWatch.view.promptRows.keys()],outer:[miniWatch.window.outerWidth,miniWatch.window.outerHeight],streams:probeStreams})`),before);
+  assert.deepEqual(await evaluate(`({fetches:activityFetches,timers:activityTimers})`),{fetches:0,timers:0});
+  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
+  checks.push('Existing 5s PiP render crosses 24h without publication, row replacement, new render fetch/timer or native resize; focused exact-offset help stays correct');
   for(const locale of ['en-US','sv-SE']) for(const timezoneId of ['America/New_York','Asia/Tokyo']) {
     // Locale is shared by the opener/PiP renderer; a second target override conflicts.
     await command('Emulation.setLocaleOverride',{locale},ownerSession);
     for(const session of [ownerSession,pip]) {
       await command('Emulation.setTimezoneOverride',{timezoneId},session);
     }
+    await evaluate('miniWatch.render()');
     assert.deepEqual((await values()).slice(0,2).map(row=>[row.time,row.help]),[
-      ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100']]);
+      ['1d ago','2026-10-25 02:30 +0200'],['23h ago','2026-10-25 02:30 +0100']]);
     assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
   }
   checks.push('Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones');
   await key('Escape'); await evaluate('activityTime.blur()');
+  await evaluate(`activityNow=Date.parse('2026-11-10T12:00:00Z');miniWatch.render()`);
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
   const point = await evaluate(`(()=>{const r=activityTime.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
@@ -52,6 +74,9 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await until(`${help}.matches(':popover-open')`);
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','touch exposes equivalent full local date');
   await key('Escape'); await evaluate('activityTime.blur()');
+  await fixture('history-ages'); await until(`miniWatch.view.promptRows.size===5 && miniWatch.view.promptRows.has('earlier-3')`);
+  assert.deepEqual((await values()).map(row=>row.time),['3y ago','2y ago','3m ago','1d ago']);
+  assert.equal(await evaluate(`[...miniWatch.view.promptRows.values()].find(row=>row.classList.contains('mini-running')).cells[0].textContent`),'▶ 14h ago');
   for(const theme of ['classic','web']) for(const color of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},ownerSession);
     await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'${theme}'})))()`);
@@ -73,7 +98,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
              context:rows.every(row=>row.cells[4].textContent!=='')};})()`);
         assert.equal(layout.documentOverflow,false); assert.equal(layout.totals,true); assert.equal(layout.context,true);
          assert.equal(layout.nowrap,true); assert.equal(layout.alignment,true);
-         assert.equal(layout.activityFits,true);assert.equal(layout.runningCue,true);
+          assert.equal(layout.activityFits,true);assert.equal(layout.runningCue,true);
         if(layout.inner>=600) {assert.equal(layout.horizontal,false);assert.equal(layout.vertical,false);assert.ok(layout.activityWidth<layout.sessionWidth);}
         // Name-only Session has a smaller minimum than the former split heading;
         // these small values may fit at 280. Oversized paired-cost cases separately
@@ -83,5 +108,6 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     }
   }
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings();miniWatch.window.resizeTo(650,550)`,true); await settle();
-    checks.push('Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
+  await evaluate('Date.now=activityNativeNow;miniWatch.render=activityNativeRender;miniWatch.window.setInterval=activityNativeInterval;miniWatch.render()');
+  checks.push('Unified five-column Activity retains relative/clock/future/midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
 };

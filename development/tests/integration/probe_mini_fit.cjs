@@ -67,6 +67,7 @@ async function main() {
     }
     if(scope==='dates-only') {
       await open();await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
+      await capture('activity');
       evidence.outcome='PASS';return;
     }
     if(scope==='help-only') {
