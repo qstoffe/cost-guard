@@ -122,9 +122,9 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
        accounts:accounts.textContent,accountBars:[...accounts.querySelectorAll('progress')].map(n=>n.value),
        mini:miniWatch.view.accounts.querySelector('progress').value};})()`);
    assert.deepEqual(idle.labels,['5-hour · 100% remaining (?)','Weekly · 100% remaining (?)']);
-    assert.deepEqual(idle.capacity,[]);
+     assert.deepEqual(idle.capacity,['5-hour Capacity: ?','Weekly Capacity: ?']);
    assert.deepEqual(await evaluate(`[...document.querySelectorAll('.watch-monthly-capacity')].map(n=>n.textContent)`),
-      []);
+       ['Monthly Capacity: ?','Monthly Capacity: ?']);
    assert.ok(idle.bars.every(([value,text,name])=>value===1 && text==='100% remaining' && !name.includes('exhausted')));
    assert.deepEqual(idle.accountBars,[1,1]); assert.equal(idle.mini,1);
    assert.match(idle.accounts,/100% remaining \(\?\)/); assert.ok(idle.reset.includes('Window not started'));

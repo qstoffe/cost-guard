@@ -1,5 +1,9 @@
 # Subscription and Mini display polish — FR000654
 
+Historical v81.3 evidence: FR000661 supersedes only the unknown-row suppression
+and extends ordinal alignment. See [current quota layout](quota-layout.md).
+Its leading `~`, concise help, capitalization and Mini cost split remain intact.
+
 Scoped v81.3 change against `a520a1ba0a3df27e5090dfbc69cabad057a69b29`,
 checked on the Windows workstation, 2026-11-09. This is not a fresh audit of
 unchanged acquisition, billing, native desktop geometry or other platforms.

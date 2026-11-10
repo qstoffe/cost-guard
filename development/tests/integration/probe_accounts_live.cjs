@@ -6,6 +6,7 @@ const [browser, output] = process.argv.slice(2);
 const quotaOnly = process.argv[4] === '--quota-only';
 const browserZoom = Number(process.argv.find(value=>value.startsWith('--browser-zoom='))?.split('=')[1] || '1');
 async function main() {
+  const started = Date.now();
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   assert.ok([1,1.25].includes(browserZoom));
   await fs.stat(browser); await fs.stat(path.dirname(output));
@@ -67,7 +68,7 @@ async function main() {
       assert.equal(await evaluate('new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))'),browserZoom);
     }
     await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;window.probeFetches=0;window.probeURLs=[];
-      const Stream=EventSource;window.EventSource=class extends Stream {constructor(...args){super(...args);window.probeStreams++;}};
+      const Stream=EventSource;window.EventSource=class extends Stream {constructor(...args){super(...args);window.probeStreams++;window.probeStream=this;}};
       const request=fetch;window.fetch=(url,options)=>{window.probeFetches++;window.probeURLs.push(new URL(url,location.href).pathname);
         if(url==='/api/reports')window.probeReports++;return request(url,options);};`}, sessionId);
     await command('Page.navigate', {url:launch.url}, sessionId);
@@ -95,6 +96,11 @@ async function main() {
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    if(process.argv.includes('--capacity-baseline')) {
+      await evaluate(`ReportView.setQuotaMode('remaining');ReportView.setUnit('usd')`);
+      await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom,baseline:true});
+      evidence={outcome:'OBSERVED',browser:version.product,browserZoom,checks,layouts};return;
+    }
     await require('./probe_account_links.cjs')({command,evaluate,sessionId,navigate,checks,layouts,openEvents,browserZoom});
     await require('./probe_quota_pace.cjs')({evaluate,navigate,checks});
     await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'})))()`);
@@ -133,7 +139,7 @@ async function main() {
       await fs.writeFile(output.replace(/\.json$/,'')+`-${theme}-${width}.png`,Buffer.from(image.data,'base64'));
     }
     checks.push('Unchanged ticks preserve nodes/focus/selection/help; live unit/mode/theme, DPR/narrow/reduced-motion layouts');
-    if(!quotaOnly) await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts});
+    if(!quotaOnly) await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom});
     await navigate('watch');
     await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'}));
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'used'}));})()`);
@@ -185,6 +191,9 @@ async function main() {
     await until(`document.querySelector('.watch-primary-details')?.textContent.includes('Remaining: $38.19/day')`);
     checks.push('Default USD reference pace survives Settings reset and a real page reload');
     // The server's real terminal event is not hidden with the Accounts report shell.
+    // A snapshot can paint before the reloaded tab's SSE handshake completes.
+    // Stop only after this stream exists, rather than racing host exit against it.
+    await until(`probeStream?.readyState===EventSource.OPEN`);
     await fixture('stop');
     await until('hostState.terminal');
     assert.equal(await evaluate(`document.getElementById('host-state').hidden`),false);
@@ -202,6 +211,7 @@ async function main() {
     server.stdin.end();
     if(server.exitCode===null)await new Promise(resolve=>server.once('exit',resolve));
     for(const entry of pending.values())clearTimeout(entry.timer);
+    evidence.elapsed_seconds=(Date.now()-started)/1000;
     await fs.writeFile(output,JSON.stringify(evidence,null,2)+'\n');
     console.log(JSON.stringify(evidence));
   }

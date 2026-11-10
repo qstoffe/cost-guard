@@ -31,6 +31,7 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertEqual('~' + ccost_amount(rounded), wire['display']['monthly_capacity'])
                 self.assertEqual(f'~${rounded / 100:.2f}', wire['display_units']['usd']['monthly_capacity'])
                 self.assertEqual(monthly, D(wire['ccost_reference']['monthly_capacity']))
+                self.assertTrue(wire['ccost_reference']['monthly_applicable'])
                 self.assertIn('Approximate 30-day equivalent', wire['display']['monthly_capacity_help'])
                 self.assertIn('not a guaranteed monthly entitlement', wire['display']['monthly_capacity_help'])
                 self.assertNotRegex(wire['display']['monthly_capacity_help'], r'rounding|÷|×|guesstimate')
@@ -50,8 +51,10 @@ class WebQuotaCCostTests(unittest.TestCase):
     def test_native_monthly_is_one_capacity_even_when_original_is_ratio_estimated(self):
         for provider in ('github-copilot', 'other'):
             quota = QuotaComponent('Monthly', 'fixed', used=D(10), limit=D(100), unit='AI credits', reset_at_ms=20000)
-            wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(2), 1, 1), None),
-                provider_id=provider), now_ms=1000).to_json()['quota']['display']
+            projected = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(2), 1, 1), None),
+                provider_id=provider), now_ms=1000).to_json()['quota']
+            self.assertFalse(projected['ccost_reference']['monthly_applicable'])
+            wire = projected['display']
             self.assertEqual(('Monthly Capacity', '', ''),
                 (wire['capacity_label'], wire['monthly_capacity'], wire['monthly_capacity_help']))
             self.assertEqual('100' if provider == 'github-copilot' else '~20', wire['ccost_capacity'])

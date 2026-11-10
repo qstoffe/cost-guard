@@ -78,6 +78,13 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
     assert.equal(targets.length,1,mode+' opens one new tab');
     assert.equal(openEvents.length,opened+1); assert.equal(openEvents.at(-1).url,'https://github.com/settings/copilot/features');
     await command('Target.closeTarget',{targetId:targets[0].targetId});
+    // Close acknowledgement can precede target destruction. Do not count the
+    // previous pointer popup as a second popup from the next touch gesture.
+    const closeDeadline=Date.now()+5000;
+    while((await command('Target.getTargets')).targetInfos.some(target=>target.targetId===targets[0].targetId)) {
+      assert.ok(Date.now()<closeDeadline,'owned provider tab actually closes');
+      await new Promise(resolve=>setTimeout(resolve,20));
+    }
   }
   const retained = await evaluate(`({location:location.href===linkLocation,streams:probeStreams===linkStreams,
     connection:liveConnection===linkConnection,auth:csrf===linkCSRF,requests:probeURLs.slice(linkRequests)})`);

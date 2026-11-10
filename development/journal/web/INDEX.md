@@ -63,8 +63,12 @@ Status: current
 - [Shared live Accounts](accounts-live.md): one Watch/Accounts renderer and feed,
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 - [Subscription/Mini display polish](subscription-mini-polish.md): numeric capacity
-  omission and concise help, five real cost-scope columns, safe live Duration fragment,
+  historical unknown-row omission (superseded below) and concise help, five real cost-scope columns, safe live Duration fragment,
   narrower measured PiP opening and scoped workstation/browser evidence.
+- [Permanent quota Capacity slots](quota-layout.md): FR000661 restores unknown `?`
+  rows, source-backed monthly eligibility and every-ordinal responsive track/divider
+  alignment; matched screenshots/coordinates, 528 Chrome/Edge scenes and the scoped
+  unverified whole-population history exception, without changing Mini or math.
 - Historical Token Mix: `development/journal/web/token-mix.md` records dedicated
   exact split tables, coherent quiet refresh and measured incremental acquisition.
 - [AI Stats](ai-stats.md): independent exact/observed/unknown metrics, count-only

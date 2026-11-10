@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.11 — 2026-11-10
+
+- Accounts/Full Watch restore permanent period Capacity and applicable theoretical Monthly Capacity rows at every real quota level. Unknown reference values show `?`, independently verified native unlimited quotas stay Unlimited, and numeric estimates retain `~`/`~$` with concise help.
+- Shared semantic subgrid slots align primary, secondary and later progress tracks/dividers within each responsive row. Monthly peers get only necessary empty comparison slots; missing quota tails create no phantom labels/bars, and lone cards remain compact. Value/period updates retain progress and help targets. Decimal calculations, native percentages, acquisition and Mini Watch are unchanged.
+
 ## v81.10 — 2026-11-10
 
 - Mini Watch no longer reserves an unused right-side scrollbar gutter. The unified table fills its existing body padding symmetrically when no internal scrollbar is needed; six-plus-row scrolling, sticky headings, narrow panning and native sizing remain unchanged.
