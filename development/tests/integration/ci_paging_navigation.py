@@ -260,11 +260,16 @@ def check_navigation_paging(browser, evidence):
             if baseline.returncode == 0:
                 host.server.assets['app.js'] = (baseline.stdout, current_asset[1])
                 page.reload()
+                assert not page.evaluate('navigate.toString().includes("New-route policy only")')
                 evidence['models_baseline'] = navigation(page, evidence, enforce=False)
             else:
                 evidence['models_baseline'] = dict(outcome='NOT RUN', reason='historical object absent in shallow checkout')
             host.server.assets['app.js'] = current_asset
             page.goto(host.server.origin + '/#/models')
+            # A same-document hash goto does not reload JavaScript. Prove that the
+            # current arm really executes shipped current bytes, not the baseline.
+            page.reload()
+            assert page.evaluate('navigate.toString().includes("New-route policy only")')
             expect(page.locator('.overview-models')).to_be_visible(timeout=30000)
             evidence['models_navigation'] = navigation(page, evidence, enforce=True)
             evidence['scenario'] = 'models-delayed-same-route-detail'

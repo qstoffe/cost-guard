@@ -113,6 +113,14 @@ the prepared benchmark now has an exact synthetic catalog join and differing raw
 scores, allowing real delayed table insertion/default-sort proof. These are test
 fixture corrections, not product behavior changes or removed assertions.
 
+Third head `cbfbcf6`: all five baseline origin routes reproduced123px after focus
+(outgoing Comparisons2379, Sessions1164, Token Mix3887, Accounts458, Watch2736px).
+Its supposed current arm still executed baseline JavaScript: switching host asset
+bytes followed by a same-document hash `goto` does not reload a page. Duplicate
+show wrappers confirmed the retained document. The harness now explicitly reloads
+and asserts old/current navigation-function identity before comparing arms. That
+failure is not evidence that the current fix passed or failed its intended test.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.
