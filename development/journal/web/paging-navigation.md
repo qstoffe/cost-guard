@@ -121,6 +121,17 @@ show wrappers confirmed the retained document. The harness now explicitly reload
 and asserts old/current navigation-function identity before comparing arms. That
 failure is not evidence that the current fix passed or failed its intended test.
 
+Fourth head `ae3ed0f`: verified old/current script identity. All five current
+routes finished at0px/contentfocus, versus baseline123px, including post-publication
+frames. Cold2s publication/benchmark insertion remained0; same-route filter, manual
+sort and refresh retained500px and manual sort; keyboard Models entry passed.
+The run then timed out in the added Session-detail70-row check, before paging fault
+tests. Those later tests remain pending. Local actual fixture source/detail capture
+returned observed70rows without a runtime failure. Follow-up adds inner-tab state
+diagnostics and aligns the live fixture clock with its current-wall-time source;
+this is not yet an established cause of the browser timeout. Latest Full rerun:
+181/181 PASS in131.6s; focused CI/report/dispatch85tests PASS.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.

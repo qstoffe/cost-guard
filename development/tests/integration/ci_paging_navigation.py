@@ -82,7 +82,7 @@ def navigation(page, evidence, *, enforce):
     return observations
 
 
-def cold_models(context, host, root):
+def cold_models(context, host, root, evidence):
     (root / 'models-delay').write_text('gated')
     host.dispatcher.invalidate()  # Only our disposable host's publications/jobs.
     page = context.new_page()
@@ -104,6 +104,8 @@ def cold_models(context, host, root):
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
         trace = page.evaluate('navigationTrace')
+        evidence['models_delayed'] = dict(before=before, trace=trace, after=0)
+        notice('Models cold publication', dict(before=before, after=0, benchmark_rows=4))
         # Same-route user actions/async updates cannot reapply new-route scroll.
         page.evaluate('''() => {
             scrollTo(0,500);
@@ -115,6 +117,7 @@ def cold_models(context, host, root):
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 500
         assert page.locator('.benchmark-table th').nth(3).get_attribute('aria-sort') == 'descending'
+        notice('Models same-route', dict(y=500, retained_sort=3))
         # A keyboard activation is tested separately from the bottom-of-page diagnostic.
         route(page, 'sessions')
         page.get_by_role('link', name='Models', exact=True).focus()
@@ -122,6 +125,7 @@ def cold_models(context, host, root):
         page.wait_for_function('() => current.section==="models"')
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
+        evidence['scenario'] = 'session-detail-refresh-scroll'
         page.evaluate('() => {location.hash="#/sessions/root-0000";}')
         page.wait_for_function('() => current.detail?.data?.result.view.prompt_blocks[0].rows.length===70', timeout=30000)
         page.evaluate('() => scrollTo(0,500)')
@@ -131,6 +135,14 @@ def cold_models(context, host, root):
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == detail_y
         return dict(before=before, trace=trace, same_route_y=500, keyboard=True, detail_refresh_y=detail_y)
+    except Exception:
+        observed = page.evaluate('''() => ({section:current?.section,detail:!!current?.detail,
+            rows:current?.detail?.body.children.length,total:current?.detail?.data?.total,
+            detailStatus:current?.detail?.status.textContent,host:hostState.kind,
+            hidden:document.hidden,message:current?.message})''')
+        evidence['observed'] = observed
+        notice('cold/detail state', dict(scenario=evidence.get('scenario'), **observed))
+        raise
     finally:
         page.close()
         (root / 'models-delay').write_text('0')
@@ -273,7 +285,7 @@ def check_navigation_paging(browser, evidence):
             expect(page.locator('.overview-models')).to_be_visible(timeout=30000)
             evidence['models_navigation'] = navigation(page, evidence, enforce=True)
             evidence['scenario'] = 'models-delayed-same-route-detail'
-            evidence['models_delayed'] = cold_models(context, host, root)
+            evidence['models_delayed'] = cold_models(context, host, root, evidence)
             notice('Models delayed', evidence['models_delayed'])
             evidence['scenario'] = 'real-source-paging-lifetime'
             evidence['paging_lifetime'] = paging(page, host, root, evidence)
