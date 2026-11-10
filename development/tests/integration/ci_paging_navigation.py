@@ -83,7 +83,7 @@ def navigation(page, evidence, *, enforce):
 
 
 def cold_models(context, host, root):
-    (root / 'models-delay').write_text('2')
+    (root / 'models-delay').write_text('gated')
     host.dispatcher.invalidate()  # Only our disposable host's publications/jobs.
     page = context.new_page()
     try:
@@ -96,8 +96,11 @@ def cold_models(context, host, root):
         assert page.evaluate('!current.result && current.loading')
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
+        (root / 'models-release').write_text('release')
         ready(page)
         page.wait_for_function('() => current.benchmark && !current.benchmark.loading')
+        assert page.locator('.benchmark-table tbody tr').count() == 4
+        assert page.locator('.benchmark-table th').nth(4).get_attribute('aria-sort') == 'descending'
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
         trace = page.evaluate('navigationTrace')
@@ -133,7 +136,7 @@ def cold_models(context, host, root):
         (root / 'models-delay').write_text('0')
 
 
-def paging(page, host, root):
+def paging(page, host, root, evidence):
     route(page, 'comparisons')
     page_at(page, 0)
     revision = page.evaluate('current.result.view.comparisons.revision')
@@ -175,6 +178,7 @@ def paging(page, host, root):
     # Actual source failure/admission faults, not only immediate fake jobs.
     faults = []
     for mode in ('busy', 'source-error', 'preview-error'):
+        evidence['scenario'] = 'paging-' + mode
         (root / 'mode').write_text(mode)
         host.dispatcher.invalidate()
         page.get_by_role('button', name='Next', exact=True).click()
@@ -190,6 +194,7 @@ def paging(page, host, root):
         # Rejecting host entries may retain a completed page10; discard only fixture jobs.
         host.dispatcher.invalidate()
     (root / 'mode').write_text('changed')
+    evidence['scenario'] = 'paging-changed-pin'
     page.get_by_role('button', name='Next', exact=True).click()
     page.wait_for_function('() => current.orderReset && !current.loading && !current.failed', timeout=30000)
     page_at(page, 0)
@@ -200,6 +205,7 @@ def paging(page, host, root):
     page.evaluate('() => acquire(current)')
     page_at(page, 0)
     (root / 'mode').write_text('stalled')
+    evidence['scenario'] = 'paging-no-progress'
     host.dispatcher.invalidate()
     started = time.monotonic()
     page.get_by_role('button', name='Next', exact=True).click()
@@ -219,6 +225,7 @@ def paging(page, host, root):
     page_at(page, 10)
     empty = []
     for count in (0, 1):
+        evidence['scenario'] = 'paging-groups-' + str(count)
         (root / 'groups').write_text(str(count))
         host.dispatcher.invalidate()
         page.evaluate('() => {current.request={kind:"comparisons"};demand.update();return acquire(current);}')
@@ -239,6 +246,11 @@ def check_navigation_paging(browser, evidence):
         baseline = subprocess.run(['git', 'show', BASELINE + ':src/web/assets/app.js'], cwd=ROOT, capture_output=True)
         context = browser.new_context(viewport={'width': 1366, 'height': 650})
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(host.server.origin + '/') else route.abort())
+        def delayed_benchmark(route):
+            response = route.fetch()
+            time.sleep(.25)
+            route.fulfill(response=response)
+        context.route('**/api/models/benchmark', delayed_benchmark)
         errors = []
         try:
             page = context.new_page()
@@ -259,9 +271,15 @@ def check_navigation_paging(browser, evidence):
             evidence['models_delayed'] = cold_models(context, host, root)
             notice('Models delayed', evidence['models_delayed'])
             evidence['scenario'] = 'real-source-paging-lifetime'
-            evidence['paging_lifetime'] = paging(page, host, root)
+            evidence['paging_lifetime'] = paging(page, host, root, evidence)
             notice('paging lifetime', evidence['paging_lifetime'])
             assert not errors
             evidence['checks'].append('real job/dispatcher/source lifecycle: pinned321-group pages, bounded faults/45s no-progress/Retry, empty/one; Models anchor navigation and delayed publication')
+        except Exception:
+            evidence['current_observation'] = page.evaluate('''() => ({section:current?.section,loading:current?.loading,
+                failed:current?.failed,message:current?.message,stage:current?.stage,
+                offset:current?.result?.view.comparisons?.offset,total:current?.result?.view.comparisons?.total})''')
+            notice('scenario state', dict(scenario=evidence.get('scenario'), **evidence['current_observation']))
+            raise
         finally:
             context.close()

@@ -92,10 +92,16 @@ def finite(sender, request):
         report = token_mix_report()
     else:
         report = tall_models()
-        delay = float((Path(os.environ['COST_GUARD_PAGING_FIXTURE']) / 'models-delay').read_text())
-        if delay:
-            time.sleep(delay)
-    sender.send(('result', json.dumps(dict(error=None, view=project(report).to_json(),
+        root = Path(os.environ['COST_GUARD_PAGING_FIXTURE'])
+        delay = (root / 'models-delay').read_text()
+        if delay == 'gated':
+            until = time.monotonic() + 15
+            while not (root / 'models-release').exists() and time.monotonic() < until:
+                time.sleep(.05)
+            time.sleep(2)
+        elif float(delay):
+            time.sleep(float(delay))
+    sender.send(('result', json.dumps(dict(error=None, observed_at_ms=int(time.time() * 1000), view=project(report).to_json(),
         source=dict(status='acquired', observed_at_ms=int(time.time() * 1000),
                     identity=dependency_signature(('v2', None))))).encode()))
     sender.close()
@@ -106,7 +112,8 @@ def tall_models():
     report = model_report(include_model_catalog=True)
     catalog = report.model_catalog
     base = next(row for row in catalog.rows if row.model == 'Z')
-    extra = tuple(replace(base, model=f'Synthetic model {i:02d}') for i in range(35))
+    extra = (replace(base, publisher='Anthropic', model='Claude Opus 5.5'),
+        *(replace(base, model=f'Synthetic model {i:02d}') for i in range(35)))
     report = replace(report, model_catalog=replace(catalog, rows=catalog.rows + extra,
         selectable=catalog.selectable + tuple((row.publisher, row.model) for row in extra)))
     return report
@@ -146,7 +153,10 @@ def fixture():
             month_start_ms=int((root / 'start').read_text()))
         host.live.driver = None
         host.live.source_failure = None
-        host.benchmark.snapshot = parse_pages(payload()['pages'], int(time.time() * 1000))
+        board = payload()['pages']
+        for row, score in zip(board[0]['rows'], (9, 80, 100, 80, 0)):
+            row['metrics']['accuracy'] = score
+        host.benchmark.snapshot = parse_pages(board, int(time.time() * 1000))
         host.benchmark.next_due = float('inf')
         host.start()
         host.publish_ready()

@@ -82,8 +82,13 @@ weakening or workstation `hosted_only` spoofing is permitted/used. No acceptance
 waiver has yet been granted. Earlier refused executable inventory remains retired.
 
 Models baseline from verified scrolled Comparisons returned to top in earlier
-trials; the owner's downward symptom remains unreproduced, so there is no asserted
-scroll-root-cause. The CI diagnostic uses page-local native anchor activation,
+trials, but the exact-baseline hosted anchor diagnostic on `e31a2f1` reproduced a
+downward shift: Comparisons2379px and Sessions1164px outgoing scroll → aftershow0
+→ focus/DOMpublication123px → both rendered frames123px, focused `content`.
+This exposes baseline hashchange's scrolling `content.focus()` after rendering;
+the new-route `preventScroll`/explicit top policy is intended to remove it. It is
+not proof that the owner's historical jump had that exact scroll amount or target.
+Current before/after validation remains pending. The diagnostic uses native anchor activation,
 records nonzero outgoing scroll, show/toolbar/publication and rendered frames,
 compares the exact historical app when its object is available, and covers the
 other populated routes plus delayed publication and same-route preservation.
@@ -97,6 +102,16 @@ was truncated before failure metadata. The GitHub job-log endpoint returned401,
 so its raw-log evidence is unavailable; normal API/annotations still work. The
 Delegate authorized compact scenario/failure notices and the next ordinary CI run,
 not another log-access route or acceptance waiver. First-head browser remains FAIL.
+
+Second head `e31a2f1` retained Quick645/645/validator PASS and the baseline traces
+above, then failed when Token Mix could not become ready. The synthetic finite
+fixture omitted top-level `observed_at_ms`, which the actual TokenMixView validator
+requires; host/job completion alone did not catch that browser-contract defect.
+The fixture now exports that numeric timestamp. A controlled Models release gate
+prevents background warming from invalidating the intended cold-entry test, and
+the prepared benchmark now has an exact synthetic catalog join and differing raw
+scores, allowing real delayed table insertion/default-sort proof. These are test
+fixture corrections, not product behavior changes or removed assertions.
 
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
