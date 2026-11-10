@@ -3,6 +3,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const {probeToolbar} = require('./probe_models_toolbar.cjs');
 const {probeModelsValues} = require('./probe_models_values.cjs');
+const {probeModelsParity} = require('./probe_models_parity.cjs');
 const [browser, output, baseline] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
@@ -16,7 +17,7 @@ async function main() {
   const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending = new Map(); let sequence = 0, buffer = ''; const errors = [], checks = [], layouts = [];
+  const pending = new Map(); let sequence = 0, buffer = '', phase = 'startup'; const errors = [], checks = [], layouts = [];
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
     while ((index=buffer.indexOf('\0'))>=0) {
@@ -27,7 +28,7 @@ async function main() {
     }
   });
   const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{
-    const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout: '+method));},15000);
+    const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout: '+method+' in '+phase));},15000);
     pending.set(id,{resolve,reject,timer});child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');
   });
   const evaluate=async (id,expression,userGesture=false)=>{
@@ -49,25 +50,27 @@ async function main() {
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},id);
   };
   let evidence={outcome:'FAIL'};
-  const deadline=setTimeout(()=>{child.kill();server.kill();},150000);
+  const deadline=setTimeout(()=>{child.kill();server.kill();},300000);
   try {
     const launch=JSON.parse((await lines.next()).value); // One-use credential stays private.
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId:id}=await command('Target.attachToTarget',{targetId,flatten:true});
     await command('Page.enable',{},id); await command('Runtime.enable',{},id);
+    await command('Page.bringToFront',{},id);
     await command('Page.navigate',{url:launch.url},id);
     await until(id,`typeof current!=='undefined' && !!current?.result && !current.loading && hostState.writable`);
     const read=()=>evaluate(id,`({date:current.result.view.pricing_retrieved_at_ms,revision:current.result.view.model_catalog,
       sample:current.result.view.token_mix,models:current.result.view.model_comparison,choice:current.models})`);
     const initial=await read(); assert.equal((await mode('status')).fetches,1);
-    await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===4`);
+    await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===4 && !current.benchmark.loading && !current.benchmark.refresh.disabled`);
+    phase='models-values';
     checks.push(...await probeModelsValues({command,evaluate,until,id,fixture:async command=>{
       server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);
     }}));
     const benchmarkImage=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},id);
     await fs.writeFile(output.replace(/\.json$/,'')+'-benchmark.png',Buffer.from(benchmarkImage.data,'base64'));
     const referenceChoice = await evaluate(id,`JSON.stringify(current.models)`);
-    for (const [key, code, windowsVirtualKeyCode, expected] of [['Enter','Enter',13,'ascending'],[' ','Space',32,'descending']]) {
+    for (const [key, code, windowsVirtualKeyCode, expected] of [['Enter','Enter',13,'descending'],[' ','Space',32,'ascending']]) {
       await evaluate(id,`document.querySelector('[data-benchmark-control="3"]').focus()`);
       await command('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode,text:key==='Enter'?'\r':' '},id);
       await command('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode},id);
@@ -90,7 +93,8 @@ async function main() {
       evidence = await evaluate(id, `(()=>{const sample=selector=>{const node=document.querySelector(selector),s=getComputedStyle(node),r=node.getBoundingClientRect();return {font:s.fontFamily,size:s.fontSize,height:r.height,padding:s.padding};};return {outcome:'OBSERVED',button:sample('[data-model-control="refresh"]'),date:sample('.model-tools span'),tier:sample('.model-relative'),ui:getComputedStyle(document.body).fontFamily};})()`);
       console.log(JSON.stringify(evidence)); return;
     }
-    layouts.push(...await probeToolbar({command,evaluate,id}));
+    phase='toolbar'; layouts.push(...await probeToolbar({command,evaluate,id}));
+    phase='price-refresh';
     await evaluate(id,`document.querySelector('[data-model-control="all"]').click();document.querySelector('[data-model-control="latest"]').click();
       document.querySelector('[data-model-control="column-1"]').dispatchEvent(new MouseEvent('click',{shiftKey:true}));
       ReportView.setUnit('usd',document.getElementById('result'));window.oldTable=document.querySelector('.overview-model-table');`);
@@ -147,6 +151,7 @@ async function main() {
     await until(id,`!current.loading`);
     assert.equal(await evaluate(id,`document.activeElement?.dataset.modelControl==='all'`),true);
     checks.push('Refresh completion preserves a filter deliberately focused during the request, without focus theft');
+    phase='price-touch';
     await command('Emulation.setTouchEmulationEnabled',{enabled:true},id);
     const touch=async selector=>{
       const point=await evaluate(id,`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
@@ -174,7 +179,7 @@ async function main() {
         assert.ok(!text.includes('Hold Shift')); assert.ok(text.length>20);
         if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.');
       }
-      const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls').children[3].getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
+       const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls').children[1].getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
       assert.equal(layout.overflow,false);assert.equal(layout.helpFits,true);assert.equal(layout.buttonFirst,true);
       layouts.push({width,theme,...layout});
       const image=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},id);
@@ -190,10 +195,15 @@ async function main() {
     assert.deepEqual(errors,[]);
     checks.push('Four semantic focus tooltips, toolbar wrapping and no document overflow in Classic/Web light/dark at 360/1280; navigation retains preferences');
     checks.push('240 toolbar cases: 360/800/1280/1366/1920, Classic/Web light/dark, 100/125/150/200% text scaling, normal/refreshing/long-error/unavailable states; separate coarse-pointer target check; exact computed Watch toggle parity');
+    phase='models-parity'; layouts.push(...await probeModelsParity({command,evaluate,id,output}));
+    checks.push('36 same-page computed table/heading/control parity cases at 360/768/1366/1920, Classic/Web light/dark and 100/125/150% text; full-page screenshots, one-column source list, vertical wheel and native touch input');
     evidence={outcome:'PASS',browser:(await command('Browser.getVersion')).product,checks,layouts,
       limitations:['Canonical Python report pipeline with synthetic upstream/source and controlled in-memory jobs. This does not prove production process startup/lifecycle or concurrency; those have separate backend tests.',
         'Production spawn, cancellation and actual source reads require the separate backend/real-installation checks, not this controlled browser fixture.',
         'Headless Chromium, not physical desktop/screen-reader or other-engine acceptance.']};
+  } catch (error) {
+    evidence={outcome:'FAIL',phase,reason:error.message,checks,layouts};
+    throw error;
   } finally {
     clearTimeout(deadline);await fs.writeFile(output,JSON.stringify(evidence,null,2));
     await command('Browser.close').catch(()=>{});if(child.exitCode===null)child.kill();

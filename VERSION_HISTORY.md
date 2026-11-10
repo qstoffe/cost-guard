@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.9 — 2026-11-10
+
+- Both Models tables share one thin rounded shell, header/cell skin and matching responsive Refresh/date/status and right-hand filter groups. Small parenthesized source references and official View source links sit beside their matching section headings, not in the control rows.
+- The compact Settings-like multiselect lists source effort options in one vertical column, highest known effort first and alphabetical extras last, without changing exact selection keys. Solved stays elastic but aligns left; Relative Task Cost remains right-aligned. Data acquisition, prices, benchmark math and filter defaults are unchanged.
+
 ## v81.8 — 2026-11-10
 
 - Comparisons retires a changed pinned revision before generic retry, deliberately restarts once at page 1 and retains the last successful page through navigation failures. Explicit paging has three recovery attempts and a 45-second no-forward-progress budget, not a deadline on progressing work or unrelated reports.

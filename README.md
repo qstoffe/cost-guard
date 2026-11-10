@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.8, 2026-11-10), the supported distribution.
+Use **current `main`** (v81.9, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.8 (2026-11-10):** Comparisons recovers changed page revisions once, bounds non-progressing page navigation and retains the last successful page. Sessions and Comparisons share centered range pagers; Models enters at the top and the benchmark defaults to Solved descending. [Web guide](docs/web-beta.md).
+**v81.9 (2026-11-10):** Models tables share their visual skin, inline source headings and responsive control rows. The compact Effort multiselect lists source levels vertically in descending conceptual order; Solved aligns left in its elastic column. Prices, benchmark math and independent filter states stay unchanged. [Web guide](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

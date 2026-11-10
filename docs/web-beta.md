@@ -324,7 +324,9 @@ Reloads and other authenticated tabs reuse valid host results, but no fresh resu
 is promised across host restart. Background refresh is silent once useful content
 exists, retaining sort, selection, scroll and focus. Navigation/heartbeats never renew observation age.
 
-Above the table, **GitHub Copilot**, an official **View source** link and **Refresh price list** precede **Last fetched: YYYY-MM-DD HH:mm**
+The **GitHub Reference Pricing** heading includes a small muted
+**(GitHub Copilot · View source)** reference, with only **View source** linked.
+Below it, the leftmost **Refresh price list** precedes **Last fetched: YYYY-MM-DD HH:mm**
 in the configured timezone (or **Unavailable**). This is the last successful upstream
 GitHub pricing observation, not page load or release-metadata enrichment. Explicit
 refresh bypasses even a fresh cache, then rebuilds one coherent Models report on the
@@ -363,9 +365,14 @@ billing, subscription and attribution details and its canonical acquisition beha
 
 After clear vertical space, an unboxed independent table shows **Publisher | Model |
 Effort | Relative Task Cost | Solved** for the official **Terminal-Bench 4.0 · Harbor Hub**
-board. Its matching source toolbar has the official **View source**, **Refresh benchmark**
-and configured-local last-successful-fetch time. The first four columns fit their
-content; Solved alone fills remaining width. Narrow layouts may scroll horizontally.
+board. Its heading includes the same small parenthesized source/link pattern:
+**(Terminal-Bench 4.0 · Harbor Hub · View source)**. Both sections share heading,
+table-shell, header/cell and toolbar styling in Classic and Web light/dark; no outer
+benchmark card is added. Below each heading, Refresh, configured-local last-successful-fetch
+time and status form the left group, while filters align right and wrap together
+when necessary. Only the table shells pan horizontally on narrow screens.
+The first four columns fit their content; Solved alone fills remaining width, with
+its heading and values aligned left beside the right-aligned Relative Task Cost column.
 Distinct model/client/effort configurations are never averaged or collapsed to Max.
 Model-name hover/focus/touch help identifies that row's actual **Coding Client**, source
 row/date and any published version. Relative Task Cost value help shows its **USD/Task**
@@ -382,7 +389,10 @@ edition, even for levels hidden by Copilot filters. Missing effort adds **Not sp
 while its row displays N/A. All start checked; zero selection shows **No matching
 benchmark rows**. Changes are immediate/local. Source refresh preserves a chosen
 subset; default All includes new source levels. Keyboard, touch, Escape and outside
-click work without a modal.
+click work without a modal. The compact Settings-like picker opens a single-column,
+vertically scrollable checklist. Source choices sort Max → Extra High (including
+xhigh/x-high) → High → Medium → Low → None/Not specified, then case-insensitive
+alphabetical extras. Sorting preserves exact source keys and never invents levels.
 
 USD/Task divides the published total USD by all task attempts, including failures.
 Relative Task Cost divides by the cheapest **strictly positive, complete-cost** run
