@@ -54,6 +54,13 @@ const SessionsCatalog = (() => {
       this.root.append(this.status, pan, pager);
       this.loader = new ReportLoading.View(); this.loader.root.hidden = true;
       this.loader.bar.setAttribute('aria-label', 'Sessions loading progress');
+      this.task = el('p', '', 'sessions-loading-task');
+      this.count = el('p', '', 'sessions-loading-count');
+      this.loader.root.insertBefore(this.task, this.loader.bar);
+      const track = el('div', undefined, 'sessions-loading-track');
+      track.append(this.loader.bar, this.loader.percent);
+      this.loader.root.insertBefore(track, this.loader.stage);
+      this.loader.root.insertBefore(this.count, this.loader.stage);
       this.cancel = el('button', 'Cancel'); this.retry = el('button', 'Retry');
       this.cancel.type = this.retry.type = 'button'; this.retry.hidden = true;
       ContextHelp.attach(this.cancel, () => this.operation?.kind === 'page' ?
@@ -61,24 +68,27 @@ const SessionsCatalog = (() => {
         'Cancel this sort and return to the previous sorting and page.');
       this.cancel.addEventListener('click', () => this.cancelNavigation());
       this.retry.addEventListener('click', () => {
-        this.configure(new URLSearchParams(location.hash.split('?')[1])); this.poll();
+        this.configure(new URLSearchParams(location.hash.split('?')[1]), {retry: true}); this.poll();
       });
       const actions = el('div', undefined, 'sessions-loading-actions'); actions.append(this.cancel, this.retry);
       this.loader.root.append(actions); this.root.append(this.loader.root);
     }
-    configure(params) {
+    configure(params, {retry = false} = {}) {
+      const offset = Number(params?.get('offset') || 0), epoch = params?.get('epoch') || null;
+      const sort = columns.some(([key]) => key === params?.get('sort')) ? params.get('sort') : 'activity';
+      const direction = params?.get('direction') === '1' ? 1 : -1;
+      // Repeated route notifications cannot impersonate Cancel or erase a failure.
+      if (!retry && this.operation && offset === this.offset && epoch === this.epoch &&
+        sort === this.sort && direction === this.direction) return;
       this.retire();
       const focus = this.operation?.focus || document.activeElement;
       const scroll = this.operation?.scroll || [window.scrollX || 0, window.scrollY || 0, this.pan.scrollLeft || 0];
-      this.offset = Number(params?.get('offset') || 0);
-      this.epoch = params?.get('epoch') || null;
-      this.sort = columns.some(([key]) => key === params?.get('sort')) ? params.get('sort') : 'activity';
-      this.direction = params?.get('direction') === '1' ? 1 : -1;
+      Object.assign(this, {offset, epoch, sort, direction});
       const changed = this.data && (this.offset !== this.data.offset || this.sort !== this.data.sort ||
         this.direction !== this.data.direction || this.offset && this.epoch !== this.data.epoch);
       this.operation = changed || !this.data ? {kind: this.data && this.sort === this.data.sort &&
         this.direction === this.data.direction ? 'page' : 'sort', focus, scroll,
-        advanced: Date.now(), percent: 0, completed: -1, source: null, rebases: 0, failed: false} : null;
+        advanced: Date.now(), percent: 0, completed: -1, highWater: -1, source: null, rebases: 0, failed: false} : null;
       this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
       this.rerun = true;
     }
@@ -112,7 +122,8 @@ const SessionsCatalog = (() => {
       const generation = this.generation;
       const flight = {controller: new AbortController()}; this.flight = flight;
       if (this.operation) this.admission = setTimeout(() => {
-        if (generation === this.generation && this.operation) this.showProgress('Checking cached sort keys…');
+        if (generation === this.generation && this.operation && this.loader.root.hidden)
+          this.showProgress('Waiting for Sessions source…');
       }, 180);
       this.requestDeadline = setTimeout(() => {
         if (this.flight !== flight) return;
@@ -160,21 +171,30 @@ const SessionsCatalog = (() => {
         }
       }
     }
-    showProgress(stage, stageLabel = stage) {
+    showProgress(stage, stageLabel = 'Loading Sessions') {
       if (!this.operation) return;
+      const operation = this.operation;
+      const name = columns.find(([key]) => key === this.sort)[1];
+      const task = operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 50) + 1}` : `Sorting sessions by ${name}`;
+      ReportView.text(this.task, task);
+      this.task.setAttribute('aria-label', task + (operation.kind === 'sort' ? this.direction === 1 ? ', ascending' : ', descending' : ''));
+      ReportView.text(this.count, operation.completed < 0 ? 'Waiting for source counts…' :
+        `${operation.phase === 'index' ? 'Indexed' : 'Prepared'} ${operation.completed.toLocaleString('en-US')} of ${operation.total.toLocaleString('en-US')} sessions`);
       this.loader.update({percent: this.operation.percent, stage, stageLabel});
       this.loader.root.hidden = false;
       this.retry.hidden = !this.operation.failed;
       this.status.hidden = true;
       if (this.pan.contains(document.activeElement) || this.pager.contains(document.activeElement) ||
         this.actionFocus && document.activeElement === document.body) this.cancel.focus?.({preventScroll: true});
-      this.pan.hidden = this.pager.hidden = !this.operation.failed;
+      // Keep the requested intent/error in the same visible slot. Revealing 50 old
+      // rows above it made a failure look like a silent rollback, with Retry offscreen.
+      this.pan.hidden = this.pager.hidden = true;
     }
     failNavigation(reason) {
       if (!this.operation) return;
       this.operation.failed = true;
       this.interest(false);
-      this.showProgress(`Sessions ${this.operation.kind} could not finish (${reason}). Retry after the source recovers, or Cancel to return.`, 'Sessions navigation failed');
+      this.showProgress(`Could not finish (${reason}). Retry, or Cancel to return to the previous view.`, `Sessions navigation failed: ${reason}`);
     }
     pendingNavigation(data) {
       if (!this.operation) return false;
@@ -184,20 +204,33 @@ const SessionsCatalog = (() => {
       const operation = this.operation;
       const completed = progress?.completed ?? data.indexed ?? 0;
       const total = progress?.total ?? data.available ?? 0;
-      const source = `${progress?.generation ?? ''}:${progress?.phase ?? 'index'}:${total}`;
-      const restarted = operation.source !== null && (source !== operation.source || completed < operation.completed);
-      if (restarted) { operation.percent = 0; operation.completed = -1; operation.rebases++; }
-      if (operation.rebases >= 8) { this.failNavigation('concurrent_source_change'); return true; }
-      if (completed > operation.completed) { operation.completed = completed; operation.advanced = Date.now(); }
-      operation.source = source;
-      operation.percent = Math.max(operation.percent, Math.min(99, total ? Math.floor(99 * completed / total) : 0));
+      const phase = progress?.phase ?? (data.pending_sort ? 'index' : 'page');
+      const scope = `${phase}:${total}`;
+      const restarted = operation.source !== null && (scope !== operation.scope || completed < operation.completed);
+      if (restarted) operation.rebases++;
+      // Source generations include unrelated metadata/activity updates. Coverage
+      // already excludes changed keys; neither those ticks nor a lower count prove
+      // forward work or justify abandoning valid unchanged keys.
+      if (operation.scope !== scope) operation.highWater = -1;
+      if (completed > operation.highWater) { operation.highWater = completed; operation.advanced = Date.now(); }
+      Object.assign(operation, {completed, total, phase, scope, source: progress?.generation ?? ''});
+      operation.percent = Math.min(99, total ? Math.floor(99 * completed / total) : 0);
       if (progress?.status === 'failed' || data.state === 'source_unavailable') {
         this.failNavigation(progress?.reason || 'source_unavailable'); return true;
       }
-      if (Date.now() - operation.advanced >= 45000) { this.failNavigation('no_source_progress'); return true; }
-      const name = columns.find(([key]) => key === this.sort)[1];
-      const label = data.pending_sort ? `Indexing ${name}` : `Preparing page ${Math.floor(this.offset / 50) + 1}`;
-      this.showProgress(`${restarted ? 'Source changed; restarting. ' : ''}${label} (${completed} of ${total} sessions)…`, label);
+      // A currently owned single-root read retains the source's transport bounds.
+      // Do not label it an idle stall merely because no whole root has finished yet.
+      if (Date.now() - operation.advanced >= 45000 && !progress?.work?.active) {
+        this.failNavigation('no_source_progress'); return true;
+      }
+      const stages = {checking_cache: 'Checking cached session summaries…', reading_summary: 'Reading session summary…',
+        projecting_summary: 'Preparing session summary…', waiting_retry: 'Waiting to retry a session summary…',
+        queued: 'Waiting for the session index worker…', ready: 'Applying requested view…'};
+      const revalidating = restarted || progress?.revalidating > 0;
+      const stage = stages[progress?.work?.stage] || 'Waiting for session sort keys…';
+      this.showProgress(`${revalidating ? 'Source changed; revalidating keys. ' : ''}${progress?.work?.retrying ? 'Retrying. ' : ''}${stage}`,
+        revalidating ? 'Revalidating Sessions keys' : progress?.waiting ? 'Waiting for Sessions source' :
+          phase === 'index' ? 'Indexing Sessions' : 'Preparing Sessions page');
       return true;
     }
     cancelNavigation() {

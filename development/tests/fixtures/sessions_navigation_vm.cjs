@@ -42,20 +42,38 @@ module.exports = async ({vm, context, Node, timers}) => {
   view.update(progress(428));
   assert.equal(view.pan.hidden,true); assert.equal(view.pager.hidden,true);
   assert.equal(view.loader.bar.max,100); assert.equal(view.loader.bar.value,13);
-  assert.match(view.loader.stage.textContent,/Indexing CTX.*428 of 3217/);
-  assert.equal(view.loader.status.textContent,'Indexing CTX');
+  const bar = view.loader.bar, heading = view.task, count = view.count;
+  for (let generation=2;generation<=22;generation++) {
+    view.update(progress(428+generation,generation));
+    assert.equal(view.operation.failed,false,'ordinary source generations cannot exhaust navigation');
+    assert.equal(view.task,heading); assert.equal(view.count,count); assert.equal(view.loader.bar,bar);
+  }
+  assert.equal(view.task.textContent,'Sorting sessions by CTX');
+  assert.equal(view.count.textContent,'Indexed 450 of 3,217 sessions');
+  const operation = view.operation;
+  view.configure(new URLSearchParams('sort=ctx&direction=1'));
+  assert.equal(view.operation,operation,'redundant route notification preserves pending intent');
   view.update(progress(1600)); assert.equal(view.loader.bar.value,49);
-  view.update(progress(50,2)); assert.match(view.loader.stage.textContent,/Source changed; restarting/);
+  view.operation.advanced = Date.now()-61000;
+  view.update(progress(1601,22));
+  assert.equal(view.operation.failed,false,'real count advancement survives more than a minute of slow work');
+  view.update(progress(50,23)); assert.match(view.loader.stage.textContent,/revalidating/);
   assert.equal(view.loader.bar.value,1,'new source generation explicitly restarts measured progress');
   view.operation.advanced = 0;
-  view.update(progress(50,2)); assert.equal(view.operation.failed,true);
-  assert.equal(view.retry.hidden,false); assert.equal(view.pan.hidden,false);
+  view.update({...progress(50,23),progress:{...progress(50,23).progress,work:{active:true,stage:'reading_summary',sequence:1}}});
+  assert.equal(view.operation.failed,false,'an owned bounded slow source read is not a no-work stall');
+  assert.match(view.loader.stage.textContent,/Reading session summary/);
+  view.update(progress(50,23)); assert.equal(view.operation.failed,true);
+  assert.equal(view.retry.hidden,false); assert.equal(view.pan.hidden,true);
+  view.configure(new URLSearchParams('sort=ctx&direction=1'));
+  assert.equal(view.operation.failed,true,'a redundant hash notification cannot erase the error');
   assert.match(view.loader.stage.textContent,/no_source_progress/);
   view.cancelNavigation(); await new Promise(setImmediate);
   view.configure(new URLSearchParams('sort=activity&direction=-1&offset=100&epoch=pinned'));
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'pending',completed:4,total:17}});
   assert.equal(view.operation.kind,'page'); assert.equal(view.loader.bar.value,23);
-  assert.match(view.loader.stage.textContent,/Preparing page 3.*4 of 17/);
+  assert.equal(view.task.textContent,'Loading Sessions page 3');
+  assert.equal(view.count.textContent,'Prepared 4 of 17 sessions');
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
   assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/http_auth_failure/);
   view.cancelNavigation(); await new Promise(setImmediate);
@@ -84,5 +102,16 @@ module.exports = async ({vm, context, Node, timers}) => {
   view.configure(new URLSearchParams('sort=model&direction=1')); await view.load();
   assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/host_identity_changed/);
   assert.equal(view.data.sort,'duration');
+  let expired = true;
+  view.api = async (_, request) => {
+    if (request.action) return {};
+    if (expired) { expired=false; throw new Error('catalog_expired'); }
+    return {...progress(600,50),token:'reopened',requested_sort:'ccost'};
+  };
+  view.configure(new URLSearchParams('sort=ccost&direction=1')); await view.load();
+  assert.equal(view.operation.failed,false); assert.equal(view.sort,'ccost');
+  assert.equal(view.token,'reopened'); assert.equal(view.task.textContent,'Sorting sessions by CCost');
+  assert.equal(view.count.textContent,'Indexed 600 of 3,217 sessions');
+  assert.equal(view.data.sort,'duration','lease recovery cannot apply its Activity fallback');
   view.detach();
 };

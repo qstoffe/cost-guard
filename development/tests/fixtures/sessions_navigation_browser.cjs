@@ -46,7 +46,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const original = await ids();
   const oldHash = await evaluate('location.hash');
   await fixture('catalog-clear');
-  await evaluate(`current.catalog.headers[6].th.querySelector('button').focus()`);
+   await evaluate(`current.catalog.headers[3].th.querySelector('button').focus()`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await until('current.catalog.operation && !current.catalog.loader.root.hidden');
@@ -55,7 +55,22 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('current.catalog.loader.bar.value'),0);
   await fixture('catalog-partial'); await load();
   assert.equal(await evaluate('current.catalog.loader.bar.value'),13);
-  assert.match(await evaluate('current.catalog.loader.stage.textContent'),/428 of 3217/);
+   assert.match(await evaluate('current.catalog.count.textContent'),/428 of 3,217/);
+   assert.equal(await evaluate('current.catalog.task.textContent'),'Sorting sessions by CCost');
+   await evaluate('window.stableBar=current.catalog.loader.bar;window.stableTask=current.catalog.task;window.stableCount=current.catalog.count');
+   const slots = [];
+   for (let update=0;update<20;update++) {
+     await fixture('catalog-churn'); await load();
+     slots.push(await evaluate(`(()=>{const c=current.catalog;return {heading:c.task.textContent,count:c.count.textContent,
+       failed:c.operation.failed,identity:stableBar===c.loader.bar&&stableTask===c.task&&stableCount===c.count,
+       positions:[c.task,c.loader.bar,c.count,c.loader.stage,c.cancel].map(n=>Math.round(n.getBoundingClientRect().top))};})()`));
+   }
+   assert.equal(new Set(slots.map(value=>value.count)).size,20);
+   for (const slot of slots) {
+     assert.equal(slot.heading,'Sorting sessions by CCost'); assert.equal(slot.failed,false); assert.equal(slot.identity,true);
+     assert.deepEqual(slot.positions,slots[0].positions,'20 source generations/counts keep the same geometry');
+   }
+   checks.push({source_churn_updates:20,stable_slots:slots[0].positions,final_count:slots.at(-1).count});
   // Hover/focus help belongs to the Cancel button, not a nearby caption.
   await evaluate('current.catalog.cancel.focus()');
   await until('document.getElementById("context-help")?.textContent.includes("Cancel this sort")');
@@ -65,11 +80,14 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]});
     await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.body.style.zoom=${zoom}`);
     const geometry = await evaluate(`(()=>{const panel=current.catalog.loader.root,bar=panel.querySelector('progress').getBoundingClientRect(),
-      cancel=current.catalog.cancel.getBoundingClientRect(),box=panel.getBoundingClientRect();return {
-      center:Math.abs((bar.left+bar.right)/2-(box.left+box.right)/2),below:cancel.top>=bar.bottom,
+       cancel=current.catalog.cancel.getBoundingClientRect(),box=panel.getBoundingClientRect(),
+       task=current.catalog.task.getBoundingClientRect(),count=current.catalog.count.getBoundingClientRect(),work=current.catalog.loader.stage.getBoundingClientRect();return {
+       center:Math.abs((bar.left+bar.right)/2-(box.left+box.right)/2),below:cancel.top>=bar.bottom,
+       slots:task.bottom<=bar.top&&count.top>=bar.bottom&&work.top>=count.bottom&&cancel.top>=work.bottom,
       overflow:document.documentElement.scrollWidth>innerWidth+1,determinate:panel.querySelector('progress').hasAttribute('value'),
       animated:getComputedStyle(panel.querySelector('progress')).animationName};})()`);
-    assert.ok(geometry.center<2); assert.equal(geometry.below,true); assert.equal(geometry.overflow,false);
+     assert.ok(geometry.center<2); assert.equal(geometry.below,true); assert.equal(geometry.overflow,false);
+     assert.equal(geometry.slots,true);
     assert.equal(geometry.determinate,true); assert.equal(geometry.animated,'none');
     layouts.push({theme,width,zoom,...geometry});
   }
@@ -77,9 +95,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('location.hash'),oldHash);
   assert.deepEqual(await ids(),original);
   assert.equal(await evaluate('current.catalog.offset'),50);
-  assert.equal(await evaluate('document.activeElement===current.catalog.headers[6].th.querySelector("button")'),true);
+   assert.equal(await evaluate('document.activeElement===current.catalog.headers[3].th.querySelector("button")'),true);
   await until('!current.catalog.busy');
-  checks.push('seven headers; CTX heading focus help and trusted Enter; 3217 roots cold global CTX 0/428 progress, old-page/sort/hash/focus Cancel, determinate layout 24 combinations');
+   checks.push('seven headers; CTX heading help; trusted Enter starts cold global CCost 0/428 progress over 3217 roots; old-page/sort/hash/focus Cancel; determinate layout 24 combinations');
   await evaluate(`window.normalCatalogApi=current.catalog.api;window.catalogHeld=false;
     current.catalog.api=async(...args)=>{const data=await normalCatalogApi(...args);
       if(!args[1]?.action && args[1]?.sort==='ccost' && !catalogHeld){catalogHeld=true;
@@ -103,8 +121,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate(`location.hash='#/sessions?sort=ctx&direction=1'`);
   await until('current.catalog.operation && !current.catalog.loader.root.hidden');
   await fixture('fail'); await load();
-  await until('current.catalog.operation?.failed && !current.catalog.retry.hidden');
-  assert.equal(await evaluate('current.catalog.data.sort'),'activity');
+   await until('current.catalog.operation?.failed && !current.catalog.retry.hidden');
+   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
+   assert.equal(await evaluate('current.catalog.pan.hidden'),true,'failure cannot reveal the old order above its error');
+   assert.equal(await evaluate('current.catalog.task.textContent'),'Sorting sessions by CTX');
+   assert.match(await evaluate('current.catalog.loader.stage.textContent'),/source_unavailable/);
   await fixture('recover');
   await fixture('catalog-index');
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
@@ -142,7 +163,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const pageOne = await ids();
   await evaluate('current.catalog.next.focus();current.catalog.next.click()');
   await until('current.catalog.operation?.kind==="page" && !current.catalog.loader.root.hidden');
-  assert.match(await evaluate('current.catalog.loader.stage.textContent'),/0 of 50/);
+   assert.match(await evaluate('current.catalog.count.textContent'),/0 of 50/);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await evaluate('current.catalog.cancel.focus()');
@@ -160,7 +181,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('fail'); await load();
   await until('current.catalog.operation?.failed');
   assert.equal(await evaluate('current.catalog.retry.hidden'),false);
-  assert.equal(await evaluate('current.catalog.pan.hidden'),false,'failure retains usable prior rows');
+   assert.equal(await evaluate('current.catalog.pan.hidden'),true,'failure keeps prior rows recoverable behind the actionable error');
   await fixture('recover'); await fixture('catalog-index');
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
   await evaluate('current.catalog.retry.click()');

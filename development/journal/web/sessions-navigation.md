@@ -3,6 +3,136 @@
 2026-11-10. Scope: host scalar catalog plus Sessions browser navigation, not finite
 reports, session detail, pricing mathematics, Mini or OpenCode lifecycle.
 
+## Three-tier progress and apparent rollback FR000669
+
+2026-11-10. This section supersedes the eight-rebase/failure-layout behavior below;
+the earlier FR000664 evidence remains historical.
+
+### Reproduced installed-source cause
+
+A fresh hidden Chrome profile used the shipped browser/controller, authenticated
+owned Web host and installed V2 source, without source writes or model calls. With
+3,097 roots, the cold ascending CCost request advanced **0 → 88** qualified keys
+over **82 seconds** (96 attempts, no retries). The source still returned
+`pending`, `reason:null`; the controller generation stayed **3**, the lease stayed
+the same and the AbortSignal remained un-aborted. Hash history contained only the
+intentional Sessions entry and CCost click. Source generations advanced **1 → 9**.
+
+On the eighth generation rebase, the client alone called
+`failNavigation('concurrent_source_change')`. It unhid the retained Last activity
+table before its loader/error. The error's top was **1,848 CSS pixels** in a
+**482-pixel viewport**. No Cancel, route reset, lease expiry, request timeout,
+45-second stall or server terminal failure caused this reproduced transition.
+This establishes the mechanism on this installation, not a recovered historical
+trace of the owner's earlier click or proof that every generation was harmless.
+
+### Scoped correction and progress semantics
+
+- Sessions composes three fixed task/count/work nodes around the unchanged shared
+  loader, with inline percent, reserved text slots and coarse live-region phases.
+  The requested heading survives waits/revalidation/failure; page counts use the
+  real selected size. Only an applied qualified page reaches 100.
+- `session_summary` reports actual cache-check, summary-read and projection call
+  boundaries through the existing scalar lane. The allowlisted work snapshot
+  includes active-read proof/sequence and settled attempt counts, no IDs, titles,
+  transcripts or invented inner-source stages. Queued/retry-wait states come from
+  actual catalog/failure state; polling never creates acquisition.
+- A source generation is not lost scalar coverage. Existing source/revision/
+  provenance/dependency checks still invalidate changed keys individually. Counts
+  use that actual coverage; a decrease/scope transition explicitly revalidates,
+  retaining unchanged facts. Lower counts and metadata ticks do not renew the
+  forward-coverage watermark or exhaust an arbitrary eight-update allowance.
+- The 45-second idle-coverage guard remains when no owned summary read is active.
+  A slow active root retains the source's existing transport/cancellation bounds,
+  rather than acquiring an unrelated browser computation deadline. The local
+  15-second HTTP deadline, terminal source errors and three failed scalar attempts
+  still expose a persistent reason with Retry/Cancel.
+- Failure keeps the old DOM recoverable **behind** the operation, never above its
+  error. Repeated same-intent route notifications preserve pending/failed state;
+  only explicit Retry creates a new attempt. Explicit Cancel restores the applied
+  page/sort/hash/focus/scroll, and obsolete replies cannot revive expensive demand.
+  Valid scalar work remains shared and reusable.
+
+### Verification and limits
+
+The first fixed installed-source observation stayed explicitly pending for
+**95 seconds**, advanced **0 → 162 / 3,097**, and reused **86 scalar-cache hits**
+alongside 92 misses/178 attempts. The final answer still requested CCost with
+Activity retained but hidden, no failure, the same controller/lease/hash intent and
+a source-backed active summary-read stage. This is bounded continuation/reuse
+evidence, **not full cold-catalog completion or a comparative speed benchmark**.
+
+The stable final-source run then stayed **connected/attached for 135 seconds**,
+advanced **0 → 299 / 3,097**, and survived **nine source generations (1 → 9)**
+with one observed running row, unchanged controller **3**, unchanged lease/intent,
+no AbortSignal, no terminal reason and no UI rollback. It recorded **185 cache
+hits, 138 misses, 323 attempts, 322 settled**, maximum catalog HTTP **1.022s**.
+Thus it crossed the exact generation condition that terminated the baseline while
+remaining truthfully pending. Full real cold completion remains unmeasured.
+An intervening run is not counted as a 135-second healthy observation: version
+metadata changed, requests ended around 70s and the controller retired. The host
+state was not recorded then, so the exact stop cause is unconfirmed (the existing
+source-change guard is consistent with it). The probe now records host/attachment
+state and stops on that boundary; the stable repeat above retained both.
+
+Deterministic coverage includes 22 generation/count updates, source-backed slow
+read versus idle >45s, count advancement after >60s, explicit invalidation,
+failure/Retry/Cancel, 15-second interruption, stale replies and lease reopen that
+cannot apply Activity fallback. The 3,217-root catalog regression changes one
+running root through 12 revisions, retains 3,216 other keys, requalifies only that
+root and verifies its changed cost becomes the true global winner.
+
+Real hidden Chrome synthetic navigation passes **20 generation/count updates**
+with identical task/bar/count/work/Cancel geometry and retained node identities,
+plus **24 theme/width/zoom layouts**, all seven sorts in both directions, no warm
+loading flash, actual 17-row last-page counts, mouse/keyboard/touch controls and
+failure recovery. Warm route applications measured **116–204 ms** in the final
+layout run. This proves the synthetic DTO/browser boundary, not private cold-read
+throughput. The earlier Edge pipe launch timed out before browser evidence;
+installed Chrome was the successful non-disruptive alternative. No physical
+desktop/macOS or screen-reader audio claim is made.
+
+Evidence owned by this worker: `scratch:/sessions-before-chrome.json`,
+`scratch:/sessions-after.json`, `scratch:/navigation-final.json`,
+`scratch:/catalog-tests-2.log`, `scratch:/detail-tests-3.log` and
+`scratch:/validate.log`; final installed-source trace: `scratch:/sessions-stable.json`.
+The initial focused run used Quick's 25-second default
+and timed out; Full's existing 240-second bound passed the catalog group in 31.2s.
+No timeout/budget baseline was changed. An initial count assertion also failed on
+host-locale grouping; explicit English number grouping repaired that presentation
+contract. Failed/partial attempts are not passes.
+
+The first Full run completed **180/181 groups successfully** but failed the unchanged
+historical 872-root overlap case: its worker remained alive after its 30-second
+join, so temporary cache deletion also failed with WinError 32. The same unchanged
+group passed in isolation in **47.4s total** (two tests), without changing its
+30-second join, assertions, production code or runner limits. The first run overlapped
+hidden-browser and real-source probes; resource contention is consistent with this
+timing failure, not an independently proven root cause. A complete rerun without
+those probes **also failed the same group**: 180/181 passed, 188.4s total. This rules
+out attributing the failure solely to those probes. Both failed runs remain evidence.
+
+### Local suite verification exception
+
+**Decision Delegate authorized a narrow local verification exception for FR000669**:
+accept the 180 concurrent passing groups plus the unchanged scale group's isolated
+PASS. **Default Full FAILED twice; all 181 registered groups have passing executions
+across runs, not one successful default Full run.** The failed join occurs after
+four overlapping reads were observed and released; the isolated run preserved its
+30-second join, 872-root result checks, four-reader limit, modeled performance
+assertion and 240-second runner bound. The runner isolates each group in a process;
+serial Full would put this already-passing group first, adding little independent
+evidence by repeating the other 180 groups. No deadlines/assertions were changed.
+
+Residual uncertainty: concurrent-suite timing reliability is unresolved and
+contention is plausible, not established. The WinError 32 follows the still-active
+worker. The delegate explicitly required truthful failed-batch reporting, no broadened
+test-maintenance changes, and unchanged normal CI/protections and FR-specific
+acceptance. No Suggestion or On Hold was warranted for this minor caveat. This
+exception does **not** verify full private cold-catalog completion. Additional
+evidence: `scratch:/full-tests.log`, `scratch:/full-final.log`,
+`scratch:/scale-isolated.log`.
+
 ## Finding and change
 
 The old client intentionally ignored `pending_sort` when it had usable content.

@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000669: `sessions.js` composes stable task/count/work slots around the unchanged
+shared loader. `session_summary.py` reports actual bounded cache/read/projection
+boundaries through `session_catalog.py`, without source-content export or another
+lane. Coverage: extended catalog/VM/navigation fixtures and opt-in read-only
+`probe_web_sessions.cjs ... --catalog-real-churn`; ordinary synthetic navigation uses
+`--catalog-navigation-only`. [Cause and limits](../../journal/web/sessions-navigation.md#three-tier-progress-and-apparent-rollback-fr000669).
+
 FR000668: `assets/app.js::focusReport`, `app.css` and the named `index.html` main
 target separate automatic Models focus from intentional keyboard transfers. Existing
 route top/scroll and centered loader lifetimes are unchanged. Coverage: loading VM,

@@ -89,6 +89,21 @@ class FixtureRuntime:
 
 
 def main():
+    if sys.argv[1] == '--real-source':
+        from src.web.composition import live_acquisition
+        host = WebHost(ROOT, live_factory=live_acquisition)
+        host.start()
+        host.publish_ready()
+        print(json.dumps(dict(url=host.browser_url())), flush=True)
+        try:
+            for line in sys.stdin:
+                if json.loads(line)['command'] == 'stop':
+                    break
+                catalog = host.live.driver.coordinator
+                print(json.dumps(dict(ok=True, observed=catalog.catalog_observation is not None)), flush=True)
+        finally:
+            host.close()
+        return
     config = Path(sys.argv[1])
     (config / "config").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "config/default-config.jsonc", config / "config/default-config.jsonc")
@@ -113,6 +128,12 @@ def main():
                 if command == 'catalog-large':
                     source.snapshots = SyntheticMonthSource(3217, 1, month_start_ms=1000).snapshots
                     catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                if command == 'catalog-churn':
+                    snapshot = source.snapshots['root-0000']
+                    source.snapshots['root-0000'] = replace(snapshot,
+                        root=replace(snapshot.root, active=True, updated_at_ms=catalog.generation + 2000),
+                        source_revision=f'churn-{catalog.generation}')
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
                 with catalog.lock:
                     if command == 'catalog-clear':
                         catalog.valid.clear()
@@ -127,6 +148,12 @@ def main():
                         keys = sorted(catalog.roots, reverse=True)[50:100]
                         for key in keys:
                             catalog.valid.pop(key, None)
+                    if command == 'catalog-churn':
+                        for key in [key for key in catalog.roots if key not in catalog.valid and key != 'root-0000'][:20]:
+                            number = int(key.split('-')[1])
+                            catalog.rows[key] = SessionUsageRow(key, catalog.roots[key].title, f'Model {number:04}', False,
+                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
+                            catalog.valid[key] = catalog.revisions[key], catalog.clock()
             elif command in ("fail", "recover"):
                 host.live.unavailable = command == "fail"
             elif command == "end":
