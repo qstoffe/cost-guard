@@ -62,7 +62,18 @@ async function main() {
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
-      await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+       await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+       if (mode === '--loading-only' || mode === '--loading-zoom-only') {
+         const probe = require('../fixtures/session_loading_browser.cjs');
+         const details = await (mode === '--loading-zoom-only' ? probe.zoom : probe)({evaluate, until,
+           browser, targetId, origin:new URL(launch.url).origin,
+           command:(method, params) => command(method, params, sessionId)});
+         checks.push(...details.checks); layouts.push(...details.layouts);
+         assert.deepEqual(errors, []);
+         evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+           personal_profile:false,desktop_effects:false};
+         console.log(JSON.stringify({outcome:evidence.outcome,checks})); return;
+       }
        if (mode === '--live-only') {
         const details = await require('../fixtures/sessions_live_browser.cjs')({evaluate, until, fixture,
           command:(method, params) => command(method, params, sessionId)});

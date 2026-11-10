@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.11, 2026-11-10), the supported distribution.
+Use **current `main`** (v81.12, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.11 (2026-11-10):** Accounts and Full Watch restore permanent Capacity rows with **?** for unknown reference values. Every real quota level shares aligned progress/divider slots with same-row peers; native monthly windows avoid duplicate Monthly Capacity, and lone cards stay compact. Pricing math, native usage and Mini Watch are unchanged. [Web guide](docs/web-beta.md).
+**v81.12 (2026-11-10):** Session detail reuses the centered report loader with determinate progress from verified history chunks. Unknown source waits do not advance; complete applied rows finish at 100%. Background refresh retains usable history, focus and selection. [Web guide](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

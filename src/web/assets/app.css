@@ -280,7 +280,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
   .page-navigation > span { grid-column: 1 / -1; grid-row: 1; }
 }
 .session-detail > .warning { min-height: 1.5rem; }
-.session-detail progress { width: 9rem; height: .65rem; vertical-align: middle; }
+.session-detail:has(> .report-loading:not([hidden])) { display: flex; flex-direction: column; min-height: calc(100dvh - 12rem); }
+.session-detail > .report-loading { flex: 1; }
+.session-detail > .report-loading[hidden] { display: none; }
 .session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
 .session-export { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-block: .5rem; }
 .session-export > span { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }

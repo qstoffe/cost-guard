@@ -16,6 +16,16 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000662 reuses `ReportLoading.View` only as a visual controller for first detail
+loading; it does not join finite report admission. `session.js` measures validated,
+revision-pinned rich rows over 0–95%, then marks applied complete DOM at 100%.
+Unknown source waits/retries retain a verified watermark, with no clock advancement.
+One stable determinate bar and stage-only live region survive loading polls; retained
+history bypasses the initial loader. Begin/chunk bounds, unique row IDs and a post-yield
+generation guard reject inconsistent/abandoned assemblies. No API/acquisition owner,
+export, pricing, report loader behavior or five-second polling change.
+[Verification and limits](../../journal/web/session-loading.md).
+
 FR000658 preserves the host/job/report ownership below. `app.js` escapes a rejected
 Comparisons pin to one deliberate page1 rebase and updates demand. Only explicit
 page navigation uses three recoveries/45s without new stage or increasing work;
@@ -275,7 +285,7 @@ new scalar schema. `sessions.js` keeps row/cell/link/text-help identity, updates
 even under focus/selection, and defers only protected structural changes. Help uses the
 shared controller and current observed list, never raw prompt data or browser valuation.
 
-`assets/app.css` shares the Watch-derived compact header/cell/divider/rounded-shell contract across semantic Sessions, Models and both Token Mix tables, preserving their individual tracks/sorts. Sessions uses the shared explicit configured-zone numeric timestamp formatter, accessible pending cells and URL-backed pager buttons. Detail's adaptive preview keeps intrinsic numeric columns; a separate prepared first-request context token preserves raw values and richer CLI/Watch transitions. Indeterminate progress belongs only to initial/pinned acquisition, not complete-history background checks. No new acquisition owner, timer, source or pricing boundary is introduced.
+`assets/app.css` shares the Watch-derived compact header/cell/divider/rounded-shell contract across semantic Sessions, Models and both Token Mix tables, preserving their individual tracks/sorts. Sessions uses the shared explicit configured-zone numeric timestamp formatter, accessible pending cells and URL-backed pager buttons. Detail's adaptive preview keeps intrinsic numeric columns; a separate prepared first-request context token preserves raw values and richer CLI/Watch transitions. Detail first loading uses determinate shared progress; complete-history background checks never replace usable rows with a loader. No new acquisition owner, timer, source or pricing boundary is introduced.
 
 `application/session_detail.py` round-robins captures on the isolated detail lane. `begin` pins a capture and `chunk` reads rich 25-row slices from that same revision while acquisition may advance; full totals remain canonical. Compatibility 50-row `page`/`freeze` remain API-only. `reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. The browser batches new DOM suffixes, retains keyed rows/selection/focus/document anchors, closes obsolete leases and has one five-second polling timer through navigation races. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`; measured evidence and the scoped cold-index exception: [Sessions findings](../../journal/web/sessions-live.md).
 
