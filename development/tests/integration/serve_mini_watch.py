@@ -155,6 +155,12 @@ def main():
                         session_next=300_000 if historical else None))
                     print('{"ok":true}', flush=True)
                     continue
+                if command.startswith('handoff-'):
+                    from development.tests.fixtures.mini_context import handoff_frame
+                    phase = command.removeprefix('handoff-')
+                    published = publish(value=handoff_frame(frame, phase))
+                    print(json.dumps({'ok': True, 'published': published}), flush=True)
+                    continue
                 if command.startswith('loading-') and sys.argv[2:] == ['--report-loading']:
                     action = command.removeprefix('loading-')
                     if action == 'hold':

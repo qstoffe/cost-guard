@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000666: `reports/watch_capture.py::mini_context_handoffs` authorizes an exact
+active predecessor only before a new prompt's first supported context estimate.
+`watch/cards.py` gates its additive Live export on fresh verified capture; Mini
+retains only a matching previously displayed token and labels its provenance.
+Coverage: `fixtures/mini_context.py` / `.cjs`, `test_mini_watch.py` and real headless
+`probe_mini_fit.cjs ... context-only` / `probe_mini_context.cjs`. Context arithmetic,
+Full Watch and acquisition are unchanged. [Evidence](../../journal/web/mini-watch.md#same-session-ctx-handoff-fr000666).
+
 FR000665: `mini.js` keeps Total noninteractive, reuses the existing server-prepared
 `account_ccost` subtotal token after its no-priced-work guard, and shortens Session
 help without changing CCost help or canonical costs. Coverage: `test_mini_watch.py`,

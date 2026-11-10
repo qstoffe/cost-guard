@@ -62,6 +62,20 @@ anchor still takes precedence. Running tool loops update from their latest suppo
 root request without waiting for the prompt to finish. Before the first request,
 only a proven prior baseline permits a disclosed provisional text estimate.
 
+When another prompt starts in the same session, Mini can keep its previously
+displayed Ctx until the new prompt has a supported estimate. Help labels this as a
+**previous same-session estimate; current prompt pending refresh**. Δ Ctx still
+belongs only to the new prompt, never the previous one. Fresh evidence replaces
+the retained value immediately, even when the formatted number stays the same.
+The source must validate the exact continuing predecessor and raw context value;
+compaction, reset/move/model boundaries, incompatible known models, inactive
+history, unsupported current requests and execution uncertainty disable carry-forward.
+A removed row, changed host/source or newly opened Mini cannot borrow an old value.
+Historical-only context can seed a resumed handoff only when its displayed value
+also matches that exact prompt's source-validated continuing estimate. First-ever
+or genuinely unavailable context keeps its honest **N/A** presentation. Nothing is
+saved in browser storage, and Full Watch's context calculation is unchanged.
+
 Leaving current active history does not erase a retained, complete same-epoch
 prompt-local pair. A historical row can therefore show session **300k** with prompt
 **Δ +12k**, never +200k calculated from different times. **N/A** means the comparison

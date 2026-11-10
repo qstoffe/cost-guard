@@ -128,6 +128,7 @@ class WatchCard:
     session_cost: object = None
     session_cost_state: str = "loading"
     observed_at_ms: int | None = None
+    context_handoff: tuple[str, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

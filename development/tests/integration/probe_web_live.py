@@ -291,8 +291,17 @@ def main():
                 raise RuntimeError('probe_watch_cards_timeout')
         if args.context_deltas:
             from src.display import context_delta, context_tokens
-            counts = dict(known=0, unavailable=0, running_known=0, historical_known=0)
+            counts = dict(known=0, unavailable=0, running_known=0, historical_known=0, handoffs=0)
             for card in cards:
+                handoff = card.get('context_handoff')
+                if handoff is not None:
+                    counts['handoffs'] += 1
+                    assert card['state'] == 'observed' and card['focal_id']
+                    assert handoff['previous_id'] != card['focal_id']
+                    assert type(handoff['previous_tokens']) is int and handoff['previous_tokens'] >= 0
+                    current = next(row for row in card['rows'] if row['prompt']['event_id'] == card['focal_id'])
+                    assert current['prompt']['in_progress'] and not current['prompt']['execution_unverified']
+                    assert current['live_context']['watch_next_context_tokens'] is None
                 for row in card['rows']:
                     context = row['live_context']
                     delta = context['watch_delta_context_tokens']

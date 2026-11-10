@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.16 - 2026-11-10
+
+- Mini Watch keeps the last displayed same-session Ctx during a source-validated new-prompt handoff, then immediately applies fresh estimates. Help explicitly labels the previous estimate pending refresh; Δ Ctx stays prompt-specific.
+- Handoffs require the exact active predecessor and raw token value, with no intervening compaction/reset/model boundary or incompatible known model. Unavailable evidence, removed rows, changed sources/hosts and execution uncertainty cannot borrow stale values. Full Watch, context arithmetic, layout and acquisition remain unchanged.
+
 ## v81.15 - 2026-11-10
 
 - Mini Watch Total is plain selectable text with no value tooltip; its accessible heading help contains only the whole-session definition. Known priced subtotals omit the partial-pricing prefix here only, preserving Credits/USD, N/A, pending Loading and genuine zero without changing source values or completeness.
