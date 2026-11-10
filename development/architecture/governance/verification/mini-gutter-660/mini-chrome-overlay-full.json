@@ -1,0 +1,600 @@
+{
+  "pairs": [
+    {
+      "case": "gutter-pair-classic-light",
+      "before": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "stable",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      },
+      "after": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "auto",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      }
+    },
+    {
+      "case": "gutter-pair-classic-dark",
+      "before": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "stable",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      },
+      "after": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "auto",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      }
+    },
+    {
+      "case": "gutter-pair-web-light",
+      "before": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "stable",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      },
+      "after": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "auto",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      }
+    },
+    {
+      "case": "gutter-pair-web-dark",
+      "before": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "stable",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      },
+      "after": {
+        "body": {
+          "rect": {
+            "left": 0,
+            "right": 526,
+            "top": 0,
+            "bottom": 258.75,
+            "width": 526
+          },
+          "clientWidth": 526,
+          "offsetWidth": 526,
+          "scrollWidth": 526
+        },
+        "root": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 7.5,
+            "bottom": 251.25,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "prompts": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 199.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "table": {
+          "rect": {
+            "left": 7.5,
+            "right": 518.5,
+            "top": 43.5,
+            "bottom": 146.5,
+            "width": 511
+          },
+          "clientWidth": 511,
+          "offsetWidth": 511,
+          "scrollWidth": 511
+        },
+        "padding": [
+          7.5,
+          7.5
+        ],
+        "insets": [
+          7.5,
+          7.5
+        ],
+        "gutter": 0,
+        "scrollbarGutter": "auto",
+        "vertical": false,
+        "horizontal": false,
+        "documentGutter": 0,
+        "documentOverflow": false,
+        "documentVertical": false,
+        "headerTop": 43.5,
+        "regionTop": 43.5,
+        "accountsClear": true,
+        "columns": 5,
+        "outer": [
+          548,
+          312
+        ]
+      }
+    }
+  ]
+}
