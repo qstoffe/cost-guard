@@ -12,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from development.tools.ci_web_beta import hosted_only, notice, save
+from development.tools.ci_web_beta import common_suite, hosted_only, notice, save
 from development.tests.fixtures.web_reports import current_report, SyntheticSessionsRuntime
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
@@ -82,6 +82,21 @@ def check_pagers(browser, evidence):
         finally:
             context.close()
             host.close()
+
+
+def check_extended_browser(browser, evidence):
+    """Keep the deep layout/lifetime portfolio on the existing manual Full route."""
+    selected = common_suite()
+    evidence['extended_browser'] = dict(selection=selected, outcome='NOT RUN',
+        reason='Deep pager/layout/navigation/zoom/stall checks run only with manual Full')
+    if selected != 'full':
+        return
+    evidence['extended_browser'] = dict(selection=selected, outcome='FAIL',
+        reason='Deep browser checks did not complete')
+    check_pagers(browser, evidence)
+    from development.tests.integration.ci_paging_navigation import check_navigation_paging
+    check_navigation_paging(browser, evidence)
+    evidence['extended_browser'] = dict(selection=selected, outcome='PASS')
 
 
 def main():
@@ -329,9 +344,7 @@ def main():
                 assert owner.stopped.wait(10)
                 assert not errors
                 evidence["checks"].append("terminal SSE and clean owned server shutdown; no JavaScript errors")
-                check_pagers(browser, evidence)
-                from development.tests.integration.ci_paging_navigation import check_navigation_paging
-                check_navigation_paging(browser, evidence)
+                check_extended_browser(browser, evidence)
             finally:
                 browser.close()
         evidence["outcome"] = "PASS"

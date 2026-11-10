@@ -94,7 +94,7 @@ Start with [CODE_MAP.md](modules/CODE_MAP.md) for exact entrypoints, platform wr
 
 ## Validation, review and delivery flow
 
-Test Health 105 scoped verification update on `70462006910b0507c7f21412ef87330c3f675e2f` (2026-11-09); unchanged runtime claims keep their metadata above. Contract revision 6 and `development/repository.json` retain authority. No new gate, scheduler, paid inference or self-review. Failed required checks remain unfinished; uncertain merge needs reconciliation, not replay.
+Test Health 120 scoped verification update on `dacef69cd72f6a37343798902df474fc8afe4714` (2026-11-10): ordinary rendered smoke remains; the deep pager/layout/navigation/zoom/stall portfolio joins explicit manual Full only. Unchanged runtime claims keep their metadata above. Contract revision 6 and `development/repository.json` retain authority. No new gate, scheduler, paid inference or self-review. Failed required checks remain unfinished; uncertain merge needs reconciliation, not replay.
 
 ```mermaid
 flowchart TD
@@ -115,7 +115,7 @@ flowchart TD
     outcome -->|yes| pr["PR to actual default; inspect blockers"]
     skip --> pr
     pr --> ci{"Risk-triggered CI?"}
-    ci -->|yes| checks["Quick / validator / browser; native on platform paths; manual Full"]
+    ci -->|yes| checks["Quick / validator / browser smoke; native on platform paths; manual Full + deep browser"]
     ci -->|no| merge["Normal protected merge"]
     checks --> permitted{"Checks / protections permit merge?"}
     permitted -->|no| repair
@@ -134,6 +134,6 @@ flowchart TD
 | Development-only | Development/docs changes | No product gates/version work | `development/README.md`; installed maintenance method | Verify changed tooling/facts; no invented product PASS |
 | Product verification | Shipped-source changes | Applicable tests/security/release facts | `development/tools/run_tests.py`, `development/tools/validate_package.py`; `development/repository.json` | Repair required failures; focused development checks remain available |
 | Installation / inference | Relevant local evidence | Conditional read-only probes; inference default-denied | CODE_MAP probes; `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` reserved | Never stop shared OpenCode; disclose gaps |
-| Common CI | Cumulative product/test/tool/workflow PR/push paths; public only | Quick units + validator + Chromium; explicit manual dispatch selects Full | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py`; `development/tests/integration/ci_browser_web.py` | Exact selected report required; missing/failed/cancelled is not PASS; no workstation spoofing |
+| Common CI | Cumulative product/test/tool/workflow PR/push paths; public only | Quick + validator + rendered Chromium smoke; manual Full additionally runs deep pager/layout/navigation/zoom/stall checks | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py::common_suite`; `development/tests/integration/ci_browser_web.py` | Exact selected report required; omitted deep checks NOT RUN; failed/incomplete is not PASS; no workstation spoofing |
 | Native CI | Platform-sensitive entry/config/host/security/jobs/Live/launcher and native test/tool paths; manual dispatch | Conditional Windows/macOS ARM/Intel profile + native smoke, unchanged mechanisms | `.github/workflows/native-web.yml`; `development/tools/ci_web_beta.py`; `development/tests/integration/ci_native_web.py` | No private paid fallback; retain deadlines, phases and missing/failed truth; isolated assets/calculations do not trigger |
 | PR / merge / handoff | Authorized delivery, then confirmed default read-back | Normal checks/protections; native finish/cleanup attempt | Installed `/repo-backlog`; actual GitHub state | No force, replay, cleanup success gate or second task |

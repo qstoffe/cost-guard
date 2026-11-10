@@ -303,6 +303,51 @@ class CiEvidenceTests(unittest.TestCase):
                 success, _ = ci_web_beta.suite_summary('common')
             self.assertTrue(success)
 
+    def test_ordinary_browser_smoke_does_not_dispatch_deep_checks(self):
+        from development.tests.integration import ci_browser_web
+
+        for event in ('pull_request', 'push'):
+            with self.subTest(event=event), patch.dict('os.environ', {'GITHUB_EVENT_NAME': event}), \
+                    patch.object(ci_browser_web, 'check_pagers') as pagers, \
+                    patch('development.tests.integration.ci_paging_navigation.check_navigation_paging') as navigation:
+                evidence = {}
+
+                ci_browser_web.check_extended_browser(None, evidence)
+
+                pagers.assert_not_called()
+                navigation.assert_not_called()
+                self.assertEqual('quick', evidence['extended_browser']['selection'])
+                self.assertEqual('NOT RUN', evidence['extended_browser']['outcome'])
+
+    def test_manual_browser_full_runs_both_deep_checks_in_order(self):
+        from development.tests.integration import ci_browser_web
+        browser, evidence, calls = object(), {}, []
+        with patch.dict('os.environ', {'GITHUB_EVENT_NAME': 'workflow_dispatch'}), \
+                patch.object(ci_browser_web, 'check_pagers', side_effect=lambda *args: calls.append(('pagers', args))), \
+                patch('development.tests.integration.ci_paging_navigation.check_navigation_paging',
+                      side_effect=lambda *args: calls.append(('navigation', args))):
+
+            ci_browser_web.check_extended_browser(browser, evidence)
+
+        self.assertEqual([('pagers', (browser, evidence)), ('navigation', (browser, evidence))], calls)
+        self.assertEqual(dict(selection='full', outcome='PASS'), evidence['extended_browser'])
+
+    def test_manual_browser_deep_failure_propagates_without_a_pass(self):
+        from development.tests.integration import ci_browser_web
+
+        for failing in ('pagers', 'navigation'):
+            with self.subTest(failing=failing), patch.dict('os.environ', {'GITHUB_EVENT_NAME': 'workflow_dispatch'}), \
+                    patch.object(ci_browser_web, 'check_pagers',
+                                 side_effect=RuntimeError('synthetic') if failing == 'pagers' else None), \
+                    patch('development.tests.integration.ci_paging_navigation.check_navigation_paging',
+                          side_effect=RuntimeError('synthetic') if failing == 'navigation' else None):
+                evidence = {}
+
+                with self.assertRaisesRegex(RuntimeError, 'synthetic'):
+                    ci_browser_web.check_extended_browser(None, evidence)
+
+                self.assertEqual('FAIL', evidence['extended_browser']['outcome'])
+
     def test_workstation_cannot_enter_hosted_probe(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):
