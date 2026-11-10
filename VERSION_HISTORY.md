@@ -1,6 +1,11 @@
 # Cost Guard version history
 
-## v81.11 — 2026-11-10
+## v81.12 - 2026-11-10
+
+- Session detail replaces its yellow indeterminate loader with the shared centered report-loading visual. Verified history rows advance a documented 0–95% transfer phase with exact counts; applied complete rows finish at 100%, without decorative timers or a forced completion delay.
+- Unknown source waits retain the last verified percentage and stable progress DOM. Invalid/duplicate/oversized chunks cannot complete; abandoned navigation cannot apply late chunks. Background refresh retains usable history, focus and selection. Source acquisition, export and five-second polling are unchanged.
+
+## v81.11 - 2026-11-10
 
 - Accounts/Full Watch restore permanent period Capacity and applicable theoretical Monthly Capacity rows at every real quota level. Unknown reference values show `?`, independently verified native unlimited quotas stay Unlimited, and numeric estimates retain `~`/`~$` with concise help.
 - Shared semantic subgrid slots align primary, secondary and later progress tracks/dividers within each responsive row. Monthly peers get only necessary empty comparison slots; missing quota tails create no phantom labels/bars, and lone cards remain compact. Value/period updates retain progress and help targets. Decimal calculations, native percentages, acquisition and Mini Watch are unchanged.

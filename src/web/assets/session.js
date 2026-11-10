@@ -39,8 +39,11 @@ const SessionDetail = (() => {
       const back = el('a', 'Show all sessions'); back.href = '#/sessions';
       this.heading = el('h1');
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
-      this.status = el('p', 'Loading session…', 'warning'); this.status.setAttribute('role', 'status');
-      this.loading();
+      this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
+      this.loader = new ReportLoading.View();
+      this.loader.bar.setAttribute('aria-label', 'Session loading progress');
+      this.loader.status.setAttribute('aria-live', 'polite');
+      this.progress = {percent: 0, stage: 'Opening session…', stageLabel: 'Opening session…'};
       this.context = new WatchView.ContextLine();
       const scroll = el('div', undefined, 'sessions-table-pan');
       this.scroll = scroll;
@@ -50,8 +53,9 @@ const SessionDetail = (() => {
       columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, scroll);
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.loader.root, scroll);
       if (this.exporter) this.heading.after(this.exporter.root);
+      this.loading(); this.freshness();
     }
     attach(parent) {
       this.freshness();
@@ -62,6 +66,7 @@ const SessionDetail = (() => {
     detach() {
       this.exporter?.close();
       this.attached = false; this.generation++; clearTimeout(this.timer);
+      this.scroll.setAttribute('aria-busy', 'false'); this.loader.root.hidden = true;
       const token = this.token; this.token = null;
       if (token) this.api('/api/detail', {action: 'close', token}).catch(() => {});
     }
@@ -78,6 +83,7 @@ const SessionDetail = (() => {
       this.busy = true;
       const generation = this.generation;
       try {
+        this.loading(this.token ? 'Waiting for session source…' : 'Opening session…');
         if (!this.token) {
           const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
           if (!this.attached || generation !== this.generation) { this.api('/api/detail', {action: 'close', token: opened}).catch(() => {}); return; }
@@ -92,25 +98,41 @@ const SessionDetail = (() => {
         }
         this.sourceStatus(data);
         if (this.data?.revision === data.revision) { if (this.pendingRender) this.update(this.data); return; }
-        const rows = [...data.result.view.prompt_blocks[0].rows];
-        if (!this.data && data.state === 'observed') this.loading();
+        const initial = data.result.view?.prompt_blocks?.[0]?.rows;
+        if (!data.revision || data.offset !== 0 || !Number.isSafeInteger(data.total) || data.total < 0 ||
+            !Array.isArray(initial) || initial.length > data.total) throw new Error('inconsistent_history');
+        const rows = [...initial], ids = new Set();
+        const validate = next => {
+          for (const row of next) {
+            if (!row.id || ids.has(row.id)) throw new Error('inconsistent_history');
+            ids.add(row.id);
+          }
+        };
+        validate(rows);
+        this.historyProgress(rows.length, data.total);
         while (rows.length < data.total) {
           const chunk = await this.api('/api/detail', {action: 'chunk', token: this.token,
             offset: rows.length, revision: data.revision});
           if (!this.attached || generation !== this.generation) return;
-          const next = chunk.result?.view.prompt_blocks[0].rows;
-          if (chunk.revision !== data.revision || chunk.total !== data.total || chunk.offset !== rows.length || !next?.length) throw new Error('inconsistent_history');
+          const next = chunk.result?.view?.prompt_blocks?.[0]?.rows;
+          if (chunk.revision !== data.revision || chunk.total !== data.total || chunk.offset !== rows.length ||
+              !Array.isArray(next) || !next.length || rows.length + next.length > data.total) throw new Error('inconsistent_history');
+          validate(next);
           rows.push(...next);
+          this.historyProgress(rows.length, data.total);
           // Yield between bounded chunks without discarding a retained history.
           await new Promise(resolve => setTimeout(resolve, 0));
         }
+        if (!this.attached || generation !== this.generation) return;
         data.result.view.prompt_blocks[0].rows = rows;
+        this.loading('Preparing session…');
         this.update(data);
         this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
         this.status.textContent = this.data ? '' : `Session unavailable (${error.message}).`;
         this.status.hidden = !this.status.textContent;
+        this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
         if (error.message === 'detail_expired') this.token = null;
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally { this.busy = false; }
@@ -118,7 +140,7 @@ const SessionDetail = (() => {
     sourceStatus(data) {
       this.freshness();
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
-        if (!this.data) this.loading();
+        if (!this.data) this.loading('Waiting for session source…');
         else { this.status.textContent = ''; this.status.hidden = true; }
         return;
       }
@@ -126,16 +148,26 @@ const SessionDetail = (() => {
         ({history_retained: 'Session data unavailable.', source_unavailable: 'Source unavailable.',
           session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
       this.status.hidden = !this.status.textContent;
+      if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
     }
-    loading() {
-      const progress = el('progress'); progress.setAttribute('aria-label', 'Loading session');
-      this.status.replaceChildren(el('span', 'Loading session… '), progress);
-      this.status.hidden = false;
+    historyProgress(completed, total) {
+      // Overall phase budget: verified history transfer 0–95%; applied DOM 95–100%.
+      // Unknown source waits never advance it. Retries retain the last verified point.
+      this.loading(`Loading session history (${completed} of ${total})…`, total ? 95 * completed / total : 95,
+        'Loading session history');
+    }
+    loading(stage = this.progress.stage, percent = this.progress.percent, stageLabel = stage) {
+      if (this.data) return;
+      Object.assign(this.progress, {stage, stageLabel, percent: Math.max(this.progress.percent, Math.min(95, Math.floor(percent)))});
+      this.loader.update(this.progress);
+      this.loader.root.hidden = false; this.status.hidden = true;
+      // Busy history must not suppress the sibling loader's polite stage announcements.
+      this.scroll.setAttribute('aria-busy', 'true');
     }
     freshness() {
       if (!this.scroll) return;
       this.scroll.hidden = !this.data;
-      if (this.scroll.hidden) this.loading();
+      this.context.root.hidden = !this.data;
     }
     update(data) {
       ReportView.defaultUnit();
@@ -178,7 +210,8 @@ const SessionDetail = (() => {
         const delta = anchor.getBoundingClientRect().top - top;
         if (delta) window.scrollBy(0, delta);
       }
-      this.data = data;
+      if (!this.data) this.loader.update({percent: 100, stage: 'Session ready', stageLabel: 'Session ready'});
+      this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
       this.freshness();
     }
   }

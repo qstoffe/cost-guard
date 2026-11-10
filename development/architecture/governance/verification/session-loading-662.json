@@ -1,0 +1,43 @@
+{
+  "feature": "FR000662",
+  "date": "2026-11-10",
+  "outcome": "PASS",
+  "browserRuns": [
+    {"browser": "Chrome/156.0.8078.80", "mode": "--loading-only", "layouts": 48, "outcome": "PASS"},
+    {"browser": "Edg/157.0.4341.42", "mode": "--loading-only", "layouts": 48, "outcome": "PASS"},
+    {"browser": "Chrome/156.0.8078.80", "mode": "--loading-zoom-only", "layouts": 48, "outcome": "PASS"}
+  ],
+  "matrix": {
+    "themes": ["classic", "web"],
+    "schemes": ["light", "dark"],
+    "cssViewportWidths": [360, 768, 1366, 1920],
+    "zoom": [1, 1.25, 1.5],
+    "reducedMotion": true
+  },
+  "nativeZoomDiagnostic": {
+    "requestedWindowWidth": 1366,
+    "deviceMetricsOverride": false,
+    "cssZoom": 1,
+    "observations": [
+      {"browserZoom": 1, "innerWidth": 1344, "innerHeight": 902, "dpr": 1},
+      {"browserZoom": 1.25, "innerWidth": 1075, "innerHeight": 722, "dpr": 1.25},
+      {"browserZoom": 1.5, "innerWidth": 896, "innerHeight": 601, "dpr": 1.5}
+    ],
+    "matrixNormalization": "Device metrics only after independent native zoom proof; assert actual CSS viewport and DPR for each case, accommodating headless native-window minimum width."
+  },
+  "checks": [
+    "Actual authenticated Sessions link/open/begin/chunks yields 1001 canonical synthetic rows",
+    "Exact 220-row history at 50/100/150/200/220 rows yields 21/43/64/86/95 percent",
+    "Complete applied DOM alone reaches100; empty and one-chunk success",
+    "Explicit numeric max/value, shared sizing, centered stable bar, no animation/warning/overflow",
+    "Polite stage region outside busy history ancestor",
+    "Unknown waits stay0; retained refresh/outage preserves history/focus/selection/scroll",
+    "Abandoned A chunk cannot update B; hidden polling adds no requests",
+    "Renderer-local mouse hover, keyboard, emulated touch and real Back navigation"
+  ],
+  "decision": "Decision Delegate accepted acceptance6 adequacy after native zoom proof; no verification exception or correctness waiver.",
+  "limitations": ["No physical hardware input, OS scaling, spoken screen-reader or macOS proof", "Synthetic browser data; complementary read-only real-installation contracts documented in journal"],
+  "inferenceCalls": 0,
+  "personalBrowserProfile": false,
+  "externalDesktopEffects": false
+}

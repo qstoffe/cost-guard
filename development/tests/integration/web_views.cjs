@@ -267,7 +267,8 @@ async function main() {
     assert.equal(vm.runInContext('current.detail.status.textContent', context), '');
    assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
-  assert.equal(all(ids.result, 'progress').length, 0);
+  assert.equal(all(ids.result, 'progress').length, 1, 'detail retains its keyed progress node');
+  assert.equal(vm.runInContext('current.detail.loader.root.hidden', context), true, 'retained history never shows initial progress');
    offline = false;
    navigate('sessions/missing');
    await until(() => vm.runInContext('current.detail.status.textContent', context).includes('Session unavailable'));

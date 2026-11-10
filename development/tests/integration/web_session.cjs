@@ -12,6 +12,7 @@ class Node {
   insertBefore(child, before) { child.remove(); const index = before ? this.children.indexOf(before) : this.children.length; this.children.splice(index, 0, child); child.parent = this; }
   remove() { if (this.parent) { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; } }
   contains(child) { return child === this || this.children.some(c => c.contains(child)); }
+  querySelector(selector) { return this.children.find(child => selector[0] === '.' ? child.className === selector.slice(1) : child.tag === selector) || this.children.map(child => child.querySelector(selector)).find(Boolean); }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
   addEventListener(key, fn) { this.events[key] = fn; }
@@ -37,7 +38,7 @@ async function main() {
       return result;
     }});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const file of ['render', 'watch', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+  for (const file of ['render', 'watch', 'report-loading', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000')", context);
   const view = context.view; view.attached = true;
   new Node('main').append(view.root);
@@ -98,15 +99,21 @@ async function main() {
   const pendingView = context.pendingView;
   pendingView.attach(new Node('main')); await new Promise(setImmediate);
   assert.equal(pendingView.body.children.length, 0);
-   assert.match(pendingView.status.textContent, /Loading session/);
-   assert.equal(pendingView.status.children[1].tag, 'progress');
-   assert.equal(pendingView.status.children[1].attributes.value, undefined, 'initial progress is indeterminate');
-  assert.equal(pendingView.status.hidden, false);
+  const pendingBar = pendingView.loader.bar;
+  assert.equal(pendingBar.max, 100); assert.equal(pendingBar.value, 0);
+  assert.equal(pendingBar.attributes['aria-valuetext'], '0 percent');
+  assert.match(pendingView.loader.stage.textContent, /Waiting for session source/);
+  assert.equal(pendingView.status.hidden, true);
+  await pendingView.load(); pendingView.freshness();
+  assert.equal(pendingView.loader.bar, pendingBar, 'polls preserve the determinate DOM instance');
+  assert.equal(pendingBar.value, 0, 'unmeasured source waits cannot advance');
   assert.equal(delays.at(-1), 5000, 'pending capture retains the configured five-second polling cadence');
   assert.equal(timers.size, 1);
   pendingState = 'source_unavailable'; await pendingView.load();
    assert.match(pendingView.status.textContent, /Source unavailable/);
    assert.ok(!pendingView.status.children.some(node => node.tag === 'progress'));
+   assert.equal(pendingView.loader.root.hidden, true);
+   assert.equal(pendingView.scroll.attributes['aria-busy'], 'false');
   assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
   pending = false;
   const [pendingTimer, resume] = timers.entries().next().value;
@@ -114,6 +121,75 @@ async function main() {
   assert.equal(pendingView.body.children.length, 100);
   assert.equal(pendingView.status.hidden, true);
   pendingView.detach(); assert.equal(timers.size, 0);
+  // Exact counts, independent phase expectations and completion after applied rows.
+  for (const total of [0, 1, 220]) {
+    const full = JSON.parse(JSON.stringify(input.first)); full.total = total; full.revision = 'count-' + total;
+    full.result.view.prompt_blocks[0].rows = Array.from({length: total}, (_, index) => ({...input.first.result.view.prompt_blocks[0].rows[0], id:'row-' + index}));
+    const offsets = [];
+    context.countApi = async (_, request) => {
+      if (request.action === 'open') return {token:'counts'};
+      if (request.action === 'close') return {};
+      offsets.push(request.offset);
+      const response = JSON.parse(JSON.stringify(full)); response.offset = request.offset;
+      response.result.view.prompt_blocks[0].rows = response.result.view.prompt_blocks[0].rows.slice(request.offset, request.offset + 50);
+      return response;
+    };
+    vm.runInContext("globalThis.countView = new SessionDetail.View(countApi, 'counts')", context);
+    const counted = context.countView, updates = [], original = counted.loader.update.bind(counted.loader);
+    counted.loader.update = state => { updates.push({percent:state.percent,stage:state.stage,label:state.stageLabel,rows:counted.body.children.length}); original(state); };
+    counted.attached = true; await counted.load();
+    assert.equal(counted.body.children.length, total);
+    assert.equal(counted.loader.bar.value, 100);
+    assert.equal(updates.at(-1).rows, total, '100 follows the actual DOM application');
+    assert.ok(updates.every((state,index) => !index || state.percent >= updates[index-1].percent));
+    if (total === 220) {
+      assert.deepEqual(offsets, [0,50,100,150,200]);
+      assert.deepEqual(updates.filter(state => state.label === 'Loading session history').map(state => [state.percent,state.stage]),
+        [[21,'Loading session history (50 of 220)…'],[43,'Loading session history (100 of 220)…'],
+          [64,'Loading session history (150 of 220)…'],[86,'Loading session history (200 of 220)…'],[95,'Loading session history (220 of 220)…']]);
+    }
+    const body = counted.body.children[0], bar = counted.loader.bar;
+    counted.api = async () => ({state:'loading',pending:true,result:null}); await counted.load();
+    assert.equal(counted.body.children[0], body); assert.equal(counted.loader.root.hidden, true);
+    assert.equal(counted.loader.bar, bar); counted.detach();
+  }
+  for (const fault of ['revision', 'offset', 'total', 'duplicate', 'overshoot', 'empty', 'detail_expired']) {
+    let broken = true;
+    context.invalidApi = async (_, request) => {
+      if (request.action === 'open') return {token:'invalid'};
+      if (request.action === 'close') return {};
+      const response = JSON.parse(JSON.stringify(input.first)); response.offset = request.offset;
+      response.result.view.prompt_blocks[0].rows = response.result.view.prompt_blocks[0].rows.slice(request.offset, request.offset + 25);
+      if (broken && request.action === 'chunk') {
+        if (fault === 'detail_expired') throw new Error(fault);
+        if (fault === 'revision') response.revision = 'foreign';
+        if (fault === 'offset') response.offset = 0;
+        if (fault === 'total') response.total++;
+        if (fault === 'duplicate') response.result.view.prompt_blocks[0].rows[0].id = input.first.result.view.prompt_blocks[0].rows[0].id;
+        if (fault === 'overshoot') response.result.view.prompt_blocks[0].rows = Array(101).fill(response.result.view.prompt_blocks[0].rows[0]);
+        if (fault === 'empty') response.result.view.prompt_blocks[0].rows = [];
+      }
+      return response;
+    };
+    vm.runInContext("globalThis.invalid = new SessionDetail.View(invalidApi, 'invalid')", context);
+    const invalid = context.invalid; invalid.attached = true; await invalid.load();
+    assert.equal(invalid.data, null); assert.ok(invalid.loader.bar.value < 100);
+    assert.equal(invalid.scroll.attributes['aria-busy'], 'false'); assert.equal(invalid.loader.root.hidden, true);
+    assert.match(invalid.status.textContent, /inconsistent_history|detail_expired/);
+    broken = false; await invalid.load(); assert.equal(invalid.body.children.length, 100); invalid.detach();
+  }
+  for (const failure of ['instance_stopping', 'authentication_required', 'host_identity_changed']) {
+    context.stoppingApi = async (_, request) => {
+      if (request.action === 'open') return {token:'stopping'};
+      if (request.action === 'close') return {};
+      throw new Error(failure);
+    };
+    vm.runInContext("globalThis.stopping = new SessionDetail.View(stoppingApi, 'stopping')", context);
+    const stopping = context.stopping; stopping.attached = true; await stopping.load();
+    assert.equal(stopping.attached, false); assert.equal(stopping.token, null);
+    assert.equal(stopping.scroll.attributes['aria-busy'], 'false');
+    assert.equal(stopping.loader.root.hidden, true); assert.match(stopping.status.textContent, new RegExp(failure));
+  }
   let resolveOpen, opening = true;
   const raceCalls = [];
   context.raceApi = async (path, value) => {
