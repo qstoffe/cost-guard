@@ -199,6 +199,36 @@ class MatchedInputsTests(unittest.TestCase):
         service.selection = replace(service.selection, warnings=('partial source',))
         self.assertFalse(self.fresh(service).build(ReportRequest(ReportKind.COMPARISONS)).comparisons.complete)
 
+    def test_321_groups_warm_pinned_pages_previews_and_changed_revision_trace(self):
+        history = source(321)
+        service = self.service(history)
+        service.shared_web_evidence = True
+        first = service.build(ReportRequest(ReportKind.COMPARISONS)).comparisons
+        self.assertEqual(321, first.total)
+        seen = [tuple(run.session_id for run in group.runs) for group in first.groups]
+        for offset in (10, 0, 170, 320):
+            with self.subTest(offset=offset):
+                fresh = self.fresh(service)
+                fresh.shared_web_evidence = True
+                progress = []
+                fresh.progress = progress.append
+                before = history.load_count
+                page = fresh.build(ReportRequest(ReportKind.COMPARISONS,
+                    comparison_offset=offset, comparison_revision=first.revision)).comparisons
+                self.assertEqual((offset, 321, first.revision), (page.offset, page.total, page.revision))
+                self.assertEqual(1 if offset == 320 else 10, len(page.groups))
+                self.assertEqual(len(page.groups), history.load_count - before, 'only displayed previews hydrate on warm pages')
+                if offset == 0:
+                    self.assertEqual(seen, [tuple(run.session_id for run in group.runs) for group in page.groups])
+                previews = [p for p in progress if getattr(p, 'stage', None) == 'comparison-previews']
+                self.assertEqual(list(range(len(page.groups) + 1)), [p.completed for p in previews])
+                self.assertTrue(all(p.total == len(page.groups) for p in previews))
+        changed = history.snapshots['root-0000']
+        history.snapshots['root-0000'] = replace(changed, source_revision='synthetic-revision-change')
+        result = ReportApplication(lambda now, progress: self.fresh(service)).execute(
+            ReportRequest(ReportKind.COMPARISONS, comparison_offset=10, comparison_revision=first.revision)).to_json()
+        self.assertEqual({'code': 'session_catalog_changed', 'retryable': False}, result['error'])
+
     def test_corrupt_compact_cache_is_rebuilt_without_losing_the_group(self):
         service = self.service(source(1))
         request = ReportRequest(ReportKind.COMPARISONS)

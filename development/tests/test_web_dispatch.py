@@ -177,6 +177,21 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(3600, cadence(self.models, result(0, sample=100), True))
         self.assertEqual(3600, cadence(self.models, result(0, sample=100), False))
 
+    def test_rejected_comparison_pin_is_terminal_and_new_first_page_can_run(self):
+        pinned = ReportRequest(ReportKind.COMPARISONS, comparison_offset=10, comparison_revision='a' * 64)
+        self.dispatch.interest('one', 'comparisons', True, pinned)
+        key = self.dispatch.lookup(pinned)['id']
+        self.jobs.values[key].update(status='complete', result=dict(
+            error=dict(code='session_catalog_changed', retryable=False)))
+        self.dispatch.tick()
+        self.now += 10000
+        self.assertTrue(self.dispatch.lookup(pinned)['terminal'])
+        self.dispatch.tick()
+        self.assertEqual(1, sum(job['request'].comparison_revision == 'a' * 64 for job in self.jobs.values.values()))
+        first = ReportRequest(ReportKind.COMPARISONS)
+        self.dispatch.interest('one', 'comparisons', True, first)
+        self.assertIsNotNone(self.dispatch.lookup(first)['id'])
+
     def test_completed_human_work_returns_to_idle_priority_and_sleep_due_work_staggers(self):
         self.dispatch.interest('one', 'models', True, self.models)
         key = self.dispatch.lookup(self.models)['id']

@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000658: Comparisons pin qualification/stages remain in `reports/matched_inputs.py`;
+`application/service.py` marks rejected pinned requests terminal. Browser retry/rebase
+and new-route Models top policy are in `assets/app.js`; page-only recovery budgets in
+`report-loading.js`; shared pager rules in `app.css`, `comparisons.js`, `sessions.js`;
+benchmark initial key in `benchmark.js`. Coverage: matched-inputs/dispatch/loading/
+views/Models/Session tests, `web_report_lifetime.cjs`, hosted `ci_browser_web.py` and
+`ci_paging_navigation.py` using `serve_comparisons_paging.py`; read-only real
+`probe_comparisons.py --paging`. [Evidence](../../journal/web/paging-navigation.md).
+
 FR000657: Web-only `render.js::timestamp` owns explicit-zone browser instants;
 `settings.py` exports the configured timezone and application display prepares numeric
 `web_reset` alongside unchanged CLI reset tokens. `token-mix.js` quiets only its own

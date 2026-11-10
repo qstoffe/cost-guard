@@ -176,14 +176,19 @@ assert.equal(controls.children.length, 0);
 state.benchmark.data = benchmark; state.benchmark.draw();
 const benchmarkRows = () => state.benchmark.body.children;
 assert.deepEqual([...state.benchmark.headers].map(([th]) => th.textContent),
-  ['Publisher ↕', 'Model ↕', 'Effort ↕', 'Relative Task Cost ↓', 'Solved ↕']);
-assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['4.0x', '3.0x', '2.0x', '1.0x']);
+  ['Publisher ↕', 'Model ↕', 'Effort ↕', 'Relative Task Cost ↕', 'Solved ↓']);
+assert.equal(state.benchmark.headers[4][0].attrs['aria-sort'], 'descending');
+assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['2.0x', '3.0x', '1.0x', '4.0x'], 'equal solved scores use stable client/effort identity ties');
 assert.equal(benchmarkRows().length, 4);
 assert.ok(benchmarkRows().every(r => r.children[0].textContent === 'Anthropic' && r.children[1].textContent === 'Claude Opus 5.5'));
-assert.ok(helpText(benchmarkRows()[0].children[1].children[0]).startsWith('Coding Client: Other client'));
-assert.ok(helpText(benchmarkRows()[0].children[3].children[0]).includes('USD/Task: $4 per attempted task'));
+assert.ok(helpText(benchmarkRows()[0].children[1].children[0]).startsWith('Coding Client: Claude Code'));
+assert.ok(helpText(benchmarkRows()[0].children[3].children[0]).includes('USD/Task: $2 per attempted task'));
 assert.ok(benchmarkRows().every(r => !r.className?.includes('promotion')));
 const referenceOrder = names(), referenceSort = JSON.stringify(state.models);
+state.benchmark.data = {...benchmark, rows: benchmark.rows.map((r, i) => ({...r, solved: [9,100,null,80,0][i]}))};
+state.benchmark.draw();
+assert.deepEqual(benchmarkRows().map(r=>r.children[3].textContent), ['2.0x','4.0x','1.0x','3.0x'], 'raw numeric scores sort 100 > 80 > 9, unknown last');
+state.benchmark.data = benchmark;
 state.benchmark.headers[0][1].events.click();
 assert.deepEqual(benchmarkRows().map(r => helpText(r.children[1].children[0]).split('\n')[0]),
   ['Coding Client: Claude Code', 'Coding Client: Claude Code', 'Coding Client: Claude Code', 'Coding Client: Other client']);

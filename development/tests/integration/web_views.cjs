@@ -90,7 +90,7 @@ async function main() {
     return {resync() {}};
   }};
   const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
-    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener: (key, fn) => { handlers['document:' + key] = fn; }}, window: {addEventListener: (key, fn) => { handlers[key] = fn; },
+    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener: (key, fn) => { handlers['document:' + key] = fn; }}, window: {scrollTo(){},addEventListener: (key, fn) => { handlers[key] = fn; },
       matchMedia: () => ({addEventListener() {}, removeEventListener() {}})},
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
@@ -176,10 +176,11 @@ async function main() {
   ids.search.events.input({target: {value: ''}});
   assert.ok(all(ids.result, 'tbody')[0].children.length);
   const navigate = key => {
+    const previousSection = vm.runInContext('current.section', context);
     ids.content.focused = false;
     location.hash = '#/' + key; handlers.hashchange();
     assert.equal(ids['product-version'].textContent, 'v91.7', 'persistent server version across routes');
-    if (['models', 'overview', 'models/all'].includes(key)) assert.equal(ids.content.focused, true, 'Models route receives keyboard focus');
+    if (['models', 'overview', 'models/all'].includes(key)) assert.equal(ids.content.focused, previousSection !== 'models', 'only new Models route receives keyboard focus');
   };
   const retainedHeartbeat = () => {
     const children = [...ids.result.children], before = requests;

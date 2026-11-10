@@ -23,14 +23,15 @@ from .session_snapshots import make_snapshot
 class SyntheticSessionsRuntime:
     """Session acquisition only; deliberately no Watch/SSE source observation."""
 
-    def __init__(self, root, *, clock_ms=lambda: 4000):
+    def __init__(self, root, *, clock_ms=lambda: 4000, source=None):
         self.clock_ms = clock_ms
         database = CacheDatabase(root / "session-cache")
         database.initialize()
-        snapshot = make_snapshot()
-        root_session = replace(snapshot.root, title='<script>PRIVATE_TEXT</script>')
-        source = FakeSource(replace(snapshot, root=root_session,
-            sessions=tuple(root_session if s.session_id == root_session.session_id else s for s in snapshot.sessions)))
+        if source is None:
+            snapshot = make_snapshot()
+            root_session = replace(snapshot.root, title='<script>PRIVATE_TEXT</script>')
+            source = FakeSource(replace(snapshot, root=root_session,
+                sessions=tuple(root_session if s.session_id == root_session.session_id else s for s in snapshot.sessions)))
         self.service = ReportService(selection=SourceSelection(source, "v1", (), source.probe()),
             pricing_provider=FakePricingProvider(), account_provider=None,
             cache_repository=CacheRepository(database), config=dict(load_configuration(root).values, timezone="UTC"),

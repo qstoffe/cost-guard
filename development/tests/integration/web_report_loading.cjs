@@ -2,7 +2,8 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 let now = 0, next = 0;
 const timers = new Map();
-const context = vm.createContext({AbortController, Date, console,
+class Clock extends Date {static now(){return now;}}
+const context = vm.createContext({AbortController, Date:Clock, console,
   setTimeout(fn, ms) { const id = ++next; timers.set(id, {fn, ms}); return id; },
   clearTimeout(id) { timers.delete(id); }});
 vm.runInContext(fs.readFileSync('src/web/assets/report-loading.js', 'utf8') + '\nthis.Loading=ReportLoading;', context);
@@ -73,6 +74,15 @@ async function main() {
   for (const kind of ['offline','stopped','identity_changed','authorization_required'])
     assert.throws(()=>new L.Attempt(()=>now).check({kind,writable:false}),new RegExp(kind));
   assert.doesNotThrow(()=>new L.Attempt(()=>now).check({kind:'reconnecting',writable:false}));
+  const page = new L.Attempt({paging:true});
+  page.observe({stage:'comparison-previews',completed:0,total:10,sequence:1});
+  now+=44000; page.observe({stage:'comparison-previews',completed:1,total:10,sequence:2});
+  assert.doesNotThrow(()=>page.check({},true),'real progress renews only the no-progress budget');
+  now+=44000;page.observe({stage:'comparison-previews',completed:1,total:10,sequence:999});
+  assert.doesNotThrow(()=>page.check({},true));
+  now+=1001;assert.throws(()=>page.check({},true),/comparison_page_no_progress/);
+  for(let index=0;index<3;index++){const wait=page.backoff(new Error('busy'));runTimer();await wait;}
+  await assert.rejects(page.backoff(new Error('busy')),/comparison_page_retries/);
   const frames=new Map(),listeners=new Map();
   context.document={hidden:false,addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
   context.requestAnimationFrame=fn=>{const id=++next;frames.set(id,fn);return id;};

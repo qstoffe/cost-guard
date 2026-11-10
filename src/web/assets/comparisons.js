@@ -99,13 +99,27 @@ const ComparisonsView = (() => {
       this.root = e('div', undefined, 'comparisons-view'); this.status = e('p'); this.status.setAttribute('role', 'status');
       const disclaimer = ContextHelp.button('About observed runs', 'Exact first user input does not establish equal repository state, files, instructions, tools, environment or model service. These are individual observed runs, not controlled scientific benchmarks or answer-quality scores. Attachment references without recorded content are excluded.');
       this.content = e('div', undefined, 'comparison-groups'); this.groups = [];
-      this.pager = e('div', undefined, 'pager'); this.previous = e('button', 'Previous'); this.next = e('button', 'Next'); this.label = e('span');
-      this.previous.addEventListener('click', () => select(this.page.offset - 10, this.page.revision));
-      this.next.addEventListener('click', () => select(this.page.offset + 10, this.page.revision));
-      this.pager.append(this.previous, this.label, this.next); this.root.append(disclaimer, this.status, this.content, this.pager);
+      this.feedback = e('p', '', 'comparison-feedback'); this.feedback.setAttribute('role', 'status');
+      this.pager = e('div', undefined, 'pager page-navigation'); this.previous = e('button', 'Previous'); this.next = e('button', 'Next'); this.label = e('span');
+      this.label.setAttribute('aria-live', 'polite');
+      for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
+        if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
+      });
+      for (const [button, step] of [[this.previous, -10], [this.next, 10]]) {
+        button.type = 'button';
+        button.addEventListener('click', () => {
+          if (button.disabled || !this.page) return;
+          this.actionFocus = document.activeElement === button ? button : null;
+          select(this.page.offset + step, this.page.revision);
+        });
+      }
+      this.pager.append(this.previous, this.label, this.next); this.root.append(disclaimer, this.status, this.feedback, this.content, this.pager);
     }
     update(state) {
       const page = state.result?.view.comparisons;
+      const feedback = state.orderReset ? 'Comparison history changed; restarting at page 1. ' : '';
+      ReportView.text(this.feedback, feedback + (state.pageNavigation ? state.loading ? state.stage : state.failed ? state.message : '' : ''));
+      this.feedback.hidden = !this.feedback.textContent;
       if (!page || state.withheld) {
         this.pager.hidden = true;
         ReportView.text(this.status, state.withheld ? 'Retained report is stale and withheld.' : '');
@@ -128,9 +142,15 @@ const ComparisonsView = (() => {
         if (focused?.isConnected && document.activeElement !== focused && this.root.contains(focused)) focused.focus({preventScroll: true});
       }
       this.page = page; this.pager.hidden = !page.total;
-      this.previous.disabled = page.offset === 0; this.next.disabled = page.offset + 10 >= page.total;
+      this.previous.disabled = state.loading || page.offset === 0; this.next.disabled = state.loading || page.offset + 10 >= page.total;
       for (const button of [this.previous, this.next]) button.setAttribute('aria-disabled', String(state.loading || button.disabled));
-      ReportView.text(this.label, `Page ${page.offset / 10 + 1} of ${Math.max(1, Math.ceil(page.total / 10))} · ${page.total} groups`);
+      ReportView.text(this.label, `Showing ${page.total ? page.offset + 1 : 0}–${Math.min(page.offset + 10, page.total)} of ${page.total.toLocaleString()} groups · Page ${page.offset / 10 + 1} of ${Math.max(1, Math.ceil(page.total / 10))}`);
+      if (!state.loading && this.actionFocus) {
+        if (document.activeElement === document.body || document.activeElement === this.actionFocus) {
+          (this.actionFocus.disabled ? this.actionFocus === this.next ? this.previous : this.next : this.actionFocus).focus({preventScroll: true});
+        }
+        this.actionFocus = null;
+      }
       ContextHelp.refresh(this.root);
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }

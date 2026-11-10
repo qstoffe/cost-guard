@@ -104,7 +104,7 @@ def build_comparisons(service, request):
             writes = []
         service.progress(WorkProgress('Updating changed first inputs', 'history', start + len(chunk), len(pending), stage='history-load'))
         work.checkpoint(len(writes), processed=len(chunk), remaining=start + len(chunk) < len(pending))
-    service.progress(WorkProgress('Preparing matched groups', 'projection', stage='history-projection'))
+    service.progress(WorkProgress('Verifying history revisions', 'projection', stage='comparison-verify'))
     unavailable.update(work.verify())
     if unavailable and len(unavailable) == len(roots):
         raise HistoryCheckpointError('history_revision_churn')
@@ -112,6 +112,7 @@ def build_comparisons(service, request):
     for sid in unavailable:
         service._acquisition.revisions.pop(sid, None)
     complete = complete and not unavailable
+    service.progress(WorkProgress('Preparing matched groups', 'projection', stage='comparison-groups'))
     groups = grouped(runs)
     signature = (ALGORITHM, session_catalog_revision(service.selection.selected, sessions),
                  sorted(revisions.items()), reference.analysis_signature)
@@ -125,6 +126,7 @@ def build_comparisons(service, request):
     visible = groups[offset:offset + 10]
     by_id = {root.session_id: root for root in roots}
     missing = [by_id[group[0].session_id] for group in visible if group[0].session_id not in previews]
+    service.progress(WorkProgress('Reading page previews', 'projection', 0, len(visible), stage='comparison-previews'))
     snapshots = load_snapshots(service, missing) if missing else {}
     for group in visible:
         label = previews.get(group[0].session_id)
@@ -136,6 +138,7 @@ def build_comparisons(service, request):
                 raise SessionCatalogChangedError('Comparison input revision changed')
             label = preview(first_input(snapshot))
         page.append(MatchGroup(group, label, facts(group)))
+        service.progress(WorkProgress('Reading page previews', 'projection', len(page), len(visible), stage='comparison-previews'))
     after = tuple(service.source.list_sessions())
     complete = complete and session_catalog_revision(service.selection.selected, sessions) == session_catalog_revision(service.selection.selected, after)
     if work.verify(after) - unavailable:

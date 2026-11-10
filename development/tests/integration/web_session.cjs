@@ -20,7 +20,7 @@ class Node {
 async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
-  const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null};
+  const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null, addEventListener(){}};
    const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
      history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },

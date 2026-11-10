@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.8 — 2026-11-10
+
+- Comparisons retires a changed pinned revision before generic retry, deliberately restarts once at page 1 and retains the last successful page through navigation failures. Explicit paging has three recovery attempts and a 45-second no-forward-progress budget, not a deadline on progressing work or unrelated reports.
+- Sessions and Comparisons share a responsive centered range-summary pager. Comparisons shows measured preview stages and explicit waiting/recovery feedback instead of a frozen percentage; pending actions are disabled and recover focus without scrolling.
+- New-route Models navigation explicitly starts at the top without resetting same-route scrolling. The coding benchmark defaults to numeric Solved descending; manual sorts, reference pricing and benchmark math remain unchanged.
+
 ## v81.7 — 2026-11-10
 
 - Models ends with an unboxed More Coding Benchmarks section linking to the official Artificial Analysis Coding Agent Index. No imported data, API, benchmark blending or invented chart anchor.
