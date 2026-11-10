@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ordinaryCount": 120,
   "completed": {
-    "architecture": 90,
+    "architecture": 120,
     "test-health": 105,
     "performance": 80,
     "session-learning": 0

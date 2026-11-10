@@ -16,6 +16,38 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+### Architecture 120 source map
+
+Static trace checked on `3f994921849ae2cf6f87245c6f3a010353fcbd08`, 2026-11-10;
+not a rerun of the historical platform/browser results below. Runtime ownership
+is unchanged. [Whole-repository coverage and alternatives](../governance/verification/architecture-120-20261110.md).
+
+```mermaid
+flowchart TD
+    tab["Sessions View: intent / generation / Cancel / Retry"] -->|authenticated demand / page lookup| http["HTTP: validate, no history acquisition"]
+    http -->|lease / detached page| catalog["SessionCatalog: membership, scalar validity, pinned order"]
+    live["One Live owner: authoritative observation"] -->|catalog / revisions / prompt proof| catalog
+    catalog -->|needed keys; one isolated lane| worker["WebWatchCoordinator catalog worker"]
+    worker --> summary["Reports session_summary: canonical analysis / disposable cache"]
+    summary -->|revision / provenance qualified scalar or typed failure| catalog
+    catalog -->|exact global keys ready / pending / retained / failed| http
+    http -->|observed counts and work stage, not estimated progress| tab
+    tab -->|Cancel: retire request, restore prior view| previous["Previous navigation; shared index survives"]
+    tab -->|expired epoch: one reopen| latest["Latest first page; preserve sort intent"]
+    live -->|allowlisted generation only after healthy frame| publication["Immutable Live publication / instance-bound SSE"]
+    publication --> connection["LiveConnection: sequence gaps / reconnect / identity stop"]
+    connection --> notice["App: V1 notice only while connected and verified"]
+```
+
+Public contracts: `application/session_catalog.py::page` supplies exact server order,
+coverage and current/retained/unavailable states; `assets/sessions.js` never computes
+canonical sort keys. `application/live.py::_publish_frame` and `assets/live.js`
+qualify source generation; neither the notice nor HTTP readiness selects a source.
+Dependencies stay HTTP → application/Watch → reports → source/analysis/cache,
+with concrete wiring confined to Web composition. Representative test source:
+`test_web_session_catalog.py`, `test_web_live.py`, `test_v1_web_watch.py` and
+`test_web_runtime.py`. These were read, not executed for this documentation-only assessment.
+
 FR000670: `application/live.py` publishes only `v1|v2|unknown` from the active
 coordinator's established selection, qualified by a healthy observed frame.
 `assets/live.js` passes it through existing instance/sequence/reconnect health;
@@ -208,7 +240,7 @@ styles and every acquisition/refresh/filter contract above unchanged. The focuse
 `probe_models_toolbar.cjs` real-DOM matrix is called by `probe_models_refresh.cjs`;
 the pricing journal separates rendered layout evidence from real-source checks.
 
-`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders seven-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 FR000667 extends the catalog below from six to **seven columns/comparators**, adding
 CTX after Duration. `reports/session_summary.py::context_fields` reuses analysis

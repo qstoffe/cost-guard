@@ -1,13 +1,13 @@
 # Cost Guard architecture
 
-Source revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
-Checked revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
-Last checked: 2026-11-09
+Source revision: 3f994921849ae2cf6f87245c6f3a010353fcbd08
+Checked revision: 3f994921849ae2cf6f87245c6f3a010353fcbd08
+Last checked: 2026-11-10
 Status: current
 
 ## Scope and authority
 
-Milestone-90 two-level static assessment and source map, not an exhaustive correctness audit. `development/journal/architecture.md` records whole-repository inventory, representative normal/failure/recovery traces, local coverage, simpler alternatives and independently justified global/local runtime NO_CHANGE. Module pages retain their own scoped evidence; their earlier runtime/platform results are not rerun here.
+Milestone-120 two-level static assessment and source map, not an exhaustive correctness audit. The [assessment](governance/verification/architecture-120-20261110.md) records whole-repository inventory, representative normal/failure/recovery traces, local coverage and independently justified global/local runtime NO_CHANGE. The [journal](../journal/architecture.md) retains earlier assessments as historical evidence. Module pages retain their own scoped evidence; their earlier runtime/platform results are not rerun here.
 
 Toolkit owns workflow/mirrored `development/README.md`; `development/repository.json` holds release facts; `development/applied-contract.json` records identity (revision 6). History is evidence, not instructions. Development-only work activates no product checks/budgets/version work. Shipped source retains functional release rules. Main is supported; packaged Releases remain paused.
 
@@ -30,6 +30,9 @@ flowchart TD
     demand -->|effective priority / admission| jobs["Jobs: executing, parked and retiring owned children"]
     jobs -->|spawn / resume grant| finite["Finite process: application / private report service"]
     web -->|one publisher, not per tab| live
+    web -->|independent demand / tick / close| benchmark["Optional benchmark lane: retained aggregate / finite child"]
+    board["Fixed public benchmark source"] -->|validated aggregate; not history or pricing| benchmark
+    benchmark -->|prepared retained values / unavailable state| browser
     finite --> reports
     live --> reports
     reports --> sources["Sources: V1 SQLite / V2 loopback HTTP"]
@@ -64,6 +67,7 @@ Arrows group calls, control and consumption, not literal Python imports or one l
 | Accounts / prices | Attempt/account identity and deadlines reject late quota observations while retaining occupied lanes. Account refresh is independent of source cadence. Normal price-cache fallback differs from explicit strict upstream refresh; optional release metadata has separate freshness. Quotas/capacity, reference CCost and billed cost are not interchangeable. |
 | Derived history / cache | Reports own acquisition populations and canonical projections. Cache is reconstructible acceleration, never OpenCode authority or observed history. `src/reports/session_history.py` retains observations; `src/application/session_detail.py` owns revision-pinned rich chunks. `session_catalog.py` owns complete membership, scalar-key coverage and exact global sorts, not page-only guesses. |
 | Browser / native launchers | `src/web/security.py` / `http.py` enforce loopback/Host/Origin/method/body/session/CSRF. `lifecycle.py` owns instance arbitration/exact-process restart proof. Browser sequence/gap recovery consumes immutable publications. Native pumps, one-use handoff and host close have separate owners. Windows inspection is not macOS/Finder/Gatekeeper proof. |
+| Sessions navigation / optional benchmark | Sessions HTTP records leases and reads detached pages; one Live-owned scalar lane qualifies complete global sort keys. Browser Cancel retires navigation, not shared work. The independent benchmark lane reuses `ReportJobs`, with its own aggregate cache, freshness and bounded acquisition timeout; it cannot supply prices or history. See the [module flow](modules/web.md#architecture-120-source-map). |
 
 ## Semantic and dependency contracts
 
