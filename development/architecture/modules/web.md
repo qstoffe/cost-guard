@@ -16,6 +16,14 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000668 keeps route/scroll and report lifetimes unchanged. `app.js::focusReport`
+distinguishes an intentional keyboard transfer from initial/already-focused scripted
+landmark focus. `app.css` suppresses only the main landmark's page-width outline,
+using an inset leading-edge keyboard cue and a forced-colors system-outline fallback.
+`index.html` names the existing main target Report content. The shared control rings
+and actual `ReportLoading.View` remain unchanged. Startup/focus, loading, pricing and
+hosted routing probes cover the distinction. [Evidence](../../journal/web/models-focus.md).
+
 FR000666 adds source-owned `context_handoffs` to canonical card capture, not an
 estimator or acquisition lane. Active-history proof, exact predecessor identity/raw
 tokens, absent current root usage and no compaction/context/model conflict qualify

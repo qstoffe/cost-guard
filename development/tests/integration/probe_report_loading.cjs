@@ -2,6 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {spawn}=require('node:child_process'),readline=require('node:readline');
 const [browser,outputPath]=process.argv.slice(2),output=path.resolve(outputPath);
+const modelsOnly=process.argv.includes('--models-only');
 async function main(){
   await fs.mkdir(output,{recursive:true});await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(output,'loading-browser-'));
@@ -43,7 +44,7 @@ async function main(){
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     await command('Page.navigate',{url:launch.url});
     await until(`typeof current!=='undefined' && current?.active && document.querySelector('.report-loading')`);
-    for(const section of ['models','token-mix','ai-stats','comparisons']){
+    for(const section of modelsOnly?['models']:['models','token-mix','ai-stats','comparisons']){
       await fixture('hold');
       if(section!=='models')await evaluate(`location.hash='#/${section}'`);
        await until(`current?.section==='${section}' && current.active && document.querySelector('.report-loading')`);
@@ -115,6 +116,7 @@ async function main(){
        await fixture('ready');await until(`!current.loading && !current.failed`);
        facts.push(section+': source wait and genuine failure retain Retry without Cancel');
     }
+    if(!modelsOnly){
     // HTTP 429 enters bounded waiting without allocating a duplicate job.
     await fixture('hold');await fixture('busy');
     await evaluate(`acquire(current);true`);await until(`current.stage==='Waiting for report slot…' && !current.active`);
@@ -125,6 +127,7 @@ async function main(){
      await fixture('complete');await until(`!__waiting.loading && !__waiting.failed`);
      await evaluate(`history.back()`);await until(`current.section==='comparisons'`);
      facts.push('temporary 429 pending intent survives navigation and admits once with bounded backoff');
+    }
     assert.deepEqual(errors,[]);outcome='PASS';console.log(JSON.stringify({outcome,checks:facts.length,layouts:layouts.length}));
    }catch(error){failure=error.stack;console.error(failure);throw error;}finally{
      clearTimeout(deadline);await fs.writeFile(path.join(output,'browser.json'),JSON.stringify({outcome,failure,facts,layouts,errors,

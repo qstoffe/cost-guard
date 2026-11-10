@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.17, 2026-11-10), the supported distribution.
+Use **current `main`** (v81.18, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.17 (2026-11-10):** Sessions adds compact **CTX** with accessible context-size help and full-catalog numeric sorting. It reuses Watch's current session-level next-input estimate and the existing bounded scalar index, progress, Cancel/Retry and stable 50-row paging. Source changes invalidate old context rather than presenting a historical prompt's size as current. [Sessions guide](docs/web-beta.md).
+**v81.18 (2026-11-10):** Models no longer paints a stray blue page-width focus line on first startup. Automatic page focus and new-route top scrolling remain intact; intentional keyboard navigation and Skip to report use a distinct inset focus cue. The centered loading bar, control focus rings and report acquisition are unchanged. [Web guide](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

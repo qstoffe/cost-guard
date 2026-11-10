@@ -20,6 +20,12 @@ other genuine terminal failures still show actionable feedback and **Retry Model
 Healthy finite work has no elapsed-computation cutoff; pending work retains bounded
 resources and automatic recovery rather than requiring Retry just because it is old.
 
+Models starts at the top on a new route, without drawing a page-width focus outline
+that could resemble a leftover loading bar. Same-route filters, sorting and pricing
+refresh preserve their focus/scroll behavior. Keyboard route entry and **Skip to report**
+focus the named **Report content** landmark with an inset leading-edge cue (an inset
+system outline in forced-colors mode); interactive controls keep their own focus rings.
+
 ## Contextual help
 
 Heading labels and useful metric labels/values explain metrics in Web and Mini

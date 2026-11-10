@@ -30,8 +30,10 @@ class LoadingJobs:
             result = browser_result(request)
         else:
             report = model_report(include_model_catalog=True) if request.kind is ReportKind.NORMAL else token_mix_report()
-            result = dict(view=project(report).to_json(), source=dict(status='acquired'), error=None,
-                observed_at_ms=int(time.time() * 1000))
+            observed = int(time.time() * 1000)
+            result = dict(view=project(report).to_json(),
+                source=dict(status='acquired', observed_at_ms=observed), error=None,
+                observed_at_ms=observed)
         key = uuid4().hex
         self.jobs[key] = dict(request=request, status='running', result=result)
         return key

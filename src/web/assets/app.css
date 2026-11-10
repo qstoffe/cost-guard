@@ -163,6 +163,13 @@ button, input, select, a { transition: background-color 140ms ease, border-color
 }
 button:not(:disabled):active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+/* A full-width landmark outline resembles a loading track below navigation.
+   Intentional keyboard transfers retain a visible inset leading-edge cue. */
+#content:focus-visible { outline: none; }
+#content.keyboard-focus:focus-visible { box-shadow: inset 4px 0 0 var(--accent); }
+@media (forced-colors: active) {
+  #content.keyboard-focus:focus-visible { outline: 3px solid Highlight; outline-offset: -3px; }
+}
 .skip { position: absolute; left: -10000px; }
 .skip:focus { left: 1rem; top: 1rem; background: var(--panel); z-index: 5; }
 .toolbar, .pager { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
