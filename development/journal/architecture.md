@@ -1,9 +1,33 @@
-# Architecture assessment — milestone 90
+# Architecture assessments
+
+## Current assessment — milestone 120
+
+Source and checked revision: `3f994921849ae2cf6f87245c6f3a010353fcbd08`, 2026-11-10.
+
+**Completed two-level static assessment: global runtime NO_CHANGE and independently
+justified local runtime NO_CHANGE.** The [assessment report](../architecture/governance/verification/architecture-120-20261110.md)
+preserves current inventory, source/test samples, normal/failure/recovery traces,
+simpler alternatives and limits. It does not convert source reading into runtime PASS.
+
+The new benchmark lane reuses finite-process ownership but has independent aggregate
+freshness; Sessions progress/cancellation does not own canonical acquisition; the V1
+notice consumes qualified Live proof, not a second selector. Keep these distinct
+lifetimes rather than adding a universal scheduler or browser-side accounting.
+Large routines and retained feature narratives remain navigation risks, not automatic
+proof of a defective state machine. Corrected the stale six-column Sessions summary,
+mapped actual module recovery branches, and refreshed the overview without product churn.
+
+Only Architecture **90 → 120** advances on merge. Ordinary count **120**, last ordinary
+identity `fr/000670`, other method milestones and the existing Session Learning deferral
+remain unchanged. Development-only: no product tests/validator, live/native probes,
+version, release or ZIP; no assertion, permission or gate was waived.
+
+## Prior assessment — milestone 90 (historical)
 
 Source revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
 Checked revision: 54f613db6777eb4fc7fc3c5c193ad774df6c3ece
 Last checked: 2026-11-09
-Status: current
+Status: historical; superseded by the milestone-120 assessment above
 
 ## Outcome and scope
 
