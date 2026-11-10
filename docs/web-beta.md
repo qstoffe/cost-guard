@@ -26,6 +26,51 @@ refresh preserve their focus/scroll behavior. Keyboard route entry and **Skip to
 focus the named **Report content** landmark with an inset leading-edge cue (an inset
 system outline in forced-colors mode); interactive controls keep their own focus rings.
 
+## Selected-source compatibility
+
+**OpenCode Desktop's product version is not Cost Guard's selected data-source
+generation.** `openCode.source` requests `auto`, `v1` or `v2`; the established
+selection is what matters. Auto prefers healthy V2, otherwise healthy V1. Histories
+are never merged. A V1 database existing beside selected V2 does not make Web V1.
+
+When the active Live owner verifies **V1**, one compact sticky notice appears below
+navigation on every main Web page (not inside Mini Watch). Web supports V1; the
+notice explains confirmed limitations, not a diagnosis of a Watch failure. It is
+withheld during startup, source failures, offline/reconnect and changed-instance
+states until authoritative evidence returns. It never changes your source setting,
+launches OpenCode or waits for a finite report to finish. There is no permanent
+dismiss preference or migration action.
+
+| Feature | Selected V1 | Selected compatible V2 |
+| --- | --- | --- |
+| CLI reports and Watch | Supported; Watch polls read-only SQLite | Supported; native change hints plus authoritative reads |
+| Web Models and finite reports (Token Mix, AI Stats, Comparisons) | Supported for available normalized history/pricing | Supported for available normalized history/pricing |
+| Full Watch and Mini Watch | Supported with polling and asynchronous card hydration | Supported with buffered native hints and asynchronous card hydration |
+| Sessions catalog/detail, child and compaction history | Supported for available normalized records | Supported; richer native context/status telemetry where supplied |
+| Accounts and quotas | Provider-dependent, separate from source polling; V1 alone cannot prove provider access | Likewise provider-dependent; not guaranteed by selecting V2 |
+| Sessions → Export Sanitized JSON | Unavailable; use ordinary native CLI export if your installed CLI supports it | Requires the compatible native sanitized-export API |
+| Specific third-party plugin combinations / the reported private installation | Not verified; plugin count is not evidence of a cause | Not verified by this V1 investigation |
+
+Synthetic SQLite comparisons exercise minimal and plugin-shaped repeated/custom
+tools, skills represented as tool parts, pending/running states, errors/cancellation,
+child sessions and compaction. CLI and genuine Web acquisition agree on canonical
+prompt/context/cost/activity and terminal values in these cases. An intentional
+presentation difference remains before any usage invocation exists: CLI reports
+zero duration; Web cards show the observed running prompt's age. V1 has no V2 event
+hints or equivalent native skill-registry/status telemetry; unknown custom part
+types cannot invent usage or plugin semantics.
+
+If CLI Watch works but Web looks different, first compare their **actually selected
+sources**, configuration roots and observation times, not Desktop's version. Allow
+for polling cadence (at least five seconds for active sessions, longer when idle),
+separate acquisition owners/caches and Web's background card/history loading. Check
+the existing connection/source notice and whether the row is running, recent or in
+Earlier Sessions. A healthy host HTTP connection does not prove a healthy source.
+Record the exact missing/wrong field and a minimal sanitized supported record shape;
+do not share a private installation database or credentials. No specific plugin
+cause or reproduction of the reported installation is claimed. See the
+[audit evidence and limits](../development/journal/web/v1-compatibility.md).
+
 ## Contextual help
 
 Heading labels and useful metric labels/values explain metrics in Web and Mini

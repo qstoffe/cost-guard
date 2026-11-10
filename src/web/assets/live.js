@@ -8,6 +8,7 @@ const LiveConnection = (() => {
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     function report(kind, message) {
       status(message, {kind, authenticatedAt, observedAt: values.live?.source_observed_at_ms ?? null,
+        sourceGeneration: kind === 'connected' && ['v1', 'v2'].includes(values.live?.source_generation) ? values.live.source_generation : 'unknown',
         terminal: stopped, writable: !stopped && ['connected', 'starting', 'source_starting', 'source_retrying', 'source_unavailable'].includes(kind)});
     }
     function stop(message, kind = 'stopped') {

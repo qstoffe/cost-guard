@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.20 - 2026-11-10
+
+- Web shows one compact, sticky selected-V1 compatibility notice below navigation, shared across all routes. It accurately describes polling and V2-only native session export without calling V1 Watch unsupported.
+- An allowlisted Live source-generation field comes from the active acquisition owner, not configuration, Desktop version or a stale report. Unknown/error/offline/reconnect/changed-instance states withhold the notice until fresh authenticated evidence returns; CLI and selection behavior are unchanged.
+- Read-only SQLite regressions compare separate CLI/Web owners under forced V1 and auto fallback, including plugin-shaped tools, child/compaction history and terminal transitions. The reported private installation issue remains unreproduced; the Web guide separates supported behavior, telemetry gaps and troubleshooting.
+
 ## v81.19 - 2026-11-10
 
 - Sessions separates a stable requested-sort/page heading, exact index/page counts and source-backed current work around one centered determinate progress bar. Fixed nodes and reserved slots avoid count/stage layout jumps; screen readers announce phases, not every root.

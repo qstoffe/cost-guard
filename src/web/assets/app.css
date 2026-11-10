@@ -132,6 +132,12 @@ h1 small { display: inline-block; margin-left: .4rem; padding: .2rem .55rem; ver
 header p { margin: var(--space-2) 0 0; font-size: .85rem; color: var(--muted); }
 #product-version { text-transform: none; white-space: nowrap; }
 #status { color: var(--ink); overflow-wrap: anywhere; }
+.source-compatibility { position: sticky; top: 0; z-index: 2;
+  padding: .4rem clamp(.85rem, 3vw, 2.5rem); font-size: .85rem;
+  background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere; }
+.source-compatibility[hidden] { display: none; }
+html { scroll-padding-top: calc(var(--source-notice-height, 0px) + .5rem); }
 .host-state { padding: .25rem clamp(.85rem, 3vw, 2.5rem);
   background: var(--warn-bg); color: var(--warn); font-weight: 600;
   overflow-wrap: anywhere; }

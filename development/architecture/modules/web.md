@@ -16,6 +16,15 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000670: `application/live.py` publishes only `v1|v2|unknown` from the active
+coordinator's established selection, qualified by a healthy observed frame.
+`assets/live.js` passes it through existing instance/sequence/reconnect health;
+`app.js` gates one shared sticky `index.html` notice only while connected with V1.
+Unknown/outage/identity changes hide it; ResizeObserver updates root scroll clearance,
+not acquisition. No status scanner, new endpoint, source preference, wake, CLI,
+report-job or Mini acquisition behavior is added. SQLite CLI/Web and genuine host/
+browser probes cover the contract. [Evidence](../../journal/web/v1-compatibility.md).
+
 FR000669 narrows Sessions-only composition around `ReportLoading.View`: a stable
 requested heading, shared bar/inline percent, exact counts and independent work
 detail retain fixed nodes/slots. Scalar summary call boundaries alone supply safe
