@@ -21,6 +21,12 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000671: `assets/mini.js::View.sessionRow` / `drawSessions` render the decorative
+running Activity triangle from canonical prompt flags; `mini.css` keeps it compact
+inside the existing metric width. Selection, lifecycle, time help and native sizing
+owners are unchanged. Coverage: Mini session/Controller VM fixtures and the existing
+PiP theme/lifecycle/Activity probes. [Evidence](../../journal/web/mini-watch.md#running-activity-indicator-fr000671).
+
 FR000670: `application/live.py::_publish_frame`, `assets/live.js`, `app.js`,
 `index.html` and `app.css` own the source-qualified global notice, not selection.
 `test_v1_web_watch.py` / `fixtures/v1_watch.py` compare actual SQLite through separate

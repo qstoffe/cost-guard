@@ -5,6 +5,45 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Running Activity indicator (FR000671)
+
+Scoped v81.21 delta against `bfb164e87913cb53f45e6dec84b5f902b8ab916d`,
+checked locally 2026-11-10; earlier sections retain their own evidence scopes.
+
+Mini's existing `running` selection deliberately includes execution-unverified
+work. The decoration therefore requires the represented nonhistorical prompt's
+`in_progress` plus absence of execution uncertainty and success/abort/error flags.
+Every draw replaces its text from these facts; keyed rows retain no independent
+running latch. The separate span is `aria-hidden`, noninteractive and unfocusable;
+the existing time wrapper still owns date/offset hover/focus/touch help. A compact
+glyph fits inside Activity's existing header width. No lifecycle inference, source
+call, new control, native minimum, opening measurement or Fit change is introduced.
+
+Verification so far (final delivery checks still in progress):
+
+- Initial focused Mini: 13 tests passed. Extended fixtures cover simultaneous
+  running sessions, same-row running/terminal/history/next-prompt updates,
+  unverified and contradictory terminal flags, unknown times, removed/replacement
+  sessions, source correction, rejected older snapshots and repeated draws.
+- Package validation: 11 passes, zero failures, seven existing advisory warnings;
+  no hard cap/baseline/dependency change.
+- Actual hidden Chrome 157.0.8103.39, 125% zoom/DPR 1.5: 16 lifecycle/color and
+  24 Activity/layout cases passed, including four themes, Credits/USD, narrow
+  native PiP, immediate terminal cue removal, decorative accessibility, stable
+  focus, hover/touch help and full date/offset invariance. Activity remains nowrap,
+  unclipped and header-aligned within its existing 57.3 CSS-pixel metric width.
+- Read-only installed V2 probe: 62 coherent publications, one running prompt,
+  three accounts and five quota projections, 22.882 s; owned acquisition closed
+  in 0.087 s and shared OpenCode was untouched. No historical rows were observed:
+  synthetic cases supply terminal/history evidence, not a real-source transition.
+- Integrated browser was disconnected. The first headless Edge attempt timed out
+  at `Browser.getVersion`, before rendering; this is not an Edge PASS. The working
+  hidden Chromium route supplies native PiP evidence without desktop interaction.
+
+No paid inference, source writes, release ZIP, tag or GitHub Release. Physical
+desktop/work-area frames, monitor transitions, macOS and screen-reader speech are
+not tested or changed. No acceptance exception or deferred scope has been needed.
+
 ## Same-session Ctx handoff (FR000666)
 
 Scoped v81.16 delta against `eaa7cb93b5699b6887b169b6455bf27e55af6fe1`,

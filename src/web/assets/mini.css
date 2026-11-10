@@ -40,6 +40,7 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
 .mini-prompt-table td.mini-session-cell { text-align: left; }
 .mini-activity { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mini-activity-running { font-size: .65em; vertical-align: .1em; }
 .mini-running { color: var(--watch-running); }
 .mini-success { color: var(--watch-success); }
 .mini-error { color: var(--error); }

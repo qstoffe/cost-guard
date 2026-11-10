@@ -100,6 +100,7 @@ function setup() {
    assert.match(helpText(view.fitButton),/five-row session viewport and subscriptions\. Width stays unchanged/);
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
+  assert.match(view.body.children[0].children[0].textContent, /^▶ /);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
@@ -255,7 +256,8 @@ function setup() {
     const saved = {...prompt}, savedView = input.view;
     Object.assign(prompt, outcome, {completed_at_ms:10000}); controller.update(input);
     const terminal = view.promptRows.get(originals[1].session_id);
-    assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
+     assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
+     assert.doesNotMatch(terminal.children[0].textContent,/▶/,'terminal publication clears the cue in the same update');
     assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
      assert.match(helpText(terminal.children[2].children[0]),/Duration: 20m/);
     input.view = {...savedView, active_cards:[originals[0]], history_state:'observed', history_epoch:1,
@@ -267,9 +269,11 @@ function setup() {
     input.view = {...input.view,cards_state:'unavailable',active_cards:[],history_state:'refreshing'};
     for (const state of ['running','recovering','running']) {
       controller.update({...input,state}); controller.render();
-      assert.equal(terminal.className,'','retention/retry does not restart completion');
+       assert.equal(terminal.className,'','retention/retry does not restart completion');
+       assert.doesNotMatch(terminal.children[0].textContent,/▶/);
     }
-    input.view = savedView; Object.assign(prompt,saved); controller.update(input);
+     input.view = savedView; Object.assign(prompt,saved); controller.update(input);
+     assert.match(terminal.children[0].textContent,/^▶ /,'the next verified running publication restores its own cue');
   }
   input.view.active_cards = []; controller.update(input);
   assert.match(view.body.textContent,/No earlier sessions/);
