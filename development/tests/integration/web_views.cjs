@@ -52,7 +52,7 @@ async function main() {
   const location = {hash: '#bootstrap=' + input.credential};
   const history = {replaceState: (_, __, value) => { location.hash = value.slice(value.indexOf('#')); }};
   let cookie = '', requests = 0, offline = false;
-  const reportKinds = [];
+   const reportKinds = [];
   const bootstrapStatuses = [];
   let releaseBootstrap, releaseReport;
   let deepGate = null, releaseDeep, failDeep = false;
@@ -78,7 +78,7 @@ async function main() {
     if (path === '/api/bootstrap') bootstrapStatuses.push(response.status);
     if (response.headers.get('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
     if (path.startsWith('/api/jobs/') || path === '/api/detail') {
-      const value = await response.clone().json();
+       const value = await response.clone().json();
       const observed = value.result?.source?.observed_at_ms ?? value.result?.observed_at_ms;
       if (Number.isFinite(observed)) fixtureNow = Math.max(fixtureNow, observed);
     }
@@ -95,7 +95,10 @@ async function main() {
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
   // Allowlisted synthetic state only: never cookie, CSRF or bootstrap values.
-  diagnostics = () => ({requests, ...vm.runInContext(`({route: current?.section,
+   diagnostics = () => ({requests, ...vm.runInContext(`({route: current?.section,
+    report: current && {loading:current.loading,failed:current.failed,message:current.message,
+      active:current.active,attempted:current.attempted,kind:current.request?.kind},
+    host:hostState.kind,
     catalog: current?.catalog && {busy:current.catalog.busy, pending:current.catalog.data?.pending_sort,
       sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available},
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
@@ -105,8 +108,8 @@ async function main() {
    for (const path of ['/render.js', '/report-loading.js', '/token-mix.js', '/cached-reports.js', '/ai-stats.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
-    vm.runInContext(await response.text(), context);
-  }
+     vm.runInContext(await response.text(), context);
+   }
    assert.match(ids.result.textContent, /0%.*Authorizing browser session/, 'slow authorization has honest initial progress');
    assert.doesNotMatch(ids.result.textContent, /≈|Approximately/);
   assert.equal(location.hash, '#/models', 'credential erased before waiting');

@@ -3,6 +3,7 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 import shutil
+import time
 from threading import Event, Lock
 import tempfile
 from types import SimpleNamespace
@@ -562,6 +563,94 @@ class SessionCatalogTests(unittest.TestCase):
         entry = replace(item.bundle.trace_entries[0], model=ModelRef("unknown", "N/A"))
         unknown = replace(item, bundle=replace(item.bundle, trace_entries=(entry,), prompts=(prompt,)))
         self.assertFalse(self.service._session_rows((unknown,))[0].model_pending)
+
+    def test_progress_distinguishes_terminal_transient_unknown_and_changed_evidence(self):
+        pending = self.catalog.page(sort='model')
+        self.assertEqual(pending['progress']['completed'], 0)
+        self.assertEqual(pending['progress']['total'], 120)
+        with patch('src.application.session_catalog.session_summary', side_effect=SourceSchemaError('private')):
+            self.catalog.tick(self.service)
+        failed = self.catalog.page(token=pending['token'], sort='model')
+        self.assertEqual(failed['progress']['status'], 'failed')
+        self.assertEqual(failed['progress']['reason'], 'unsupported_schema')
+        self.assertNotIn('private', str(failed['progress']))
+        self.assertEqual(failed['progress']['failed'], 4)
+        self.index()
+        self.catalog.failures.clear()
+        self.catalog.rows['root-0000'] = replace(self.catalog.rows['root-0000'], model='N/A')
+        known_unknown = self.catalog.page(token=pending['token'], sort='model')
+        self.assertFalse(known_unknown['pending_sort'])
+        self.catalog.rows['root-0000'] = replace(self.catalog.rows['root-0000'], model_pending=True)
+        self.assertTrue(self.catalog.page(token=pending['token'], sort='model')['pending_sort'])
+        self.catalog.rows['root-0000'] = replace(self.catalog.rows['root-0000'], model_pending=False)
+        before = self.catalog.generation
+        self.observe()
+        self.assertEqual(self.catalog.generation, before, 'unchanged observations do not restart progress')
+        self.source.snapshots['root-0000'] = replace(self.source.snapshots['root-0000'], source_revision='new')
+        self.observe()
+        self.assertGreater(self.catalog.generation, before)
+        self.assertEqual(self.catalog.page(sort='model')['progress']['completed'], 119)
+
+    def test_repeated_transient_failures_terminate_but_shared_retry_can_recover(self):
+        self.catalog.page(sort='ccost')
+        self.catalog.tick(self.service)
+        self.index()
+        self.catalog.valid.pop('root-0000')
+        with patch('src.application.session_catalog.session_summary', side_effect=SourceUnavailableError('private')):
+            for attempt in range(3):
+                self.clock += 31
+                self.catalog.tick(self.service)
+                page = self.catalog.page(sort='ccost')
+                self.assertEqual(page['progress']['status'], 'failed' if attempt == 2 else 'pending')
+        self.assertEqual(page['progress']['metrics']['retries'], 2)
+        self.clock += 31
+        self.catalog.tick(self.service)
+        self.assertFalse(self.catalog.page(sort='ccost')['pending_sort'])
+
+    def test_large_scalar_catalog_global_sort_warm_reuse_and_exact_last_page(self):
+        self.source = SyntheticMonthSource(3217, 1, month_start_ms=1000)
+        self.observe()
+        pending = self.catalog.page(sort='prompts', direction=1)
+        self.assertTrue(pending['pending_sort'])
+        counts = []
+        def summary(service, root, revision, *, metrics, **kwargs):
+            number = int(root.session_id.split('-')[1])
+            metrics['cache_hits'] += 1
+            return SessionUsageRow(root.session_id, root.title, f'Model {number:04}', False,
+                Decimal(number) / 1000, number, duration_ms=number * 1000), revision
+        started = time.perf_counter()
+        with patch('src.application.session_catalog.session_summary', side_effect=summary) as acquire:
+            for batch in range(805):
+                self.catalog.tick(self.service)
+                if batch % 100 == 0:
+                    counts.append(self.catalog.page(token=pending['token'], sort='prompts')['indexed'])
+            self.assertEqual(acquire.call_count, 3217)
+        cold_seconds = time.perf_counter() - started
+        self.assertEqual(counts, sorted(counts))
+        self.assertEqual(self.catalog.metrics['cache_hits'], 3217)
+        warm = time.perf_counter()
+        with patch('src.application.session_catalog.session_summary', side_effect=AssertionError('warm source hydration')):
+            for sort in SORTS:
+                for direction in (-1, 1):
+                    first = self.catalog.page(token=pending['token'], sort=sort, direction=direction)
+                    last = self.catalog.page(token=first['token'], sort=sort, direction=direction,
+                                             epoch=first['epoch'], offset=3200)
+                    self.assertFalse(first['pending_sort'])
+                    self.assertEqual(first['view']['session_usage'][0]['session_id'],
+                                     'root-3216' if direction == -1 else 'root-0000')
+                    self.assertEqual(len(last['view']['session_usage']), 17)
+                    self.assertEqual(last['progress']['total'], 17)
+                    self.assertEqual(last['progress']['completed'], 17)
+            original = self.catalog.page(token=pending['token'], sort='prompts', direction=1)
+            self.source.snapshots['root-3217'] = replace(self.source.snapshots['root-3216'],
+                root=replace(self.source.snapshots['root-3216'].root, session_id='root-3217'))
+            self.observe()
+            older = self.catalog.page(token=original['token'], epoch=original['epoch'], offset=3200,
+                                      sort='prompts', direction=1)
+            self.assertFalse(older['pending_sort'], 'new arrivals do not re-index a qualified pinned order')
+            self.assertEqual(older['total'], 3217)
+        print(dict(synthetic_roots=3217, scalar_cache_hits=3217, source_hydrations=0,
+                   cold_key_seconds=round(cold_seconds, 3), warm_12_sorts_seconds=round(time.perf_counter() - warm, 3)))
 
 
 if __name__ == "__main__":

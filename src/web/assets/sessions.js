@@ -51,13 +51,40 @@ const SessionsCatalog = (() => {
         if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
       });
       this.root.append(this.status, pan, pager);
+      this.loader = new ReportLoading.View(); this.loader.root.hidden = true;
+      this.loader.bar.setAttribute('aria-label', 'Sessions loading progress');
+      this.cancel = el('button', 'Cancel'); this.retry = el('button', 'Retry');
+      this.cancel.type = this.retry.type = 'button'; this.retry.hidden = true;
+      ContextHelp.attach(this.cancel, () => this.operation?.kind === 'page' ?
+        'Cancel loading this page and return to the previous page.' :
+        'Cancel this sort and return to the previous sorting and page.');
+      this.cancel.addEventListener('click', () => this.cancelNavigation());
+      this.retry.addEventListener('click', () => {
+        this.configure(new URLSearchParams(location.hash.split('?')[1])); this.poll();
+      });
+      const actions = el('div', undefined, 'sessions-loading-actions'); actions.append(this.cancel, this.retry);
+      this.loader.root.append(actions); this.root.append(this.loader.root);
     }
     configure(params) {
+      this.retire();
+      const focus = this.operation?.focus || document.activeElement;
+      const scroll = this.operation?.scroll || [window.scrollX || 0, window.scrollY || 0, this.pan.scrollLeft || 0];
       this.offset = Number(params?.get('offset') || 0);
       this.epoch = params?.get('epoch') || null;
       this.sort = columns.some(([key]) => key === params?.get('sort')) ? params.get('sort') : 'activity';
       this.direction = params?.get('direction') === '1' ? 1 : -1;
-      this.generation++; this.rerun = true;
+      const changed = this.data && (this.offset !== this.data.offset || this.sort !== this.data.sort ||
+        this.direction !== this.data.direction || this.offset && this.epoch !== this.data.epoch);
+      this.operation = changed || !this.data ? {kind: this.data && this.sort === this.data.sort &&
+        this.direction === this.data.direction ? 'page' : 'sort', focus, scroll,
+        advanced: Date.now(), percent: 0, completed: -1, source: null, rebases: 0, failed: false} : null;
+      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
+      this.rerun = true;
+    }
+    retire() {
+      this.generation++; this.flight?.controller.abort(); this.flight = null; this.busy = false;
+      clearTimeout(this.admission); clearTimeout(this.timer);
+      clearTimeout(this.requestDeadline);
     }
     rememberedDestination() { return destination(this.offset || 0, this.epoch || this.data?.epoch, this.sort || 'activity', this.direction || -1); }
     attach(parent) {
@@ -68,22 +95,33 @@ const SessionsCatalog = (() => {
     interest(visible = this.attached && !document.hidden, token = this.token) {
       if (token) this.api('/api/sessions', {action: 'interest', token, visible}).catch(() => {});
     }
-    detach() { this.attached = false; this.interest(false); this.generation++; clearTimeout(this.timer); }
+    detach() { this.attached = false; this.interest(false); this.retire(); }
     async poll() {
-      if (!this.attached || this.busy) return;
+      if (!this.attached || this.busy || this.operation?.failed) return;
       clearTimeout(this.timer);
       if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
+      const generation = this.generation;
       await this.load();
-      if (this.attached) this.timer = setTimeout(() => this.poll(), this.rerun ? 0 : 5000);
+      if (generation === this.generation && this.attached && !this.operation?.failed) this.timer = setTimeout(() => this.poll(), this.rerun ? 0 : this.operation ? 1000 : 5000);
     }
     async load() {
       if (this.busy) return;
       this.busy = true; this.rerun = false;
       this.pagerBusy();
       const generation = this.generation;
+      const flight = {controller: new AbortController()}; this.flight = flight;
+      if (this.operation) this.admission = setTimeout(() => {
+        if (generation === this.generation && this.operation) this.showProgress('Checking cached sort keys…');
+      }, 180);
+      this.requestDeadline = setTimeout(() => {
+        if (this.flight !== flight) return;
+        this.retire();
+        if (this.operation) this.failNavigation('request_timeout');
+        else { this.status.textContent = 'Sessions source did not respond. Retaining the last observed page.'; this.status.hidden = false; }
+      }, 15000);
       try {
         const request = () => this.api('/api/sessions', {token: this.token, offset: this.offset,
-          epoch: this.epoch, sort: this.sort, direction: this.direction});
+          epoch: this.epoch, sort: this.sort, direction: this.direction}, flight.controller.signal);
         let data;
         try { data = await request(); }
         catch (error) {
@@ -94,22 +132,87 @@ const SessionsCatalog = (() => {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
           data = await request();
         }
-        if (!this.attached || generation !== this.generation) { this.interest(false, data.token); return; }
+        if (!this.attached || generation !== this.generation) {
+          if (data.token !== this.token || !this.attached || this.operation?.failed) this.interest(false, data.token);
+          else if (!document.hidden) this.api('/api/sessions', {token: this.token, offset: this.offset,
+            epoch: this.epoch, sort: this.sort, direction: this.direction}).catch(() => {});
+          return;
+        }
+        if (!data.pending_sort && (data.sort !== this.sort || data.direction !== this.direction || data.offset !== this.offset)) {
+          throw new Error('catalog_response_mismatch');
+        }
         const opened = this.token !== data.token;
         this.token = data.token; this.update(data);
         if (opened) this.interest();
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        this.status.textContent = this.usable ? '' : `Sessions unavailable (${error.message}).`;
+        if (this.operation) this.failNavigation(error.message);
+        else this.status.textContent = `Sessions unavailable (${error.message}). Retaining the last observed page.`;
         if (error.message === 'catalog_expired') {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
         this.status.hidden = !this.status.textContent;
-        if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally {
-        this.busy = false;
-        this.pagerBusy();
+        if (this.flight === flight) {
+          clearTimeout(this.admission); clearTimeout(this.requestDeadline);
+          this.flight = null; this.busy = false; this.pagerBusy();
+        }
       }
+    }
+    showProgress(stage, stageLabel = stage) {
+      if (!this.operation) return;
+      this.loader.update({percent: this.operation.percent, stage, stageLabel});
+      this.loader.root.hidden = false;
+      this.retry.hidden = !this.operation.failed;
+      this.status.hidden = true;
+      if (this.pan.contains(document.activeElement) || this.pager.contains(document.activeElement) ||
+        this.actionFocus && document.activeElement === document.body) this.cancel.focus?.({preventScroll: true});
+      this.pan.hidden = this.pager.hidden = !this.operation.failed;
+    }
+    failNavigation(reason) {
+      if (!this.operation) return;
+      this.operation.failed = true;
+      this.interest(false);
+      this.showProgress(`Sessions ${this.operation.kind} could not finish (${reason}). Retry after the source recovers, or Cancel to return.`, 'Sessions navigation failed');
+    }
+    pendingNavigation(data) {
+      if (!this.operation) return false;
+      const progress = data.progress;
+      const pagePending = this.operation.kind === 'page' && progress && progress.completed < progress.total;
+      if (!data.pending_sort && !pagePending && data.state === 'observed') return false;
+      const operation = this.operation;
+      const completed = progress?.completed ?? data.indexed ?? 0;
+      const total = progress?.total ?? data.available ?? 0;
+      const source = `${progress?.generation ?? ''}:${progress?.phase ?? 'index'}:${total}`;
+      const restarted = operation.source !== null && (source !== operation.source || completed < operation.completed);
+      if (restarted) { operation.percent = 0; operation.completed = -1; operation.rebases++; }
+      if (operation.rebases >= 8) { this.failNavigation('concurrent_source_change'); return true; }
+      if (completed > operation.completed) { operation.completed = completed; operation.advanced = Date.now(); }
+      operation.source = source;
+      operation.percent = Math.max(operation.percent, Math.min(99, total ? Math.floor(99 * completed / total) : 0));
+      if (progress?.status === 'failed' || data.state === 'source_unavailable') {
+        this.failNavigation(progress?.reason || 'source_unavailable'); return true;
+      }
+      if (Date.now() - operation.advanced >= 45000) { this.failNavigation('no_source_progress'); return true; }
+      const name = columns.find(([key]) => key === this.sort)[1];
+      const label = data.pending_sort ? `Indexing ${name}` : `Preparing page ${Math.floor(this.offset / 50) + 1}`;
+      this.showProgress(`${restarted ? 'Source changed; restarting. ' : ''}${label} (${completed} of ${total} sessions)…`, label);
+      return true;
+    }
+    cancelNavigation() {
+      const operation = this.operation;
+      if (!operation) return;
+      this.retire(); this.interest(false); this.operation = null;
+      if (this.data) {
+        this.offset = this.data.offset; this.epoch = this.data.epoch;
+        this.sort = this.data.sort; this.direction = this.data.direction;
+      } else { this.offset = 0; this.epoch = null; this.sort = 'activity'; this.direction = -1; }
+      history.replaceState(null, '', this.rememberedDestination());
+      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false; this.pagerBusy();
+      operation.focus?.focus?.({preventScroll: true});
+      if (operation.scroll) { window.scrollTo?.(operation.scroll[0], operation.scroll[1]); this.pan.scrollLeft = operation.scroll[2]; }
+      // Reassert only the restored lease demand. Shared caches/index work survive.
+      this.poll();
     }
     update(data) {
       // Even a deferred sort/outage must retire unsupported running indicators.
@@ -121,16 +224,21 @@ const SessionsCatalog = (() => {
       }
       // A requested global sort is not applied until every key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
-      if (this.usable && (data.pending_sort || data.state !== 'observed' && !data.view.session_usage.length)) return;
+      if (this.pendingNavigation(data) || data.pending_sort) return;
+      const completed = this.operation;
+      const restoreFocus = completed && this.loader.root.contains(document.activeElement);
+      this.operation = null; clearTimeout(this.admission);
+      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
       this.data = data;
       this.usable = data.state === 'observed' || data.view.session_usage.length > 0;
       this.offset = data.offset;
       if (data.epoch) this.epoch = data.epoch;
       if (this.recovering) {
         history.replaceState(null, '', destination(data.offset, data.epoch, this.sort, this.direction));
-        this.recovering = false;
+        this.recovering = false; this.rebased = true;
       }
-      this.status.textContent = data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
+      this.status.textContent = this.rebased ? 'The previous catalog expired; showing the latest first page.' :
+        data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
       this.status.hidden = !this.status.textContent;
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
@@ -139,7 +247,13 @@ const SessionsCatalog = (() => {
       }
       const values = data.view.session_usage;
       // Lifecycle status must not remain falsely running while a title is selected.
+      if (completed && protectedNode(this.body)) {
+        window.getSelection?.()?.removeAllRanges?.();
+        if (this.body.contains(document.activeElement)) document.activeElement.blur?.();
+      }
       this.rows(values);
+      if (completed && !restoreFocus) ContextHelp.refresh(this.root);
+      if (restoreFocus) this.actionFocus = completed.focus;
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + 50, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / 50) + 1} of ${pages}` :
         data.state === 'observed' ? 'No sessions · Page 1 of 1' : 'Session count unavailable';
@@ -149,12 +263,14 @@ const SessionsCatalog = (() => {
       link(this.previous, Math.max(0, data.offset - 50), data.offset > 0);
       link(this.next, data.offset + 50, data.offset + 50 < data.total);
       this.pagerBusy();
+      if (completed) this.loader.update({percent: 100, stage: 'Page applied', stageLabel: 'Page applied'});
     }
     pagerBusy() {
       if (this.busy && [this.previous, this.next].includes(document.activeElement)) this.actionFocus = document.activeElement;
       for (const button of [this.previous, this.next]) button.disabled = this.busy || this.recovering || !button.destination;
       if (!this.busy && this.actionFocus) {
-        if (document.activeElement === document.body || document.activeElement === this.actionFocus) {
+        if (document.activeElement === document.body || document.activeElement === this.actionFocus ||
+          this.loader.root.contains(document.activeElement)) {
           (this.actionFocus.disabled ? this.actionFocus === this.next ? this.previous : this.next : this.actionFocus).focus({preventScroll: true});
         }
         this.actionFocus = null;

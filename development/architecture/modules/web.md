@@ -174,10 +174,21 @@ FR000634 keeps loaded catalog/detail content visible regardless of observation a
 without a generic finite progress footer or routine sort/source captions. Catalog
 expiry permits one bounded reopen per poll; without membership proof, it returns to
 latest with preserved sort intent and synchronized URL/epoch/pager once usable.
-Pending global sorts retain the previous actual order/header/pager; an initial
-pending response cannot pin an empty table forever. Stale-generation replies demote
-their own interest. The backend lease, source isolation, index and acquisition owners
-are unchanged. [Quiet-refresh evidence](../../journal/web/quiet-refresh.md) records
+FR000664 adds an operation-level exception: genuinely pending sort/page navigation
+hides only the grid/pager behind the shared determinate loader, retaining the last
+applied DOM for immediate Cancel. Complete scalar-key coverage still gates metric
+ordering; a pending fallback is never applied. Request/operation generations reject
+late replies, and Cancel restores URL/focus/scroll plus the old lease demand without
+stopping shared acquisition. First-response admission avoids warm-page flashes.
+Typed source failures, bounded failed attempts, explicit source rebases and
+no-forward-count recovery replace indefinite silent navigation. Qualified older
+epochs are not globally gated by newly arrived roots. Scalar cache hit/miss and
+attempt/retry counters contain no source content. The backend lease, source isolation,
+index and acquisition owners are unchanged. Loading actions receive focus before
+the old controls hide; completion restores the initiating pager after re-enabling
+it, with an enabled last-page fallback and no theft of deliberately moved focus.
+[Navigation evidence](../../journal/web/sessions-navigation.md)
+records current checks and limitations; [quiet-refresh evidence](../../journal/web/quiet-refresh.md) records
 the scoped lifecycle matrix and its synthetic/real-source limits.
 
 ### Native session export (FR 000631)

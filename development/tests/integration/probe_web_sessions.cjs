@@ -62,7 +62,16 @@ async function main() {
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
-       await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+        await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+        if (mode === '--catalog-navigation-only') {
+          const details = await require('../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
+            command:(method, params) => command(method, params, sessionId)});
+          checks.push(...details.checks); layouts.push(...details.layouts);
+          assert.deepEqual(errors, []);
+          evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+            personal_profile:false,desktop_effects:false};
+          console.log(JSON.stringify({outcome:evidence.outcome,checks})); return;
+        }
        if (mode === '--loading-only' || mode === '--loading-zoom-only') {
          const probe = require('../fixtures/session_loading_browser.cjs');
          const details = await (mode === '--loading-zoom-only' ? probe.zoom : probe)({evaluate, until,
@@ -116,6 +125,7 @@ async function main() {
            personal_profile:false,desktop_effects:false};
          console.log(JSON.stringify(evidence));return;
        }
+     if (mode !== '--catalog-detail-only') {
      await until('current?.result && !current.loading');
      const retiredHashes=['#/reports','#/reports?date=2026-11-05','#/reports?date=2026-10-01:2026-11-05',
        '#/reports?date=2026-02-30','#/reports?date=%ZZ&sort=ccost&offset=50'];
@@ -170,7 +180,8 @@ async function main() {
        await fixture('resume-captures');
      }
      assert.equal(await evaluate('reportKinds.includes("date")'),false);
-      checks.push('token-mix reacquisition/internal API cancellation retains result with no UI Cancel; AI Stats lifecycle has its own probe');
+       checks.push('token-mix reacquisition/internal API cancellation retains result with no UI Cancel; AI Stats lifecycle has its own probe');
+     }
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),
@@ -237,10 +248,15 @@ async function main() {
     assert.equal(await evaluate('retainedNode.isConnected'),true);
     assert.ok(Math.abs(await evaluate('retainedNode.getBoundingClientRect().top')-selection.top)<2);
     assert.equal(await evaluate('document.querySelectorAll("tr.session-running").length'),0);
-    await evaluate('getSelection().removeAllRanges()'); await fixture('fail');
-    await until('current.detail.status.textContent.includes("Source unavailable")');
+     await evaluate(`getSelection().removeAllRanges();window.detailStates=[];
+       const sourceStatus=current.detail.sourceStatus.bind(current.detail);
+       current.detail.sourceStatus=data=>{detailStates.push(data.state);return sourceStatus(data);}`);
+     await fixture('fail');
+     await until('detailStates.includes("source_unavailable")');
+     assert.equal(await evaluate('current.detail.status.hidden && current.detail.status.textContent==="" && current.detail.loader.root.hidden'),true);
     assert.equal(await evaluate('document.querySelectorAll("tbody tr").length'),1002);
-    await fixture('recover'); await until('current.detail.status.hidden');
+     await evaluate('detailStates.length=0');
+     await fixture('recover'); await until('detailStates.includes("observed")');
      checks.push('selection-scroll-end-outage-recovery');
      const expected = ['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30'];
      for (const locale of ['sv-SE','en-US']) for (const timezoneId of ['Europe/Stockholm','America/New_York']) {
@@ -255,9 +271,9 @@ async function main() {
        await evaluate(`document.body.style.zoom=1;location.hash=${JSON.stringify('#/'+route)}`);
        if (route==='models') await until('current.result && !current.loading');
        if (route==='watch') await until('document.querySelector(".watch-prompt-table tbody tr")');
-       if (route==='token-mix') {
-         await until('current.section === "token-mix"');
-         if (!await evaluate('Boolean(current.result)')) await evaluate('document.querySelector("#refresh").click()');
+        if (route==='token-mix') {
+          await until('current.section === "token-mix"');
+          await until('current.result && !current.loading');
          await until('document.querySelectorAll(".token-mix-table").length===2');
          assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[13,13]);
        }
@@ -292,16 +308,17 @@ async function main() {
            const image=await command('Page.captureScreenshot',{format:'png'},sessionId);
            await fs.writeFile(path.join(directory,'table-'+route.replaceAll('/','-')+'.png'),Buffer.from(image.data,'base64'));
          }
-         if (route==='sessions') {
-           const pager=await evaluate(`(() => {
-             const original=current.catalog.data,rows=original.view.session_usage;
-             const value=structuredClone(original);value.total=1234567;value.view.session_usage[0].running=true;
-             current.catalog.update(value);
-             const bar=document.querySelector('.page-navigation'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
+          if (route==='sessions') {
+            await evaluate(`(()=>{window.pagerOriginal=current.catalog.data;const value=structuredClone(pagerOriginal);
+              value.total=1234567;value.view.session_usage[0].running=true;current.catalog.update(value);})()`);
+            await until(`(()=>{const row=document.querySelector('.session-catalog-table tbody tr');return row.classList.contains('session-running') &&
+              new Set([...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color)).size===1;})()`);
+            const pager=await evaluate(`(() => {
+              const bar=document.querySelector('.page-navigation'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
              const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
-             const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
-             current.catalog.update(original);return result;})()`);
-           assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1);assert.equal(pager.marker,true);
+              const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
+              current.catalog.update(pagerOriginal);return result;})()`);
+            assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
          }
        }
      }
