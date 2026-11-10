@@ -1,6 +1,8 @@
 """Full-catalog keys, cold indexing, retained epochs and scalar-cache boundaries."""
 from dataclasses import replace
 from decimal import Decimal
+from pathlib import Path
+import shutil
 from threading import Event, Lock
 import tempfile
 from types import SimpleNamespace
@@ -10,6 +12,7 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
+from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
 from src.application.session_catalog import SessionCatalog, SORTS
 from src.domain import ModelRef
 from src.reports.models import SessionUsageRow
@@ -38,6 +41,26 @@ class SessionCatalogTests(unittest.TestCase):
                 Decimal(number) / 1000, number, duration_ms=number * 1000,
                 last_activity_ms=self.catalog.activity[key])
             self.catalog.valid[key] = self.catalog.revisions[key], self.clock
+
+    def test_browser_fixture_uses_injected_source_for_catalog_and_detail_acquisition(self):
+        source = SyntheticMonthSource(3, 70, month_start_ms=1000)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'config').mkdir()
+            shutil.copyfile(Path(__file__).resolve().parents[2] / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
+            runtime = SyntheticSessionsRuntime(root, source=source, clock_ms=lambda: 100_000_000)
+            runtime.catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            catalog = runtime.catalog.page()
+            runtime.catalog.interest(catalog['token'], True)
+
+            runtime.catalog.tick(runtime.service)
+            token = runtime.details.open('root-0000', 'live')
+            runtime.details.tick(runtime.service)
+            detail = runtime.details.page(token, 0, begin=True)
+
+            self.assertEqual(detail['state'], 'observed')
+            self.assertEqual(detail['total'], 70)
+            self.assertEqual(runtime.catalog.page(token=catalog['token'])['total'], 3)
 
     def test_every_sort_orders_full_catalog_with_numeric_keys_and_stable_ties(self):
         self.index()

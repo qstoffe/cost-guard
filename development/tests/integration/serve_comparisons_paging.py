@@ -149,10 +149,10 @@ def fixture():
         jobs = FixtureJobs(target=finite)
         host = WebHost(root, jobs=jobs)
         host.dispatcher = FixtureDispatcher(jobs)
-        host.live = SyntheticSessionsRuntime(root, clock_ms=lambda: int(time.time() * 1000))
-        host.live.service.source = source(321, start=int((root / 'start').read_text()))
-        host.live.service.source.snapshots['root-0000'] = make_root_snapshot(0, 70,
+        session_source = source(321, start=int((root / 'start').read_text()))
+        session_source.snapshots['root-0000'] = make_root_snapshot(0, 70,
             month_start_ms=int((root / 'start').read_text()))
+        host.live = SyntheticSessionsRuntime(root, clock_ms=lambda: int(time.time() * 1000), source=session_source)
         host.live.driver = None
         host.live.source_failure = None
         board = payload()['pages']
@@ -169,6 +169,8 @@ def fixture():
             view=project_live(frame).to_json()))
         try:
             yield host, root
+            if host.live.failure:
+                raise RuntimeError('synthetic_live_acquisition_failed') from host.live.failure
         finally:
             host.stop()
             host.close()

@@ -29,8 +29,7 @@ def check_pagers(browser, evidence):
         (root / 'config').mkdir()
         shutil.copyfile(ROOT / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
         host = WebHost(root, jobs=ComparisonsJobs(groups=321))
-        host.live = SyntheticSessionsRuntime(root)
-        host.live.service.source = source(321)
+        host.live = SyntheticSessionsRuntime(root, source=source(321))
         host.start()
         host.publish_ready()
         context = browser.new_context(viewport={'width': 1366, 'height': 900}, has_touch=True)
@@ -77,6 +76,7 @@ def check_pagers(browser, evidence):
                 next_button.tap()
                 expect(page.locator('.page-navigation')).to_contain_text('Showing 151–200' if section == 'sessions' else 'Showing 31–40', timeout=30000)
             assert not errors
+            assert host.live.failure is None
             evidence['pager_layouts'] = layouts
             evidence['checks'].append('shared Sessions/321-group Comparisons pagers: 360/1366/1920px, Classic/Web and light/dark media, actual mouse/keyboard/emulated touch, focus and live summary')
         finally:

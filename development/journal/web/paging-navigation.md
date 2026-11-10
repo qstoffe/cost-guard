@@ -143,6 +143,18 @@ and `getZoom`, an un-emulated viewport and one delayed Models transition. The ne
 bounded probe implements that proposal; success is not yet claimed. No extension
 permissions, external desktop or new credential access are added.
 
+Sixth head `43e381d` reached connected/visible Session detail but retained0rows.
+A local catalog-then-detail reproducer found the real fixture defect: replacing
+`ReportService.source` after construction left its acquisition owner bound to the
+original single-root FakeSource. Catalog scalar hydration raised `ValueError(missing)`
+and ended the synthetic acquisition thread; source-only detail checks had missed
+the coupling. Source is now injected into `SyntheticSessionsRuntime` at construction,
+before all owners bind it; both browser fixtures use it and require healthy runtime.
+The local paired catalog/detail probe now observes70rows, and the deterministic
+regression plus25 existing catalog tests pass. Earlier pager geometry/input evidence
+is valid, but did not establish healthy large-catalog scalar acquisition; the new
+complete run must establish that too. Clock alignment alone was not the cause.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.
