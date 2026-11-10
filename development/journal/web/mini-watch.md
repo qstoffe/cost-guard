@@ -5,6 +5,62 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Unused scrollbar gutter (FR000660)
+
+Scoped v81.10 delta against `0da05445ee574952d268fa8d8502cdc2b8fb5b0d`,
+checked locally 2026-11-10. The only runtime behavior change removes
+`scrollbar-gutter: stable` from `.mini-prompts` in `mini.css`. `overflow: auto`,
+the five-row viewport, sticky cells and all other tables/styles remain unchanged.
+There is no scrollbar hiding, fake left padding, new resize handler or redesign.
+
+Fresh browser evidence, not a visual assumption:
+
+- Local Full passed **181 bounded groups, zero failures, 152.3 s**. Two native
+  macOS zsh/PTY tests skipped on Windows; no all-platform PASS is claimed.
+- Package validation passed **11 checks, zero failures, seven existing advisory
+  prose/module budget warnings**. No hard cap or structural baseline was raised.
+- The new regression failed against original CSS: a non-scrolling three-row table
+  reserved **15 CSS px**, with **7.5 px left / 22.5 px right** outer insets. The fix
+  gives **7.5 / 7.5**, and six/ten rows still consume the authentic 15 px scrollbar.
+  Returning to five/one rows releases it without resizing the native window.
+- Four complete real Document PiP runs passed **127 layouts each (508 total)**:
+  headless Edge 157.0.4341.42 with classic-width scrollbars at 100%/125% zoom,
+  Chrome 156.0.8078.80 with actual zero-width overlay scrollbars at 100% zoom/DPR 1
+  and 125% zoom/DPR 1.5. The new matrix measures body/main/region/table rectangles,
+  client/offset/scroll widths, computed gutter and independent document scrollbars;
+  it covers Classic/Web light/dark, 0/1/3/5/6/10→5→1 rows, reachable last rows,
+  sticky headers, non-overlapping accounts and unchanged native bounds.
+- Paired before/after screenshots reapply just the original `stable` declaration
+  in the same PiP, then restore shipped CSS, at unchanged native dimensions.
+  All four theme/color combinations at 100%/125% are retained. The original-code
+  red run also captured the original shipped declaration directly.
+- Existing width/fit/theme/activity/help/AX/history checks passed in every run:
+  compact metric minima and flexible Session, narrow horizontal panning without
+  document overflow, too-short document scrolling, Fit on open/Remember last,
+  manual resize/reopen, pointer/Enter/Space/touch Fit, selected tooltip text and
+  retained focus, one SSE and no passive native autosizing or geometry storage.
+  One exploratory test read the non-sticky `thead` rectangle instead of its sticky
+  `th`; correcting that test observer repaired it without a product change.
+- Rechecked `tableWidth`, `scrollbarWidth`, `OpeningMeasure.read` and explicit
+  `FitSize` height measurement. The measured opening allowance is authentic
+  scrollbar width, not the persistent CSS reservation. Removing the latter gives
+  Session the recovered width at identical requested/achieved native bounds.
+  No measured over-reservation requiring a JavaScript change was demonstrated;
+  **`mini.js` is unchanged**. Full Watch, Models and other table gutters are untouched.
+- Read-only actual-installation `probe_mini_source.py` passed on V2: **20 coherent
+  publications**, two running rows, three accounts, 7.756 s; owned acquisition
+  closed in 0.117 s. It observed zero historical cards, so synthetic tests supply
+  row-transition/history evidence, not an invented real-source transition.
+  No model calls or shared OpenCode stop.
+
+[Compact measurements and paired screenshots](../../architecture/governance/verification/mini-gutter-660/summary.json)
+retain the public synthetic evidence. Raw runs remain `scratch:/mini-edge-full.json`,
+`scratch:/mini-edge-125.json`, `scratch:/mini-chrome-overlay-full.json` and
+`scratch:/mini-chrome-overlay-125.json`. Integrated browser was tried but disconnected;
+owned hidden browsers supplied the actual browser proof without desktop disruption.
+Physical desktop/work-area frames, monitor transitions, macOS and screen-reader
+speech were not tested or changed; no acceptance exception or deferral is claimed.
+
 ## Value-help additions (FR000645)
 
 Scoped v80.225 delta on `0997b8b9e0b9e592db29153a7bceb85d9efba13a`,

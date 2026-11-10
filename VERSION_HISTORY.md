@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v81.10 — 2026-11-10
+
+- Mini Watch no longer reserves an unused right-side scrollbar gutter. The unified table fills its existing body padding symmetrically when no internal scrollbar is needed; six-plus-row scrolling, sticky headings, narrow panning and native sizing remain unchanged.
+
 ## v81.9 — 2026-11-10
 
 - Both Models tables share one thin rounded shell, header/cell skin and matching responsive Refresh/date/status and right-hand filter groups. Small parenthesized source references and official View source links sit beside their matching section headings, not in the control rows.

@@ -1,0 +1,140 @@
+{
+  "fr": "000660",
+  "baseRevision": "0da05445ee574952d268fa8d8502cdc2b8fb5b0d",
+  "baseline": "New geometry regression failed against original shipped CSS: unused 15px gutter, 7.5px left versus 22.5px right inset.",
+  "screenshotMethod": "Paired screenshots reapply only the original scrollbar-gutter: stable declaration in the same native PiP, then restore shipped CSS; native bounds unchanged.",
+  "sizingDecision": "No JS change: tableWidth measures metric minima; scrollbarWidth supplies authentic browser width for OpeningMeasure.read, not a persistent CSS gutter. Explicit Fit height and passive native bounds pass unchanged.",
+  "liveInstallation": {
+    "source": "V2",
+    "coherentPublications": 20,
+    "running": 2,
+    "accounts": 3,
+    "finishedHistoryCards": 0,
+    "seconds": 7.756,
+    "ownedCloseSeconds": 0.117,
+    "sharedOpenCodeUntouched": true,
+    "modelCalls": 0
+  },
+  "runs": [
+    {
+      "name": "mini-edge-full",
+      "outcome": "PASS",
+      "browser": "Edg/157.0.4341.42",
+      "dpr": 1.0,
+      "zoom": 1.0,
+      "requestedScrollbars": "classic",
+      "layoutCount": 127,
+      "checks": [
+        "Paired original-stable/shipped gutter screenshots and DOM geometry in Classic/Web light/dark; 0/1/3/5/6/10→5→1 rows, authentic internal scrollbar, sticky header, reachable last row, symmetric body padding and no passive native resize",
+        "Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged",
+        "24 real layouts: themes/light/dark/system/serif, reference/long Today and USD; one table, compact metrics and feasible ~1.6 Session ratio, native requested/achieved geometry; four oversized paired-cost layouts preserve both amounts and narrow table panning",
+        "0/1/3/5/6/10 distinct sessions × 0/1/6 accounts: five-row capacity, internal overflow, no passive native resize; clamps recorded",
+        "Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones",
+        "Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry",
+        "Normalized V2 → analysis → report → Live SSE → Full/Mini DOM: 100k incoming, running 112k/+12k then 117k/+17k, move invalidation/recovery, inactive historical 300k/+12k, exact zero, missing first request; stable row/focus/open tooltip and paragraph separation",
+        "Both independent cost tooltips: only the full running Duration line uses the theme running/yellow role; ticking span/focus retained, open completion/abort/error/unverified/history/replacement removes it; hostile model text stays literal; Classic/Web light/dark and Credits/USD",
+        "Actual Full/Mini DOM and accessibility: initial loading without counters, Full five/Mini four fillers plus one running session, silent refresh/failure, source switch, no background popup resize",
+        "Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage"
+      ],
+      "limitations": [
+        "Headless native PiP, not physical desktop/work-area proof."
+      ],
+      "internalScrollbarWidths": [
+        15
+      ],
+      "maxUnscrolledInsetDifference": 0.0,
+      "geometryFile": "mini-edge-full.json"
+    },
+    {
+      "name": "mini-edge-125",
+      "outcome": "PASS",
+      "browser": "Edg/157.0.4341.42",
+      "dpr": 1.0,
+      "zoom": 1.25,
+      "requestedScrollbars": "classic",
+      "layoutCount": 127,
+      "checks": [
+        "Paired original-stable/shipped gutter screenshots and DOM geometry in Classic/Web light/dark; 0/1/3/5/6/10→5→1 rows, authentic internal scrollbar, sticky header, reachable last row, symmetric body padding and no passive native resize",
+        "Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged",
+        "24 real layouts: themes/light/dark/system/serif, reference/long Today and USD; one table, compact metrics and feasible ~1.6 Session ratio, native requested/achieved geometry; four oversized paired-cost layouts preserve both amounts and narrow table panning",
+        "0/1/3/5/6/10 distinct sessions × 0/1/6 accounts: five-row capacity, internal overflow, no passive native resize; clamps recorded",
+        "Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones",
+        "Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry",
+        "Normalized V2 → analysis → report → Live SSE → Full/Mini DOM: 100k incoming, running 112k/+12k then 117k/+17k, move invalidation/recovery, inactive historical 300k/+12k, exact zero, missing first request; stable row/focus/open tooltip and paragraph separation",
+        "Both independent cost tooltips: only the full running Duration line uses the theme running/yellow role; ticking span/focus retained, open completion/abort/error/unverified/history/replacement removes it; hostile model text stays literal; Classic/Web light/dark and Credits/USD",
+        "Actual Full/Mini DOM and accessibility: initial loading without counters, Full five/Mini four fillers plus one running session, silent refresh/failure, source switch, no background popup resize",
+        "Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage"
+      ],
+      "limitations": [
+        "Headless native PiP, not physical desktop/work-area proof."
+      ],
+      "internalScrollbarWidths": [
+        12
+      ],
+      "maxUnscrolledInsetDifference": 0.0,
+      "geometryFile": "mini-edge-125.json"
+    },
+    {
+      "name": "mini-chrome-overlay-full",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "dpr": 1.0,
+      "zoom": 1.0,
+      "requestedScrollbars": "overlay",
+      "layoutCount": 127,
+      "checks": [
+        "Paired original-stable/shipped gutter screenshots and DOM geometry in Classic/Web light/dark; 0/1/3/5/6/10→5→1 rows, authentic internal scrollbar, sticky header, reachable last row, symmetric body padding and no passive native resize",
+        "Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged",
+        "24 real layouts: themes/light/dark/system/serif, reference/long Today and USD; one table, compact metrics and feasible ~1.6 Session ratio, native requested/achieved geometry; four oversized paired-cost layouts preserve both amounts and narrow table panning",
+        "0/1/3/5/6/10 distinct sessions × 0/1/6 accounts: five-row capacity, internal overflow, no passive native resize; clamps recorded",
+        "Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones",
+        "Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry",
+        "Normalized V2 → analysis → report → Live SSE → Full/Mini DOM: 100k incoming, running 112k/+12k then 117k/+17k, move invalidation/recovery, inactive historical 300k/+12k, exact zero, missing first request; stable row/focus/open tooltip and paragraph separation",
+        "Both independent cost tooltips: only the full running Duration line uses the theme running/yellow role; ticking span/focus retained, open completion/abort/error/unverified/history/replacement removes it; hostile model text stays literal; Classic/Web light/dark and Credits/USD",
+        "Actual Full/Mini DOM and accessibility: initial loading without counters, Full five/Mini four fillers plus one running session, silent refresh/failure, source switch, no background popup resize",
+        "Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage"
+      ],
+      "limitations": [
+        "Headless native PiP, not physical desktop/work-area proof."
+      ],
+      "internalScrollbarWidths": [
+        0
+      ],
+      "maxUnscrolledInsetDifference": 0.0,
+      "geometryFile": "mini-chrome-overlay-full.json"
+    },
+    {
+      "name": "mini-chrome-overlay-125",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "dpr": 1.5,
+      "zoom": 1.25,
+      "requestedScrollbars": "overlay",
+      "layoutCount": 127,
+      "checks": [
+        "Paired original-stable/shipped gutter screenshots and DOM geometry in Classic/Web light/dark; 0/1/3/5/6/10→5→1 rows, authentic internal scrollbar, sticky header, reachable last row, symmetric body padding and no passive native resize",
+        "Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged",
+        "24 real layouts: themes/light/dark/system/serif, reference/long Today and USD; one table, compact metrics and feasible ~1.6 Session ratio, native requested/achieved geometry; four oversized paired-cost layouts preserve both amounts and narrow table panning",
+        "0/1/3/5/6/10 distinct sessions × 0/1/6 accounts: five-row capacity, internal overflow, no passive native resize; clamps recorded",
+        "Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones",
+        "Unified five-column Activity retains midnight/DST/unknown tokens; stable focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry",
+        "Normalized V2 → analysis → report → Live SSE → Full/Mini DOM: 100k incoming, running 112k/+12k then 117k/+17k, move invalidation/recovery, inactive historical 300k/+12k, exact zero, missing first request; stable row/focus/open tooltip and paragraph separation",
+        "Both independent cost tooltips: only the full running Duration line uses the theme running/yellow role; ticking span/focus retained, open completion/abort/error/unverified/history/replacement removes it; hostile model text stays literal; Classic/Web light/dark and Credits/USD",
+        "Actual Full/Mini DOM and accessibility: initial loading without counters, Full five/Mini four fillers plus one running session, silent refresh/failure, source switch, no background popup resize",
+        "Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage"
+      ],
+      "limitations": [
+        "Headless native PiP, not physical desktop/work-area proof."
+      ],
+      "internalScrollbarWidths": [
+        0
+      ],
+      "maxUnscrolledInsetDifference": 2.956390380859375e-05,
+      "geometryFile": "mini-chrome-overlay-125.json"
+    }
+  ]
+}

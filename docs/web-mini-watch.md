@@ -108,8 +108,8 @@ defaults; explicit choices stay pinned. Missing preferences create no user file.
 Fit on open measures styled content before one PiP request. Width is the larger of:
 
 - The table's compact Activity, CCost, Total and Ctx column need **N**, with a generous Session
-  target of about **1.6 × N** (about **2.6 × N** for the table), plus stable table scrollbar
-  gutter, padding and small focus/rounding allowance.
+  target of about **1.6 × N** (about **2.6 × N** for the table), plus a measured scrollbar-width
+  opening allowance, padding and small focus/rounding allowance.
 - The complete intrinsic header: **Cost Guard · Watch**, **↕**, and the actual/reference
   **CCost Today 90 000 · 999 prompts**, or wider real text.
 
@@ -123,6 +123,9 @@ not fake data. With six or more running sessions, all remain in the same table w
 internal vertical scrollbar and sticky column heading. Header/Today/subscriptions stay
 outside that scroll area. A sixth row never passively resizes the native window.
 At narrow widths the table can also pan horizontally without clipping metrics.
+When no internal scrollbar is needed, the table uses equal left/right body padding,
+without a reserved empty gutter. A real scrollbar consumes only its browser-owned
+width (overlay scrollbars consume none); the opening allowance remains available to Session.
 
 The small **↕ Fit Mini Watch height** action deliberately fits this **bounded five-row
 viewport plus header/messages/subscriptions**, not offscreen sixth-plus rows. Mouse,

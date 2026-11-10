@@ -1,7 +1,7 @@
 // Owned headless Edge/Chromium Document PiP, shipped HTTP/CSP/SSE, synthetic data.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {spawn}=require('node:child_process'),readline=require('node:readline');
-const [browser,output,scale='1',zoom='1',scope='all']=process.argv.slice(2);
+const [browser,output,scale='1',zoom='1',scope='all',scrollbars='classic']=process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser)&&path.isAbsolute(output));await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(path.dirname(output),'mini-browser-'));
@@ -12,7 +12,8 @@ async function main() {
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
   const child=spawn(browser,['--headless=new',`--screen-info={${1920*Number(scale)}x${1200*Number(scale)}}`,
     '--force-device-scale-factor='+scale,'--no-first-run','--no-default-browser-check','--disable-extensions',
-    '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
+    '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,
+    ...(scrollbars==='overlay'?['--enable-features=OverlayScrollbar,FluentOverlayScrollbar,FluentScrollbar']:[]),'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending=new Map();let sequence=0,buffer='';
   child.stdio[4].on('data',chunk=>{buffer+=chunk.toString();let index;while((index=buffer.indexOf('\0'))>=0){
@@ -23,7 +24,7 @@ async function main() {
     const timer=setTimeout(()=>reject(new Error('CDP timeout '+method)),15000);pending.set(id,{resolve,reject,timer});
     child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');});
   const deadline=setTimeout(()=>{child.kill();server.kill();},240000);
-  const evidence={outcome:'FAIL',scale,zoom,layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
+   const evidence={outcome:'FAIL',scale,zoom,scrollbars,layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
   try {
     evidence.browser=await command('Browser.getVersion');
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
@@ -68,6 +69,10 @@ async function main() {
       await open();await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
       await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});
       evidence.outcome='PASS';return;
+    }
+    if(scope==='gutter-only'||scope==='all') {
+      await require('./probe_mini_gutter.cjs')({evaluate,until,fixture,command,sessionId,open,close,capture,layouts:evidence.layouts,checks:evidence.checks});
+      if(scope==='gutter-only') {evidence.outcome='PASS';return;}
     }
     await require('./probe_mini_theme.cjs')({evaluate,until,fixture,command,sessionId,open,close,capture,layouts:evidence.layouts,checks:evidence.checks});
     if(scope==='colors-only') {evidence.outcome='PASS';return;}

@@ -21,6 +21,11 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000660: `mini.css` leaves `.mini-prompts` at automatic scrollbar-gutter sizing;
+real overflow and the measured JavaScript opening/Fit helpers are unchanged.
+`probe_mini_gutter.cjs` runs through `probe_mini_fit.cjs` for paired original/fixed
+Classic/Web light/dark geometry, 0–10-row transitions and classic/overlay scrollbars.
+
 FR000659: `render.js::modelHeading` shares the two Models heading/source structures;
 `app.css` supplies shared semantic table shells/cells, responsive toolbars and the
 compact one-column effort picker. `benchmark.js` orders source options without
