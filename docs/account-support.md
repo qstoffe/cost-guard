@@ -12,12 +12,16 @@ Web alone offers **Settings → Quota display → Remaining** (Default is Used).
 Finite native percentages, Remaining/Total amounts and bars change together in Accounts,
 Watch and Mini. Unlimited or insufficient evidence keeps Used/unknown; zero Remaining
 remains exhausted/red even with no fill. CCost parentheses now switch between observed
-Used and a same-window Remaining reference proxy; Full Watch shows **Capacity** above
-each bar, Mini exposes it in help, and Accounts adds it only with matching period cost.
+Used and a same-window Remaining reference proxy; shared Web Accounts/Full Watch show
+permanent **Capacity** rows at every real quota level, while Mini exposes it in help.
 Copilot uses its actual included AI-credit allowance and native remaining credits;
 other valid windows extrapolate from observed cost / raw fraction used. Neither is a
-guaranteed budget. Numeric inferred Capacity carries **(guesstimate)** in Web text/help;
-verified comparable native limits do not. Unknown estimates show **?**, Unlimited Capacity **N/A**, without that suffix. A verified
+guaranteed budget. Numeric inferred Capacity carries leading **~** on Web cards;
+verified comparable native limits do not. Unknown card estimates show **?**, native
+unlimited Capacity **Unlimited**; neither gets an approximation marker. Nonmonthly
+quotas also retain their theoretical 30-day **Monthly Capacity**, or **?** with reason help.
+Each ordinal bar/divider aligns with same-row peers, without fake missing quotas.
+A verified
 idle 0%-Used window has native 100% Remaining even when reference Capacity is unknown.
 Native amounts remain in Accounts/help; CLI pacing does not change.
 

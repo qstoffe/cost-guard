@@ -300,10 +300,12 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .live-account-cards .watch-subscription > p { margin-block: 0; }
 .watch-quota-track { display: flex; align-items: flex-end; min-width: 0; }
 .live-account-cards .watch-subscription .watch-quota-track progress { margin-block: 0; }
-.live-account-cards .watch-primary-details > p:first-child, .live-account-cards .watch-secondary-quota > .watch-quota-track + p { margin-top: 0; }
+.live-account-cards .watch-primary-details > p:first-child, .live-account-cards .watch-secondary-details > p:first-child { margin-top: 0; }
 .watch-quota-summary { overflow-wrap: anywhere; }
-.watch-account-details { border-top: 1px solid var(--line); padding-top: .5rem; }
-.watch-secondary-quota + .watch-secondary-quota { margin-top: .65rem; }
+.live-account-cards .watch-account-footer, .live-account-cards .watch-account-details,
+.live-account-cards .watch-secondary-quota { display: contents; }
+.live-account-cards .watch-secondary-quota > *, .live-account-cards .watch-account-warnings { margin-inline: .9rem; min-width: 0; }
+.live-account-cards .watch-quota-divider { border-top: 1px solid var(--line); }
 .watch-subscription[data-exhausted="true"] > h4 { background: var(--watch-exhausted-bg); color: var(--error); border-color: var(--error); }
 .watch-subscription .watch-quota-exhausted { color: var(--error); }
 .watch-subscription .watch-quota-track progress { appearance: none; border: 0; border-radius: 2px; overflow: hidden;

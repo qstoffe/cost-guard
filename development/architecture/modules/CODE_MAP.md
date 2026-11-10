@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000661: `application/display.py` exports the existing source-backed
+`monthly_applicable` presentation fact without changing Decimal calculations.
+`account-cards.js` retains unknown Capacity rows and stable bound tracks; `app.css`
+shares subgrid slots for every quota ordinal through presentation-only wrappers.
+Coverage: `fixtures/account_capacity.cjs`, existing daily/quota tests,
+`probe_subscription_capacity.cjs` and `probe_quota_display.cjs` through the full
+Accounts driver. Mini and legacy report formatting are unchanged.
+[Layout evidence](../../journal/web/quota-layout.md).
+
 FR000660: `mini.css` leaves `.mini-prompts` at automatic scrollbar-gutter sizing;
 real overflow and the measured JavaScript opening/Fit helpers are unchanged.
 `probe_mini_gutter.cjs` runs through `probe_mini_fit.cjs` for paired original/fixed

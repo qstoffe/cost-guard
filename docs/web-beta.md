@@ -247,7 +247,7 @@ Usage in other clients counts here, but never changes OpenCode-observed **CCost 
 or prompt/session costs. Other eligible percentage-only windows retain the
 `observed period CCost / raw fraction used` Capacity guesstimate and estimated Remaining.
 Reference USD is not provider cash, a guaranteed budget or a billed balance. Unknown reference
-usage can show **?**; unknown/unlimited Capacity rows are omitted, while native unlimited
+usage can show **?**; unknown Capacity rows remain visible as **?**, while native unlimited
 status remains visible. Focus/tap the visible label/value for native amounts,
 attribution and limitations. Credits/USD converts all three reference figures together.
 A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
@@ -973,20 +973,26 @@ without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each quota shows **period · N% used/remaining (CCost)**, then a known numerical
+Each real quota shows **period · N% used/remaining (CCost)**, then its permanent
 **Monthly Capacity**, **5-hour Capacity**, **Weekly Capacity**, etc. Displayed window
 names capitalize only their first letter; internal provider identifiers are unchanged.
-Unknown period Capacity rows are omitted entirely, not replaced by placeholders or blank lines.
-A nonmonthly primary/secondary quota adds **Monthly Capacity** only when its numerical
-30-day equivalent is valid: full-window reference Capacity × 2,592,000 / verified
-full-window seconds, calculated with unrounded Decimal. This equivalent has a leading
+Unknown reference amounts show exactly **?**, never an omitted row, blank, `N/A` or `~?`.
+Independently verified native unlimited quotas retain **Unlimited**, never a finite estimate.
+Every nonmonthly primary/secondary/tertiary/later quota also has one **Monthly Capacity**
+row. Its valid 30-day equivalent is full-window reference Capacity × 2,592,000 / verified
+full-window seconds, calculated with unrounded Decimal. This numeric equivalent has a leading
 **~**, never an entitlement, bill or forecast. Compare independent restrictions separately;
 never add them together. Unknown duration/recurrence, inactive/expired/stale data,
-incompatible reference units, contradictory native data or incomplete pricing omit
-the derived row. Native monthly windows have just their own Capacity line.
-An empty, aria-hidden noninteractive row aligns a known period-only primary beside a
-known monthly-equivalent peer on the same responsive row. Unknown primaries never
-get this spacer. Watch and Accounts use the same full-size card contract, including
+incompatible reference units, contradictory native data or incomplete pricing show **?**
+with concise reason help. Proven native monthly windows have only their own Capacity line;
+eligibility follows normalized source-period facts, not the displayed label.
+Shared CSS grid slots align each ordinal quota track and divider across peers on the
+same responsive row. A native monthly quota gets one empty, aria-hidden, noninteractive
+comparison slot only beside a nonmonthly quota at that level. Missing quota tails are
+empty grid cells, not phantom labels/bars/accessibility nodes. Wrapped rows align independently;
+lone/single-column cards stay compact. Known↔unknown changes update permanent text/help
+targets without replacing bars; period and membership changes recompute the slots.
+Watch and Accounts use the same full-size card contract, including
 ordered text, controls, help, warnings, percentages, reset and accessibility; future
 deliberate divergence requires explicit owner approval. Mini stays separately compact.
 The bar is followed by a tightly adjacent reset and applicable canonical
@@ -1005,7 +1011,7 @@ show Used **(0)** independently of Today. Unlimited, sub-100% precision and genu
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
 reset and partial/estimated attribution without raw source/observation logs.
-Each known Capacity label and number share one intrinsic help target: one explanatory
+Each Capacity label and value share one intrinsic help target: one explanatory
 sentence, then separated native window/Used/Remaining/reset facts and essential warnings.
 These card Capacity tooltips omit raw calculation, arithmetic and rounding methodology.
 The native summary remains a help target even when Capacity is unknown.

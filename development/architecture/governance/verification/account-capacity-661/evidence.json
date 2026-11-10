@@ -1,0 +1,429 @@
+{
+  "date": "2026-11-10",
+  "base": "eece82687a736173a33024a4b114949f4aa88bd8",
+  "version": "81.11",
+  "scope": "Synthetic shipped HTTP/SSE Accounts/Full Watch, real hidden Chromium layout; no physical desktop or natural provider trajectory proof",
+  "matrices": [
+    {
+      "browser": "Chrome/156.0.8078.80",
+      "actual_browser_zoom": 1,
+      "outcome": "PASS",
+      "elapsed_seconds": 48,
+      "scenes": 264,
+      "directed_same_row_progress_comparisons": 1428,
+      "maximum_progress_y_difference_px": 0,
+      "widths": [
+        360,
+        800,
+        1280,
+        1920
+      ],
+      "css_zoom": [
+        1,
+        1.25
+      ],
+      "themes": [
+        "classic",
+        "dark",
+        "light"
+      ],
+      "scenarios": [
+        "all-monthly",
+        "missing",
+        "mixed",
+        "period-change",
+        "recovered",
+        "reorder",
+        "single-monthly",
+        "stale",
+        "unknown",
+        "unknown-again",
+        "unlimited"
+      ],
+      "observed_viewports": [
+        {
+          "width": 360,
+          "dpr": 1,
+          "scale": 1
+        },
+        {
+          "width": 800,
+          "dpr": 1,
+          "scale": 1
+        },
+        {
+          "width": 1280,
+          "dpr": 1,
+          "scale": 1
+        },
+        {
+          "width": 1920,
+          "dpr": 1,
+          "scale": 1
+        }
+      ]
+    },
+    {
+      "browser": "Edg/157.0.4341.42",
+      "actual_browser_zoom": 1.25,
+      "outcome": "PASS",
+      "elapsed_seconds": 58.04,
+      "scenes": 264,
+      "directed_same_row_progress_comparisons": 2028,
+      "maximum_progress_y_difference_px": 0,
+      "widths": [
+        360,
+        800,
+        1280,
+        1920
+      ],
+      "css_zoom": [
+        1,
+        1.25
+      ],
+      "themes": [
+        "classic",
+        "dark",
+        "light"
+      ],
+      "scenarios": [
+        "all-monthly",
+        "missing",
+        "mixed",
+        "period-change",
+        "recovered",
+        "reorder",
+        "single-monthly",
+        "stale",
+        "unknown",
+        "unknown-again",
+        "unlimited"
+      ],
+      "observed_viewports": [
+        {
+          "width": 360,
+          "dpr": 1.25,
+          "scale": 1
+        },
+        {
+          "width": 800,
+          "dpr": 1.25,
+          "scale": 1
+        },
+        {
+          "width": 1280,
+          "dpr": 1.25,
+          "scale": 1
+        },
+        {
+          "width": 1920,
+          "dpr": 1.25,
+          "scale": 1
+        }
+      ]
+    }
+  ],
+  "sample": {
+    "width": 1920,
+    "css_zoom": 1,
+    "actual_browser_zoom": 1,
+    "theme": "light",
+    "scenario": "mixed",
+    "before": [
+      {
+        "top": 133,
+        "height": 543.078125,
+        "tracks": [
+          {
+            "y": 290.640625,
+            "progress": 461.890625
+          }
+        ],
+        "dividers": [],
+        "spacers": 1,
+        "lines": [
+          "Monthly Capacity: $250.00"
+        ]
+      },
+      {
+        "top": 133,
+        "height": 543.078125,
+        "tracks": [
+          {
+            "y": 290.640625,
+            "progress": 461.890625
+          },
+          {
+            "y": 625.375,
+            "progress": 625.375
+          }
+        ],
+        "dividers": [],
+        "spacers": 0,
+        "lines": [
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00"
+        ]
+      },
+      {
+        "top": 133,
+        "height": 543.078125,
+        "tracks": [
+          {
+            "y": 238.125,
+            "progress": 245.4375
+          },
+          {
+            "y": 318.890625,
+            "progress": 318.890625
+          },
+          {
+            "y": 436.625,
+            "progress": 436.625
+          }
+        ],
+        "dividers": [],
+        "spacers": 0,
+        "lines": []
+      },
+      {
+        "top": 691.078125,
+        "height": 682.453125,
+        "tracks": [
+          {
+            "y": 823.453125,
+            "progress": 823.453125
+          },
+          {
+            "y": 1025.21875,
+            "progress": 1025.21875
+          },
+          {
+            "y": 1124.421875,
+            "progress": 1124.421875
+          },
+          {
+            "y": 1223.625,
+            "progress": 1223.625
+          }
+        ],
+        "dividers": [],
+        "spacers": 1,
+        "lines": [
+          "Monthly Capacity: $250.00",
+          "Monthly Capacity: $250.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "Weekly Capacity: ~$8.00",
+          "Monthly Capacity: ~$36.00"
+        ]
+      },
+      {
+        "top": 691.078125,
+        "height": 682.453125,
+        "tracks": [
+          {
+            "y": 823.453125,
+            "progress": 823.453125
+          },
+          {
+            "y": 986.9375,
+            "progress": 986.9375
+          },
+          {
+            "y": 1086.140625,
+            "progress": 1086.140625
+          },
+          {
+            "y": 1223.625,
+            "progress": 1223.625
+          },
+          {
+            "y": 1322.828125,
+            "progress": 1322.828125
+          }
+        ],
+        "dividers": [],
+        "spacers": 0,
+        "lines": [
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "Weekly Capacity: ~$8.00",
+          "Monthly Capacity: ~$36.00",
+          "Monthly Capacity: $250.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00"
+        ]
+      }
+    ],
+    "after": [
+      {
+        "top": 133,
+        "height": 554.921875,
+        "tracks": [
+          {
+            "y": 285.125,
+            "progress": 285.125
+          }
+        ],
+        "dividers": [],
+        "spacers": 1,
+        "lines": [
+          "Monthly Capacity: $250.00"
+        ]
+      },
+      {
+        "top": 133,
+        "height": 554.921875,
+        "tracks": [
+          {
+            "y": 285.125,
+            "progress": 285.125
+          },
+          {
+            "y": 466.359375,
+            "progress": 466.359375
+          }
+        ],
+        "dividers": [
+          380.859375
+        ],
+        "spacers": 0,
+        "lines": [
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00"
+        ]
+      },
+      {
+        "top": 133,
+        "height": 554.921875,
+        "tracks": [
+          {
+            "y": 285.125,
+            "progress": 285.125
+          },
+          {
+            "y": 466.359375,
+            "progress": 466.359375
+          },
+          {
+            "y": 573.5625,
+            "progress": 573.5625
+          }
+        ],
+        "dividers": [
+          380.859375,
+          511.5625
+        ],
+        "spacers": 0,
+        "lines": [
+          "Weekly Capacity: ?",
+          "Monthly Capacity: ?",
+          "Weekly Capacity: ?",
+          "Monthly Capacity: ?",
+          "Monthly Capacity: ?"
+        ]
+      },
+      {
+        "top": 702.921875,
+        "height": 870.609375,
+        "tracks": [
+          {
+            "y": 835.296875,
+            "progress": 835.296875
+          },
+          {
+            "y": 1016.53125,
+            "progress": 1016.53125
+          },
+          {
+            "y": 1197.765625,
+            "progress": 1197.765625
+          },
+          {
+            "y": 1328.46875,
+            "progress": 1328.46875
+          }
+        ],
+        "dividers": [
+          931.03125,
+          1112.265625,
+          1242.96875
+        ],
+        "spacers": 2,
+        "lines": [
+          "Monthly Capacity: $250.00",
+          "Monthly Capacity: $250.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "Weekly Capacity: ~$8.00",
+          "Monthly Capacity: ~$36.00"
+        ]
+      },
+      {
+        "top": 702.921875,
+        "height": 870.609375,
+        "tracks": [
+          {
+            "y": 835.296875,
+            "progress": 835.296875
+          },
+          {
+            "y": 1016.53125,
+            "progress": 1016.53125
+          },
+          {
+            "y": 1197.765625,
+            "progress": 1197.765625
+          },
+          {
+            "y": 1328.46875,
+            "progress": 1328.46875
+          },
+          {
+            "y": 1509.703125,
+            "progress": 1509.703125
+          }
+        ],
+        "dividers": [
+          931.03125,
+          1112.265625,
+          1242.96875,
+          1424.203125
+        ],
+        "spacers": 1,
+        "lines": [
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00",
+          "Weekly Capacity: ~$8.00",
+          "Monthly Capacity: ~$36.00",
+          "Monthly Capacity: $250.00",
+          "5-hour Capacity: ~$17.00",
+          "Monthly Capacity: ~$2400.00"
+        ]
+      }
+    ]
+  },
+  "live": {
+    "focused_accounts": "PASS",
+    "cards": 3,
+    "owners": 1,
+    "native_capacity_pairs_pace": 1,
+    "estimated_amount_checks": 0,
+    "seconds": 6.7057,
+    "broader_history": "FAIL: probe_watch_cards_timeout",
+    "checked": 559,
+    "total": 3085,
+    "observation_cap_seconds": 90,
+    "whole_population_history": "UNVERIFIED",
+    "disposition": "Decision Delegate: FR000661-only minor journal verification exception, no functional acceptance waived"
+  }
+}

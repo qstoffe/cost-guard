@@ -309,7 +309,7 @@ def _with_display(value, timezone_id, now_ms):
     reference = quota_ccost_values(values, now_ms) if "period_ccost" in values else {}
     if reference:
         value = ObjectValue(value.fields + (("ccost_reference", record(**{key: reference[key] for key in
-            ("used", "capacity", "remaining", "basis", "monthly_capacity")})),))
+            ("used", "capacity", "remaining", "basis", "monthly_capacity", "monthly_applicable")})),))
     if "native_pace" in values:
         value = ObjectValue(value.fields + (("ccost_pace", quota_ccost_pace(values, now_ms, reference)),))
     # Only differing CCost tokens need a second wire representation. Native
