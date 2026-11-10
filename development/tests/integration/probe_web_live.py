@@ -188,6 +188,10 @@ def main():
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
+        selected = owners[0].coordinator.selection.selected
+        assert selected in {'v1', 'v2'} and live['source_generation'] == selected
+        print(json.dumps(dict(source_generation='verified', selected=selected,
+            transport='authenticated_host_live', live_owners=len(owners))))
         if args.benchmark:
             from development.tests.integration.models_source_observations import observe_benchmark
             print(json.dumps(observe_benchmark(get, cookie, host)))

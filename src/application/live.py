@@ -101,7 +101,11 @@ class LiveRuntime:
                         raise
 
     def _publish_frame(self, driver, frame):
+        selection = getattr(driver.coordinator, "selection", None)
+        generation = getattr(selection, "selected", None)
+        verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
         self.publish("live", record(state=driver.source_state,
+            source_generation=generation if verified and generation in {"v1", "v2"} else "unknown",
             source_observed_at_ms=driver.observed_at_ms,
             error_code=driver.error.code.value if driver.error else None,
             view=project_live(frame, driver.coordinator.report_service.timezone_id,

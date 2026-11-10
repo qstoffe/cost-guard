@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000670: `application/live.py::_publish_frame`, `assets/live.js`, `app.js`,
+`index.html` and `app.css` own the source-qualified global notice, not selection.
+`test_v1_web_watch.py` / `fixtures/v1_watch.py` compare actual SQLite through separate
+CLI and Web owners; `serve_v1_watch.py` / `probe_v1_watch.cjs` exercise genuine host/
+HTTP/SSE/Full/Mini and synthetic failure/reconnect/layout states.
+[Source matrix and investigation limits](../../journal/web/v1-compatibility.md).
+
 FR000669: `sessions.js` composes stable task/count/work slots around the unchanged
 shared loader. `session_summary.py` reports actual bounded cache/read/projection
 boundaries through `session_catalog.py`, without source-content export or another

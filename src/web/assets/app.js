@@ -20,6 +20,11 @@ let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
 let demand = null; // Enabled only after the authenticated host advertises it.
+const sourceNotice = document.getElementById('source-compatibility');
+function sourceNoticeGeometry() {
+  document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
+}
+if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
 function firstReport(state = current) {
   if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
@@ -84,6 +89,10 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
   hostState = {...hostState, ...state};
+  if (sourceNotice) {
+    sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
+    sourceNoticeGeometry();
+  }
   if (hostState.terminal) demand?.close?.(false);
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
