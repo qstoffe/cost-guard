@@ -53,7 +53,9 @@ class SessionCatalog:
         self.failure_counts = {}
         self.failure_reasons = {}
         self.generation = 0
-        self.metrics = dict(cache_hits=0, cache_misses=0, attempts=0, retries=0)
+        self.metrics = dict(cache_hits=0, cache_misses=0, attempts=0, retries=0, settled=0)
+        self.work = None
+        self.work_sequence = 0
         self.activity = {}
         self.active = frozenset()
         self.prompt_activity = {}
@@ -235,8 +237,10 @@ class SessionCatalog:
                 self.attempted[key] = self.clock()
                 self.metrics['attempts'] += 1
                 self.metrics['retries'] += int(key in self.failures)
+                retrying = key in self.failures
             try:
-                row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics)
+                row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
+                    on_stage=lambda stage: self._stage(stage, retrying))
             except (SourceError, PricingUnavailableError) as error:
                 with self.lock:
                     if key in self.roots and revision == self.revisions.get(key):
@@ -264,6 +268,10 @@ class SessionCatalog:
                             self.failures[key] = revision, False
                             self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
                             self.failure_reasons[key] = 'concurrent_source_change'
+            finally:
+                with self.lock:
+                    self.work = None
+                    self.metrics['settled'] += 1
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
@@ -272,6 +280,12 @@ class SessionCatalog:
             if not any(self._browsing(lease) for lease in self.leases.values()):
                 self.background_due = self.clock() + (15 if any(
                     not self._current(key) for key in targets if key in self.roots) else 900)
+
+    def _stage(self, stage, retrying):
+        # One scalar lane owns these actual call boundaries, never a browser clock.
+        with self.lock:
+            self.work_sequence += 1
+            self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
     def _rows(self):
         rows = []
@@ -301,7 +315,11 @@ class SessionCatalog:
             status='failed' if reason else 'pending' if pending or completed < len(keys) else 'ready',
             completed=completed, total=len(keys), reason=reason,
             failed=len(failed), waiting=sum(key in self.failures for key in keys),
-            pinned=pinned, metrics=dict(self.metrics))
+            pinned=pinned, metrics=dict(self.metrics),
+            revalidating=sum(key in self.rows and not self._key_current(key, sort) for key in keys),
+            work=dict(self.work) if self.work else dict(active=False, sequence=self.work_sequence,
+                stage='waiting_retry' if any(key in self.failures for key in keys) else
+                      'queued' if pending or completed < len(keys) else 'ready'))
 
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None):
         with self.lock:

@@ -7,7 +7,7 @@ async function main() {
   const directory = path.dirname(output);
   const profile = await fs.mkdtemp(path.join(directory, 'sessions-browser-'));
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py', config],
+  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py', mode === '--catalog-real-churn' ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
   let serverError = ''; server.stderr.on('data', bytes => serverError += bytes.toString());
@@ -62,7 +62,15 @@ async function main() {
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
-        await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+         await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+         if (mode === '--catalog-real-churn') {
+           const details = await require('../fixtures/sessions_source_browser.cjs')({evaluate, until});
+           checks.push(details);
+           assert.deepEqual(errors, []);
+           evidence = {outcome:'OBSERVED',browser:version.product,checks,layouts,inference_calls:0,
+             personal_profile:false,desktop_effects:false};
+           console.log(JSON.stringify(evidence)); return;
+         }
         if (mode === '--catalog-navigation-only') {
           const details = await require('../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
             command:(method, params) => command(method, params, sessionId)});

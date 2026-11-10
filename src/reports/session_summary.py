@@ -45,8 +45,10 @@ def summary_key(service, root):
         service._load_comparison_catalog().diagnostic_signature))
 
 
-def session_summary(service, root, revision, *, active=False, metrics=None):
+def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
+    stage = on_stage or (lambda _stage: None)
+    stage('checking_cache')
     key = summary_key(service, root)
     try:
         cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
@@ -103,7 +105,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None):
     service.invalidate_roots((root.session_id,))
     # Derived analysis alone does not carry full-source acquisition completeness.
     # Establish it once on scalar-cache miss, without changing finite-report semantics.
+    stage('reading_summary')
     item = service._analyze(root, detail=True, force_fresh=active)
+    stage('projecting_summary')
     row = service._session_rows((item,))[0]
     row = replace(row, complete=row.complete and item.snapshot.complete)
     actual = item.bundle.source_revision

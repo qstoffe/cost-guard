@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.19 - 2026-11-10
+
+- Sessions separates a stable requested-sort/page heading, exact index/page counts and source-backed current work around one centered determinate progress bar. Fixed nodes and reserved slots avoid count/stage layout jumps; screen readers announce phases, not every root.
+- Source generations no longer exhaust an eight-rebase allowance while valid keys accumulate. Changed keys still require revalidation; an owned bounded slow summary read is not mistaken for idle no-progress. Source/read/request failures remain actionable, with no total deadline on progressing work.
+- Failure keeps the requested operation and Retry/Cancel in place instead of exposing the old Last activity table above an offscreen error. Redundant route notifications preserve pending/failed intent; explicit Cancel restores the prior page, URL and focus. Retry reuses only revision-qualified indexed work.
+
 ## v81.18 - 2026-11-10
 
 - Models removes the initial full-width blue focus outline that resembled a leftover loading track. Automatic entry keeps its page focus and new-route top scroll, without resetting same-route interactions.

@@ -765,6 +765,53 @@ class SessionCatalogTests(unittest.TestCase):
         self.catalog.tick(self.service)
         self.assertFalse(self.catalog.page(token=page['token'], sort='ctx')['pending_sort'])
 
+    def test_running_revision_churn_preserves_other_keys_and_requalifies_only_changed_root(self):
+        self.source = SyntheticMonthSource(3217, 1, month_start_ms=1000, running_roots=1)
+        self.observe()
+        self.catalog.tick(self.service)
+        self.index()
+        page = self.catalog.page(sort='ccost', direction=-1)
+        original = dict(self.catalog.valid)
+        for sequence in range(12):
+            snapshot = self.source.snapshots['root-0000']
+            self.source.snapshots['root-0000'] = replace(snapshot, source_revision=f'running-{sequence}',
+                root=replace(snapshot.root, updated_at_ms=1000 + sequence))
+            self.observe()
+            pending = self.catalog.page(token=page['token'], sort='ccost', direction=-1)
+            self.assertTrue(pending['pending_sort'])
+            self.assertEqual(pending['progress']['completed'], 3216)
+            self.assertEqual(pending['progress']['revalidating'], 1)
+            self.assertEqual(self.catalog.valid['root-1000'][0], original['root-1000'][0])
+        acquired = []
+        def changed_summary(service, root, revision, **kwargs):
+            acquired.append(root.session_id)
+            return replace(self.catalog.rows[root.session_id], ccost=Decimal('99999')), revision
+        with patch('src.application.session_catalog.session_summary', side_effect=changed_summary):
+            self.catalog.tick(self.service)
+        ready = self.catalog.page(token=page['token'], sort='ccost', direction=-1)
+        self.assertEqual(acquired, ['root-0000'])
+        self.assertFalse(ready['pending_sort'])
+        self.assertEqual(ready['view']['session_usage'][0]['session_id'], 'root-0000')
+
+    def test_source_backed_work_is_visible_during_one_slow_read_and_cleared_on_failure(self):
+        page = self.catalog.page(sort='ccost')
+        def slow_summary(service, root, revision, *, on_stage, **kwargs):
+            on_stage('reading_summary')
+            self.clock += 70
+            pending = self.catalog.page(token=page['token'], sort='ccost')['progress']
+            self.assertEqual(pending['completed'], 0)
+            self.assertEqual(pending['work']['stage'], 'reading_summary')
+            self.assertTrue(pending['work']['active'])
+            self.assertGreater(pending['work']['sequence'], 0)
+            raise SourceUnavailableError('private source detail')
+        with patch('src.application.session_catalog.session_summary', side_effect=slow_summary):
+            self.catalog.tick(self.service)
+        waiting = self.catalog.page(token=page['token'], sort='ccost')['progress']
+        self.assertFalse(waiting['work']['active'])
+        self.assertEqual(waiting['work']['stage'], 'waiting_retry')
+        self.assertEqual(waiting['metrics']['settled'], 1)
+        self.assertNotIn('private', str(waiting))
+
 
 if __name__ == "__main__":
     unittest.main()

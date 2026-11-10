@@ -16,6 +16,18 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000669 narrows Sessions-only composition around `ReportLoading.View`: a stable
+requested heading, shared bar/inline percent, exact counts and independent work
+detail retain fixed nodes/slots. Scalar summary call boundaries alone supply safe
+cache/read/projection stages and active-read proof; HTTP still acquires no history.
+Source generations no longer count as failed navigation rebases, while existing
+per-root identity/revision/dependency qualification remains mandatory. The 45-second
+idle-coverage guard excludes currently owned source-bounded reads. Failure retains
+the operation in place with Retry/Cancel instead of revealing old rows above its
+error; redundant route notifications preserve intent. Models/detail/shared report
+loading behavior, source limits and acquisition lanes are unchanged.
+[Reproduction and limits](../../journal/web/sessions-navigation.md#three-tier-progress-and-apparent-rollback-fr000669).
+
 FR000668 keeps route/scroll and report lifetimes unchanged. `app.js::focusReport`
 distinguishes an intentional keyboard transfer from initial/already-focused scripted
 landmark focus. `app.css` suppresses only the main landmark's page-width outline,
