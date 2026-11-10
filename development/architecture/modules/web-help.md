@@ -106,9 +106,17 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
 
 ## Whole-application audit inventory
 
+FR000665 scoped delta (v81.15): Mini Total is an intentional no-help value, including
+N/A and Loading. Only its heading explains the whole-session scope, in one sentence.
+CCost retains compact prompt details and the running Duration cue; Session combines
+the full title and direct prompt number/25-grapheme preview. The existing server's
+prefix-free `account_ccost` token supplies Mini Total after the no-priced-work guard;
+global formatting, raw values and completeness stay unchanged.
+[Verification and limits](../../journal/web/mini-watch.md#quiet-total-and-direct-session-help-fr000665).
+
 FR000628 scoped delta (v80.208): actual reference-CCost N/A text is a shared help
 target, not a blanket rule for noncost N/A. Watch merges reasons into rich details;
-Mini retains stable independent prompt/session spans and compact prompt details.
+Mini retains stable independent prompt/session spans, with details on CCost only.
 FR000634 removes even N/A help from the global daily summary in Full and Mini;
 other cost scopes retain dynamic help, whose empty content closes an open panel
 without moving focus or reopening it. Sessions initial pending acquisition remains Loading.
@@ -125,8 +133,8 @@ without changing the rate signature. See [classification and evidence](../../jou
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
 | Watch: daily summary, account Today, primary/secondary quotas, exact reset | Global Today label, amount and prompt count remain plain semantic text. Account Today and native quota-summary help remain. Unknown Capacity/Monthly Capacity rows and their help targets are absent. Known values have distinct concise explanations plus native facts, without raw arithmetic/rounding. Ratio period Capacity and every numerical monthly equivalent use leading `~`; native amounts do not. Display-only first-letter normalization also applies to help/ARIA |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
-| Mini: table headings | Activity / Session / CCost / Total / Ctx; independent cost headings explain prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
-| Mini: session title/cost and prompt/history status | Session text reveals full title and represented canonical Prompt # (unknown stays unavailable). Separate CCost/Total cells retain independent value help over compact prompt model/effort/duration/calls and linked/mixed/pricing/outcome facts. Only genuinely running represented prompts use yellow for the complete Duration fragment in both cost tooltips, ticking/removing it in already-open help. History uses its actual representative. No row-wide popup, unsafe HTML, native title, detailed I/C/W/O or raw prompt text |
+| Mini: table headings | Activity / Session / CCost / Total / Ctx; CCost keeps its prompt/pricing definition. Total says exactly: The entire session’s reference cost, including attributed linked subagents. Active-next versus historical-last-valid-next context remains distinct |
+| Mini: session title/cost and prompt/history status | Session help reveals the full title and direct `Prompt #N: excerpt` line (unknown number stays unavailable), using the existing bounded 25-grapheme preview. CCost alone retains prompt model/effort/duration/calls and linked/mixed/pricing/outcome help, including the yellow running Duration fragment and open-help updates. Total stays plain selectable text without help, tabindex, native title or prompt details. History uses its actual representative. No row-wide popup, unsafe HTML, detailed I/C/W/O or raw prompt retrieval |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
 | Mini: subscriptions | Primary-window Capacity, then Next reset; applicable raw Capacity/current Remaining estimate help follows. Select canonical unit/provenance and reset tokens; no secondary or unrelated CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: reference checkboxes and multi-sort | Four semantic label-only definitions preserve click/keyboard/Shift actions and accessible sort names. Relative Price List Cost has two compact paragraphs: reference ratio, then shared recent token mix rather than task performance. Internal `relative_cost`, tiers and sample semantics are unchanged |

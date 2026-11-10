@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.15 - 2026-11-10
+
+- Mini Watch Total is plain selectable text with no value tooltip; its accessible heading help contains only the whole-session definition. Known priced subtotals omit the partial-pricing prefix here only, preserving Credits/USD, N/A, pending Loading and genuine zero without changing source values or completeness.
+- Session help shows the full title and direct `Prompt #N: excerpt` line using the existing 25-grapheme preview. CCost's prompt-specific help, live running Duration cue, other columns and Full Watch remain unchanged.
+
 ## v81.14 - 2026-11-10
 
 - Sessions replaces silent pending global sorts and uncached page navigation with shared determinate progress, real index/page counts and operation-specific Cancel help. Warm qualified pages apply directly without a loading layout swap.

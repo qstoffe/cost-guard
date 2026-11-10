@@ -52,12 +52,34 @@ class MiniWatchTests(unittest.TestCase):
         self.assertTrue(all(summary == summaries[0] for summary in summaries))
         self.assertEqual("4582.125", summaries[0]["cost"]["known_ccost"])
         self.assertEqual("?4583", summaries[0]["cost"]["display"]["known_ccost"])
+        self.assertEqual("4583", summaries[0]["cost"]["display"]["account_ccost"])
         self.assertEqual("?$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["known_ccost"])
+        self.assertEqual("$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["account_ccost"])
         self.assertEqual("refreshing", summaries[0]["state"])
         self.assertFalse(summaries[0]["cost"]["complete"])
         self.assertEqual(120000, summaries[0]["context"]["watch_next_context_tokens"])
         self.assertEqual(17, credits["history_cards"][0]["rows"][0]["live_context"]["watch_next_context_tokens"])
         self.assertEqual(["1.25", "2.75"], [card["rows"][0]["prompt"]["ccost"] for card in credits["active_cards"]])
+
+    def test_quiet_subtotal_token_preserves_partial_unknown_and_zero_source_facts(self):
+        for amount, observed, priced, complete, quiet, ordinary in (
+                ("562", 3, 2, False, ("562", "$5.62"), ("?562", "?$5.62")),
+                ("562", 3, 3, True, ("562", "$5.62"), ("562", "$5.62")),
+                ("0", 0, 0, True, ("0", "$0.00"), ("0", "$0.00")),
+                ("0", 1, 1, True, ("0", "$0.00"), ("0", "$0.00")),
+                ("0", 1, 0, False, ("—", "—"), ("N/A", "N/A"))):
+            cost = SessionCost(ComparisonCost(D(amount), observed, priced), complete, True)
+            card = replace(self.cards[0], session_cost=cost, session_cost_state="observed")
+
+            for index, unit in enumerate(("credits", "usd")):
+                wire = project_live(replace(self.frame, active_cards=(card,)), ccost_display_unit=unit).to_json()
+                total = wire["active_cards"][0]["session_summary"]["cost"]
+
+                with self.subTest(amount=amount, observed=observed, priced=priced, unit=unit):
+                    self.assertEqual(quiet[index], total["display"]["account_ccost"])
+                    self.assertEqual(ordinary[index], total["display"]["known_ccost"])
+                    self.assertEqual((amount, observed, priced, complete),
+                        (total["known_ccost"], total["observed_requests"], total["priced_requests"], total["complete"]))
 
     def test_same_session_distinct_prompts_dedup_focals_not_context_or_compaction(self):
         context = WatchRow("same-session", "Concurrent", replace(self.first, event_id="context", ccost=D(999)))

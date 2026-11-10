@@ -25,20 +25,26 @@ There is no Earlier Sessions button, separate history section or Duration column
   **Unknown finish time** help, never source-refresh time or an inferred ending.
 - **Session:** the flexible, left-aligned name, or canonical session ID if unnamed.
   Only the title ellipsizes. It remains selectable; its help includes the full name
-   and represented **Prompt #**, or **Prompt number unavailable**. When supported, it
-   adds a short hint from that same prompt's existing bounded preview: up to 25 visible
+   on its first line and **Prompt #N: excerpt** on the next, or **Prompt #N** without
+   an available excerpt. Missing numbers say **Prompt number unavailable**, with a
+   separate **Prompt: excerpt** only when supported. The hint uses that same prompt's
+   existing bounded preview: up to 25 visible
    characters, without splitting combining marks or emoji, and one ellipsis only when
    shortened. Missing/non-prompt previews add nothing; no full prompt text is fetched.
-- **CCost:** the representative prompt's own reference cost.
-- **Total:** the **entire canonical root/session cost**, including supported linked
-  subagents and pre-Watch history, in its own column without parentheses. Neither amount substitutes for the other. Credits/
-  USD, zero, **N/A**, unknown **Loading…** and partial **?** retain their meanings.
-  Each amount has independent help with model, effort, **Duration**, calls and relevant
+- **CCost:** the representative prompt's own reference cost, retaining partial **?**
+  and its prompt-specific help with model, effort, **Duration**, calls and relevant
   linked/mixed/pricing/outcome details. Only a genuinely running represented prompt’s
-  complete **Duration: time** line is yellow in both tooltips, and it continues updating
-  while open. Completion, failure, abort, unverified work or a historical representative
-  removes the cue; completed duration is frozen. These are reference
-   costs, not verified billing. This cost help does not expose prompt text.
+  complete **Duration: time** line is yellow, and it continues updating while open.
+  Completion, failure, abort, unverified work or a historical representative removes
+  the cue; completed duration is frozen. This help does not expose prompt text.
+- **Total:** the **entire canonical root/session cost**, including supported linked
+  subagents and pre-Watch history, in its own column without parentheses. The value is
+  plain selectable text with **no tooltip**. Its heading help says only: “The entire
+  session’s reference cost, including attributed linked subagents.” Known priced
+  subtotals omit the partial **?** here only; missing pricing is not filled in.
+  Credits/USD, real zero, **N/A** for wholly unpriced work and pending **Loading…**
+  remain distinct. Neither amount substitutes for the other; both are reference
+  costs, not verified billing. Full Watch and canonical completeness are unchanged.
 - **Ctx:** the running/recent representative's supported next-incoming estimate; a
   historical-only row uses the last valid **session-level next-request context**, not
    stale historical prompt context or a sum. Value help includes **Next Ctx**, matching

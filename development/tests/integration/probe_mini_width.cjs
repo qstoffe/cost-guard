@@ -40,7 +40,7 @@ module.exports=async({evaluate,command,sessionId,open,close,read,capture,layouts
     await evaluate(`(()=>{ReportView.setUnit('${unit}');const p=structuredClone(liveValue);p.view.now_ms++;
       p.view.cards_state='observed';for(const card of [...p.view.active_cards,...p.view.history_cards]){card.state='observed';
         for(const row of card.rows)row.prompt.display_units={${unit}:{ccost:'${amount}'}};
-        card.session_summary.cost.display_units={${unit}:{known_ccost:'${total}'}};}
+        card.session_summary.cost.display_units={${unit}:{known_ccost:'${total}',account_ccost:'${total}'}};}
       window.widthPublication=p;miniWatch.update(p);})()`);
     await open();await evaluate(`miniWatch.window.resizeTo(${width},550)`,true);
     await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))');

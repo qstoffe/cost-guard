@@ -297,7 +297,7 @@ const MiniWatch = (() => {
         const cell = this.el('th'); cell.scope = 'col';
         const explanation = {Activity: 'Start time for a running prompt; finish time for a completed prompt/session.\nConfigured local time; focus or hover the value for the full local date and UTC offset.', Session: 'The name of the session.',
           CCost: 'The represented prompt’s reference cost, not provider billing. N/A means unavailable; ? means partial pricing.',
-          Total: 'The entire session’s reference cost, including attributed linked subagents, not provider billing. N/A means unavailable; ? means partial pricing.',
+          Total: 'The entire session’s reference cost, including attributed linked subagents.',
           Ctx: 'Estimated context for this prompt’s next request; for historical sessions, the last valid session-level estimate.\nNot historical prompt context or a sum. N/A means unavailable, not zero.'}[name];
         const button = ContextHelp.button(name, explanation, this.doc);
         if (name === 'Session') cell.className = 'mini-session-cell';
@@ -324,7 +324,6 @@ const MiniWatch = (() => {
       cell.append(value);
       const promptCost = this.el('span', '', 'mini-cost-value'), sessionCost = this.el('span', '', 'mini-cost-value');
       ContextHelp.value(promptCost, () => row.costHelp);
-      ContextHelp.value(sessionCost, () => row.totalCostHelp);
       row.children[2].append(promptCost); row.children[3].append(sessionCost);
       ContextHelp.value(row.children[4], () => row.contextHelp || 'Context estimate unavailable');
       return row;
@@ -337,14 +336,11 @@ const MiniWatch = (() => {
     rowHelp(row, session, item, card, context, historical) {
       const number = item?.prompt?.prompt_number;
       const preview = promptPreview(item?.prompt);
-      const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session';
-      row.sessionHelp = `${session}\n${identity}${preview ? (number == null ? '\nPrompt preview: ' : ': ') + preview : ''}`;
+      const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number;
+      row.sessionHelp = `${session}\n${identity}${preview ? (number == null ? '\nPrompt: ' : ': ') + preview : ''}`;
       const prompt = item?.prompt;
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
       row.costHelp = this.promptDetails(item, ReportView.costHelp(prompt), highlight);
-      row.totalCostHelp = this.promptDetails(item, ['Whole-session reference CCost, including linked subagents.',
-        ReportView.costHelp(card.session_summary?.cost || (card.session_summary?.state === 'unavailable' ? {} : null), 'known_ccost')]
-        .filter(Boolean).join('\n\n'), highlight);
       const warning = card.session_summary?.context?.warning;
       row.children[4].dataset.guidance = warning?.guidance_state || 'ready';
       const delta = ReportView.display(item?.live_context, 'watch_delta_context_tokens');
@@ -358,7 +354,9 @@ const MiniWatch = (() => {
     }
     drawCost(row, card, prompt) {
       const summary = card.session_summary, cost = summary?.cost;
-      const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
+      // Reuse the server's unit-correct, prefix-free known subtotal; guard its
+      // no-priced-work dash here so Mini retains its established N/A semantics.
+      const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'account_ccost') :
         summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const amount = ReportView.display(prompt, 'ccost');
       ReportView.text(row.children[2].children[0], amount);

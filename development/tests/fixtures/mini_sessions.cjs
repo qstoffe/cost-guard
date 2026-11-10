@@ -22,7 +22,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.match(helpText(headers[0].children[0]),/Start time for a running prompt; finish time for a completed prompt\/session\./);
   assert.equal(helpText(headers[1].children[0]),'The name of the session.');
   assert.match(helpText(headers[2].children[0]),/represented prompt’s reference cost/);
-  assert.match(helpText(headers[3].children[0]),/entire session’s reference cost[\s\S]*linked subagents/);
+  assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');
   assert.match(helpText(headers[4].children[0]),/last valid session-level estimate/);
   for(const count of [0,1,3,4,5,6,10]) {
     const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
@@ -43,12 +43,12 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     value.rows[0].prompt.prompt_number=100+i;value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=String(i);return value;});
   show(concurrent,history);assert.equal(rows().length,5);assert.equal(view.promptRows.get('h4'),retained);
   assert.match(retained.attributes['aria-label'],/Prompt 109 · Running/);
-  assert.equal(helpText(retained.children[1].children[0].children[0]),'Same display title\nPrompt #109 in this session');
+  assert.equal(helpText(retained.children[1].children[0].children[0]),'Same display title\nPrompt #109');
   const cost=retained.children[2].children[0];
   assert.match(helpText(cost),/Duration: 10m/);assert.equal(retained.children[2].textContent,'9');
   assert.equal(retained.children[3].textContent,'4583');
-  for (const index of [2,3]) {
-    assert.match(helpText(retained.children[index].children[0]),/Duration: 10m/);
+  {
+    assert.match(helpText(cost),/Duration: 10m/);
     const panel=view.doc.body.children.at(-1);
     assert.equal(panel.children.length,3);
     assert.equal(panel.children[1].className,'context-help-running-duration');
@@ -61,10 +61,8 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   show([...concurrent,unverified],history);assert.equal(time.textContent,'12:34');
   assert.match(retained.attributes['aria-label'],/Running/,'genuinely running wins over unverified candidate');
   show([unverified],history);assert.match(retained.attributes['aria-label'],/Unverified/);assert.equal(retained.className,'');
-  for (const index of [2,3]) {
-    helpText(retained.children[index].children[0]);
-    assert.equal(view.doc.body.children.at(-1).children.length,0,'unverified Duration is plain text');
-  }
+  helpText(cost);
+  assert.equal(view.doc.body.children.at(-1).children.length,0,'unverified Duration is plain text');
   const ended=Array.from({length:5},(_,i)=>{const c=card('h4',400+i);c.focal_id=c.rows[0].prompt.event_id='end'+i;return c;});
   show(ended,history);assert.equal(ids().filter(id=>id==='h4').length,1);assert.equal(view.promptRows.get('h4'),retained);
   assert.equal(retained.className,'mini-success');assert.equal(ids().at(-1),'h4');
@@ -93,13 +91,44 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(rows().length,5);assert.doesNotMatch(view.body.textContent,/checking for changes/);
   show([],[]);assert.equal(rows().length,0);assert.equal(view.body.children[0].children[0].colSpan,5);
   show([],history.slice(0,2));assert.equal(rows().length,2,'no duplicate/fake data rows');
-  for(const [amount,total] of [['N/A','562'],['49','Loading…'],['?49','?562'],['0','0']]) {
+  for(const [amount,total] of [['N/A','562'],['49','Loading…'],['?49','562'],['0','0']]) {
     const value=card('only',10);value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=amount;
-    value.session_summary.cost=total==='Loading…'?null:{display:{known_ccost:total}};value.session_summary.state='loading';show([],[value]);
+    value.session_summary.cost=total==='Loading…'?null:{display:{account_ccost:total}};value.session_summary.state='loading';show([],[value]);
     assert.equal(rows()[0].children[2].textContent,amount);
     assert.equal(rows()[0].children[3].textContent,total);
     assert.equal(rows()[0].children[2].children[0].attributes['aria-label'],'Prompt reference CCost: '+amount);
     assert.equal(rows()[0].children[3].children[0].attributes['aria-label'],'Whole-session reference CCost: '+total);
+    const plain=rows()[0].children[3].children[0];
+    assert.equal(plain.className,'mini-cost-value');assert.equal(plain.tabIndex,undefined);
+    assert.equal(plain.attributes.title,undefined);assert.deepEqual(plain.events,{});
+    assert.equal(rows()[0].totalCostHelp,undefined);
+  }
+  // Source-corrected whole-session subtotals never replace the representative cost.
+  const partial=card('subtotal',500,true),summary=partial.session_summary;
+  partial.rows[0].prompt.display_units={};
+  summary.cost={known_ccost:'562',complete:false,observed_requests:3,priced_requests:2,
+    display:{known_ccost:'?562',account_ccost:'562'},display_units:{
+      credits:{known_ccost:'?562',account_ccost:'562'},usd:{known_ccost:'?$5.62',account_ccost:'$5.62'}}};
+  const canonical=JSON.stringify(partial);
+  for(const stage of ['running','grace','history']) {
+    partial.rows[0].prompt.in_progress=stage==='running';partial.rows[0].prompt.completed_at_ms=600;
+    for(const [unit,expected] of [['credits','562'],['usd','$5.62']]) {
+      vm.runInContext(`ReportView.setUnit('${unit}')`,context);
+      show(stage==='history'?[]:[partial],stage==='history'?[partial]:[]);
+      const row=rows()[0];assert.equal(row.children[3].textContent,expected);
+      assert.equal(row.children[2].textContent,'49');
+    }
+  }
+  partial.rows[0].prompt.in_progress=true;partial.rows[0].prompt.completed_at_ms=null;
+  assert.equal(JSON.stringify(partial),canonical,'display never rewrites canonical cost/completeness');
+  vm.runInContext('ReportView.setUnit("credits")',context);
+  for(const [cost,state,expected] of [
+    [{display:{account_ccost:'563'},observed_requests:3,priced_requests:2},'refreshing','563'],
+    [{display:{account_ccost:'—'},observed_requests:3,priced_requests:0},'observed','N/A'],
+    [{display:{account_ccost:'0'},observed_requests:0,priced_requests:0},'observed','0'],
+    [null,'unavailable','N/A'],[null,'loading','Loading…']]) {
+    summary.cost=cost;summary.state=state;show([partial],[]);
+    assert.equal(rows()[0].children[3].textContent,expected);
   }
   // Full Watch keeps its independent per-prompt rows and certified five history cards.
   show(saved.active_cards,history);context.fullInput=input;context.fullParent=view.el('div');context.fullState={connection:'Live connected.'};
