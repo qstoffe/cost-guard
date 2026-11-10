@@ -95,9 +95,11 @@ def finite(sender, request):
         root = Path(os.environ['COST_GUARD_PAGING_FIXTURE'])
         delay = (root / 'models-delay').read_text()
         if delay == 'gated':
-            until = time.monotonic() + 15
+            until = time.monotonic() + 30
             while not (root / 'models-release').exists() and time.monotonic() < until:
                 time.sleep(.05)
+            if not (root / 'models-release').exists():
+                raise TimeoutError('synthetic_models_release_timeout')
             time.sleep(2)
         elif float(delay):
             time.sleep(float(delay))

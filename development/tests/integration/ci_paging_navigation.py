@@ -69,7 +69,6 @@ def navigation(page, evidence, *, enforce):
             assert after['focus'] == 'content'
             assert all(item['y'] == 0 for item in after['trace'] if item['phase'].startswith('frame-'))
         observations.append(dict(origin=section, before=before, **after))
-        notice('Models entry', dict(scenario=evidence['scenario'], before=before, y=after['y'], focus=after['focus'], trace=after['trace']))
     # Cached browser Back/Forward must apply the same new-route policy.
     route(page, 'comparisons')
     page.go_back()
@@ -79,6 +78,8 @@ def navigation(page, evidence, *, enforce):
         assert page.evaluate('scrollY') == 0
     page.go_forward()
     page.wait_for_function('() => current.section==="comparisons"')
+    notice('Models routes', dict(arm='current' if enforce else 'baseline', routes=[
+        {key: item[key] for key in ('origin', 'before', 'y', 'focus')} for item in observations]))
     return observations
 
 
@@ -92,8 +93,9 @@ def cold_models(context, host, root, evidence):
         page.evaluate(TRACE)
         before = page.evaluate('() => {scrollTo(0,document.documentElement.scrollHeight);recordNavigation("activation");return scrollY;}')
         assert before > 100
+        page.wait_for_function('() => hostState.writable', timeout=15000)
         route(page, 'models')
-        assert page.evaluate('!current.result && current.loading')
+        page.wait_for_function('() => !current.result && current.loading', timeout=15000)
         page.evaluate('() => renderedFrames()')
         assert page.evaluate('scrollY') == 0
         (root / 'models-release').write_text('release')
@@ -287,6 +289,8 @@ def check_navigation_paging(browser, evidence):
             evidence['scenario'] = 'models-delayed-same-route-detail'
             evidence['models_delayed'] = cold_models(context, host, root, evidence)
             notice('Models delayed', evidence['models_delayed'])
+            from development.tests.integration.ci_browser_zoom import check_zoom
+            check_zoom(browser, host, root, evidence)
             evidence['scenario'] = 'real-source-paging-lifetime'
             evidence['paging_lifetime'] = paging(page, host, root, evidence)
             notice('paging lifetime', evidence['paging_lifetime'])

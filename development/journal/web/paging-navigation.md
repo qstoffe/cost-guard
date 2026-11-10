@@ -132,6 +132,17 @@ diagnostics and aligns the live fixture clock with its current-wall-time source;
 this is not yet an established cause of the browser timeout. Latest Full rerun:
 181/181 PASS in131.6s; focused CI/report/dispatch85tests PASS.
 
+Fifth head `8660527` again passed the five current/baseline route comparisons but
+raced the new tab's reconnect before the cold request started; the failed immediate
+loading assertion observed `host=reconnecting`. Cold tests now wait for the real
+writable/start event while keeping publication gated, rather than assuming SSE
+startup has already completed. Diagnostic notices are compacted to avoid the
+per-step annotation cap. The Delegate did not waive zoom: its adequate alternative
+is a disposable CI-only extension using actual per-tab `chrome.tabs.setZoom(1.25)`
+and `getZoom`, an un-emulated viewport and one delayed Models transition. The new
+bounded probe implements that proposal; success is not yet claimed. No extension
+permissions, external desktop or new credential access are added.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.
