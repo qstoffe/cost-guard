@@ -314,7 +314,10 @@ class WatchCards:
             tuple(projected), state,
             capture.context if state != "unavailable" else None, entry.cost.value,
             "unavailable" if state == "unavailable" else entry.cost.status,
-            observed_at_ms=None if capture.retained else capture.observed_at_ms)
+            observed_at_ms=None if capture.retained else capture.observed_at_ms,
+            context_handoff=(dict(capture.context_handoffs).get(focal.event_id)
+                if focal is not None and state == 'observed' and not capture.retained
+                and entry.verified_generation == entry.generation else None))
 
     def project(self, now_ms):
         active = []

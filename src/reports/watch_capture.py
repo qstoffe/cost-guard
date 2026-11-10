@@ -6,6 +6,7 @@ incremental session-cost work; no aggregate blocks this row publication.
 """
 from dataclasses import dataclass
 
+from src.domain import EventKind
 from src.reports.sampling import AnalyzedRoot
 from .session_history import analyze_observed
 from .prompt_rows import PromptRowProjector
@@ -25,6 +26,7 @@ class WatchCapture:
     context: object = None
     authoritative: bool = False
     cost_snapshot: object = None
+    context_handoffs: tuple = ()
 
     @property
     def history_row(self):
@@ -32,6 +34,41 @@ class WatchCapture:
         terminal = [row for row in self.rows if not row.in_progress]
         return max(terminal, key=lambda row: (row.completed_at_ms or 0,
             0 if row.completed_at_ms else row.at_ms, row.event_id), default=None)
+
+
+def mini_context_handoffs(projector, rows):
+    """Authorize display continuity only before a comparable first root request.
+
+    The browser must already have displayed this exact source-owned predecessor
+    value. This neither supplies an estimate nor changes Full Watch arithmetic.
+    An unbound new model is pending, not proof of a model change; known identity
+    conflicts and explicit boundaries retire the predecessor immediately.
+    """
+    records = projector.bundle.prompts
+    by_id = {row.event_id: row for row in rows}
+    handoffs = []
+    for current in records:
+        row = by_id.get(current.prompt_id)
+        prior = current.pre_prompt_entry
+        if (row is None or row.watch_next_context_tokens is not None or not current.in_progress
+                or current.execution_unverified or current.aborted or current.watch_error
+                or current.prompt_kind == 'subtask' or prior is None
+                or any(entry.session_id == current.session_id for entry in current.entries)
+                or projector.epochs.active_prompt(current) is not True
+                or projector.epochs.active_entry(prior) is not True
+                or (current.main_model_id and current.main_model_id != prior.model.model)
+                or (current.main_provider_id and current.main_provider_id != prior.model.provider)
+                or projector.epochs.retired(current.session_id, prior.completed_at_ms)
+                or any(item.session_id == current.session_id and item.kind is EventKind.COMPACTION
+                       and item.created_at_ms >= prior.completed_at_ms for item in projector.snapshot.events)):
+            continue
+        previous = next((item for item in records if item.last_root_entry == prior), None)
+        before = by_id.get(previous.prompt_id) if previous is not None else None
+        if (before is not None and previous.session_id == current.session_id
+                and not before.execution_unverified and not before.aborted
+                and not before.watch_error and before.watch_next_context_tokens is not None):
+            handoffs.append((current.prompt_id, (previous.prompt_id, before.watch_next_context_tokens)))
+    return tuple(handoffs)
 
 
 def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False):
@@ -70,4 +107,4 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
         card_context(projector, root.session_id, service._threshold_multiplier,
             defer_guidance=defer_guidance, guidance_signature=signature,
             source_epoch=(getattr(service.source, 'observation_epoch', None) or '') if defer_guidance else ''),
-        fresh.complete, fresh), item
+        fresh.complete, fresh, mini_context_handoffs(projector, rows) if fresh.complete and not retained else ()), item

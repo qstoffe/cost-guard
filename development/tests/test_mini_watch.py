@@ -12,11 +12,13 @@ from zoneinfo import ZoneInfoNotFoundError
 
 from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.context_deltas import context_snapshot, context_frame
+from development.tests.fixtures.mini_context import handoff_snapshot, handoff_capture, handoff_frame
 from development.tests.fixtures.pricing_catalog import catalog
 from src.analysis.session_cost import SessionCost
 from src.analysis.valuation import ComparisonCost
 from src.application.live_projection import project_live
 from src.analysis.timezones import resolve_timezone
+from src.domain import EventKind, NormalizedEvent
 from src.watch.models import WatchCard, WatchRow
 from src.watch.running import running_prompts
 
@@ -161,6 +163,34 @@ class MiniWatchTests(unittest.TestCase):
         self.assertEqual((17, 2, True, "quota_limit"), (item["prompt"]["calls"],
             item["prompt"]["linked_agent_count"], item["prompt"]["has_additional_model"], item["prompt"]["abort_reason"]))
         self.assertEqual("4582.125", card["session_summary"]["cost"]["known_ccost"])
+
+    def test_handoff_requires_active_comparable_source_predecessor_and_no_current_estimate(self):
+        capture = handoff_capture(handoff_snapshot())
+        self.assertEqual((('next', ('u', 172_000)),), capture.context_handoffs)
+        self.assertIsNone(capture.rows[-1].watch_next_context_tokens)
+        self.assertIsNone(capture.rows[-1].watch_delta_context_tokens)
+        wire = project_live(handoff_frame(self.frame, 'pending')).to_json()
+        self.assertEqual({'previous_id': 'u', 'previous_tokens': 172_000},
+            wire['active_cards'][0]['context_handoff'])
+        self.assertEqual('N/A', wire['active_cards'][0]['rows'][0]['live_context']['display']['watch_next_context_tokens'])
+        fresh = handoff_capture(handoff_snapshot('fresh')).rows[-1]
+        self.assertEqual(175_002, fresh.watch_next_context_tokens)
+        self.assertTrue(fresh.in_progress)
+        unverified = handoff_capture(handoff_snapshot('unverified')).rows[-1]
+        self.assertTrue(unverified.execution_unverified)
+        self.assertIsNone(unverified.watch_next_context_tokens)
+        for phase in ('fresh', 'tools', 'model', 'model-selection', 'reset', 'move',
+                      'inactive', 'unverified', 'partial-usage', 'incomplete'):
+            with self.subTest(phase=phase):
+                self.assertEqual((), handoff_capture(handoff_snapshot(phase)).context_handoffs)
+        snapshot = handoff_snapshot()
+        compacted = replace(snapshot.messages[-2], message_id='compact', created_at_ms=1800,
+            parts=(replace(snapshot.messages[-2].parts[0], kind='compaction', data={}),))
+        snapshot = replace(snapshot, messages=snapshot.messages + (compacted,),
+            parts=snapshot.parts + compacted.parts,
+            events=snapshot.events + (NormalizedEvent('compact', 'root', EventKind.COMPACTION,
+                1800, compacted.provenance, ''),))
+        self.assertEqual((), handoff_capture(snapshot).context_handoffs)
 
     def test_pending_unknown_partial_estimate_and_genuine_empty_are_distinct(self):
         for state in ("loading", "partial", "unavailable"):

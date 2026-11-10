@@ -16,6 +16,17 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000666 adds source-owned `context_handoffs` to canonical card capture, not an
+estimator or acquisition lane. Active-history proof, exact predecessor identity/raw
+tokens, absent current root usage and no compaction/context/model conflict qualify
+Mini-only carry-forward. Only fresh verified cards export the handoff. Mini retains
+its already-displayed formatted token, labels it as a previous same-session estimate,
+and keeps current prompt Δ independent. Fresh values, authoritative invalidation,
+row removal and source/host changes replace/clear it without a timer or persistence.
+Historical summaries qualify only with matching prompt context and later source proof.
+Full Watch, report/Watch calculations and geometry are unchanged.
+[Evidence and limits](../../journal/web/mini-watch.md#same-session-ctx-handoff-fr000666).
+
 FR000662 reuses `ReportLoading.View` only as a visual controller for first detail
 loading; it does not join finite report admission. `session.js` measures validated,
 revision-pinned rich rows over 0–95%, then marks applied complete DOM at 100%.

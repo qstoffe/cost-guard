@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.15, 2026-11-10), the supported distribution.
+Use **current `main`** (v81.16, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.15 (2026-11-10):** Mini Watch Total is plain selectable text without value help or a partial-pricing prefix; its heading keeps one concise definition. Session help shows the full title and compact `Prompt #N: excerpt` line. CCost help, canonical costs and unknown/zero semantics remain intact. [Mini guide](docs/web-mini-watch.md).
+**v81.16 (2026-11-10):** Mini Watch retains a previously displayed same-session Ctx while a new prompt awaits its first context evidence, only when the source validates the continuing predecessor. Help identifies the retained estimate; fresh values replace it immediately. Context invalidation, prompt-specific Δ Ctx, Full Watch and context calculations remain unchanged. [Mini guide](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

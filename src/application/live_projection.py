@@ -40,6 +40,8 @@ def card(value, now_ms):
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
         rows=tuple(card_row(row, now_ms, value.state == "observed") for row in value.rows), state=value.state,
         observed_at_ms=value.observed_at_ms,
+        context_handoff=None if value.context_handoff is None else record(
+            previous_id=value.context_handoff[0], previous_tokens=value.context_handoff[1]),
         session_summary=record(context=None if context is None else record(
             watch_next_context_tokens=context.tokens,
             warning=fields(context, "owner_id text severity multiplier cached_ccost fresh_ccost guidance_state guidance_sample_at_ms")),

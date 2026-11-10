@@ -5,6 +5,65 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Same-session Ctx handoff (FR000666)
+
+Scoped v81.16 delta against `eaa7cb93b5699b6887b169b6455bf27e55af6fe1`,
+checked locally 2026-11-10. The earlier headers/sections retain their own scope.
+
+- Existing session guidance and prompt context share canonical invalidation and
+  cannot always supply a numeric value while the next prompt has no bound model.
+  The old `waiting for comparable request context` detail also covers invalid data;
+  it is not sufficient permission for browser carry-forward.
+- `watch_capture.mini_context_handoffs` therefore exports only permission to retain
+  an exact earlier prompt/token pair. It requires complete nonretained capture,
+  proven active current/prior history, no current root request, no compaction since
+  the prior anchor, no retired boundary, no incompatible known provider/model, and
+  a supported predecessor projection. An unbound new model stays pending, not a
+  fabricated comparable measurement. Fresh verified Watch cards alone export it.
+- Mini's row owns only its last displayed source token/raw identity. The handoff
+  must match both; missing permission clears it. Historical seeding additionally
+  requires matching prompt/session context, never merely a numeric summary. New
+  source/host identity and row removal reset retention; old publication timestamps
+  are rejected before identity/observation changes. No arbitrary delay, storage,
+  request, context arithmetic, delta reuse, Full Watch or layout change.
+- Retained help says `previous same-session estimate; current prompt pending
+  refresh`; fresh same-number evidence removes that qualification immediately.
+  Δ always comes independently from the current prompt.
+
+Verification:
+
+- Local Full: **181 bounded groups, zero failures, 142.6 s**. Focused Mini was
+  rerun after final fixture/late-publication adjustments: **13 tests, zero failures**.
+  VM cases include repeated draws, several prompts, fresh equal values, separate
+  sessions, missing first context, zero, authoritative unknown, unverified work,
+  source correction, removal/reappearance, host/source changes and history resumption.
+- Package validation: **11 passes, zero failures, seven existing advisory warnings**;
+  no cap/baseline/dependency changes. No ZIP, tag or GitHub Release.
+- Integrated browser capability check found no Document PiP on its blank document.
+  Owned hidden **Edge 157.0.4341.42**, zoom/DPR 1, then passed actual Document PiP
+  with shipped HTTP/CSP/SSE. Raw synthetic V2 evidence passes through normalization,
+  analysis, capture, verified cards and Live: **172k → 172k → 175k**, repeated SSE/
+  timer draws, focused help/AX provenance, independent Δ, late snapshot rejection,
+  tool continuation, genuine reset/model/move/inactive/unverified invalidation, and
+  a newly opened Mini with no retained value. Reproducer:
+  `node development/tests/integration/probe_mini_fit.cjs <edge.exe> <owned.json> 1 1 context-only`.
+  Summary retained as `scratch:/mini-context.json` for this worker.
+- Read-only real installed V2 `probe_web_live.py --context-deltas`: one known running
+  context, zero handoffs observed, one acquisition owner, two verified streams,
+  sequence advancing, first usable row 1.115 s; owned threads/processes zero after
+  cleanup, shared OpenCode untouched. This verifies real export/formatting, **not**
+  the owner's original incident or a real new-prompt handoff. Earlier remained
+  loading; one history-batch/advance failure was recorded, not claimed as history PASS.
+- Initial probe failures were fixture defects, not waived acceptance: root and
+  invocation replacements now agree; the canonical estimate includes the prompt's
+  two-token growth. Partial current telemetry can still legitimately yield the
+  existing provisional `172k`, which must replace retained help rather than be
+  forced to N/A. Deterministic raw assertions now pin fresh/unverified fixture states.
+
+Limits: no paid model calls, source writes, physical desktop/work-area test or
+instrumental reproduction of the private incident. No acceptance exceptions or
+deferred product scope were needed; headless PiP proves the changed rendering path.
+
 ## Quiet Total and direct Session help (FR000665)
 
 Scoped v81.15 delta against `b22cfc98fa123ac50d4a201bb92eafe8c6c236d7`,

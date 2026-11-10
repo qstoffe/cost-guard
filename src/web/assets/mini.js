@@ -333,7 +333,7 @@ const MiniWatch = (() => {
       ReportView.text(cell.children[0].children[0], title);
       return title;
     }
-    rowHelp(row, session, item, card, context, historical) {
+    rowHelp(row, session, item, card, context, historical, retained) {
       const number = item?.prompt?.prompt_number;
       const preview = promptPreview(item?.prompt);
       const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number;
@@ -348,7 +348,7 @@ const MiniWatch = (() => {
       const guidance = [
         warning?.text?.replace(/^\[|\]$/g, ''),
         warning && ReportView.display(warning, 'warning_cost').replace(/^\(|\)$/g, '')].filter(Boolean).join('\n');
-      row.contextHelp = [`Next Ctx: ${context} (estimated next incoming context${detail === 'provisional text estimate' && !historical ? '; provisional text estimate' : ''}). Not remaining model capacity.`,
+      row.contextHelp = [`Next Ctx: ${context} (${retained ? 'previous same-session estimate; current prompt pending refresh' : 'estimated next incoming context' + (detail === 'provisional text estimate' && !historical ? '; provisional text estimate' : '')}). Not remaining model capacity.`,
         `Δ Ctx: ${delta} (${delta === 'N/A' && detail ? detail : historical ? 'historical prompt change; session estimate may be later' : 'represented prompt change'})`,
         guidance].filter(Boolean).join('\n\n');
     }
@@ -429,8 +429,17 @@ const MiniWatch = (() => {
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
-        const context = display(historical ? card.session_summary?.context : item?.live_context, 'watch_next_context_tokens');
-        this.rowHelp(row, session, item, card, context, historical);
+        const source = historical ? card.session_summary?.context : item?.live_context;
+        let context = display(source, 'watch_next_context_tokens');
+        const handoff = card.context_handoff, old = row.lastContext;
+        const retained = !historical && !prompt?.execution_unverified && prompt?.in_progress &&
+          source?.watch_next_context_tokens == null && handoff && old &&
+          old.id === handoff.previous_id && old.tokens === handoff.previous_tokens;
+        if (retained) context = old.text;
+        else row.lastContext = !prompt?.execution_unverified && Number.isFinite(source?.watch_next_context_tokens) &&
+          (!historical || source.watch_next_context_tokens === item?.live_context?.watch_next_context_tokens) ?
+          {id: prompt.event_id, tokens: source.watch_next_context_tokens, text: context} : null;
+        this.rowHelp(row, session, item, card, context, historical, retained);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
         const known = running ? prompt?.at_ms != null : prompt?.completed_at_ms != null;
@@ -612,6 +621,14 @@ const MiniWatch = (() => {
     update(value) {
       // Progress events and repeated HTTP snapshots may contain the same retained
       // Live value. They are not fresh source/presentation publications.
+      if (typeof value?.view?.now_ms === 'number' && value.view.now_ms < this.publication?.view?.now_ms) return;
+      // A changed source cannot inherit prompt observations or displayed context.
+      const scope = JSON.stringify([this.instance, value?.view?.source_label, value?.view?.history_scope]);
+      if (scope !== this.sourceScope) {
+        this.sourceScope = scope; this.observations = new Observations();
+        for (const view of [this.view, this.measure?.view])
+          if (view) for (const row of view.promptRows.values()) row.lastContext = null;
+      }
       const epoch = JSON.stringify([value?.view?.now_ms, value?.source_observed_at_ms]);
       if (epoch !== this.epoch) { this.epoch = epoch; this.receivedAt = Date.now(); }
       this.observations.update(value, Date.now());
@@ -628,6 +645,8 @@ const MiniWatch = (() => {
       if (instance && instance !== this.instance) {
         if (this.instance) { this.demand?.close(false); this.demand = null; this.demandFactory = null; }
         this.instance = instance; this.opened = false;
+        this.publication = null; this.observations = new Observations();
+        this.view?.drawSessions(null); this.measure?.view?.drawSessions(null);
       }
       if (values) {
         this.placement = values.miniWatchPlacement;
