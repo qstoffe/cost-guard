@@ -31,7 +31,16 @@ draw();
 assert.equal(all(output, 'th').length, 9);
 assert.equal(all(output, 'input').length, 4);
 assert.equal(all(output, 'button').length, 11);
-assert.deepEqual(all(output, 'h2').map(n => n.textContent), ['GitHub Reference Pricing', 'Coding Benchmark – Cost per Task', 'More Coding Benchmarks']);
+const headings = all(output, 'h2');
+assert.deepEqual(headings.map(n => n.textContent), ['GitHub Reference Pricing(GitHub Copilot · View source)',
+  'Coding Benchmark – Cost per Task(Terminal-Bench 4.0 · Harbor Hub · View source)', 'More Coding Benchmarks']);
+assert.equal(headings[0].className, 'model-section-heading');
+assert.equal(headings[1].className, headings[0].className);
+for (const heading of headings.slice(0, 2)) {
+  const source = heading.children[1], link = all(source, 'a')[0];
+  assert.equal(source.className, 'model-source');
+  assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
+}
 const more = output.children.at(-1), external = all(more, 'a');
 assert.equal(more.className, 'more-benchmarks');
 assert.deepEqual(more.children.map(n => n.tag), ['h2', 'a', 'p']);
@@ -42,6 +51,11 @@ assert.match(external[0].textContent, /Artificial Analysis.*Coding Agent Index/)
 assert.match(more.children[2].textContent, /average USD cost per task/);
 assert.equal(button('Refresh price list').attrs['data-model-control'], 'refresh');
 assert.equal(all(output, 'div').filter(n => n.className === 'model-price-controls').length, 2);
+for (const toolbar of all(output, 'div').filter(n => n.className === 'model-price-controls')) {
+  assert.deepEqual(toolbar.children.map(n => n.tag), ['button', 'span', 'span']);
+  assert.ok(toolbar.children[1].textContent.startsWith('Last fetched:'));
+  assert.equal(toolbar.children[2].attrs.role, 'status');
+}
 assert.ok(!all(output, 'div').some(n => n.className === 'model-prices'), 'toolbar must not inherit price-cell typography');
 assert.equal(button('Refresh price list').attrs['aria-pressed'], undefined);
 assert.ok(output.textContent.includes('Last fetched:'));
@@ -205,6 +219,14 @@ state.benchmark.sort = {index:3, direction:-1}; state.benchmark.draw();
 assert.equal(benchmarkRows()[0].children[2].textContent, 'high', 'sort uses exact raw values, not identical displayed ratios');
 
 const bv = state.benchmark;
+const sourceEfforts = ['zeta', 'None', 'x-high', 'Low', 'MAX', 'extra high', 'High', 'medium', 'Alpha', 'xhigh', 'constructor'];
+bv.data = {...benchmark, efforts: sourceEfforts}; bv.draw();
+assert.deepEqual([...bv.effortInputs].map(([key]) => key),
+  ['MAX', 'extra high', 'x-high', 'xhigh', 'High', 'medium', 'Low', 'None', 'Alpha', 'constructor', 'zeta']);
+assert.deepEqual(sourceEfforts, ['zeta', 'None', 'x-high', 'Low', 'MAX', 'extra high', 'High', 'medium', 'Alpha', 'xhigh', 'constructor'], 'source order is not mutated');
+assert.ok(!all(bv.options, 'label').some(n => n.textContent === 'Not specified'), 'no invented missing-effort option');
+bv.data = {...benchmark, efforts: ['zeta', '', 'Not specified', 'None', 'Max', 'Max']}; bv.draw();
+assert.deepEqual([...bv.effortInputs].map(([key]) => key), ['Max', '', 'None', 'Not specified', 'zeta'], 'deduplicate exact keys only');
 bv.data = {...benchmark, efforts: ['', 'high', 'medium', 'max', 'unmatched-only'], rows: benchmark.rows.map((r, i) => ({...r,
   effort: i === 3 ? null : r.effort, selectable: i !== 1, superseded: i === 0, superseded_selectable: i === 2}))};
 bv.draw();
@@ -224,6 +246,9 @@ bv.choice.efforts=null;bv.draw();
 assert.ok(bv.effortInputs.every(([,n])=>n.checked),'default All includes new source levels');
 bv.choice.efforts=new Set(['']);bv.draw();assert.equal(benchmarkRows()[0].children[2].textContent,'N/A');
 assert.ok(all(bv.root,'label').some(n=>n.textContent==='Not specified'));
+bv.data = {...bv.data, efforts: ['high', 'max']}; bv.draw();
+assert.equal(bv.choice.efforts.size, 0, 'a removed selected source option reconciles to an honest empty subset');
+assert.equal(bv.summary.textContent, 'Effort levels · None');
 
 (async()=>{
   let calls=[];bv.controls(true,async(path,value)=>{calls.push([path,value]);return path.endsWith('/refresh')?{status:'refreshing'}:{...benchmark,refreshing:true};});

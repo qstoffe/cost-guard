@@ -60,7 +60,7 @@
        check(appearance.borderTopWidth === '0px' && appearance.backgroundColor === 'rgba(0, 0, 0, 0)' && appearance.paddingTop === '0px', 'unboxed comparison link');
        check(external.href === 'https://artificialanalysis.ai/agents/coding-agents/' && external.target === '_blank' && external.rel === 'noopener noreferrer', 'safe official comparison destination');
        external.focus(); check(document.activeElement === external, 'keyboard-accessible external link');
-       check(benchmark.tBodies[0].rows.length === 4 && benchmark.tBodies[0].rows[0].cells[3].textContent === '4.0x', 'matched configurations default most expensive first');
+       check(benchmark.tBodies[0].rows.length === 4 && benchmark.tBodies[0].rows[0].cells[3].textContent === '2.0x', 'matched configurations default solved descending');
        const before = names().join('|'), referenceSort = JSON.stringify(state.models);
        benchmark.tHead.querySelector('button').click();
        check(names().join('|') === before && JSON.stringify(state.models) === referenceSort, 'benchmark sorting cannot reorder reference pricing');
@@ -70,7 +70,7 @@
           const pan = output.querySelector('.benchmark-scroll');
           const sectionStyle = getComputedStyle(output.querySelector('.benchmark-section'));
           check(sectionStyle.borderTopWidth === '0px' && sectionStyle.backgroundColor === 'rgba(0, 0, 0, 0)' && sectionStyle.paddingTop === '0px', 'unboxed benchmark '+theme+' '+zoom);
-          check(getComputedStyle(pan).borderTopWidth === '0px' && getComputedStyle(pan).backgroundColor === 'rgba(0, 0, 0, 0)', 'no redundant table frame '+theme+' '+zoom);
+          check(getComputedStyle(pan).borderTopWidth === getComputedStyle(scroll).borderTopWidth && parseFloat(getComputedStyle(pan).borderTopWidth)>0 && getComputedStyle(pan).backgroundColor === getComputedStyle(scroll).backgroundColor, 'shared table frame '+theme+' '+zoom);
           const last = benchmark.tHead.rows[0].cells[4].getBoundingClientRect(), first = benchmark.tHead.rows[0].cells[0].getBoundingClientRect();
           check(benchmark.tHead.rows[0].cells[0].scrollWidth === benchmark.tHead.rows[0].cells[0].clientWidth && last.width > 0 && first.width > 0, 'intrinsic readable tracks '+theme+' '+zoom);
          check(pan.clientHeight >= benchmark.clientHeight && getComputedStyle(pan).overflowY !== 'scroll', 'benchmark document vertical scrolling '+theme+' '+zoom);

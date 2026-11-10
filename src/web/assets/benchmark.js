@@ -8,22 +8,27 @@ const BenchmarkView = (() => {
     'The matched GitHub model. The name reveals this configuration’s coding client.',
     'The tested reasoning effort. Missing effort is not guessed.',
     'Cost per attempt relative to the cheapest comparable benchmark run (1.0x).',
-    'Percentage of benchmark attempts solved successfully.'];
+     'Percentage of benchmark attempts solved successfully.'];
+  function effortRank(value) {
+    const key = value.toLowerCase().replace(/[\s_-]+/g, '');
+    const ranks = {max: 0, extrahigh: 1, xhigh: 1, high: 2, medium: 3, low: 4,
+      none: 5, notspecified: 5, '': 5};
+    return Object.hasOwn(ranks, key) ? ranks[key] : 6;
+  }
   class View {
     constructor() {
       const el = ReportView.element;
       this.root = el('section', undefined, 'benchmark-section');
-      const heading = el('h2');
-      heading.append(ContextHelp.value(el('span', 'Coding Benchmark – Cost per Task'),
-        'Terminal-Bench 4.0 results depend on model, coding client and effort.\n\nThese are benchmark tasks, not your bills or predicted OpenCode costs.'));
+      const heading = ReportView.modelHeading(ContextHelp.value(el('span', 'Coding Benchmark – Cost per Task'),
+        'Terminal-Bench 4.0 results depend on model, coding client and effort.\n\nThese are benchmark tasks, not your bills or predicted OpenCode costs.'),
+        'Terminal-Bench 4.0 · Harbor Hub', source);
       const provenance = el('div', undefined, 'model-price-controls');
       this.fetched = el('span');
-      const link = el('a', 'View source'); link.href = source; link.target = '_blank'; link.rel = 'noopener noreferrer';
       this.refresh = el('button', 'Refresh benchmark');
       this.refresh.setAttribute('data-benchmark-control', 'refresh');
       this.refresh.addEventListener('click', () => this.refreshSource());
       this.status = el('span'); this.status.setAttribute('role', 'status');
-      provenance.append(el('span', 'Terminal-Bench 4.0 · Harbor Hub'), link, this.refresh, this.fetched, this.status);
+      provenance.append(this.refresh, this.fetched, this.status);
       this.choice = {all: false, latest: true, efforts: null};
       const filters = el('div', undefined, 'model-filters benchmark-filters');
       this.picker = el('details', undefined, 'effort-picker'); this.summary = el('summary');
@@ -94,7 +99,10 @@ const BenchmarkView = (() => {
       finally { this.loading = false; this.controls(this.writable); }
     }
     efforts() {
-      const el = ReportView.element, available = this.data.efforts || [], selected = this.choice.efforts;
+      const el = ReportView.element, selected = this.choice.efforts;
+      // Sort a copy for presentation only: raw source values remain selection keys.
+      const available = [...new Set(this.data.efforts || [])].sort((a, b) => effortRank(a) - effortRank(b) ||
+        a.toLowerCase().localeCompare(b.toLowerCase()) || a.localeCompare(b));
       if (selected) for (const key of selected) if (!available.includes(key)) selected.delete(key);
       const signature = JSON.stringify(available);
       if (signature !== this.effortSignature) {

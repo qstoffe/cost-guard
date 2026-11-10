@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000659: `render.js::modelHeading` shares the two Models heading/source structures;
+`app.css` supplies shared semantic table shells/cells, responsive toolbars and the
+compact one-column effort picker. `benchmark.js` orders source options without
+changing keys or filter math. Coverage: existing Models/overview/views tests,
+`probe_models_parity.cjs` through authenticated `probe_models_refresh.cjs`, frozen
+Models browser layouts and real `probe_web_live.py --models --benchmark`.
+No backend or architecture-boundary change. [Evidence](../../journal/web/models-parity.md).
+
 FR000658: Comparisons pin qualification/stages remain in `reports/matched_inputs.py`;
 `application/service.py` marks rejected pinned requests terminal. Browser retry/rebase
 and new-route Models top policy are in `assets/app.js`; page-only recovery budgets in

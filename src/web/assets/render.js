@@ -309,18 +309,24 @@ const ReportView = (() => {
       'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.',
       'The published/verified model release date; N/A means unavailable.'];
   }
+  function modelHeading(title, source, href) {
+    const heading = element('h2', undefined, 'model-section-heading');
+    const reference = element('span', undefined, 'model-source'), link = element('a', 'View source');
+    link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    reference.append(element('span', '(' + source + ' · '), link, element('span', ')'));
+    heading.append(typeof title === 'string' ? element('span', title) : title, reference);
+    return heading;
+  }
   function overviewModels(parent, view, state) {
     const catalog = view.model_catalog;
     const models = catalog?.rows || view.model_comparison;
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
-    parent.append(element('h2', 'GitHub Reference Pricing'));
+    parent.append(modelHeading('GitHub Reference Pricing', 'GitHub Copilot',
+      'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing'));
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
     const prices = element('div', undefined, 'model-price-controls'), refresh = element('button', 'Refresh price list');
     refresh.setAttribute('data-model-control', 'refresh');
-    const source = element('span', 'GitHub Copilot'), link = element('a', 'View source');
-    link.href = 'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing';
-    link.target = '_blank'; link.rel = 'noopener noreferrer';
     const fetched = element('span', 'Last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
     const progress = element('span'); progress.setAttribute('role', 'status');
     state.priceControls = writable => {
@@ -329,7 +335,7 @@ const ReportView = (() => {
       text(progress, state.priceRefreshing ? 'Refreshing…' : state.priceMessage || '');
     };
     refresh.addEventListener('click', () => state.refreshPrices?.());
-    prices.append(source, link, refresh, fetched, progress);
+    prices.append(refresh, fetched, progress);
     const filters = element('div', undefined, 'model-filters');
     function checkbox(label, key, help) {
       const wrap = element('label'), input = element('input');
@@ -679,5 +685,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
 })();

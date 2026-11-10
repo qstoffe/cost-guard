@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 
 async function probeToolbar({command, evaluate, id}) {
   const layouts = [];
-    const original = await evaluate(id, `(()=>{const p=document.querySelector('.model-price-controls');return {date:p.children[3].textContent,status:p.children[4].textContent,labels:[...document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span')].map(n=>n.textContent)};})()`);
+    const original = await evaluate(id, `(()=>{const p=document.querySelector('.model-price-controls');return {date:p.children[1].textContent,status:p.children[2].textContent,labels:[...document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span')].map(n=>n.textContent)};})()`);
   const measure = () => evaluate(id, `(()=>{
     const price=document.querySelector('.model-price-controls'), button=price.querySelector('button');
-    const filters=document.querySelector('.model-filters'), date=price.children[3], status=price.children[4];
+    const filters=document.querySelector('.model-filters'), date=price.children[1], status=price.children[2];
     const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height,center:r.top+r.height/2};};
     const style=node=>{const s=getComputedStyle(node);return {font:s.fontFamily,size:s.fontSize,padding:s.padding,minHeight:s.minHeight};};
     const nodes=[...price.children].filter(n=>n.textContent).concat([...filters.children]);
@@ -30,7 +30,7 @@ async function probeToolbar({command, evaluate, id}) {
           'Last fetched: Wednesday, 30 September 2026 at 23:59:59 Central European Summer Time':original.date;
         const status=state==='refreshing'?'Refreshing…':state==='failure'?
           'Price list refresh failed; previous prices retained. '+ 'upstream-unavailable-'.repeat(18):'';
-        await evaluate(id,`(()=>{const p=document.querySelector('.model-price-controls');p.children[3].textContent=${JSON.stringify(date)};p.children[4].textContent=${JSON.stringify(status)};})()`);
+        await evaluate(id,`(()=>{const p=document.querySelector('.model-price-controls');p.children[1].textContent=${JSON.stringify(date)};p.children[2].textContent=${JSON.stringify(status)};})()`);
         await evaluate(id,`document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i]+${JSON.stringify(state==='failure'?' — extended localized filter label':'')})`);
         const layout=await measure(), context=JSON.stringify({width,theme,scale,state,layout});
         assert.equal(layout.button.font,layout.ui,context);
@@ -59,7 +59,7 @@ async function probeToolbar({command, evaluate, id}) {
   } finally {
     await command('Emulation.setTouchEmulationEnabled',{enabled:false},id);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},id);
-    await evaluate(id,`(()=>{document.documentElement.style.removeProperty('font-size');const p=document.querySelector('.model-price-controls');p.children[3].textContent=${JSON.stringify(original.date)};p.children[4].textContent=${JSON.stringify(original.status)};})()`);
+    await evaluate(id,`(()=>{document.documentElement.style.removeProperty('font-size');const p=document.querySelector('.model-price-controls');p.children[1].textContent=${JSON.stringify(original.date)};p.children[2].textContent=${JSON.stringify(original.status)};})()`);
     await evaluate(id,`document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i])`);
   }
   return layouts;
