@@ -165,9 +165,9 @@ def metric_tokens(values, timezone_id, now_ms=None, *, times=None):
     for key in ("duration_ms", "watch_duration_ms", "running_ms", "background_ms"):
         if key in values:
             tokens[key] = duration_text(values[key])
-    for key in ("incoming_context_tokens", "next_context_tokens", "watch_next_context_tokens"):
+    for key in ("incoming_context_tokens", "next_context_tokens", "watch_next_context_tokens", "context_tokens"):
         if key in values:
-            tokens[key] = context_tokens(values[key])
+            tokens[key] = "0" if key == "context_tokens" and values[key] == 0 else context_tokens(values[key])
     for key in ("delta_context_tokens", "watch_delta_context_tokens"):
         if key in values:
             tokens[key] = context_delta(values[key])

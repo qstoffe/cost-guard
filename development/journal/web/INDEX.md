@@ -60,6 +60,9 @@ Status: current
   current-state regression and explicit synthetic-report/platform limits.
 - [Live Sessions](sessions-live.md): bounded full-catalog scalar keys, explicit pending
   global metric sorts, stable older pages, unpaged history and real-source timings.
+- [Sessions CTX](sessions-context.md): canonical current-session context scalar,
+  seven-key global sorting, epoch/cache invalidation, shared navigation/help and
+  explicit synthetic versus bounded real-V2 coverage.
 - [Shared live Accounts](accounts-live.md): one Watch/Accounts renderer and feed,
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 - [Subscription/Mini display polish](subscription-mini-polish.md): numeric capacity

@@ -7,6 +7,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('catalog-large'); await fixture('catalog-index');
   await evaluate(`location.hash='#/sessions'`);
   await until('current.catalog?.data?.total===3217');
+  assert.deepEqual(await evaluate('current.catalog.headers.map(header=>header.name)'),
+    ['Last activity','Session name','Model','CCost','Prompts','Duration','CTX']);
+  await evaluate('current.catalog.headers[6].th.querySelector("button").focus()');
+  await until('document.getElementById("context-help")?.textContent.includes("Estimated session-level next incoming context")');
+  assert.match(await evaluate('document.getElementById("context-help").textContent'),/not remaining model capacity or a sum of prompts[\s\S]*full catalog/);
   await evaluate(`window.pagerApi=current.catalog.api;window.pagerHeld=false;
     current.catalog.api=async(...args)=>{const data=await pagerApi(...args);
       if(!args[1]?.action && args[1]?.offset===50 && !pagerHeld){pagerHeld=true;
@@ -41,7 +46,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const original = await ids();
   const oldHash = await evaluate('location.hash');
   await fixture('catalog-clear');
-  await evaluate(`current.catalog.headers[2].th.querySelector('button').focus();current.catalog.headers[2].th.querySelector('button').click()`);
+  await evaluate(`current.catalog.headers[6].th.querySelector('button').focus()`);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await until('current.catalog.operation && !current.catalog.loader.root.hidden');
   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
   assert.equal(await evaluate('current.catalog.pan.hidden && current.catalog.pager.hidden'),true);
@@ -70,9 +77,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('location.hash'),oldHash);
   assert.deepEqual(await ids(),original);
   assert.equal(await evaluate('current.catalog.offset'),50);
-  assert.equal(await evaluate('document.activeElement===current.catalog.headers[2].th.querySelector("button")'),true);
+  assert.equal(await evaluate('document.activeElement===current.catalog.headers[6].th.querySelector("button")'),true);
   await until('!current.catalog.busy');
-  checks.push('3217 roots: cold global Model 0/428 progress, old-page/sort/hash/focus Cancel, shared determinate layout 24 combinations');
+  checks.push('seven headers; CTX heading focus help and trusted Enter; 3217 roots cold global CTX 0/428 progress, old-page/sort/hash/focus Cancel, determinate layout 24 combinations');
   await evaluate(`window.normalCatalogApi=current.catalog.api;window.catalogHeld=false;
     current.catalog.api=async(...args)=>{const data=await normalCatalogApi(...args);
       if(!args[1]?.action && args[1]?.sort==='ccost' && !catalogHeld){catalogHeld=true;
@@ -93,13 +100,23 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('current.catalog.data.offset'),50); assert.deepEqual(await ids(),original);
   await evaluate('current.catalog.api=normalCatalogApi');
   checks.push('trusted keyboard Enter activates Cancel; held post-HTTP answer cannot replace original page/sort');
+  await evaluate(`location.hash='#/sessions?sort=ctx&direction=1'`);
+  await until('current.catalog.operation && !current.catalog.loader.root.hidden');
+  await fixture('fail'); await load();
+  await until('current.catalog.operation?.failed && !current.catalog.retry.hidden');
+  assert.equal(await evaluate('current.catalog.data.sort'),'activity');
+  await fixture('recover');
   await fixture('catalog-index');
+  await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
+  await evaluate('current.catalog.retry.click()');
+  await until('current.catalog.data.sort==="ctx" && !current.catalog.operation && !current.catalog.busy');
+  checks.push('cold CTX outage retains actual Activity; visible Retry recovers to globally qualified CTX');
   // Observe actual layout swaps, not just final hidden state, for cached navigation.
   await evaluate(`window.loaderFlashes=0;window.loaderObserver=new MutationObserver(records=>{
     for(const record of records)if(record.oldValue===null)loaderFlashes++;
   });loaderObserver.observe(current.catalog.loader.root,{attributes:true,attributeFilter:['hidden'],attributeOldValue:true});`);
   const timings = [];
-  for (const sort of ['activity','name','model','ccost','prompts','duration']) for (const direction of [1,-1]) {
+  for (const sort of ['activity','name','model','ccost','prompts','duration','ctx']) for (const direction of [1,-1]) {
     const started = Date.now();
     await evaluate(`location.hash='#/sessions?sort=${sort}&direction=${direction}'`);
     await until(`current.catalog.data.sort==='${sort}' && current.catalog.data.direction===${direction} && !current.catalog.operation`);
@@ -110,6 +127,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('loaderFlashes'),0,'all warm sorts apply without a loading layout swap');
   await evaluate('loaderObserver.disconnect()');
   checks.push({warm_global_sorts:timings,global_keys:3217,rendered_rows:50});
+  await command('Emulation.setTouchEmulationEnabled',{enabled:true});
+  const ctxTouch = await evaluate(`(()=>{const b=current.catalog.headers[6].th.querySelector('button');b.scrollIntoView();const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[ctxTouch]});
+  await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await until('current.catalog.data.sort==="ctx" && current.catalog.data.direction===1 && !current.catalog.operation');
+  await until('document.getElementById("context-help")?.matches(":popover-open")');
+  assert.match(await evaluate('document.getElementById("context-help").textContent'),/Estimated session-level/);
+  await command('Emulation.setTouchEmulationEnabled',{enabled:false});
+  checks.push('trusted touch reverses CTX sort and exposes its heading help on the same retained button');
   await evaluate(`location.hash='#/sessions?sort=activity&direction=-1'`);
   await until('current.catalog.data.sort==="activity"');
   await fixture('catalog-page-cold');
@@ -117,6 +143,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('current.catalog.next.focus();current.catalog.next.click()');
   await until('current.catalog.operation?.kind==="page" && !current.catalog.loader.root.hidden');
   assert.match(await evaluate('current.catalog.loader.stage.textContent'),/0 of 50/);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await evaluate('current.catalog.cancel.focus()');
   await until('document.getElementById("context-help")?.textContent.includes("Cancel loading this page")');
   await command('Emulation.setTouchEmulationEnabled',{enabled:true});

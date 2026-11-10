@@ -121,7 +121,7 @@ def main():
                             if command == 'catalog-partial' and number >= 428:
                                 break
                             catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
-                                Decimal(number) / 1000, number, duration_ms=number * 1000)
+                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
                     if command == 'catalog-page-cold':
                         keys = sorted(catalog.roots, reverse=True)[50:100]

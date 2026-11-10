@@ -5,23 +5,26 @@ module.exports = async ({vm, context, Node, timers}) => {
   Node.prototype.focus = function() { document.activeElement = this; };
   const calls = [];
   const row = {session_id:'previous',title:'Previous',indexed:true,has_summary:true,metric_state:'ready',
-    prompt_count:1,model:'Known',display:{ccost:'1.00',duration_ms:'1s'}};
+    prompt_count:1,model:'Known',context_tokens:172000,context_detail:'Estimated next incoming session context.',
+    display:{ccost:'1.00',duration_ms:'1s',context_tokens:'172k'}};
   const previous = {token:'owned',epoch:'pinned',offset:50,total:117,size:50,sort:'activity',direction:-1,
     state:'observed',page_ready:1,view:{session_usage:[row]}};
   let delayed, signal;
   context.navigationApi = async (_, value, requestSignal) => {
     calls.push(value);
     if (value.action === 'interest') return {};
-    if (value.sort === 'ccost') { signal = requestSignal; return new Promise(resolve => { delayed = resolve; }); }
+    if (value.sort === 'ctx') { signal = requestSignal; return new Promise(resolve => { delayed = resolve; }); }
     return previous;
   };
   vm.runInContext('globalThis.navigation = new SessionsCatalog.View(navigationApi)', context);
   const view = context.navigation;
   new Node('main').append(view.root); view.attached = true; view.token = previous.token;
   view.update(previous);
+  assert.equal(view.headers.length,7); assert.equal(view.headers[6].name,'CTX');
+  assert.equal(view.body.children[0].metrics[4].textContent,'172k');
   const retained = view.body.children[0];
   view.next.focus();
-  view.configure(new URLSearchParams('sort=ccost&direction=1'));
+   view.configure(new URLSearchParams('sort=ctx&direction=1'));
   const pending = view.load();
   view.cancelNavigation();
   assert.equal(signal.aborted, true);
@@ -29,18 +32,18 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(view.body.children[0], retained);
   assert.equal(document.activeElement, view.next);
   assert.match(context.location.hash, /offset=50&epoch=pinned/);
-  delayed({...previous,sort:'ccost',offset:0}); await pending; await new Promise(setImmediate);
+  delayed({...previous,sort:'ctx',offset:0}); await pending; await new Promise(setImmediate);
   assert.equal(view.data, previous, 'late cancelled completion cannot replace the restored snapshot');
   assert.ok(calls.some(value => value.action === 'interest' && !value.visible));
   assert.equal(calls.filter(value => !value.action).at(-1).sort, 'activity');
-  view.configure(new URLSearchParams('sort=model&direction=1'));
+  view.configure(new URLSearchParams('sort=ctx&direction=1'));
   const progress = (completed, generation=1, total=3217) => ({...previous,pending_sort:true,
     progress:{generation,phase:'index',status:'pending',completed,total}});
   view.update(progress(428));
   assert.equal(view.pan.hidden,true); assert.equal(view.pager.hidden,true);
   assert.equal(view.loader.bar.max,100); assert.equal(view.loader.bar.value,13);
-  assert.match(view.loader.stage.textContent,/Indexing Model.*428 of 3217/);
-  assert.equal(view.loader.status.textContent,'Indexing Model');
+  assert.match(view.loader.stage.textContent,/Indexing CTX.*428 of 3217/);
+  assert.equal(view.loader.status.textContent,'Indexing CTX');
   view.update(progress(1600)); assert.equal(view.loader.bar.value,49);
   view.update(progress(50,2)); assert.match(view.loader.stage.textContent,/Source changed; restarting/);
   assert.equal(view.loader.bar.value,1,'new source generation explicitly restarts measured progress');

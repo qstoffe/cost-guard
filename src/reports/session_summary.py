@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature
+from src.analysis.context import ContextEpochs, session_watch_context
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
@@ -11,8 +12,30 @@ from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .models import SessionUsageRow
 
-ALGORITHM = "session-summary-2"
+ALGORITHM = "session-summary-3"
 NAMESPACE = "session-summary"
+
+
+def context_fields(item, catalog):
+    """Root-scoped current continuation, identical to Watch's session guidance.
+
+    Never hydrate here: finite reports can have only compact analysis. The scalar
+    index supplies a full snapshot with the same source identity/revision.
+    """
+    snapshot = item.snapshot
+    if (snapshot is None or not snapshot.complete or snapshot.source_revision != item.bundle.source_revision
+            or snapshot.root.provenance != item.session.provenance):
+        return dict(context_qualified=False, context_detail="Partial source; session context not qualified.")
+    record = max((record for record in item.bundle.prompts
+        if record.session_id == item.session.session_id and record.prompt_kind != "subtask"),
+        key=lambda record: (record.prompt_time_ms, record.prompt_id), default=None)
+    if record is None:
+        return dict(context_detail="No supported session context anchor.")
+    state = session_watch_context(snapshot, item.bundle, record, catalog, ContextEpochs(snapshot, item.bundle))
+    detail = ("Provisional text estimate." if state.detail == "provisional text estimate" else
+              "Estimated next incoming session context." if state.next_tokens is not None else
+              "No supported context anchor in the current session epoch.")
+    return dict(context_tokens=state.next_tokens, context_detail=detail)
 
 
 def summary_key(service, root):
@@ -58,7 +81,10 @@ def session_summary(service, root, revision, *, active=False, metrics=None):
             row = SessionUsageRow(**values)
             if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
                     and isinstance(row.title, str) and isinstance(row.model, str)
-                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending"))
+                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified"))
+                    and row.context_qualified
+                    and (row.context_tokens is None or type(row.context_tokens) is int and row.context_tokens >= 0)
+                    and isinstance(row.context_detail, str) and len(row.context_detail) <= 128
                     and len(row.contributor_models) <= 64
                     and all(isinstance(value, str) and 0 < len(value) <= 256
                             and all(value.partition("/")[::2]) for value in row.contributor_models)
@@ -81,7 +107,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None):
     row = service._session_rows((item,))[0]
     row = replace(row, complete=row.complete and item.snapshot.complete)
     actual = item.bundle.source_revision
-    if item.bundle.cacheable and not row.running:
+    if item.bundle.cacheable and not row.running and row.context_qualified:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = dependencies(item.bundle.trace_entries)
