@@ -5,6 +5,67 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Quiet Total and direct Session help (FR000665)
+
+Scoped v81.15 delta against `b22cfc98fa123ac50d4a201bb92eafe8c6c236d7`,
+checked locally 2026-11-10. The earlier revision header/sections retain their
+historical scope. The runtime change is confined to `mini.js`:
+
+- Total's span is normal selectable text: no `ContextHelp.value`, `help-value`,
+  tabindex, title, popover binding or `totalCostHelp` construction. Its factual
+  accessible amount label remains. Header help is exactly one sentence.
+- `drawCost` reuses the existing server-prepared `account_ccost` token from the
+  same canonical whole-session cost object. Its `known_ccost` input includes the
+  existing linked-subagent scope. The existing no-priced-request guard converts
+  that token's dash to Mini's N/A; null pending/unavailable summaries remain distinct.
+  No backend change, prefix stripping, client arithmetic or missing-cost invention.
+  Ordinary `known_ccost`, raw cost, completeness, CCost and other views are unchanged.
+- Session help keeps the full title/stable-ID fallback and reuses `promptPreview`
+  for `Prompt #N: excerpt`; missing number/preview cases stay explicit. No new
+  prompt retrieval. The CCost help construction and Duration highlight are unchanged.
+
+Fresh evidence:
+
+- Local Full: **181 bounded groups, 2,243 passed tests, two skipped, zero failures,
+  133.1 s**. Both skips are existing macOS zsh/PTY checks unavailable on Windows.
+  The focused Mini group passed all 12 tests. Projection/VM cases cover partial
+  versus complete Credits/USD, known/empty zero, wholly unpriced N/A, pending and
+  unavailable summaries, corrected subtotals, running/grace/history rows, preserved
+  canonical fields, direct preview labels, grapheme boundaries and literal HTML text.
+- Package validation: **11 passes, zero failures, seven existing advisory warnings**
+  (README/Web-guide/version-history prose and four module design budgets). No cap,
+  baseline or dependency change; no release ZIP or GitHub Release.
+- Real headless **Edge 157.0.4341.42**, zoom/DPR 1: the full PiP fit probe passed
+  **127 layouts**, including Classic/Web light/dark, Credits/USD, 650/280 widths,
+  lifecycle/SSE handoff, selection, scrollbars, Fit, viewport bounds and one SSE.
+  New assertions preserve CCost focus/delayed-hover/touch help and its ticking
+  yellow Duration/selection, including terminal/unverified/history/replacement
+  transitions. Total is skipped by Tab, has no focus/click/touch help and does not
+  open after a 700ms hover (beyond the shared 600ms delay). Total remains selectable;
+  the exact header definition opens by focus/hover/touch. Corrected/unknown/zero
+  Total values update the same row, including at narrow native width.
+- Real headless **Chrome 156.0.8078.80**, 125% zoom/DPR 1.5, overlay-scrollbar
+  configuration: the complete help/source-context/Duration matrix also passed.
+  This is a targeted second-browser run, not another 127-layout run.
+- Read-only installed V2 `probe_mini_source.py`: **36 coherent publications**, one
+  running row, three accounts, five quota projections, 14.298 s. Owned acquisition
+  closed in 0.086 s; shared OpenCode was untouched. No historical cards were
+  observed, so synthetic tests supply historical transitions, not a real-history claim.
+- Two initial fixture failures were repaired, not waived: oversized Total inputs
+  now populate the reused subtotal token; synthetic help pins its own publication
+  until source-driven checks begin, avoiding replacement by normal live refresh.
+  An initial unit fixture also inherited old display-unit tokens; making its inputs
+  explicit and retaining the established wholly-unpriced N/A expectation fixed it.
+
+[Synthetic Web-light sample](../../architecture/governance/verification/mini-total-665/web-light.png)
+retains the rendered five-column layout. Detailed execution reports were
+`scratch:/full-tests.json`, `scratch:/mini-edge-verified.json` and
+`scratch:/mini-chrome-help.json`; this section retains their useful outcome facts.
+The integrated browser was tried and disconnected; owned hidden browsers supplied
+real Document PiP evidence without external desktop interaction. Physical Windows
+frames/work areas, monitor transitions, macOS and screen-reader speech were not
+tested or changed. No paid model calls, acceptance exceptions or deferrals.
+
 ## Unused scrollbar gutter (FR000660)
 
 Scoped v81.10 delta against `0da05445ee574952d268fa8d8502cdc2b8fb5b0d`,

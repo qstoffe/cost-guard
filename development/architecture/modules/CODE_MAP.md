@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000665: `mini.js` keeps Total noninteractive, reuses the existing server-prepared
+`account_ccost` subtotal token after its no-priced-work guard, and shortens Session
+help without changing CCost help or canonical costs. Coverage: `test_mini_watch.py`,
+`fixtures/mini_sessions.cjs`, `mini_help.cjs`, `probe_mini_help.cjs`,
+`probe_mini_duration.cjs` and `probe_mini_width.cjs` through the real PiP fit probe.
+[Evidence and limits](../../journal/web/mini-watch.md#quiet-total-and-direct-session-help-fr000665).
+
 FR000663: `application/quota_ccost.py` prepares distinct raw period/30-day Capacity
 help from accepted Decimal inputs; `quota_estimates.py` owns the inclusive 5%
 estimate-only tolerance and USD precision caveat. `render.js` separates native

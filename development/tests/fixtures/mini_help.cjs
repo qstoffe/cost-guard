@@ -12,7 +12,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     controller.update(input); return view.promptRows.get('help-a');
   };
   const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[4];
-  assert.equal(helpText(title), 'Example Session\nPrompt #21 in this session: Implement pagination for…');
+  assert.equal(helpText(title), 'Example Session\nPrompt #21: Implement pagination for…');
   assert.match(helpText(ctx), /^Next Ctx: 128k .*\n\nΔ Ctx: \+4k \(represented prompt change\)/);
   const visible = row.textContent;
   for (const [preview, expected] of [
@@ -26,16 +26,19 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     ['a'.repeat(22)+'... tail','a'.repeat(22)+'…'],
     ['<img src=x onerror=alert(1)>','<img src=x onerror=alert(…']]) {
     prompt.preview = preview; show();
-    assert.equal(helpText(title),'Example Session\nPrompt #21 in this session: '+expected);
+    assert.equal(helpText(title),'Example Session\nPrompt #21: '+expected);
     assert.equal(title.children.length,0,'preview remains text-only contextual help, not markup');
     assert.equal(row.textContent,visible,'tooltips do not change the compact row');
   }
   for (const preview of ['', ' \n ', null, undefined, 42]) {
     prompt.preview = preview; show();
-    assert.equal(helpText(title),'Example Session\nPrompt #21 in this session');
+    assert.equal(helpText(title),'Example Session\nPrompt #21');
   }
   prompt.preview = 'Available hint'; prompt.prompt_number = null; show();
-  assert.equal(helpText(title),'Example Session\nPrompt number unavailable\nPrompt preview: Available hint');
+  assert.equal(helpText(title),'Example Session\nPrompt number unavailable\nPrompt: Available hint');
+  prompt.preview = ''; base.title = ''; show();
+  assert.equal(helpText(title),'help-a\nPrompt number unavailable','unnamed sessions retain stable identity');
+  base.title = 'Example Session';
   const history = structuredClone(base); history.focal_id = '';
   history.rows[0].prompt = {...prompt,in_progress:false,completed_at_ms:1000,preview:'Historical hint',prompt_number:20};
   history.rows[0].live_context = {display:{watch_next_context_tokens:'17k',watch_delta_context_tokens:'+12k'}};
@@ -43,7 +46,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   assert.equal(view.promptRows.get('help-a'),row);
   assert.equal(ctx.textContent,'900k');
   assert.match(helpText(ctx),/^Next Ctx: 900k .*\n\nΔ Ctx: \+12k \(historical prompt change; session estimate may be later\)/);
-  assert.equal(helpText(title),'Example Session\nPrompt #20 in this session: Historical hint');
+  assert.equal(helpText(title),'Example Session\nPrompt #20: Historical hint');
   history.rows[0].live_context = null; show([], [history]);
   assert.match(helpText(ctx),/Δ Ctx: N\/A/);
   history.rows = []; show([], [history]);
@@ -79,7 +82,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   next.session_summary.context.warning = null;
   show([base,next,other],[history]);
   assert.equal(view.promptRows.get('help-a'),row);
-  assert.equal(helpText(title),'Renamed session\nPrompt #22 in this session: Replacement hint');
+  assert.equal(helpText(title),'Renamed session\nPrompt #22: Replacement hint');
   assert.match(helpText(ctx),/^Next Ctx: 256k[\s\S]*Δ Ctx: -4k/);
   assert.doesNotMatch(helpText(ctx),/threshold|Original/);
   assert.match(helpText(view.promptRows.get('help-b').children[4]),/Next Ctx: 0k[\s\S]*exceeded/);
