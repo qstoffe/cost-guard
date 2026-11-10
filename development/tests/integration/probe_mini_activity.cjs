@@ -65,12 +65,15 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
             horizontal:v.prompts.scrollWidth>v.prompts.clientWidth+1,
             vertical:d.documentElement.scrollHeight>w.innerHeight+1,
             activityWidth:rect(rows[0].cells[0]).width,sessionWidth:rect(rows[0].cells[1]).width,
-            nowrap:rows.every(row=>w.getComputedStyle(row.cells[0]).whiteSpace==='nowrap'),
+             nowrap:rows.every(row=>w.getComputedStyle(row.cells[0]).whiteSpace==='nowrap'),
+             activityFits:rows.every(row=>{const n=row.cells[0].firstChild,r=rect(n),c=rect(row.cells[0]);return r.left>=c.left && r.right<=c.right;}),
+             runningCue:rows.filter(row=>row.classList.contains('mini-running')).every(row=>row.cells[0].textContent.startsWith('▶ ')),
             alignment:rows.every(row=>Math.abs(rect(row.cells[0]).right-rect(v.body.parentNode.rows[0].cells[0]).right)<1),
             totals:rows.every(row=>{const n=row.querySelector('.mini-cost-value'),c=row.cells[2];return n.scrollWidth<=n.clientWidth+1 && rect(n).right<=rect(c).right+1;}),
              context:rows.every(row=>row.cells[4].textContent!=='')};})()`);
         assert.equal(layout.documentOverflow,false); assert.equal(layout.totals,true); assert.equal(layout.context,true);
-        assert.equal(layout.nowrap,true); assert.equal(layout.alignment,true);
+         assert.equal(layout.nowrap,true); assert.equal(layout.alignment,true);
+         assert.equal(layout.activityFits,true);assert.equal(layout.runningCue,true);
         if(layout.inner>=600) {assert.equal(layout.horizontal,false);assert.equal(layout.vertical,false);assert.ok(layout.activityWidth<layout.sessionWidth);}
         // Name-only Session has a smaller minimum than the former split heading;
         // these small values may fit at 280. Oversized paired-cost cases separately

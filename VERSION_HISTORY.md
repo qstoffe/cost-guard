@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.21 - 2026-11-10
+
+- Mini Watch Activity adds a small decorative ▶ before the start time only for verified running prompts. Terminal updates immediately clear it in the existing keyed row; unverified and historical work never acquire a false running cue.
+- The five-column layout, configured-local start/finish and unknown times, hover/focus/touch help, row colors and native opening/Fit sizing remain unchanged. No extra control, tooltip, dependency or status announcement is introduced.
+
 ## v81.20 - 2026-11-10
 
 - Web shows one compact, sticky selected-V1 compatibility notice below navigation, shared across all routes. It accurately describes polling and V2-only native session export without calling V1 Watch unsupported.

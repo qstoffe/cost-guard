@@ -8,7 +8,10 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
     const token=name=>{const n=v.doc.createElement('span');n.style.color='var('+name+')';v.root.append(n);
       const value=style(n).color;n.remove();return value;};
     return {normal:style(v.body).color,running:token('--watch-running'),success:token('--watch-success'),error:token('--error'),
-      rows:[...v.promptRows.values()].map(row=>({id:row.dataset.id,cls:row.className,color:style(row).color,
+       rows:[...v.promptRows.values()].map(row=>({id:row.dataset.id,cls:row.className,color:style(row).color,
+         activity:row.cells[0].textContent,indicator:row.querySelector('.mini-activity-running').textContent,
+         decorative:row.querySelector('.mini-activity-running').getAttribute('aria-hidden'),
+         focusable:row.querySelector('.mini-activity-running').tabIndex,
         values:[...row.cells].map(cell=>style(cell.firstElementChild||cell).color),label:row.getAttribute('aria-label'),
         same:row.dataset.id!=='mini-lifecycle-4'||row===window.lifecycleRow})),
       fullHistory:[...document.querySelectorAll('.watch-history tbody tr')].map(row=>row.className),
@@ -17,7 +20,10 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
     const value=await inspect(),row=value.rows.find(row=>row.id==='mini-lifecycle-4');
     assert.equal(value.rows.length,5);assert.equal(new Set(value.rows.map(row=>row.id)).size,5);
     assert.ok(row);assert.equal(row.cls,cls);assert.ok(row.label.includes(label));if(same)assert.equal(row.same,true);
-    for(const item of value.rows) {
+     for(const item of value.rows) {
+       assert.equal(item.indicator,item===row&&cls==='mini-running'?'▶ ':'');
+       assert.equal(item.activity.startsWith('▶ '),item===row&&cls==='mini-running');
+       assert.equal(item.decorative,'true');assert.equal(item.focusable,-1);
       const expected=item===row&&cls?value[cls.replace('mini-','')]:value.normal;
       assert.equal(item.color,expected);assert.ok(item.values.every(color=>color===expected),'all four values share the foreground');
     }
@@ -25,7 +31,7 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
     if(cls==='mini-running'||cls==='mini-success')assert.deepEqual(value.fullActive,[cls.replace('mini-','watch-')]);
     return value;
   };
-  for(const [theme,color] of [['classic','dark'],['web','light'],['web','dark']]) {
+  for(const [theme,color] of [['classic','light'],['classic','dark'],['web','light'],['web','dark']]) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},sessionId);
     await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'${theme}'})))()`);
     for(const width of [650,280]) for(const unit of ['credits','usd']) {
@@ -34,8 +40,9 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
       await evaluate(`window.lifecycleRow=miniWatch.view.promptRows.get('mini-lifecycle-4')`);
       const cold=await check();assert.notEqual(cold.normal,cold.success);assert.notEqual(cold.normal,cold.error);
       assert.ok(cold.rows.every(row=>row.cls===''));
-      await publish('running');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-running'`);
-      await check('mini-running','Running');
+       await publish('running');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-running'`);
+       await check('mini-running','Running');
+       if(width===650&&unit==='credits')await capture(`running-activity-${theme}-${color}`);
       await publish('success');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-success'`);
       await check('mini-success');
       await publish('history-success');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className===''`);
@@ -65,5 +72,5 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
   }
   await fixture('running');await until('liveValue.view.active_cards.length===2');
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings()`);
-  checks.push('Five successful cold histories; running/success/error/abort to neutral history in same row; retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged');
+  checks.push('Decorative play cue only on verified running Activity; immediate success/error/abort removal, neutral history, retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged');
 };

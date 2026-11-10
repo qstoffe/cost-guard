@@ -22,7 +22,11 @@ There is no Earlier Sessions button, separate history section or Duration column
   **start** while running or execution-unverified, and its supported **finish** when
   ended. Hover, keyboard focus or touch the time for the full local date/time and UTC
   offset, distinguishing repeated daylight-saving hours. Unknown finish is **—** with
-  **Unknown finish time** help, never source-refresh time or an inferred ending.
+   **Unknown finish time** help, never source-refresh time or an inferred ending.
+   A small decorative **▶** precedes the start time only for a verified running
+   prompt. It is not a control; completion, abort, failure, execution-unverified
+   work and historical-only rows have no play symbol. Existing time help stays on
+   the complete value, with no additional focus stop or status announcement.
 - **Session:** the flexible, left-aligned name, or canonical session ID if unnamed.
   Only the title ellipsizes. It remains selectable; its help includes the full name
    on its first line and **Prompt #N: excerpt** on the next, or **Prompt #N** without

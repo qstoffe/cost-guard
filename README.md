@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.20, 2026-11-10), the supported distribution.
+Use **current `main`** (v81.21, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.20 (2026-11-10):** Web shows one compact sticky notice only while its active Live owner verifies a selected V1 source. V1 reports and Watch remain supported with polling; native sanitized session export requires V2. Unknown, disconnected and changed-instance states never retain an unverified V1 claim. [Source support and troubleshooting](docs/web-beta.md#selected-source-compatibility).
+**v81.21 (2026-11-10):** Mini Watch Activity shows a small decorative ▶ before verified running prompts' start times. It disappears immediately on terminal updates and stays absent for unverified/history rows, without changing time help, row colors or native sizing. [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

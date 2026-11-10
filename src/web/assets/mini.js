@@ -315,6 +315,8 @@ const MiniWatch = (() => {
       const row = this.el('tr');
       for (let index = 0; index < 5; index++) row.append(this.el('td'));
       const time = this.el('span', '', 'mini-activity');
+      const indicator = this.el('span', '', 'mini-activity-running'); indicator.setAttribute('aria-hidden', 'true');
+      time.append(indicator, this.el('span'));
       ContextHelp.value(time, () => row.activityHelp || 'Unknown finish time'); row.children[0].append(time);
       const cell = row.children[1], value = this.el('span', undefined, 'mini-session-value');
       cell.className = 'mini-session-cell';
@@ -444,7 +446,11 @@ const MiniWatch = (() => {
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
         const known = running ? prompt?.at_ms != null : prompt?.completed_at_ms != null;
         row.activityHelp = known ? (running ? prompt.display?.start_date_time : prompt.display?.finished_date_time) : null;
-        text(row.children[0].children[0], known ? (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—' : '—');
+        const time = row.children[0].children[0];
+        const verifiedRunning = !historical && prompt?.in_progress && !prompt.execution_unverified &&
+          !prompt.aborted && !prompt.has_error && !prompt.completed_successfully;
+        text(time.children[0], verifiedRunning ? '▶ ' : '');
+        text(time.children[1], known ? (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—' : '—');
         row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
         this.drawCost(row, card, prompt);
         text(row.children[4], context); wanted.push(row);
