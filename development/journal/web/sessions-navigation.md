@@ -69,9 +69,11 @@ no AbortSignal, no terminal reason and no UI rollback. It recorded **185 cache
 hits, 138 misses, 323 attempts, 322 settled**, maximum catalog HTTP **1.022s**.
 Thus it crossed the exact generation condition that terminated the baseline while
 remaining truthfully pending. Full real cold completion remains unmeasured.
-An intervening run was interrupted by the owned host's normal source-change guard
-when version metadata changed during observation; it is not counted as a 135-second
-healthy run. The probe now records host/attachment state and stops on that boundary.
+An intervening run is not counted as a 135-second healthy observation: version
+metadata changed, requests ended around 70s and the controller retired. The host
+state was not recorded then, so the exact stop cause is unconfirmed (the existing
+source-change guard is consistent with it). The probe now records host/attachment
+state and stops on that boundary; the stable repeat above retained both.
 
 Deterministic coverage includes 22 generation/count updates, source-backed slow
 read versus idle >45s, count advancement after >60s, explicit invalidation,
@@ -106,8 +108,30 @@ join, so temporary cache deletion also failed with WinError 32. The same unchang
 group passed in isolation in **47.4s total** (two tests), without changing its
 30-second join, assertions, production code or runner limits. The first run overlapped
 hidden-browser and real-source probes; resource contention is consistent with this
-timing failure, not an independently proven root cause. A complete rerun is performed
-without those probes before delivery; the original failed run remains evidence.
+timing failure, not an independently proven root cause. A complete rerun without
+those probes **also failed the same group**: 180/181 passed, 188.4s total. This rules
+out attributing the failure solely to those probes. Both failed runs remain evidence.
+
+### Local suite verification exception
+
+**Decision Delegate authorized a narrow local verification exception for FR000669**:
+accept the 180 concurrent passing groups plus the unchanged scale group's isolated
+PASS. **Default Full FAILED twice; all 181 registered groups have passing executions
+across runs, not one successful default Full run.** The failed join occurs after
+four overlapping reads were observed and released; the isolated run preserved its
+30-second join, 872-root result checks, four-reader limit, modeled performance
+assertion and 240-second runner bound. The runner isolates each group in a process;
+serial Full would put this already-passing group first, adding little independent
+evidence by repeating the other 180 groups. No deadlines/assertions were changed.
+
+Residual uncertainty: concurrent-suite timing reliability is unresolved and
+contention is plausible, not established. The WinError 32 follows the still-active
+worker. The delegate explicitly required truthful failed-batch reporting, no broadened
+test-maintenance changes, and unchanged normal CI/protections and FR-specific
+acceptance. No Suggestion or On Hold was warranted for this minor caveat. This
+exception does **not** verify full private cold-catalog completion. Additional
+evidence: `scratch:/full-tests.log`, `scratch:/full-final.log`,
+`scratch:/scale-isolated.log`.
 
 ## Finding and change
 
