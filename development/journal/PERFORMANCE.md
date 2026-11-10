@@ -1,30 +1,34 @@
 # Performance investigations
 
-Source revision: c110fe568c41abb18b9e386f20a3c2f456f956e7
-Checked revision: c110fe568c41abb18b9e386f20a3c2f456f956e7
-Last checked: 2026-11-08
+Source revision: 13ec8fee2821be77d35f6589242e9d5b6bd6e2a2
+Checked revision: 13ec8fee2821be77d35f6589242e9d5b6bd6e2a2
+Last checked: 2026-11-10
 Status: current
 
 ## Summary
 
-**NO_GAIN — milestone 80 (2026-11-08).** Offline baselines cover bounded Normal, Watch reuse and deep Token Mix. Existing Web compact hits avoid warm hydration/repricing; CLI reconstructs richer derived bundles. No candidate optimization, whole-Web acceptance, source/tool/version change or ordinary-count increment. Only performance milestone 80 advances.
+**NO_GAIN — milestone 120 (2026-11-10): no validated optimization identified.** Offline baselines cover Normal, Watch, CLI/compact-Web Token Mix and twelve-root cards. Existing shared guidance avoids repeated sampling when telemetry demands it. No candidate/product change, new speedup or whole-Web/installed-source recovery claim. Performance advances 80→120; ordinary count stays 120.
 
 ## Evidence
 
-### Current coverage and setup
+### Scope, owners and setup
 
-Whole-repository inventory: 1,083 readable files (351 source/config, 322 test, 410 documentation), 284 binary/over-1-MiB exclusions, no exact duplicates. Includes 254 `src/`, 320 `development/tests/`, 15 `development/tools/` files; tracked plus nonignored text/config, excluding Git/runtime artifacts. Full inventory: originating-session `scratch:/performance-inventory.json`; summary published below. Historical evidence JSON size hotspots are not runtime/semantic findings.
+Inventory: 1,250 selected text/config files (381 source/config, 346 test, 523 documentation), 343 binary/over-1-MiB exclusions, no exact duplicate groups; includes 269 `src/`, 344 `development/tests/` and 15 `development/tools/` files. Launcher extensions fall outside this selection; tracked paths were listed, not benchmarked. Size hotspots are not semantic findings. Full inventory: originating-session `scratch:/performance-inventory.json`; published summary below.
 
-Representative source investigation: `src/reports/service.py`, `src/reports/sampling.py`, `src/reports/acquisition.py`, `src/reports/token_mix_history.py`, `src/reports/token_mix_cache.py`, `src/reports/history_work.py`, `src/analysis/cache.py`, `src/cache/database.py`, `src/watch/web_coordinator.py`, `src/application/session_detail.py`, `src/accounts/refresh_policy.py` and the GET owner in `src/sources/opencode_v2_transport.py`. Runner/fixture and critical contracts were inspected in `development/tools/benchmark_large_month.py`, `development/tests/fixtures/synthetic_month.py`, `development/tests/test_benchmark_large_month.py`, `development/tests/test_step9_parity_performance.py`, `development/tests/test_web_token_mix.py` and `development/tests/test_web_session_detail.py`. Existing unit tests were read, not rerun or claimed as fresh PASS.
+Representative source: report service/sampling/acquisition, context sample/guidance, Token Mix/cache/history-work/shared-evidence owners under `src/reports/`; `src/analysis/cache.py`, `src/analysis/context.py`, `src/cache/database.py`; Web coordinator/card workers/readers/guidance/cards under `src/watch/`; `src/application/session_detail.py`, `src/accounts/refresh_policy.py`, `src/sources/opencode_v2_transport.py` and `src/sources/opencode_tokens.py`. Runners: `development/tools/benchmark_large_month.py`, `development/tests/integration/benchmark_card_guidance.py` and `benchmark_v2_acquisition.py`; fixture: `development/tests/fixtures/synthetic_month.py`. Tests read, not rerun: `test_benchmark_large_month.py`, `test_step9_parity_performance.py`, `test_context_sample.py`, `test_web_token_mix.py`, and scale/page contracts in `test_web_session_detail.py`, under `development/tests/`.
 
-User-visible/high-frequency paths and material costs:
+Reachable costs and protected behavior:
 
-- Normal: full root catalog/order, two independent samples of up to 100 eligible prompts, revision-keyed analysis and model projection. Unpriceable/tied/recently touched history can require more roots; this is not a universal five-root bound. Account periods have a separate history scope; synthetic runs have no accounts or model-availability network.
-- Explicit Token Mix: complete root population, clone deduplication, category/publisher grouping and retained aggregate entries. CLI releases analyzed roots but reads rich derived bundles. Managed Web uses compact facts, current membership/revision brackets and no rich derived writes. Both still aggregate all shown requests; neither reconstructs deleted history.
-- Watch/Web: CLI-neutral startup/enrichment/refresh is timed, not Web's separate card/history/detail/index lanes, finite jobs, SSE, browser or native lifecycle. HTTP detail pages serialize bounded rows without source acquisition.
-- External costs: V2 pools loopback GETs with one stale-connection retry; account refresh has cadence/deadline/retry owners. No newly measured network/provider latency, model inference or new provider calls. Monetary cost is unknown, not zero.
+- Normal orders the catalog and acquires enough eligible history for two latest-100 samples; unpriceable prompts, ties and touched old roots can deepen traversal. Account scope is separate. Fixtures have no accounts/availability network or V2 sampling-batch seam; they do not prove bracket amortization.
+- Full Token Mix retains global deduplication/grouping. CLI reads/writes rich derived bundles; managed Web can reuse compact facts without repricing or rich writes, but still verifies membership/revisions and aggregates all shown requests. Neither reconstructs deleted history.
+- Web separates card, account-history, detail and scalar-index lanes; HTTP pages never acquire history. Card readers isolate transport lifetimes; shared guidance uses one card-pool job, not per-tab samplers. Running roots stay fresh; changed scope/epoch, clock rollback and cancellation retire guidance.
+- Loopback V2 GETs already pool connections with one stale-socket retry; SSE/cancellation have separate owners. Account cadence/deadline/retry owners are independent. No new network/provider/inference or monetary-cost measurements were made; unknown is not zero.
 
-Windows 11 build 26300, AMD64 Family 25 Model 33, CPython 3.14.7. Three sequential fresh-process repetitions of each unchanged repository command:
+Windows 11 build 26300, AMD64 Family 25 Model 33, CPython 3.14.7. Sequential baseline processes use fixed synthetic UTC/time/pricing and fresh SQLite caches; warm phases reuse only their pair's cache. OS caches were not flushed; background load uncontrolled. Timings exclude fixture/database setup; no total-process, cross-date regression or cross-scenario scaling claim.
+
+### Current Normal and CLI-neutral Watch baselines
+
+Three repetitions of each unchanged command:
 
 ```text
 py -3 development/tools/benchmark_large_month.py --roots 100 --prompts 50 --watch
@@ -32,57 +36,71 @@ py -3 development/tools/benchmark_large_month.py --roots 20 --prompts 50 --child
 py -3 development/tools/benchmark_large_month.py --roots 1000 --prompts 20 --watch
 ```
 
-Fixed synthetic input, UTC/time/pricing, fresh temporary SQLite caches; warm phases reuse only their run's cache. OS caches not flushed; background load uncontrolled. Medians in seconds exclude fixture/database setup, not thresholds or total process durations. No cross-scenario scaling or cross-date regression ratio is claimed.
+Medians, seconds; cold / warm within each cell:
 
-| Scenario | Report cold / warm | Watch usable cold / warm | Watch full cold / warm | Refresh cold / warm |
+| Scenario | Normal | Watch usable | Watch full | Refresh |
 | --- | --- | --- | --- | --- |
-| 100 roots x 50 prompts | .0432 / .0174 | .6159 / .1567 | .6171 / .1571 | .0014 / .0006 |
-| 20 roots + 40 children x 50, 5 today / 2 running | .1099 / .0414 | .6174 / .2035 | .6584 / .2394 | .0260 / .0268 |
-| 1,000 roots x 20 prompts | .0872 / .0218 | .4603 / .0847 | .4616 / .0858 | .0030 / .0027 |
+| 100 roots × 50 prompts | .0385 / .0165 | .5461 / .1466 | .5473 / .1471 | .0013 / .0005 |
+| 20 roots + 40 children × 50; 5 today / 2 running | .1010 / .0430 | .5827 / .1981 | .6240 / .2343 | .0275 / .0297 |
+| 1,000 roots × 20 prompts | .0692 / .0220 | .3748 / .0979 | .3768 / .0991 | .0035 / .0032 |
 
-All nine runs exited zero, with both report sample counts 100. Cold Normal hydrations were 2/5/5 respectively; warm hydrations were all zero, with 2/5/5 revision checks. The two running child-scenario roots are old/outside Normal's sample; Watch independently hydrates both per refresh. Watch cold initialization hydrated 20 roots per scenario, warm initialization 2/4/2, subsequent refresh 0/2/0. Runner assertions retain sampled-running bypass and the broad O(root) revision bound; the fixture has no V2 batch-sampling seam, so it does not prove bracket-amortization performance.
+All nine runs exited zero with sampled-running/O(root) assertions satisfied and both sample counts 100. Normal cold hydrated 2/5/5 roots; warm zero, with 2/5/5 revision checks. Unsampled running roots do not force a full scan; Watch refreshes them independently. Not Web/browser/SSE/native or real-source latency.
 
-### Deep history, profiling and decision
+### Current deep history and diagnostic profiles
 
-The new offline probe alternates existing CLI deep and compact Web paths for three repetitions each, 100 roots x 50 prompts, with independent fresh caches. Web enables `cache_token_mix_history` and `shared_web_evidence`, including end-of-scan membership/revision verification; it is not a full Web host or partial-history continuation test.
+Three alternating CLI/Web repetitions, each 100 roots × 50 prompts with its own fresh cache. Web enables `cache_token_mix_history` and `shared_web_evidence`, including end-of-scan membership/revision verification, not partial-history continuation or a full Web host.
 
-| Existing path | Wall cold / warm (s) | Process CPU cold / warm (s) | Cache files after each phase (bytes) |
+| Existing path | Wall cold / warm (s) | Process CPU cold / warm (s) | Cache files after phase (bytes) |
 | --- | --- | --- | --- |
-| CLI deep | 1.9670 / .7901 | 1.2500 / .7969 | 21,807,104 |
-| Web compact | .6601 / .2145 | .6563 / .1875 | 2,199,552 |
+| CLI deep | 2.0601 / .8626 | 1.1719 / .8438 | 21,807,104 |
+| Web compact | .6546 / .1936 | .6094 / .1875 | 2,199,552 |
 
-CLI wall ranges: cold 1.9234–2.1120 s, warm .7334–.8127 s; Web: cold .6531–.6948 s, warm .2066–.2227 s. These paths have different cache/bracketing contracts: the table is not a before/after improvement or billing comparison. Cache file size is not physical bytes read/written.
+These existing paths have different execution/cache contracts: not a before/after gain or physical I/O measurement. All twelve uninstrumented full projected outputs matched SHA-256 `0d57b7105985dca688e67726094746526a21d700279eb6de0285fe85764c840b`, with 5,000 prompts/requests and no retained `service._analyzed` roots. Both paths hydrate 100/0 roots cold/warm. CLI performs 200/100 revision work items and one catalog read per phase; Web 500/200 including bulk checks and two catalog reads. Warm Web has 100 compact hits, no analysis/repricing. Its scalar revision counter alone is zero, not zero freshness work.
 
-Every run retained 5,000 prompts/calls, released `service._analyzed`, and hydrated 100/0 roots cold/warm. CLI performed 200/100 per-root revision checks and one catalog read per phase. Web performed 500/200 revision work items (including bulk checks) and two catalog reads per phase; warm Web had 100 compact hits, no analysis or repricing. Its scalar `revision_count` alone is 300/0 and excludes bulk work: zero there does not mean no freshness checks. All 12 full projected JSON outputs matched SHA-256 `ac6f9f4e30469c355143292230897ecc43d91fa5f0770f2de7805f8ac5e0744b`.
+Separate single cProfile/tracemalloc pairs are diagnostics, not repeated timing/memory samples. CLI cold: SQLite commit .566 s and close .553 s self time; CLI warm: rich bundle reconstruction .539 s cumulative out of 1.210 s build wall. Web warm: shared grouping/projection .257 s cumulative and compact decode .094 s out of .424 s instrumented build wall. Inclusive times overlap. Traced Python build peaks, cold/warm: CLI **3,784,342 / 14,891,706 bytes**, Web **9,850,522 / 11,381,980 bytes**. They exclude fixture construction, native SQLite buffers, other processes/browser, and are not RSS or a general memory bound. Instrumented outputs matched the same digest.
 
-[Sanitized raw samples, setup, source hashes, profiles, inventory summary and executable `probe_source`](../architecture/governance/verification/performance-80-20261108.json) retain reproduction evidence. Original samples remain in originating-session `scratch:/performance-80.json`. To reproduce, extract `probe_source` from that JSON to a Python file in an existing owned scratch directory, set `OPENCODE_TOOLKIT_SESSION_SCRATCH` to that directory, and run from this repository root:
+Decision: retain mode-specific acquisition over one canonical projection. SQLite lifecycle/serialization and rich reconstruction are costs, not proof that pooling or routing CLI through Web cache is equivalent. Alternatives change concurrency, transactions, rollback, timeouts, freshness and cache reuse. No equivalent measured candidate or source optimization is retained.
+
+### Card/guidance cohort: exercise the demanded work
+
+Unchanged runner: twelve inactive V2-wire roots, batch two, three alternating trials, 60-second strategy budget:
 
 ```text
-py -3 <owned-scratch>/performance_probe.py --output <owned-scratch>/performance-80.json
+py -3 development/tests/integration/benchmark_card_guidance.py --roots 12 --trials 3 --batch-size 2 --seconds 60 --output <owned-scratch>/card-guidance-120.json
 ```
 
-Separate single-run cProfile and tracemalloc passes are diagnostics, not timing samples or repeated memory measurements. CLI cold had .552 s SQLite-close and .462 s commit self time; warm rich-bundle reconstruction consumed .520 s cumulative out of a 1.212 s instrumented build. Web warm shared grouping/projection consumed .247 s cumulative out of .396 s, with compact decode .081 s. Inclusive times overlap and are not additive. These observations do not attribute real-source latency.
+All six default trials observed 12/12 roots, with no failures or budget exhaustion, **but zero warning finalists and no shared producer**. `WireHistory` omits cache-read/write telemetry. `opencode_tokens.py` preserves those fields as unknown; the context estimator requires known I/C/W/O, so numeric guidance is correctly not demanded. The runner's non-null completion time alone is not numeric-guidance evidence.
 
-Traced Python build peaks: CLI cold/warm **3,784,422 / 14,810,442 bytes**, Web **9,810,221 / 11,381,980 bytes**. Releasing analyzed roots does not guarantee lower warm peaks; precise causes remain unestablished. Single samples exclude fixture construction, native SQLite buffers, child/browser memory: not RSS, total-memory bounds or an optimization claim. Instrumented outputs matched the same hash.
+A scratch-only adapter added known-zero `tokens.cache.read/write`, changing no product/runner. Six new trials asserted 12/12 roots, five numeric-guidance finalists, no failures/budget exhaustion, and producer execution with twelve-root sampling in all three shared trials.
 
-Decision: retain bounded Normal and mode-specific acquisition over one canonical Token Mix projection. CLI serialization/connection lifecycle is observable cost; Web already avoids rich writes. A blanket switch/pool changes cache reuse, revision brackets, threads/transactions, rollback, busy-timeout and failure ownership. No equivalent candidate redesign was established; no speculative wrapper or source optimization is retained. **NO_GAIN** completes this assessment, not separate live/Web recovery requirements.
+| Existing strategy, complete telemetry | First rows median (s) | Cohort observed median (s) | Guidance ready median (s) | Sample-root work per run |
+| --- | --- | --- | --- | --- |
+| Per-card control | .2100 | .4367 | .4367 | 96 |
+| Shared guidance | .0422 | .1465 | .2484 | 12 |
 
-### Verification and collection repair
+Existing behavior, not a delivered optimization/production speedup. One interpreter alternates fresh-cache strategies; allocator carryover, uncontrolled load and 20-ms ticks limit CPU/RSS/timing comparisons. At most three occupied/history slots were observed, not active-root fairness proof. Summed per-service `context_sample_peak_analysis_roots` values 8/1 are not concurrent peaks. In-memory wire traffic bypasses HTTP counters. No card numeric-value parity digest was captured: assertions prove exercised work/membership, not full semantic/browser/global Earlier acceptance.
 
-The first scratch deep probe failed with `AttributeError`: it used nonexistent `TokenMix.prompt_count`. Source inspection identified the existing `sample_size` field; only the scratch probe was corrected. The failure remains in published evidence, not PASS. All nine already-successful report/Watch samples were retained without rerun; the corrected six deep runs and four diagnostic runs exited zero. No repository runner/assertion or product code was changed.
+### Reproduction, collection and delivery scope
 
-No local full/quick product suite, package validator, version bump, ZIP, installed-service or browser probe was run: edits are development-only evidence/docs/state. This is the selected workflow's normal scope, not a requirement/test exception. Normal GitHub checks/blockers are read at delivery and reported in the PR. Architecture responsibilities/flows are unchanged; no diagram/module-contract update is needed. Normal/Watch CPU, physical I/O, total peak memory, real account latency, installed V2/whole-Web latency and monetary cost remain unknown.
+[Sanitized raw samples, setup, source hashes, profiles and embedded probe sources](../architecture/governance/verification/performance-120-20261110.json) retain the baseline and complete-telemetry card evidence. The initial default-card observation is explicitly a summary reconstructed from returned output, not a full raw archive. Original files remain in originating-session `scratch:/performance-120.json`, `scratch:/card-guidance-120.json` and `scratch:/card-guidance-complete-120.json`.
 
-### Historical findings and scope (not current baselines)
+In a new authorized worker, obtain its own scratch through the native helper; use native-injected scratch/session values, never manually replace them. Extract `baseline.probe_source` and `numeric_guidance.probe_source` from the published JSON into that owned scratch. Run from an explicit repository cwd, using those files and owned output paths:
 
-- [2026-11-05 milestone-40 samples/profile](../architecture/governance/verification/performance-40-20261105.json): NO_GAIN; repaired obsolete unsampled-running expectation. Historical results, not fresh PASS.
-- [Milestone-20](../architecture/governance/verification/performance-20.json) and [older milestone-40](../architecture/governance/verification/performance-40.json) retain original semantics/failed attempts. FR 000534 restored bounded Normal; old deep-comparison timings are not equivalent gains.
-- Older causal/cache/quota/context improvements remain in Git, not current ratios. Inspected detail tests retain 100/1,000/10,000-row totals, bounded pages and revision reuse; not executed here.
+```text
+py -3 <owned-scratch>/performance_probe.py --output <owned-scratch>/performance-120.json
+py -3 <owned-scratch>/guidance_probe.py --roots 12 --trials 3 --batch-size 2 --seconds 60 --output <owned-scratch>/card-guidance-complete-120.json
+```
+
+An optional inline-Python summary hit `SCRATCH_SESSION_BOUNDARY` before execution (unsupported environment-read syntax). Decision Delegate authorized one supported injected PowerShell packaging attempt, not a permission/test waiver. It succeeded without rerunning samples, alternate access, changed scratch identity or rebootstrap. No benchmark/product assertion failed.
+
+Development-only evidence/docs/state activates no product suite, package validation, live/browser probe, version/release update or ZIP; none ran or is claimed PASS. GitHub checks/blockers are read at delivery. Responsibilities/flows are unchanged: no architecture update. Physical I/O, real-source/provider/whole-Web latency, total memory and monetary cost remain unknown. No requirement exception, proposal or held-work release.
+
+Historical, not current baselines: [milestone 80](../architecture/governance/verification/performance-80-20261108.json) and [2026-11-05 milestone 40](../architecture/governance/verification/performance-40-20261105.json) retain original samples, limitations and collection repairs. Older observations remain in Git; none is a fresh regression ratio.
 
 ## Next investigations
 
-Before changing CLI connection lifetime or adopting compact evidence, characterize concurrent report/Live owners, cache-consumer reuse, transaction failures and fresh revision/deletion behavior on equivalent inputs. Investigate warm allocation peaks with object/allocation evidence rather than assuming cache hits are cheaper in every resource. Whole-Web scheduling, real V2 hydration/bracket cost, browser interaction, assistive technology and native lifecycle need their own existing scoped evidence. No new FR, proposal implementation or cross-repository work was published; these limits do not release held work or declare pending recovery complete.
+Before connection/cache redesign, establish equivalent concurrent-owner, rollback/failure, revision/deletion and consumer-reuse contracts; profile warm allocations. Guidance claims need non-vacuous demand/producer assertions. Complete telemetry is a separate fixture, never a repair of unknown production counters. Whole-Web, installed V2/global Earlier, browser/native and numeric-parity proof remain separate.
 
 ## Rejected hypotheses
 
-Do not expand Normal to all history to satisfy obsolete assertions, cache running roots, skip revisions, cap full detail to Watch rows, rebuild prices on display ticks or add per-tab workers. Zero scalar revision calls are not zero bulk freshness work; fewer cache bytes are not measured physical I/O or lower cold peak memory. Existing CLI/Web mode differences are not a candidate speedup, and synthetic wall/CPU/Python-allocation samples are not production latency, billing or whole-process savings. Retain transaction isolation, rollback/close behavior and source authority; no speculative pooling/concurrency wrapper for an invented gain.
+Do not expand Normal to all history, cache running roots, skip revisions, cap full detail to Watch rows, reprice on display ticks or add per-tab workers. Fewer cache bytes are not measured physical I/O/lower peaks; zero scalar checks are not zero bulk freshness work. Existing mode/strategy differences are not candidate gains. A non-null guidance completion time with zero finalists/producer is not exercised numeric guidance. Preserve unknown telemetry, source authority, transaction isolation and bounded cleanup; no speculative pooling for an invented gain.
