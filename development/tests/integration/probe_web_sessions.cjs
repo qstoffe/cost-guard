@@ -185,11 +185,11 @@ async function main() {
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),
-      ['Last activity','Session name','Model','CCost','Prompts','Duration']);
+       ['Last activity','Session name','Model','CCost','Prompts','Duration','CTX']);
     assert.equal(await evaluate('document.querySelectorAll("#result tbody tr").length'),50);
     assert.equal(await evaluate('getComputedStyle(document.querySelector(".toolbar")).display'),'none');
     assert.equal(await evaluate('document.querySelector("#scope-controls").textContent'),'');
-    checks.push('minimal-six-column-catalog');
+     checks.push('minimal-seven-column-catalog');
     await evaluate('document.querySelectorAll("#result th button")[4].click()');
     await until('current.catalog.data.sort === "prompts" && !current.catalog.data.pending_sort');
     assert.equal(await evaluate('current.catalog.data.total'),120);

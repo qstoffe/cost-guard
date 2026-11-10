@@ -8,7 +8,8 @@ const SessionsCatalog = (() => {
     ['model', 'Model', 'One canonical model, or Multiple models when different models contributed.'],
     ['ccost', 'CCost', 'Whole-session reference cost, not billing. ? means incomplete pricing. Sort uses unrounded complete cost; partial values stay last.'],
     ['prompts', 'Prompts', 'Canonical number of prompts in the entire session.'],
-    ['duration', 'Duration', 'Canonical execution duration, excluding idle gaps. Sort uses milliseconds.']
+    ['duration', 'Duration', 'Canonical execution duration, excluding idle gaps. Sort uses milliseconds.'],
+    ['ctx', 'CTX', 'Estimated session-level next incoming context in tokens, not remaining model capacity or a sum of prompts.']
   ];
   function protectedNode(node) {
     const selected = window.getSelection?.();
@@ -31,7 +32,7 @@ const SessionsCatalog = (() => {
       const head = el('thead'), header = el('tr'); this.headers = [];
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
-        const label = ContextHelp.heading(button, help + '\nActivate to sort the full catalog; activate again to reverse. Unknowns stay last.');
+        const label = ContextHelp.heading(button, help + '\nActivate to sort the full catalog; activate again to reverse. Unknowns stay last.', key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
           location.hash = destination(0, null, key, direction);
@@ -290,11 +291,14 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-          row.metrics = ['model', 'ccost', 'prompts', 'duration'].map(key => {
+          row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             ContextHelp.value(node, () => {
               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
               if (key === 'ccost' && ReportView.costHelp(current)) return ReportView.costHelp(current);
+              if (key === 'ctx') return [current.context_tokens == null ? '' : `${current.context_tokens.toLocaleString()} estimated tokens.`,
+                current.context_detail, state === 'retained' ? 'Retained from an earlier source observation; refresh pending.' :
+                  state === 'pending' ? 'Source work is pending.' : state === 'unavailable' ? 'Source context unavailable.' : ''].filter(Boolean).join('\n');
               if (key !== 'model' || !current.multiple_models) return 'Observed session ' + key + '.';
               const models = current.contributor_models || [];
               return ['Models used in this session' + (current.contributor_models_complete && state === 'ready' ? '' : ' (observed so far)'),
@@ -311,14 +315,17 @@ const SessionsCatalog = (() => {
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
         const texts = [value.multiple_models ? 'Multiple models' : value.model || 'N/A',
           () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
-          () => ReportView.display(value, 'duration_ms')];
+          () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];
         row.metrics.forEach((node, index) => {
-          const key = ['model', 'ccost', 'prompts', 'duration'][index];
+          const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
           const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
           const missing = (!value.has_summary && !value.indexed && state !== 'retained') ||
-            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A'));
+            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A')) ||
+            (key === 'ctx' && state === 'pending' && value.context_tokens == null);
           ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
-          node.className = 'help-value' + (missing ? ' session-metric-pending' : '');
+          node.className = 'help-value' + (missing || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
+          if (key === 'ctx' && state === 'retained') node.setAttribute('aria-label', `Retained context: ${node.textContent}`);
+          else node.removeAttribute('aria-label');
           if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');
           else node.removeAttribute('aria-busy');
         });

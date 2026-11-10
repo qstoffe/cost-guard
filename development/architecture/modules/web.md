@@ -181,6 +181,19 @@ the pricing journal separates rendered layout evidence from real-source checks.
 
 `src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
+FR000667 extends the catalog below from six to **seven columns/comparators**, adding
+CTX after Duration. `reports/session_summary.py::context_fields` reuses analysis
+`session_watch_context`/`ContextEpochs` for the latest non-subtask root prompt and
+later compaction. Complete same-source/revision snapshots qualify either numeric
+CTX or an authoritative unavailable anchor; compact/partial evidence cannot finish
+a CTX sort. Algorithm `session-summary-3` lazily invalidates old scalar entries,
+without invalidating unrelated analysis. Changed source revisions clear obsolete
+context before display-token generation; unchanged outage values can remain
+explicitly retained. No Watch capture, PiP, additional indexer or browser acquisition
+dependency is introduced. Existing six-column/six-key references below describe the
+pre-CTX baseline; the seven-key tests and retained browser navigation now also cover
+CTX. [CTX evidence](../../journal/web/sessions-context.md).
+
 FR000634 keeps loaded catalog/detail content visible regardless of observation age,
 without a generic finite progress footer or routine sort/source captions. Catalog
 expiry permits one bounded reopen per poll; without membership proof, it returns to

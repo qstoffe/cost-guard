@@ -265,7 +265,7 @@ async function main() {
    assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
    assert.equal(catalog.body.children[0].className,'session-running');
    assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
-   assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s']);
+    assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s','N/A']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
     assert.equal(catalog.body.children[0].className,'');

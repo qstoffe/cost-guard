@@ -19,14 +19,14 @@ from src.sources.errors import SourceError
 
 from .projection import project
 
-SORTS = ("activity", "name", "model", "ccost", "prompts", "duration")
+SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
 
 def sort_value(row, key):
     return {"activity": row.last_activity_ms, "name": row.title.casefold(),
         "model": "multiple models" if row.multiple_models else row.model.casefold() if row.model != "N/A" else None,
         "ccost": row.ccost if row.complete else None, "prompts": row.prompt_count,
-        "duration": row.duration_ms}[key]
+        "duration": row.duration_ms, "ctx": row.context_tokens if row.context_qualified else None}[key]
 
 
 def ordered(rows, key, direction):
@@ -187,7 +187,9 @@ class SessionCatalog:
             return False  # Unsupported/auth failures require changed source evidence.
         delay = 30 if failure else 5
         return (self.clock() - self.attempted.get(key, -100) >= delay
-                and (not self._current(key) or key in self.active or self.rows[key].running))
+                and (not self._current(key) or key in self.active or self.rows[key].running
+                     or not self.rows[key].context_qualified and any(lease.get('sort') == 'ctx'
+                         and self._browsing(lease) for lease in self.leases.values())))
 
     def _candidate(self):
         # Only requested rows, or global scalar keys required by a requested
@@ -249,9 +251,15 @@ class SessionCatalog:
                             self.rows[key] = row
                             self.valid[key] = actual, self.clock()
                             self.prompt_activity[key] = self.attempted[key], row.running
-                            self.failures.pop(key, None)
-                            self.failure_counts.pop(key, None)
-                            self.failure_reasons.pop(key, None)
+                            if not row.context_qualified and any(lease.get('sort') == 'ctx'
+                                    and self._browsing(lease) for lease in self.leases.values()):
+                                self.failures[key] = revision, False
+                                self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
+                                self.failure_reasons[key] = 'partial_source_context'
+                            else:
+                                self.failures.pop(key, None)
+                                self.failure_counts.pop(key, None)
+                                self.failure_reasons.pop(key, None)
                         else:
                             self.failures[key] = revision, False
                             self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
@@ -270,12 +278,16 @@ class SessionCatalog:
         for key, root in self.roots.items():
             value = self.rows.get(key) or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False)
+            if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
+                value = replace(value, context_tokens=None,
+                    context_detail="Source revision changed; waiting for current session context.")
             rows.append(replace(value, title=root.title or "Untitled session",
                 last_activity_ms=self.activity.get(key), archived=root.archived_at_ms is not None))
         return rows
 
     def _key_current(self, key, sort):
-        return self._current(key) and not (sort == 'model' and self.rows[key].model_pending)
+        return (self._current(key) and not (sort == 'model' and self.rows[key].model_pending)
+                and not (sort == 'ctx' and not self.rows[key].context_qualified))
 
     def _progress(self, sort, pending, selected, indexed, pinned):
         keys = tuple(self.roots) if pending else tuple(row.session_id for row in selected)
@@ -353,7 +365,11 @@ class SessionCatalog:
                 row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
                     "ready" if current else "retained" if row["has_summary"] else "pending")
                 row["running"] = self._running(key, bool(row["running"] and current and not unavailable))
-                row["metric_states"] = {name: row["metric_state"] for name in ("model", "ccost", "prompts", "duration")}
+                row["metric_states"] = {name: row["metric_state"] for name in ("model", "ccost", "prompts", "duration", "ctx")}
+                if current and not self.rows[key].context_qualified:
+                    row["metric_states"]["ctx"] = "unavailable"
+                if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
+                    row["metric_states"]["ctx"] = "unavailable" if unavailable else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].model_pending:
                     row["metric_states"]["model"] = "pending"
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,

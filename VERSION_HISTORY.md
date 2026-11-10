@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.17 - 2026-11-10
+
+- Sessions adds CTX after Duration: compact server-formatted estimated next incoming session context, not capacity or a sum of prompts. Hover, focus and touch help retain the same working sort button.
+- CTX uses canonical Watch session guidance and revision/source-qualified scalar summaries. Numeric global ordering, unknown-last ties, bounded indexing, progress/Cancel/Retry and stable 50-row pages share the existing catalog implementation. Partial evidence cannot qualify a final unknown; changed revisions discard obsolete context.
+
 ## v81.16 - 2026-11-10
 
 - Mini Watch keeps the last displayed same-session Ctx during a source-validated new-prompt handoff, then immediately applies fresh estimates. Help explicitly labels the previous estimate pending refresh; Δ Ctx stays prompt-specific.

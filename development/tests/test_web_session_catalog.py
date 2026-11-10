@@ -11,12 +11,15 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.compact_reports import report_service
+from development.tests.fixtures.context_deltas import context_snapshot
+from development.tests.fixtures.session_snapshots import make_native_v2_compaction_snapshot
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
 from src.application.session_catalog import SessionCatalog, SORTS
-from src.domain import ModelRef
+from src.domain import ContextBoundary, ModelRef
 from src.reports.models import SessionUsageRow
+from src.reports.sampling import AnalyzedRoot
 from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, summary_key
 from src.reports.watch_capture import capture_rows
 from src.sources.errors import SourceUnavailableError, SourceSchemaError
@@ -29,6 +32,7 @@ class SessionCatalogTests(unittest.TestCase):
     def setUp(self):
         self.clock = 0
         self.source = SyntheticMonthSource(120, 1, month_start_ms=1000)
+        self.source.snapshots = {key: replace(value, complete=True) for key, value in self.source.snapshots.items()}
         self.service = report_service(self, self.source, now_ms=100_000_000)
         self.catalog = SessionCatalog(clock=lambda: self.clock)
         self.observe()
@@ -40,7 +44,7 @@ class SessionCatalogTests(unittest.TestCase):
         for number, (key, root) in enumerate(self.catalog.roots.items()):
             self.catalog.rows[key] = SessionUsageRow(key, root.title, f"Model {number:03}", False,
                 Decimal(number) / 1000, number, duration_ms=number * 1000,
-                last_activity_ms=self.catalog.activity[key])
+                last_activity_ms=self.catalog.activity[key], context_tokens=number)
             self.catalog.valid[key] = self.catalog.revisions[key], self.clock
 
     def test_browser_fixture_uses_injected_source_for_catalog_and_detail_acquisition(self):
@@ -136,7 +140,7 @@ class SessionCatalogTests(unittest.TestCase):
         revision = self.catalog.revisions[root.session_id]
         row, actual = session_summary(self.service, root, revision)
         self.assertEqual(actual, revision)
-        self.assertFalse(row.complete, "the fixture lacks complete-source proof, even with fully priced requests")
+        self.assertTrue(row.complete)
         with patch.object(self.service, "_analyze", side_effect=AssertionError("unexpected hydration")):
             cached, _ = session_summary(self.service, root, revision)
         self.assertEqual(cached, row)
@@ -291,8 +295,8 @@ class SessionCatalogTests(unittest.TestCase):
     def test_partial_unknown_metrics_are_indexed_but_sort_last_both_directions(self):
         self.index()
         key = "root-0119"
-        self.catalog.rows[key] = replace(self.catalog.rows[key], complete=False, duration_ms=None)
-        for sort in ("ccost", "duration"):
+        self.catalog.rows[key] = replace(self.catalog.rows[key], complete=False, duration_ms=None, context_tokens=None)
+        for sort in ("ccost", "duration", "ctx"):
             for direction in (-1, 1):
                 page = self.catalog.page(sort=sort, direction=direction)
                 final = self.catalog.page(token=page["token"], offset=100, epoch=page["epoch"], sort=sort)
@@ -617,7 +621,7 @@ class SessionCatalogTests(unittest.TestCase):
             number = int(root.session_id.split('-')[1])
             metrics['cache_hits'] += 1
             return SessionUsageRow(root.session_id, root.title, f'Model {number:04}', False,
-                Decimal(number) / 1000, number, duration_ms=number * 1000), revision
+                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number), revision
         started = time.perf_counter()
         with patch('src.application.session_catalog.session_summary', side_effect=summary) as acquire:
             for batch in range(805):
@@ -650,7 +654,116 @@ class SessionCatalogTests(unittest.TestCase):
             self.assertFalse(older['pending_sort'], 'new arrivals do not re-index a qualified pinned order')
             self.assertEqual(older['total'], 3217)
         print(dict(synthetic_roots=3217, scalar_cache_hits=3217, source_hydrations=0,
-                   cold_key_seconds=round(cold_seconds, 3), warm_12_sorts_seconds=round(time.perf_counter() - warm, 3)))
+                   cold_key_seconds=round(cold_seconds, 3), warm_14_sorts_seconds=round(time.perf_counter() - warm, 3)))
+
+    def test_context_source_matches_watch_session_guidance_not_prompt_input_or_sum(self):
+        for running, outputs in ((False, (12_000,)), (True, (12_000, 60_000)), (False, (12_000, 60_000))):
+            snapshot = replace(context_snapshot(outputs=outputs, running=running), complete=True)
+            self.source.snapshots = {'root': snapshot}
+            service = report_service(self, self.source, now_ms=2000)
+            row, actual = session_summary(service, snapshot.root, snapshot.source_revision, active=running)
+            capture, _ = capture_rows(service, snapshot.root)
+            with self.subTest(running=running, outputs=outputs):
+                self.assertEqual(row.context_tokens, 100_000 + sum(outputs))
+                self.assertEqual(row.context_tokens, capture.context.tokens)
+                self.assertEqual(actual, snapshot.source_revision)
+                self.assertTrue(row.context_qualified)
+                self.catalog.observe(observe_catalog(self.source, include_archived_revisions=True))
+                self.catalog.rows['root'] = row
+                self.catalog.valid['root'] = actual, self.clock
+                exported = self.catalog.page(sort='ctx')['view']['session_usage'][0]
+                self.assertEqual(exported['display']['context_tokens'], '172k' if len(outputs) > 1 else '112k')
+        archived = replace(snapshot, root=replace(snapshot.root, archived_at_ms=3000))
+        item = service._analyze_snapshot(archived)
+        self.assertEqual(service._session_rows((AnalyzedRoot(archived.root, item, False, archived),))[0].context_tokens, 172_000)
+
+    def test_context_compaction_and_epoch_changes_never_revive_old_prompt_context(self):
+        snapshot = replace(make_native_v2_compaction_snapshot(), complete=True)
+        self.source.snapshots = {'root': snapshot}
+        service = report_service(self, self.source, now_ms=10000)
+        before, _ = session_summary(service, snapshot.root, snapshot.source_revision)
+        capture, _ = capture_rows(service, snapshot.root)
+        self.assertEqual(before.context_tokens, capture.context.tokens)
+        self.assertIsNotNone(before.context_tokens)
+        changed = replace(snapshot, source_revision='new-epoch',
+            context_boundaries=(ContextBoundary('root', 'move', 9999),))
+        self.source.snapshots['root'] = changed
+        after, _ = session_summary(service, changed.root, changed.source_revision)
+        self.assertIsNone(after.context_tokens)
+        self.assertTrue(after.context_qualified, 'authoritative unknown must not block global sort')
+
+    def test_context_exact_numeric_keys_zero_ties_retention_and_changed_revision(self):
+        self.index()
+        for key, tokens in (('root-0119', 172_001), ('root-0118', 95_000), ('root-0117', 172_000),
+                            ('root-0116', 172_000), ('root-0115', None)):
+            self.catalog.rows[key] = replace(self.catalog.rows[key], context_tokens=tokens)
+        for direction, expected in ((-1, ['root-0119', 'root-0116', 'root-0117', 'root-0118']),
+                                    (1, ['root-0000', 'root-0001', 'root-0002', 'root-0003'])):
+            page = self.catalog.page(sort='ctx', direction=direction)
+            self.assertFalse(page['pending_sort'])
+            self.assertEqual([row['session_id'] for row in page['view']['session_usage'][:4]], expected)
+            self.assertEqual(self.catalog.page(token=page['token'], sort='ctx', direction=direction,
+                offset=100, epoch=page['epoch'])['view']['session_usage'][-1]['session_id'], 'root-0115')
+        self.assertEqual(self.catalog.page(sort='ctx', direction=1)['view']['session_usage'][0]['display']['context_tokens'], '0')
+        self.catalog.observe(None, unavailable=True)
+        retained = self.catalog.page(sort='activity')['view']['session_usage'][0]
+        self.assertEqual(retained['context_tokens'], 172_001)
+        self.assertEqual(retained['metric_states']['ctx'], 'retained')
+        snapshot = self.source.snapshots['root-0119']
+        self.source.snapshots['root-0119'] = replace(snapshot, source_revision='compacted')
+        self.observe()
+        stale = self.catalog.page(sort='activity')['view']['session_usage'][0]
+        self.assertIsNone(stale['context_tokens'])
+        self.assertEqual(stale['metric_states']['ctx'], 'pending')
+        self.assertTrue(all(tokens.get('context_tokens', stale['display']['context_tokens']) == 'N/A'
+                            for tokens in stale['display_units'].values()))
+        self.assertTrue(self.catalog.page(sort='ctx')['pending_sort'])
+
+    def test_context_scalar_cache_rejects_old_missing_and_malformed_facts_and_partial_source(self):
+        root = self.catalog.roots['root-0000']
+        revision = self.catalog.revisions[root.session_id]
+        original, _ = session_summary(self.service, root, revision)
+        key = summary_key(self.service, root)
+        cached = self.service.cache_repository.get(NAMESPACE, key)
+        for tokens in (-1, True, '172k'):
+            self.service.cache_repository.put(NAMESPACE, key, dict(cached.payload, context_tokens=tokens),
+                source_revision=revision, algorithm_version=ALGORITHM)
+            with patch.object(self.service, '_analyze', wraps=self.service._analyze) as acquire:
+                repaired, _ = session_summary(self.service, root, revision)
+            self.assertEqual(acquire.call_count, 1)
+            self.assertEqual(repaired, original)
+        old = dict(cached.payload)
+        old.pop('context_tokens')
+        self.service.cache_repository.put(NAMESPACE, key, old, source_revision=revision, algorithm_version='session-summary-2')
+        with patch.object(self.service, '_analyze', wraps=self.service._analyze) as acquire:
+            session_summary(self.service, root, revision)
+        self.assertEqual(acquire.call_count, 1)
+        self.source.snapshots[root.session_id] = replace(self.source.snapshots[root.session_id],
+            complete=False, source_revision='partial')
+        partial, _ = session_summary(self.service, root, 'partial')
+        self.assertFalse(partial.context_qualified)
+        self.assertIsNone(partial.context_tokens)
+        self.assertNotEqual(self.service.cache_repository.get(NAMESPACE, key).source_revision, 'partial')
+
+    def test_partial_context_is_not_a_final_unknown_and_has_bounded_failure_recovery(self):
+        self.catalog.tick(self.service)
+        self.index()
+        key = 'root-0000'
+        self.catalog.rows[key] = replace(self.catalog.rows[key], context_qualified=False)
+        page = self.catalog.page(sort='ctx')
+        self.assertTrue(page['pending_sort'])
+        def partial(service, root, revision, **kwargs):
+            return replace(self.catalog.rows[key], context_detail='Partial source.'), revision
+        with patch('src.application.session_catalog.session_summary', side_effect=partial):
+            for attempt in range(3):
+                self.clock += 31
+                self.catalog.tick(self.service)
+        failed = self.catalog.page(token=page['token'], sort='ctx')
+        self.assertEqual(failed['progress']['status'], 'failed')
+        self.assertEqual(failed['progress']['reason'], 'partial_source_context')
+        self.clock += 31
+        self.catalog.tick(self.service)
+        self.assertFalse(self.catalog.page(token=page['token'], sort='ctx')['pending_sort'])
 
 
 if __name__ == "__main__":

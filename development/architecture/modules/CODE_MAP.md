@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000667: `reports/session_summary.py::context_fields` prepares root-scoped CTX
+using canonical `analysis/context.py::session_watch_context`; scalar algorithm 3
+qualifies source/revision/epoch facts. `application/session_catalog.py` extends its
+existing global index/comparator; `sessions.js`/`app.css` render seven intrinsic
+columns and shared help without a new acquisition owner. Coverage: catalog tests,
+Sessions VM/navigation/live/detail browser fixtures and read-only V2 Sessions probe.
+[Evidence and limits](../../journal/web/sessions-context.md).
+
 FR000666: `reports/watch_capture.py::mini_context_handoffs` authorizes an exact
 active predecessor only before a new prompt's first supported context estimate.
 `watch/cards.py` gates its additive Live export on fresh verified capture; Mini

@@ -3,6 +3,7 @@ import json
 import time
 
 from src.domain.reference_cost import REASONS
+from src.display import context_tokens
 
 
 def reference_cost_evidence(values):
@@ -38,7 +39,7 @@ def observe_sessions(get, cookie, host, driver):
     cold_running = 0
     multiple_model_rows = 0
     for _ in range(30):
-        current = request('/api/sessions', dict(token=token, sort='ccost'))
+        current = request('/api/sessions', dict(token=token, sort='ctx'))
         coverage.append(current['indexed'])
         progress.append(current['progress'])
         assert len(current['view']['session_usage']) <= 50
@@ -47,6 +48,10 @@ def observe_sessions(get, cookie, host, driver):
             assert current['sort'] == 'activity'
         latest = request('/api/sessions', dict(token=token))
         for row in latest['view']['session_usage']:
+            tokens = row['context_tokens']
+            assert tokens is None or type(tokens) is int and tokens >= 0
+            assert row['display']['context_tokens'] == ('0' if tokens == 0 else context_tokens(tokens))
+            assert row['metric_states']['ctx'] in ('ready', 'pending', 'retained', 'unavailable')
             models = row['contributor_models']
             assert len(models) <= 64 and all(isinstance(value, str) and 0 < len(value) <= 256 for value in models)
             assert models == sorted(set(models))
@@ -57,7 +62,7 @@ def observe_sessions(get, cookie, host, driver):
             arrival = 'changed_first_page_observed; no session created by probe'
         # Keep the intended global sort's interest active during the observation,
         # rather than accidentally restoring Activity demand between every sample.
-        request('/api/sessions', dict(token=token, sort='ccost'))
+        request('/api/sessions', dict(token=token, sort='ctx'))
         time.sleep(1)
     candidates = [row for row in latest['view']['session_usage']
                   if row['indexed'] and 0 < (row['prompt_count'] or 0) <= 1000]
@@ -103,6 +108,7 @@ def observe_sessions(get, cookie, host, driver):
             index_metrics=progress[-1]['metrics'],
             cold_running_observations=cold_running, multi_model_observations=multiple_model_rows,
             contributor_contract='validated bounded distinct identities; no identities exported by probe',
+            context_contract='validated raw tokens, server formatting and qualified states; no context sizes exported',
             exact_owner_incident='not established by this read-only observation',
             first_page_seconds=round(first_seconds, 3), observation_seconds=round(time.monotonic() - started, 3),
             natural_arrival=arrival or 'unobserved; source-to-browser arrival latency not measured',

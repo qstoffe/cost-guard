@@ -160,6 +160,9 @@ class SessionUsageRow:
     contributor_models_complete: bool = False
     model_pending: bool = False
     ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
+    context_tokens: int | None = None
+    context_qualified: bool = True
+    context_detail: str = "Session context unavailable."
 
 
 @dataclass(frozen=True, slots=True)

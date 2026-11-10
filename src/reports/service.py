@@ -52,6 +52,7 @@ from .token_mix_history import HistoryProgress, build_token_mix_history
 from .sampling import AnalyzedRoot, latest_prompts, latest_token_prompts, recent_sample_roots
 from .history import HistoryRequirements, WatchHistoryAcquisition
 from .acquisition import RootAcquisition
+from .session_summary import context_fields
 
 from .models import (
     AccountsQuotasProjection,
@@ -328,6 +329,7 @@ class ReportService:
                 running=any(record.in_progress for record in item.bundle.prompts),
                 last_activity_ms=item.session.updated_at_ms,
                 contributor_models=contributors,
+                **context_fields(item, self._load_comparison_catalog()),
                 model_pending=(name == "N/A" and not item.bundle.trace_entries
                                and any(record.in_progress for record in item.bundle.prompts)),
                 contributor_models_complete=(item.snapshot is not None and item.snapshot.complete and not any(
