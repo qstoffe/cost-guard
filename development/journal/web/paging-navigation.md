@@ -170,6 +170,41 @@ successful Retry. Navigability does not require a different finite report to fin
 while the deliberately blocked source owns the worker. This is a harness correction,
 not a shortened production timeout or fabricated progress; final browser outcome pending.
 
+## Completed verification and delivery decisions
+
+Head `e3d14ab`: [common CI](https://github.com/qstoffe/cost-guard/actions/runs/42732344744)
+passed Quick645/645, validator and the complete actual-browser suite.
+[Windows/macOS ARM/macOS Intel](https://github.com/qstoffe/cost-guard/actions/runs/42732344583)
+all passed. Local Full rerun181/181PASS,0failures,129.8s is retained at
+`scratch:/full-stall-marker.json`; validator11PASS/0FAIL/7existingwarnings.
+
+The actual paging source/job lifecycle passed pinned offsets10/0/170/320/0,
+measured preview progress1/10→5/10→8/10, three bounded recovery outcomes for each
+busy/source/preview fault, deliberate changed-pin rebase and empty/onegroup totals.
+The stalled-source attempt failed after47.37s with the explicit45s-no-progress
+message, retained offset0/ten groups, allowed Models→Comparisons navigation and
+then reached offset10 on explicit Retry. This closes the previously unavailable
+browser45s outcome; old interrupted/failed trials remain failures, not retroactive PASS.
+
+Exact old/current script arms again showed all five scrolled origins123px baseline
+versus0px/contentfocus current. Delayed publication, benchmark insertion and both
+rendered frames stayed0; same-route manualsort/filter/refresh and70row detailrefresh
+retained500px. Actual125% per-tab browser zoom retained the earlier780→624width,
+DPR1→1.25,1456px outgoing→0px cold/delayed Models outcome. These are synthetic
+rendered evidence, distinct from the real-source observations above.
+
+During final bookkeeping, an accidental empty native `delivery` observation set
+`unfinished:false` without merging anything; a corrective `continue` was rejected
+at context-protection with `REPO_BACKLOG_CONTINUATION_UNAVAILABLE`. The foreground
+Decision Delegate inspected the supported implementation and authorized continuing
+the already-active same FR/branch/PR through genuine Git delivery: that flag explains
+the rejected continuation, not a prohibition on ordinary active-task work. The rejection
+stands; no activation/reselection, internal-state repair or access-route bypass is used.
+The flag also suppresses automatic rotation, so it is not assumed to provide recovery.
+Actual new runtime refusal, pause/rotation, inadequate context or newer Stop still wins.
+This scoped workflow exception waives no acceptance, test, permission or Git protection.
+Merge/default read-back and native merged finish are required for actual delivery.
+
 Physical touch, screen-reader speech, non-Chromium behavior and native desktop zoom
 are not certified by emulated input or viewport sizing. No feature-PR self-review,
 implementation agents, ZIP, tag or GitHub Release is part of this delivery.
