@@ -78,10 +78,10 @@ def check_estimate_quotas(accounts):
                         continue
                     original = Decimal(value)
                     rendered = Decimal(display[key].removeprefix('~'))
-                    assert abs(rendered - original) <= original / 10, 'estimate display tolerance'
+                    assert abs(rendered - original) <= original / 20, 'estimate display tolerance'
                     assert original == 0 or rendered > 0, 'positive estimate display'
                     if key == 'monthly_capacity':
-                        assert 'not a guaranteed monthly entitlement' in display[key + '_help'], 'monthly provenance help'
+                        assert 'not an actual monthly provider entitlement' in display[key + '_help'], 'monthly provenance help'
                     else:
                         assert 'not verified provider usage' in display[key + '_help'], 'estimate provenance help'
                     count += 1

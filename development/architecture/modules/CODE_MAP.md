@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000663: `application/quota_ccost.py` prepares distinct raw period/30-day Capacity
+help from accepted Decimal inputs; `quota_estimates.py` owns the inclusive 5%
+estimate-only tolerance and USD precision caveat. `render.js` separates native
+usage help from Capacity help; shared `account-cards.js` retains intrinsic targets.
+Coverage: quota-estimate/CCost/pace tests, `fixtures/account_capacity.cjs`, shared
+Watch DOM, `probe_quota_estimates.cjs` and `probe_subscription_capacity.cjs` through
+the Accounts driver. No acquisition, accounting or layer-boundary change.
+
 FR000661: `application/display.py` exports the existing source-backed
 `monthly_applicable` presentation fact without changing Decimal calculations.
 `account-cards.js` retains unknown Capacity rows and stable bound tracks; `app.css`

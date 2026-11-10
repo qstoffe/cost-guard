@@ -1012,8 +1012,8 @@ remain distinct. Today keeps daily scope/attribution without an estimate suffix 
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
 reset and partial/estimated attribution without raw source/observation logs.
 Each Capacity label and value share one intrinsic help target: one explanatory
-sentence, then separated native window/Used/Remaining/reset facts and essential warnings.
-These card Capacity tooltips omit raw calculation, arithmetic and rounding methodology.
+sentence, then its exact unrounded reference calculation or genuine source allowance.
+Native Used/Remaining/reset facts belong to the separate usage summary, not Capacity.
 The native summary remains a help target even when Capacity is unknown.
 Account CCost Today label and number explain daily scope and real attribution notes.
 Copilot's verified reference Used and Remaining use one provider snapshot and sum to
@@ -1030,24 +1030,32 @@ followed only by applicable primary unrounded-estimate help.
 Both facts belong only to the visible primary window, with canonical local reset/countdown,
 **Window not started** or honest unknowns. No secondary-quota or unrelated CCost prose
 is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts use
-concise Capacity help while retaining other native and pace help. All three follow
+separate intrinsic help on Usage, period Capacity and Monthly Capacity. Usage explains
+the selected native Used/Remaining percentage, quantities, reset and restrictions—never
+reference Capacity mathematics. Period Capacity shows the full available unrounded
+reference Credits and actual same-window observed-cost ÷ native-used-fraction inputs,
+or the genuine source-confirmed allowance/provenance without a fabricated ratio.
+Monthly Capacity shows its own unrounded period Capacity × (30 days ÷ verified full
+duration), not an actual monthly entitlement. Unknown/unlimited figures explain why
+there is no numeric calculation. All three follow
 the same choice immediately, without more polling.
 
 **Quota guesstimate precision:** ratio-derived Remaining/Capacity, every theoretical
 30-day Monthly Capacity and genuinely estimated Remaining/day or /workday use the
 nearest one significant decimal digit when its difference from the raw calculation
-is at most 10%; otherwise they use two significant digits (decimal half up).
+is at most 5%; otherwise they use two significant digits (decimal half up), retaining
+more precision if needed to obey the bound.
 Each quantity starts from its own unrounded reference Credits: never derive pace or
 monthly equivalents from a rounded display. For example, 613 → **600 / $6.00**,
-2,343 → **2300 / $23.00**, 52,343 → **50000 / $500.00**, 250 → **250 / $2.50**.
+550 → **550 / $5.50**, 949 → **950 / $9.50**, 52,343 → **50000 / $500.00**.
 Conversion to USD happens after Credit-space rounding and keeps `$` plus two decimals.
 Fractional Credits retain necessary precision; positive amounts below USD display
-precision use **<$0.01**, not zero. Detailed estimate help outside the two shared-card
-Capacity metrics explains the USD precision limitation.
+precision use **<$0.01**, not zero. Estimate help, including both shared-card Capacity
+metrics, explains when currency precision cannot retain the 5% Credit-space tolerance.
 
 Remaining and pace help retains the **guesstimate before display rounding** in full
 Decimal Credits (plus ordinary USD in USD mode), not verified provider usage. Shared-card
-Capacity/Monthly Capacity instead use the short explanations above; Mini retains its
+Capacity/Monthly Capacity expose their own raw calculation as described above; Mini retains its
 existing primary-line calculation help. Unit switches and Live updates refresh the same
 bound help without fetching. Source-confirmed allowances, observed period Used, Today,
 prompt/session costs, native percentages/bars, billing and CLI formatting are unchanged.

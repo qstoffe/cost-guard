@@ -1,9 +1,9 @@
 """Reference equivalents of verified quota facts, or explicitly estimated period costs."""
 from decimal import Decimal
 
-from src.numbers import ccost_amount
+from src.numbers import ccost_amount, ccost_unit, exact_number
 from .contracts import record
-from .quota_estimates import estimate_amount, estimate_help
+from .quota_estimates import estimate_amount, estimate_help, usd_precision_help
 
 
 def capacity_period(values):
@@ -49,10 +49,38 @@ def monthly_values(values, capacity, cost, coherent, current, now_ms):
     return dict(capacity_label=label, monthly_capacity=raw, monthly_reason=reason, monthly_applicable=True)
 
 
-def monthly_tokens(reference):
+def raw_reference(value):
+    return exact_number(value) + " Credits" + (" (" + ccost_amount(value) + ")" if ccost_unit() == "usd" else "")
+
+
+def period_capacity_help(reference, values):
+    """Explain this snapshot's accepted basis, never reverse-engineer display text."""
+    basis, capacity = reference["basis"], reference["capacity"]
+    if basis == "unlimited":
+        return "The provider reports an unlimited quota; no finite reference Capacity applies."
+    if capacity is None:
+        return "No reliable same-window reference CCost or source-confirmed full-window allowance."
+    if basis == "native":
+        provenance = ("Source-verified reference CCost allowance." if values.get("reference_ccost_capacity") is not None
+            else "Provider-reported AI credit allowance, converted to reference Credits.")
+        return "Source-confirmed full-window reference CCost allowance.\n\nUnrounded Capacity: " + raw_reference(capacity) + "\n" + provenance
+    used, fraction = reference["used"], reference["fraction_used"]
+    text = ("Estimated full-window reference CCost capacity, not a guaranteed provider budget.\n\n"
+        "Observed same-window CCost used: " + raw_reference(used) + "\n"
+        "Provider-reported fraction used: " + exact_number(fraction) + "\n"
+        "Unrounded Capacity (estimate): " + exact_number(used) + " ÷ " + exact_number(fraction) + " = " + raw_reference(capacity))
+    if reference["context"]["estimated"]:
+        text += "\nUses estimated account attribution."
+    return text + usd_precision_help(capacity)
+
+
+def monthly_tokens(reference, values):
     raw, reason = reference["monthly_capacity"], reference["monthly_reason"]
-    explanation = reason or ("Approximate 30-day equivalent of this window’s reference CCost capacity, "
-        "not a guaranteed monthly entitlement.")
+    if not reference["monthly_applicable"]:
+        return {"capacity_label": reference["capacity_label"], "monthly_capacity": "", "monthly_capacity_help": ""}
+    explanation = reason or ("Theoretical standardized 30-day reference equivalent, not an actual monthly provider entitlement.\n\n"
+        "Unrounded Monthly Capacity (estimate): " + exact_number(reference["capacity"]) +
+        " × (30 days ÷ " + str(values["duration_seconds"]) + " seconds) = " + raw_reference(raw) + usd_precision_help(raw))
     return {"capacity_label": reference["capacity_label"],
             "monthly_capacity": ("N/A" if raw is None else "~" + estimate_amount(raw)) if reference["monthly_applicable"] else "",
             "monthly_capacity_help": explanation if reference["monthly_applicable"] else ""}
@@ -151,7 +179,8 @@ def quota_ccost_values(values, now_ms):
                 remaining = capacity - used
     return dict(**monthly_values(values, capacity, {} if basis == "native" else cost, coherent, current, now_ms),
                 context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
-                basis=basis, coherent=coherent, current=current)
+                basis=basis, coherent=coherent, current=current,
+                fraction_used=1 - fraction if basis == "ratio" else None)
 
 
 def quota_ccost_pace(values, now_ms, reference=None):
@@ -223,17 +252,20 @@ def quota_ccost_tokens(values, now_ms, reference=None):
     if values.get("reference_ccost_capacity") is not None and basis == "native":
         brief = "Source-verified reference Capacity. " + brief
     estimated = basis == "ratio"
-    capacity_help = {
-        "ratio": "Estimated full-window reference CCost from observed same-window CCost and the provider’s reported usage fraction.",
-        "native": "Provider-reported full-window allowance in reference CCost units, separate from OpenCode-observed usage.",
-        "unlimited": "The provider reports an unlimited quota.",
-        "unknown": "Reference CCost capacity is unknown.",
-    }[basis]
-    if estimated and context["estimated"]:
-        capacity_help += "\n\nUses estimated account attribution."
-    return {**monthly_tokens(reference),
-            "capacity_help": capacity_help,
+    usage_notes = []
+    if basis != "native":
+        if cost and not cost.get("complete"):
+            usage_notes.append("Used CCost has partial attribution / pricing.")
+        if context["estimated"]:
+            usage_notes.append("Used CCost has estimated attribution.")
+        if context["note"]:
+            usage_notes.append(context["note"])
+    used_help = (("Observed same-window reference CCost used: " + raw_reference(used) if used is not None
+        else "Reference CCost used is unavailable.") + "\n" + "\n".join(usage_notes)) if usage_notes else ""
+    return {**monthly_tokens(reference, values),
+            "capacity_help": period_capacity_help(reference, values),
             "ccost_used": amount(used), "ccost_remaining": estimate_amount(remaining) if estimated else amount(remaining),
+            "ccost_used_help": used_help,
             "ccost_remaining_help": "Remaining — " + estimate_help(remaining) if estimated and remaining is not None else "",
             "ccost_capacity_help": "Capacity — " + estimate_help(capacity) if estimated and capacity is not None else "",
             "ccost_capacity": ("N/A" if basis == "unlimited" else "~" + estimate_amount(capacity) if estimated else amount(capacity)),

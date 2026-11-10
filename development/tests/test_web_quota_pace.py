@@ -26,7 +26,7 @@ class WebQuotaPaceTests(unittest.TestCase):
 
         self.assertEqual('5517', pace['ccost_remaining'])
         self.assertEqual(('613', '1839'), (pace['ccost_per_day'], pace['ccost_per_workday']))
-        self.assertEqual(('600', '2000'), tuple(pace['display'][key] for key in ('ccost_per_day', 'ccost_per_workday')))
+        self.assertEqual(('600', '1800'), tuple(pace['display'][key] for key in ('ccost_per_day', 'ccost_per_workday')))
         self.assertEqual('$6.00', pace['display_units']['usd']['ccost_per_day'])
         self.assertIn('613 Credits ($6.13)', pace['display_units']['usd']['ccost_per_day_help'])
         self.assertEqual('ratio', pace['capacity_basis'])

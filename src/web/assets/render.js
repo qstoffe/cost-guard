@@ -50,17 +50,25 @@ const ReportView = (() => {
   }
   const quotaLabel = quota => quota.label.replace(/^\p{L}/u, letter => letter.toUpperCase());
   const capacityKnown = (quota, monthly = false) => quota.ccost_reference?.[monthly ? 'monthly_capacity' : 'capacity'] != null;
-  function quotaHelp(quota, compact = false, monthly = false) {
+  function quotaCapacityHelp(quota, monthly = false) {
+    if (quota.unlimited && !monthly) return 'The provider reports an unlimited quota; no finite reference Capacity applies.';
+    if (!capacityKnown(quota, monthly)) return monthly ?
+      'No reliable full-window reference Capacity or verified duration for a 30-day equivalent.' :
+      'No reliable same-window reference CCost or source-confirmed full-window allowance.';
+    return display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
+  }
+  function quotaUsageHelp(quota) {
     const view = quotaView(quota), native = quota.quota_display;
-    const scope = [quotaLabel(quota), quota.period !== 'unknown' && quota.period,
-      quota.duration_seconds && display(quota, 'window') + ' window',
-      quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean).join(' · ');
-    return (compact ? '' : display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help') + '\n\n') + scope + '\n' +
+    const meaning = quota.unlimited ? 'The provider reports no finite usage limit.' : view.percent && view.percent !== '—' ?
+      `${quota.origin === 'provider_native' ? 'The provider reports' : 'Quota status shows'} ${view.percent} of this quota window ${view.mode}.` :
+      `Native ${view.mode} percentage is unavailable.`;
+    return meaning + '\n\n' +
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
-      (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
-      (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'web_reset') +
+      display(quota, 'web_reset') +
+      (quota.model_id ? '\nApplies to model: ' + quota.model_id : '') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
+      (['stale', 'unavailable', 'error', 'paused', 'invalid'].includes(quota.status) ? '\nQuota status: ' + quota.status + '.' : '') +
       ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
   }
@@ -484,7 +492,7 @@ const ReportView = (() => {
     row.append(label);
     if (hasCost) {
       const capacity = element('span', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'metric-value');
-      ContextHelp.value(capacity, () => quotaHelp(quota));
+      ContextHelp.value(capacity, () => quotaCapacityHelp(quota));
       row.append(capacity);
     }
     bind(label, () => label.className = 'metric-value' + (view().mode === 'remaining' && view().exhausted ? ' quota-exhausted' : ''));
@@ -685,5 +693,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
 })();

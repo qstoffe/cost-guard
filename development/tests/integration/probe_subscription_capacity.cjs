@@ -56,23 +56,30 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
         lines:[...card.querySelectorAll('.watch-quota-capacity,.watch-monthly-capacity')].map(n=>n.textContent)};
     }))()`);
   };
-  const help = async () => {
-    const count = await evaluate(`document.querySelectorAll('#result .watch-quota-capacity .help-value').length`), result=[];
-    for(let index=0;index<count;index++) {
-      await evaluate(`document.querySelectorAll('#result .watch-quota-capacity .help-value')[${index}].focus()`);
+  const help = async (all = false) => {
+    const selector='#result .watch-quota-summary > .help-value:first-child,#result .watch-quota-capacity .help-value,#result .watch-monthly-capacity .help-value';
+    const count = await evaluate(`document.querySelectorAll('${selector}').length`), result=[];
+    const indices=all?Array.from({length:count},(_,index)=>index):
+      [...new Set([0,1,2,count-3,count-2,count-1])].filter(index=>index>=0&&index<count);
+    for(const index of indices) {
+      await evaluate(`document.querySelectorAll('${selector}')[${index}].focus()`);
       await until(`document.querySelector('#context-help')?.matches(':popover-open')`);
-      result.push(await evaluate(`document.querySelector('#context-help').textContent`));
+      const {text,kind}=await evaluate(`({text:document.querySelector('#context-help').textContent,kind:document.activeElement.parentElement.className})`);
+      assert.doesNotMatch(text,/rolling ·|account scope|Native Used:[\s\S]*Capacity:/);
+      if(kind.includes('summary'))assert.doesNotMatch(text,/Capacity|CCost|÷|pricing/);
+      else assert.doesNotMatch(text,/Native Used:|Native Remaining:/);
+      result.push(text);
       await evaluate(`document.activeElement.blur()`);
     }
     return result;
   };
   const scenarios=baseline?['mixed']:['mixed','single-monthly','all-monthly','period-change','unknown','recovered','unknown-again','reorder','missing','unlimited','stale'];
-  for(const width of baseline?[1920]:[360,800,1280,1920]) for(const zoom of baseline?[1]:[1,1.25]) for(const theme of baseline?['light']:['classic','light','dark']) {
+  for(const width of baseline?[1920]:[360,800,1280,1920]) for(const zoom of baseline?[1]:[1,1.25]) for(const theme of baseline?['light']:['classic','classic-dark','light','dark']) {
     // Device emulation dimensions are pre-page-zoom; keep the actual CSS viewport
     // at the requested matrix width when the disposable profile uses native zoom.
     await command('Emulation.setDeviceMetricsOverride',{width:Math.round(width*browserZoom),height:1400,deviceScaleFactor:1,mobile:false},sessionId);
-    await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
-    await evaluate(`document.documentElement.dataset.theme='${theme==='classic'?'classic':'web'}';document.documentElement.style.zoom='${zoom}'`);
+    await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme.endsWith('dark')?'dark':'light'}]},sessionId);
+    await evaluate(`document.documentElement.dataset.theme='${theme.startsWith('classic')?'classic':'web'}';document.documentElement.style.zoom='${zoom}'`);
     for(const scenario of scenarios) {
       await evaluate(`capacityBuild('${scenario}')`);
       await navigate('accounts');await evaluate(`current.accounts.update(capacityCase);window.scrollTo(0,0)`);
@@ -111,7 +118,8 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
           line+=1+Number(slot.monthly);
         }
       }
-      const accountHelp=baseline?[]:await help();
+      const allHelp=width===1920&&zoom===1&&theme==='light';
+      const accountHelp=baseline?[]:await help(allHelp);
       if(!baseline){
         await navigate('watch');await evaluate(`current.watch.update({state:'running',view:capacityCase})`);
         const watch=await fingerprint(),strip=values=>values.map(({top,height,tracks,dividers,...facts})=>facts);
@@ -120,7 +128,7 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
           for(const peer of watch.filter(peer=>Math.abs(peer.top-card.top)<1&&peer.tracks[level]))
             assert.ok(Math.abs(track.y-peer.tracks[level].y)<1,'Full Watch ordinal tracks align');
         }));
-        assert.deepEqual(await help(),accountHelp,'same Capacity explanations');
+        assert.deepEqual(await help(allHelp),accountHelp,'same Usage/Capacity/Monthly explanations');
         assert.equal(await evaluate(`document.documentElement.scrollWidth>innerWidth`),false,'no horizontal overflow');
       }
       const viewport=await evaluate(`({width:innerWidth,dpr:devicePixelRatio,scale:visualViewport.scale})`);
