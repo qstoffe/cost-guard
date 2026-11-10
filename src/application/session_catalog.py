@@ -50,6 +50,10 @@ class SessionCatalog:
         self.valid = {}
         self.attempted = {}
         self.failures = {}
+        self.failure_counts = {}
+        self.failure_reasons = {}
+        self.generation = 0
+        self.metrics = dict(cache_hits=0, cache_misses=0, attempts=0, retries=0)
         self.activity = {}
         self.active = frozenset()
         self.prompt_activity = {}
@@ -113,7 +117,12 @@ class SessionCatalog:
                 self.last_page = ()
             self.activity = root_activity(observation.sessions)
             self.active = observation.live_candidates
+            previous_revisions = self.revisions
             self.revisions = dict(observation.revisions)
+            if (tuple(previous_roots) != tuple(self.roots) or any(
+                    key not in previous_roots or previous_roots[key] != root
+                    for key, root in self.roots.items()) or previous_revisions != self.revisions):
+                self.generation += 1
             self.rows = {key: row for key, row in self.rows.items() if key in self.roots}
             self.valid = {key: value for key, value in self.valid.items()
                            if key in self.roots and value[0] == self.revisions.get(key)
@@ -128,7 +137,9 @@ class SessionCatalog:
                 if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance}
             self.failures = {key: failure for key, failure in self.failures.items()
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
-                             and failure[0] == self.revisions.get(key)}
+                              and failure[0] == self.revisions.get(key)}
+            self.failure_counts = {key: value for key, value in self.failure_counts.items() if key in self.failures}
+            self.failure_reasons = {key: value for key, value in self.failure_reasons.items() if key in self.failures}
             self.state = "observed"
             self.observed = self.clock()
 
@@ -201,6 +212,9 @@ class SessionCatalog:
             if dependencies != self.dependencies:
                 self.valid.clear()
                 self.failures.clear()
+                self.failure_counts.clear()
+                self.failure_reasons.clear()
+                self.generation += 1
                 self.dependencies = dependencies
             self.timezone_id = service.timezone_id
             self.unit = service.config.get("ccostDisplayUnit", "credits")
@@ -217,12 +231,16 @@ class SessionCatalog:
                 root, revision = self.roots[key], self.revisions.get(key)
                 active = key in self.active or bool(self.rows.get(key) and self.rows[key].running)
                 self.attempted[key] = self.clock()
+                self.metrics['attempts'] += 1
+                self.metrics['retries'] += int(key in self.failures)
             try:
-                row, actual = session_summary(service, root, revision, active=active)
+                row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics)
             except (SourceError, PricingUnavailableError) as error:
                 with self.lock:
                     if key in self.roots and revision == self.revisions.get(key):
                         self.failures[key] = revision, isinstance(error, SourceError) and error.terminal
+                        self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
+                        self.failure_reasons[key] = str(error.code) if isinstance(error, SourceError) else 'pricing_unavailable'
             else:
                 with self.lock:
                     if (key in self.roots and root.provenance == self.roots[key].provenance
@@ -232,8 +250,12 @@ class SessionCatalog:
                             self.valid[key] = actual, self.clock()
                             self.prompt_activity[key] = self.attempted[key], row.running
                             self.failures.pop(key, None)
+                            self.failure_counts.pop(key, None)
+                            self.failure_reasons.pop(key, None)
                         else:
                             self.failures[key] = revision, False
+                            self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
+                            self.failure_reasons[key] = 'concurrent_source_change'
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
@@ -252,6 +274,23 @@ class SessionCatalog:
                 last_activity_ms=self.activity.get(key), archived=root.archived_at_ms is not None))
         return rows
 
+    def _key_current(self, key, sort):
+        return self._current(key) and not (sort == 'model' and self.rows[key].model_pending)
+
+    def _progress(self, sort, pending, selected, indexed, pinned):
+        keys = tuple(self.roots) if pending else tuple(row.session_id for row in selected)
+        completed = indexed if pending else sum(self._current(key) for key in keys)
+        failed = [key for key in keys if key in self.failures and
+                  (self.failures[key][1] or self.failure_counts.get(key, 0) >= 3)]
+        reason = ('source_unavailable' if self.state == 'source_unavailable' else
+                  'index_unavailable' if self.index_unavailable else
+                  self.failure_reasons.get(failed[0], 'source_key_unavailable') if failed else None)
+        return dict(generation=self.generation, phase='index' if pending else 'page',
+            status='failed' if reason else 'pending' if pending or completed < len(keys) else 'ready',
+            completed=completed, total=len(keys), reason=reason,
+            failed=len(failed), waiting=sum(key in self.failures for key in keys),
+            pinned=pinned, metrics=dict(self.metrics))
+
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None):
         with self.lock:
             self._expire()
@@ -267,7 +306,7 @@ class SessionCatalog:
             if 'interest_until' in lease:
                 lease['interest_until'] = self.clock() + 90
             lease['sort'] = sort
-            indexed = sum(self._current(key) for key in self.roots)
+            indexed = sum(self._key_current(key, sort) for key in self.roots)
             pending = sort not in ("activity", "name") and indexed != len(self.roots)
             if offset == 0:
                 applied = "activity" if pending else sort
@@ -287,6 +326,11 @@ class SessionCatalog:
                 if epoch not in lease["epochs"]:
                     raise KeyError("catalog_expired")
                 rows, applied, order = lease["epochs"][epoch]
+                if applied != sort:
+                    raise KeyError('catalog_expired')
+                # These global keys were already qualified when the epoch was
+                # published. New arrivals must not invalidate its older pages.
+                pending = False
                 if offset >= len(rows):
                     raise KeyError('catalog_expired')
                 if any(row.session_id not in self.roots for row in rows[offset:offset + 50]):
@@ -315,6 +359,8 @@ class SessionCatalog:
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
                 available=len(self.roots), state=self.state, view=result,
+                requested_sort=sort, requested_direction=direction,
+                progress=self._progress(sort, pending, selected, indexed, offset > 0),
                 age_ms=None if self.observed is None else int(max(0, self.clock() - self.observed) * 1000),
                 page_ready=sum(self._current(row.session_id) for row in selected if row.session_id in self.roots))
 

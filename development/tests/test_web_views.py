@@ -181,13 +181,13 @@ class WebViewTests(unittest.TestCase):
             lifecycle = SimpleNamespace(root=settings_root, live=SimpleNamespace(catalog=catalog, details=details),
                 stopping=Event(), observations=WebObservations(), nonce="sessions-fixture", public_status=lambda: {})
             server = LoopbackServer(jobs, lifecycle, settings=WebSettings(settings_root))
-            # This fixture pumps the background catalog on the serving thread.
-            # A blocking HTTP wait must not make scalar indexing depend on the
-            # browser's five-second poll cadence; the product has its own lane.
+            # Like the shipped host, keep acquisition off the accepting thread.
+            # Rapid navigation aborts may otherwise fill the five-connection
+            # listen backlog while a synthetic detail/index tick is running.
             server.timeout = .05
             stopped = Event()
 
-            def serve():
+            def acquire():
                 nonlocal now
                 while not stopped.is_set():
                     now += 6000
@@ -195,10 +195,12 @@ class WebViewTests(unittest.TestCase):
                     details.tick(factory(now, lambda _: None))
                     if catalog.needed():
                         catalog.tick(factory(now, lambda _: None))
-                    server.handle_request()
+                    stopped.wait(.05)
 
-            thread = Thread(target=serve)
+            thread = Thread(target=server.serve_forever, kwargs={'poll_interval': .05})
+            acquisition = Thread(target=acquire)
             thread.start()
+            acquisition.start()
             try:
                 payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples,
                                handoff_credential=server.session.bootstrap(renew=True),
@@ -212,6 +214,8 @@ class WebViewTests(unittest.TestCase):
                 self.assertEqual(len(jobs.results), 4, "Two Normal captures, explicit Token Mix and one due background check")
             finally:
                 stopped.set()
+                acquisition.join(3)
+                server.shutdown()
                 thread.join(3)
                 server.server_close()
                 jobs.work.shutdown(wait=True)

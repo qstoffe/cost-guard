@@ -22,7 +22,7 @@ def reference_cost_evidence(values):
 
 def observe_sessions(get, cookie, host, driver):
     started = time.monotonic()
-    timings, coverage, visible_coverage = [], [], []
+    timings, coverage, visible_coverage, progress = [], [], [], []
 
     def request(path, value):
         before = time.monotonic()
@@ -40,6 +40,7 @@ def observe_sessions(get, cookie, host, driver):
     for _ in range(30):
         current = request('/api/sessions', dict(token=token, sort='ccost'))
         coverage.append(current['indexed'])
+        progress.append(current['progress'])
         assert len(current['view']['session_usage']) <= 50
         assert current['pending_sort'] == (current['indexed'] != current['available'])
         if current['pending_sort']:
@@ -54,6 +55,9 @@ def observe_sessions(get, cookie, host, driver):
         visible_coverage.append(sum(row['indexed'] for row in latest['view']['session_usage']))
         if original and any(row['session_id'] not in original for row in latest['view']['session_usage']):
             arrival = 'changed_first_page_observed; no session created by probe'
+        # Keep the intended global sort's interest active during the observation,
+        # rather than accidentally restoring Activity demand between every sample.
+        request('/api/sessions', dict(token=token, sort='ccost'))
         time.sleep(1)
     candidates = [row for row in latest['view']['session_usage']
                   if row['indexed'] and 0 < (row['prompt_count'] or 0) <= 1000]
@@ -93,6 +97,10 @@ def observe_sessions(get, cookie, host, driver):
             visible_metric_states={state: sum(row.get('metric_state') == state for row in latest['view']['session_usage'])
                                    for state in ('ready', 'pending', 'retained', 'unavailable')},
             metric_sort='pending' if current['pending_sort'] else 'global',
+            applied_sort=current['sort'], requested_sort=current['requested_sort'],
+            progress_status=progress[-1]['status'], progress_reason=progress[-1]['reason'],
+            progress_generations=len({item['generation'] for item in progress}),
+            index_metrics=progress[-1]['metrics'],
             cold_running_observations=cold_running, multi_model_observations=multiple_model_rows,
             contributor_contract='validated bounded distinct identities; no identities exported by probe',
             exact_owner_incident='not established by this read-only observation',

@@ -3,6 +3,7 @@
 Stdin commands alter only in-memory synthetic history; no personal source/provider.
 """
 from dataclasses import replace
+from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
@@ -24,6 +25,7 @@ from src.application.session_catalog import SessionCatalog
 from src.application.session_detail import SessionDetails
 from src.domain import ModelRef
 from src.reports.watch_capture import capture_rows
+from src.reports.models import SessionUsageRow
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.observers import observe_catalog
@@ -105,6 +107,26 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command.startswith('catalog-'):
+                host.live.scalar_hold = True
+                catalog = host.live.catalog
+                if command == 'catalog-large':
+                    source.snapshots = SyntheticMonthSource(3217, 1, month_start_ms=1000).snapshots
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                with catalog.lock:
+                    if command == 'catalog-clear':
+                        catalog.valid.clear()
+                    if command in ('catalog-partial', 'catalog-index'):
+                        for number, (key, root) in enumerate(catalog.roots.items()):
+                            if command == 'catalog-partial' and number >= 428:
+                                break
+                            catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
+                                Decimal(number) / 1000, number, duration_ms=number * 1000)
+                            catalog.valid[key] = catalog.revisions[key], catalog.clock()
+                    if command == 'catalog-page-cold':
+                        keys = sorted(catalog.roots, reverse=True)[50:100]
+                        for key in keys:
+                            catalog.valid.pop(key, None)
             elif command in ("fail", "recover"):
                 host.live.unavailable = command == "fail"
             elif command == "end":

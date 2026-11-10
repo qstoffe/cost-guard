@@ -383,6 +383,8 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .report-loading-percent { font-variant-numeric: tabular-nums; margin: .5rem 0 0; }
 .report-loading-stage { font-size: .9rem; margin: .4rem 0 0; width: min(30rem, 95%); height: 3.6em; line-height: 1.2; overflow-wrap: anywhere; }
 .report-loading progress, .report-loading progress::-webkit-progress-value { transition: none; animation: none; }
+.sessions-catalog > .report-loading[hidden], .sessions-catalog > [hidden] { display: none; }
+.sessions-loading-actions { display: flex; gap: .75rem; justify-content: center; margin-top: .75rem; }
 .comparison-groups + .pager { min-height: 2.5rem; }
 .comparisons-view .pager[hidden] { visibility: hidden; pointer-events: none; }
 [data-section="comparisons"] #notice:empty, [data-section="comparisons"] .report-search { display: none; }

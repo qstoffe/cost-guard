@@ -22,7 +22,7 @@ def summary_key(service, root):
         service._load_comparison_catalog().diagnostic_signature))
 
 
-def session_summary(service, root, revision, *, active=False):
+def session_summary(service, root, revision, *, active=False, metrics=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     key = summary_key(service, root)
     try:
@@ -67,9 +67,13 @@ def session_summary(service, root, revision, *, active=False):
                     and not row.model_pending
                     and type(row.prompt_count) is int and row.prompt_count >= 0
                     and (row.duration_ms is None or type(row.duration_ms) is int and row.duration_ms >= 0)):
+                if metrics is not None:
+                    metrics['cache_hits'] += 1
                 return row, revision
         except (KeyError, TypeError, ValueError, InvalidOperation):
             pass  # Disposable malformed summaries are misses, never source evidence.
+    if metrics is not None:
+        metrics['cache_misses'] += 1
     service.invalidate_roots((root.session_id,))
     # Derived analysis alone does not carry full-source acquisition completeness.
     # Establish it once on scalar-cache miss, without changing finite-report semantics.

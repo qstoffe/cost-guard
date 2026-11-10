@@ -22,7 +22,7 @@ async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null, addEventListener(){}};
-   const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
+    const context = vm.createContext({document, console, Date, URLSearchParams, AbortController, location: {},
      history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
     clearTimeout: id => timers.delete(id),
@@ -217,7 +217,7 @@ async function main() {
   context.catalogApi = async (path, value) => {
     catalogCalls.push(value);
     if (catalogCalls.length === 1) return new Promise(resolve => { resolveCatalog = resolve; });
-    return catalogData;
+    return {...catalogData,sort:value.sort,direction:value.direction};
   };
   vm.runInContext('globalThis.catalog = new SessionsCatalog.View(catalogApi)', context);
   const catalog = context.catalog;
@@ -225,10 +225,10 @@ async function main() {
   catalog.detach(); catalog.configure(new URLSearchParams('sort=ccost')); catalog.attach(parent);
   resolveCatalog(catalogData); await new Promise(setImmediate);
    const pageCalls = catalogCalls.filter(value=>value.action!=='interest');
-   assert.equal(pageCalls.length, 2, 'changed route reruns after stale request completes');
+    assert.equal(pageCalls.length, 3, 'changed route starts independently; late HTTP reasserts current lease demand only');
    assert.equal(pageCalls[1].sort, 'ccost');
-   assert.ok(catalogCalls.some(value=>value.action==='interest' && value.visible===false), 'late detached lease is demoted');
-  assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
+    assert.ok(!catalogCalls.some(value=>value.action==='interest' && value.visible===false), 'late response cannot demote the same reattached lease');
+   assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
    catalog.detach(); assert.equal(timers.size, 0);
    const timestamp = expression => vm.runInContext(`ReportView.timestamp(${expression}, "Europe/Stockholm")`, context);
    const originalTZ = process.env.TZ;
@@ -249,10 +249,10 @@ async function main() {
     // table forever while the requested global sort finishes.
     vm.runInContext('globalThis.coldCatalog = new SessionsCatalog.View(catalogApi)', context);
     context.coldCatalog.update({...catalogData,state:'loading',pending_sort:true});
-    assert.equal(context.coldCatalog.usable,false);
+    assert.ok(!context.coldCatalog.usable);
     context.coldCatalog.update({...catalogData,pending_sort:true,total:1,view:{session_usage:[{
       session_id:'first',title:'First usable row',indexed:false,metric_state:'pending'}]}});
-    assert.equal(context.coldCatalog.body.children.length,1);
+    assert.equal(context.coldCatalog.body.children.length,0,'pending Activity fallback is never applied as the requested sort');
     const cold = Array.from({length:50}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
    catalog.update({...catalogData,total:51,view:{session_usage:cold}});
@@ -269,7 +269,7 @@ async function main() {
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
     assert.equal(catalog.body.children[0].className,'');
-    // Age and failed background work never hide the list or append finite progress.
+     // Age/background updates retain the grid; an explicit pending navigation has progress.
     const usable = {...catalogData,total:51,age_ms:7200000,view:{session_usage:cold.map((row, index) =>
       ({...known,session_id:row.session_id,title:'Loaded '+index}))}};
     catalog.update(usable);
@@ -279,10 +279,13 @@ async function main() {
     assert.equal(catalog.label.textContent,labelBefore);
     assert.equal(catalog.status.textContent,'');
     assert.notEqual(catalog.pan.hidden,true); assert.notEqual(catalog.pager.hidden,true);
-     assert.equal(catalog.loader,undefined);
+      assert.equal(catalog.loader.root.hidden,true);
      catalog.configure(new URLSearchParams('sort=ccost&direction=1'));
-     catalog.update({...usable,pending_sort:true});
-     assert.match(catalog.next.destination,/sort=activity&direction=-1/,'retained pager belongs to the actual displayed order');
+      catalog.update({...usable,pending_sort:true});
+      assert.match(catalog.next.destination,/sort=activity&direction=-1/,'retained pager belongs to the actual displayed order');
+      assert.equal(catalog.pan.hidden,true);
+      assert.equal(catalog.loader.root.hidden,false);
+      assert.equal(catalog.loader.bar.max,100);
     catalog.attached=true;
     for (const offset of [0,50]) {
       const requests=[]; let expire=true;
@@ -301,16 +304,16 @@ async function main() {
       assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
       assert.equal(context.location.hash,'#/sessions?sort=ccost&direction=1');
       assert.match(catalog.label.textContent,/Page 1 of 2/);
-      assert.equal(catalog.status.textContent,'');
+      assert.match(catalog.status.textContent,/expired.*latest first page/);
       assert.equal(catalog.body.children[0],firstRow,'reopening retains keyed rows and focus targets');
     }
     let failures=0;
     catalog.api=async (_,request)=> {if(request.action==='interest')return {}; failures++;throw new Error('catalog_expired');};
     await catalog.load();
     assert.equal(failures,2,'one bounded reopen even when the source keeps expiring');
-    assert.equal(catalog.body.children.length,50); assert.equal(catalog.status.textContent,'');
+    assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/expired|unavailable/);
     catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
-    assert.equal(catalog.body.children.length,50); assert.equal(catalog.status.textContent,'');
+    assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/unavailable/);
     catalog.detach();
     catalog.recovering=false;
     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
@@ -337,7 +340,8 @@ async function main() {
     catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
    assert.ok(catalog.body.children[0].children.slice(2).every(cell=>cell.textContent==='Unavailable'));
    assert.equal(catalog.body.children[0].className,'');
-   const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';
+    await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
+    const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';
    ictxPage.result.view.prompt_blocks[0].rows[0].display.incoming_context_tokens='2K → 19K';
    ictxPage.result.view.prompt_blocks[0].rows[0].display.first_incoming_context_tokens='17K';
    page=ictxPage; view.attached=true; await view.load();
