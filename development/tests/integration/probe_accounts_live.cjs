@@ -96,6 +96,25 @@ async function main() {
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    if(process.argv.includes('--claude-agent')) {
+      await fixture('claude-agent-account');
+      await until(`document.querySelectorAll('#result .watch-subscription').length === 1`);
+      await evaluate(`ReportView.setUnit('usd');ReportView.setQuotaMode('used')`);
+      for(const route of ['accounts','watch']) {
+        await navigate(route);
+        const text=await evaluate(`document.querySelector('#result .watch-subscription').textContent`);
+        assert.match(text,/Claude Code Pro/);assert.match(text,/1% used \(\$0\.06\)/);
+        assert.doesNotMatch(text,/1% used \(\$0\.00\)/);
+      }
+      // Mini consumes the exact same server-prepared account slots; instantiate
+      // its actual renderer in this hidden browser, without opening native PiP.
+      const mini=await evaluate(`(()=>{const view=miniWatch.measure.view;
+        view.update(liveValue,hostState,false,miniWatch.observations,Date.now());return view.root.textContent})()`);
+      assert.match(mini,/\$0\.06/);assert.match(mini,/1%/);
+      assert.deepEqual(errors,[]);
+      checks.push('source-shaped opus alias → canonical $0.06 → qualified Pro 5h/weekly/Today; actual Accounts/Full/Mini renderers keep native 1% independent');
+      evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0};return;
+    }
     if(process.argv.includes('--capacity-baseline')) {
       await evaluate(`ReportView.setQuotaMode('remaining');ReportView.setUnit('usd')`);
       await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom,baseline:true});

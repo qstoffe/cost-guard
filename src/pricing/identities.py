@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import re
-from src.domain.model_identity import unverified_alias
+from src.domain.model_identity import unverified_alias, desktop_catalog_candidate
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 CONTEXT_MODELS = frozenset({
@@ -22,7 +22,7 @@ DATED_ALIASES = {"claude-haiku-4-5-20251001": "claude-haiku-4-5"}
 
 # Per-entry semantic admission, not a global pricing/cache generation. Old
 # unaffected entries remain reusable; alias-derived conclusions rebuild lazily.
-MODEL_IDENTITY_SEMANTICS = 2
+MODEL_IDENTITY_SEMANTICS = 3
 def identity_cache_current(semantics, models) -> bool:
     """Admit legacy derived entries only when no moving selection influenced them.
 
@@ -32,7 +32,8 @@ def identity_cache_current(semantics, models) -> bool:
     if semantics == MODEL_IDENTITY_SEMANTICS:
         return True
     for provider, model in models:
-        if not isinstance(provider, str) or not isinstance(model, str) or unverified_alias(model, provider):
+        if (not isinstance(provider, str) or not isinstance(model, str)
+                or unverified_alias(model, provider) or desktop_catalog_candidate(model, provider)):
             return False
     return True
 

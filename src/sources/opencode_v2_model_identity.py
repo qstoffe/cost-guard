@@ -5,7 +5,7 @@ import json
 import threading
 import time
 
-from src.domain.model_identity import ModelResolution, unverified_alias
+from src.domain.model_identity import ModelResolution, desktop_catalog_candidate
 from .errors import SourceError
 
 
@@ -55,14 +55,16 @@ class DesktopModelCatalog:
     def lookup(self, directory, selected):
         value = self._models(directory).get(selected)
         safe = value if value and _text(value[1]) else (value[0], None) if value else None
-        signature = hashlib.sha256(json.dumps(safe, ensure_ascii=False).encode()).hexdigest()
+        # Qualify short SDK names since resolver v2. Invalidate only dependent
+        # mutable projections, including previously unresolved/short-name costs.
+        signature = hashlib.sha256(json.dumps([2, safe], ensure_ascii=False).encode()).hexdigest()
         return safe, signature
 
     def resolve(self, model, directory):
         if model is None or model.provider != "claude-agent" or not directory:
             return model
         selected = model.recorded_model
-        if not unverified_alias(selected, model.provider):
+        if not desktop_catalog_candidate(selected, model.provider):
             return model  # An explicit historical release never depends on today's catalog.
         value, signature = self.lookup(directory, selected)
         identity = ModelResolution(selected, directory, signature)
@@ -70,13 +72,16 @@ class DesktopModelCatalog:
             return replace(model, resolution=identity)
         label, upstream = value
         # A concrete request ID is supported pricing identity, not execution evidence.
-        effective = upstream if upstream and not unverified_alias(upstream, model.provider) else label
+        concrete = upstream and not desktop_catalog_candidate(upstream, model.provider)
+        # SDK displayName may omit the provider's brand (Opus 5.5). Qualify that
+        # exact observed label, never substitute a family/version or guess rates.
+        effective = upstream if concrete else label if label.startswith('Claude ') else 'Claude ' + label
         return replace(model, model=effective, display_name=label, resolution=identity)
 
     def current(self, models):
         for model in models:
             resolution = model.resolution
-            if resolution is None and model.provider == 'claude-agent' and unverified_alias(model.model, model.provider):
+            if resolution is None and desktop_catalog_candidate(model.model, model.provider):
                 return False  # A prior unresolved projection has no location observation.
             if resolution is not None and (model.provider != "claude-agent"
                     or resolution.kind != "desktop-catalog-estimate"

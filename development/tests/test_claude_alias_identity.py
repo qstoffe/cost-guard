@@ -8,10 +8,13 @@ from development.tests.fixtures.compact_reports import rendered
 from src.analysis.comparisons import model_timeline_name
 from src.application.comparisons import run as export_run
 from src.application.projection import project
-from src.domain import ModelRef
+from src.domain import ModelRef, ModelPricing, TokenUsage
+from src.pricing.catalog import PricingCatalog
 from src.pricing.publishers import publisher_for
 from src.reports import ReportKind, ReportRequest
 from src.reports.watch_capture import capture_rows
+from src.reports.accounts import accounts_quota_projection
+from src.application.session_detail import SessionDetails
 from src.analysis.billing import billing_request_fingerprint
 from src.analysis.causal import trace_entries
 from src.analysis.session_cost import reconcile_session_cost
@@ -20,6 +23,85 @@ from unittest.mock import Mock
 
 
 class ClaudeAliasIdentityTests(unittest.TestCase):
+    def test_discovered_catalog_shapes_share_prompt_session_watch_detail_cli_and_today_cost(self):
+        # Sanitized 2026-11-11 inventory shapes, not a production model allowlist.
+        matrix = [('opus', 'opus', 'Opus 5.5'), ('sonnet', 'claude-sonnet-5-5', 'Sonnet 5.5'),
+            ('haiku', 'haiku', 'Haiku 5.5'), ('fable', 'fable', 'Fable 5.1')]
+        matrix += [(model, model, label) for model, label in (
+            ('claude-fable-5-2', 'Fable 5.2'), ('claude-haiku-4-5-20251001', 'Haiku 4.5'),
+            ('claude-sonnet-5', 'Sonnet 5'), ('claude-opus-5', 'Opus 5'),
+            ('claude-fable-5', 'Fable 5'), ('claude-opus-4-8', 'Opus 4.8'),
+            ('claude-opus-4-7', 'Opus 4.7'), ('claude-opus-4-6', 'Opus 4.6'),
+            ('claude-sonnet-4-6', 'Sonnet 4.6'))]
+        absent = {'claude-opus-4-7', 'claude-opus-4-6'}
+        reference = PricingCatalog(tuple(ModelPricing(ModelRef('github-copilot',
+            'claude-' + label.lower().replace(' ', '-').replace('.', '-'), 'Claude ' + label),
+            'USD', D(2), D('.2'), D(3), D(10), metadata={'publisher': 'Anthropic'})
+            for selected, _, label in matrix if selected not in absent), retrieved_at_ms=1, source_revision='fixture')
+        for selected, upstream, label in matrix:
+            with self.subTest(selection=selected):
+                original = desktop_service(self, (snapshot(model=selected),))
+                original.source.json = lambda route, **_: dict(location=dict(directory='/synthetic'),
+                    data=[dict(id='claude-agent')] if route == '/api/provider' else
+                    [dict(providerID='claude-agent', id=selected, modelID=upstream, name=label)])
+                original.pricing_provider.catalog = reference
+                report = original.build(ReportRequest(ReportKind.SESSION, session_id='root-0000'))
+                row = report.prompt_blocks[0].rows[0]
+                expected = None if selected in absent else D('6.89')
+                self.assertEqual(expected, row.comparison_cost.ccost)
+                self.assertEqual(expected is not None, row.comparison_cost.complete)
+                watch, _ = capture_rows(reopen(original), original.source.snapshots['root-0000'].root)
+                self.assertEqual(expected, watch.rows[0].comparison_cost.ccost)
+                sessions = reopen(original).build(ReportRequest(ReportKind.SESSIONS, session_limit=None))
+                self.assertEqual(expected is not None, sessions.session_usage[0].complete)
+                if expected is not None:
+                    self.assertEqual(expected, sessions.session_usage[0].ccost)
+                details = SessionDetails()
+                token = details.open('root-0000', 'live')
+                details.tick(reopen(original))
+                exported = details.page(token, 0, begin=True)['result']['view']['prompt_blocks'][0]['rows'][0]
+                exported_cost = exported['comparison_cost']
+                self.assertEqual(expected, None if exported_cost['ccost'] is None else D(exported_cost['ccost']))
+                self.assertEqual(expected is not None, exported_cost['complete'])
+                entries = trace_entries(original.source.load_session_snapshot('root-0000'))
+                total = accounts_quota_projection((), entries, reference,
+                    now_ms=entries[0].completed_at_ms, today_start_ms=0, month_start_ms=0)
+                self.assertEqual(expected, total.comparison_today.ccost)
+                if expected is not None:
+                    self.assertIn(label, rendered(report))
+                else:
+                    self.assertEqual('model_absent', row.comparison_cost.unavailable[0].reason)
+                    self.assertIn('N/A', rendered(report))
+
+    def test_short_catalog_labels_price_all_families_without_guessing_versions_or_rates(self):
+        # Current source shape: some modelIDs are aliases, others concrete releases.
+        selections = [('opus', 'opus', 'Opus 5.5'), ('haiku', 'haiku', 'Haiku 5.5'),
+            ('fable', 'fable', 'Fable 5.1'), ('sonnet', 'claude-sonnet-5-5', 'Sonnet 5.5'),
+            ('future-selection', 'future-selection', 'Newfamily 9.2')]
+        prices = PricingCatalog(tuple(ModelPricing(ModelRef('github-copilot',
+            'claude-' + label.lower().replace(' ', '-').replace('.', '-'), 'Claude ' + label),
+            'USD', D(2), D('.2'), D(3), D(10), metadata={'publisher': 'Anthropic'})
+            for _, _, label in selections))
+        client = Mock(json=lambda route, **_: dict(location=dict(directory='/one'),
+            data=[dict(id='claude-agent')] if route == '/api/provider' else
+            [dict(providerID='claude-agent', id=selected, modelID=upstream, name=label)
+             for selected, upstream, label in selections]))
+        resolver = DesktopModelCatalog(lambda: client)
+        for selected, _, label in selections:
+            with self.subTest(selection=selected):
+                model = resolver.resolve(ModelRef('claude-agent', selected), '/one')
+                tokens = TokenUsage(input=1000, cache_read=2000, cache_write=3000, output=50)
+                self.assertEqual(D('.0119') * 100, prices.reference_valuation(model, tokens))
+                self.assertEqual(prices.reference_valuation(model, tokens),
+                    sum(prices.reference_category_valuation(model, tokens)))
+                self.assertEqual(label, model.display_name)
+                self.assertEqual(selected, model.recorded_model)
+                self.assertIsNone(prices.estimate(model, tokens))
+        unknown = resolver.resolve(ModelRef('claude-agent', 'absent'), '/one')
+        self.assertIsNone(prices.reference_valuation(unknown, TokenUsage(input=1000)))
+        pinned = ModelRef('claude-agent', 'claude-newfamily-9-2')
+        self.assertEqual(pinned, resolver.resolve(pinned, '/one'))
+
     def test_exact_location_provider_and_catalog_label_do_not_leak_across_requests(self):
         def response(route, *, query, **_kwargs):
             directory = query['location[directory]']

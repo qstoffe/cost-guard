@@ -158,3 +158,28 @@ provides non-disruptive browser evidence. No physical input, spoken screen reade
 OS scaling or macOS result is inferred. The working-tree validator passed with
 zero failures and seven existing advisory budget warnings. Compact evidence:
 `architecture/governance/verification/session-detail-liveness-674.json`.
+
+## First-load measurement FR000673
+
+2026-11-11: current main already contains FR000674's 500ms visible pending-read
+cadence and detached source status. No duplicate runtime fix was added. New
+`detail-delayed` fixture mode performs twenty measured source units at 250ms each,
+then the canonical 1001-row capture through the actual owned process supervisor.
+The hidden Chrome157 authenticated browser records queued/reading/publishing phases,
+real counts and **0% throughout pending** without inventing a fraction or denominator.
+
+`probe_web_sessions.cjs --detail-first-load` passed: total7654.2ms,
+publication-to-first-ready-begin224.8ms, publication-to1001-row-DOM1172.1ms and
+100% only after complete DOM application. The >=5s source delay plus setup/capture
+is real fixture work, not claimed browser lag. Readiness discovery<1250ms and bulk
+1001-row DOM<3000ms separate the avoidable polling cost from transfer/rendering.
+An initial DOM<1500ms assertion failed at1602.3ms during concurrent Full; that run
+is not PASS. Correcting the measurement boundary did not change product cadence.
+
+The existing comprehensive loading probe also passed48 CSS layout cases and
+authenticated1001/controlled220/1/0-row, navigation/cancel/hidden/focus/selection/
+outage behavior. Native page zoom, OS scaling, physical input and macOS were not
+rerun. Evidence: `scratch:/first-load.json` and `scratch:/loading-layouts.json`;
+FR000673's separate [pricing/account journal](../claude-agent-ccost.md) records the
+unrelated scoped live-inference exclusion. These source-shaped browser tests do
+not reproduce the owner's unidentified private incident.

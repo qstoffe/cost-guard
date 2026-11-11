@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.23, 2026-11-11), the supported distribution.
+Use **current `main`** (v81.24, 2026-11-11), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -75,7 +75,7 @@ Distinct signals:
 
 Reference costs—including Watch **Today**—are **CCost**, unless labeled otherwise, not native **Used** or actual **Billed**. Included work can have CCost with Billed $0. Quota bars default to **Used / Total**; Web Settings can instead show finite native **Remaining / Total**. **Remaining** pace describes capacity left independently. Quota credentials do not prove historical attribution.
 
-Moving Claude aliases show **version unverified** unless the request records a concrete release. Current picker/catalog defaults cannot resolve older requests. Affected historical cache projections repair automatically on access; raw history remains unchanged.
+Recorded concrete Claude releases take precedence. Otherwise an exact, location-qualified Claude Agent catalog entry can supply an **estimated** reference identity, including supported short catalog labels; it cannot prove which release executed an older request. Missing entries/prices stay unavailable. Affected cache projections repair on access without rewriting history.
 
 ### Symbols and token categories
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.23 (2026-11-11):** Session detail isolates stalled source reads, reports measured acquisition phases and typed finite failures, and offers **Retry session loading**. Short pending status reads reveal readiness promptly; verified history, costs and revision-pinned chunks remain intact. [Session history](docs/web-beta.md#complete-live-session-history).
+**v81.24 (2026-11-11):** Claude Agent reference pricing supports exact current-catalog identities across model families. Qualified Claude subscription requests contribute to account-period CCost without changing native quotas or billing. All-model live inference remains explicitly unverified; see [evidence and limits](development/journal/claude-agent-ccost.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

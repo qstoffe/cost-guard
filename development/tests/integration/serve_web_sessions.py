@@ -146,9 +146,9 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
-            elif command in ('detail-blocked', 'detail-recover', 'detail-progress'):
+            elif command in ('detail-blocked', 'detail-recover', 'detail-progress', 'detail-delayed'):
                 host.live.detail_mode = {'detail-blocked': 'blocked', 'detail-recover': 'fast',
-                    'detail-progress': 'progress'}[command]
+                    'detail-progress': 'progress', 'detail-delayed': 'delayed'}[command]
             elif command == 'detail-observe':
                 lane = host.live.detail_capture
                 print(json.dumps(dict(ok=True, started=lane.started_count, retired=lane.retired_count,

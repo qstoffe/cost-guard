@@ -36,6 +36,10 @@ def run_fixture(shared, paths):
                 for _ in range(15):
                     meter.observe('reading', 1)
                     time.sleep(.1)
+            if mode == 'delayed':
+                for _ in range(20):
+                    meter.observe('reading', 1)  # Deliberately delayed synthetic source work.
+                    time.sleep(.25)
             source = SyntheticMonthSource(2, payload['config'].get('detail_rows', 3), month_start_ms=1000)
             if 'detail_snapshots' in payload['config']:
                 source.snapshots = payload['config']['detail_snapshots']

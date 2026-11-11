@@ -15,6 +15,22 @@ v78.25 discovers the CLI-owned Claude account independently of experimental quot
 
 ## Model identities
 
+FR000673 / v81.24 scoped delta: `domain/model_identity.py` admits opaque Claude
+Agent selections to exact location/provider/id catalog lookup without a family
+allowlist. `sources/opencode_v2_model_identity.py` owns observed concrete modelID
+or branded exact-name fallback, preserving alias/estimate provenance and recorded
+release precedence. Identity semantics 3 and catalog signature 2 invalidate only
+dependent derived projections, not raw history or unrelated pinned roots.
+
+`analysis/period_ccost.py::account_usage_routes` owns reference-only compatibility:
+unassigned Claude Agent usage requires authenticated first-party subscription
+discovery plus unique-account estimation. Proven request references can survive
+current sign-out; explicit billed/foreign-account Agent entries cannot become Pro
+estimates. `reports/accounts.py` combines indexed compatible lanes for every shared
+account scope without changing strict actual-billing attribution or quota polling.
+Renderers consume the same projection. No architecture layer or acquisition owner
+was added. [Evidence, source limitations and delegated exclusion](../../journal/claude-agent-ccost.md).
+
 `sources/model_availability.py` accepts opaque enabled selectable `id` values, including `[1m]`, and rejects controls/bidi/whitespace/malformed contracts. The working registered API never needs model CLI fallback. Empty/disabled-only responses are authoritative; actual failures retain the explicit full-pricing-catalog warning.
 
 `pricing/identities.py` owns reviewed aliases, not generic date/suffix stripping. Haiku 4.5's pinned `20251001` ID maps to its documented base alias. A bounded set of documented Claude versions recognizes `[1m]` as context capacity. Exact catalog variants win before alias resolution; ambiguous matches return unknown. Existing input-token thresholds select long-context rates, not the suffix by itself. Availability/reference valuation never replaces actual billing. Unsupported Fast/other variants still have no guessed price.
