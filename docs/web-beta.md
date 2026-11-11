@@ -696,9 +696,17 @@ Native amounts and attribution live in the existing focus/tap/600ms-hover help, 
 second report. CLI and Diagnostics keep their detailed account layouts.
 
 Known provider account headings on both Accounts and Full Watch open the provider's
-usage/settings or billing page in a new tab. Hover underlines the heading text; keyboard
+usage/settings or billing page in a new tab. A small outline chain icon before the name
+is part of that same link, not a second button. Hover underlines the heading text; keyboard
 focus is visible. The provider uses your browser's signed-in account/workspace, not Cost
 Guard credentials. Unknown providers keep plain headings.
+
+Account **CCost Today** uses the configured local calendar day, independently of native
+quota freshness. Local midnight clears yesterday's scope; zero before new eligible usage
+is normal. Fresh daily values and explanations still update if native quotas fail.
+Missing history/account attribution or wholly unpriced usage stays unknown, not a fake
+zero; partial pricing shows only the known subtotal. Global Today may include usage
+that cannot be assigned to an account. [Midnight evidence and limits](../development/journal/web/account-today.md).
 
 The existing single authenticated Live stream updates Accounts even if Watch has never
 opened. Switching routes uses the latest retained common observation immediately;

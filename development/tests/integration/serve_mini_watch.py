@@ -146,6 +146,11 @@ def main():
                     publish(value=claude_account_frame(frame))
                     print('{"ok":true}', flush=True)
                     continue
+                if command.startswith('midnight-'):
+                    from development.tests.fixtures.account_midnight import midnight_frame
+                    publish(value=midnight_frame(frame, command.removeprefix('midnight-')), timezone_name='Europe/Stockholm')
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command.startswith('context-'):
                     from development.tests.fixtures.context_deltas import context_snapshot, context_frame
                     from development.tests.fixtures.pricing_catalog import catalog

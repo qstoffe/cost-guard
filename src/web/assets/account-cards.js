@@ -146,7 +146,10 @@ const AccountCards = (() => {
         this.levels.push({track, divider, details});
       });
       if (item().secondary.length) this.lower.append(secondary);
-      this.root.replaceChildren(ReportView.accountHeading(() => item().observation), cost, ...track.nodes, primary);
+      if (!this.heading) { this.heading = ReportView.accountHeading(() => item().observation); this.root.append(this.heading); }
+      // Track-shape redraws must not detach the focused heading link.
+      for (const child of [...this.root.children]) if (child !== this.heading) child.remove();
+      this.root.append(cost, ...track.nodes, primary);
       this.warningSignature = null;
     }
     update(value, stale) {
@@ -159,9 +162,10 @@ const AccountCards = (() => {
         q.used_fraction != null || q.quota.unlimited)) && !this.partialObservation;
       const lines = warnings(value, quiet);
       if (!usable && this.value && ![value.primary, ...value.secondary].some(q => q.restricted || q.exhausted)) {
-        // Keep observed figures quietly, but never retain a stale forward budget.
+        // Retain native figures only: independently published accounting (including
+        // midnight/unknown Today) must not freeze with a failed quota observation.
         const observed = q => ({...q, quota:{...q.quota, ccost_pace:null}});
-        value = {...this.value, observation: obs, primary:observed(this.value.primary), secondary:this.value.secondary.map(observed)};
+        value = {...value, primary:observed(this.value.primary), secondary:this.value.secondary.map(observed)};
       }
       if (usable) { this.lastObserved = obs.observed_at_ms; if (obs.availability === 'available') this.verified = true; }
       const signature = JSON.stringify([value, lines, usable]);

@@ -11,7 +11,7 @@ class Node {
 }
 const all = (n, tag) => [...(n.tag === tag ? [n] : []), ...n.children.flatMap(child => all(child, tag))];
 const view = JSON.parse(fs.readFileSync(0, 'utf8')), output = new Node('main');
-const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, Date,
+const context = vm.createContext({document: {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag)}, output, Date,
   state: {section: 'accounts', pages: {}}, result: {view, observed_at_ms: 1, source: {status: 'acquired'}}});
 require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);

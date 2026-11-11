@@ -41,10 +41,16 @@ module.exports = (vm, context, seed) => {
       if (expected) {
         const link = links[0];
         assert.equal(link.href, expected); assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
-        assert.equal(link.children.length, 0, 'source HTML remains literal heading text');
+        assert.equal(link.children.length, 2, 'one decorative icon followed by literal account text');
+        const [icon, name] = link.children;
+        assert.equal(icon.tag, 'svg'); assert.equal(icon.namespaceURI, 'http://www.w3.org/2000/svg');
+        assert.equal(icon.attributes['aria-hidden'], 'true'); assert.equal(icon.attributes.focusable, 'false');
+        assert.equal(icon.tabIndex, undefined); assert.equal(name.tag, 'span'); assert.equal(name.textContent, label);
+        assert.equal(name.children.length, 0, 'source HTML remains literal heading text');
         assert.equal(link.attributes['aria-label'], label+' — provider usage or settings (opens in a new tab)');
         assert.equal(new URL(link.href).protocol, 'https:'); assert.doesNotMatch(link.href, /private-account|untrusted/);
       }
+      assert.equal(heading.querySelectorAll('svg').length, expected ? 1 : 0);
       assert.equal(heading.events.click, undefined, 'header padding is not a click target');
     });
   }
@@ -54,9 +60,13 @@ module.exports = (vm, context, seed) => {
   context.linkCase.accounts.accounts[8].observation.label = 'Changed account';
   vm.runInContext('linkAccounts.update(linkCase)', context);
   assert.equal(card.children[0], heading); assert.equal(heading.children[0], anchor, 'plan/label refresh retains focus owner');
+  assert.equal(anchor.querySelectorAll('svg').length, 1, 'refresh never duplicates or removes the icon');
   assert.equal(anchor.href, 'https://platform.openai.com/usage'); assert.equal(anchor.textContent, 'Changed account');
   context.linkCase.accounts.accounts[8].primary.quota.label = 'Changed track';
+  context.linkCase.accounts.accounts[8].primary.quota.reset_at_ms = null;
   vm.runInContext('linkAccounts.update(linkCase)', context);
+  assert.equal(card.children[0], heading, 'track shape redraw never detaches the heading');
+  assert.equal(heading.children[0], anchor);
   assert.equal(card.querySelectorAll('h4')[0].querySelectorAll('a')[0].href, 'https://platform.openai.com/usage', 'shape redraw retains correct destination');
   context.linkCase.accounts.accounts[8].observation.provider_id = 'unknown';
   vm.runInContext('linkAccounts.update(linkCase)', context);
