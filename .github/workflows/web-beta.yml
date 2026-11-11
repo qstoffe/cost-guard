@@ -23,6 +23,7 @@ jobs:
   common:
     if: github.event.repository.private == false
     runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright/python:v1.56.0-noble
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -37,11 +38,12 @@ jobs:
           node-version: '22'
       - name: Quick units and package validation (Full on manual dispatch)
         run: python development/tools/ci_web_beta.py regression --scope common
-      - name: CI-only browser tooling and Linux dependencies
+      # The matching image supplies Chromium and its Linux libraries. Keep the
+      # Python binding pinned to that browser build; no runtime browser download.
+      - name: CI-only version-matched browser binding
         if: ${{ !cancelled() }}
         run: |
           python -m pip install playwright==1.56.0
-          python -m playwright install --with-deps chromium
       - name: Rendered browser smoke (once)
         if: ${{ !cancelled() }}
         run: python development/tools/ci_web_beta.py browser --scope common

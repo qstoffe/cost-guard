@@ -259,6 +259,13 @@ FR000634 keeps loaded catalog/detail content visible regardless of observation a
 without a generic finite progress footer or routine sort/source captions. Catalog
 expiry permits one bounded reopen per poll; without membership proof, it returns to
 latest with preserved sort intent and synchronized URL/epoch/pager once usable.
+FR000679 removes the persistent `rebased` presentation flag: accepted recovery and
+subsequent polls leave status empty, including the live region. When replacement
+membership/order differs, protected incompatible rows cannot defer reconciliation
+under a new page label; matching keyed rows retain focus/DOM. No backend index,
+lease, cache, source or global-sort semantics change.
+[Recovery evidence](../../journal/web/sessions-expiry.md) includes real HTTP expiry
+on first/older installed-source pages and multiple post-recovery polls.
 FR000664 adds an operation-level exception: genuinely pending sort/page navigation
 hides only the grid/pager behind the shared determinate loader, retaining the last
 applied DOM for immediate Cancel. Complete scalar-key coverage still gates metric

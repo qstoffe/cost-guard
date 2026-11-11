@@ -7,7 +7,8 @@ async function main() {
   const directory = path.dirname(output);
   const profile = await fs.mkdtemp(path.join(directory, 'sessions-browser-'));
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py', mode === '--catalog-real-churn' ? '--real-source' : config],
+  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py',
+    ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
   let serverError = ''; server.stderr.on('data', bytes => serverError += bytes.toString());
@@ -54,8 +55,8 @@ async function main() {
       if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails));
       return value.result.value;
     };
-     const until=async expression => {
-      const end=Date.now()+30000;
+     const until=async (expression, timeoutMs=30000) => {
+       const end=Date.now()+timeoutMs;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
       throw new Error('Condition not reached: '+expression+'; '+await evaluate('document.body.innerText'));
      };
@@ -63,8 +64,10 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-          if (mode === '--catalog-real-churn') {
-           const details = await require('../fixtures/sessions_source_browser.cjs')({evaluate, until});
+           if (mode === '--catalog-real-churn' || mode === '--catalog-real-recovery') {
+            const probe = require('../fixtures/sessions_source_browser.cjs');
+            const details = await (mode === '--catalog-real-recovery' ? probe.recovery : probe)({evaluate, until,
+              command:(method, params) => command(method, params, sessionId)});
            checks.push(details);
            assert.deepEqual(errors, []);
            evidence = {outcome:'OBSERVED',browser:version.product,checks,layouts,inference_calls:0,
