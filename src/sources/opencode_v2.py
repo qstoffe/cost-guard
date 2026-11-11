@@ -29,6 +29,7 @@ from src.domain import (
     SessionSnapshot,
 )
 from src.domain.acquisition import AcquisitionMetrics
+from src.domain.progress import observe_work
 
 from .base import SourceChange
 from .discovery import (
@@ -284,6 +285,17 @@ class OpenCodeV2Source:
         """Refresh local registration only, not catalogs, health or transport."""
         with self._connection_lock:
             self._current_endpoint()
+
+    def detail_evidence(self):
+        with self._connection_lock:
+            self._current_endpoint()
+            return self.observation_epoch, self._interruptions.records()
+
+    def restore_detail_evidence(self, evidence):
+        with self._connection_lock:
+            self._current_endpoint()
+            if evidence is not None and self.observation_epoch == evidence[0]:
+                self._interruptions = LiveInterruptionReasons.from_records(evidence[1])
 
     @property
     def observation_epoch(self) -> str | None:
@@ -613,6 +625,7 @@ class OpenCodeV2Source:
                 message = replace(message, model=self._model_identities.resolve(message.model, native.directory))
             messages.append(message)
             parts.extend(message_parts)
+            observe_work('reading', 1)
         messages.sort(key=lambda value: (value.created_at_ms, value.message_id))
 
         latest_user: str | None = None

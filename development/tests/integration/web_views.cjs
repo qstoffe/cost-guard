@@ -274,7 +274,8 @@ async function main() {
   assert.equal(vm.runInContext('current.detail.loader.root.hidden', context), true, 'retained history never shows initial progress');
    offline = false;
    navigate('sessions/missing');
-   await until(() => vm.runInContext('current.detail.status.textContent', context).includes('Session unavailable'));
+    await until(() => vm.runInContext('current.detail.status.textContent', context).includes('no longer present'));
+    assert.equal(vm.runInContext('current.detail.retry.hidden', context), false);
   navigate('sessions/root-0001');
    await until(() => vm.runInContext('current.detail.data?.total', context) === 0);
    assert.equal(all(ids.result, 'tbody')[0].children.length, 0);

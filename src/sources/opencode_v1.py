@@ -598,14 +598,20 @@ class OpenCodeV1Source:
             connection.commit()
 
         sessions = tuple(self._normalize_session(row) for row in tree_rows)
-        part_values = tuple(self._normalize_part(row) for row in part_rows)
+        from src.domain.progress import observe_work
+        part_values = []
+        for row in part_rows:
+            part_values.append(self._normalize_part(row))
+            observe_work('reading', 1)
+        part_values = tuple(part_values)
         parts_by_message: dict[str, list[NormalizedPart]] = {}
         for part in part_values:
             parts_by_message.setdefault(part.message_id, []).append(part)
-        messages = tuple(
-            self._normalize_message(row, tuple(parts_by_message.get(str(row["id"]), ())))
-            for row in message_rows
-        )
+        messages = []
+        for row in message_rows:
+            messages.append(self._normalize_message(row, tuple(parts_by_message.get(str(row["id"]), ()))))
+            observe_work('reading', 1)
+        messages = tuple(messages)
         events = tuple(
             event
             for message in messages

@@ -1,6 +1,28 @@
 """Source-neutral startup work observations; also usable by plain text sinks."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+
+
+_work_observer = ContextVar('work_observer', default=None)
+
+
+@contextmanager
+def observing_work(observer):
+    """Opt-in scalar work checkpoints; no source identities or content escape."""
+    token = _work_observer.set(observer)
+    try:
+        yield
+    finally:
+        _work_observer.reset(token)
+
+
+def observe_work(phase, units=0):
+    observer = _work_observer.get()
+    if observer is not None:
+        observer(phase, units)
+
 
 class WorkProgress(str):
     """A stage label with optional completed/total work, never a global percentage."""

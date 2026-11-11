@@ -8,6 +8,7 @@ from dataclasses import replace
 from src.analysis.duration import accumulated_duration, execution_duration
 from src.analysis.causal import TOOL_CALLS_CONTINUATION_GRACE_MS
 from src.domain import MessageRole
+from src.domain.progress import observe_work
 
 from .sampling import AnalyzedRoot
 
@@ -148,20 +149,25 @@ class SessionHistory:
         self.dependencies = None
 
     def acquire(self, service, session_id):
+        observe_work('reading')
         root = service.root_for_session(session_id)
         if root is None:
             return None, "session_missing"
         dependencies = (root.provenance.source_generation, root.provenance.source_instance,
+                        getattr(service.source, 'observation_epoch', None),
                         service._dependencies(service._load_catalog()),
                         service._load_comparison_catalog().diagnostic_signature)
         if self.dependencies is not None and self.dependencies != dependencies:
             self.__init__()  # Another source/config/price revision is not retained history.
         self.dependencies = dependencies
+        observe_work('verifying')
         revision = service.source.get_session_tree_revision(root.session_id)
         if self.report is not None and revision == self.revision and not self.running and root.active is not True:
             return self.report, ("archived" if root.archived_at_ms is not None else
                                  "history_retained" if self.retained else "observed")
+        observe_work('reading')
         fresh = service.source.load_session_snapshot(root.session_id)
+        observe_work('analyzing')
         if fresh == self.fresh_snapshot and service.now_ms < self.lifecycle_due_ms:
             # Identical running evidence needs only the shared execution clock,
             # not attribution, token/context projection or reference valuation.
@@ -199,6 +205,7 @@ class SessionHistory:
                 row = replace(row, duration_ms=(max(old.duration_ms or 0, service.now_ms - old.at_ms)
                     if old.in_progress else old.duration_ms))
             rows.append(row)
+            observe_work('publishing', 1)
         block = replace(block, rows=tuple(rows),
                         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows))
         self.snapshot = snapshot

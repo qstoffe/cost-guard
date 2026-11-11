@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.23 - 2026-11-11
+
+- Session detail supervises one privately owned source-capture process. A read with no measured forward progress is retired safely; fair admission lets healthy peers proceed. Repeated failures become typed actionable errors rather than indefinite 0% waits. Ordinary detail faults no longer end shared Live acquisition.
+- Source-backed phase/work/attempt/age status and explicit Retry complement the existing real 0–95% history transfer / applied-DOM 100% bar. Visible pending status reads use 500ms, with normal/hidden cadence unchanged; HTTP never acquires history. Retry retains valid snapshots and rejects stale attempts/source epochs.
+
 ## v81.22 - 2026-11-10
 
 - Mini Watch Activity retains configured-local HH:mm on today's date or under twelve elapsed hours, then uses floored lowercase h/d/m/y ago: elapsed hours, days, fixed 30-day months and fixed 365-day years.

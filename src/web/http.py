@@ -460,10 +460,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                         value["mode"] not in ("snapshot", "live")):
                     raise ValueError()
                 result = {"token": owner.open(value["session_id"], value["mode"])}
-            elif action in ("page", "begin", "chunk", "freeze", "close") and isinstance(value.get("token"), str):
-                if action in ("freeze", "close") and set(value) == {"action", "token"}:
+            elif action in ("page", "begin", "chunk", "freeze", "close", "retry") and isinstance(value.get("token"), str):
+                if action in ("freeze", "close", "retry") and set(value) == {"action", "token"}:
                     if action == "freeze":
                         owner.freeze(value["token"])
+                    elif action == 'retry':
+                        owner.retry(value['token'])
                     else:
                         owner.close(value["token"])
                     result = {"state": action}

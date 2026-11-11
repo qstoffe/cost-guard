@@ -105,7 +105,11 @@ class _ReadSocket(socket.socket):
             if remaining is not None and remaining <= 0:
                 raise TimeoutError()
             if select.select([self], [], [], min(0.1, remaining) if remaining is not None else 0.1)[0]:
-                return super().recv_into(buffer, nbytes, flags)
+                received = super().recv_into(buffer, nbytes, flags)
+                if received:
+                    from src.domain.progress import observe_work
+                    observe_work('reading', 1)
+                return received
         raise ConnectionAbortedError()
 
 
@@ -246,6 +250,7 @@ class V2HttpClient:
         return result
 
     def json(self, path: str, *, query: Mapping[str, Any] | None = None, phase: str = "unknown") -> Any:
+        from src.domain.progress import observe_work
         try:
             status, body = self._get(self._target(path, query))
         except (OSError, http.client.HTTPException) as exc:
@@ -253,7 +258,9 @@ class V2HttpClient:
         if status >= 300:
             raise http_failure(status, phase=phase)
         try:
-            return json.loads(body.decode("utf-8"))
+            value = json.loads(body.decode("utf-8"))
+            observe_work('reading', 1)
+            return value
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise SourceDataError("OpenCode V2 API returned malformed JSON", phase=phase,
                                   exception_type=type(exc).__name__, generation="v2") from exc

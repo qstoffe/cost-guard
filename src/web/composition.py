@@ -120,10 +120,13 @@ def live_acquisition(*, selection=None):
     from src.reports.context_guidance import cached_guidance_binding
     from src.watch.card_readers import CardReaders
     from src.sources.opencode_v2 import OpenCodeV2Source
+    from src.watch.detail_capture import DetailCapture
+    from .detail_worker import run_owned_detail
     card_readers = (CardReaders(selection.source.new_card_reader)
         if selection.selected == 'v2' and isinstance(selection.source, OpenCodeV2Source) else None)
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
         config=config, service_factory=card_service, session_cost_factory=session_cost_resources,
         card_readers=card_readers,
+        detail_capture=DetailCapture(run_owned_detail),
         guidance_binding=cached_guidance_binding
             if callable(getattr(selection.source, 'refresh_observation_epoch', None)) else None))
