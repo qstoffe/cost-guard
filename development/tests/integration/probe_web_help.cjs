@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable','--quiet-refresh'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -56,8 +56,9 @@ async function main() {
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===2`);
     await evaluate(owner,`location.hash='#/watch'`);
      await until(owner,`current?.watch?.cards.size>0`);
-     if(scope==='--quiet-refresh') {
-       await require('./probe_quiet_refresh.cjs')({command,evaluate,until,owner,checks,layouts});
+     if(scope==='--quiet-refresh' || scope==='--sessions-quiet-refresh') {
+       await require('./probe_quiet_refresh.cjs')({command,evaluate,until,owner,checks,layouts,
+         sessionsOnly:scope==='--sessions-quiet-refresh'});
        assert.deepEqual(errors,[]);
        evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
          limitations:['Canonical synthetic finite reports and Live publications; injected Sessions/detail API responses, not real catalog acquisition.',

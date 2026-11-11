@@ -259,6 +259,9 @@ const SessionsCatalog = (() => {
       // A requested global sort is not applied until every key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
       if (this.pendingNavigation(data) || data.pending_sort) return;
+      const values = data.view.session_usage;
+      const changedPage = this.recovering && (this.body.children.length !== values.length ||
+        values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
       const restoreFocus = completed && this.loader.root.contains(document.activeElement);
       this.operation = null; clearTimeout(this.admission);
@@ -269,19 +272,19 @@ const SessionsCatalog = (() => {
       if (data.epoch) this.epoch = data.epoch;
       if (this.recovering) {
         history.replaceState(null, '', destination(data.offset, data.epoch, this.sort, this.direction));
-        this.recovering = false; this.rebased = true;
+        this.recovering = false;
       }
-      this.status.textContent = this.rebased ? 'The previous catalog expired; showing the latest first page.' :
-        data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
+      // A safely applied replacement completes recovery, not a lasting warning.
+      this.status.textContent = data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
       this.status.hidden = !this.status.textContent;
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
         ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ' ↕'));
       }
-      const values = data.view.session_usage;
       // Lifecycle status must not remain falsely running while a title is selected.
-      if (completed && protectedNode(this.body)) {
+      // A recovered epoch cannot keep protected old rows under a new page label.
+      if ((completed || changedPage) && protectedNode(this.body)) {
         window.getSelection?.()?.removeAllRanges?.();
         if (this.body.contains(document.activeElement)) document.activeElement.blur?.();
       }

@@ -310,33 +310,70 @@ async function main() {
       assert.equal(catalog.loader.root.hidden,false);
       assert.equal(catalog.loader.bar.max,100);
     catalog.attached=true;
-    for (const offset of [0,50]) {
-      const requests=[]; let expire=true;
-      catalog.configure(new URLSearchParams(`offset=${offset}&epoch=expired&sort=ccost&direction=1`));
+     for (const direction of [1,-1]) for (const offset of [0,50]) {
+       const requests=[]; let expire=true;
+       catalog.configure(new URLSearchParams(`offset=${offset}&epoch=expired&sort=ccost&direction=${direction}`));
       catalog.token='expired';
       catalog.api=async (_,request) => {
         if(request.action==='interest') return {};
         requests.push({...request});
         if(expire) {expire=false; throw new Error('catalog_expired');}
-        return {...usable,token:'reopened',epoch:'new-epoch',sort:'ccost',direction:1,offset:0};
+         return {...usable,token:'reopened',epoch:'new-epoch',sort:'ccost',direction,offset:0};
       };
       await catalog.load();
       assert.equal(requests.length,2);
       assert.equal(requests[1].token,null); assert.equal(requests[1].offset,0);
-      assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,1);
+       assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,direction);
       assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
-      assert.equal(context.location.hash,'#/sessions?sort=ccost&direction=1');
-      assert.match(catalog.label.textContent,/Page 1 of 2/);
-      assert.match(catalog.status.textContent,/expired.*latest first page/);
-      assert.equal(catalog.body.children[0],firstRow,'reopening retains keyed rows and focus targets');
+       assert.equal(context.location.hash,`#/sessions?sort=ccost&direction=${direction}`);
+       assert.match(catalog.label.textContent,/Page 1 of 2/);
+       assert.equal(catalog.status.textContent,'','successful lease recovery has no live-region announcement');
+       assert.equal(catalog.status.hidden,true);
+       assert.equal(catalog.recovering,false);
+       assert.ok(!catalog.rebased,'no persistent rebase presentation state survives recovery');
+       assert.equal(catalog.headers.find(header=>header.key==='ccost').th.attributes['aria-sort'],direction===1?'ascending':'descending');
+       assert.equal(catalog.body.children[0],firstRow,'reopening retains keyed rows and focus targets');
+       for (let poll=0;poll<3;poll++) {
+         await catalog.poll();
+         assert.equal(catalog.status.textContent,''); assert.equal(catalog.status.hidden,true);
+         assert.equal(catalog.body.children[0],firstRow);
+         assert.equal(catalog.loader.root.hidden,true); assert.equal(catalog.pan.hidden,false);
+         assert.equal(delays.at(-1),5000,'recovery returns to normal visible polling');
+       }
     }
     let failures=0;
     catalog.api=async (_,request)=> {if(request.action==='interest')return {}; failures++;throw new Error('catalog_expired');};
     await catalog.load();
     assert.equal(failures,2,'one bounded reopen even when the source keeps expiring');
     assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/expired|unavailable/);
-    catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
-    assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/unavailable/);
+     catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
+     assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/unavailable/);
+     catalog.api=async (_,request)=>request.action==='interest'?{}:{...usable,sort:'ccost',direction:-1};
+     await catalog.load();
+     assert.equal(catalog.status.textContent,'','a later successful poll retires a real failure too');
+     assert.equal(catalog.recovering,false);
+     // A focused older-page row must not survive under the recovered page-one label.
+     vm.runInContext('globalThis.rebasedCatalog = new SessionsCatalog.View(catalogApi)',context);
+     const rebasedView=context.rebasedCatalog;
+     rebasedView.configure(new URLSearchParams('sort=ccost&direction=-1'));
+     rebasedView.update({...usable,sort:'ccost',direction:-1,offset:50});rebasedView.attached=true;
+     const protectedRow=rebasedView.body.children[0], protectedLink=protectedRow.children[1].children[0];
+     document.activeElement=protectedLink;protectedLink.blur=()=>{document.activeElement=null;};
+     const savedSelection=selected;selected=null;
+     let rebase=true;
+     const replacement=cold.map((value,index)=>({...known,session_id:'replacement-'+index}));
+     rebasedView.api=async (_,request)=>{
+       if(request.action==='interest')return {};
+       if(rebase){rebase=false;throw new Error('catalog_expired');}
+       return {...usable,sort:'ccost',direction:-1,epoch:'replacement-epoch',view:{session_usage:replacement}};
+     };
+     await rebasedView.poll();
+     assert.equal(rebasedView.body.children.length,50);
+     assert.deepEqual(rebasedView.body.children.map(row=>row.dataset.id),replacement.map(row=>row.session_id));
+     assert.equal(protectedRow.parentNode,null,'incompatible focused membership is retired before relabeling');
+     assert.equal(document.activeElement,null);
+     assert.equal(rebasedView.status.textContent,'');rebasedView.detach();
+     selected=savedSelection;
     catalog.detach();
     catalog.recovering=false;
     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});

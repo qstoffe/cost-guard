@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000679: `assets/sessions.js::update` completes lease recovery silently and retires
+incompatible protected rows before publishing a replacement page. Existing catalog,
+index, sorting, source and cache owners are unchanged. Coverage: `web_session.cjs`,
+`probe_web_help.cjs --sessions-quiet-refresh`, navigation/live Sessions probes and
+`probe_web_sessions.cjs --catalog-real-recovery` through `sessions_source_browser.cjs`.
+[Reproduction and limits](../../journal/web/sessions-expiry.md).
+
 FR000677: `application/quota_ccost.py` accepts qualified priced same-window subtotals
 for provisional Capacity/30-day estimates and prepares fact-specific unknown help.
 `render.js::quotaCapacityHelp` preserves those server reasons on shared cards. History,

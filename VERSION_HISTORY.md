@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.28 - 2026-11-11
+
+- Sessions silently completes expired-catalog recovery, clearing transient status on successful publication and subsequent polls without a browser reload. Existing five-second refresh, keyed metric updates and bounded reopen remain unchanged.
+- A recovered page with different membership/order retires incompatible focused/selected old rows before publishing its new URL, header and pager; matching rows retain their DOM and focus. Backend global sorting, catalog/cache semantics and actual failure controls are unchanged.
+
 ## v81.27 - 2026-11-11
 
 - Accounts and Full Watch permit provisional primary/secondary/later Capacity estimates from positive priced CCost within the matching native window, even when other requests are unpriced. Capacity help discloses the potentially low subtotal, raw fraction/calculation and estimated account attribution; native verified allowances remain exact.
