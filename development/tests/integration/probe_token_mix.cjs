@@ -56,7 +56,7 @@ async function main() {
     const loadedAt=await evaluate(`current.checkedAt`);
     const rows=await evaluate(`current.result.view.model_token_mix`);
     assert.equal(rows.length,65);
-    for (const theme of ['classic','light','dark']) for (const width of [360,1366,1920]) {
+    for (const theme of ['classic','light','dark']) for (const width of [360,800,1280,1920]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
       const layout=await evaluate(`(() => {

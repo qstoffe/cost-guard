@@ -25,8 +25,11 @@ def isolated_report(sender, request):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cold-and-warm', action='store_true')
+    parser.add_argument('--budget-seconds', type=int, default=600)
     args = parser.parse_args()
-    temporary = tempfile.TemporaryDirectory(dir=ROOT / 'cache', prefix='token-mix-probe-') if args.cold_and_warm else None
+    if not 1 <= args.budget_seconds <= 1800:
+        parser.error('budget-seconds must be between 1 and 1800')
+    temporary = tempfile.TemporaryDirectory(dir=os.environ['OPENCODE_TOOLKIT_SESSION_SCRATCH'], prefix='token-mix-probe-') if args.cold_and_warm else None
     if temporary:
         os.environ['COST_GUARD_PROBE_CACHE'] = temporary.name
     jobs = ReportJobs(target=isolated_report if temporary else measured_report)
@@ -35,17 +38,17 @@ def main():
             if attempt:
                 if 'finished_at' in jobs._jobs[key]:
                     jobs._jobs[key]['finished_at'] -= 61
-            key = observe(jobs, attempt)
+            key = observe(jobs, attempt, args.budget_seconds)
     finally:
         jobs.close()
         if temporary:
             temporary.cleanup()
 
 
-def observe(jobs, attempt):
+def observe(jobs, attempt, budget):
     started = time.monotonic()
     key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
-    while time.monotonic() - started < 130:
+    while time.monotonic() - started < budget:
         jobs.tick()
         value = jobs.snapshot(key)
         if value['status'] not in {'queued', 'running'}:
@@ -55,7 +58,10 @@ def observe(jobs, attempt):
                 status=value['status'], error=value['error'], result_error=result.get('error'),
                 model_rows=len(view.get('model_token_mix', [])),
                 publisher_rows=len(view.get('publisher_token_mix', [])),
+                source_status=result.get('source', {}).get('status'),
+                nonzero_tokens=int((view.get('token_mix') or {}).get('known_total_tokens', 0)) > 0,
                 progress=value.get('progress'))))
+            assert value['status'] == 'complete' and not value['error'] and not result.get('error')
             return key
         time.sleep(.05)
     raise RuntimeError('probe_deadline')

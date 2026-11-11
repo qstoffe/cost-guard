@@ -15,7 +15,7 @@ from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain import ModelRef, TokenUsage
 from src.domain.progress import WorkProgress
-from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current, unverified_alias
+from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .token_mix_history import history_projection
 from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
 from .history_snapshots import load as load_snapshots, warnings as history_warnings
@@ -49,7 +49,7 @@ def encode(bundle, reference):
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
         if entry.model.resolution is not None:
             facts[-1]['resolved_identity'] = encode_model(entry.model)
-        if unverified_alias(entry.model.model, entry.model.provider):
+        if not identity_cache_current(None, ((entry.model.provider, entry.model.model),)):
             facts[-1]['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
     return facts
 
@@ -161,12 +161,14 @@ def build_cached_token_mix(service, progress):
                 writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM,
                     snapshot_scope(item.snapshot) if item.snapshot is not None else None))
             service._analyzed.pop(root.session_id, None)
+        write_error = None
         try:
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
-        except (OSError, sqlite3.Error):
+        except (OSError, sqlite3.Error) as error:
+            write_error = error
             writes = []
         progress(WorkProgress('Updating changed history', 'history', start + len(chunk), len(pending), stage='history-load'), None)
-        work.checkpoint(len(writes), processed=len(chunk), remaining=start + len(chunk) < len(pending))
+        work.checkpoint(len(writes), processed=len(chunk), remaining=start + len(chunk) < len(pending), error=write_error)
     unavailable.update(work.verify())
     if unavailable and len(unavailable) == len(roots):
         raise HistoryCheckpointError('history_revision_churn')

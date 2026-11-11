@@ -177,6 +177,86 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(3600, cadence(self.models, result(0, sample=100), True))
         self.assertEqual(3600, cadence(self.models, result(0, sample=100), False))
 
+    def test_worker_interruption_recovers_on_host_backoff_but_typed_blockers_do_not_loop(self):
+        for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
+            request = ReportRequest(kind)
+            self.dispatch.interest('one', kind.value, True, request)
+            for code in ('report_unavailable', 'worker_unavailable', 'cancelled'):
+                key = self.dispatch.lookup(request)['id']
+                self.jobs.values[key].update(status='failed', error=code)
+                self.dispatch.tick()
+                entry = self.dispatch.entries[request]
+                self.assertFalse(entry['terminal'])
+                self.assertIsNone(self.dispatch.lookup(request)['id'])
+                self.assertGreater(entry['due'], self.now)
+                before = len(self.jobs.values)
+                self.dispatch.lookup(request)
+                self.assertEqual(before, len(self.jobs.values))
+                self.now = entry['due']
+            key = self.dispatch.lookup(request)['id']
+            self.jobs.values[key].update(status='failed', result=dict(
+                error=dict(code='history_resource_limit', retryable=False)))
+            self.dispatch.tick()
+            self.now += 86400
+            self.assertTrue(self.dispatch.lookup(request)['terminal'])
+            self.assertIsNone(self.dispatch.entries[request]['job'])
+
+    def test_incomplete_stats_refresh_preserves_accepted_scope_until_coherent_replacement(self):
+        request = ReportRequest(ReportKind.AI_STATS)
+        first = self.dispatch.lookup(request)['id']
+        accepted = result(1_000_000)
+        accepted['view'].update(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=True)}))
+        self.jobs.values[first].update(status='complete', result=accepted)
+        self.dispatch.lookup(request)
+        self.now = self.dispatch.entries[request]['due']
+        self.dispatch.interest('one', 'ai-stats', True, request)
+        self.dispatch.tick()
+        refresh = self.dispatch.entries[request]['job']
+        partial = result(int(self.now * 1000))
+        partial['view'].update(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=False)}))
+        self.jobs.values[refresh].update(status='running', result=partial)
+
+        waiting = self.dispatch.lookup(request)
+
+        self.assertIs(accepted, waiting['result'])
+        self.assertEqual(first, waiting['result_id'])
+        self.assertEqual(refresh, waiting['id'])
+        partial['view']['ai_stats_work']['scopes']['30-days']['ready'] = True
+        self.jobs.values[refresh]['status'] = 'complete'
+        replaced = self.dispatch.lookup(request)
+        self.assertIs(partial, replaced['result'])
+        self.assertEqual(refresh, replaced['result_id'])
+
+    def test_corrected_source_access_rechecks_report_blocker_without_explicit_retry(self):
+        request = ReportRequest(ReportKind.TOKEN_MIX)
+        self.dispatch.interest('one', 'token-mix', True, request)
+        key = self.dispatch.lookup(request)['id']
+        self.jobs.values[key].update(status='failed', result=dict(
+            error=dict(code='source_permission_denied', retryable=False)))
+        self.dispatch.tick()
+        self.assertTrue(self.dispatch.lookup(request)['terminal'])
+        self.dispatch.tick(ready=False, error='source_permission_denied', terminal=True)
+        self.dispatch.tick(ready=True)
+        self.assertFalse(self.dispatch.lookup(request)['terminal'])
+        self.assertNotEqual(key, self.dispatch.lookup(request)['id'])
+
+    def test_cache_connection_fault_is_typed_without_claiming_source_disconnection(self):
+        import sqlite3
+        from src.application import ReportApplication
+        for sqlite_code, expected in ((sqlite3.SQLITE_BUSY, 'report_cache_busy'),
+                (sqlite3.SQLITE_READONLY, 'report_cache_unavailable')):
+            error = sqlite3.OperationalError('private path must not escape')
+            error.cache_phase = 'connect'
+            error.sqlite_errorcode = sqlite_code
+            application = ReportApplication(lambda *_: (_ for _ in ()).throw(error))
+            with patch('src.application.service.recoverable'):
+                value = application.execute(ReportRequest(ReportKind.AI_STATS)).to_json()
+            self.assertEqual(dict(code=expected, retryable=True), value['error'])
+            self.assertEqual('not_acquired', value['source']['status'])
+            self.assertIsNone(value['view'])
+
     def test_rejected_comparison_pin_is_terminal_and_new_first_page_can_run(self):
         pinned = ReportRequest(ReportKind.COMPARISONS, comparison_offset=10, comparison_revision='a' * 64)
         self.dispatch.interest('one', 'comparisons', True, pinned)
@@ -594,6 +674,45 @@ time.sleep(30)
 
 
 class SharedEvidenceTests(unittest.TestCase):
+    def test_thousands_of_roots_keep_real_counts_and_reuse_then_repair_compact_evidence(self):
+        from src.domain import ModelRef
+        from src.reports import ReportService
+        from src.reports.token_mix_cache import NAMESPACE, cache_key
+        source = SyntheticMonthSource(3217, 2, month_start_ms=NOW - 5 * 86400000)
+        source.snapshots = {sid: replace(value, complete=True) for sid, value in source.snapshots.items()}
+        raw = source.snapshots['root-0000']
+        opaque = ModelRef('claude-agent', 'large-agent')
+        source.snapshots['root-0000'] = replace(raw,
+            invocations=tuple(replace(item, model=opaque) for item in raw.invocations),
+            messages=tuple(replace(item, model=opaque) if item.model else item for item in raw.messages))
+        original = report_service(self, source)
+
+        def fresh():
+            service = ReportService(selection=original.selection, pricing_provider=original.pricing_provider,
+                account_provider=None, cache_repository=original.cache_repository, config=original.config,
+                now_ms=NOW, cache_token_mix_history=True)
+            service.shared_web_evidence = True
+            return service
+
+        cold = fresh().build_token_mix_history()
+        stats = fresh().build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+        warm = fresh().build_token_mix_history()
+        self.assertEqual(6434, cold.token_mix.request_count)
+        self.assertEqual(839637, cold.token_mix.known_total_tokens)
+        self.assertEqual(cold.model_token_mix, warm.model_token_mix)
+        self.assertEqual(3217, source.load_count)
+        self.assertEqual(3217, stats.ai_stats_work['completed'])
+        self.assertGreater(stats.ai_stats[-1].metrics[1].value, 0)
+        service = fresh()
+        root = source.snapshots['root-0000'].root
+        key = cache_key(service, root, service._load_comparison_catalog())
+        entry = service.cache_repository.get(NAMESPACE, key)
+        service.cache_repository.put(NAMESPACE, key, {'corrupt': True},
+            source_revision=entry.source_revision, algorithm_version=entry.algorithm_version)
+        repaired = fresh().build_token_mix_history()
+        self.assertEqual(cold.model_token_mix, repaired.model_token_mix)
+        self.assertEqual(3218, source.load_count, 'one disposable corrupt entry is a miss, not a report failure')
+
     def test_price_dependency_lookup_is_cache_only_even_with_expired_prices(self):
         from src.pricing.github_copilot import GitHubCopilotPricingProvider, CACHE_NAMESPACE, CACHE_KEY, _catalog_payload
         service = report_service(self)

@@ -64,6 +64,69 @@ def seed_previous(original):
 
 
 class ClaudeAliasCacheTests(unittest.TestCase):
+    def test_opaque_agent_selection_roundtrips_fresh_and_persisted_history_evidence(self):
+        from src.application import ReportApplication
+        from src.reports.token_mix_cache import NAMESPACE
+        for resolved in (False, True):
+            for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
+                with self.subTest(resolved=resolved, kind=kind):
+                    original = desktop_service(self, snapshots=(snapshot(model='large-agent'),
+                        snapshot(1, 'claude-sonnet-4-5')))
+                    original.source.selection = 'large-agent'
+                    if not resolved:
+                        original.source.model = None
+                    results = []
+                    for attempt in range(3):
+                        fresh = reopen(original, shared=True)
+                        value = ReportApplication(lambda *_: fresh, clock=lambda: fresh.now_ms).execute(
+                            ReportRequest(kind)).to_json()
+                        self.assertIsNone(value['error'])
+                        results.append(value['view'])
+                        if attempt == 0:
+                            loads = original.source.load_count
+                        if attempt == 1:
+                            self.assertEqual(loads, original.source.load_count, 'warm evidence needs no hydration')
+                            # Previous affected compact facts rebuild lazily, never weaken admission.
+                            with original.cache_repository.database.connect(operation='read') as connection:
+                                keys = connection.execute('SELECT namespace, cache_key FROM cache_entries WHERE namespace IN (?, ?)',
+                                    (NAMESPACE, 'ai-stats-evidence')).fetchall()
+                            for namespace, key in keys:
+                                entry = original.cache_repository.get(namespace, key)
+                                original.cache_repository.put(namespace, key, previous_payload(entry.payload),
+                                    source_revision=entry.source_revision, algorithm_version=entry.algorithm_version)
+                    self.assertEqual(results[0], results[1])
+                    self.assertEqual(results[0], results[2])
+                    self.assertEqual(loads + int(not resolved), original.source.load_count,
+                        'only opaque-selection evidence rebuilds; concrete resolved releases stay reusable')
+                    if kind is ReportKind.TOKEN_MIX:
+                        self.assertEqual('50100', results[0]['token_mix']['known_total_tokens'])
+                    else:
+                        row = next(row for row in results[0]['ai_stats'] if row['period'] == 'all')
+                        self.assertGreater(D(row['metrics'][1]['value']), 0)
+
+    def test_catalog_turnover_during_fresh_stats_is_retryable_then_recovers(self):
+        from src.application import ReportApplication
+        from src.reports.ai_stats_evidence import payload
+        original = desktop_service(self)
+
+        def turn_catalog(*args):
+            value = payload(*args)
+            original.source.model, original.source.label, original.source.clock = 'claude-sonnet-4', 'Sonnet 4', 31
+            return value
+
+        first = reopen(original, shared=True)
+        with patch('src.reports.ai_stats.payload', side_effect=turn_catalog), patch('src.application.service.recoverable'):
+            failed = ReportApplication(lambda *_: first, clock=lambda: first.now_ms).execute(
+                ReportRequest(ReportKind.AI_STATS)).to_json()
+
+        self.assertEqual(dict(code='ai_stats_revision_churn', retryable=True), failed['error'])
+        self.assertIsNone(failed['view'])
+        fresh = reopen(original, shared=True)
+        recovered = ReportApplication(lambda *_: fresh, clock=lambda: fresh.now_ms).execute(
+            ReportRequest(ReportKind.AI_STATS)).to_json()
+        self.assertIsNone(recovered['error'])
+        self.assertGreater(D(recovered['view']['ai_stats'][-1]['metrics'][1]['value']), 0)
+
     def test_catalog_turnover_revalidates_all_compact_caches_without_reloading_pinned_roots(self):
         for mode in ('analysis', 'summary', 'mix', 'stats', 'matches'):
             with self.subTest(mode=mode):

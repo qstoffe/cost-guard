@@ -1,7 +1,7 @@
 // Real app/Attempt control flow with virtual time and transport; no browser/source.
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 let now = 1000000000, sequence = 0, busy = 0, sourceWait = 0, managedResponse = null, liveUpdate = null;
-const timers = new Map(), jobs = new Map(), admissions = [], handlers = {}, ids = {}, jobFetches = {};
+const timers = new Map(), jobs = new Map(), admissions = [], lookups = [], handlers = {}, ids = {}, jobFetches = {};
 const node = () => {
   const classes=new Set();
   return {dataset:{}, attrs:{}, classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name)},
@@ -10,9 +10,9 @@ const node = () => {
     focus(){document.activeElement=this;},
     replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}};
 };
-for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating']) ids[id]=node();
+for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating','toolbar']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
-  querySelector:()=>null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
+  querySelector:selector=>selector==='.toolbar'?ids.toolbar:null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
 const location = {hash:'#/watch'}, history = {replaceState(){}};
 class Clock extends Date {static now(){return now;}}
 const context = vm.createContext({document, location, history, URLSearchParams, AbortController, Date:Clock,
@@ -31,6 +31,7 @@ const context = vm.createContext({document, location, history, URLSearchParams, 
     else if(path==='/api/status') value={session_detail:false};
     else if(path==='/api/reports' || path==='/api/data') {
       const body=JSON.parse(options.body),request=body.request || body;admissions.push(request.kind);
+      if(path==='/api/data') lookups.push(body);
       if(path==='/api/data' && managedResponse) return {ok:true,json:async()=>managedResponse};
       const error=busy-- > 0?'busy':sourceWait-- > 0?'source_starting':null;
       if(error)return {ok:false,status:429,json:async()=>({error})};
@@ -222,6 +223,47 @@ async function main(){
   managedResponse={id:owned,result_id:owned,result:historical,refresh:'scheduled'};
   await go('watch');await go('models');
   assert.equal(aged.result,historical);assert.equal(aged.withheld,false);
+  // Managed historical recovery follows host due times, even with no publication.
+  const hostTick=async()=>{
+    const entry=[...timers].find(([,timer])=>timer.ms===5000);
+    assert.ok(entry,'host lookup must remain scheduled without a result');
+    const [id,timer]=entry;timers.delete(id);now+=timer.ms;timer.fn();await settle();
+  };
+  for(const section of ['token-mix','ai-stats']) {
+    await go('watch');run(`views.delete('#/${section}')`);
+    managedResponse={id:null,result:null,refresh:'delayed',error:'report_unavailable',terminal:false};
+    await go(section);const recovering=run('current');
+    for(let i=0;i<8;i++) {
+      assert.equal(recovering.loading,true);assert.equal(recovering.failed,false);
+      assert.equal(recovering.active,null);
+      await hostTick();
+    }
+    assert.equal(ids.refresh.hidden,true,'no Retry button while recovering');
+    const retainedResult={view:{kind:section,ai_stats:[{period:'30-days'}]},source:{status:'acquired',observed_at_ms:now}};
+    managedResponse={id:'published',result_id:'published',result:retainedResult,refresh:'scheduled'};
+    await hostTick();
+    assert.equal(recovering.result,retainedResult);assert.equal(recovering.failed,false);
+    managedResponse={id:null,result:null,refresh:'stopped',error:'report_cache_unavailable',terminal:true};
+    await run('acquire(current,true)');await settle();
+    assert.equal(recovering.result,retainedResult,'absent publication never erases matching last-good data');
+    assert.equal(recovering.withheld,false);assert.equal(recovering.failed,true);
+    assert.equal(ids.refresh.hidden,true,'no Retry button after a report failure');
+    // A cold terminal failure stays truthful, but lookups can see relevant host recovery.
+    await go('watch');run(`views.delete('#/${section}')`);await go(section);
+    const cold=run('current');assert.equal(cold.failed,true);assert.equal(cold.result,null);
+    assert.equal(ids.refresh.hidden,true);
+    assert.equal(ids.toolbar.hidden,true,'no redundant toolbar after a cold history failure');
+    const scheduled=run('cachedReportTimer');
+    for(let i=0;i<8;i++) {
+      now+=1000;
+      run(`connectionStatus('connected',{kind:'connected',writable:true})`);
+      assert.equal(run('cachedReportTimer'),scheduled,'frequent Live health hints must not postpone the five-second history lookup');
+    }
+    managedResponse={id:'recovered',result_id:'recovered',result:retainedResult,refresh:'scheduled'};
+    await hostTick();
+    assert.equal(cold.result,retainedResult);assert.equal(cold.failed,false);
+  }
+  assert.ok(lookups.every(body=>body.retry===false),'automatic history never bypasses host backoff with explicit Retry');
   // Host owns source retries; only a previously observed live view earns quiet grace.
   run(`liveValue={view:{}}; connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:null})`);
   assert.equal(ids['host-state'].hidden,false,'no successful observation cannot be disguised as retained success');

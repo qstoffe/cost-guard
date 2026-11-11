@@ -6,7 +6,9 @@ async function main() {
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'ai-stats-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'ai-stats-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--ai-stats'],
+  const liveHistory=process.argv.includes('--live-history');
+  const server = spawn('py', ['-3', ...(liveHistory ? ['development/tests/integration/serve_historical_reports.py'] :
+    ['development/tests/integration/serve_mini_watch.py', config, '--ai-stats'])],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverClosed = new Promise(resolve=>server.once('close',(code,signal)=>resolve({code,signal})));
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
@@ -44,14 +46,16 @@ async function main() {
       host:typeof hostState==='undefined'?null:hostState.kind,
       active:typeof current==='undefined'?null:current?.active,
       percent:typeof current==='undefined'?null:current?.percent,
-      hidden:document.hidden})`,target);
+      hidden:document.hidden, managed:typeof demand!=='undefined' && !!demand,
+      checkedAgo:typeof current==='undefined'?null:Date.now()-current?.checkedAt,
+      scheduled:typeof cachedReportTimer!=='undefined' && cachedReportTimer!==null})`,target);
     server.stdin.write('{"command":"jobs-status"}\n');
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));
   };
   const layouts=[], textLayouts=[], contrasts=[], states=[], checks=[];
   let evidence={outcome:'FAIL',layouts,textLayouts,contrasts,states,checks};
-  const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
+   const deadline=setTimeout(()=>{child.kill();server.kill();},liveHistory?600000:180000);
   try {
     const launch=JSON.parse((await lines.next()).value);
     if (process.argv.includes('--slices-only')) {
@@ -64,7 +68,12 @@ async function main() {
     tab=(await command('Target.attachToTarget',{targetId,flatten:true})).sessionId;
     await command('Page.enable',{},tab); await command('Runtime.enable',{},tab);
     await command('Page.navigate',{url:launch.url},tab);
-    await until(`typeof csrf!=='undefined' && csrf && hostState.writable`);
+     await until(`typeof csrf!=='undefined' && csrf && hostState.writable`);
+     if(liveHistory) {
+       const observations=await require('./probe_historical_reports.cjs')({command,evaluate,until,tab,checks});
+       evidence={outcome:'PASS',checks,observations,limitations:['Read-only headless Chromium; controlled browser transport failures are synthetic, not source outages. No physical desktop or screen-reader proof.']};
+       return;
+     }
     await evaluate(`location.hash='#/cost-per-hour'`);
     await until(`current?.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`location.hash`),'#/ai-stats');
@@ -79,7 +88,7 @@ async function main() {
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_rate_help.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
-    for(const theme of ['classic','light','dark']) for(const width of [360,520,1280]) {
+    for(const theme of ['classic','light','dark']) for(const width of [360,800,1280,1920]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
       const layout=await evaluate(`(() => {
@@ -96,7 +105,7 @@ async function main() {
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
-    checks.push('Classic/Web light/dark, 360/520/1280px, three rate rows, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
+    checks.push('Classic/Web light/dark, 360/800/1280/1920px, three rate rows, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
     await evaluate(`window.__root=current.stats.root; window.__cards=[...document.querySelectorAll('.ai-stat')];
       window.__observation=current.result.observed_at_ms; selectStats(current,'today'); selectStats(current,'7-days'); selectStats(current,'30-days');`);
     assert.equal(await evaluate(`current.result.observed_at_ms===__observation && !current.loading && __cards.every((c,i)=>c===document.querySelectorAll('.ai-stat')[i])`),true);
@@ -198,18 +207,13 @@ async function main() {
     await evaluate(`window.__savedStats=current.result; current.result=null; current.statsResults.clear();
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),10);
-    assert.doesNotMatch(await evaluate(`output.textContent`),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|synthetic|snapshot interval/i);
-    assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-value')].every(node=>node.textContent.includes('0'))`),true);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),0,'failure is not an empty successful period');
+    assert.match(await evaluate(`output.textContent`),/Historical report unavailable; automatic checks continue/);
+    assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
-    await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
-      document.querySelector('.ai-stat h4 button').focus();`);
-    await until(`!document.getElementById('context-help').hidden`);
-    const idleHelp=await evaluate(`document.getElementById('context-help').textContent`);
-    assert.equal(idleHelp.split('\n\n').length,3);
-    assert.match(idleHelp,/office calendar is taking a nap/); assert.match(idleHelp,/hasn't started/);
-    await evaluate(`api=__realApi; AIStatsView.remember(current,__savedStats); current.failed=false; show(current)`);
-    checks.push('cold failed acquisition has ten playful zero figures, no invented record links; warm failure retains fun results');
+    await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
+    await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===10`);
+    checks.push('cold failure has truthful report status, no fake zero cards/record links/Retry/toolbar; overdue automatic lifecycle restores genuine results; known-empty evidence remains covered separately');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;
     const peer=(await command('Target.attachToTarget',{targetId:peerId,flatten:true})).sessionId;

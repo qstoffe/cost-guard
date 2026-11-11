@@ -19,6 +19,7 @@ let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
+let cachedReportOwner = null;
 let demand = null; // Enabled only after the authenticated host advertises it.
 const sourceNotice = document.getElementById('source-compatibility');
 function sourceNoticeGeometry() {
@@ -26,24 +27,35 @@ function sourceNoticeGeometry() {
 }
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
+function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
 function firstReport(state = current) {
   if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
 }
 function scheduleCachedReport() {
-  clearTimeout(cachedReportTimer);
   const state = current;
-  if (!historical(state) || !state.result || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) return;
+  if (!historical(state) || !state.result && !(automaticHistory(state) && state.failed) || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
+    clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
+  }
+  // Live health arrives more often than the lookup interval. Keep the existing
+  // deadline rather than debouncing automatic recovery forever on a healthy host.
+  if (demand && cachedReportTimer !== null && cachedReportOwner === state) return;
+  clearTimeout(cachedReportTimer); cachedReportOwner = state;
+  const check = () => {
+    cachedReportTimer = null; cachedReportOwner = null;
+    if (current === state && !document.hidden && hostState.writable) {
+      if (demand) state.benchmark?.load(api);
+      acquire(state, true);
+    }
+  };
   if (demand) {
-    cachedReportTimer = setTimeout(() => { if (current === state) { state.benchmark?.load(api); acquire(state, true); } }, 5000);
+    cachedReportTimer = setTimeout(check, 5000);
     return; // Lookup a publication, never schedule a browser-owned source refresh.
   }
   const cadence = CachedReports.cadences[state.section];
   const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
-  cachedReportTimer = setTimeout(() => {
-    if (current === state && !document.hidden && hostState.writable) acquire(state, true);
-  }, delay);
+  cachedReportTimer = setTimeout(check, delay);
 }
 function enterCachedReport(state) {
   if (!historical(state)) return;
@@ -183,18 +195,17 @@ function show(state) {
   if (finite) output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
   state.interrupted = ReportLoading.interrupted(hostState) ?
     'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
-  if (state.section === 'token-mix') {
-    refresh.textContent = 'Retry Token Mix';
-    refresh.hidden = !state.failed;
-    heading.hidden = !!state.result && !state.withheld;
+  if (automaticHistory(state)) {
+    refresh.hidden = true;
+    heading.hidden = true;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
+    if (state.result && state.failed) notice.textContent = state.message;
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }
   if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
-    refresh.textContent = 'Retry AI Stats'; refresh.hidden = !state.failed;
-    notice.textContent = ''; output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
+    output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
     state.stats.update(state); state.stats.attach(output);
@@ -279,7 +290,28 @@ function reportWork(progress) {
     'date-catalog-after': 'Verifying after-catalog', 'date-analysis': 'Analyzing date-history roots'};
   return `${labels[progress.stage] || progress.phase} · ${progress.completed ?? 0}${progress.total == null ? '' : '/' + progress.total}`;
 }
-function failure(code) {
+function failure(code, state) {
+  if (automaticHistory(state)) {
+    const reportErrors = {
+      internal_error: 'Historical report failed (internal_error); the source connection is checked separately.',
+      report_unavailable: 'Historical report worker was interrupted; recovery is automatic.',
+      worker_unavailable: 'Historical report worker could not start; recovery is automatic.',
+      report_invalid_result: 'Historical report returned an invalid result; no usage values were substituted.',
+      report_cache_busy: 'Historical report cache is busy; saved work will resume automatically.',
+      report_cache_unavailable: 'Historical report cache is unavailable. Check local cache access or disk space; automatic checks continue.',
+      history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space.',
+      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space.',
+      ai_stats_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
+      history_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
+      history_no_progress: 'History could not resume its saved work (history_no_progress); no totals were substituted.',
+      busy: 'Waiting for an available historical report slot.',
+      source_permission_denied: 'Permission denied reading the source. Correct source access; reports recheck when the source recovers.',
+      http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization.',
+      registration_invalid: 'OpenCode source registration is invalid. Repair the registration.',
+      registration_unreadable: 'OpenCode source registration is unreadable. Check source permissions.',
+      source_identity_changed: 'Historical source identity changed; previous results cannot be reused.'};
+    if (reportErrors[code]) return reportErrors[code];
+  }
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
     cancelled: 'Report cancelled.',
@@ -304,7 +336,10 @@ function failure(code) {
      offline: 'Host is offline. Check the local host and reload.',
      authorization_required: 'Browser authorization expired. Use a fresh OS launcher link.',
      identity_changed: 'Host identity changed. Use a fresh OS launcher link.'};
-  return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
+  const message = errors[code];
+  if (automaticHistory(state)) return message ||
+    'Historical report unavailable; automatic checks continue. Source connection status is shown separately.';
+  return message || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
@@ -318,7 +353,7 @@ async function acquire(state, background = false, prices = false) {
   for (const event of priceFocusEvents) document.addEventListener(event, movedPriceFocus);
   const request = state.request;
   let publication = null;
-  let retry = !!state.failed && !background;
+  let retry = !!state.failed && !background && !automaticHistory(state);
   state.loading = true;
   const attempt = state.attempt = new ReportLoading.Attempt({paging: state.pageNavigation === true});
   state.priceRefreshing = prices; state.priceMessage = '';
@@ -344,16 +379,21 @@ async function acquire(state, background = false, prices = false) {
           // Retained publication identity is independent of an active refresh.
           state.dispatchRefresh = admission.refresh;
           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
-          if (!admission.result && state.result && state.section !== 'ai-stats' && !state.pageNavigation) { state.withheld = true; show(state); }
+           if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
+             state.result = null; state.statsResults?.clear();
+           }
+           if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
             publication_id: admission.result_id || admission.id};
-          else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
+           else if (!admission.id && !admission.terminal && automaticHistory(state)) {
+             ReportLoading.waiting(state, admission.error || 'report_pending'); show(state);
+             await attempt.poll(null, 5000); continue; // Host due/backoff owns readmission, not explicit Retry.
+           } else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
         }
         state.progressSequence = 0;
         return;
       } catch (error) {
         if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
-        if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
         ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
         await attempt.backoff(error);
       }
@@ -373,17 +413,17 @@ async function acquire(state, background = false, prices = false) {
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
-         if (job.status !== 'complete' || !job.result || job.result.error) {
+          if (job.status !== 'complete' || !job.result || job.result.error) {
+           if (demand && automaticHistory(state)) { state.active = null; await admit(); continue; }
           const error = new Error(job.result?.error?.code || job.error || job.status);
           error.retryable = job.result?.error?.retryable === true;
             if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
-           if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
            state.active = null; ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
           await attempt.backoff(error); await admit(); continue;
         }
         if (hostState.terminal) break;
-         if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
-         if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
+          if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_invalid_result');
+          if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_invalid_result');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
           if (state.section === 'comparisons') state.pageNavigation = false;
          if (state.section === 'ai-stats' && !job.result.view.ai_stats.some(row => row.period === state.period)) {
@@ -428,11 +468,11 @@ async function acquire(state, background = false, prices = false) {
       demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
     }
     state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
-      `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
+      `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message, state)}`;
     if (prices) state.priceMessage = state.message;
     state.failed = true;
   } finally {
-     if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError); }
+     if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError, state); }
      state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
      show(state); scheduleCachedReport();
     for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);

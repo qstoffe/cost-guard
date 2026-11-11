@@ -1,4 +1,5 @@
 """Revision-bracketed finite history work and compact durable continuation proof."""
+import sqlite3
 from src.analysis.cache import dependency_signature
 from src.domain.progress import WorkProgress
 from src.domain.session_tree import root_by_session
@@ -36,7 +37,7 @@ class HistoryWork:
         self.saved = 0
         self.processed = 0
 
-    def checkpoint(self, count, *, processed, remaining):
+    def checkpoint(self, count, *, processed, remaining, error=None):
         """Count only successful stable writes, never analyzed/partial roots."""
         self.saved += count
         self.processed += processed
@@ -46,7 +47,9 @@ class HistoryWork:
         limit = getattr(self.service, 'history_slice_roots', None)
         if callback and limit and self.processed >= limit and remaining:
             if not count:
-                raise HistoryCheckpointError('history_checkpoint_unavailable')
+                code = getattr(error, 'sqlite_errorcode', None)
+                busy = type(code) is int and code & 255 in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+                raise HistoryCheckpointError('history_checkpoint_busy' if busy else 'history_checkpoint_unavailable')
             raise HistoryContinuation()
 
     def verify(self, latest=None):

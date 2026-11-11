@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.26 - 2026-11-11
+
+- Token Mix and AI Stats correctly mark newly encoded opaque Claude Agent facts under the same identity semantics their decoder requires. Affected old derived entries rebuild lazily; source history and useful validation are unchanged.
+- Both reports recover through host-owned backoff and automatic publication lookups, including interrupted workers, transient cache contention and model-catalog turnover, without Retry/Refresh buttons. Frequent Live health updates no longer postpone the lookup forever. Valid prior reports retain their provenance and DOM; incomplete AI Stats refresh slices cannot replace a matching last-good period.
+- Failed AI Stats acquisition now shows truthful report status rather than ten artificial zero metrics. Genuine empty/best-effort evidence retains the playful cards; cache/report faults no longer masquerade as source disconnection.
+
 ## v81.25 - 2026-11-11
 
 - Accounts and Full Watch show one decorative outline chain icon inside each trusted provider heading link. Unknown providers remain plain text; destinations, new-tab semantics, accessible names, wrapping and keyboard focus are preserved, including quota-track redraws.

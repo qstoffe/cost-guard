@@ -273,6 +273,43 @@ class StatsResumeTests(unittest.TestCase):
         self.assertTrue(any(row['period']=='30-days' for row in entry['result']['view']['ai_stats']))
         self.assertTrue(entry['result']['view']['ai_stats_work']['scopes']['30-days']['ready'])
 
+    def test_token_mix_real_busy_checkpoint_is_retryable_and_recovers_after_lock_release(self):
+        from src.application import ReportApplication
+        from src.reports.token_mix_cache import NAMESPACE as MIX_NAMESPACE
+        failures = []
+        cache = self.original.cache_repository
+        put_many = cache.put_many
+
+        def locked(entries, **kwargs):
+            if not failures and any(entry.namespace == MIX_NAMESPACE for entry in entries):
+                with cache.database.connect(operation='write') as connection:
+                    connection.execute('BEGIN IMMEDIATE')
+                    try:
+                        return put_many(entries, **kwargs)
+                    except sqlite3.Error as error:
+                        failures.append(error.sqlite_errorcode)
+                        raise
+            return put_many(entries, **kwargs)
+
+        def factory(_now, _progress):
+            service = self.service()
+            service.cache_token_mix_history = service.shared_web_evidence = True
+            service.history_checkpoint = lambda _proof: None
+            service.history_slice_roots = service.history_batch_size = 1
+            return service
+
+        request = ReportRequest(ReportKind.TOKEN_MIX)
+        with patch.object(cache, 'put_many', side_effect=locked):
+            failed = ReportApplication(factory, clock=lambda: NOW).execute(request).to_json()
+        self.assertEqual([sqlite3.SQLITE_BUSY], failures)
+        self.assertEqual(dict(code='history_checkpoint_busy', retryable=True), failed['error'])
+        self.assertIsNone(failed['view'])
+        recovered = self.service()
+        recovered.cache_token_mix_history = recovered.shared_web_evidence = True
+        result = ReportApplication(lambda *_: recovered, clock=lambda: NOW).execute(request).to_json()
+        self.assertIsNone(result['error'])
+        self.assertGreater(int(result['view']['token_mix']['known_total_tokens']), 0)
+
     def test_active_evidence_is_fresh_at_publication_and_not_shared_across_observations(self):
         source = SyntheticMonthSource(5, 3, month_start_ms=NOW - DAY, running_roots=1)
         source.snapshots = {sid: replace(s, complete=True) for sid, s in source.snapshots.items()}
