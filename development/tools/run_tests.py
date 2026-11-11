@@ -256,6 +256,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_web_quota_pace.py",
 )
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
+    "test_session_detail_liveness.py",
     "test_historical_reports.HistoricalReportScaleTests",
     "test_web_session_detail.py",
     "test_web_session_catalog.py",

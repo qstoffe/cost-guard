@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000674: `application/session_detail.py` owns fair attempt budgets, safe Retry and
+typed detached acquisition state; `watch/detail_capture.py` owns one supervised
+capture child and bounded private file IPC. `web/detail_worker.py` composes that
+child without reversing Watch→Web dependencies. Domain work checkpoints observe
+source normalization/analysis/projection, never timer-generated progress. Coverage:
+`test_session_detail_liveness.py`, detail/Live regressions and authenticated
+`probe_web_sessions.cjs --detail-liveness`; [causality and limits](../../journal/web/session-loading.md#finite-source-acquisition-fr000674).
+
 FR000672: `mini.js::activityLabel` formats the selected absolute start/finish using
 the prepared local date and configured-zone `ReportView.timestamp` current day.
 The existing Controller render clock owns age transitions; selection, source access,

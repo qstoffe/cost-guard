@@ -40,6 +40,35 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_detail_future_fault_does_not_end_independent_live_or_catalog_publication(self):
+        from concurrent.futures import Future
+        from src.application.session_detail import SessionDetails
+        from src.application.session_catalog import SessionCatalog
+        from src.watch.web_coordinator import WebWatchCoordinator
+        source = MutableSource(make_uncompacted_snapshot())
+        with tempfile.TemporaryDirectory() as tmp:
+            config, selection, service, _ = make_service(tmp, source, now_ms=1_000_000)
+            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                service_factory=lambda now: make_service(tmp, source, now_ms=now)[2], clock_ms=lambda: 1_000_000)
+            details, catalog = SessionDetails(), SessionCatalog()
+            token = details.open(source.snapshot.root.session_id, 'live')
+            try:
+                owner.initialize(defer_history=True)
+                owner.detail_job = Future()
+                owner.detail_job.set_exception(RuntimeError('synthetic detail fault'))
+                owner.tick_details(details)
+                self.assertEqual('detail_worker_failed', details.page(token, 0)['acquisition']['reason'])
+                for _ in range(3):
+                    frame = owner._build_projection(now_ms=1_000_000)
+                    owner.tick_catalog(catalog)
+                    self.assertIsNotNone(project_live(frame, 'UTC'))
+                self.assertIsNotNone(owner.catalog_observation)
+                # Also cover shutdown before the next Live turn can classify it.
+                owner.detail_job = Future()
+                owner.detail_job.set_exception(RuntimeError('synthetic shutdown detail fault'))
+            finally:
+                owner.close()
+
     def test_delayed_history_does_not_block_advancing_active_live_publications(self):
         from types import SimpleNamespace
         from uuid import uuid4

@@ -85,11 +85,12 @@ async function main() {
   view.detach();
   assert.ok(calls.some(call => call.action === 'close' && call.token === 'owned'));
   offline = false;
-  let pending = true, pendingState = 'observed';
+  let pending = true, pendingState = 'observed', acquisition, retryCalls = 0;
   context.pendingApi = async (path, value) => {
     if (value.action === 'open') return {token:'pending-lease'};
     if (value.action === 'close') return {};
-    if (pending) return {state:pendingState,pending:true,result:null};
+    if (value.action === 'retry') {retryCalls++;acquisition={phase:'queued',attempts:0,completed:0};return {};}
+    if (pending) return {state:pendingState,pending:true,result:null,acquisition};
     const result = JSON.parse(JSON.stringify(input.first));
     result.offset = value.offset;
     result.result.view.prompt_blocks[0].rows = result.result.view.prompt_blocks[0].rows.slice(value.offset, value.offset + 25);
@@ -107,7 +108,7 @@ async function main() {
   await pendingView.load(); pendingView.freshness();
   assert.equal(pendingView.loader.bar, pendingBar, 'polls preserve the determinate DOM instance');
   assert.equal(pendingBar.value, 0, 'unmeasured source waits cannot advance');
-  assert.equal(delays.at(-1), 5000, 'pending capture retains the configured five-second polling cadence');
+  assert.equal(delays.at(-1), 500, 'bounded short pending status polls do not acquire source history');
   assert.equal(timers.size, 1);
   pendingState = 'source_unavailable'; await pendingView.load();
    assert.match(pendingView.status.textContent, /Source unavailable/);
@@ -115,6 +116,28 @@ async function main() {
    assert.equal(pendingView.loader.root.hidden, true);
    assert.equal(pendingView.scroll.attributes['aria-busy'], 'false');
   assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
+  acquisition = {phase:'analyzing',attempts:2,completed:73,progress_age_seconds:1};
+  await pendingView.load();
+  assert.match(pendingView.loader.stage.textContent,/Analyzing session history.*73 completed work units; attempt 2/);
+  assert.equal(pendingBar.value,0,'measured units with no denominator are never a fraction');
+  acquisition = {phase:'failed',reason:'detail_no_progress',attempts:3,retry_available:true};
+  await pendingView.load();
+  assert.equal(pendingView.retry.hidden,false);
+  assert.match(pendingView.status.textContent,/No forward progress.*Retry or return to Sessions/);
+  assert.equal(pendingView.loader.root.hidden,true);
+  await pendingView.retrySource();
+  assert.equal(retryCalls,1);
+  assert.equal(pendingView.retry.hidden,true);
+  assert.match(pendingView.loader.stage.textContent,/Queued for session source/);
+  let finishStatus;
+  pendingView.pendingLoad = new Promise(resolve => {finishStatus=resolve;});
+  pendingView.busy = true;
+  const queuedRetry = pendingView.retrySource();
+  await pendingView.retrySource();
+  assert.equal(retryCalls,1,'a pending status read serializes Retry and duplicate clicks');
+  pendingView.busy = false; finishStatus();
+  await queuedRetry;
+  assert.equal(retryCalls,2,'the original click is not discarded after the status read');
   pending = false;
   const [pendingTimer, resume] = timers.entries().next().value;
   timers.delete(pendingTimer); resume(); await new Promise(setImmediate);

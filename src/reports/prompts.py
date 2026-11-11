@@ -9,6 +9,7 @@ from src.analysis.context import ContextEpochs, context_composition, estimate_ne
 from src.analysis.models import RootAnalysisBundle
 from src.analysis.duration import accumulated_duration
 from src.domain import EventKind, SessionSnapshot
+from src.domain.progress import observe_work
 from src.domain.reference_cost import bounded_issues
 from src.pricing.catalog import PricingCatalog
 
@@ -151,6 +152,7 @@ def build_prompt_block(
         if end_ms is not None and record.prompt_time_ms >= end_ms:
             continue
         row = projector.prompt(record)
+        observe_work('publishing', 1)
         rows.append(row)
         if record.entries and not mix_known(record):
             mix_complete = False
@@ -169,6 +171,7 @@ def build_prompt_block(
         if end_ms is not None and record.created_at_ms >= end_ms:
             continue
         row = projector.compaction(record, event_numbers[record.user_message_id])
+        observe_work('publishing', 1)
         rows.append(row)
         if record.entries and not mix_known(record):
             mix_complete = False

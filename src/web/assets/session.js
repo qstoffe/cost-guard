@@ -40,6 +40,8 @@ const SessionDetail = (() => {
       this.heading = el('h1');
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
+      this.retry = el('button', 'Retry session loading'); this.retry.type = 'button'; this.retry.hidden = true;
+      this.retry.addEventListener('click', () => this.retrySource());
       this.loader = new ReportLoading.View();
       this.loader.bar.setAttribute('aria-label', 'Session loading progress');
       this.loader.status.setAttribute('aria-live', 'polite');
@@ -53,7 +55,7 @@ const SessionDetail = (() => {
       columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.loader.root, scroll);
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.retry, this.loader.root, scroll);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
     }
@@ -75,15 +77,34 @@ const SessionDetail = (() => {
       clearTimeout(this.timer);
       if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
       const generation = this.generation;
-      await this.load();
-      if (this.attached) this.timer = setTimeout(() => this.poll(), generation === this.generation ? 5000 : 0);
+      this.pendingLoad = this.load();
+      await this.pendingLoad;
+      if (this.attached) this.timer = setTimeout(() => this.poll(), generation === this.generation ? (this.waiting ? 500 : 5000) : 0);
+    }
+    async retrySource() {
+      if (this.retry.disabled || !this.token) return;
+      const token = this.token;
+      this.retry.disabled = true;
+      try {
+        // A click during a short status read must not be silently discarded.
+        await this.pendingLoad;
+        if (!this.attached || this.token !== token) return;
+        await this.api('/api/detail', {action: 'retry', token});
+        if (!this.attached || this.token !== token) return;
+        if (!this.data) this.progress = {percent: 0, stage: 'Queued for session source…'};
+        this.retry.hidden = true; this.waiting = true;
+        await this.poll();
+      } catch (error) {
+        this.status.textContent = `Retry unavailable (${error.message}). Return to Sessions and reopen this session.`;
+        this.status.hidden = false;
+      } finally { this.retry.disabled = false; }
     }
     async load() {
       if (this.busy) return;
       this.busy = true;
       const generation = this.generation;
       try {
-        this.loading(this.token ? 'Waiting for session source…' : 'Opening session…');
+        if (!this.token) this.loading('Opening session…');
         if (!this.token) {
           const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
           if (!this.attached || generation !== this.generation) { this.api('/api/detail', {action: 'close', token: opened}).catch(() => {}); return; }
@@ -139,6 +160,31 @@ const SessionDetail = (() => {
     }
     sourceStatus(data) {
       this.freshness();
+      const acquisition = data.acquisition;
+      this.waiting = !data.result && acquisition?.phase !== 'failed';
+      this.retry.hidden = !acquisition?.retry_available;
+      if (acquisition?.phase === 'failed') {
+        const reasons = {
+          detail_no_progress: 'No forward progress was observed during source acquisition.',
+          detail_not_admitted: 'The session acquisition worker did not start. Check the source connection.',
+          session_missing: 'This session is no longer present in the selected source.',
+          concurrent_source_change: 'The session changed repeatedly while it was being verified.',
+          source_identity_changed: 'The source changed. Return to Sessions to select it again.',
+          http_auth_failure: 'The source rejected authentication. Restore source access before retrying.',
+          unsupported_schema: 'This source data format is unsupported.',
+          unsupported_version: 'This source version is unsupported.'
+        };
+        this.status.textContent = `${reasons[acquisition.reason] || 'Session acquisition failed.'} (${acquisition.reason || 'detail_unavailable'}). Retry or return to Sessions.${this.data ? ' Previously verified history is retained.' : ''}`;
+        this.status.hidden = false; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
+        return;
+      }
+      if (!data.result && acquisition) {
+        const phase = ({queued: 'Queued for session source', reading: 'Reading session source',
+          verifying: 'Verifying session revision', analyzing: 'Analyzing session history',
+          publishing: 'Preparing verified session history', retrying: 'Waiting to retry session source'})[acquisition.phase] || 'Waiting for session source';
+        this.loading(`${phase}… ${acquisition.completed || 0} completed work units; attempt ${acquisition.attempts || 0}; last progress ${acquisition.progress_age_seconds || 0}s ago${acquisition.reason ? ` (${acquisition.reason})` : ''}`, this.progress.percent, phase);
+        return;
+      }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
         if (!this.data) this.loading('Waiting for session source…');
         else { this.status.textContent = ''; this.status.hidden = true; }

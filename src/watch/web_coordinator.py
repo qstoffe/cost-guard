@@ -19,11 +19,12 @@ from .today_ccost import WatchTodayCCost
 from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
+from .detail_capture import DetailWorkerStopError
 
 
 class WebWatchCoordinator(WatchCoordinator):
     def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
-                 card_readers=None, **kwargs):
+                 card_readers=None, detail_capture=None, **kwargs):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory,
             batch_size=2 if callable(getattr(self.source, 'load_card_snapshots', None)) else 1,
@@ -48,6 +49,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_revision = None
         self.detail_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-detail")
         self.detail_job = None
+        self.detail_capture = detail_capture
         self.include_archived_revisions = True
         self.catalog_observation = None
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
@@ -68,7 +70,12 @@ class WebWatchCoordinator(WatchCoordinator):
         if self.detail_job is not None:
             if not self.detail_job.done():
                 return
-            self.detail_job.result()
+            try:
+                self.detail_job.result()
+            except DetailWorkerStopError:
+                raise  # Unconfirmed owned-child exit is a host ownership failure.
+            except Exception:
+                details.failed('detail_worker_failed')
             self.detail_job = None
         with details.lock:
             if not details.leases:
@@ -76,6 +83,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self.detail_job = self.detail_pool.submit(self._detail_capture, details, unavailable, int(self.clock_ms()))
 
     def _detail_capture(self, details, unavailable, now_ms):
+        if self.detail_capture is not None:
+            return self.detail_capture.capture(details, self.source, self.config, now_ms, unavailable=unavailable)
         service = None
         try:
             service = self.history_factory(now_ms)
@@ -83,6 +92,8 @@ class WebWatchCoordinator(WatchCoordinator):
                 details.tick(service, unavailable=unavailable)
         except (SourceError, PricingUnavailableError):
             details.tick(None, unavailable=True)
+        except Exception:
+            details.failed('detail_internal_error')
         finally:
             if service is not None:
                 service.close_accounts()
@@ -224,6 +235,8 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def cancel(self):
         self._closed = True
+        if self.detail_capture is not None:
+            self.detail_capture.cancel()
         cancel_source(self.source)
         self.reads.cancel()
         if self.guidance is not None:
@@ -240,6 +253,13 @@ class WebWatchCoordinator(WatchCoordinator):
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             self.catalog_pool.shutdown(wait=True, cancel_futures=True)
-            for future in (self.history_job, self.detail_job, self.catalog_job):
+            for future in (self.history_job, self.catalog_job):
                 if future is not None and not future.cancelled():
                     future.result()
+            if self.detail_job is not None and not self.detail_job.cancelled():
+                try:
+                    self.detail_job.result()
+                except DetailWorkerStopError:
+                    raise
+                except Exception:
+                    pass  # Ordinary detail faults cannot turn normal host close into failure.

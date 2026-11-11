@@ -160,6 +160,7 @@ class SessionDetailTests(unittest.TestCase):
         self.tick(service)
         self.assertEqual(self.details.page(a, 0)["state"], "session_missing")
         source.snapshots["root-0000"] = replace(snapshot, source_revision="reconnected")
+        self.details.retry(a)
         self.tick(service)
         self.assertEqual(self.details.page(a, 0)["state"], "observed")
         self.assertEqual(self.details.page(a, 0)["total"], 100)

@@ -5,6 +5,7 @@ import math
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from src.domain.progress import observe_work
 
 from src.domain import (
     BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedEvent, NormalizedMessage, NormalizedPart,
@@ -31,6 +32,7 @@ def trace_entries(
     result: list[TraceEntry] = []
     owners = prompt_owners(snapshot)
     for order, invocation in enumerate(snapshot.invocations):
+        observe_work('analyzing', 1)
         reported = invocation.cost.amount if invocation.cost is not None else 0
         disposition = invocation.cost_disposition
         if reported > 0:
@@ -561,12 +563,13 @@ def build_prompt_records(
     subscription_providers: frozenset[str] = frozenset(),
 ) -> tuple[PromptRecord, ...]:
     timeline = _root_timeline(snapshot, subscription_providers, tracked_provider)
-    records = [
-        record
-        for ref in prompt_references(snapshot, since_ms=since_ms, timeline=timeline)
-        if (record := build_prompt_record(
+    records = []
+    for ref in prompt_references(snapshot, since_ms=since_ms, timeline=timeline):
+        record = build_prompt_record(
             snapshot, ref, tracked_provider=tracked_provider, estimator=estimator, now_ms=now_ms,
             subscription_providers=subscription_providers, timeline=timeline,
-        )) is not None
-    ]
+        )
+        if record is not None:
+            records.append(record)
+        observe_work('analyzing', 1)
     return tuple(sorted(records, key=lambda record: (record.prompt_time_ms, record.prompt_number)))

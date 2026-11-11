@@ -63,14 +63,23 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-         if (mode === '--catalog-real-churn') {
+          if (mode === '--catalog-real-churn') {
            const details = await require('../fixtures/sessions_source_browser.cjs')({evaluate, until});
            checks.push(details);
            assert.deepEqual(errors, []);
            evidence = {outcome:'OBSERVED',browser:version.product,checks,layouts,inference_calls:0,
              personal_profile:false,desktop_effects:false};
-           console.log(JSON.stringify(evidence)); return;
-         }
+            console.log(JSON.stringify(evidence)); return;
+          }
+          if (mode === '--detail-liveness') {
+            const details = await require('../fixtures/session_liveness_browser.cjs')({evaluate, until, fixture,
+              command:(method, params) => command(method, params, sessionId)});
+            checks.push(...details.checks); layouts.push(...details.layouts);
+            assert.deepEqual(errors, []);
+            evidence = {outcome:'PASS',browser:version.product,checks,layouts,measurements:details.measurements,
+              inference_calls:0,personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify({outcome:evidence.outcome,checks,measurements:details.measurements})); return;
+          }
         if (mode === '--catalog-navigation-only') {
           const details = await require('../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
             command:(method, params) => command(method, params, sessionId)});

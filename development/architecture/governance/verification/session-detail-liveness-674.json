@@ -1,0 +1,52 @@
+{
+  "fr": "000674",
+  "date": "2026-11-11",
+  "full": {"groups": 183, "passed": 2273, "skipped": 2, "failures": 0, "seconds": 138.8},
+  "skips": "Native macOS zsh/PTY shell execution unavailable on Windows",
+  "liveness_tests": 14,
+  "focused_detail_after_retry_regression": 11,
+  "chrome": {
+    "outcome": "PASS",
+    "browser": "Chrome/157.0.8103.39",
+    "error_layouts": 24,
+    "failed_attempts": 3,
+    "status_burst_reads": 25,
+    "recovery_rows": 1001,
+    "retry_to_dom_ms": 2579.3,
+    "publication_to_dom_ms": 1064.6,
+    "first_ready_response_to_dom_ms": 790.9,
+    "capture_seconds": 0.995,
+    "input_bytes": 613518,
+    "output_bytes": 1094581,
+    "snapshot_reads": 1
+  },
+  "edge": {
+    "outcome": "PASS",
+    "browser": "Edg/157.0.4341.42",
+    "error_layouts": 24,
+    "failed_attempts": 3,
+    "final_joined_retirements": 4,
+    "recovery_rows": 1001,
+    "retry_to_dom_ms": 2592.6,
+    "publication_to_dom_ms": 1138.3,
+    "snapshot_reads": 1
+  },
+  "inherited_loader_layouts": 48,
+  "inherited_native_page_zoom_layouts": 48,
+  "real_v2": {
+    "available_sessions": 3113,
+    "indexed": 60,
+    "visible_indexed": 50,
+    "first_page_seconds": 0.091,
+    "detail_rows": 1,
+    "detail_seconds": 2.156,
+    "detail_http_max_seconds": 0.0794,
+    "owned_thread_survivors": 0,
+    "owned_process_survivors": 0,
+    "model_calls_initiated": 0,
+    "private_owner_incident_reconstructed": false
+  },
+  "validator": {"failures": 0, "advisory_warnings": 7},
+  "limits": ["No physical-input, spoken-screen-reader, OS-scaling or macOS proof", "No natural-arrival latency or completed global metric-sort claim"],
+  "verification_waiver": false
+}

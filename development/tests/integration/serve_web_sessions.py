@@ -3,6 +3,7 @@
 Stdin commands alter only in-memory synthetic history; no personal source/provider.
 """
 from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -29,6 +30,8 @@ from src.reports.models import SessionUsageRow
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.observers import observe_catalog
+from src.watch.detail_capture import DetailCapture
+from development.tests.fixtures.detail_child import run_owned_fixture
 
 
 class CaptureJobs(HelpAuditJobs):
@@ -61,6 +64,11 @@ class FixtureRuntime:
         self.unavailable = False
         self.scalar_hold = False
         self.live_root = None
+        self.detail_mode = None
+        self.detail_capture = DetailCapture(run_owned_fixture, no_progress_seconds=3)
+        self.detail_pool = ThreadPoolExecutor(max_workers=1)
+        self.detail_future = None
+        self.service.source.source_instance = 'synthetic-detail'
         self.thread = Thread(target=self.run)
 
     def start(self):
@@ -74,7 +82,15 @@ class FixtureRuntime:
                 root = self.service.source.snapshots[self.live_root].root
                 capture, _ = capture_rows(self.service, root)
                 self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
-            self.details.tick(self.service, unavailable=self.unavailable)
+            if self.detail_mode is None:
+                self.details.tick(self.service, unavailable=self.unavailable)
+            elif self.detail_future is None or self.detail_future.done():
+                if self.detail_future is not None:
+                    self.detail_future.result()
+                self.detail_future = self.detail_pool.submit(self.detail_capture.capture,
+                    self.details, self.service.source, dict(detail_test=self.detail_mode,
+                        detail_snapshots=dict(self.service.source.snapshots)), self.service.now_ms,
+                    unavailable=self.unavailable)
             if not self.scalar_hold and self.catalog.needed():
                 self.catalog.tick(self.service)
             view = project_live(summary_watch(), "UTC").to_json()
@@ -83,12 +99,20 @@ class FixtureRuntime:
 
     def close(self):
         self.stopping.set()
+        self.detail_capture.cancel()
         self.thread.join(5)
+        self.detail_pool.shutdown(wait=True, cancel_futures=True)
         if self.thread.is_alive():
             raise RuntimeError("fixture_shutdown_timeout")
 
 
 def main():
+    if sys.platform == 'win32':
+        import multiprocessing
+        executable = Path(sys.executable).with_name('pythonw.exe')
+        if not executable.is_file():
+            raise RuntimeError('fixture_gui_interpreter_unavailable')
+        multiprocessing.set_executable(str(executable))
     if sys.argv[1] == '--real-source':
         from src.web.composition import live_acquisition
         host = WebHost(ROOT, live_factory=live_acquisition)
@@ -122,6 +146,16 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command in ('detail-blocked', 'detail-recover', 'detail-progress'):
+                host.live.detail_mode = {'detail-blocked': 'blocked', 'detail-recover': 'fast',
+                    'detail-progress': 'progress'}[command]
+            elif command == 'detail-observe':
+                lane = host.live.detail_capture
+                print(json.dumps(dict(ok=True, started=lane.started_count, retired=lane.retired_count,
+                    active=lane.process is not None, metrics=lane.last_metrics,
+                    entries=[dict(key=key, **host.live.details.acquisition_status(entry))
+                        for key, entry in host.live.details.histories.items()])), flush=True)
+                continue
             elif command.startswith('catalog-'):
                 host.live.scalar_hold = True
                 catalog = host.live.catalog

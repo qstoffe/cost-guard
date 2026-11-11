@@ -51,6 +51,16 @@ class LiveInterruptionReasons:
             duplicate._observed = self._observed.copy()
         return duplicate
 
+    def records(self):
+        with self._lock:
+            return tuple(self._observed.items())
+
+    @classmethod
+    def from_records(cls, records):
+        value = cls()
+        value._observed = OrderedDict(records[-cls.MAX_OBSERVATIONS:])
+        return value
+
     def equivalent(self, other: LiveInterruptionReasons) -> bool:
         """Compare all detached contents, including changed and evicted entries."""
         with self._lock:

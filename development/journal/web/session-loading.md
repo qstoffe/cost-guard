@@ -64,3 +64,97 @@ contracts, not a reconstruction of the owner's private visual incident. Natural
 arrivals and complete global metric sorting were not established by the bounded
 installation probe and are outside this detail-loading change. No paid inference,
 new acquisition scan, shared-service stop or packaging was introduced.
+
+## Finite source acquisition FR000674
+
+### Reproduced causes and boundary
+
+The owner reported v81.21's indefinite pre-publication 0% wait, without an affected
+ID or sanitized trace. This investigation reproduces causal code paths, **not the
+unidentified private incident**. Previously, a failed service factory called
+`details.tick(None, unavailable=True)` and then dereferenced `service.source`.
+An unexpected detail-future exception escaped `tick_details` into Live's outer
+failure handler. A permanently blocked read also occupied the sole detail thread
+indefinitely. None of these paths published a useful acquisition failure; shorter
+browser polling alone could not repair them.
+
+Watch still owns admission, retry and publication. Its one supervisor thread runs
+one private spawned capture with exact-parent death ownership, detached history
+and epoch-qualified interruption evidence. Web composition injects the spawn-safe
+target; HTTP only records intent and reads detached status/chunks. The child owns
+its source, pricing/cache resources and canonical analysis, without account work
+or model calls. Ordinary detail failures are isolated from shared Live.
+
+Measured socket reads, normalized messages/parts, analyzed invocations/prompts,
+projected rows and serialization blocks renew a 120-second **silence** watchdog;
+phase-only callbacks and identical polls do not. There is no total advancing-work
+deadline. Even the shared progress lock has a bounded parent read: an unresponsive
+child holding it cannot disable cancellation/the watchdog. Retirement addresses
+only that owned child, joins termination then kill, and retains exact process/IPC
+ownership if exit cannot be confirmed. No replacement is admitted in that state.
+
+Three consecutive retryable failures exhaust the local budget, with 5/10-second
+backoff. Terminal source faults and a 120-second unadmitted queue are actionable
+failures. Opening/polling cannot renew a failed budget; explicit Retry resets
+acquisition, not verified history. Attempt/demand/source-epoch checks reject late
+outcomes. A snapshot freezes only actual verified content, not a failed generation.
+Internal file IPC is capped at 256 MiB without truncating a successful report;
+bulk serialization stays outside Live and HTTP locks.
+
+The foreground Decision Delegate selected this owned-process boundary over an
+unkillable thread-only alternative. This was an architecture decision, not an
+acceptance waiver. Normal detail-future faults also remain harmless during host
+close; an unconfirmed owned-child exit still propagates as an ownership failure.
+
+### Verification, 2026-11-11
+
+- Full: **183/183 groups passed**, 2273 tests passed and two native macOS zsh/PTY
+  tests skipped on Windows, 138.8s with four workers and a bounded 240s/file limit.
+  All **14 liveness tests** passed; coverage includes real V1 SQLite/V2 HTTP
+  adapters, archived/child cost parity, revision churn, typed errors, poison/healthy
+  peers, 1000/10000 rows, advancing work, Retry/late results, source epochs,
+  crash/start/cancel/uncertain-exit cleanup and progress-lock starvation.
+- The inherited Full had one obsolete missing-session UI-text expectation; that
+  original run was not green. The corrected real-HTTP view test and the fresh Full
+  passed. After adding the status-read/Retry-click regression, all **11 focused
+  detail tests** passed again. Duplicate clicks serialize and the original click
+  is not silently discarded while a status request completes.
+- Inherited actual hidden Chrome loading and native-page-zoom probes passed:
+  authenticated 1001-row transfer, 48 CSS-layout and 48 native-zoom cases,
+  stable geometry, focus/navigation and no hidden-tab requests.
+- Fresh authenticated hidden Chrome process-liveness acceptance passed: a truly
+  blocked child retires, a competing healthy snapshot publishes, three failed
+  attempts end in typed Retry rather than endless 0%, and repeated 25-request
+  status bursts cannot create source captures/reset the budget. The synthetic
+  silence threshold is 3s versus the production 120s; it was not enlarged to get
+  acceptance. Twenty-four error layouts cover Classic/Web light/dark, 360/1366px,
+  100/125/150% CSS zoom, focus/aria and Back/Forward. Keyboard Retry recovers exactly
+  1001 rows/100% after DOM; hidden polling adds no request and leaving a poisoned
+  route prevents old-session publication.
+- Chrome recovery took 2.579s from Retry, **1064.6ms publication-to-DOM** and
+  790.9ms first-ready-response-to-DOM, not an extra five-second poll. The capture
+  took 0.995s, 613518 input/1094581 output bytes and one snapshot read. Work counts
+  mix measured operations, not a percentage or a row-denominator estimate.
+- Edge independently passed the same process-liveness/24-layout acceptance,
+  including a final assertion that route retirement joined the fourth owned
+  child. Recovery was 2.593s, publication-to-DOM 1138.3ms, with one snapshot read.
+- Initial browser attempts failed in test transport, not accepted as PASS: console
+  children under the stdin-command host stopped entering the target after the
+  first retirement. Reusing the existing fixtures' verified sibling `pythonw.exe`
+  child interpreter resolved it, without command-pump workarounds. The initial CDP
+  Enter lacked its character text and issued no Retry; complete Enter input now
+  exercises the real button. Temporary traceback/debug pumps were removed.
+- Fresh read-only authenticated V2 installation probe: 3113 available sessions,
+  60 indexed (50 visible), first page 0.091s; pinned detail one row/one chunk in
+  2.156s, independent freeze check consistent, maximum detail HTTP 0.0794s and
+  detail-worker capture 1.608s. One Live owner remained; zero owned threads/processes
+  survived close, shared OpenCode untouched, zero initiated model calls. The bounded
+  observation did not finish the global metric sort or observe a natural arrival;
+  partial price identity evidence stayed qualified, not zero. The private incident
+  was not established. These are actual controls, not synthetic reproduction.
+
+The integrated browser was disconnected; existing hidden fresh-profile Chromium
+provides non-disruptive browser evidence. No physical input, spoken screen reader,
+OS scaling or macOS result is inferred. The working-tree validator passed with
+zero failures and seven existing advisory budget warnings. Compact evidence:
+`architecture/governance/verification/session-detail-liveness-674.json`.
