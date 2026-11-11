@@ -84,3 +84,25 @@ The real check uses an owned host against the installed source, not a reload or
 modification of an already-running user browser/host. Backend non-scan and sort
 guarantees rely on unchanged owners plus deterministic/navigation coverage, not
 an invented real-source enumeration audit.
+
+## Delivery CI provisioning repair
+
+PR #285 head `5f5ceda`: Windows, macOS ARM and Intel native CI passed. Common
+Linux Quick/validator passed (53 groups, 659 tests), but browser provisioning
+failed, followed by a pre-test Chromium-launch failure (`checks=[]`). A normal
+failed-job rerun on a fresh hosted runner repeated the provisioning/pre-launch
+failure. Full log download returned HTTP 401; it was not retried or accessed via
+another identity/route. Official check annotations and job steps establish the
+failed phases, not the installer's exact root cause.
+
+The active **Decision Delegate** authorized a distinct provisioning-only repair:
+run the common hosted job in the official
+`mcr.microsoft.com/playwright/python:v1.56.0-noble` image, with matching
+`playwright==1.56.0`. The image supplies browser binaries/Linux libraries before
+the job; the former combined dependency-install/download step is removed. The
+topology test now asserts matching image/binding versions, including negative
+mismatch cases. Product smoke assertions, fixtures, deadlines, authentic hosted
+restriction and result accounting are unchanged. No failed phase is waived or
+relabeled PASS, and no completed local Full/browser/native sweep is repeated.
+The new hosted attempt and its final outcome belong to the PR/run evidence;
+this source commit alone does not prove the container route available or passing.

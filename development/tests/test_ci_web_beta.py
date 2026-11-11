@@ -33,6 +33,8 @@ class CiEvidenceTests(unittest.TestCase):
             self.assert_workflow_topology(text)
         for broken in (workflow.replace('native-regression --scope native', 'regression --scope common'),
                        workflow.replace('cancel-in-progress: true', 'cancel-in-progress: false'),
+                       workflow.replace('python:v1.56.0-noble', 'python:v1.55.0-noble'),
+                       workflow.replace('playwright==1.56.0', 'playwright==1.55.0'),
                        workflow.replace('os: [windows-2025, macos-15, macos-15-intel]', 'os: [windows-2025]')):
             with self.assertRaises(AssertionError):
                 self.assert_workflow_topology(broken)
@@ -116,7 +118,8 @@ class CiEvidenceTests(unittest.TestCase):
         self.assertLessEqual(int(re.search(r'max-parallel:\s*(\d+)', native)[1]), 2)
         self.assertEqual({'windows-2025', 'macos-15', 'macos-15-intel'},
                          set(re.findall(r'windows-\d+|macos-[\d]+(?:-intel)?', native)))
-        self.assertRegex(common, r'playwright\s+install\s+--with-deps\s+chromium')
+        self.assertRegex(common, r'container:\s*mcr\.microsoft\.com/playwright/python:v1\.56\.0-noble\b')
+        self.assertRegex(common, r'pip\s+install\s+playwright==1\.56\.0\b')
         self.assertRegex(workflow, r'cancel-in-progress:\s*true\b')
 
     def test_native_facts_never_discover_node(self):

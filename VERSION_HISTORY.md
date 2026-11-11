@@ -4,6 +4,7 @@
 
 - Sessions silently completes expired-catalog recovery, clearing transient status on successful publication and subsequent polls without a browser reload. Existing five-second refresh, keyed metric updates and bounded reopen remain unchanged.
 - A recovered page with different membership/order retires incompatible focused/selected old rows before publishing its new URL, header and pager; matching rows retain their DOM and focus. Backend global sorting, catalog/cache semantics and actual failure controls are unchanged.
+- Hosted common CI uses the matching official Playwright Python image for preinstalled Chromium/Linux libraries, retaining the existing browser smoke, assertions and deadlines rather than downloading the browser during each run.
 
 ## v81.27 - 2026-11-11
 

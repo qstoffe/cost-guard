@@ -27,3 +27,9 @@ are not claimed. No delegated exception, source mutation, inference or new loade
 The complete specification is preserved intact. Maintenance progress advances
 127 → 128 only when this delivery reaches default. Architecture/code map and
 current Web guide/history are updated; no release archive/tag/publication.
+
+Delivery CI also includes a Decision Delegate-authorized provisioning-only repair
+after two common Linux browser-installer/pre-launch failures: use the official
+version-matched Playwright container and binding, with unchanged smoke assertions,
+deadlines and hosted-only restriction. No test waiver; final CI outcomes are in
+the PR/run evidence rather than a reporting-only source commit.
