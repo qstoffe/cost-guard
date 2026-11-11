@@ -8,6 +8,15 @@ _CLAUDE_ROUTES = frozenset({"claude-agent", "claude-code", "anthropic", "github-
 _FAMILY_ALIAS = re.compile(r"^(?:claude-)?(sonnet|opus|haiku|fable)(?:-latest)?(?:\[1m\])?$")
 
 
+def desktop_catalog_candidate(value: str, provider: str) -> bool:
+    """Opaque Agent selections may use the catalog; recorded releases stay fixed.
+
+    This does not assign a family/version or price to an unknown selection.
+    Only an exact location/provider/selection catalog observation can resolve it.
+    """
+    return provider == 'claude-agent' and not re.match(r'^claude-.+-\d', value or '', re.I)
+
+
 @lru_cache(maxsize=8192)
 def unverified_alias(value: str, provider: str = "") -> str | None:
     """Recognize moving selections without asserting a release or publisher."""

@@ -15,7 +15,7 @@ from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.analysis.period_ccost import PeriodCCostIndex, quota_window
 from src.analysis.valuation import ComparisonCost
-from src.domain import QuotaComponent
+from src.domain import QuotaComponent, CostDisposition
 from src.domain.acquisition import AcquisitionMetrics
 from src.presentation.accounts import account_ccost_lines, account_ccost_text, capacity_lines
 from src.presentation.token_mix import comparison_cost_text
@@ -30,6 +30,57 @@ def strip_ansi(value):
 
 
 class AccountPeriodCCostTests(unittest.TestCase):
+    def test_claude_agent_route_joins_only_qualified_subscription_reference_scopes(self):
+        native = replace(subscription(), plan='Pro', observations=dict(account_kind='subscription',
+            auth_status='authenticated', backend_status='first_party'))
+        entry = replace(request('agent', NOW, provider='claude-agent', amount=60000),
+            cost_disposition=CostDisposition.UNKNOWN, reported_cost=D(0))
+        # Canonical fixture rate is $1/M: $0.06 == 6 CCost credits, not native 1%.
+        native = replace(native, quotas=tuple(replace(q, remaining_fraction=D('.99')) for q in native.quotas))
+        row = project((native,), (entry,), observed_start_ms=MONTH)[0]
+        for name in ('today', '5-hour', 'weekly'):
+            self.assertEqual(D(6), dict(row.ccost_scopes)[name].ccost)
+            self.assertIn(name, row.ccost_estimated_scopes)
+        self.assertIsNone(row.billed_today)
+        for excluded in (replace(entry, cost_disposition=CostDisposition.BILLED),
+                         replace(entry, model=replace(entry.model, provider='anthropic'))):
+            self.assertEqual(0, dict(project((native,), (excluded,), observed_start_ms=MONTH)[0].ccost_scopes)['today'].ccost)
+        for observations in ({}, dict(account_kind='api_or_external'),
+                             dict(account_kind='subscription', auth_status='authenticated', backend_status='external')):
+            other = replace(native, observations=observations)
+            self.assertEqual(0, dict(project((other,), (entry,), observed_start_ms=MONTH)[0].ccost_scopes)['today'].ccost)
+        second = replace(native, ref=replace(native.ref, account_id='second'))
+        ambiguous = project((native, second), (entry,), observed_start_ms=MONTH)
+        self.assertTrue(all(dict(item.ccost_scopes)['today'] is None for item in ambiguous))
+        proven = replace(entry, account_ref=native.ref)
+        rows = project((native, second), (proven, replace(proven, session_id='fork')), observed_start_ms=MONTH)
+        self.assertEqual([D(6), D(0)], [dict(item.ccost_scopes)['today'].ccost for item in rows])
+        foreign = replace(entry, account_ref=replace(native.ref, provider_id='anthropic'))
+        self.assertEqual(0, dict(project((native,), (foreign,), observed_start_ms=MONTH)[0].ccost_scopes)['today'].ccost)
+        signed_out = replace(native, observations={})
+        self.assertEqual(D(6), dict(project((signed_out,), (proven,), observed_start_ms=MONTH)[0].ccost_scopes)['today'].ccost)
+
+    def test_agent_windows_dedup_partial_prices_and_account_rebinding_keep_exact_boundaries(self):
+        native = replace(subscription(), observations=dict(account_kind='subscription',
+            auth_status='authenticated', backend_status='first_party'))
+        start = native.quotas[0].reset_at_ms - 18000000
+        base = replace(request('agent', NOW, provider='claude-agent', amount=60000),
+            cost_disposition=CostDisposition.UNKNOWN, reported_cost=D(0))
+        entries = tuple(replace(base, message_id=str(i), completed_at_ms=when)
+            for i, when in enumerate((start - 1, start, NOW, NOW + 1)))
+        row = project((native,), entries, watch=True, observed_start_ms=MONTH)[0]
+        self.assertEqual(D(12), dict(row.ccost_scopes)['5-hour'].ccost)
+        self.assertEqual(D(18), dict(row.ccost_scopes)['weekly'].ccost)
+        partial = replace(base, message_id='unknown', completed_at_ms=NOW - 1,
+            model=replace(base.model, model='unpriced'))
+        row = project((native,), (*entries, replace(base, session_id='fork'), partial),
+            watch=True, observed_start_ms=MONTH)[0]
+        cost = dict(row.ccost_scopes)['5-hour']
+        self.assertEqual((D(12), 3, 2), (cost.known_ccost, cost.observed_requests, cost.priced_requests))
+        self.assertIsNone(cost.ccost)
+        reset = replace(native, quotas=tuple(replace(q, reset_at_ms=q.reset_at_ms + HOUR) for q in native.quotas))
+        self.assertEqual(D(6), dict(project((reset,), entries, watch=True, observed_start_ms=MONTH)[0].ccost_scopes)['5-hour'].ccost)
+
     def test_month_is_calendar_history_not_sum_of_overlapping_windows(self):
         monthly = replace(subscription("github-copilot"), quotas=(QuotaComponent("Month", "monthly"),))
         entries = tuple(request(name, when, provider=provider) for provider in ("claude-code", "github-copilot")

@@ -141,6 +141,11 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command == 'claude-agent-account':
+                    from development.tests.fixtures.claude_account import claude_account_frame
+                    publish(value=claude_account_frame(frame))
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command.startswith('context-'):
                     from development.tests.fixtures.context_deltas import context_snapshot, context_frame
                     from development.tests.fixtures.pricing_catalog import catalog

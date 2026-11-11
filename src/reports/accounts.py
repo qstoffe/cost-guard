@@ -6,7 +6,8 @@ from dataclasses import dataclass, replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
-from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window, monthly_quota_window
+from src.analysis.period_ccost import (PeriodCCostIndex, usage_provider, quota_window, monthly_quota_window,
+    account_usage_routes, combined_cost)
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
@@ -24,7 +25,7 @@ def account_projections(
     observed_start_ms: int | None = None, require_history: bool = False,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
-    providers = Counter(usage_provider(item.ref.provider_id) for item in accounts)
+    providers = Counter(route for item in accounts for route in account_usage_routes(item))
     index = period_index or PeriodCCostIndex(entries, catalog.reference_valuation)
     explained = set()
     labels: dict[str, int] = {}
@@ -122,9 +123,13 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             scopes.append((name, None))
             notes.append(f"CCost {name}: waiting for complete period history.")
             continue
-        proven = index.cost(provider, account.key, start, end, model)
-        unknown = index.cost(provider, None, start, end, model)
-        if unknown.observed_requests and providers[provider] == 1:
+        routes = account_usage_routes(account)
+        proven = combined_cost(index.cost(route, account.key, start, end, model)
+            for route in account_usage_routes(account, proven=True))
+        unassigned = [(route, index.cost(route, None, start, end, model)) for route in routes]
+        unknown = combined_cost(value for _, value in unassigned)
+        ambiguous = any(value.observed_requests and providers[route] != 1 for route, value in unassigned)
+        if unknown.observed_requests and not ambiguous:
             # Include proven requests only for this account, never another account's history.
             value = replace(proven, known_ccost=proven.known_ccost + unknown.known_ccost,
                             observed_requests=proven.observed_requests + unknown.observed_requests,
@@ -136,7 +141,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             account_unknown = True
             attribution = "account unknown / not attributable among multiple compatible accounts"
             if (provider, name) not in explained:
-                total = index.cost(provider, "provider", start, end, model)
+                total = combined_cost(index.cost(route, "provider", start, end, model) for route in routes)
                 number = str(total.known_ccost) if total.priced_requests else "N/A"
                 provider_notes.append((len(notes), name, total))
                 notes.append(f"Provider-only CCost {name}: {number}{' (partial pricing)' if not total.complete else ''}; not allocated to accounts.")

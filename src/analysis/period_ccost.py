@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from src.domain import AccountSnapshot, QuotaComponent
+from src.domain import AccountSnapshot, QuotaComponent, CostDisposition
 from src.domain.ccost import ReferenceValuation
 from src.pricing.catalog import canonical_model_name
 from .models import TraceEntry
@@ -30,7 +30,27 @@ def reconcile_usage(previous: TraceEntry | None, entry: TraceEntry) -> TraceEntr
 def usage_provider(provider: str) -> str:
     # These are supported integration aliases, not model publisher aliases.
     return {"codex": "openai", "openai-codex": "openai",
-            "github-copilot-enterprise": "github-copilot"}.get(provider, provider)
+             "github-copilot-enterprise": "github-copilot"}.get(provider, provider)
+
+
+def account_usage_routes(account: AccountSnapshot, *, proven: bool = False) -> tuple[str, ...]:
+    """Reference compatibility only; current login never proves historical billing.
+
+    Claude Agent is an SDK route, not an Anthropic publisher alias. Its unassigned
+    reference subtotal is eligible only for discovered first-party subscriptions;
+    the caller still requires a unique compatible account and marks it estimated.
+    """
+    provider = usage_provider(account.ref.provider_id)
+    evidence = account.observations
+    subscription = (provider == 'claude-code' and evidence.get('account_kind') == 'subscription'
+        and evidence.get('backend_status') == 'first_party' and evidence.get('auth_status') == 'authenticated')
+    return (provider, 'claude-agent') if subscription or proven and provider == 'claude-code' else (provider,)
+
+
+def combined_cost(values: Iterable[ComparisonCost]) -> ComparisonCost:
+    values = tuple(values)
+    return ComparisonCost(sum((v.known_ccost for v in values), Decimal(0)),
+        sum(v.observed_requests for v in values), sum(v.priced_requests for v in values))
 
 
 def quota_window(component: QuotaComponent, now_ms: int, *, include_monthly: bool = False) -> tuple[int, int, str] | None:
@@ -107,6 +127,9 @@ class PeriodCCostIndex:
         self._series: dict[tuple, _Series] = {}
         for entry in unique_usage(entries):
             provider = usage_provider(entry.model.provider)
+            if provider == 'claude-agent' and (entry.cost_disposition is CostDisposition.BILLED
+                    or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'):
+                continue  # Explicit API/foreign-account proof must not become a Pro estimate.
             account = entry.account_ref.key if entry.account_ref else None
             value = comparison_cost((entry,), valuation)
             for identity in ("provider", account):

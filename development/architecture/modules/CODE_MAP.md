@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000673: exact Claude Agent catalog identity lives in `domain/model_identity.py`
+and `sources/opencode_v2_model_identity.py`; `pricing/identities.py` owns scoped
+derived-cache semantics. Reference account compatibility lives in
+`analysis/period_ccost.py`, combined by `reports/accounts.py` for all shared views.
+Coverage: alias identity/cache and account-period tests, `fixtures/claude_account.py`,
+`probe_accounts_live.cjs --claude-agent` and `probe_web_sessions.cjs --detail-first-load`.
+The latter measures existing FR000674 runtime behavior, not another acquisition
+owner. [Independent causes and excluded live proof](../../journal/claude-agent-ccost.md).
+
 FR000674: `application/session_detail.py` owns fair attempt budgets, safe Retry and
 typed detached acquisition state; `watch/detail_capture.py` owns one supervised
 capture child and bounded private file IPC. `web/detail_worker.py` composes that

@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.24 - 2026-11-11
+
+- Claude Agent opaque selections use exact location/provider catalog evidence, including short labels when the upstream modelID remains an alias, for supported reference pricing. Recorded releases retain precedence; absent prices remain unavailable and affected derived caches repair on access.
+- Qualified Claude Code subscription accounts include compatible Claude Agent reference CCost in Today/native windows. Proven references and uniquely compatible estimated attribution stay distinct; API-billed/foreign-account traffic, ambiguity and unknown pricing never become verified Pro billing. Native quota percentages are unchanged.
+- Strengthened delayed first-load Sessions and shared Accounts/Full/Mini regressions. Existing v81.23 source-progress behavior is retained. All 13 live inference cases were NOT RUN under a scoped Decision Delegate exclusion; the published follow-up Suggestion records the missing proof.
+
 ## v81.23 - 2026-11-11
 
 - Session detail supervises one privately owned source-capture process. A read with no measured forward progress is retired safely; fair admission lets healthy peers proceed. Repeated failures become typed actionable errors rather than indefinite 0% waits. Ordinary detail faults no longer end shared Live acquisition.

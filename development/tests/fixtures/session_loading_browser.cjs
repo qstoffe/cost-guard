@@ -177,3 +177,33 @@ module.exports.zoom = async function sessionLoadingZoom({evaluate,until,command,
   return {layouts,checks:[`actual disposable-profile page zoom 100/125/150%; fixed-bounds viewport/DPR proof ${JSON.stringify(diagnostics)}`,
     '48 native-page-zoom Classic/Web light/dark loader layouts: explicit requested device/window/actual CSS widths; metrics override only for layout matrix after independent native-zoom proof; no CSS zoom or desktop effects']};
 };
+
+module.exports.firstLoad = async function firstLoad({evaluate,until,fixture}) {
+  await fixture('detail-delayed');
+  await evaluate(`window.firstLoadEvents=[];window.firstLoadStart=performance.now();
+    const status=SessionDetail.View.prototype.sourceStatus;
+    SessionDetail.View.prototype.sourceStatus=function(value){status.call(this,value);
+      firstLoadEvents.push({at:performance.now(),phase:value.acquisition?.phase,
+        count:value.acquisition?.completed,percent:this.loader.bar.value,result:!!value.result});};
+    const update=SessionDetail.View.prototype.update;
+    SessionDetail.View.prototype.update=function(value){update.call(this,value);window.firstLoadApplied=performance.now();};
+    location.hash='#/sessions/root-0000'`);
+  await until('current.detail?.data?.total===1001 && !current.detail.busy');
+  const lane=await fixture('detail-observe');
+  const measured=await evaluate(`({elapsed:firstLoadApplied-firstLoadStart,
+    appliedAt:performance.timeOrigin+firstLoadApplied,events:firstLoadEvents,
+    rows:current.detail.body.rows.length,percent:current.detail.loader.bar.value})`);
+  measured.publicationToDOM=measured.appliedAt-lane.metrics.published_at_ms;
+  // timeOrigin, not the route start, qualifies the browser/host clock join.
+  measured.publicationToBegin=await evaluate('performance.timeOrigin')+
+    measured.events.find(e=>e.result).at-lane.metrics.published_at_ms;
+  assert.ok(measured.elapsed>=5000 && measured.elapsed<15000,JSON.stringify(measured));
+  assert.ok(measured.publicationToBegin>=0 && measured.publicationToBegin<1250,JSON.stringify(measured));
+  assert.ok(measured.publicationToDOM>=0 && measured.publicationToDOM<3000,JSON.stringify(measured));
+  const pending=measured.events.filter(e=>!e.result);
+  assert.ok(pending.length>=5 && pending.length<20);
+  assert.ok(pending.some(e=>e.phase==='reading' && e.count>0));
+  assert.ok(pending.every(e=>e.percent===0),'opaque work must not manufacture a fraction');
+  assert.equal(measured.rows,1001);assert.equal(measured.percent,100);
+  return {measurements:measured,checks:['deliberate 5s source acquisition: detached 500ms pending reads, actual work counts, zero until verified rows; publication-to-begin <1.25s and 1001-row DOM <3s; 100 only after apply']};
+};
