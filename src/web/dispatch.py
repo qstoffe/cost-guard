@@ -16,6 +16,9 @@ FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKi
 SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'comparisons', 'settings'}
 MAX_ENTRIES = 12
 LEASE_SECONDS = 90
+WORKER_INTERRUPTS = {'report_unavailable', 'worker_unavailable', 'cancelled'}
+SOURCE_BLOCKERS = {'http_auth_failure', 'source_permission_denied', 'registration_invalid',
+                   'registration_unreadable', 'unsupported_schema', 'unsupported_version'}
 
 
 def source_identity(selection):
@@ -158,7 +161,10 @@ class DataDispatcher:
             ready = (result and not result.get('error') and result.get('view') and
                 (request.kind is not ReportKind.AI_STATS or any(
                     row['period'] == request.stats_scope for row in result['view'].get('ai_stats', ()))))
-            if ready:
+            work = ((result or {}).get('view') or {}).get('ai_stats_work') or {}
+            scoped = work.get('scopes', {})
+            if ready and (not entry['result'] or request.kind is not ReportKind.AI_STATS or
+                    scoped.get(request.stats_scope, {}).get('ready') is not False):
                 entry.update(result=result, result_id=key, failures=0, error=None)
             if snapshot['status'] in {'queued', 'running'}:
                 continue
@@ -174,10 +180,12 @@ class DataDispatcher:
                 if entry['error'] == 'source_identity_changed':
                     entry['result'] = None
                 entry['failures'] = min(12, entry['failures'] + 1)
-                retryable = error.get('retryable') is True
+                retryable = (error.get('retryable') is True or
+                    not error and entry['error'] in WORKER_INTERRUPTS)
                 entry['terminal'] = not retryable
                 pending = entry['error'] in {'concurrent_source_change', 'history_revision_churn',
-                    'ai_stats_revision_churn', 'ai_stats_checkpoint_busy', 'session_catalog_changed'}
+                    'ai_stats_revision_churn', 'ai_stats_checkpoint_busy', 'history_checkpoint_busy',
+                    'report_cache_busy', 'session_catalog_changed'}
                 entry['due'] = self.clock() + (min(60, 2 ** entry['failures']) if pending else
                     min(3600, 60 * 2 ** entry['failures']))
 
@@ -185,6 +193,7 @@ class DataDispatcher:
         with self.lock:
             identity = self.identity if identity is None else identity
             ready = ready and bool(identity)
+            recovered_source = ready and not self.ready
             self.ready = ready
             self._expire()
             if self.identity and identity and self.identity != identity:
@@ -209,6 +218,10 @@ class DataDispatcher:
             else:
                 self.source_error = None
                 self.source_terminal = False
+                if recovered_source:
+                    for entry in self.entries.values():
+                        if entry['terminal'] and entry['error'] in SOURCE_BLOCKERS:
+                            entry.update(terminal=False, due=0, error=None, failures=0)
             foreground = self._foreground()
             if not ready:
                 self.warm_allowed = False

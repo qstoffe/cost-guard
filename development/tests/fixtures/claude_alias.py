@@ -76,12 +76,13 @@ class DesktopSource(SyntheticMonthSource):
         super().__init__(0, 1, month_start_ms=START)
         self.snapshots = {value.root.session_id: value for value in snapshots}
         self.model, self.label, self.clock, self.catalog_reads = model, label, 0, 0
+        self.selection = 'sonnet'
         self.identities = DesktopModelCatalog(lambda: self, clock=lambda: self.clock)
 
     def json(self, route, **_kwargs):
         self.catalog_reads += 1
         return dict(location=dict(directory='/synthetic'), data=[dict(id='claude-agent')] if route == '/api/provider'
-            else [dict(providerID='claude-agent', id='sonnet', name=self.label, modelID=self.model)] if self.model else [])
+            else [dict(providerID='claude-agent', id=self.selection, name=self.label, modelID=self.model)] if self.model else [])
 
     def model_identities_current(self, models):
         return self.identities.current(models)

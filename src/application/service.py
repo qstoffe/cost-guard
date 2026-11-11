@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+import sqlite3
 from threading import Lock
 from time import time_ns
 from uuid import uuid4
@@ -138,7 +139,8 @@ class ReportApplication:
         except (StatsCheckpointError, HistoryCheckpointError) as exc:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError(str(exc), str(exc) in {
-                                    'history_revision_churn', 'ai_stats_revision_churn', 'ai_stats_checkpoint_busy'}))
+                                    'history_revision_churn', 'ai_stats_revision_churn', 'ai_stats_checkpoint_busy',
+                                    'history_checkpoint_busy', 'history_checkpoint_unavailable', 'ai_stats_checkpoint_unavailable'}))
         except SourceError as exc:
             permission = exc.exception_type == 'PermissionError'
             return ReportResult(self._instance_id, sequence, now, scope,
@@ -160,7 +162,17 @@ class ReportApplication:
         except ReportRequestError:
             # Never leak interpolated targets/paths.
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
-                                error=ReportError("report_unavailable"))
+                                 error=ReportError("report_unavailable"))
+        except (OSError, sqlite3.Error) as exc:
+            recoverable(exc, 'application-report')
+            # Only the cache connection annotates this boundary; arbitrary source
+            # transport faults must not be relabeled as a cache problem.
+            cache = hasattr(exc, 'cache_phase')
+            code = getattr(exc, 'sqlite_errorcode', None)
+            busy = type(code) is int and code & 255 in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                error=ReportError('report_cache_busy' if cache and busy else
+                    'report_cache_unavailable' if cache else 'internal_error', cache))
         except Exception as exc:
             # An adapter can contain arbitrary transport text in its exception.
             recoverable(exc, "application-report")

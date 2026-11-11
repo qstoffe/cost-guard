@@ -34,7 +34,8 @@ const AIStatsView = (() => {
     state.statsResults ||= new Map();
     for (const row of result.view.ai_stats) {
       const old = state.statsResults.get(row.period);
-      if (!old || CachedReports.observation(old) <= CachedReports.observation(result))
+      const ready = result.view.ai_stats_work?.scopes?.[row.period]?.ready !== false;
+      if (!old || ready && CachedReports.observation(old) <= CachedReports.observation(result))
         state.statsResults.set(row.period, result);
     }
     state.result = state.statsResults.get(state.period) || null;
@@ -115,9 +116,9 @@ const AIStatsView = (() => {
     update(state) {
       const e = ReportView.element;
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
-      const row = valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period) ||
-        (state.failed || state.interrupted ? empty() : null);
+      const row = valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
       if (!row) {
+        ReportView.text(this.loading, state.interrupted || (state.failed ? state.message : 'The robots are counting their adventures…'));
         if (this.content.firstChild !== this.loading) this.content.replaceChildren(this.loading);
         return;
       }
@@ -147,22 +148,6 @@ const AIStatsView = (() => {
       ContextHelp.refresh(this.root);
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }
-  }
-  function empty() {
-    const traits = ['Budget build. Dangerous potential.', 'The token furnace is on vacation.', 'The silicon crew took a nap.',
-      'Tiny adventures. Tiny tab.', 'A boss fight on a budget.', 'A quick quest. Refreshing.', 'A perfectly peaceful calendar.',
-      'Day-shift citizen. Suspiciously responsible.', 'The calendar awaits its first quest.', 'The parallel universe is on vacation.'];
-    return {metrics: definitions.map(([metric], index) => {
-      const suffix = index === 0 ? '/h' : '';
-      const value = index < 2 || index === 3 || index === 4 ? '0 CCost' + suffix :
-        [2, 5, 6].includes(index) ? '0s' : index === 7 ? '0%' : index === 8 ? '0 days' : '0';
-      const display = {value, trait: traits[index], ...(index === 0 ? {
-        calendar_rate: '0 CCost/h', workday_rate: 'No workdays', active_rate: '0 CCost/h',
-        rate_help: idleRateHelp} : {})};
-      return {metric, value: 0, display, display_units: {credits: display,
-        usd: {...display, value: index < 2 || index === 3 || index === 4 ? '$0.00' + suffix : value,
-          ...(index === 0 ? {calendar_rate: '$0.00/h', active_rate: '$0.00/h'} : {})}}};
-    })};
   }
   return {View, valid, remember, observe, prioritize};
 })();

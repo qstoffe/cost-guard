@@ -364,7 +364,10 @@ claim successful completion. Stable nodes, reserved stage height, tabular numera
 and stage-only polite announcements avoid poll-by-poll jumping or announcement spam.
 
 Authenticated source/slot waits use bounded backoff; terminal failures remain
-actionable. **Retry** is recovery-only. Every actual report child retains its
+actionable. Token Mix and AI Stats have **no Retry/Refresh action**, even after a
+failure: host backoff and automatic publication lookups own recovery. Worker/cache
+faults are report failures, not evidence that the source disconnected. Models and
+Comparisons retain their separate recovery controls. Every actual report child retains its
 8 MiB result limit, owned cancellation and parent-loss cleanup, not an elapsed-work
 abort. Managed historical work
 can resume only through bounded, verified checkpoints. No user-facing Cancel,
@@ -557,8 +560,12 @@ Session records, busiest dates and parallel parties keep their familiar places.
 
 A cold visit may briefly say the robots are warming up. Numbers arrive as the
 history is collected and improve along the way. Already loaded cards stay visible
-during refresh, period changes and interrupted updates; an empty period gets
-cheerful zero-style figures (and **No workdays** where appropriate). There is no permanent Load/Refresh toolbar or Cancel button.
+during refresh and interrupted updates; period changes reuse only the matching
+period's result. A genuinely empty period gets cheerful zero-style figures (and
+**No workdays** where appropriate), but failed acquisition without a valid result
+shows truthful report status, **never synthetic zero cards**. Incomplete refresh
+slices do not replace an already accepted same-period result. There is no
+Load/Refresh/Retry toolbar or Cancel button in any report state.
 Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**
 inactive, reusing collected history across periods, reloads and host restarts.
 Leaving the page does not discard requested work. Watch, Sessions, CLI, Token Mix

@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000678: `reports/token_mix_cache.py` emits the same identity semantics its
+decoder admits; `application/service.py` types cache failures, `history_work.py`
+distinguishes checkpoint contention, and `web/dispatch.py` owns recovery/backoff.
+`assets/app.js` / `ai-stats.js` retain valid period results and remove manual
+historical Retry/false zero fallback. Coverage: alias-cache, dispatch, Stats resume,
+loading/lifetime tests, Token Mix/Stats browser probes and opt-in
+`probe_ai_stats.cjs ... --live-history` through `serve_historical_reports.py`.
+[Reproduction and limits](../../journal/web/historical-recovery.md).
+
 FR000675: `render.js::accountHeading` adds one decorative SVG within the existing
 trusted link; `account-cards.js` retains that heading through track redraws and retains
 only native slots (not daily accounting) when quotas fail. No acquisition or pricing
