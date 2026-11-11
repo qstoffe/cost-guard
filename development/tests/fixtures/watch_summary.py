@@ -130,6 +130,28 @@ def many_cost_groups(frame):
     return replace(frame, active_cards=(replace(card, rows=(replace(row, prompt=prompt),)),))
 
 
+def secondary_estimates(frame, phase):
+    """Three independent native windows with partial→complete→reset browser updates."""
+    base = frame.quota.accounts[0]
+    primary = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.8'), duration_seconds=18000,
+        reset_at_ms=frame.now_ms + 3600000, primary=True)
+    weekly = QuotaComponent('Weekly', 'rolling', remaining_fraction=D('.9301') if phase == 'raw' else D('.93'),
+        duration_seconds=604800, reset_at_ms=frame.now_ms + 86400000)
+    later = QuotaComponent('Model daily', 'rolling', scope='model', model_id='synthetic-model',
+        remaining_fraction=D('.5'), duration_seconds=86400, reset_at_ms=frame.now_ms + 3600000)
+    if phase == 'reset':
+        weekly = replace(weekly, remaining_fraction=D(1), reset_at_ms=weekly.reset_at_ms + 604800000)
+    quotas = (primary, weekly, later)
+    costs = (ComparisonCost(D(200), 1, 1), ComparisonCost(D(1020), 3, 3 if phase == 'complete' else 2), ComparisonCost(D(40), 2, 1))
+    periods = tuple(QuotaPeriodProjection(q, None if phase in {'history', 'reset'} and q is weekly else cost, None)
+        for q, cost in zip(quotas, costs))
+    note = ('CCost Weekly: waiting for complete period history.',) if phase == 'history' else ()
+    item = replace(base, account=replace(base.account, ref=AccountRef('fixture', 'claude-code', account_id='secondary'),
+        quotas=quotas, primary_quota_label='5-hour', provider_label='Claude Code', plan='Pro'),
+        label='Claude Code Pro', quota_periods=periods, ccost_notes=note, ccost_estimated_scopes=('Weekly',))
+    return replace(frame, quota=replace(frame.quota, accounts=(item,)))
+
+
 def same_model_groups(frame):
     """Single-model linked work must still export actual main/child effort help."""
     card = frame.active_cards[0]

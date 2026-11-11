@@ -82,7 +82,7 @@ class WebQuotaPaceTests(unittest.TestCase):
             unit='messages', reset_at_ms=NOW + 86400000)
         pace = QuotaPace('Monthly', 'messages', D(80), 1, 1, D(80))
         for current, cost, availability in (
-                (quota, None, 'available'), (quota, ComparisonCost(D(100), 2, 1), 'available'),
+                (quota, None, 'available'), (quota, ComparisonCost(D(0), 2, 0), 'available'),
                 (replace(quota, reference_ccost_capacity=D(10000), used=None, remaining=None), None, 'available'),
                 (replace(quota, unlimited=True), None, 'available'),
                 (replace(quota, window_active=False), ComparisonCost(D(100), 1, 1), 'available'),
@@ -94,6 +94,18 @@ class WebQuotaPaceTests(unittest.TestCase):
             with self.subTest(quota=current, availability=availability):
                 self.assertIsNone(wire['quota']['ccost_pace'])
                 self.assertEqual('80', wire['pace']['per_day'], 'the native contract is independent')
+
+    def test_provisional_priced_subtotal_supplies_the_same_qualified_remaining_pace(self):
+        quota = QuotaComponent('Monthly', 'fixed', used=D(20), limit=D(100), remaining=D(80),
+            unit='messages', reset_at_ms=NOW + 86400000)
+        period = QuotaPeriodProjection(quota, ComparisonCost(D(100), 2, 1),
+            QuotaPace('Monthly', 'messages', D(80), 1, 1, D(80)))
+
+        wire = with_display(watch_quota(quota, period), now_ms=NOW).to_json()['quota']
+
+        self.assertEqual('400', wire['ccost_pace']['ccost_per_day'])
+        self.assertEqual('ratio', wire['ccost_pace']['capacity_basis'])
+        self.assertIn('unpriced usage may make this low', wire['display']['capacity_help'])
 
     def test_verified_native_reference_mapping_drives_pace_without_observed_cost(self):
         quota = QuotaComponent('Monthly', 'fixed', used=D(3), limit=D(10), remaining=D(7), unit='messages',

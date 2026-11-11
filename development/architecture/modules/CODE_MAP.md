@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000677: `application/quota_ccost.py` accepts qualified priced same-window subtotals
+for provisional Capacity/30-day estimates and prepares fact-specific unknown help.
+`render.js::quotaCapacityHelp` preserves those server reasons on shared cards. History,
+attribution, scope joins and native accounting retain their owners. Coverage: quota-CCost,
+account-period and pace tests, `fixtures/account_capacity.cjs`, hidden
+`probe_accounts_live.cjs ... --secondary-capacity` and `probe_web_live.py --accounts --quota-capacity`.
+[Causes and evidence](../../journal/web/secondary-capacity.md).
+
 FR000678: `reports/token_mix_cache.py` emits the same identity semantics its
 decoder admits; `application/service.py` types cache failures, `history_work.py`
 distinguishes checkpoint contention, and `web/dispatch.py` owns recovery/backoff.

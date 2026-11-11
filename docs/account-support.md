@@ -20,6 +20,9 @@ guaranteed budget. Numeric inferred Capacity carries leading **~** on Web cards;
 verified comparable native limits do not. Unknown card estimates show **?**, native
 unlimited Capacity **Unlimited**; neither gets an approximation marker. Nonmonthly
 quotas also retain their theoretical 30-day **Monthly Capacity**, or **?** with reason help.
+Positive priced same-window subtotals can support provisional estimates even with unpriced
+requests; Capacity help says the estimate may be low. Missing history, ambiguous accounts,
+unidentified model scopes and unusable native windows remain unknown with specific help.
 Each ordinal bar/divider aligns with same-row peers, without fake missing quotas.
 A verified
 idle 0%-Used window has native 100% Remaining even when reference Capacity is unknown.

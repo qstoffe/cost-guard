@@ -76,8 +76,10 @@ positive used fraction `f`, Capacity is `U/f` and Remaining is `U*(1-f)/f`.
 For verified account-scoped Copilot monthly AI credits, Capacity instead uses the
 actual included native limit and Remaining uses native credits remaining; independent
 observed Used CCost need not reconcile with them. No plan limits are hardcoded.
-Partial/unpriced/missing history, ambiguous attribution, stale/reset or invalid evidence
-withhold the extrapolation. Zero native usage alone cannot establish numeric Capacity.
+Partial pricing alone does not withhold a useful positive same-window priced subtotal:
+Capacity help qualifies the provisional estimate because unpriced usage may make it low.
+No priced sample, missing period history, ambiguous attribution, stale/reset or invalid
+evidence still withhold extrapolation. Zero native usage cannot establish numeric Capacity.
 Full Watch shows Capacity above every quota bar; Mini keeps it in accessible help;
 Accounts uses only matching cost already present in its report, without more scans.
 Credits/USD converts all reference figures, not native allocation/billing or percentages.

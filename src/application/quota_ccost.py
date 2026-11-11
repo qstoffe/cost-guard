@@ -24,7 +24,7 @@ def capacity_period(values):
     return monthly, duration, (label + " Capacity" if label else "Capacity")
 
 
-def monthly_values(values, capacity, cost, coherent, current, now_ms):
+def monthly_values(values, capacity, capacity_reason, coherent, current, now_ms):
     monthly, duration, label = capacity_period(values)
     if monthly:
         return dict(capacity_label=label, monthly_capacity=None, monthly_reason="", monthly_applicable=False)
@@ -41,10 +41,8 @@ def monthly_values(values, capacity, cost, coherent, current, now_ms):
         reason = "No verified active recurring quota window."
     elif not coherent:
         reason = "Contradictory native quota amounts or fractions."
-    elif cost and not cost.get("complete"):
-        reason = "Same-window usage has incomplete attribution or pricing."
     elif capacity is None or not capacity.is_finite() or capacity <= 0:
-        reason = "No compatible same-window reference CCost Capacity."
+        reason = capacity_reason or "No compatible same-window reference CCost Capacity."
     raw = None if reason else capacity * Decimal(30 * 24 * 3600) / Decimal(duration)
     return dict(capacity_label=label, monthly_capacity=raw, monthly_reason=reason, monthly_applicable=True)
 
@@ -59,7 +57,7 @@ def period_capacity_help(reference, values):
     if basis == "unlimited":
         return "The provider reports an unlimited quota; no finite reference Capacity applies."
     if capacity is None:
-        return "No reliable same-window reference CCost or source-confirmed full-window allowance."
+        return reference["capacity_reason"]
     if basis == "native":
         provenance = ("Source-verified reference CCost allowance." if values.get("reference_ccost_capacity") is not None
             else "Provider-reported AI credit allowance, converted to reference Credits.")
@@ -71,6 +69,8 @@ def period_capacity_help(reference, values):
         "Unrounded Capacity (estimate): " + exact_number(used) + " ÷ " + exact_number(fraction) + " = " + raw_reference(capacity))
     if reference["context"]["estimated"]:
         text += "\nUses estimated account attribution."
+    if not reference["cost"].get("complete"):
+        text += "\nEstimate from priced requests; unpriced usage may make this low."
     return text + usd_precision_help(capacity)
 
 
@@ -117,6 +117,34 @@ def native_reference_amounts(capacity, limit, used, remaining, fraction, *, dire
         remaining = capacity * fraction
         used = capacity - remaining
     return used, remaining
+
+
+def unavailable_capacity_reason(values, context, cost, used, fraction, coherent, current, convertible, now_ms):
+    """Explain the failed eligibility fact; never substitute another quota's cost."""
+    if not current:
+        return "Quota source is stale, unavailable or expired; refresh the native quota."
+    if not coherent:
+        return "Contradictory native quota amounts or fractions."
+    deadline, duration = values.get("reset_at_ms"), values.get("duration_seconds")
+    if values.get("window_active") is False:
+        return "No verified active quota window; the window is inactive or resetting."
+    if convertible:
+        return "No valid source-confirmed finite reference allowance."
+    if values.get("scope") not in {"account", "model"}:
+        return "No compatible account or model quota scope for period CCost."
+    if values.get("scope") == "model" and not values.get("model_id"):
+        return "No reliable model identity for this model-specific quota's period CCost."
+    if deadline is None or duration and now_ms is not None and now_ms < deadline - duration * 1000:
+        return "No verified active matching quota window; check the native reset boundary."
+    if not cost:
+        return "No compatible same-window reference CCost. " + (context["note"] or "Period cost history is unavailable.")
+    if not cost.get("priced_requests") and cost.get("observed_requests"):
+        return "No priced requests in this quota window; no usable reference CCost sample."
+    if used is None or used <= 0:
+        return "No positive same-window reference CCost sample."
+    if fraction is None:
+        return "Native fraction used is unknown; refresh the native quota."
+    return "Native fraction used is zero; a positive fraction is needed for a Capacity estimate."
 
 
 def quota_ccost_values(values, now_ms):
@@ -173,13 +201,15 @@ def quota_ccost_values(values, now_ms):
             active = (values.get("window_active") is not False and deadline is not None and
                       (not duration or now_ms is None or deadline - duration * 1000 <= now_ms))
             if (active and fraction is not None and 0 <= fraction < 1 and used is not None and used > 0
-                    and cost.get("complete") and values.get("scope") in {"account", "model"}
+                    and cost.get("priced_requests", 0) > 0 and values.get("scope") in {"account", "model"}
                     and (values.get("scope") != "model" or values.get("model_id"))):
                 basis, capacity = "ratio", used / (1 - fraction)
                 remaining = capacity - used
-    return dict(**monthly_values(values, capacity, {} if basis == "native" else cost, coherent, current, now_ms),
+    reason = (unavailable_capacity_reason(values, context, cost, used, fraction, coherent, current, convertible, now_ms)
+        if basis == "unknown" else "")
+    return dict(**monthly_values(values, capacity, reason, coherent, current, now_ms),
                 context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
-                basis=basis, coherent=coherent, current=current,
+                basis=basis, coherent=coherent, current=current, capacity_reason=reason,
                 fraction_used=1 - fraction if basis == "ratio" else None)
 
 

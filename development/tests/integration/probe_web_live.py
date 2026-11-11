@@ -122,6 +122,7 @@ def main():
     parser.add_argument("--watch-seconds", type=int, default=90,
         help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
     parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
+    parser.add_argument('--quota-capacity', action='store_true', help='With --accounts, inspect raw quota/window/cost eligibility; no account identifiers or credentials.')
     parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
     parser.add_argument("--tool-invocations", action="store_true", help="Observe active invocation DTOs without waiting for unrelated Earlier coverage; scalar evidence only.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
@@ -243,6 +244,26 @@ def main():
                 reference_quotas=check_reference_quotas(current['accounts']),
                 estimate_quotas=check_estimate_quotas(current['accounts']),
                 finite_jobs_started=0, model_calls_started_by_probe=0)))
+            if args.quota_capacity:
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline and any('waiting for complete period history' in slot['note']
+                        for item in current['accounts']['accounts'] for slot in (item['primary'], *item['secondary'])):
+                    time.sleep(.5)
+                    state, _ = get('/api/live', cookie=cookie)
+                    current = state['values']['live']['view']
+                for item in current['accounts']['accounts']:
+                    for ordinal, slot in enumerate((item['primary'], *item['secondary'])):
+                        quota = slot['quota']
+                        context = quota.get('period_ccost') or {}
+                        duration, reset = quota['duration_seconds'], quota['reset_at_ms']
+                        print(json.dumps(dict(quota_capacity=dict(provider=context.get('provider_id'), ordinal=ordinal,
+                            scope=quota['scope'], model=quota['model_id'], duration_seconds=duration, reset_at_ms=reset,
+                            start_at_ms=reset-duration*1000 if reset and duration else None,
+                            remaining_fraction=quota['remaining_fraction'], availability=quota['availability'],
+                            window_active=quota['window_active'], cost={key: context['cost'][key] for key in
+                                ('known_ccost', 'observed_requests', 'priced_requests', 'complete')} if context.get('cost') else None,
+                            estimated=context.get('estimated'), note=context.get('note'),
+                            reference=quota.get('ccost_reference'), capacity_help=quota['display']['capacity_help']))))
         if args.sessions:
             from development.tests.integration.session_catalog_observations import observe_sessions
             observations.stage = 'sessions'

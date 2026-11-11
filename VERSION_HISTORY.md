@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.27 - 2026-11-11
+
+- Accounts and Full Watch permit provisional primary/secondary/later Capacity estimates from positive priced CCost within the matching native window, even when other requests are unpriced. Capacity help discloses the potentially low subtotal, raw fraction/calculation and estimated account attribution; native verified allowances remain exact.
+- Nonmonthly recurring quotas derive their theoretical 30-day Monthly Capacity from the same unrounded Decimal estimate. Missing history, account ambiguity, unsupported model scope, absent/zero samples, native zero usage and invalid/stale/reset windows stay unknown with their actual reason instead of generic browser help. Native bars, accounting, units and retained card identity are unchanged.
+
 ## v81.26 - 2026-11-11
 
 - Token Mix and AI Stats correctly mark newly encoded opaque Claude Agent facts under the same identity semantics their decoder requires. Affected old derived entries rebuild lazily; source history and useful validation are unchanged.

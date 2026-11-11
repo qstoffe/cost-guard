@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.26, 2026-11-11), the supported distribution.
+Use **current `main`** (v81.27, 2026-11-11), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.26 (2026-11-11):** Token Mix and AI Stats repair historical acquisition for opaque Claude Agent selections, recover automatically without Retry buttons and preserve valid results. Failed AI Stats acquisition shows report status, never ten fabricated zeros. [Cause and verification](development/journal/web/historical-recovery.md).
+**v81.27 (2026-11-11):** Accounts and Full Watch estimate secondary/later quota Capacity and its 30-day equivalent from usable same-window priced subtotals, with explicit partial-pricing qualification. Unsupported evidence stays unknown with a specific explanation. [Cause and verification](development/journal/web/secondary-capacity.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

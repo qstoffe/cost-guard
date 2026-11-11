@@ -146,6 +146,11 @@ def main():
                     publish(value=claude_account_frame(frame))
                     print('{"ok":true}', flush=True)
                     continue
+                if command.startswith('secondary-capacity-'):
+                    from development.tests.fixtures.watch_summary import secondary_estimates
+                    publish(value=secondary_estimates(frame, command.removeprefix('secondary-capacity-')))
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command.startswith('midnight-'):
                     from development.tests.fixtures.account_midnight import midnight_frame
                     publish(value=midnight_frame(frame, command.removeprefix('midnight-')), timezone_name='Europe/Stockholm')
