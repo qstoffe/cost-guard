@@ -154,15 +154,24 @@ const ReportView = (() => {
     return accountDestinations.get(obs.provider_id);
   }
   function accountHeading(observation) {
-    const heading = element('h4'); let label, linked;
+    const heading = element('h4'); let label, name, linked;
     bind(heading, () => {
       const obs = observation(), href = accountDestination(obs);
       if (!label || linked !== Boolean(href)) {
         linked = Boolean(href); label = element(linked ? 'a' : 'span', undefined, linked ? 'account-provider-link' : undefined);
-        if (linked) { label.target = '_blank'; label.rel = 'noopener noreferrer'; }
+        name = linked ? element('span') : label;
+        if (linked) {
+          label.target = '_blank'; label.rel = 'noopener noreferrer';
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('class', 'account-link-icon'); icon.setAttribute('viewBox', '0 0 24 24');
+          icon.setAttribute('aria-hidden', 'true'); icon.setAttribute('focusable', 'false');
+          const chain = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          chain.setAttribute('d', 'M10 13a5 5 0 0 0 7 .2l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.2l-3 3a5 5 0 0 0 7 7l1.7-1.7');
+          icon.append(chain); label.append(icon, name);
+        }
         heading.replaceChildren(label);
       }
-      text(label, obs.label);
+      text(name, obs.label);
       if (linked) {
         label.href = href;
         label.setAttribute('aria-label', `${obs.label} — provider usage or settings (opens in a new tab)`);

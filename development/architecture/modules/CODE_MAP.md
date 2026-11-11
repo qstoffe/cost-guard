@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000675: `render.js::accountHeading` adds one decorative SVG within the existing
+trusted link; `account-cards.js` retains that heading through track redraws and retains
+only native slots (not daily accounting) when quotas fail. No acquisition or pricing
+boundary changes. Coverage: `fixtures/account_links.cjs`, `account_today.cjs`,
+`test_ccost_midnight.py`, hidden `probe_account_links.cjs` and `probe_account_today.cjs`
+through the Accounts driver; read-only `probe_web_live.py --accounts --daily`.
+[Causes and limits](../../journal/web/account-today.md).
+
 FR000673: exact Claude Agent catalog identity lives in `domain/model_identity.py`
 and `sources/opencode_v2_model_identity.py`; `pricing/identities.py` owns scoped
 derived-cache semantics. Reference account compatibility lives in
@@ -233,7 +241,7 @@ and valuation gates. `analysis/cache.py`, `session_cost.py`, `reports/session_su
 repair, unaffected hits and real subprocess restarts. [Evidence](../../journal/claude-alias-identity.md).
 
 FR000636: `render.js::accountHeading` owns the reviewed static provider destinations
-and bound text-only external heading links for shared `account-cards.js` and legacy
+and bound external heading links for shared `account-cards.js` and legacy
 cards. `fixtures/account_links.cjs` (via `web_watch_summary.cjs`) covers every supported
 ID, API/subscription distinctions, hostile labels/IDs and stable refresh/redraws;
 `probe_account_links.cjs` runs through the shipped Accounts/Watch browser probe.

@@ -353,7 +353,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .report-concepts { margin-block: var(--space-5); }
 .report-concepts > div { padding: var(--space-4); border-left: 3px solid var(--accent); background: var(--surface); border-radius: .5rem; min-width: 0; }
 .report-concepts h3, .account-card h4 { margin: 0; }
-.account-provider-link { color: inherit; text-decoration: none; cursor: pointer; }
+.account-provider-link { display: inline-flex; align-items: center; gap: .35em; max-width: 100%; vertical-align: middle; color: inherit; text-decoration: none; cursor: pointer; }
+.account-provider-link > span { min-width: 0; }
+.account-link-icon { flex: none; width: .85em; height: .85em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .account-provider-link:is(:hover, :focus-visible) { color: inherit; text-decoration: underline; text-underline-offset: .15em; }
 .account-provider-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 2px; }
 .metric-value { font-weight: 650; font-variant-numeric: tabular-nums; }

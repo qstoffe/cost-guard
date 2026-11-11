@@ -535,5 +535,6 @@ assert.equal(page.root.textContent, 'No configured accounts detected.', 'observe
 assert.equal(page.cards.size, 0);
 require('../fixtures/live_status.cjs')(vm, context, value => value == null ? now : (now = value));
 require('../fixtures/account_links.cjs')(vm, context, monthly);
+require('../fixtures/account_today.cjs')(vm, context, monthly, helpText);
 require('../fixtures/account_capacity.cjs')(vm,context,capacitySample,helpText);
 console.log('watch summary passed');

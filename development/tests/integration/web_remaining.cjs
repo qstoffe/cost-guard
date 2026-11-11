@@ -15,7 +15,7 @@ class Node {
 const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');
-const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, Date});
+const context = vm.createContext({document: {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag)}, output, Date});
 const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('src/web/assets/token-mix.js', 'utf8'), context);
@@ -74,7 +74,7 @@ console.log('PASS shared session clocks/context, bounded rows/full totals, CLI h
 
 // A CLI/report USD default never leaks into the independent Web default.
 const freshOutput = new Node('main');
-const fresh = vm.createContext({document: {createElement: tag => new Node(tag)}, output: freshOutput,
+const fresh = vm.createContext({document: {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag)}, output: freshOutput,
   result: {...input.session, view: {...input.session.view, ccost_display_unit: 'usd'}}, Date});
 require('../fixtures/web_help_vm.cjs')(vm, fresh);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), fresh);

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.25 - 2026-11-11
+
+- Accounts and Full Watch show one decorative outline chain icon inside each trusted provider heading link. Unknown providers remain plain text; destinations, new-tab semantics, accessible names, wrapping and keyboard focus are preserved, including quota-track redraws.
+- Native quota failures no longer freeze independently published account CCost Today or its explanation. Cross-provider regressions cover local midnight, Stockholm winter/summer/DST and UTC, late history, partial/unknown pricing, account isolation and global Today. A new-day zero before eligible usage remains correct; the owner's original midnight incident is not retrospectively proven.
+
 ## v81.24 - 2026-11-11
 
 - Claude Agent opaque selections use exact location/provider catalog evidence, including short labels when the upstream modelID remains an alias, for supported reference pricing. Recorded releases retain precedence; absent prices remain unavailable and affected derived caches repair on access.

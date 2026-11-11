@@ -88,6 +88,26 @@ def check_estimate_quotas(accounts):
     return dict(checked_amounts=count)
 
 
+def check_account_today(accounts):
+    """Observe daily accounting separately from native quota availability; no private values."""
+    from src.analysis.valuation import ComparisonCost
+    from src.numbers import ccost_display
+    from src.presentation.accounts import account_ccost_text
+    results = []
+    for item in accounts['accounts']:
+        cost = next(scope['cost'] for scope in item['ccost_scopes'] if scope['name'] == 'today')
+        state = 'unknown'
+        if cost is not None:
+            value = ComparisonCost(Decimal(cost['known_ccost']), cost['observed_requests'], cost['priced_requests'])
+            for unit in ('credits', 'usd'):
+                with ccost_display(unit):
+                    assert cost['display_units'][unit]['account_ccost'] == account_ccost_text(value), 'account Today display'
+            state = ('unpriced' if value.observed_requests and not value.priced_requests else
+                'partial' if not value.complete else 'positive' if value.known_ccost > 0 else 'zero')
+        results.append(dict(provider=item['observation']['provider_id'], today=state))
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
@@ -395,6 +415,7 @@ def main():
                     print(json.dumps(dict(daily='ok', requests=mix['request_count'], prompts=daily['prompt_count'],
                         prompt_count_complete=daily['prompt_count_complete'], cost_complete=total['complete'],
                         category_costs_reconcile=True, quiet_daily_units=True,
+                        account_today=check_account_today(live['view']['accounts']),
                         seconds=round(time.monotonic() - started, 3))))
                     break
                 if live.get('state') in {'failed', 'internal_error'}:

@@ -96,6 +96,11 @@ async function main() {
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    if(process.argv.includes('--midnight')) {
+      await require('./probe_account_today.cjs')({evaluate,fixture,until,navigate,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0};return;
+    }
     if(process.argv.includes('--claude-agent')) {
       await fixture('claude-agent-account');
       await until(`document.querySelectorAll('#result .watch-subscription').length === 1`);
@@ -120,7 +125,12 @@ async function main() {
       await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom,baseline:true});
       evidence={outcome:'OBSERVED',browser:version.product,browserZoom,checks,layouts};return;
     }
-    await require('./probe_account_links.cjs')({command,evaluate,sessionId,navigate,checks,layouts,openEvents,browserZoom});
+    if(!process.argv.includes('--skip-links'))
+      await require('./probe_account_links.cjs')({command,evaluate,sessionId,navigate,checks,layouts,openEvents,browserZoom});
+    if(process.argv.includes('--links-only')) {
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',browser:version.product,browserZoom,checks,layouts};return;
+    }
     await require('./probe_quota_pace.cjs')({evaluate,navigate,checks});
     await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'})))()`);
     await command('Page.reload',{},sessionId);
@@ -130,7 +140,7 @@ async function main() {
     checks.push('Explicit Credits reference pace survives a real Settings save and page reload');
     await evaluate(`window.savedCard=document.querySelector('.watch-subscription');window.savedBar=savedCard.querySelector('progress');
       window.savedHelp=savedCard.querySelector('.watch-quota-capacity span');savedHelp.focus();
-      window.savedText=savedCard.querySelector('h4 a').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
+      window.savedText=savedCard.querySelector('h4 a > span').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
       window.mutations=0;window.observer=new MutationObserver(events=>mutations+=events.filter(e=>e.type==='childList').length);
       observer.observe(document.querySelector('.watch-account-grid'),{subtree:true,childList:true});`);
     for (let n=0;n<5;n++) await fixture('running');

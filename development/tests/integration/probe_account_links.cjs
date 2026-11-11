@@ -27,14 +27,23 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
         hover:linkTarget.matches(':hover'),decoration:a.textDecorationLine,cursor:a.cursor,color:a.color,headingColor:h.color,
         exhausted:linkCard.dataset.exhausted,overflow:document.documentElement.scrollWidth>innerWidth,
         unknown:document.querySelectorAll('#result .watch-subscription')[1].querySelector('h4 a')===null,
-        href:linkTarget.href,target:linkTarget.target,rel:linkTarget.rel};})()`);
+        href:linkTarget.href,target:linkTarget.target,rel:linkTarget.rel,
+        icon:(()=>{const svg=linkTarget.querySelector('svg'),r=svg.getBoundingClientRect(),t=linkTarget.lastChild.getBoundingClientRect(),
+          a=linkTarget.getBoundingClientRect(),h=linkTarget.parentNode.getBoundingClientRect();return {
+          count:linkTarget.querySelectorAll('svg').length,hidden:svg.getAttribute('aria-hidden'),focusable:svg.getAttribute('focusable'),
+          width:r.width,height:r.height,before:r.right<t.left,centered:Math.abs((a.left+a.right-h.left-h.right)/2)<2,
+          color:getComputedStyle(svg).stroke,display:getComputedStyle(svg).display};})()};})()`);
       assert.equal(facts.hover,true); assert.equal(facts.decoration,'underline'); assert.equal(facts.cursor,'pointer');
       assert.equal(facts.color,facts.headingColor); assert.equal(facts.exhausted,String(exhausted));
       assert.equal(facts.overflow,false); assert.equal(facts.unknown,true);
       assert.equal(facts.href,'https://github.com/settings/copilot/features');
       assert.equal(facts.target,'_blank'); assert.equal(facts.rel,'noopener noreferrer');
+      assert.equal(facts.icon.count,1);assert.equal(facts.icon.hidden,'true');assert.equal(facts.icon.focusable,'false');
+      assert.ok(facts.icon.width>0&&facts.icon.height>0);assert.equal(facts.icon.before,true);assert.equal(facts.icon.centered,true);
+      assert.equal(facts.icon.color,facts.color);assert.notEqual(facts.icon.display,'none');
       await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},sessionId);
       assert.equal(await evaluate(`getComputedStyle(linkTarget).textDecorationLine`),'none');
+      assert.equal(await evaluate(`getComputedStyle(linkTarget.querySelector('svg')).visibility`),'visible');
       await evaluate('linkTarget.focus()');
       await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
       await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
@@ -45,6 +54,8 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
       assert.equal(focus.focused,true); assert.equal(focus.visible,true); assert.equal(focus.outline,'solid');
       assert.ok(parseFloat(focus.width)*zoom*browserZoom>=1.8,
         'focus outline remains visibly at least two rendered pixels under CSS/browser zoom: '+JSON.stringify(focus));
+      assert.equal(await evaluate(`(()=>{const saved=linkTarget;ReportView.syncUnits(linkCard);
+        return document.activeElement===saved&&saved.querySelectorAll('svg').length===1})()`),true);
       await evaluate('linkTarget.blur()');
       layouts.push({case:'account-links',width,zoom,browserZoom,theme,route,exhausted,hover:true,keyboard:true,overflow:false});
     }
@@ -54,6 +65,10 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
     window.linkTarget=document.querySelector('#result .watch-subscription h4 a');linkTarget.scrollIntoView({block:'center'});
     window.linkStreams=probeStreams;window.linkRequests=probeURLs.length;window.linkLocation=location.href;
     window.linkConnection=liveConnection;window.linkCSRF=csrf;`);
+  assert.equal(await evaluate(`(()=>{linkTarget.focus();const item=structuredClone(linkCase);
+    item.accounts.accounts[0].primary.quota.reset_at_ms=null;current.accounts.update(item);
+    const retained=document.activeElement===linkTarget&&linkTarget.querySelectorAll('svg').length===1;
+    current.accounts.update(linkCase);linkTarget.blur();return retained;})()`),true,'track redraw retains link focus and icon');
   const ax = await command('Accessibility.getFullAXTree',{},sessionId);
   assert.ok(ax.nodes.some(node=>node.role?.value==='link'&&node.name?.value===
     'GitHub Copilot — long account heading with wrapping at narrow widths — provider usage or settings (opens in a new tab)'));
@@ -63,10 +78,10 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
   for (const type of ['mousePressed','mouseReleased'])
     await command('Input.dispatchMouseEvent',{type,...padding,button:'left',clickCount:1},sessionId);
   assert.deepEqual((await command('Target.getTargets')).targetInfos.map(target=>target.targetId).sort(),[...targetsBefore].sort());
-  for (const mode of ['pointer','touch']) {
-    const point = await evaluate(`(()=>{const r=linkTarget.getClientRects()[0];return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  for (const mode of ['icon','pointer','touch']) {
+    const point = await evaluate(`(()=>{const r=linkTarget.${mode==='icon' ? "querySelector('svg').getBoundingClientRect()" : 'lastChild.getClientRects()[0]'};return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
     const opened = openEvents.length;
-    if (mode==='pointer') {
+    if (mode!=='touch') {
       for (const type of ['mousePressed','mouseReleased'])
         await command('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1},sessionId);
     } else {
@@ -95,5 +110,5 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
   await command('Emulation.setTouchEmulationEnabled',{enabled:false},sessionId);
   await evaluate(`AccountCards.View.prototype.update=linkUpdate;delete window.linkUpdate;
     document.documentElement.dataset.theme=linkTheme;current.accounts.update(linkOriginal)`);
-  checks.push('Account links: Watch/Accounts normal/exhausted Classic/Web light/dark at 360/1280 and 100/125% zoom; hover/leave, native Tab focus, AX purpose, plain unknown, header padding inert, pointer/touch each open one new tab; same Live connection/CSRF/route, only ordinary snapshot/interest heartbeats permitted');
+  checks.push('Account links: Watch/Accounts normal/exhausted Classic/Web light/dark at 360/1280 and 100/125% CSS zoom; decorative visible/centered chain before wrapping text, hover/leave, native Tab focus, AX purpose, plain unknown, header padding inert, icon/text pointer and touch each open one new tab; focus/icon retained on track redraw, same Live connection/CSRF/route');
 };
