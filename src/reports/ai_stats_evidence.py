@@ -13,6 +13,10 @@ COVERAGE = 'ai-stats-coverage-2'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)
 
 
+class ModelCatalogChanged(ValueError):
+    """Compact identities no longer match the source's current catalog."""
+
+
 def payload(bundle, reference, snapshot, config):
     intervals = [(p.prompt_time_ms, p.execution_duration_ms, p.in_progress) for p in bundle.prompts]
     intervals.extend((c.created_at_ms, c.duration_ms, c.in_progress) for c in bundle.compactions)
@@ -25,7 +29,7 @@ def payload(bundle, reference, snapshot, config):
 def decoded(value, root, source=None):
     facts = decode(value['usage'])
     if not current(source, (entry.model for entry, _prompt, _cost in facts)):
-        raise ValueError('changed_model_catalog')
+        raise ModelCatalogChanged('changed_model_catalog')
     intervals = value['intervals']
     if (not isinstance(intervals, list) or type(value['pending']) is not bool
             or type(value['complete']) is not bool):

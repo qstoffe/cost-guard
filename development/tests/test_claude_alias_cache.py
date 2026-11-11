@@ -104,6 +104,29 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                         row = next(row for row in results[0]['ai_stats'] if row['period'] == 'all')
                         self.assertGreater(D(row['metrics'][1]['value']), 0)
 
+    def test_catalog_turnover_during_fresh_stats_is_retryable_then_recovers(self):
+        from src.application import ReportApplication
+        from src.reports.ai_stats_evidence import payload
+        original = desktop_service(self)
+
+        def turn_catalog(*args):
+            value = payload(*args)
+            original.source.model, original.source.label, original.source.clock = 'claude-sonnet-4', 'Sonnet 4', 31
+            return value
+
+        first = reopen(original, shared=True)
+        with patch('src.reports.ai_stats.payload', side_effect=turn_catalog), patch('src.application.service.recoverable'):
+            failed = ReportApplication(lambda *_: first, clock=lambda: first.now_ms).execute(
+                ReportRequest(ReportKind.AI_STATS)).to_json()
+
+        self.assertEqual(dict(code='ai_stats_revision_churn', retryable=True), failed['error'])
+        self.assertIsNone(failed['view'])
+        fresh = reopen(original, shared=True)
+        recovered = ReportApplication(lambda *_: fresh, clock=lambda: fresh.now_ms).execute(
+            ReportRequest(ReportKind.AI_STATS)).to_json()
+        self.assertIsNone(recovered['error'])
+        self.assertGreater(D(recovered['view']['ai_stats'][-1]['metrics'][1]['value']), 0)
+
     def test_catalog_turnover_revalidates_all_compact_caches_without_reloading_pinned_roots(self):
         for mode in ('analysis', 'summary', 'mix', 'stats', 'matches'):
             with self.subTest(mode=mode):

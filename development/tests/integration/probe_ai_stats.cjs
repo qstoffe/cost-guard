@@ -46,7 +46,9 @@ async function main() {
       host:typeof hostState==='undefined'?null:hostState.kind,
       active:typeof current==='undefined'?null:current?.active,
       percent:typeof current==='undefined'?null:current?.percent,
-      hidden:document.hidden})`,target);
+      hidden:document.hidden, managed:typeof demand!=='undefined' && !!demand,
+      checkedAgo:typeof current==='undefined'?null:Date.now()-current?.checkedAt,
+      scheduled:typeof cachedReportTimer!=='undefined' && cachedReportTimer!==null})`,target);
     server.stdin.write('{"command":"jobs-status"}\n');
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));

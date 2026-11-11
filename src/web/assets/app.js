@@ -19,6 +19,7 @@ let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
+let cachedReportOwner = null;
 let demand = null; // Enabled only after the authenticated host advertises it.
 const sourceNotice = document.getElementById('source-compatibility');
 function sourceNoticeGeometry() {
@@ -33,18 +34,28 @@ function firstReport(state = current) {
   }
 }
 function scheduleCachedReport() {
-  clearTimeout(cachedReportTimer);
   const state = current;
-  if (!historical(state) || !state.result && !(automaticHistory(state) && state.failed) || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) return;
+  if (!historical(state) || !state.result && !(automaticHistory(state) && state.failed) || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
+    clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
+  }
+  // Live health arrives more often than the lookup interval. Keep the existing
+  // deadline rather than debouncing automatic recovery forever on a healthy host.
+  if (demand && cachedReportTimer !== null && cachedReportOwner === state) return;
+  clearTimeout(cachedReportTimer); cachedReportOwner = state;
+  const check = () => {
+    cachedReportTimer = null; cachedReportOwner = null;
+    if (current === state && !document.hidden && hostState.writable) {
+      if (demand) state.benchmark?.load(api);
+      acquire(state, true);
+    }
+  };
   if (demand) {
-    cachedReportTimer = setTimeout(() => { if (current === state) { state.benchmark?.load(api); acquire(state, true); } }, 5000);
+    cachedReportTimer = setTimeout(check, 5000);
     return; // Lookup a publication, never schedule a browser-owned source refresh.
   }
   const cadence = CachedReports.cadences[state.section];
   const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
-  cachedReportTimer = setTimeout(() => {
-    if (current === state && !document.hidden && hostState.writable) acquire(state, true);
-  }, delay);
+  cachedReportTimer = setTimeout(check, delay);
 }
 function enterCachedReport(state) {
   if (!historical(state)) return;
@@ -186,7 +197,7 @@ function show(state) {
     'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
   if (automaticHistory(state)) {
     refresh.hidden = true;
-    heading.hidden = state.section === 'ai-stats' || !!state.result && !state.withheld;
+    heading.hidden = true;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
     if (state.result && state.failed) notice.textContent = state.message;
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }

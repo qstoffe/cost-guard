@@ -10,7 +10,7 @@ from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
 from src.domain.session_tree import root_by_session
-from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, coverage, coverage_key,
+from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, ModelCatalogChanged, coverage, coverage_key,
                                 decoded, exclusion, payload)
 from .migration_notice import migration_gap_notes
 from .models import ReportKind, ReportProjection
@@ -153,7 +153,10 @@ class StatsAcquisition:
             bundle = service._analyze_snapshot(snapshot)
             with service.metrics.measure('ai_stats_evidence'):
                 value = payload(bundle, self.reference, snapshot, service.config)
-                facts = decoded(value, root, service.source)
+                try:
+                    facts = decoded(value, root, service.source)
+                except ModelCatalogChanged as error:
+                    raise StatsCheckpointError('ai_stats_revision_churn') from error
             volatile = not bundle.cacheable or root.session_id in self.active
             self._retain(root.session_id, facts, volatile)
             self.fresh.add(root.session_id)

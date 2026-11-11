@@ -201,6 +201,34 @@ class DispatcherTests(unittest.TestCase):
             self.assertTrue(self.dispatch.lookup(request)['terminal'])
             self.assertIsNone(self.dispatch.entries[request]['job'])
 
+    def test_incomplete_stats_refresh_preserves_accepted_scope_until_coherent_replacement(self):
+        request = ReportRequest(ReportKind.AI_STATS)
+        first = self.dispatch.lookup(request)['id']
+        accepted = result(1_000_000)
+        accepted['view'].update(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=True)}))
+        self.jobs.values[first].update(status='complete', result=accepted)
+        self.dispatch.lookup(request)
+        self.now = self.dispatch.entries[request]['due']
+        self.dispatch.interest('one', 'ai-stats', True, request)
+        self.dispatch.tick()
+        refresh = self.dispatch.entries[request]['job']
+        partial = result(int(self.now * 1000))
+        partial['view'].update(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=False)}))
+        self.jobs.values[refresh].update(status='running', result=partial)
+
+        waiting = self.dispatch.lookup(request)
+
+        self.assertIs(accepted, waiting['result'])
+        self.assertEqual(first, waiting['result_id'])
+        self.assertEqual(refresh, waiting['id'])
+        partial['view']['ai_stats_work']['scopes']['30-days']['ready'] = True
+        self.jobs.values[refresh]['status'] = 'complete'
+        replaced = self.dispatch.lookup(request)
+        self.assertIs(partial, replaced['result'])
+        self.assertEqual(refresh, replaced['result_id'])
+
     def test_corrected_source_access_rechecks_report_blocker_without_explicit_retry(self):
         request = ReportRequest(ReportKind.TOKEN_MIX)
         self.dispatch.interest('one', 'token-mix', True, request)

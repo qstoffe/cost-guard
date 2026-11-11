@@ -10,9 +10,9 @@ const node = () => {
     focus(){document.activeElement=this;},
     replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}};
 };
-for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating']) ids[id]=node();
+for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating','toolbar']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
-  querySelector:()=>null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
+  querySelector:selector=>selector==='.toolbar'?ids.toolbar:null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
 const location = {hash:'#/watch'}, history = {replaceState(){}};
 class Clock extends Date {static now(){return now;}}
 const context = vm.createContext({document, location, history, URLSearchParams, AbortController, Date:Clock,
@@ -252,6 +252,13 @@ async function main(){
     await go('watch');run(`views.delete('#/${section}')`);await go(section);
     const cold=run('current');assert.equal(cold.failed,true);assert.equal(cold.result,null);
     assert.equal(ids.refresh.hidden,true);
+    assert.equal(ids.toolbar.hidden,true,'no redundant toolbar after a cold history failure');
+    const scheduled=run('cachedReportTimer');
+    for(let i=0;i<8;i++) {
+      now+=1000;
+      run(`connectionStatus('connected',{kind:'connected',writable:true})`);
+      assert.equal(run('cachedReportTimer'),scheduled,'frequent Live health hints must not postpone the five-second history lookup');
+    }
     managedResponse={id:'recovered',result_id:'recovered',result:retainedResult,refresh:'scheduled'};
     await hostTick();
     assert.equal(cold.result,retainedResult);assert.equal(cold.failed,false);
