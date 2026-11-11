@@ -28,7 +28,7 @@ New heading: **Cost per Task – Artificial Analysis** with matching **(Artifici
 
 At implementation, use e.g. `src/data/artificial-analysis-coding-agent-index.json` (one repository-shipped JSON asset; **not** the runtime Harbor cache). Read/validate it as static data and return a prepared view to the Web. `updated_at` represents **when a human-reviewed dataset was refreshed**, not when Artificial Analysis ran each benchmark. `methodology` is a plain descriptive label, **not a separate release/snapshot versioning subsystem**.
 
-**Important rights and completeness boundary:** The following is a *limited research/review sample*, **not** the complete public Artificial Analysis leaderboard or a licensed production redistribution dataset. The official site's current Terms of Use §2.2(d) restrict copying/republication, not just automation (§3.3(b)); Artificial Analysis's API documentation says redistribution rights require separate discussion. Consequently these facts are here to discuss UI/math and verify provenance. **Do not copy this sample into a public shipped runtime asset, or expand it to a substantial copied leaderboard, until the owner has confirmed appropriate reuse permission.** The FR may be implemented as a static-data table only once lawful data use has been established; if permission is unavailable, keep the existing outbound source link rather than silently shipping a public copy. Cite and link Artificial Analysis in the final UI. No scraping or unofficial API endpoints, no claim that manual copying bypasses the restriction.
+**Owner-level data-use decision (not an implementation work item):** This is a small, manually curated set of public benchmark facts, not a copy of the full Artificial Analysis leaderboard. The owner and assistant reviewed the site's current Terms of Use (notably §§2.2(d), 3.3(b)): automated scraping is prohibited and the terms do **not** expressly permit republishing a dataset. A locally running UI does not remove the distribution question when Cost Guard and its JSON are published or downloadable. Individual numeric facts have a different copyright position from a database as a whole; the applicable contractual/database-right scope for this particular excerpt remains uncertain. **Do not assign the implementer a licensing investigation, permission request, legal interpretation or approval workflow.** The owner retains the responsibility for any release/publication decision outside this FR. Implement the requested static-table architecture and curated data presentation without additional licensing workflow or a blocked development task; do not expand this into systematic harvesting or a full leaderboard mirror. Cite and link Artificial Analysis in the UI; no scraping, unofficial API endpoints, or assertions that the data is licensed.
 
 This research sample deliberately prioritizes current relevant coding models plus every actually published **GPT-6.1 Terra** effort in the coding-agent benchmark, without fabricating unmeasured Carbon/Sol efforts. Official source pages used to check model, agent, effort, index and USD/task:
 - https://artificialanalysis.ai/agents/coding-agents/comparisons/claude-code-vs-codex
@@ -44,7 +44,6 @@ This research sample deliberately prioritizes current relevant coding models plu
   "source_url": "https://artificialanalysis.ai/agents/coding-agents/",
   "methodology": "Coding Agent Index v2.0",
   "currency": "USD",
-  "status": "review_sample_only_license_not_cleared",
   "rows": [
     {
       "publisher": "Anthropic",
@@ -194,7 +193,7 @@ This research sample deliberately prioritizes current relevant coding models plu
 }
 ```
 
-**Research-only status:** `status: review_sample_only_license_not_cleared` is an explicit design safeguard, not a public runtime field requirement. On implementation, use a small validated and *authorized* dataset; `status` may then be removed. Include any further source-proven and licensed model/client/effort rows, preserving original publisher names and cost precision. Artificial Analysis can add new models or change the evaluated method between updates; never quietly combine different methodology cohorts. Do not substitute the *general Intelligence Index* or its USD/task for Coding Agent Index rows.
+**Dataset scope:** This initial 18-row subset is the owner-requested manually reviewed starting data, not a comprehensive snapshot. Future updates overwrite the same JSON and `updated_at`; include only verifiable source-published model/client/effort configurations, preserving original publisher names and numeric cost precision. Do not require a license status flag or review gate in the runtime schema; the publication/data-use judgment belongs to the owner, not to the coding implementation. Artificial Analysis may change its evaluation methodology: never silently combine incompatible cohorts. Do not substitute the *general Intelligence Index* or its USD/task for Coding Agent Index rows.
 
 ## Suggested implementation surfaces and acceptance
 
