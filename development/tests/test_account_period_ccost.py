@@ -20,7 +20,7 @@ from src.domain.acquisition import AcquisitionMetrics
 from src.presentation.accounts import account_ccost_lines, account_ccost_text, capacity_lines
 from src.presentation.token_mix import comparison_cost_text
 from src.presentation.terminal import AnsiStyler
-from src.reports.accounts import WatchAccountProjection
+from src.reports.accounts import WatchAccountProjection, account_projections
 
 D = Decimal
 
@@ -102,6 +102,43 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertNotIn("trailing lookback", notes)
         self.assertIn("native reset window", notes)
         self.assertIn("not verified account/billing attribution", notes)
+
+    def test_partial_agent_reference_estimates_require_matching_history_account_and_model_scope(self):
+        from src.application.display import with_display
+        from src.application.watch_accounts import watch_account
+        native = replace(subscription(), observations=dict(account_kind='subscription',
+            auth_status='authenticated', backend_status='first_party'))
+        primary, weekly = (replace(q, remaining_fraction=D('.93')) for q in native.quotas)
+        later = replace(weekly, label='Model weekly', scope='model', model_id='gpt-test', reset_at_ms=NOW + 2 * HOUR)
+        native = replace(native, quotas=(primary, weekly, later))
+        base = replace(request('one', NOW, provider='claude-agent', amount=5100000),
+            cost_disposition=CostDisposition.UNKNOWN, reported_cost=D(0))
+        unknown = replace(base, message_id='unpriced', model=replace(base.model, model='unpriced'))
+        old = replace(base, message_id='old', completed_at_ms=NOW - 2 * 86400000, tokens=replace(base.tokens, input=1000000))
+        entries = (base, replace(base, message_id='two'), unknown, old)
+
+        row = project((native,), entries, watch=True, observed_start_ms=MONTH)[0]
+        wire = with_display(watch_account(row), now_ms=NOW).to_json()
+
+        self.assertEqual((D(1020), 3, 2), tuple(getattr(row.quota_periods[0].cost, key)
+            for key in ('known_ccost', 'observed_requests', 'priced_requests')))
+        quotas = (wire['primary']['quota'], *(slot['quota'] for slot in wire['secondary']))
+        self.assertEqual([D(1020), D(1120), D(1120)], [D(q['period_ccost']['cost']['known_ccost']) for q in quotas])
+        self.assertTrue(all(q['display']['capacity_basis'] == 'ratio' for q in quotas))
+        self.assertTrue(all('estimated account attribution' in q['display']['capacity_help'] for q in quotas))
+        self.assertIn('unpriced usage', quotas[1]['display']['capacity_help'])
+        self.assertNotIn('unpriced usage', quotas[2]['display']['capacity_help'], 'model-specific numerator excludes the unpriced other model')
+        missing = account_projections((native,), entries, FakePricingProvider().catalog,
+            now_ms=NOW, today_start_ms=DAY, month_start_ms=MONTH, watch=True,
+            observed_start_ms=DAY, require_history=True)[0]
+        missing_wire = with_display(watch_account(missing), now_ms=NOW).to_json()['secondary'][0]['quota']
+        self.assertEqual('?', missing_wire['display']['ccost_capacity'])
+        self.assertIn('waiting for complete period history', missing_wire['display']['capacity_help'])
+        peer = replace(native, ref=replace(native.ref, account_id='second'))
+        for row in project((native, peer), entries, watch=True, observed_start_ms=MONTH):
+            quota = with_display(watch_account(row), now_ms=NOW).to_json()['secondary'][0]['quota']
+            self.assertEqual('?', quota['display']['ccost_capacity'])
+            self.assertIn('multiple compatible accounts', quota['display']['capacity_help'])
 
     def test_provider_is_request_source_not_publisher_and_direct_api_stays_separate(self):
         entries = (request("gpt-via-copilot", NOW, provider="github-copilot-enterprise"),

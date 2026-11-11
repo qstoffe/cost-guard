@@ -1057,8 +1057,12 @@ row. Its valid 30-day equivalent is full-window reference Capacity × 2,592,000 
 full-window seconds, calculated with unrounded Decimal. This numeric equivalent has a leading
 **~**, never an entitlement, bill or forecast. Compare independent restrictions separately;
 never add them together. Unknown duration/recurrence, inactive/expired/stale data,
-incompatible reference units, contradictory native data or incomplete pricing show **?**
-with concise reason help. Proven native monthly windows have only their own Capacity line;
+incompatible reference units, contradictory native data or no usable priced sample show **?**
+with the actual reason in help (including missing period history or ambiguous accounts).
+A positive same-window priced subtotal remains useful when other requests lack prices:
+Capacity help explicitly qualifies the estimate as potentially low. Raw CCost and native
+fraction, not rounded display text, determine period and Monthly Capacity; partial pricing
+alone never suppresses those estimates. Proven native monthly windows have only their own Capacity line;
 eligibility follows normalized source-period facts, not the displayed label.
 Shared CSS grid slots align each ordinal quota track and divider across peers on the
 same responsive row. A native monthly quota gets one empty, aria-hidden, noninteractive

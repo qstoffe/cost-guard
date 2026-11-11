@@ -7,12 +7,20 @@ module.exports=(vm,context,sample,helpText)=>{
   const source=context.capacityView.accounts.accounts[0];
   source.primary.quota.label='weekly Mixed CASE';source.secondary[0].quota.label='5-hour';
   const quotas=[source.primary.quota,source.secondary[0].quota],known=quotas.map(q=>structuredClone(q.ccost_reference));
+  const displays=quotas.map(q=>structuredClone({display:q.display,display_units:q.display_units}));
   const lines=card=>card.children.filter(n=>/^watch-(quota|monthly)-capacity/.test(n.className));
   const draw=()=>vm.runInContext(`capacityPage.update(capacityView);
     capacityWatch.update({state:'running',view:capacityView})`,context);
   let savedRows,savedBar;
   for(const phase of ['unknown','known','unknown','known'])for(const unit of ['credits','usd']){
-    quotas.forEach((q,index)=>q.ccost_reference=phase==='known'?known[index]:{...known[index],capacity:null,monthly_capacity:null});
+    quotas.forEach((q,index)=>{
+      q.ccost_reference=phase==='known'?known[index]:{...known[index],capacity:null,monthly_capacity:null};
+      Object.assign(q,structuredClone(displays[index]));
+      if(phase==='unknown')for(const tokens of [q.display,...Object.values(q.display_units)]){
+        tokens.capacity_help='No positive same-window reference CCost sample.';
+        tokens.monthly_capacity_help='No positive same-window reference CCost sample.';
+      }
+    });
     const raw=JSON.stringify(source);
     vm.runInContext(`ReportView.setUnit('${unit}',capacityPage.root);
       ReportView.syncUnits(capacityWatch.root)`,context);draw();
@@ -36,7 +44,7 @@ module.exports=(vm,context,sample,helpText)=>{
       assert.match(line.textContent,phase==='unknown'?/: \?$/:unit==='usd' ? /: ~\$/ : /: ~/);
       const help=helpText(line.children[0]);
       assert.doesNotMatch(help,/Native Used|Native Remaining|rolling|scope/);
-      assert.match(help,phase==='unknown'?/No reliable/:/Unrounded .*Capacity/);
+       assert.match(help,phase==='unknown'?/No positive same-window reference CCost sample/:/Unrounded .*Capacity/);
       if(phase==='known')assert.match(help,line.className.includes('monthly')?/× \(30 days ÷/:/÷/);
     }
   }

@@ -120,6 +120,11 @@ async function main() {
       checks.push('source-shaped opus alias → canonical $0.06 → qualified Pro 5h/weekly/Today; actual Accounts/Full/Mini renderers keep native 1% independent');
       evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0};return;
     }
+    if(process.argv.includes('--secondary-capacity')) {
+      await require('./probe_secondary_capacity.cjs')({command,evaluate,fixture,until,navigate,sessionId,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0};return;
+    }
     if(process.argv.includes('--capacity-baseline')) {
       await evaluate(`ReportView.setQuotaMode('remaining');ReportView.setUnit('usd')`);
       await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom,baseline:true});

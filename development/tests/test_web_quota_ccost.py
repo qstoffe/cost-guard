@@ -102,8 +102,7 @@ class WebQuotaCCostTests(unittest.TestCase):
                 (replace(base, used=D(10), remaining_fraction=D('.8'), limit=D(100)), cost, 'available', 'Contradictory'),
                 (base, cost, 'stale', 'stale'), (base, cost, 'error', 'unavailable'),
                 (base, None, 'available', 'compatible'),
-                (base, ComparisonCost(D(100), 3, 2), 'available', 'incomplete'),
-                (base, ComparisonCost(D(0), 2, 0), 'available', 'incomplete')):
+                (base, ComparisonCost(D(0), 2, 0), 'available', 'No priced requests')):
             tokens = with_display(watch_quota(quota, QuotaPeriodProjection(quota, observed, None),
                 availability=availability), now_ms=1000).to_json()['quota']['display']
             with self.subTest(quota=quota, availability=availability, reason=reason):
@@ -271,12 +270,70 @@ class WebQuotaCCostTests(unittest.TestCase):
                 (replace(base, used=D(10), remaining=D(95), limit=D(100)), cost, 'available'),
                 (base, cost, 'stale'), (base, cost, 'error'),
                 (base, None, 'available'), (base, ComparisonCost(D(0), 0, 0), 'available'),
-                (base, ComparisonCost(D(100), 3, 2), 'available'),
                 (base, ComparisonCost(D(0), 2, 0), 'available')):
             wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, observed, None),
                 availability=availability), now_ms=1000).to_json()['quota']['display']
             with self.subTest(quota=quota, observed=observed, availability=availability):
                 self.assertEqual(('?', '?'), (wire['ccost_capacity'], wire['ccost_remaining']))
+
+    def test_secondary_and_later_partial_quotas_keep_raw_weekly_and_monthly_estimates(self):
+        base = summary_watch().quota.accounts[0]
+        primary = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.8'), duration_seconds=18000, reset_at_ms=20000)
+        weekly = QuotaComponent('Weekly', 'rolling', remaining_fraction=D('.93'), duration_seconds=604800, reset_at_ms=30000)
+        later = replace(weekly, label='Model daily', duration_seconds=86400, remaining_fraction=D('.5'), scope='model', model_id='model')
+        costs = (ComparisonCost(D(200), 1, 1), ComparisonCost(D(1020), 3, 2), ComparisonCost(D(40), 2, 1))
+        item = replace(base, account=replace(base.account, quotas=(primary, weekly, later), primary_quota_label='5-hour'),
+            quota_periods=tuple(QuotaPeriodProjection(q, cost, None) for q, cost in zip((primary, weekly, later), costs)))
+
+        watch = with_display(watch_account(item), now_ms=1000).to_json()
+        accounts = with_display(account(item), now_ms=1000).to_json()['observation']['quotas']
+
+        slots = (watch['primary']['quota'], *(slot['quota'] for slot in watch['secondary']))
+        self.assertEqual(accounts, list(slots))
+        self.assertEqual(['1.00E+3', '14571.42857142857142857142857', '8E+1'], [q['ccost_reference']['capacity'] for q in accounts])
+        self.assertEqual('62448.97959183673469387755101', accounts[1]['ccost_reference']['monthly_capacity'])
+        self.assertEqual('ratio', accounts[1]['display']['capacity_basis'])
+        self.assertEqual('7%', accounts[1]['quota_display']['used']['percent'])
+        for q in accounts[1:]:
+            self.assertIn('Estimate from priced requests; unpriced usage may make this low.', q['display']['capacity_help'])
+            self.assertIn('not a guaranteed provider budget', q['display']['capacity_help'])
+            self.assertTrue(q['display_units']['usd']['ccost_capacity'].startswith('~$'))
+        for key in ('capacity', 'monthly_capacity'):
+            raw = D(accounts[1]['ccost_reference'][key])
+            display_key = 'ccost_capacity' if key == 'capacity' else key
+            rendered = D(accounts[1]['display'][display_key].removeprefix('~'))
+            self.assertLessEqual(abs(raw - rendered), raw / 20)
+        self.assertIn('1020 ÷ 0.07 = 14571.42857142857142857142857 Credits', accounts[1]['display']['capacity_help'])
+        complete = with_display(watch_quota(weekly, QuotaPeriodProjection(weekly, ComparisonCost(D(1020), 3, 3), None)), now_ms=1000).to_json()['quota']
+        self.assertEqual(accounts[1]['ccost_reference'], complete['ccost_reference'])
+        self.assertNotIn('unpriced', complete['display']['capacity_help'])
+        changed = replace(weekly, remaining_fraction=D('.9301'))
+        raw = with_display(watch_quota(changed, QuotaPeriodProjection(changed, costs[1], None)), now_ms=1000).to_json()['quota']
+        self.assertEqual('7%', raw['quota_display']['used']['percent'])
+        self.assertEqual(D(1020) / D('.0699'), D(raw['ccost_reference']['capacity']))
+        self.assertNotEqual(accounts[1]['ccost_reference']['capacity'], raw['ccost_reference']['capacity'])
+
+    def test_unknown_capacity_explains_the_failed_fact_on_both_capacity_rows(self):
+        base = QuotaComponent('Weekly', 'rolling', remaining_fraction=D('.93'), duration_seconds=604800, reset_at_ms=30000)
+        cost = ComparisonCost(D(1020), 3, 2)
+        for quota, observed, note, reason in (
+                (base, None, 'CCost Weekly: waiting for complete period history.', 'waiting for complete period history'),
+                (base, None, 'CCost Weekly: account unknown / not attributable among multiple compatible accounts.', 'multiple compatible accounts'),
+                (base, ComparisonCost(D(0), 3, 0), '', 'No priced requests'),
+                (replace(base, scope='model'), cost, '', 'No reliable model identity'),
+                (replace(base, remaining_fraction=None), cost, '', 'fraction used is unknown'),
+                (replace(base, remaining_fraction=D(1)), cost, '', 'fraction used is zero'),
+                (replace(base, window_active=False), cost, '', 'inactive'),
+                (replace(base, reset_at_ms=None), cost, '', 'matching quota window'),
+                (replace(base, status='stale'), cost, '', 'stale'),
+                (replace(base, used=D(101), limit=D(100)), cost, '', 'Contradictory')):
+            wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, observed, None), note=note), now_ms=1000).to_json()['quota']
+            with self.subTest(reason=reason):
+                self.assertEqual('?', wire['display']['ccost_capacity'])
+                self.assertIn(reason, wire['display']['capacity_help'])
+                # Monthly may explain its own recurring-window failure first.
+                if quota.window_active is not False and quota.reset_at_ms is not None:
+                    self.assertIn(reason, wire['display']['monthly_capacity_help'])
 
     def test_full_usage_and_unlimited_have_distinct_zero_and_inapplicable_states(self):
         base = QuotaComponent('Weekly', 'rolling', remaining_fraction=D(0), reset_at_ms=20000)

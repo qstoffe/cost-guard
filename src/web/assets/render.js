@@ -52,10 +52,12 @@ const ReportView = (() => {
   const capacityKnown = (quota, monthly = false) => quota.ccost_reference?.[monthly ? 'monthly_capacity' : 'capacity'] != null;
   function quotaCapacityHelp(quota, monthly = false) {
     if (quota.unlimited && !monthly) return 'The provider reports an unlimited quota; no finite reference Capacity applies.';
+    const explanation = display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
+    if (explanation && explanation !== 'N/A') return explanation;
     if (!capacityKnown(quota, monthly)) return monthly ?
       'No reliable full-window reference Capacity or verified duration for a 30-day equivalent.' :
       'No reliable same-window reference CCost or source-confirmed full-window allowance.';
-    return display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
+    return '';
   }
   function quotaUsageHelp(quota) {
     const view = quotaView(quota), native = quota.quota_display;
