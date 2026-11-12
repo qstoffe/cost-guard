@@ -21,8 +21,7 @@ def launch_windows(root):
         preflight()
         result = launch(root, "src.web.native_windows", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
-            store.log("browser_open_failed")
-            print_failure("browser_open_failed", 'windows')
+            print_failure("browser_open_failed", 'windows', store)
             return 4
         progress("handoff")
         return 0
@@ -32,10 +31,5 @@ def launch_windows(root):
         code = str(error) if str(error) in MESSAGES else "instance_conflict"
     except Exception:
         code = "gui_or_server_start_failed"
-    if store:
-        try:
-            store.log(code)
-        except (OSError, InstanceConflict):
-            print("Cost Guard: Private startup diagnostic could not be recorded.")
-    print_failure(code, 'windows')
+    print_failure(code, 'windows', store)
     return 1

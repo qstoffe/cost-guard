@@ -1,6 +1,7 @@
 """Fixed, shared console/dialog text; never interpolate subprocess exceptions."""
 import json
 from pathlib import Path
+from .process_identity import InstanceConflict
 
 _MESSAGES = json.loads(Path(__file__).with_suffix('.json').read_text(encoding='utf-8'))
 
@@ -25,8 +26,19 @@ def failure_text(code, platform):
     return f'{title}\n\nReason: {reason}\n\nNext step: {action}\n\nDiagnostics: {diagnostics}'
 
 
-def print_failure(code, platform):
+def record_failure(store, code):
+    try:
+        store.log(code)
+        return True
+    except (OSError, InstanceConflict):
+        return False
+
+
+def print_failure(code, platform, store=None):
+    recorded = record_failure(store, code) if store else True
     if platform == 'windows':
         # The PowerShell wrapper accepts a known code only, not arbitrary child text.
         print('Cost Guard failure: ' + code, flush=True)
     print(failure_text(code, platform), flush=True)
+    if not recorded:
+        print('\nPrivate startup diagnostic could not be recorded.', flush=True)

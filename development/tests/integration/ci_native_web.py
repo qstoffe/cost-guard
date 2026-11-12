@@ -186,6 +186,14 @@ def macos_python_fixture(root, home, environment):
     for name in ('dirname', 'sleep'):
         (binary / name).symlink_to(shutil.which(name))
     environment.update(HOME=str(user), PATH=str(binary))
+    # Hosted images also have eligible global Python installs. Relocate just
+    # global roots in this disposable copy, as in the standard-layout unit cases;
+    # otherwise they can win before the fixture whose removal we must exercise.
+    resolver = root / 'src/python_discovery.sh'
+    source = resolver.read_text()
+    for prefix in ('/Library', '/opt/homebrew', '/usr/local'):
+        source = source.replace(' ' + prefix + '/', ' "' + str(home / 'fixture-system') + '"' + prefix + '/')
+    resolver.write_text(source)
     # This exact environment has no PATH Python, no interactive profile or developer shell.
     selected = subprocess.run(['/bin/zsh', '-c',
         'source "$1"; cg_find_python || exit 8; print -r -- "$PYTHON"', 'discovery',
@@ -194,27 +202,13 @@ def macos_python_fixture(root, home, environment):
     if not same:
         error = AssertionError('non_path_real_interpreter_selection_failed')
         # Fixed scalar evidence only; subprocess output may contain private paths/errors.
-        diagnosis = subprocess.run(['/bin/zsh', '-c',
-            'source "$1"; cg_find_python; print -r -- "${CG_PYTHON_FAILURE}:${CG_PROBE-unknown}"',
-            'discovery', str(root / 'src/python_discovery.sh')], env=environment,
-            capture_output=True, timeout=25)
-        enums = diagnosis.stdout.decode(errors='replace').strip()
         error.ci_discovery = dict(exit_code=selected.returncode, same_real_interpreter=same,
             output_bytes=len(selected.stdout), stderr_bytes=len(selected.stderr),
-            primary_exists=primary.is_file(), fallback_exists=fallback.is_file(),
-            diagnosis=enums if enums in {'missing:unknown', 'missing:broken', 'broken:broken', 'old:old', 'missing:ready'} else 'unclassified')
-        started = time.monotonic()
-        direct = subprocess.run([sys.executable, '-I', '-B', '-S', '-c',
-            'import sys,sqlite3,ssl,ctypes; print(sys.platform)'],
-            env=environment, capture_output=True, timeout=10)
-        error.ci_discovery.update(direct_exit=direct.returncode,
-            direct_seconds=round(time.monotonic() - started, 3),
-            direct_platform_verified=direct.stdout.strip() == b'darwin',
-            direct_stderr_bytes=len(direct.stderr))
+            primary_exists=primary.is_file(), fallback_exists=fallback.is_file())
         raise error
     return primary, dict(outcome='PASS', actual_python=version, path_python=False,
         install_tree='synthetic user Python.org framework plus pyenv fallback',
-        interpreter='real CI Python; symlinks only, no install or system-directory mutation')
+        interpreter='real CI Python; symlinks only, global roots relocated in disposable source copy')
 
 
 def detached(root, home):

@@ -306,13 +306,15 @@ print('PASS isolated production preflight dispatch')
                 patch.object(macos_launch, "native_preflight"), \
                 patch.object(macos_launch, "prepare_app", side_effect=InstanceConflict("app_preparation_failed")), \
                 patch.object(macos_launch, "launch", return_value=Mock(browser_opened=False)) as launch, \
-                contextlib.redirect_stdout(output):
+                 contextlib.redirect_stdout(output):
+            store.return_value.log.side_effect = OSError('PRIVATE_DIAGNOSTIC_PATH')
             self.assertEqual(macos_launch.launch_macos(ROOT), 4)
         self.assertEqual(launch.call_args.args, (ROOT, "src.web.native_macos"))
         self.assertEqual([call.args[0] for call in store.return_value.log.call_args_list],
                          ["app_preparation_failed", "browser_open_failed"])
         self.assertIn("continuing with .command", output.getvalue())
         self.assertIn("Web is running", output.getvalue())
+        self.assertNotIn('PRIVATE_DIAGNOSTIC_PATH', output.getvalue())
 
     def test_wrong_os_does_not_touch_state_or_native_api(self):
         with patch.object(macos_launch.sys, "platform", "win32"), \
@@ -412,6 +414,7 @@ exit 17
         layouts = ('Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
                    'opt/homebrew/opt/python@3.13/bin/python3.13',
                    'usr/local/opt/python@3.13/bin/python3.13',
+                   'home/Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
                    'home/.pyenv/versions/3.13.2/bin/python3',
                    'home/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/bin/python3')
         for layout in layouts:
@@ -424,7 +427,7 @@ exit 17
                 resolver = (ROOT / 'src/python_discovery.sh').read_text()
                 # Relocate only OS-owned roots into an isolated, representative tree.
                 for prefix in ('/Library', '/opt/homebrew', '/usr/local'):
-                    resolver = resolver.replace(prefix, '"' + str(root) + '"' + prefix)
+                    resolver = resolver.replace(' ' + prefix + '/', ' "' + str(root) + '"' + prefix + '/')
                 source = root / 'discovery.sh'
                 source.write_text(resolver)
                 script = root / 'probe.zsh'

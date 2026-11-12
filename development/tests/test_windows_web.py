@@ -181,6 +181,19 @@ class WindowsWebTests(unittest.TestCase):
         self.assertIn("Web is running", output.getvalue())
         store.log.assert_called_once_with("browser_open_failed")
 
+    def test_browser_failure_remains_running_when_diagnostic_record_is_unwritable(self):
+        output, store = io.StringIO(), Mock()
+        store.log.side_effect = OSError('PRIVATE_PATH_TOKEN')
+        with patch.object(windows_launch, 'InstanceStore', return_value=store), \
+                patch.object(windows_launch, 'load_configuration'), \
+                patch('src.web.native_windows.preflight'), \
+                patch.object(windows_launch, 'launch', return_value=Mock(browser_opened=False)), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(4, windows_launch.launch_windows(ROOT))
+        self.assertIn('COST GUARD WEB IS RUNNING\n\nReason:', output.getvalue())
+        self.assertNotIn('PRIVATE_PATH_TOKEN', output.getvalue())
+        self.assertNotIn('COULD NOT START', output.getvalue())
+
     def test_specific_ownership_failures_reach_console_and_private_diagnostics(self):
         reasons = ("process_identity_access_denied", "process_identity_unavailable",
                    "instance_lifetime_busy", "instance_transition_busy", "corrupt_instance_state",
