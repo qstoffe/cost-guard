@@ -24,8 +24,9 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     const tab = await open(launch.url);
     // The fixture's finite non-Stats page isn't part of this check.
     await evaluate(`location.hash='#/ai-stats'`, tab);
-    await until(`current.section==='ai-stats' && current.loading && current.active &&
-      current.result?.view.ai_stats_work.remaining>0`, tab);
+    await until(`current.section==='ai-stats' && current.loading && current.active && current.percent>0`, tab);
+    assert.equal(await evaluate(`!current.result && document.querySelectorAll('.ai-stat').length===12 &&
+      [...document.querySelectorAll('.ai-stat')].every(card=>card.textContent==='Loading…' && card.children.length===0)`,tab),true);
     const initial = await evaluate(`({id:current.active,percent:current.percent})`, tab);
     const peer = await open(launch.url.split('#')[0] + '#/ai-stats');
     await until(`current?.section==='ai-stats' && current.loading && !!current.active`, peer);

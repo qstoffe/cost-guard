@@ -73,6 +73,8 @@ def hourly(value):
 
 def ai_stat(value):
     base = fields(value, 'metric value status session_id session_title detail reasons')
+    if value.metric == 'total-tokens':
+        base = ObjectValue(base.fields + (('exact_value', str(value.value)),))
     if value.rates is None:
         return base
     rates = fields(value.rates, 'total calendar_days workdays calendar_hours workday_hours active_hours '

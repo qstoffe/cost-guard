@@ -78,13 +78,14 @@ async function main() {
     await until(`current?.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`location.hash`),'#/ai-stats');
     assert.equal(await evaluate(`current.period`),'30-days');
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),10);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),12);
     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.ai-stats-periods button')].map(b=>b.textContent)`),
       ['Today','7 days','30 days','This month','All time']);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-view img').length`),0);
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
-    checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
+    checks.push('automatic default, retired-route alias, twelve cards, five exact periods, safe real record links, no healthy toolbar');
+    await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_rate_help.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
@@ -100,8 +101,8 @@ async function main() {
           headings:document.querySelectorAll('.ai-stat h4 .help-trigger').length,
           foreground:getComputedStyle(document.querySelector('[aria-pressed="true"]')).color,
           background:getComputedStyle(document.querySelector('[aria-pressed="true"]')).backgroundColor}; })()`);
-      assert.equal(layout.count,10); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
-      assert.equal(layout.headings,10);
+      assert.equal(layout.count,12); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
+      assert.equal(layout.headings,12);
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
@@ -115,7 +116,7 @@ async function main() {
     await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='all')`);
     checks.push('period and unit changes reuse scope without acquisition; lazy All time completes');
     const ax=await command('Accessibility.getFullAXTree',{},tab);
-    for(const name of ['AI Hourly Rate','Total AI Cost','AI Working Time','Average Cost per Session',
+    for(const name of ['AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session',
       'Most Expensive Session','Longest Session','Busiest Day','Night Owl','Coding Streak','Peak Parallel Sessions'])
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
@@ -124,7 +125,7 @@ async function main() {
     await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
       ReportView.setUnit('usd',output);`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),3);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),6);
     await evaluate(`ReportView.setUnit('credits',output)`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
@@ -147,7 +148,7 @@ async function main() {
     await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},tab);
     await until(`current.period==='30-days'`);
     await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
-    checks.push('all ten AX names, intrinsic title help, Tab/Shift-Tab traversal, Enter/Space activation, emulated touch period activation, Escape');
+    checks.push('all twelve AX names, intrinsic title help, Tab/Shift-Tab traversal, Enter/Space activation, emulated touch period activation, Escape');
     await fixture('stats-hold-all');
     await evaluate(`selectStats(current,'all'); void acquire(current)`);
     await until(`current.loading && !!current.active`);
@@ -208,11 +209,11 @@ async function main() {
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),0,'failure is not an empty successful period');
-    assert.match(await evaluate(`output.textContent`),/Historical report unavailable; automatic checks continue/);
+    assert.match(await evaluate(`output.textContent`),/Unavailable/);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
-    await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===10`);
+    await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===12`);
     checks.push('cold failure has truthful report status, no fake zero cards/record links/Retry/toolbar; overdue automatic lifecycle restores genuine results; known-empty evidence remains covered separately');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;

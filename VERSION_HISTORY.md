@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.30 - 2026-11-12
+
+- AI Stats adds observed Total Tokens (Input/Cached input/Cache write/Output, reasoning once) and calendar/workday/active-hour token consumption. Both reuse canonical deduplicated requests and existing time denominators; missing usage/source evidence is qualified, never filled from guessed cost or converted with currency.
+- Twelve retained card shells contain only plain Loading until authoritative period coverage is ready. Complete card contents appear together; matching last-good results survive refresh, stale/foreign publications cannot replace them, and cold terminal failures say Unavailable. No extra source crawl or unsupported generation-TPS podium is added.
+
 ## v81.29 - 2026-11-12
 
 - Web, Legacy report/Watch and Diagnostics share Python-independent installed-runtime discovery per OS. Windows uses installed-only launcher/manager listings, PEP 514 registry views and standard install directories; macOS adds versioned Python.org/Homebrew and common user-local layouts. Bounded isolated probes skip old, broken and hanging candidates without installing anything or changing PATH.

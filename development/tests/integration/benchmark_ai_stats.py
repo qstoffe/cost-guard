@@ -21,6 +21,7 @@ from src.cache import CacheDatabase, CacheRepository
 from src.domain.acquisition import AcquisitionMetrics
 from src.reports import ReportService
 from src.reports.ai_stats import build_ai_stats
+from src.application.projection import project
 from src.sources.selection import SourceSelection
 
 
@@ -62,13 +63,19 @@ def scenario(builder, size, scope, selected, sliced=False):
                 assert sliced and slices < size // 256 + 10, 'Bounded benchmark made no progress'
             elapsed, used_cpu = time.perf_counter() - started, time.process_time() - cpu
             row = next(row for row in report.ai_stats if row.period == selected)
-            signature = hashlib.sha256(json.dumps(asdict(row), default=str, sort_keys=True).encode()).hexdigest()
-            all_periods = hashlib.sha256(json.dumps([asdict(row) for row in report.ai_stats],
+            def comparable(row):
+                value = asdict(row)
+                value['metrics'] = [m for m in value['metrics'] if m['metric'] not in ('total-tokens', 'token-rate')]
+                return value
+            signature = hashlib.sha256(json.dumps(comparable(row), default=str, sort_keys=True).encode()).hexdigest()
+            all_periods = hashlib.sha256(json.dumps([comparable(row) for row in report.ai_stats],
                 default=str, sort_keys=True).encode()).hexdigest()
             result = dict(roots=size, requests=size * 20, scope=scope, attempt=attempt,
                 seconds=round(elapsed, 4), cpu_seconds=round(used_cpu, 4), selected_sha256=signature,
                 all_periods_sha256=all_periods, first_usable_seconds=round(first_usable, 4),
-                hydrated=source.load_count - before, slices=slices, periods=len(report.ai_stats), metrics=service.metrics.snapshot())
+                hydrated=source.load_count - before, slices=slices, periods=len(report.ai_stats),
+                view_bytes=len(json.dumps(project(report).to_json(), separators=(',', ':')).encode()),
+                metrics=service.metrics.snapshot())
             yield result
 
 
@@ -92,6 +99,7 @@ def main():
         formulas = subprocess.check_output(['git', 'show', args.baseline + ':src/analysis/ai_stats.py'], cwd=ROOT)
         exec(compile(formulas, '<baseline-stats-formulas>', 'exec'), analysis.__dict__)
         module.period_stats = analysis.period_stats
+        module.StatsObservation = analysis.StatsObservation
         builders.insert(0, ('baseline', module.build_ai_stats))
     print(json.dumps(dict(environment=dict(python=sys.version.split()[0], platform=sys.platform),
                           source='fixed canonical synthetic history; no simulated I/O delay', baseline=args.baseline)))

@@ -212,7 +212,7 @@ section > label input { min-width: 0; }
 .ai-stats-section { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .ai-stats-section h3 { margin: 1.1rem 0 .65rem; }
 .ai-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: .8rem; }
-.ai-stat { display: grid; grid-template-rows: auto auto auto 1fr auto; min-height: 12rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--surface); }
+.ai-stat { display: grid; grid-template-rows: auto auto auto 1fr auto; min-height: 15rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--surface); }
 .ai-stat h4 { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .8rem; font-size: 1rem; }
 .ai-stat h4 button { text-align: left; }
 .ai-stat-icon { font-size: 1.3rem; }

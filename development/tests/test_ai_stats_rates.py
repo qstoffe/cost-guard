@@ -22,8 +22,8 @@ def evidence(at, hours, credits):
     return StatsRoot('root', 'Synthetic', (entry,), ((at, hours * HOUR_MS, False),))
 
 
-def calculate(roots, now, period='7-days', calendar='SE', zone='Europe/Stockholm'):
-    stats = period_stats(roots, lambda _model, tokens: Decimal(tokens.input),
+def calculate(roots, now, period='7-days', calendar='SE', zone='Europe/Stockholm', valuation=None):
+    stats = period_stats(roots, valuation or (lambda _model, tokens: Decimal(tokens.input)),
         period=period, start=dict(windows(zone, now))[period], now=now, zone=zone, workday_calendar=calendar)
     dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()
     return stats, dto['ai_stats'][0]['metrics'][0]
@@ -145,9 +145,9 @@ class AIStatsRateTests(unittest.TestCase):
                 ('9.9999', 'nibbles'), ('10', 'hourly appetite'), ('99.9999', 'hourly appetite'),
                 ('100', 'buffet'), ('100.0001', 'buffet')):
             with self.subTest(rate=rate):
-                root = evidence(now - HOUR_MS, 1, Decimal(rate))
+                root = evidence(now - HOUR_MS, 1, 1)
 
-                stats, dto = calculate((root,), now, 'today')
+                stats, dto = calculate((root,), now, 'today', valuation=lambda *_: Decimal(rate))
 
                 self.assertEqual(Decimal(rate), stats.metrics[0].rates.active_rate)
                 self.assertEqual(Decimal(rate), stats.metrics[0].value)

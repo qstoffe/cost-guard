@@ -38,7 +38,7 @@ def metrics(roots, *, start=None, now=None, zone='UTC', valuation=None, complete
 
 
 class AIStatsAnalysisTests(unittest.TestCase):
-    def test_empty_period_has_ten_playful_zeros_without_fabricated_records(self):
+    def test_empty_period_has_twelve_playful_zeros_without_fabricated_records(self):
         result = metrics(())
 
         for key in result:
@@ -47,6 +47,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
             display = stat_tokens(asdict(item))
             self.assertRegex(display['value'], r'0')
             self.assertTrue(display['trait'])
+            if key in ('total-tokens', 'token-rate'):
+                continue
             self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
                              if key == 'hourly-rate' else {'value', 'trait'}, set(display))
             self.assertIsNone(item.session_id)
@@ -128,7 +130,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
 
         result = metrics((a, b))
 
-        self.assertEqual(10, len(result))
+        self.assertEqual(12, len(result))
         self.assertEqual(Decimal(18), result['total-cost'].value)
         self.assertEqual(3 * HOUR_MS, result['working-time'].value)
         self.assertEqual(Decimal(6), result['hourly-rate'].value)
@@ -251,6 +253,36 @@ class AIStatsAnalysisTests(unittest.TestCase):
 
 
 class AIStatsAcquisitionTests(unittest.TestCase):
+    def test_typed_pricing_outage_does_not_prevent_observed_token_cards(self):
+        from src.pricing.base import PricingUnavailableError
+        original, _source = self.original(1)
+        application = ReportApplication(lambda *_: self.fresh(original), clock=lambda: NOW)
+
+        with patch.object(original.pricing_provider, 'get_catalog', side_effect=PricingUnavailableError('unavailable')):
+            result = application.execute(ReportRequest(ReportKind.AI_STATS)).to_json()
+
+        self.assertIsNone(result['error'])
+        metrics = {m['metric']: m for m in result['view']['ai_stats'][-1]['metrics']}
+        self.assertEqual((393, 'complete'), (metrics['total-tokens']['value'], metrics['total-tokens']['status']))
+        self.assertEqual(393, Decimal(metrics['token-rate']['rates']['total']))
+        self.assertIn('unpriced-requests', metrics['total-cost']['reasons'])
+
+    def test_streamed_metadata_cannot_create_a_model_generation_ranking_or_change_token_traffic(self):
+        original, source = self.original(1)
+        first = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
+        sid, snapshot = next(iter(source.snapshots.items()))
+        # Atomic final bursts, slow TTFT and missing metadata have no qualified
+        # first/last output-token interval in the supported compact evidence.
+        for delay in (0, 1, 1_000_000):
+            source.snapshots[sid] = replace(snapshot, source_revision=str(delay), messages=tuple(
+                replace(m, metadata={**m.metadata, 'streamed_at_ms': m.created_at_ms + delay})
+                for m in snapshot.messages))
+
+            changed = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
+
+            self.assertEqual(first.ai_stats, changed.ai_stats)
+            self.assertTrue(all(len(row.metrics) == 12 for row in changed.ai_stats))
+
     def test_source_warning_or_migration_gap_exposes_only_safe_metric_reasons(self):
         original, _source = self.original(1)
         selections = (
@@ -296,7 +328,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
                 break
             time.sleep(.02)
         self.assertEqual('complete', job['status'], job.get('error'))
-        self.assertEqual(10, len(job['result']['view']['ai_stats'][0]['metrics']))
+        self.assertEqual(12, len(job['result']['view']['ai_stats'][0]['metrics']))
 
     @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
     def test_cached_view_policy_exact_ttl_and_one_hour_edges(self):
@@ -324,12 +356,14 @@ class AIStatsAcquisitionTests(unittest.TestCase):
             warm = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
         self.assertEqual(first, warm)
         self.assertEqual(6, loads)
+        self.assertEqual(6 * 393, first.ai_stats[-1].metrics[-2].value)
         del source.snapshots['root-0001']
         snapshot = source.snapshots['root-0002']
         root = replace(snapshot.root, archived_at_ms=NOW)
         source.snapshots['root-0002'] = replace(snapshot, root=root, sessions=(root,), source_revision='archived')
-        self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
+        changed = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
         self.assertEqual(loads + 1, source.load_count)
+        self.assertEqual(5 * 393, changed.ai_stats[-1].metrics[-2].value)
 
     def test_unknown_old_roots_are_verified_once_then_reused_across_periods(self):
         now = epoch('2026-10-31T22:00:00+00:00')

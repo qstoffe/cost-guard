@@ -7,6 +7,8 @@ const AIStatsView = (() => {
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
+    ['total-tokens', '🍿', 'Total Tokens', 'Observed token traffic, including repeated context reads.'],
+    ['token-rate', '🍽️', 'Token Consumption Rate', 'Token traffic per calendar, workday and active AI hour.'],
     ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Coffee breaks excluded.'],
     ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
     ['expensive-session', '🏆', 'Most Expensive Session', 'The quest with the biggest token tab.'],
@@ -20,22 +22,34 @@ const AIStatsView = (() => {
   const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
   function valid(result) {
     const rows = result?.view?.ai_stats;
-    return result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-1' &&
+    return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-2-tokens' &&
       Array.isArray(rows) && rows.length > 0 && rows.every(row =>
-      periods.some(([id]) => id === row.period) && row.metrics?.length === 10 && definitions.every(([key]) =>
-        row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
+      periods.some(([id]) => id === row.period) && row.metrics?.length === definitions.length && definitions.every(([key]) =>
+        row.metrics.filter(metric => metric.metric === key && (metric.value !== null && Number.isFinite(Number(metric.value)) ||
+          key === 'token-rate' && metric.value === null && metric.status === 'partial') &&
           typeof metric.display?.value === 'string' && typeof metric.display?.trait === 'string' &&
+          (key !== 'total-tokens' || /^\d+$/.test(metric.exact_value) && typeof metric.display.token_help === 'string') &&
           ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
-            (key !== 'hourly-rate' || [...rateRows.map(([id]) => id), 'rate_help'].every(id =>
+            (!['hourly-rate', 'token-rate'].includes(key) || [...rateRows.map(([id]) => id), 'rate_help'].every(id =>
               typeof (metric.display_units?.[unit]?.[id] ?? metric.display[id]) === 'string')))).length === 1));
   }
   function remember(state, result) {
     if (!valid(result)) return;
     state.statsResults ||= new Map();
+    const seen = CachedReports.observation(result);
+    if (!Number.isSafeInteger(seen) || seen < 0) return;
+    const identity = JSON.stringify([result.source?.identity, result.source?.generation, result.scope?.timezone_id]);
+    if (state.statsIdentity !== identity) {
+      if (state.statsObserved > seen) return;
+      state.statsResults.clear(); state.statsIdentity = identity;
+    }
+    state.statsObserved = Math.max(state.statsObserved || 0, seen || 0);
     for (const row of result.view.ai_stats) {
       const old = state.statsResults.get(row.period);
-      const ready = result.view.ai_stats_work?.scopes?.[row.period]?.ready !== false;
-      if (!old || ready && CachedReports.observation(old) <= CachedReports.observation(result))
+      const ready = result.view.ai_stats_work?.scopes?.[row.period]?.ready === true;
+      const newer = !old || CachedReports.observation(old) < seen || CachedReports.observation(old) === seen &&
+        (old.instance_id !== result.instance_id || (old.sequence || 0) <= (result.sequence || 0));
+      if (ready && newer)
         state.statsResults.set(row.period, result);
     }
     state.result = state.statsResults.get(state.period) || null;
@@ -76,20 +90,21 @@ const AIStatsView = (() => {
         this.buttons.set(id, button); this.selector.append(button);
       }
       this.content = e('div');
-      this.loading = e('p', 'The robots are counting their adventures…'); this.loading.setAttribute('role', 'status');
       this.grid = e('div', undefined, 'ai-stats-groups');
-      for (const [name, items] of [['Overview', definitions.slice(0, 4)], ['Fun Facts', definitions.slice(4)]]) {
+      for (const [name, items] of [['Overview', definitions.slice(0, 6)], ['Fun Facts', definitions.slice(6)]]) {
         const section = e('section', undefined, 'ai-stats-section'), grid = e('div', undefined, 'ai-stats-grid');
         section.append(e('h3', name), grid); this.grid.append(section);
         for (const [key, icon, title, help] of items) {
           const card = e('article', undefined, 'ai-stat'), heading = e('h4');
+          card.dataset.metric = key;
           const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
           const retained = {metric: null, rates: new Map()};
-          const helpButton = ContextHelp.button(title, () => key === 'hourly-rate' && retained.metric ?
-            ReportView.display(retained.metric, 'rate_help') : help);
+          const hasRates = ['hourly-rate', 'token-rate'].includes(key);
+          const helpButton = ContextHelp.button(title, () => retained.metric && (hasRates || key === 'total-tokens') ?
+            ReportView.display(retained.metric, hasRates ? 'rate_help' : 'token_help') : help);
           heading.append(symbol, helpButton);
-          const value = e(key === 'hourly-rate' ? 'div' : 'p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
-          if (key === 'hourly-rate') {
+          const value = e(hasRates ? 'div' : 'p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
+          if (hasRates) {
             value.classList.add('ai-stat-rates');
             for (const [id, label] of rateRows) {
               const row = e('div', undefined, 'ai-stat-rate'), amount = e('span', '', 'ai-stat-rate-value');
@@ -99,11 +114,12 @@ const AIStatsView = (() => {
             }
           }
           const trait = e('p', '', 'ai-stat-trait');
-          card.append(heading, value, detail, trait); grid.append(card);
-          this.cards.set(key, Object.assign(retained, {value, detail, trait}));
+          grid.append(card);
+          this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, detail, trait], value, detail, trait}));
         }
       }
       this.root.append(this.selector, this.content);
+      this.content.append(this.grid);
       this.extra = e('article', undefined, 'ai-stat');
       const title = e('h4'), symbol = e('span', '🏁', 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
       this.extraHeading = ContextHelp.button('Biggest AI Speed Gap',
@@ -116,13 +132,20 @@ const AIStatsView = (() => {
     update(state) {
       const e = ReportView.element;
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
-      const row = valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
+      const ready = state.result?.view?.ai_stats_work?.scopes?.[state.period]?.ready === true;
+      const row = ready && valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
       if (!row) {
-        ReportView.text(this.loading, state.interrupted || (state.failed ? state.message : 'The robots are counting their adventures…'));
-        if (this.content.firstChild !== this.loading) this.content.replaceChildren(this.loading);
+        const message = state.interrupted || (state.failed ? 'Unavailable' : 'Loading…');
+        for (const item of this.cards.values()) {
+          if (item.pending !== message) {
+            item.card.replaceChildren(message); item.pending = message;
+            item.card.setAttribute('role', 'status'); item.card.setAttribute('aria-live', 'off');
+          }
+        }
+        this.extra.remove();
         return;
       }
-      // Mutate the ten retained cards in one synchronous commit; never touch focus/scroll.
+      // Reveal each complete card in this synchronous commit; retain nodes on quiet refresh.
       for (const metric of row.metrics) {
         const card = this.cards.get(metric.metric);
         card.metric = metric;
@@ -136,6 +159,10 @@ const AIStatsView = (() => {
           link.href = '#/sessions/' + metric.session_id;
           if (!target) card.detail.replaceChildren(link);
         } else ReportView.text(card.detail, metric.detail || '');
+        if (card.pending || !card.card.firstChild) {
+          card.card.replaceChildren(...card.nodes); card.pending = null;
+          card.card.removeAttribute('role'); card.card.removeAttribute('aria-live');
+        }
       }
       if (!this.content.contains(this.grid)) this.content.replaceChildren(this.grid);
       if (row.matched) {

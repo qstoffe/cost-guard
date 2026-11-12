@@ -133,7 +133,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix, publisher_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
-| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition with early fun-first numeric snapshots independent of scan readiness; Stats-only bounded time/cost heuristics, configured-local calendar/DST and overlap-safe execution; no accounts/request rows or CLI change |
+| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition; scope-ready twelve-card presentation, observed token traffic/rates alongside Stats-only fun cost/time heuristics; configured-local calendar/DST and overlap-safe execution; no accounts/request rows or CLI change |
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
@@ -161,6 +161,24 @@ cache corruption and a >500-key no-hydration/no-repricing refresh. Performance a
 browser proof retain their actual limits in the Token Mix journal.
 
 ## Web AI Stats acquisition and accounting
+
+FR000682 current delta (2026-11-12): `fun-2-tokens` preserves the ten historical
+fun figures below and appends exact observed `total-tokens`/`token-rate` metrics.
+They use the same canonical deduplication/event membership and rate denominators,
+but never guessed usage or timing. Missing counters/source/pending evidence qualify
+the total and withhold precise rates; unknown/guessed/running active time withholds
+the active rate. Application owns compact/exact-help text, independent of CCost units.
+A typed pricing outage uses empty catalogs in that finite Stats service only, not
+provider/shared-cache writes, so actual traffic remains available. Compact usage
+algorithm 5 stays reusable; coverage v3 alone rejects undated-request exclusions.
+The browser stores only authoritative ready period snapshots, rejects older/foreign
+publications, and atomically reveals twelve stable Loading-only card shells. A cold
+terminal failure is Unavailable, not fabricated zero or indefinite Loading. Existing
+last-good same-period refresh, host scheduling and the optional matched-run fact keep
+their owners. No qualified per-invocation generation interval exists in captured
+facts, so no TPS ranking/scan is added. [Evidence](../../journal/web/ai-stats.md#observed-token-traffic-and-ready-card-shells--fr000682).
+
+Historical cost/time policy and acquisition baseline:
 
 FR000633 scoped delta against `9b9fdf389d93d90a09bfa13e9b075b564d026961`,
 checked 2026-11-08; unrelated module provenance above remains unchanged.

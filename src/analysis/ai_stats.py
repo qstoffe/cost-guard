@@ -12,7 +12,7 @@ DAY_MS = 24 * HOUR_MS
 FALLBACK_MS = 60_000
 MAX_GUESSED_MS = 4 * HOUR_MS
 GENERIC_TOKEN_COST = Decimal('.000003')
-POLICY = 'fun-1'
+POLICY = 'fun-2-tokens'
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +238,33 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
               reasons=reasons))
 
 
+def _token_metrics(roots, entries, complete, duration, time_reasons, rates):
+    """Observed physical traffic only: never borrow fun-page cost/time fillers."""
+    reasons = tuple(code for code, present in (
+        ('source-incomplete', not complete),
+        ('missing-token-usage', any(not USAGE_FIELDS <= set(e.tokens.known_fields) for e in entries)),
+        ('unknown-request-time', any(e.completed_at_ms <= 0 for root in roots for e in root.entries)),
+        ('pending-usage', any(root.cost_pending for root in roots))) if present)
+    total = sum(sum(getattr(e.tokens, field) for field in USAGE_FIELDS if field in e.tokens.known_fields)
+                + (e.tokens.reasoning if 'output' in e.tokens.known_fields else 0)
+                for e in entries if e.completed_at_ms > 0)
+    # Reuse the cost card's exact denominators, including its all-time evidence start.
+    numerator = Decimal(total)
+    active = numerator * HOUR_MS / duration if duration else Decimal(0) if not total else None
+    active_reasons = tuple(dict.fromkeys((*reasons, *time_reasons,
+        *(('unknown-duration',) if any(root.entries and not root.intervals for root in roots) else ()),
+        *(('zero-active-time',) if total and not duration else ()))))
+    token_rates = replace(rates, total=numerator,
+        calendar_rate=numerator / rates.calendar_hours if rates.calendar_hours else Decimal(0),
+        workday_rate=numerator / rates.workday_hours if rates.workday_hours else None,
+        active_rate=None if active_reasons else active, robot_day=Decimal(0), robot_period=Decimal(0))
+    if reasons:
+        token_rates = replace(token_rates, calendar_rate=None, workday_rate=None)
+    return (Stat('total-tokens', total, 'partial' if reasons else 'complete', reasons=reasons),
+            Stat('token-rate', token_rates.active_rate, 'partial' if active_reasons else 'complete',
+                 reasons=active_reasons, rates=token_rates))
+
+
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
     def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE'):
@@ -272,7 +299,8 @@ class StatsObservation:
         rates = hourly_rates(cost[1].value, duration, period=period, now=self.now, zone=self.zone,
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
         return StatsPeriod(period, start, self.now,
-            (replace(cost[0], rates=rates), cost[1], timed[0], *cost[2:], *timed[1:]))
+            (replace(cost[0], rates=rates), cost[1], timed[0], *cost[2:], *timed[1:],
+             *_token_metrics(roots, entries, complete, duration, reasons, rates)))
 
 
 def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True, workday_calendar='SE'):
@@ -287,7 +315,7 @@ def outside_period(root, start):
     A missing end, pending usage or incomplete snapshot cannot prove irrelevance.
     Global membership/migration warnings are intentionally not discharged here.
     """
-    if start is None or not root.source_complete or root.cost_pending:
+    if start is None or not root.source_complete or root.cost_pending or any(e.completed_at_ms <= 0 for e in root.entries):
         return False
     if any(left <= 0 or duration is None or duration < 0 or running
            for left, duration, running in root.intervals):

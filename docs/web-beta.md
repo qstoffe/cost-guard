@@ -516,16 +516,17 @@ stay date-only; raw timestamps, sorting, reset deadlines and CLI formats are unc
 
 ## AI Stats
 
-**AI Stats** at `/#/ai-stats` turns your robot adventures into ten playful cards and a
+**AI Stats** at `/#/ai-stats` turns your robot adventures into twelve playful cards and a
 little friendly banter. Old `/#/cost-per-hour` bookmarks arrive here too.
 
 The emoji cards keep two sections:
 
-- **Overview:** AI Hourly Rate, Total AI Cost, AI Working Time, Average Cost per Session.
+- **Overview:** AI Hourly Rate, Total AI Cost, Total Tokens, Token Consumption Rate,
+  AI Working Time, Average Cost per Session.
 - **Fun Facts:** Most Expensive Session, Longest Session, Busiest Day, Night Owl,
   Coding Streak, Peak Parallel Sessions.
 
-Every card gets a figure and a playful trait, even when the silicon crew has taken
+Ready, evidenced cards get a figure and a playful trait, even when the silicon crew has taken
 the whole period off. Real session records link to their session pages. Hover,
 focus or tap a card title for a short explanation of its meaning. Long names and
 enlarged text wrap naturally, with equal-height cards within each responsive row.
@@ -536,6 +537,24 @@ Choose **Today | 7 days | 30 days | This month | All time**, starting at **30 da
 The rolling choices cover 7/30 × 24 hours; Today and This month follow your configured
 local calendar. All five buttons have friendly hover, keyboard-focus and touch help.
 Switch Credits/USD to change the money display while keeping your period and cards.
+The two token cards never change with monetary units.
+
+**Total Tokens** counts observed physical request traffic: Input + Cached input
+(cache read) + Cache write + Output, with reasoning included once. Repeated context
+reads count again; this is not context-window size, unique text, billing or quota.
+Title help gives the precise integer behind the compact K/M/B/T display. Child agents,
+archived sessions, step precedence and clone deduplication use the existing canonical
+request population. Missing usage, pending requests or source gaps produce a qualified
+**Partial** subtotal, or **Unavailable** when no known subtotal exists, not an invented zero.
+
+**Token Consumption Rate** repeats the cost card's Calendar / Workday / Active AI
+average rows in **tokens/h**, using the same Total Tokens numerator and exactly the
+same denominators described below. Unknown token coverage withholds the rates;
+unknown/guessed/running active time or nonzero tokens with zero active time withhold
+the active row. **No workdays** remains distinct. Activity-hour consumption is not
+actual model output generation speed in tokens/second. A fastest-model podium is
+intentionally omitted: available created/completed/streamed timestamps do not qualify
+a pure generation interval. No extra history scan or model call is made to seek one.
 
 The first **💸 AI Hourly Rate** card has three compact rows, not three cards:
 
@@ -558,12 +577,14 @@ Working Time counts overlapping robot activity once. Night Owl follows the
 22:00–06:00 shift; Coding Streak celebrates consecutive active calendar dates.
 Session records, busiest dates and parallel parties keep their familiar places.
 
-A cold visit may briefly say the robots are warming up. Numbers arrive as the
-history is collected and improve along the way. Already loaded cards stay visible
+A cold visit or pending new period shows the normal twelve card shells. Each pending
+card contains only plain **Loading…**, with no title, emoji, value or joke. Complete
+card contents appear together only after authoritative scope readiness. Already loaded,
+ready same-period cards stay visible
 during refresh and interrupted updates; period changes reuse only the matching
 period's result. A genuinely empty period gets cheerful zero-style figures (and
 **No workdays** where appropriate), but failed acquisition without a valid result
-shows truthful report status, **never synthetic zero cards**. Incomplete refresh
+shows **Unavailable**, **never synthetic zero cards or endless Loading**. Incomplete refresh
 slices do not replace an already accepted same-period result. There is no
 Load/Refresh/Retry toolbar or Cancel button in any report state.
 Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**
@@ -732,7 +753,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live seven-column catalog including CTX, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten playful numeric cards plus an optional matched-input fact, five periods, early figures and retained refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Twelve cards including token traffic/rates plus an optional matched-input fact; five periods, Loading-only pending shells and retained ready refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
 | Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
 | Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Known subtotals are quiet; incomplete pricing/telemetry is explained in the total-title help. Unknown values remain N/A. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |

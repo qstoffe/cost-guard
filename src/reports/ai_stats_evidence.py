@@ -9,7 +9,7 @@ from .matched_runs import project_run, encode_run, decode_run
 
 ALGORITHM = 'ai-stats-evidence-5-fun-1'
 NAMESPACE = 'ai-stats-evidence'
-COVERAGE = 'ai-stats-coverage-2'
+COVERAGE = 'ai-stats-coverage-3'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)
 
 
@@ -53,7 +53,7 @@ def coverage_key(root):
 def coverage(value):
     """Only a complete stable root with known ends may be irrelevant to a window."""
     intervals = value['intervals']
-    known = value['complete'] and not value['pending'] and all(
+    known = value['complete'] and not value['pending'] and all(fact['completed'] > 0 for fact in value['usage']) and all(
         left > 0 and duration is not None and duration >= 0 and not running for left, duration, running in intervals)
     ends = [left + duration for left, duration, _running in intervals] if known else []
     ends.extend(fact['completed'] for fact in value['usage'])
