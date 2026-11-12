@@ -473,7 +473,7 @@ cg_python_failure
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertIn(str(root / 'good'), result.stdout)
             self.assertIn('START\n\nReason: No usable Python', result.stdout)
-            self.assertNotIn('private', result.stdout + result.stderr)
+            self.assertNotIn('private-url-token', result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

@@ -142,7 +142,7 @@ function Find-CostGuardPython {
             [IO.Path]::GetExtension($candidate) -ne '.exe') { continue }
         $candidate = [IO.Path]::GetFullPath($candidate)
         if (-not $tested.Add($candidate)) { continue }
-        $result = Invoke-CostGuardPythonProcess $candidate ('-I -S -c "' + $probeCode + '"') ([Math]::Min(2000, 20000 - $timer.ElapsedMilliseconds)) $Activity
+        $result = Invoke-CostGuardPythonProcess $candidate ('-I -B -S -c "' + $probeCode + '"') ([Math]::Min(2000, 20000 - $timer.ElapsedMilliseconds)) $Activity
         try {
             if (-not $result -or $result.Code -ne 0) { $broken = $true; continue }
             $facts = ConvertFrom-Json -InputObject $result.Output -ErrorAction Stop
@@ -155,7 +155,7 @@ function Find-CostGuardPython {
             if ($real -match '\\Microsoft\\WindowsApps\\' -or -not [IO.File]::Exists($real)) { $broken = $true; continue }
             # Resolve shims/launchers to a real interpreter; validate the direct invocation too.
             if ($real -ne $candidate) {
-                $direct = Invoke-CostGuardPythonProcess $real ('-I -S -c "' + $probeCode + '"') 2000 $Activity
+                $direct = Invoke-CostGuardPythonProcess $real ('-I -B -S -c "' + $probeCode + '"') 2000 $Activity
                 if (-not $direct -or $direct.Code -ne 0 -or $direct.Output.Trim() -ne $result.Output.Trim()) { $broken = $true; continue }
             }
             return @{Executable = $real; Arguments = @(); Failure = $null}

@@ -46,11 +46,40 @@ menu/tray responsibilities are unchanged. SourceGuard includes the new shell fil
 - Real workstation, read-only: resolver fed only actual PEP 514 registrations
   selected the installed Python and successfully ran `cost-guard-web.py --help`.
   This proves non-PATH registered lookup/invocation, not a visible native launch.
-- Full local suite, final validator, headless real-installation probe and protected
-  PR CI results will be recorded before completion. No pending check is a PASS.
+- Full local suite: all 184 groups PASS (150.1s). Initial failures were obsolete
+  duplicated-source assertions and native-profile inventory expectations; they
+  were updated to assert shared ownership and retain behavioral coverage.
+- Validator: 11 checks PASS, zero failures, seven existing advisory warnings.
+- The initial generic Live probe FAILED an immediate post-close worker assertion
+  (two provider workers). Its failure is retained, not relabeled PASS. Following
+  Decision Delegate guidance, `probe_source_generation.py` ran using the exact
+  PEP 514-selected interpreter with normal providers retained: authenticated V2,
+  one owner, two verified streams, instance/source identity and advancing sequence
+  PASS; zero initial/final owned workers/processes, retirement wait 0.0s. This is
+  bounded observation, not a universal provider-cleanup reliability claim.
+- Protected PR CI remains pending reconciliation. The first macOS run exposed a
+  test assertion that mistook macOS's `/private/` temporary root for leaked fake
+  secret text; it now checks the exact fake secret. Its real-interpreter startup
+  fixture also needs causal diagnosis, not a waived failure. Discovery now passes
+  `-B` explicitly so `-I` cannot override bytecode suppression during probes.
+- GitHub's job-log endpoint returned HTTP 401. Canonical check-run annotations
+  remain accessible and provide the scoped failure/native evidence; no identity
+  change, credential recovery or alternate login was attempted.
 - macOS tests use real zsh/process/glob behavior on CI with representative disposable
   framework/Homebrew/user-install trees; those installations are synthetic. No
   local macOS desktop is available. Physical Finder/Gatekeeper, visual dialog/menu,
   consumer-installation and browser-paint acceptance are not inferred from CI.
 - No model calls, downloads, package installation or shared OpenCode stop is part
   of verification. Runtime caches/logs and private raw evidence stay outside Git.
+
+## Scoped verification decision
+
+Decision Delegate authorized a conditional, journal-only verification exception:
+after successful core non-PATH real-runtime startup, stale-command recovery and
+native lifecycle checks, unavailable physical Finder/Gatekeeper/Explorer, visual
+dialog/tray/browser and actual consumer-distribution observations remain NOT RUN /
+UNVERIFIED. Real-runtime and native CI establish separable behavior without
+disruptive workstation UI; they do not reproduce the reported user's incident.
+This decision does not waive causal failures, unresolved host lifetime defects or
+core automatic discovery. No Suggestion is required solely for those physical
+observations. The first generic live-probe failure remains disclosed above.

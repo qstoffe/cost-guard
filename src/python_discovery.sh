@@ -39,7 +39,7 @@ cg_probe_python() {
   CG_PROBE_FILE="$temporary"
   {
     # The exact child has a wall deadline and a small output-file limit.
-    ( ulimit -f 16; exec "$executable" -I -S -c 'import sys,sqlite3,ssl,ctypes; print("CGPY|%s|%s|%s|%s" % (sys.version_info[0],sys.version_info[1],sys.platform,sys.executable))' ) >"$temporary" 2>/dev/null &
+    ( ulimit -f 16; exec "$executable" -I -B -S -c 'import sys,sqlite3,ssl,ctypes; print("CGPY|%s|%s|%s|%s" % (sys.version_info[0],sys.version_info[1],sys.platform,sys.executable))' ) >"$temporary" 2>/dev/null &
     probe=$!
     CG_PROBE_PID="$probe"
     for tick in {1..20}; do
