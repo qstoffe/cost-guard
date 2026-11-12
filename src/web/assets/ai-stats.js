@@ -124,6 +124,7 @@ const AIStatsView = (() => {
             value.classList.add('ai-stat-podium');
             for (const medal of ['🥇', '🥈', '🥉']) {
               const row = e('div', undefined, 'ai-stat-racer'), label = e('span', '', 'ai-stat-model');
+              ContextHelp.value(label, () => retained.metric?.podium[retained.podium.findIndex(item => item.label === label)]?.model_help || 'Recorded model identity unavailable.');
               const icon = e('span', medal); icon.setAttribute('aria-hidden', 'true');
               const speed = e('span', '', 'ai-stat-speed'), sample = e('span', '', 'ai-stat-sample');
               row.append(icon, label, speed, sample); row.setAttribute('role', 'group');

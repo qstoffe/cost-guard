@@ -884,6 +884,18 @@ Both normal and legacy `/live` links open the same live page; the legacy URL rep
 
 Every observed prompt appears oldest to newest, with no 50-row cap or user-facing pagination. Prompt alone flexes/ellipsizes; other columns keep intrinsic widths. The document scrolls vertically. Clock, actual **[RUNNING]**, number and preview share one line; running ink is yellow across all cells, reverting to theme foreground after canonical completion. Model/Effort use structured main-prompt evidence. Shared heading help covers all ten columns; prompt clock and CCost expose useful conditional detail. **Complete session** remains the aligned canonical whole-session footer, not a sum of fetched rows.
 
+Since v81.33, request-model hover/focus/touch help shows the **recorded provider/model**
+(for example `claude-agent/sonnet`, not a friendly-name/bracket duplicate). Friendly
+cells retain their labels. A separately labelled **Catalog modelID** is a current
+catalog estimate, not proof of the historical executed release. Single-model help,
+mixed/child and compaction groups, Mini prompt cost, Full Watch Model/Calls/CCost,
+Sessions list/detail, Comparisons and AI Stats model podiums share prepared provenance.
+Incomplete Sessions lists say observed so far. A saved selection without usage is
+not a contributing request: its help says **Usage unavailable; cost unknown**.
+The unchanged numeric empty observed subtotal is not known zero consumption.
+Historical Claude recovery and complete all-model native proof remain excluded;
+see [evidence and limits](../development/journal/recorded-model-help.md).
+
 **[UNVERIFIED]** distinguishes an unfinished assistant whose complete source observation has no native running drain or supported tool/child/background activity. It is not success, failure or proof that another OpenCode process stopped. Known calls/usage remain, but Duration and affected session-duration totals are **N/A**, without an invented finish time. Later authoritative activity or terminal evidence updates the same prompt.
 
 Stable keyed rows preserve document anchors, focus and text selection. Large new suffixes are built detached and batch-appended. Source omissions retain canonical evidence and frozen lifecycle/time until observed again; deleted-before-observation history cannot be recovered. Missing, archived, partial and unavailable remain distinguishable from observed empty. Silence/connection loss never proves completion.

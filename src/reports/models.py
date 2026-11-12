@@ -106,6 +106,7 @@ class PromptProjection:
     extra_ccost_known: bool = False
     linked_agent_count: int = 0
     cost_parts: tuple[PromptCostPart, ...] = ()
+    recorded_selections: tuple[str, ...] = ()  # Saved replies without request usage; not contributors.
 
 
 @dataclass(frozen=True, slots=True)

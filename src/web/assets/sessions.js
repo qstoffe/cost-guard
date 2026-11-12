@@ -335,10 +335,9 @@ const SessionsCatalog = (() => {
               if (key === 'ctx') return [current.context_tokens == null ? '' : `${current.context_tokens.toLocaleString()} estimated tokens.`,
                 current.context_detail, state === 'retained' ? 'Retained from an earlier source observation; refresh pending.' :
                   state === 'pending' ? 'Source work is pending.' : state === 'unavailable' ? 'Source context unavailable.' : ''].filter(Boolean).join('\n');
-              if (key !== 'model' || !current.multiple_models) return 'Observed session ' + key + '.';
-              const models = current.contributor_models || [];
-              return ['Models used in this session' + (current.contributor_models_complete && state === 'ready' ? '' : ' (observed so far)'),
-                models.length ? models.join('\n') : 'Contributing model identities are not available.'].filter(Boolean).join('\n');
+              if (key !== 'model') return 'Observed session ' + key + '.';
+              return [ReportView.display(current, 'model_help'), state === 'ready' ? '' :
+                'Retained or pending source observation; contributing model coverage may be incomplete.'].filter(Boolean).join('\n');
             });
             return node;
           });

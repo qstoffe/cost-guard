@@ -143,7 +143,7 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
         row = report.prompt_blocks[0].rows[0]
         request = original._analyzed['root-0000'].snapshot.invocations[0]
 
-        self.assertEqual('Sonnet 5.5', row.watch_model)
+        self.assertEqual('Claude Sonnet 5.5', row.watch_model)
         self.assertEqual('Default', row.watch_effort)
         self.assertEqual(D('6.89'), row.ccost)
         self.assertEqual('sonnet', request.model.recorded_model)
@@ -187,7 +187,7 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
 
         self.assertEqual(LABEL, before.session_usage[0].model)
         self.assertFalse(before.session_usage[0].complete)
-        self.assertEqual('Sonnet 5.5', after.session_usage[0].model)
+        self.assertEqual('Claude Sonnet 5.5', after.session_usage[0].model)
         self.assertEqual(D('6.89'), after.session_usage[0].ccost)
         self.assertEqual('sonnet', original.source.snapshots['root-0000'].invocations[0].model.model)
 

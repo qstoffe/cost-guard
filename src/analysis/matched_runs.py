@@ -33,6 +33,7 @@ class MatchedRun:
     activity_ms: int = 0
     model_label: str = ''
     model_identities: tuple = ()  # Compact source-qualified mutable dependencies.
+    recorded_models: tuple = ()  # (provider, effective model, effort, recorded selectors)
 
 
 @dataclass(frozen=True, slots=True)

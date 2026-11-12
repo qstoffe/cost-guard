@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.32, 2026-11-12), the supported distribution.
+Use **current `main`** (v81.33, 2026-11-12), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.32 (2026-11-12):** AI Stats' Token Consumption Rate becomes a sampled Top 3 model-response output tok/s podium. Every ready Stats card follows the permanent best-effort policy; sparse or incomplete observations never become Unavailable. Other card calculations remain unchanged. [AI Stats](docs/web-beta.md#ai-stats).
+**v81.33 (2026-11-12):** Request-model help exposes the recorded provider/model, including aliases, across Watch/Mini, Sessions/detail, Comparisons and AI Stats. Friendly cells retain Claude branding; catalog estimates remain separate. Historical recovery and full-catalog live proof are not delivered by this scoped change. [Evidence and exclusions](development/journal/recorded-model-help.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

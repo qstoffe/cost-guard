@@ -44,3 +44,10 @@ class ModelResolution:
 
 CATALOG_ESTIMATE_HELP = ("Model and reference cost based on current OpenCode catalog; "
                          "historic executed version unconfirmed.")
+
+
+def catalog_display_name(provider, label):
+    """Restore branding on exact catalog labels, without inferring a release."""
+    if provider == 'claude-agent' and label and re.match(r'^(Sonnet|Opus|Haiku|Fable)\b', label):
+        return 'Claude ' + label
+    return label

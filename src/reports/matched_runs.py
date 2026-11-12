@@ -52,7 +52,9 @@ def project_run(snapshot, bundle, reference, config):
         duration, row.next_context_tokens if status == 'complete' else None, row.token_mix_percent if known else None,
         (record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens),
         len(entries), row.linked_agent_count, sum(bool(entry.error_name) for entry in entries), tuple(groups),
-        model_label=row.watch_model, model_identities=tuple(dependencies(bundle.trace_entries)))
+        model_label=row.watch_model, model_identities=tuple(dependencies(entries)),
+        recorded_models=tuple((*key, tuple(sorted({entry.model.recorded_model for entry in requests})))
+                              for key, requests in sorted(contributors.items())))
 
 
 def encode_run(run):
@@ -97,6 +99,17 @@ def decode_run(payload):
             or type(values['cost_complete']) is not bool or type(values['mixed']) is not bool):
         raise ValueError('invalid_match_identity')
     values['contributors'] = tuple((*group[:4], Decimal(group[4]), group[5]) for group in values['contributors'])
+    recorded = values['recorded_models']
+    if not isinstance(recorded, (list, tuple)) or any(not isinstance(group, (list, tuple)) or len(group) != 4
+            or any(not isinstance(value, str) for value in group[:3])
+            or not isinstance(group[3], (list, tuple)) or not group[3]
+            or any(not isinstance(value, str) or not value or len(value) > 1024 or not value.isprintable()
+                   for value in group[3]) for group in recorded):
+        raise ValueError('invalid_recorded_models')
+    values['recorded_models'] = tuple((*group[:3], tuple(sorted(set(group[3])))) for group in recorded)
+    if ({group[:3] for group in values['recorded_models']} != {group[:3] for group in values['contributors']}
+            or len(values['recorded_models']) != len(values['contributors'])):
+        raise ValueError('invalid_recorded_model_groups')
     if any(len(group) != 6 or type(group[3]) is not int or group[3] < 0 or type(group[5]) is not bool
            or not group[4].is_finite() or group[4] < 0 for group in values['contributors']):
         raise ValueError('invalid_match_contributors')

@@ -10,7 +10,7 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
     })()`);
     assert.deepEqual(facts.parts,[{role:'main',agents:0,calls:2},{role:'subagents',agents:2,calls:2}]);
     assert.equal(facts.mixHelp,false);
-    assert.match(facts.calls,/Subagents — Child Model · Low \(2 agents\): 2\nTotal Calls: 4/);
+    assert.match(facts.calls,/Subagents — fixture\/child-model · Low \(2 agents\): 2\nTotal Calls: 4/);
     await evaluate(owner,`document.querySelector('.${table} tbody td:nth-child(7) .help-value').focus()`);
     await until(owner,`document.querySelector('#context-help')?.matches(':popover-open')`);
     assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Total Calls: 4/);
@@ -43,10 +43,12 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
   for(const cell of sameModel) {assert.equal(cell.help,true);assert.equal(cell.label,'Model*');assert.match(cell.aria,/Linked subagents participated \(2\)/);}
   await evaluate(owner,`document.querySelector('.watch-active tbody td:nth-child(4) .help-value').focus()`);
   await until(owner,`document.querySelector('#context-help')?.matches(':popover-open')`);
-  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Main prompt — Main Model · High[\s\S]*Subagents — Main Model · Low/);
+  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Main prompt — fixture\/main-model · High[\s\S]*Subagents — fixture\/main-model · Low/);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},owner);
   const stable=await evaluate(owner,`(() => {
     const real=Date.now,base=real(),p=structuredClone(liveValue),history=structuredClone(p.view.history_cards);
+     const prior=Object.fromEntries(['observations','publication','epoch','receivedAt','sourceScope'].map(key=>[key,miniWatch[key]]));
+     miniWatch.observations=new prior.observations.constructor();
     let offset=0;Date.now=()=>base+offset;
     const amounts=[];
     try {
@@ -59,23 +61,23 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
         current.watch.update(p);miniWatch.update(p);
         if(offset%60000===0||offset===241000) amounts.push({at:offset,
           full:[...current.watch.cards.values()].map(c=>({amount:c.costLabel.textContent,note:c.costStatus.textContent})),
-          mini:[...miniWatch.view.root.querySelectorAll('tbody .mini-cost-value')].map(n=>n.textContent)});
+        mini:[...miniWatch.view.body.children].filter(n=>n.dataset.id).map(n=>[n.children[2].textContent,n.children[3].textContent])});
       }
       const unknown=structuredClone(p);unknown.view.active_cards=unknown.view.active_cards.slice(0,1);
       unknown.view.active_cards[0].session_id='unknown-total';
       unknown.view.active_cards[0].session_summary={cost:null,context:null,state:'loading'};
       current.watch.update(unknown);miniWatch.update(unknown);
       const loading={full:[...current.watch.cards.values()].find(c=>c.value.session_id==='unknown-total').costLabel.textContent,
-        mini:miniWatch.view.body.querySelector('tr[data-id="unknown-total"] .mini-cost-value').textContent};
+        mini:[...miniWatch.view.body.querySelector('tr[data-id="unknown-total"]').children].slice(2,4).map(n=>n.textContent)};
       return {amounts,loading};
-    } finally {Date.now=real;document.activeElement?.blur();current.watch.earlier.open=true;current.watch.update(liveValue);miniWatch.update(liveValue);}
+    } finally {Date.now=real;Object.assign(miniWatch,prior);document.activeElement?.blur();current.watch.earlier.open=true;current.watch.update(liveValue);miniWatch.update(liveValue);}
   })()`);
   for(const sample of stable.amounts) {
     for(const total of sample.full) {assert.equal(total.amount,'4583');assert.equal(total.note,'');}
     assert.ok(sample.mini.length>0,'paired Mini cost targets must actually be present');
-    for(const total of sample.mini) assert.equal(total,'33 (4583)');
+    for(const total of sample.mini) assert.deepEqual(total,['33','4583']);
   }
-  assert.deepEqual(stable.loading,{full:'Loading…',mini:'33 (Loading…)'});
+  assert.deepEqual(stable.loading,{full:'Loading…',mini:['33','Loading…']});
   layouts.push({case:'241-second-stable-totals',...stable});
   for(const width of [1280,360]) for(const zoom of [1,1.5]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);

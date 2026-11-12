@@ -4,6 +4,7 @@ Uses shipped HTTP/assets/CSP/session/SSE and disposable Settings. No real source
 provider, browser launch or inference. The one-use URL stays inside the probe pipe.
 """
 from dataclasses import replace
+from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
@@ -48,7 +49,11 @@ def main():
         (root / "config").mkdir(exist_ok=True)
         if not (root / "config/default-config.jsonc").exists():
             shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
-        jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
+        help_audit = sys.argv[2:3] == ['--help-audit']
+        replay = None
+        if sys.argv[3:4] == ['--raw-models']:
+            replay = json.loads(Path(sys.argv[4]).read_text(encoding='utf-8'))
+        jobs = HelpAuditJobs() if help_audit else ReportJobs(target=finite_report)
         if sys.argv[2:] == ['--token-mix']:
             jobs = TokenMixJobs()
         if sys.argv[2:] == ['--ai-stats']:
@@ -104,23 +109,35 @@ def main():
         cards = tuple(replace(base, focal_id=str(index), rows=(WatchRow(base.session_id, base.title,
             replace(base.rows[0].prompt, event_id=str(index), prompt_number=22 + index,
                 at_ms=frame.now_ms - duration, duration_ms=duration,
-                 ccost=Decimal(33) if sys.argv[2:] == ["--help-audit"] else Decimal(cost),
-                 cost_parts=base.rows[0].prompt.cost_parts if sys.argv[2:] == ["--help-audit"] else (),
+                 ccost=Decimal(33) if help_audit else Decimal(cost),
+                 cost_parts=base.rows[0].prompt.cost_parts if help_audit else (),
                  unresolved_cost=False, cost_estimated=False)),))
             for index, duration, cost in ((1, 600_000, "1.25"), (2, 1_200_000, "2.75")))
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
         cost_groups = (project_live(many_cost_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
-            if sys.argv[2:] == ["--help-audit"] else None)
+            if help_audit else None)
         same_model = (project_live(same_model_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
-            if sys.argv[2:] == ["--help-audit"] else None)
-        ccost_frames = unavailable_frames(frame) if sys.argv[2:] == ["--help-audit"] else None
-        promotion_models = project(model_report(include_model_catalog=True)).to_json() if sys.argv[2:] == ["--help-audit"] else None
+            if help_audit else None)
+        ccost_frames = unavailable_frames(frame) if help_audit else None
+        promotion_models = project(model_report(include_model_catalog=True)).to_json() if help_audit else None
 
         def publish(state="running", value=frame, timezone_name="UTC"):
             current = int(time.time() * 1000)
             value = replace(value, now_ms=current, quota=replace(value.quota, now_ms=current))
+            view = project_live(value, timezone_name).to_json()
+            if replay is not None:
+                # Replay at the publication boundary: periodic client redraws must see
+                # the same controlled wire, not silently restore the baseline fixture.
+                for group in ('active_cards', 'history_cards'):
+                    for index, card in enumerate(view[group]):
+                        prompt = deepcopy(next(row for row in replay['browser_rows'] if row['event_id'] == 'sonnet'))
+                        prompt.update(in_progress=group == 'active_cards', at_ms=current - 1000)
+                        card['rows'][0].update(prompt=prompt, model=prompt['watch_model'], effort=prompt['watch_effort'])
+                        card['session_id'] = f'replay-{group}-{index}'
+                        card['rows'][0]['session_id'] = card['session_id']
+                        card['focal_id'] = prompt['event_id']
             host.events.publish("live", {"state": state, "source_observed_at_ms": value.now_ms,
-                "view": project_live(value, timezone_name).to_json(),
+                "view": view,
                 "probe_cost_groups": cost_groups,
                 "probe_same_model": same_model,
                 "probe_ccost_unavailable": ccost_frames,
