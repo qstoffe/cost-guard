@@ -6,13 +6,17 @@ from decimal import Decimal, InvalidOperation
 
 from .active_hour import HOUR_MS, USAGE_FIELDS, deduplicated_requests
 from .ai_stats_rates import HourlyRates, hourly_rates
+from .ai_stats_responses import podium
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
 DAY_MS = 24 * HOUR_MS
 FALLBACK_MS = 60_000
 MAX_GUESSED_MS = 4 * HOUR_MS
 GENERIC_TOKEN_COST = Decimal('.000003')
-POLICY = 'fun-2-tokens'
+# AI Stats = BEST EFFORT / NEVER Unavailable. Sparse, partial and estimated
+# observations show fun values; Loading and genuine operational errors differ.
+# Standing contract: development/architecture/modules/reports.md#ai-stats--best-effort--never-unavailable
+POLICY = 'fun-3-responses'
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +28,7 @@ class StatsRoot:
     intervals: tuple
     cost_pending: bool = False
     source_complete: bool = True
+    responses: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +41,7 @@ class Stat:
     detail: str = ''
     reasons: tuple[str, ...] = ()
     rates: HourlyRates | None = None
+    podium: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,7 +244,7 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
               reasons=reasons))
 
 
-def _token_metrics(roots, entries, complete, duration, time_reasons, rates):
+def _token_metrics(roots, entries, complete, start, now):
     """Observed physical traffic only: never borrow fun-page cost/time fillers."""
     reasons = tuple(code for code, present in (
         ('source-incomplete', not complete),
@@ -248,21 +254,9 @@ def _token_metrics(roots, entries, complete, duration, time_reasons, rates):
     total = sum(sum(getattr(e.tokens, field) for field in USAGE_FIELDS if field in e.tokens.known_fields)
                 + (e.tokens.reasoning if 'output' in e.tokens.known_fields else 0)
                 for e in entries if e.completed_at_ms > 0)
-    # Reuse the cost card's exact denominators, including its all-time evidence start.
-    numerator = Decimal(total)
-    active = numerator * HOUR_MS / duration if duration else Decimal(0) if not total else None
-    active_reasons = tuple(dict.fromkeys((*reasons, *time_reasons,
-        *(('unknown-duration',) if any(root.entries and not root.intervals for root in roots) else ()),
-        *(('zero-active-time',) if total and not duration else ()))))
-    token_rates = replace(rates, total=numerator,
-        calendar_rate=numerator / rates.calendar_hours if rates.calendar_hours else Decimal(0),
-        workday_rate=numerator / rates.workday_hours if rates.workday_hours else None,
-        active_rate=None if active_reasons else active, robot_day=Decimal(0), robot_period=Decimal(0))
-    if reasons:
-        token_rates = replace(token_rates, calendar_rate=None, workday_rate=None)
     return (Stat('total-tokens', total, 'partial' if reasons else 'complete', reasons=reasons),
-            Stat('token-rate', token_rates.active_rate, 'partial' if active_reasons else 'complete',
-                 reasons=active_reasons, rates=token_rates))
+            Stat('token-rate', 0, podium=podium(roots, entries, start, now),
+                 detail='activity' if entries or any(root.intervals for root in roots) else ''))
 
 
 class StatsObservation:
@@ -300,7 +294,7 @@ class StatsObservation:
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
         return StatsPeriod(period, start, self.now,
             (replace(cost[0], rates=rates), cost[1], timed[0], *cost[2:], *timed[1:],
-             *_token_metrics(roots, entries, complete, duration, reasons, rates)))
+             *_token_metrics(roots, entries, complete, start, self.now)))
 
 
 def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True, workday_calendar='SE'):

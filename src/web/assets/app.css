@@ -221,6 +221,11 @@ section > label input { min-width: 0; }
 .ai-stat-rate { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .15rem .6rem; min-width: 0; }
 .ai-stat-rate-label { font-size: .8rem; }
 .ai-stat-rate-value { font-size: 1.1rem; font-weight: 600; max-width: 100%; }
+.ai-stat-podium { display: grid; gap: .5rem; font-size: .9rem; }
+.ai-stat-racer { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .1rem .4rem; align-items: baseline; }
+.ai-stat-model { font-size: .85rem; }
+.ai-stat-speed { grid-column: 2; font-weight: 600; }
+.ai-stat-sample { grid-column: 2; font-size: .75rem; color: var(--muted); }
 .ai-stat-detail { margin: .25rem 0; }
 .ai-stat-trait { margin: .7rem 0 0; font-size: .85rem; color: var(--muted); }
 .token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }

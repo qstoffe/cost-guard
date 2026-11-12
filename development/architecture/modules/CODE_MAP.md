@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000685: `analysis/ai_stats_responses.py` owns bounded deterministic response sampling
+and weighted per-model TPS; `reports/ai_stats_responses.py` extracts already-acquired
+request-level intervals. `ai_stats_evidence.py` owns revision/time-valid summaries;
+application/JS own prepared medal rows, never browser math. The permanent
+[best-effort / never Unavailable contract](reports.md#ai-stats--best-effort--never-unavailable)
+applies to every Stats card. Coverage: token/Stats/recovery/resume tests, canonical
+podium/states/loading browser probes and read-only cold/warm installation probe.
+[Current evidence](../../journal/web/ai-stats.md#sampled-response-podium--fr000685).
+
 FR000683: `assets/help.js::watchHover` owns the open-only 1000ms exact-target check
 and thirty-second trusted-pointer idle lease, shared by Full Watch and Mini PiP.
 Opening tickets and owner/lifetime cleanup stay in the same controller. Coverage:

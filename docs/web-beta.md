@@ -541,7 +541,10 @@ The emoji cards keep two sections:
 - **Fun Facts:** Most Expensive Session, Longest Session, Busiest Day, Night Owl,
   Coding Streak, Peak Parallel Sessions.
 
-Ready, evidenced cards get a figure and a playful trait, even when the silicon crew has taken
+**AI Stats is best effort, not accounting or a scientific benchmark.** Every ready card
+shows a useful number, sampled ranking or playful empty-period fact—never an
+Unavailable/N/A quality placeholder because evidence is sparse, old, estimated or incomplete.
+Ready cards get a figure and a playful trait, even when the silicon crew has taken
 the whole period off. Real session records link to their session pages. Hover,
 focus or tap a card title for a short explanation of its meaning. Long names and
 enlarged text wrap naturally, with equal-height cards within each responsive row.
@@ -559,17 +562,24 @@ The two token cards never change with monetary units.
 reads count again; this is not context-window size, unique text, billing or quota.
 Title help gives the precise integer behind the compact K/M/B/T display. Child agents,
 archived sessions, step precedence and clone deduplication use the existing canonical
-request population. Missing usage, pending requests or source gaps produce a qualified
-**Partial** subtotal, or **Unavailable** when no known subtotal exists, not an invented zero.
+request population. Missing usage, pending requests or source gaps do not hide the
+observed subtotal; title help explains its best-effort coverage. No tokens are invented.
 
-**Token Consumption Rate** repeats the cost card's Calendar / Workday / Active AI
-average rows in **tokens/h**, using the same Total Tokens numerator and exactly the
-same denominators described below. Unknown token coverage withholds the rates;
-unknown/guessed/running active time or nonzero tokens with zero active time withhold
-the active row. **No workdays** remains distinct. Activity-hour consumption is not
-actual model output generation speed in tokens/second. A fastest-model podium is
-intentionally omitted: available created/completed/streamed timestamps do not qualify
-a pure generation interval. No extra history scan or model call is made to seek one.
+**Token Consumption Rate** is the silicon sprint podium: up to three used models,
+with gold/silver/bronze medals, approximate generated-output **tok/s** and the actual
+sampled call count. Provider/model/effort identities stay distinct. Each speed is
+summed output (reasoning once) divided by summed sampled response seconds—not an
+average of rounded speeds, total token traffic or prompt/workflow hours. The observed
+assistant/step interval approximates provider response round trip, including network,
+queueing and time to first token. V2's stream end excludes subsequent tool-only waiting
+while retaining genuine response/tool overlap; older records use a best-effort
+completion/native-tool-start fallback. Small client overhead or fallback clipping can
+bias the estimate. It is not pure
+decoding speed. Up to 32 calls/model are selected deterministically from recent and
+identity-spread retained observations; even one sensible response can race. Root
+summaries mean historical-window samples are approximate rather than uniform.
+A truly empty period has a polished, waiting podium; activity without a timed response
+gets stopwatch copy, not a false claim of no activity. No extra history scan or model call.
 
 The first **💸 AI Hourly Rate** card has three compact rows, not three cards:
 
@@ -599,7 +609,7 @@ ready same-period cards stay visible
 during refresh and interrupted updates; period changes reuse only the matching
 period's result. A genuinely empty period gets cheerful zero-style figures (and
 **No workdays** where appropriate), but failed acquisition without a valid result
-shows **Unavailable**, **never synthetic zero cards or endless Loading**. Incomplete refresh
+shows a truthful page-level error and paused card shells, **never synthetic zero cards or endless Loading**. Incomplete refresh
 slices do not replace an already accepted same-period result. There is no
 Load/Refresh/Retry toolbar or Cancel button in any report state.
 Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**

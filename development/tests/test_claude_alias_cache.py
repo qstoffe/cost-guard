@@ -109,8 +109,8 @@ class ClaudeAliasCacheTests(unittest.TestCase):
         from src.reports.ai_stats_evidence import payload
         original = desktop_service(self)
 
-        def turn_catalog(*args):
-            value = payload(*args)
+        def turn_catalog(*args, **kwargs):
+            value = payload(*args, **kwargs)
             original.source.model, original.source.label, original.source.clock = 'claude-sonnet-4', 'Sonnet 4', 31
             return value
 

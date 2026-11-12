@@ -94,8 +94,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       if (!['hourly-rate','token-rate'].includes(card.metric)) assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
       assert.equal(card.trait,metric.display.trait);
       assert.equal(card.state,false);
-      if (!['total-tokens','token-rate'].includes(card.metric))
-        assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
+       assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
     });
     const rates=await evaluate(`[...document.querySelector('[data-metric="hourly-rate"]').querySelectorAll('.ai-stat-rate')].map(row=>({
       label:row.getAttribute('aria-label'),value:row.querySelector('.ai-stat-rate-value').textContent}))`);
@@ -108,7 +107,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     if (item.name==='no-workdays') assert.equal(rates[1].value,'No workdays');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
-    assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].filter(c=>!['total-tokens','token-rate'].includes(c.dataset.metric)).map(c=>c.textContent).join(' ')`),forbidden);
+     assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),forbidden);
     assert.equal(await evaluate(`document.getElementById('report-updating')`),null);
     for (const affected of theme==='classic' && unit==='credits' ? [0,1,4,5,6,7,8,9,10,11] : [0]) {
       await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
@@ -131,5 +130,5 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hourly appetite when it's actually working/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
-  checks.push('twelve canonical evidence cases: twelve cards with Python-prepared rates; legacy fun copy retained, token availability qualified, both units/three themes and focused heading retained');
+   checks.push('standing best-effort/never Unavailable policy: every ready card across empty/sparse/partial/estimated canonical cases; both units/three themes; focused heading retained');
 };

@@ -1,11 +1,128 @@
-# AI Stats: observed token traffic, ready cards and resumable history
+# AI Stats: sampled responses, best effort and resumable history
 
 Source revision: 9b9fdf389d93d90a09bfa13e9b075b564d026961
 Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
 Last checked: 2026-11-09
 Status: current
 
-## Observed token traffic and ready card shells — FR000682
+## Sampled response podium — FR000685
+
+Scoped delta against `f9ee34f59c1106df88dd01c7907344a7bccc373d`, 2026-11-12, Windows.
+The permanent [best-effort / never Unavailable contract](../../architecture/modules/reports.md#ai-stats--best-effort--never-unavailable)
+supersedes older conservative token/failure display conventions below. Every ready
+card retains fun values, including sparse, partial and estimated observations. Total
+Tokens arithmetic, cost/time cards and optional matched fact calculations are unchanged.
+Only Token Consumption Rate becomes the Top 3 sampled response-output tok/s podium.
+
+### Timing feasibility and source trace
+
+The installed OpenCode **2.2.7** `/openapi.json` has Assistant `time.created`, optional
+`completed`/`streamed`, and separate tool `created`/`ran`/`completed`. Cost Guard's
+`current_union_message_to_legacy_bundle` maps current union messages to the canonical
+assistant; `normalize_message_bundle` preserves assistant times and per-step usage.
+`normalize_invocations` prefers step usage over the cumulative message fallback.
+V1 uses the same canonical invocation contract; missing streamed metadata is irrelevant
+to this broader response-round-trip proxy. Streamed is not a first-to-last token clock.
+
+Exact-version source: released tag **v2.2.7** resolves to
+[`fedc6f208aa2bd54c1019227214568083f6380ad`](https://github.com/anomalyco/opencode/tree/fedc6f208aa2bd54c1019227214568083f6380ad).
+The installed CLI's adjacent version file and running API both report 2.2.7; the
+tag's root/core manifests agree. This is released-version linkage, not a reproducible
+binary audit. In [`runner/step.ts:73–162`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/runner/step.ts#L73-L162),
+`started` is captured before `llm.stream`; tool calls fork while the provider stream
+continues. The stream is drained, `publisher.streamed()` runs, **then** tool fibers
+are awaited. [`publish-llm-event.ts:121–143`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/runner/publish-llm-event.ts#L121-L143)
+publishes the same assistant ID. [`message-updater.ts:220–276`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/message-updater.ts#L220-L276)
+maps started to created, Step.Streamed event time to streamed, and Step.Ended to
+completed; retries clear old streamed/completed fields before reuse.
+
+Stats prefers an independent observed step pair, then created to valid same-response
+streamed, preserving response/tool overlap but excluding subsequent tool-only waiting.
+Missing/invalid streamed falls back to created/completed clipped at explicit native
+tool execution start; wire scalars distinguish native `ran` from inherited times. Multiple
+steps require separate observed pairs: a synthesized message interval is never
+multiplied across responses. Known output plus separately normalized reasoning is the
+numerator, never input/cache traffic. Aborted/incomplete/zero-output and impossible
+individual intervals do not suppress healthy calls. Canonical completion timestamp,
+source/step identity and clone precedence still own period membership and dedup.
+Assistant creation can include small client setup and streamed includes local event
+handling; fallback completion can include finalization, and fallback first-tool clipping
+can understate overlapping response duration (upward TPS bias). This is a fun approximate
+response throughput, not a network
+instrumentation guarantee or pure decoding benchmark.
+
+### Bounded sample and design decision
+
+Root/model/effort summaries and final period/model samples each retain at most 32:
+newest eight, then bottom identity-hash 24 from the remainder. Canonical identity,
+not array index or containing root/revision, drives deterministic selection. An index
+only references that revision's existing usage record. Final period filters happen
+before sampling; future completions cannot evict eligible recent calls. Summary as-of
+and next-excluded-future bounds force existing-path reacquisition when necessary.
+Revision changes rebuild affected summaries. No second historical scan or paid probe.
+
+Foreground **Decision Delegate** approved this bounded hierarchical design: cache
+retention is per root/model (not a globally constant 32 facts/model), final ranking is
+32/model/period, and historical-window sampling can lose eligible older candidates.
+This disclosed selection bias is a design interpretation, **not an acceptance/test
+waiver**. Small samples display their actual count and never trigger a quality gate.
+
+The foreground **Decision Delegate** approved the supported endpoint order after the
+bounded temporal inventory and exact-version source trace. No arbitrary timing-quality
+or minimum-sample gate was introduced; missing streamed is not a rejection condition.
+
+### Verification and measured tradeoffs
+
+- Read-only real installation, owned disposable cache: optimized cold30 **145.768s,
+  13 slices**, fresh warm30 **8.539s**, All reuse **0s** (not cold), fresh warmAll
+  **9.048s**. All five periods checked all twelve metrics, unchanged hourly formulas,
+  three model ranks and actual 24–32 sampled calls. Payload **432,456–432,476 bytes**.
+  Pre-change observation: cold **136.074s**, warm30 **7.527s**, warmAll **6.875s**,
+  payload **428,527–428,561 bytes**. Mutable source/concurrency prevent paired causal
+  claims. No source writes, shared-service stop, paid inference or transcript export.
+- Temporal inventory: at most 32 already-acquired positive responses per child;
+  streamed always followed the chosen eligible tool start, no missing/out-of-bounds
+  streamed in these samples. Median differences were **1–187ms**, with a **4,287ms**
+  tail; completion minus streamed reached **211,932ms**. Native tool completion
+  occurred both before and after streamed. This motivated the pinned source trace
+  and final stream-end preference, rather than subtracting genuine tool overlap.
+  **The live run preceded that final endpoint edit**; focused tests verify the edit.
+- Fixed canonical history, exact base builder/formulas, 12/512 roots × 20 requests,
+  7/30/all × cold/warm/1%-changed: **18 old-ten-metric signatures matched**;
+  hydration **512/0/5**, slices **2/1/1** unchanged. For 512 roots, base/current cold
+  **2.35–2.49/2.83–2.96s**, warm **0.61–0.71/1.21–1.24s**, changed
+  **0.70–0.73/1.04–1.12s**. Current five-period view **26,069 bytes**; historical
+  view size is unmeasured, not a fabricated baseline. Current shared dependencies
+  support both builders, not a whole old runtime. Profiling repaired repeated
+  candidate rehash/sort overhead; initial live implementation **310s cold / 20–26s
+  warm** was not accepted as final performance.
+- **Scoped Decision Delegate performance acceptance:** the residual measured runtime
+  increase is accepted for this new statistic because sampling/acquisition remain
+  bounded, hydration/slices and old formulas match, payload grows about 4KB, and the
+  major hot loop was repaired. This is **not unchanged-performance PASS**, a future
+  regression allowance, or a waiver of responsiveness, loading/focus or tests.
+- Hidden Edge browser: **PASS, 19 checks, zero runtime errors**, including 0/1/2/3
+  medals, sample counts/speeds, all-card best-effort states, loading/last-good/error,
+  narrow/enlarged-text/theme/unit/help/focus and production two-tab finite slices.
+  Exactly **24 hydrations**, 12 finite children, clean owned cleanup. Unchanged UI
+  evidence stands for the backend endpoint refinement. Physical OS rendering,
+  actual screen-reader speech, real touch hardware and non-Chromium remain unproved.
+
+Final Full: **185 groups passed, zero failed groups, 143.5s**, four isolated workers.
+Final validator: **11 passes, zero failures, seven existing advisory warnings**, no
+raised budgets. Final focused endpoint/token oracles: **15 tests passed**; scope/
+sequence Node VM passed. Initial Full runs
+exposed stale token expectations, a payload wrapper dropping the new `now` keyword,
+an introduced test indentation error, and the historical assertion that streamed could
+not affect any metric. That last assertion now proves only the podium changes and
+invalid markers fall back; all other metrics/matched facts must remain identical.
+These failures were repaired, not counted as PASS.
+Evidence: `scratch:/ai-stats-optimized.jsonl`, `scratch:/ai-stats-benchmark-optimized.jsonl`,
+`scratch:/ai-stats-browser-final.json`, `scratch:/tokens-stream.txt`,
+`scratch:/full-tests-stream.txt`, `scratch:/full-tests-final-delivery.txt` and
+`scratch:/validation-final.txt`.
+
+## Observed token traffic and ready card shells — FR000682 (historical)
 
 Scoped delta against `431ef684b3e6c654fefc718d29c4adf00ca310b8`, checked
 2026-11-12 on Windows. Earlier sections retain historical evidence, not the current

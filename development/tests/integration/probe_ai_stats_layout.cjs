@@ -59,10 +59,10 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
       row.metrics.forEach((metric,index)=>{
         metric.display.trait='A long readable trait with descenders gjpqy and accents Åé — '.repeat(3);
         metric.status=['complete','unknown','partial'][index%3];
-        metric.display.value=index%2 ? 'N/A' : '12345678901234567890';
-        metric.display_units={credits:{...metric.display,value:index%2 ? 'N/A' : '12345678901234567890 credits'},
-          usd:{...metric.display,value:index%2 ? 'N/A' : '$123456789012345678.90'}};
-        if(['hourly-rate','token-rate'].includes(metric.metric)) for(const unit of ['credits','usd'])
+         metric.display.value=index%2 ? '0' : '12345678901234567890';
+         metric.display_units={credits:{...metric.display,value:index%2 ? '0' : '12345678901234567890 credits'},
+           usd:{...metric.display,value:index%2 ? '0' : '$123456789012345678.90'}};
+         if(metric.metric==='hourly-rate') for(const unit of ['credits','usd'])
           for(const key of ['calendar_rate','workday_rate','active_rate'])
             metric.display_units[unit][key]=(unit==='usd'?'$':'')+'123456789012345678.90'+
               (unit==='credits'?' CCost':'')+'/h';

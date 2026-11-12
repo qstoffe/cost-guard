@@ -75,6 +75,13 @@ def ai_stat(value):
     base = fields(value, 'metric value status session_id session_title detail reasons')
     if value.metric == 'total-tokens':
         base = ObjectValue(base.fields + (('exact_value', str(value.value)),))
+    if value.metric == 'token-rate':
+        from .ai_stats import response_tokens
+        base = ObjectValue(base.fields + (('podium', tuple(record(
+            **dict(provider=row.provider, model=row.model, variant=row.variant,
+                   output_tokens=row.output_tokens, duration_ms=row.duration_ms,
+                   sampled_calls=row.sampled_calls, tokens_per_second=row.tokens_per_second),
+            **response_tokens(row)) for row in value.podium)),))
     if value.rates is None:
         return base
     rates = fields(value.rates, 'total calendar_days workdays calendar_hours workday_hours active_hours '

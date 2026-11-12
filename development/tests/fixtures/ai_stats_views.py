@@ -19,6 +19,7 @@ def evidence_views():
     """Canonical, explicitly synthetic period states, with no browser-invented causes."""
     from decimal import Decimal
     from src.analysis.ai_stats import StatsRoot, period_stats
+    from src.analysis.ai_stats_responses import ResponseCall
     from src.analysis.models import TraceEntry
     from src.application.projection import project
     from src.domain import ModelRef, TokenUsage
@@ -28,9 +29,13 @@ def evidence_views():
     now = int(time.time() * 1000)
     at = now - 3_600_000
     entry = TraceEntry('root', 'prompt', 'message', None, at, 0,
-                       ModelRef('synthetic', 'model'), None, TokenUsage(input=4))
-    root = StatsRoot('root', 'Synthetic record', (entry,), ((at, 3_600_000, False),))
+                       ModelRef('synthetic', 'model'), None, TokenUsage(input=4, output=100))
+    root = StatsRoot('root', 'Synthetic record', (entry,), ((at, 3_600_000, False),),
+                     responses=(ResponseCall(entry, 1000),))
     missing = replace(root, entries=(replace(entry, tokens=TokenUsage(input=4, known_fields=())),))
+    racers = tuple(replace(entry, message_id='racer-' + str(i), model=ModelRef('synthetic', 'model-' + str(i)),
+                           tokens=TokenUsage(output=300 - 100 * i)) for i in range(3))
+    podium = replace(root, entries=racers, responses=tuple(ResponseCall(e, 1000) for e in racers))
     base = stats_result(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
     cases = (
         ('complete', (root,), True, Decimal(4)), ('empty', (), True, Decimal(4)),
@@ -40,6 +45,8 @@ def evidence_views():
         ('pending-usage', (replace(root, cost_pending=True),), True, Decimal(4)),
         ('provisional', (replace(root, intervals=((at, 3_600_000, True),)),), True, Decimal(4)),
         ('observed-time', (replace(root, intervals=((at, 1_800_000, False), (at - 86_400_000, None, False))),), True, Decimal(4)),
+        ('podium-three', (podium,), False, None),
+        ('podium-two', (replace(podium, entries=racers[:2], responses=podium.responses[:2]),), True, Decimal(4)),
     )
     result = []
     for name, roots, complete, price in cases:
@@ -55,7 +62,7 @@ def evidence_views():
         ('three-rates', 28, '7-days', fixed_now, start),
         ('faster-robot', 7, '7-days', fixed_now, start),
         ('no-workdays', 4, 'today', epoch('2026-11-07T12:00:00+00:00'), epoch('2026-11-07T06:00:00+00:00'))):
-        synthetic = replace(root, entries=(replace(entry, completed_at_ms=stamp),),
+        synthetic = replace(root, entries=(replace(entry, completed_at_ms=stamp),), responses=(),
                             intervals=((stamp, hours * 3_600_000, False),))
         period = period_stats((synthetic,), lambda *_: Decimal(840), period=period_name,
             start=clock - 7 * 86_400_000 if period_name == '7-days' else epoch('2026-11-06T23:00:00+00:00'),

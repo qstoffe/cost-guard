@@ -64,7 +64,7 @@ def main():
     args = parser.parse_args()
     counts = Counter()
 
-    def observed(bundle, reference, snapshot, config):
+    def observed(bundle, reference, snapshot, config, **kwargs):
         counts['incomplete_snapshots'] += not snapshot.complete
         counts['compactions'] += len(bundle.compactions)
         counts['child_sessions'] += max(0, len(snapshot.sessions) - 1)
@@ -75,7 +75,7 @@ def main():
                 counts['unknown_with_completed_assistant'] += any(m.completed_at_ms for m in assistants)
                 counts['unknown_with_termination'] += any(m.termination for m in assistants)
                 counts['unknown_with_error'] += any(m.error_name for m in assistants)
-        return payload(bundle, reference, snapshot, config)
+        return payload(bundle, reference, snapshot, config, **kwargs)
 
     def wire(value, **kwargs):
         if value.get('type') == 'compaction':

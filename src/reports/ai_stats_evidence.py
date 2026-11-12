@@ -6,8 +6,9 @@ from src.analysis.cache import dependency_signature
 from src.analysis.model_identity import current
 from .token_mix_cache import encode, decode
 from .matched_runs import project_run, encode_run, decode_run
+from .ai_stats_responses import encode_responses, decode_responses
 
-ALGORITHM = 'ai-stats-evidence-5-fun-1'
+ALGORITHM = 'ai-stats-evidence-6-response-stream'
 NAMESPACE = 'ai-stats-evidence'
 COVERAGE = 'ai-stats-coverage-3'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)
@@ -17,16 +18,19 @@ class ModelCatalogChanged(ValueError):
     """Compact identities no longer match the source's current catalog."""
 
 
-def payload(bundle, reference, snapshot, config):
+def payload(bundle, reference, snapshot, config, *, now=None):
     intervals = [(p.prompt_time_ms, p.execution_duration_ms, p.in_progress) for p in bundle.prompts]
     intervals.extend((c.created_at_ms, c.duration_ms, c.in_progress) for c in bundle.compactions)
+    if now is None:
+        now = max((e.completed_at_ms for e in bundle.trace_entries), default=0)
     return dict(usage=encode(bundle, reference), intervals=intervals,
+                responses=encode_responses(bundle, snapshot, now),
                 complete=snapshot.complete,
                 matched=encode_run(project_run(snapshot, bundle, reference, config)),
                 pending=any(p.in_progress and not p.entries for p in bundle.prompts))
 
 
-def decoded(value, root, source=None):
+def decoded(value, root, source=None, *, now=None):
     facts = decode(value['usage'])
     if not current(source, (entry.model for entry, _prompt, _cost in facts)):
         raise ModelCatalogChanged('changed_model_catalog')
@@ -42,7 +46,8 @@ def decoded(value, root, source=None):
     if matched is not None and matched.session_id != root.session_id:
         raise ValueError('invalid_match_root')
     return StatsRoot(root.session_id, root.title, tuple(e for e, _p, _c in facts),
-                     tuple(tuple(pair) for pair in intervals), value['pending'], value['complete']), facts, matched
+                     tuple(tuple(pair) for pair in intervals), value['pending'], value['complete'],
+                     decode_responses(value['responses'], facts, now)), facts, matched
 
 
 def coverage_key(root):

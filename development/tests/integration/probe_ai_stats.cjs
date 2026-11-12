@@ -86,6 +86,7 @@ async function main() {
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
     checks.push('automatic default, retired-route alias, twelve cards, five exact periods, safe real record links, no healthy toolbar');
     await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
+    await require('./probe_ai_stats_podium.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_rate_help.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
@@ -119,13 +120,14 @@ async function main() {
     for(const name of ['AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session',
       'Most Expensive Session','Longest Session','Busiest Day','Night Owl','Coding Streak','Peak Parallel Sessions'])
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
-    await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
+    await evaluate(`document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+      document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
     assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Active AI average:/);
     await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
       ReportView.setUnit('usd',output);`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),6);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),3);
     await evaluate(`ReportView.setUnit('credits',output)`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
@@ -209,7 +211,7 @@ async function main() {
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),0,'failure is not an empty successful period');
-    assert.match(await evaluate(`output.textContent`),/Unavailable/);
+    assert.match(await evaluate(`output.textContent`),/Counting paused/);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);

@@ -25,7 +25,7 @@ def publish(service, snapshot, bundle):
     if (not getattr(service, 'shared_web_evidence', False) or getattr(service, 'stats_scan', None)
             or not bundle.cacheable or not snapshot.complete):
         return
-    value = stats.payload(bundle, service._load_comparison_catalog(), snapshot, service.config)
+    value = stats.payload(bundle, service._load_comparison_catalog(), snapshot, service.config, now=service.now_ms)
     if service.source.get_session_tree_revision(snapshot.root.session_id) != bundle.source_revision:
         return
     pending = getattr(service, '_shared_pending', None)

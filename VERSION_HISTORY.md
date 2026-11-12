@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.32 - 2026-11-12
+
+- AI Stats replaces the hourly Token Consumption Rate table with a Top 3 provider/model/effort podium: sampled output (reasoning once) divided by summed approximate response round-trip seconds, not prompt/tool workflow time or a decoding benchmark. Deterministic recent/identity-spread sampling caps displayed model samples at 32 calls and reuses existing bounded acquisition.
+- All ready AI Stats cards permanently follow best effort / never Unavailable. Total Tokens keeps its observed traffic arithmetic; AI Hourly Rate, Working Time and other calculations stay unchanged. Loading-only pending shells, matching last-good results and distinct real operational failures remain.
+
 ## v81.31 - 2026-11-12
 
 - Shared Web/Mini hover help revalidates the exact label/panel about once per second only while open, preserving the transfer grace and cleaning up Popover/ARIA state even when all exit events are missing. Delayed openings also recheck current hover and document lifetime.
