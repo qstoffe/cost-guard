@@ -249,10 +249,10 @@ the pricing journal separates rendered layout evidence from real-source checks.
 
 FR000667 extends the catalog below from six to **seven columns/comparators**, adding
 CTX after Duration. `reports/session_summary.py::context_fields` reuses analysis
-`session_watch_context`/`ContextEpochs` for the latest non-subtask root prompt and
+`session_context_observation`/`ContextEpochs` for the latest non-subtask root prompt and
 later compaction. Complete same-source/revision snapshots qualify either numeric
 CTX or an authoritative unavailable anchor; compact/partial evidence cannot finish
-a CTX sort. Algorithm `session-summary-3` lazily invalidates old scalar entries,
+a CTX sort. Algorithm `session-summary-4` (FR000690) lazily invalidates old scalar entries,
 without invalidating unrelated analysis. Changed source revisions clear obsolete
 context before display-token generation; unchanged outage values can remain
 explicitly retained. No Watch capture, PiP, additional indexer or browser acquisition

@@ -35,6 +35,14 @@ their existing owners and meanings.
 
 Evidence:
 
+- Final local Full: **186 bounded groups, 2323 passed tests, zero failures, 155.6s**;
+  four native macOS zsh/PTY tests skipped on Windows. Package validator: **11 passes,
+  zero failures, seven existing advisory warnings**; no cap/baseline/dependency change.
+  An intermediate Full run caught old historical rows leaking into an active refresh
+  placeholder. Retaining only session Ctx while preserving empty prompt membership
+  repaired that causal regression; focused card/guidance/context and final Full passed.
+  The earlier failed run remains `scratch:/full-final.json`; final is
+  `scratch:/full-repaired.json`.
 - RED source-shaped V2 normalization → analysis/capture/Live → original renderer:
   **230k → N/A → N/A → 235k**. The first new-prompt publication has null prompt-local
   raw Ctx and no `context_handoff`; the second is still pending. Replaying the same
