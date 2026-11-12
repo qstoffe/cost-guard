@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000681: `src/python_discovery.ps1` / `.sh` own bounded pre-Python installed-runtime
+resolution shared by each OS's Web, Legacy and Diagnostics launchers. Fixed Web
+failure reasons live in `web/launch_messages.json`, rendered by Python and the
+Windows status boundary. Finder apps re-enter the `.command` resolver; private
+cache fingerprints/inventory and existing lifecycle/security owners are retained.
+Coverage: Windows launcher/activity, macOS Web/app and launcher-feedback tests;
+[policy, reproduction and proof limits](../../journal/python-discovery.md).
+
 FR000679: `assets/sessions.js::update` completes lease recovery silently and retires
 incompatible protected rows before publishing a replacement page. Existing catalog,
 index, sorting, source and cache owners are unchanged. Coverage: `web_session.cjs`,

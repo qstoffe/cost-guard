@@ -70,7 +70,8 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertIn("-Mode report", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("cost-guard-cli.py", driver)
-        self.assertIn("sys.version_info >= (3,11)", driver)
+        self.assertIn("Find-CostGuardPython", driver)
+        self.assertIn("python_discovery.ps1", driver)
 
     def test_watch_launcher_exits_batch_before_ctrl_c_path(self) -> None:
         text = (ROOT / "windows/Legacy/Cost-Guard-Watch.cmd").read_text(encoding="utf-8")
@@ -133,7 +134,8 @@ class MacOSLauncherTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertTrue(text.startswith("#!/bin/zsh"), name)
             self.assertIn('dirname "$0"', text, name)
-            self.assertIn("sys.version_info >= (3,11)", text, name)
+            self.assertIn('source "$CG_ROOT/src/python_discovery.sh"', text, name)
+            self.assertIn('cg_find_python', text, name)
             self.assertIn(needle, text, name)
         watch = (ROOT / "macos/Legacy/Cost-Guard-Watch.command").read_text(encoding="utf-8")
         self.assertIn('exec "$PYTHON"', watch)

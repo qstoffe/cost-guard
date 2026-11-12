@@ -23,31 +23,19 @@ stop_activity() {
 trap stop_activity EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [[ -t 2 ]]; then activity & SPINNER=$!; fi
+if [[ -t 0 && -t 1 && -t 2 ]]; then activity & SPINNER=$!; fi
 
-find_python() {
-  typeset -A tested
-  for candidate in python3 python /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
-    local executable="$(command -v "$candidate" 2>/dev/null)"
-    [[ -z "$executable" || -n "${tested[$executable]-}" ]] && continue
-    tested[$executable]=1
-    if "$executable" -c 'import sys; raise SystemExit(0 if sys.platform == "darwin" and sys.version_info >= (3,11) else 1)' >/dev/null 2>&1; then
-      printf '%s' "$executable"
-      return 0
-    fi
-  done
-  return 1
-}
-
-PYTHON="$(find_python)" || {
+source "$CG_ROOT/src/python_discovery.sh"
+cg_find_python || {
   stop_activity
-  printf 'Cost Guard Web requires macOS and already-installed Python 3.11+. Nothing was installed.\n'
-   printf 'Legacy CLI: macos/Legacy/Cost-Guard.command or python3 cost-guard-cli.py (also requires Python 3.11+).\n'
-  if [[ -t 0 ]]; then read -r '?Press Return to close…'; fi
+  cg_python_failure
+  if [[ -t 0 && -t 1 ]]; then read -r '?Press Return to close…'; fi
   exit 1
 }
+# Stop the display-only row before Python can print a multi-line failure.
+stop_activity
 "$PYTHON" -u "$CG_ROOT/cost-guard-web.py" --launch-macos
 RESULT=$?
 stop_activity
-if [[ $RESULT -ne 0 && -t 0 ]]; then read -r '?Press Return to close…'; fi
+if [[ $RESULT -ne 0 && -t 0 && -t 1 ]]; then read -r '?Press Return to close…'; fi
 exit $RESULT

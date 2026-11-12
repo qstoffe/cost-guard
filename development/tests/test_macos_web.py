@@ -306,13 +306,15 @@ print('PASS isolated production preflight dispatch')
                 patch.object(macos_launch, "native_preflight"), \
                 patch.object(macos_launch, "prepare_app", side_effect=InstanceConflict("app_preparation_failed")), \
                 patch.object(macos_launch, "launch", return_value=Mock(browser_opened=False)) as launch, \
-                contextlib.redirect_stdout(output):
+                 contextlib.redirect_stdout(output):
+            store.return_value.log.side_effect = OSError('PRIVATE_DIAGNOSTIC_PATH')
             self.assertEqual(macos_launch.launch_macos(ROOT), 4)
         self.assertEqual(launch.call_args.args, (ROOT, "src.web.native_macos"))
         self.assertEqual([call.args[0] for call in store.return_value.log.call_args_list],
                          ["app_preparation_failed", "browser_open_failed"])
         self.assertIn("continuing with .command", output.getvalue())
         self.assertIn("Web is running", output.getvalue())
+        self.assertNotIn('PRIVATE_DIAGNOSTIC_PATH', output.getvalue())
 
     def test_wrong_os_does_not_touch_state_or_native_api(self):
         with patch.object(macos_launch.sys, "platform", "win32"), \
@@ -329,34 +331,48 @@ print('PASS isolated production preflight dispatch')
             beta = root / 'macos'; beta.mkdir(parents=True)
             command = beta / 'Cost-Guard-Web.command'
             shutil.copyfile(ROOT / 'macos/Cost-Guard-Web.command', command)
+            (root / 'src').mkdir()
+            shutil.copyfile(ROOT / 'src/python_discovery.sh', root / 'src/python_discovery.sh')
             binary = root / 'bin'; binary.mkdir()
             python = binary / 'python3'
             python.write_text('''#!/bin/sh
-if [ "$1" = "-c" ]; then exit 0; fi
+if [ "$1" = "-I" ]; then printf 'CGPY|3|13|darwin|%s\n' "$0"; sleep 0.4; exit 0; fi
 printf 'Cost Guard startup: Checking native support\\n'
 printf 'ENTRY:%s|%s|%s\\n' "$1" "$2" "$3"
 sleep 0.4
 exit "$CG_FAKE_EXIT"
 ''', encoding='utf-8')
             python.chmod(0o700)
-            for code in (0, 4):
-                with self.subTest(exit_code=code):
+            for code, redirected in ((0, None), (4, None), (4, 'stdin'), (4, 'stdout')):
+                with self.subTest(exit_code=code, redirected=redirected):
                     master, slave = os.openpty()
                     try:
                         env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'], CG_FAKE_EXIT=str(code))
+                        if redirected is None:
+                            os.write(master, b'\n')  # acknowledge through this hidden test PTY only
                         child = subprocess.run([shutil.which('zsh'), str(command)], cwd=root, env=env,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
+                            stdin=subprocess.DEVNULL if redirected == 'stdin' else slave,
+                            stdout=subprocess.PIPE if redirected == 'stdout' else slave,
+                            stderr=slave, timeout=5)
                         self.assertEqual(code, child.returncode)
-                        self.assertIn(b'Checking native support', child.stdout)
-                        self.assertIn(('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos').encode(), child.stdout)
                         # Darwin may discard queued PTY output on the last slave
                         # close. Read while our slave remains open, with a deadline.
                         readable, _, _ = select.select([master], [], [], 1)
-                        self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
-                        activity = os.read(master, 8192).decode('utf-8')
+                        if redirected is None:
+                            self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
+                        activity = os.read(master, 8192).decode('utf-8') if readable else ''
+                        activity += (child.stdout or b'').decode('utf-8')
+                        self.assertIn('Checking native support', activity)
+                        self.assertIn('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos', activity)
                         self.assertIn('Launching web', activity)
-                        self.assertIn('[|]', activity)
-                        self.assertIn('[/]', activity)
+                        if redirected is None:
+                            self.assertIn('[|]', activity)
+                            self.assertIn('[/]', activity)
+                        else:
+                            self.assertNotIn('[|]', activity)
+                            self.assertNotIn('Press Return', activity)
+                            self.assertNotIn('\x1b', activity)
+                            self.assertNotIn('\r', activity.replace('\r\n', '\n'))
                     finally:
                         os.close(slave)
                         os.close(master)
@@ -370,8 +386,10 @@ exit "$CG_FAKE_EXIT"
             binary = root / 'bin'
             binary.mkdir()
             python = binary / 'python3'
+            (root / 'src').mkdir()
+            shutil.copyfile(ROOT / 'src/python_discovery.sh', root / 'src/python_discovery.sh')
             python.write_text('''#!/bin/sh
-if [ "$1" = "-c" ]; then exit 0; fi
+if [ "$1" = "-I" ]; then printf 'CGPY|3|13|darwin|%s\n' "$0"; exit 0; fi
 printf 'ENTRY:%s|%s\\n' "$1" "${2-}"
 exit 17
 ''', encoding='utf-8')
@@ -389,7 +407,7 @@ exit 17
         source = (ROOT / "macos/Cost-Guard-Web.command").read_text(encoding="utf-8")
         self.assertTrue(source.startswith("#!/bin/zsh\n"))
         self.assertIn('$(dirname "$0")/.."', source)
-        self.assertIn("(3,11)", source)
+        self.assertIn('source "$CG_ROOT/src/python_discovery.sh"', source)
         self.assertIn("--launch-macos", source)
         self.assertNotIn("osascript", source)
         self.assertEqual(source.count('kill '), 1)
@@ -401,6 +419,76 @@ exit 17
         self.assertIn('Launching web…', source)
         self.assertIn('RESULT=$?', source)
         self.assertIn('exit $RESULT', source)
+
+    @unittest.skipUnless(shutil.which('zsh'), 'native macOS CI owns zsh execution')
+    def test_versioned_framework_homebrew_and_user_installs_without_path(self):
+        # Real zsh/globs/processes in synthetic install trees, never system installs.
+        layouts = ('Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
+                   'opt/homebrew/opt/python@3.13/bin/python3.13',
+                   'usr/local/opt/python@3.13/bin/python3.13',
+                   'home/Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
+                   'home/.pyenv/versions/3.13.2/bin/python3',
+                   'home/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/bin/python3')
+        for layout in layouts:
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory(prefix="python å ' space ") as directory:
+                root = Path(directory)
+                executable = root / layout
+                executable.parent.mkdir(parents=True)
+                executable.write_text('#!/bin/sh\nprintf "CGPY|3|13|darwin|%s\\n" "$0"\n')
+                executable.chmod(0o700)
+                resolver = (ROOT / 'src/python_discovery.sh').read_text()
+                # Relocate only OS-owned roots into an isolated, representative tree.
+                for prefix in ('/Library', '/opt/homebrew', '/usr/local'):
+                    resolver = resolver.replace(' ' + prefix + '/', ' "' + str(root) + '"' + prefix + '/')
+                source = root / 'discovery.sh'
+                source.write_text(resolver)
+                script = root / 'probe.zsh'
+                script.write_text('source "$1"\ncg_find_python || exit 9\nprint -r -- "$PYTHON"\n')
+                result = subprocess.run([shutil.which('zsh'), str(script), str(source)],
+                    env=dict(os.environ, HOME=str(root / 'home'), PATH=''),
+                    capture_output=True, text=True, timeout=8)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(str(executable.resolve()), result.stdout.strip())
+
+    @unittest.skipUnless(shutil.which('zsh'), 'native macOS CI owns zsh execution')
+    def test_discovery_skips_old_broken_hanging_and_duplicate_candidates(self):
+        with tempfile.TemporaryDirectory(prefix='python å space ') as directory:
+            root = Path(directory)
+            scripts = {
+                'old': '#!/bin/sh\nprintf "CGPY|3|10|darwin|%s\\n" "$0"\n',
+                'broken': '#!/bin/sh\necho private-url-token\nexit 2\n',
+                'hanging': '#!/bin/sh\nexec /bin/sleep 30\n',
+                'good': '#!/bin/sh\nprintf "CGPY|3|13|darwin|%s\\n" "$0"\n',
+            }
+            for name, text in scripts.items():
+                (root / name).write_text(text)
+                (root / name).chmod(0o700)
+            (root / 'duplicate').symlink_to(root / 'old')
+            probe = root / 'probe.zsh'
+            probe.write_text('''source "$1"
+cg_python_candidates() { print -rl -- "$2/old" "$2/duplicate" "$2/broken" "$2/hanging" "$2/good"; }
+# Function positional parameters are local; capture the fixture root explicitly.
+fixture="$2"
+cg_python_candidates() { print -rl -- "$fixture/old" "$fixture/duplicate" "$fixture/broken" "$fixture/hanging" "$fixture/good"; }
+cg_find_python || exit 8
+print -r -- "$PYTHON"
+cg_python_candidates() { print -r -- "$fixture/old"; }
+cg_find_python && exit 9
+[[ "$CG_PYTHON_FAILURE" == old ]] || exit 10
+cg_python_candidates() { print -r -- "$fixture/broken"; }
+cg_find_python && exit 11
+[[ "$CG_PYTHON_FAILURE" == broken ]] || exit 12
+cg_python_candidates() { return 0; }
+cg_find_python && exit 13
+[[ "$CG_PYTHON_FAILURE" == missing ]] || exit 14
+cg_python_failure
+''')
+            result = subprocess.run([shutil.which('zsh'), str(probe), str(ROOT / 'src/python_discovery.sh'), str(root)],
+                                    capture_output=True, text=True, timeout=12)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn(str(root / 'good'), result.stdout)
+            self.assertIn('START\n\nReason: No usable Python', result.stdout)
+            self.assertNotIn('private-url-token', result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

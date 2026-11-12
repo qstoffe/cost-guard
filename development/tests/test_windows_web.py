@@ -181,6 +181,19 @@ class WindowsWebTests(unittest.TestCase):
         self.assertIn("Web is running", output.getvalue())
         store.log.assert_called_once_with("browser_open_failed")
 
+    def test_browser_failure_remains_running_when_diagnostic_record_is_unwritable(self):
+        output, store = io.StringIO(), Mock()
+        store.log.side_effect = OSError('PRIVATE_PATH_TOKEN')
+        with patch.object(windows_launch, 'InstanceStore', return_value=store), \
+                patch.object(windows_launch, 'load_configuration'), \
+                patch('src.web.native_windows.preflight'), \
+                patch.object(windows_launch, 'launch', return_value=Mock(browser_opened=False)), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(4, windows_launch.launch_windows(ROOT))
+        self.assertIn('COST GUARD WEB IS RUNNING\n\nReason:', output.getvalue())
+        self.assertNotIn('PRIVATE_PATH_TOKEN', output.getvalue())
+        self.assertNotIn('COULD NOT START', output.getvalue())
+
     def test_specific_ownership_failures_reach_console_and_private_diagnostics(self):
         reasons = ("process_identity_access_denied", "process_identity_unavailable",
                    "instance_lifetime_busy", "instance_transition_busy", "corrupt_instance_state",
@@ -353,10 +366,7 @@ while not Path(__file__).with_name('release').exists() and time.monotonic() < de
             probe = root / 'probe.ps1'
             probe.write_text('''param($Source, $Python)
 $ErrorActionPreference = 'Stop'
-$tokens = $null; $errors = $null
-$ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
-$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-WebPython'}, $true)
-Invoke-Expression $function.Extent.Text
+. (Join-Path (Split-Path -Parent (Split-Path -Parent $Source)) 'python_discovery.ps1')
 function Write-LaunchActivity { }
 function Get-Command {
     param($Name, [switch]$All, $CommandType, $ErrorAction)
@@ -365,7 +375,7 @@ function Get-Command {
 }
 $env:PYTHONPATH = $PSScriptRoot
 $timer = [Diagnostics.Stopwatch]::StartNew()
-if (Find-WebPython) { throw 'Stalled interpreter accepted' }
+if (Invoke-CostGuardPythonProcess $Python '-c "pass"' 2000) { throw 'Stalled interpreter accepted' }
 if ($timer.Elapsed.TotalSeconds -gt 9) { throw 'Discovery exceeded bound' }
 $ownedPid = [int][IO.File]::ReadAllText((Join-Path $PSScriptRoot 'pid'))
 try { $process = [Diagnostics.Process]::GetProcessById($ownedPid) } catch { $process = $null }
@@ -406,35 +416,21 @@ $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
 $realLauncher = (Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue).Source
-$function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-WebPython'}, $true)
-Invoke-Expression $function.Extent.Text
+. (Join-Path (Split-Path -Parent (Split-Path -Parent $Source)) 'python_discovery.ps1')
 # Discovery timing may cross its 120ms activity turn. This isolated harness
 # extracts discovery only; startup activity rendering is tested separately.
 function Write-LaunchActivity {}
-function Get-Command { return @() }
-if (Find-WebPython) { throw 'Missing Python must not succeed' }
+function Get-CostGuardPythonCandidates { return @() }
+if ((Find-CostGuardPython).Executable) { throw 'Missing Python must not succeed' }
 Write-Output 'STAGE:direct-python'
-function Get-Command {
-    param($Name, [switch]$All, $CommandType, $ErrorAction)
-    if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$OldPython}) }
-    return @([pscustomobject]@{Source=$OldPython}, [pscustomobject]@{Source=$Python})
-}
-$found = Find-WebPython
+function Get-CostGuardPythonCandidates { $OldPython; $Python }
+$found = Find-CostGuardPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
 if ($realLauncher) {
     Write-Output 'STAGE:py-launcher'
-    function Get-Command {
-        param($Name, [switch]$All, $CommandType, $ErrorAction)
-        if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$realLauncher}) }
-        return @([pscustomobject]@{Source=$Python})
-    }
-    $found = Find-WebPython
-    if (-not $found) { throw 'Neither real launcher nor supported PATH interpreter accepted' }
-    if ($found.Executable -eq $realLauncher) {
-        if ($found.Arguments.Count -ne 1 -or $found.Arguments[0] -ne '-3') { throw 'Launcher must retain single -3 argument' }
-    } elseif ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) {
-        throw 'Unusable real launcher must fall back to the supported interpreter'
-    }
+    $listing = Invoke-CostGuardPythonProcess $realLauncher '-0p' 2000
+    if (-not $listing -or $listing.Code -ne 0) { throw 'Installed-only launcher listing failed' }
+    if ($listing.Output -notmatch 'python.exe') { throw 'No installed interpreter listed' }
 }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-WebStartupRecord'}, $true)
 Write-Output 'STAGE:private-log'

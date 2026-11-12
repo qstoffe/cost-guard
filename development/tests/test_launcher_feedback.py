@@ -12,12 +12,30 @@ from unittest.mock import patch
 from development.tests.fixtures.windows_shell import CONSOLE_STUB
 from src.launcher_feedback import release_launcher_status
 from src.presentation.progress import StartupProgress
+from src.web.launch_messages import failure_text
 
 ROOT = Path(__file__).resolve().parents[2]
 
 # Discovery/argument tests do not own cold Roslyn compilation or Win32 Ctrl+C.
 # The real console boundary is exercised by the native launcher/Watch probe.
 class LauncherFeedbackTests(unittest.TestCase):
+    def test_web_failures_separate_outcome_cause_action_and_diagnostics(self):
+        reasons = set()
+        for platform in ('windows', 'macos'):
+            for code in ('tray_unavailable', 'instance_start_timeout', 'configuration_unavailable',
+                         'instance_conflict', 'browser_open_failed'):
+                with self.subTest(platform=platform, code=code):
+                    text = failure_text(code, platform)
+                    outcome, reason, action, diagnostics = text.split('\n\n')
+                    self.assertEqual('COST GUARD WEB IS RUNNING' if code == 'browser_open_failed'
+                                     else 'COST GUARD COULD NOT START', outcome)
+                    self.assertTrue(reason.startswith('Reason: '))
+                    self.assertTrue(action.startswith('Next step: '))
+                    self.assertTrue(diagnostics.startswith('Diagnostics: '))
+                    self.assertNotIn('\x1b', text)
+                    reasons.add(reason)
+        self.assertEqual(6, len(reasons))  # native cause differs by OS, other causes stay shared
+
     def test_all_eight_launchers_have_whitespace_free_names_without_aliases(self):
         expected = {
             "windows/Legacy": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
@@ -53,9 +71,10 @@ class LauncherFeedbackTests(unittest.TestCase):
         text = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         feedback = text.index("Write-Host -NoNewline 'Cost Guard: Checking requirements...'")
         self.assertLess(feedback, text.index("Add-Type -TypeDefinition"))
-        self.assertLess(feedback, text.index("Get-Command $candidate.Name"))
+        self.assertLess(feedback, text.index("Find-CostGuardPython"))
         self.assertIn("[Console]::IsOutputRedirected", text)
-        self.assertIn("$tested.Add($application.Source)", text)
+        self.assertIn("[Console]::IsInputRedirected", text)
+        self.assertIn("python_discovery.ps1", text)
         self.assertIn("SetConsoleCtrlHandler([IntPtr]::Zero, $false)", text)
         self.assertIn("$code = $LASTEXITCODE", text)
 
@@ -63,12 +82,11 @@ class LauncherFeedbackTests(unittest.TestCase):
         for filename in ("Cost-Guard.command", "Cost-Guard-Watch.command"):
             text = (ROOT / "macos/Legacy" / filename).read_text(encoding="utf-8")
             self.assertLess(text.index("Checking requirements..."), text.index("CG_ROOT="))
-            self.assertLess(text.index("Checking requirements..."), text.index("find_python()"))
+            self.assertLess(text.index("Checking requirements..."), text.index("cg_find_python"))
             self.assertIn("[[ -t 1 ]]", text)
             self.assertIn("COST_GUARD_LAUNCHER_STATUS=1", text)
-            self.assertIn("sys.version_info >= (3,11)", text)
-            self.assertIn("${tested[$executable]-}", text)
-            self.assertIn("could not find Python 3.11", text)
+            self.assertIn('source "$CG_ROOT/src/python_discovery.sh"', text)
+            self.assertIn("cg_python_failure", text)
             self.assertNotIn("sleep ", text)
 
     def test_python_handoff_consumes_one_row_once_without_ansi_or_newline(self):
@@ -97,14 +115,20 @@ class LauncherFeedbackTests(unittest.TestCase):
                 continue
             with self.subTest(shell=executable), tempfile.TemporaryDirectory() as temporary:
                 script = Path(temporary) / "probe.ps1"
-                driver = str(ROOT / "src/windows_launcher.ps1").replace("'", "''")
-                script.write_text(CONSOLE_STUB + "function Get-Command { return @() }\n"
+                source = Path(temporary) / 'src'
+                source.mkdir()
+                shutil.copyfile(ROOT / 'src/windows_launcher.ps1', source / 'windows_launcher.ps1')
+                (source / 'python_discovery.ps1').write_text(
+                    "function Find-CostGuardPython { return @{Executable=$null;Failure='missing'} }\n"
+                    "function Get-CostGuardPythonFailure { return 'COST GUARD COULD NOT START: No usable Python 3.11+' }\n")
+                driver = str(source / 'windows_launcher.ps1').replace("'", "''")
+                script.write_text(CONSOLE_STUB + "\n"
                                   f". '{driver}' -Mode report\n"
                                   "exit $LASTEXITCODE\n", encoding="utf-8")
                 result = subprocess.run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)],
-                                        capture_output=True, text=True, timeout=20)
+                                        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
                 self.assertEqual(9009, result.returncode)
-                self.assertLess(result.stdout.index("Checking requirements"), result.stdout.index("could not find Python"))
+                self.assertLess(result.stdout.index("Checking requirements"), result.stdout.index("No usable Python"))
                 self.assertNotIn("\x1b", result.stdout)
                 self.assertNotIn("\r", result.stdout)
 
@@ -123,16 +147,18 @@ class LauncherFeedbackTests(unittest.TestCase):
                     good.write_text("if ($args -contains '-c') { $global:Probes++; $global:LASTEXITCODE=0 } "
                                     "else { Write-Output ('APP:' + ($args -join ',')); $global:LASTEXITCODE=17 }\n",
                                     encoding="utf-8")
-                    driver = str(ROOT / "src/windows_launcher.ps1").replace("'", "''")
-                    sources = [str(path).replace("'", "''") for path in (bad, bad, good)]
-                    choices = ",".join("[pscustomobject]@{Source='" + path + "'}" for path in sources)
-                    script.write_text(CONSOLE_STUB + f"$global:Probes=0\nfunction Get-Command {{ return @({choices}) }}\n"
+                    source = root / 'src'
+                    source.mkdir()
+                    shutil.copyfile(ROOT / 'src/windows_launcher.ps1', source / 'windows_launcher.ps1')
+                    (source / 'python_discovery.ps1').write_text(
+                        "function Find-CostGuardPython { return @{Executable='" + str(good).replace("'", "''") + "';Arguments=@()} }\n")
+                    driver = str(source / 'windows_launcher.ps1').replace("'", "''")
+                    script.write_text(CONSOLE_STUB + "\n"
                                       f". '{driver}' -Mode {mode}\n"
-                                      "Write-Output ('PROBES:' + $global:Probes)\nexit $LASTEXITCODE\n", encoding="utf-8")
+                                      "exit $LASTEXITCODE\n", encoding="utf-8")
                     result = subprocess.run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)],
                                             capture_output=True, text=True, timeout=20)
                     self.assertEqual(17, result.returncode, result.stderr)
-                    self.assertIn("PROBES:2", result.stdout)
                     self.assertIn(argument, result.stdout)
                     self.assertNotIn("\x1b", result.stdout)
 

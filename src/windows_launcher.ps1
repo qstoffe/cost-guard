@@ -4,7 +4,7 @@ param([ValidateSet('report', 'watch', 'diagnostics')][string]$Mode = 'report')
 $ErrorActionPreference = 'Stop'
 $code = 1
 # Feedback belongs only to this console, never to the caller's prompt.
-$interactiveStatus = -not [Console]::IsOutputRedirected
+$interactiveStatus = -not [Console]::IsOutputRedirected -and -not [Console]::IsInputRedirected
 if ($env:COST_GUARD_LAUNCHER_STATUS -ne 'pending') {
     if ($interactiveStatus) { Write-Host -NoNewline 'Cost Guard: Checking requirements...' }
     else { Write-Host 'Cost Guard: Checking requirements...' }
@@ -37,30 +37,14 @@ public static class CostGuardLauncherConsole {
         throw 'Cost Guard could not enable console Ctrl+C handling.'
     }
 
-    $python = $null
-    $pythonArgs = @()
-    $tested = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($candidate in @(@{Name = 'py.exe'; Args = @('-3')}, @{Name = 'python.exe'; Args = @()})) {
-        # Get-Command may return multiple PATH matches. Probe each executable independently.
-        foreach ($application in @(Get-Command $candidate.Name -All -CommandType Application -ErrorAction SilentlyContinue)) {
-            if (-not $application -or -not $application.Source) { continue }
-            if (-not $tested.Add($application.Source)) { continue }
-            $arguments = $candidate.Args
-            try {
-                & $application.Source @arguments -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)' 1>$null 2>$null
-                if ($LASTEXITCODE -eq 0) {
-                    $python = $application.Source
-                    $pythonArgs = $arguments
-                    break
-                }
-            } catch { continue }
-        }
-        if ($python) { break }
-    }
+    . (Join-Path $PSScriptRoot 'python_discovery.ps1')
+    $found = Find-CostGuardPython
+    $python = $found.Executable
+    $pythonArgs = $found.Arguments
     if (-not $python) {
         Clear-LauncherStatus
-        Write-Host 'Cost Guard could not find Python 3.11 or newer.'
-        Write-Host 'Install Python 3.11+ and run this launcher again.'
+        Write-Host (Get-CostGuardPythonFailure $found.Failure)
+        Write-Host "`nDiagnostics: development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd"
         $global:LASTEXITCODE = 9009
         return
     }
@@ -76,8 +60,7 @@ public static class CostGuardLauncherConsole {
     $code = $LASTEXITCODE
 } catch {
     Clear-LauncherStatus
-    Write-Host 'Cost Guard - Windows launcher error'
-    Write-Host $_.Exception.Message
+    Write-Host "COST GUARD COULD NOT START`n`nReason: The Windows launcher could not run the command.`n`nNext step: Retry from a local checkout; run Cost Guard Diagnostics if this repeats."
 }
 Clear-LauncherStatus
 if ($code -ne 0) { Write-Host ('Cost Guard command exited with code ' + $code + '.') }

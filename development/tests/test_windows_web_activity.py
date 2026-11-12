@@ -21,6 +21,8 @@ class WindowsWebActivityTests(unittest.TestCase):
                 # Redirect only the OS profile-root lookup; retain real private-log code.
                 source = source.replace("[Environment]::GetFolderPath('LocalApplicationData')", '$env:LOCALAPPDATA')
                 (web / 'windows_launch.ps1').write_text(source, encoding='utf-8-sig')
+                (root / 'src/python_discovery.ps1').write_bytes((ROOT / 'src/python_discovery.ps1').read_bytes())
+                (web / 'launch_messages.json').write_bytes((ROOT / 'src/web/launch_messages.json').read_bytes())
                 (root / 'cost-guard-web.py').write_text(f'''
 import sys, time
 if sys.argv[1:] != ['--launch-windows']:
@@ -30,19 +32,23 @@ print('untrusted raw exception https://private/#secret', flush=True)
 time.sleep(0.4)
 print('Cost Guard startup: Opening your default browser (0.4s elapsed)', flush=True)
 if {code}:
-    print('Cost Guard: Web is running; use Open Cost Guard to retry.', flush=True)
+    print('Cost Guard failure: browser_open_failed', flush=True)
+    print('Cost Guard: private https://private/#secret', flush=True)
 raise SystemExit({code})
 ''', encoding='utf-8')
                 probe = root / 'probe.ps1'
                 probe.write_text('''param($Interpreter, $Source, $Mode)
 $ErrorActionPreference = 'Stop'
-function Get-Command {
-    param($Name, [switch]$All, $CommandType, $ErrorAction)
+# Override only the candidate inventory, not the production process/version probe.
+$resolver = Join-Path (Split-Path -Parent (Split-Path -Parent $Source)) 'python_discovery.ps1'
+[IO.File]::AppendAllText($resolver, @'
+
+function Get-CostGuardPythonCandidates {
     if ($Mode -eq 'missing') { return @() }
     if ($Mode -eq 'exception') { throw 'private exception https://private/#secret' }
-    if ($Name -eq 'python.exe') { return @([pscustomobject]@{Source=$Interpreter}) }
-    return @()
+    $Interpreter
 }
+'@)
 # Test only the non-UI fallback; never display a dialog or write a real profile log.
 function Add-Type { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'unexpected-ui'), 'called'); throw 'UI disabled by test' }
 function Read-Host { throw 'Redirected launch must never prompt' }
@@ -64,9 +70,10 @@ exit $LASTEXITCODE
                 self.assertFalse((root / 'unexpected-ui').exists(), 'Redirected failure must not attempt a dialog')
                 if code:
                     if mode in ('browser', 'startup'):
-                        self.assertIn('Web is running; use Open Cost Guard to retry.', text)
+                        self.assertIn('Web is running, but the default browser could not open.', text)
+                        self.assertIn('COST GUARD WEB IS RUNNING\n\nReason:', text.replace('\r\n', '\n'))
                     if mode == 'missing':
-                        self.assertIn('Python 3.11 or newer was not found', text)
+                        self.assertIn('No usable Python 3.11+ installation could be located', text)
                     self.assertIn('Diagnostics:', text)
                     record = root / 'CostGuard/Web/launcher/startup.log'
                     failure = 'python_unavailable' if mode in ('missing', 'exception') else 'launcher_failed'

@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import shutil
 import tempfile
 import unittest
 
@@ -14,44 +15,81 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class WindowsLauncherTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'nt', 'Windows Python selection behavior')
-    def test_python_probe_rejects_old_accepts_minimum_and_preserves_launcher_arguments(self):
-        for scenario in ('fallback', 'launcher'):
-            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                for name, version in (('old', '(3,10)'), ('supported', '(3,11)')):
-                    (root / (name + '.ps1')).write_text(f'''if ($args -contains '-c') {{
-    $index = [array]::IndexOf($args, '-c')
-    $code = 'import sys; sys.version_info={version}; ' + $args[$index + 1]
-    & $env:FIXTURE_PYTHON -c $code
-    [IO.File]::AppendAllText((Join-Path $PSScriptRoot 'probes'), '{name}:' + $LASTEXITCODE + ':' + ($args[0]) + "`n")
-}} else {{
-    Write-Output ('APP:' + ($args -join ','))
-    $global:LASTEXITCODE = 17
-}}
-''', encoding='utf-8-sig')
+    def test_shared_resolver_skips_aliases_deduplicates_and_classifies_evidence(self):
+        for shell in ('powershell.exe', 'pwsh.exe'):
+            if not shutil.which(shell):
+                continue
+            with self.subTest(shell=shell), tempfile.TemporaryDirectory(prefix='Python å space ') as directory:
+                root = Path(directory)
                 script = root / 'probe.ps1'
-                script.write_text(CONSOLE_STUB + '''
-function Get-Command {
-    param($Name, [switch]$All, $CommandType, $ErrorAction)
-    if ($Name -eq 'py.exe') {
-        $choice = if ($env:FIXTURE_SCENARIO -eq 'launcher') { 'supported.ps1' } else { 'old.ps1' }
-        return @([pscustomobject]@{Source=(Join-Path $PSScriptRoot $choice)})
-    }
-    return @([pscustomobject]@{Source=(Join-Path $PSScriptRoot 'old.ps1')},
-             [pscustomobject]@{Source=(Join-Path $PSScriptRoot 'supported.ps1')})
+                script.write_text(r'''param($Source, $Python)
+$ErrorActionPreference = 'Stop'
+. $Source
+$script:Scenario = 'fallback'
+$script:Calls = @()
+function Get-CostGuardPythonCandidates {
+    if ($script:Scenario -eq 'missing') { return @() }
+    if ($script:Scenario -eq 'old') { return 'C:\fixture\old.exe' }
+    if ($script:Scenario -eq 'broken') { return 'C:\fixture\broken.exe' }
+    'C:\Users\fixture\AppData\Local\Microsoft\WindowsApps\python.exe'
+    'C:\fixture\old.exe'; 'C:\fixture\OLD.exe'
+    'C:\fixture\broken.exe'; 'C:\fixture\wrong-platform.exe'
+    'C:\fixture\not-an-interpreter.ps1'
+    $Python
 }
-& $env:FIXTURE_SOURCE -Mode watch
-exit $LASTEXITCODE
+$realProbe = ${function:Invoke-CostGuardPythonProcess}
+function Invoke-CostGuardPythonProcess {
+    param($Executable, $Arguments, $Timeout, $Activity)
+    $script:Calls += $Executable
+    if ($Executable -eq 'C:\fixture\broken.exe') { return $null }
+    if ($Executable -eq 'C:\fixture\old.exe') { return @{Code=0;Output='[3,10,"win32","C:\\fixture\\old.exe"]'} }
+    if ($Executable -eq 'C:\fixture\wrong-platform.exe') { return @{Code=0;Output='[3,13,"linux","/bin/python"]'} }
+    & $realProbe $Executable $Arguments $Timeout $Activity
+}
+$found = Find-CostGuardPython
+if ($found.Executable -ne $Python -or $found.Arguments.Count) { throw 'No real interpreter selected' }
+if ($script:Calls.Count -ne 4) { throw ('Alias/duplicate/unrelated file probed: ' + $script:Calls.Count) }
+foreach ($scenario in @('missing','old','broken')) {
+    $script:Scenario = $scenario
+    $found = Find-CostGuardPython
+    if ($found.Executable -or $found.Failure -ne $scenario) { throw 'Incorrect evidence classification' }
+    $text = Get-CostGuardPythonFailure $found.Failure
+    if ($text -notmatch 'START\n\nReason: .+\n\nNext step:') { throw 'Dense failure text' }
+}
+Write-Output 'DISCOVERY_PASS'
 ''', encoding='utf-8-sig')
-                env = dict(os.environ, FIXTURE_PYTHON=sys.executable, FIXTURE_SCENARIO=scenario,
-                           FIXTURE_SOURCE=str(ROOT / 'src/windows_launcher.ps1'))
-                result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File', str(script)],
-                                        env=env, capture_output=True, text=True, timeout=30,
-                                        creationflags=subprocess.CREATE_NO_WINDOW)
-                self.assertEqual(17, result.returncode, result.stderr)
-                expected = ['old:1:-3', 'supported:0:-c'] if scenario == 'fallback' else ['supported:0:-3']
-                self.assertEqual(expected, (root / 'probes').read_text().splitlines())
-                self.assertIn('APP:' + ('-3,' if scenario == 'launcher' else '') + 'cost-guard-cli.py,--watch', result.stdout)
+                result = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-File', str(script),
+                    str(ROOT / 'src/python_discovery.ps1'), sys.executable], capture_output=True,
+                    text=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn('DISCOVERY_PASS', result.stdout)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows native installation lookup')
+    def test_canonical_non_path_install_with_spaces_and_unicode_is_executable(self):
+        with tempfile.TemporaryDirectory(prefix='Python å space ') as directory:
+            root = Path(directory)
+            executable = root / 'Programs/Python/Python313/python.exe'
+            executable.parent.parent.mkdir(parents=True)
+            # Link only the interpreter directory; no installation, PATH or registry mutation.
+            subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(executable.parent),
+                            str(Path(sys.executable).parent)], check=True, capture_output=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+            actual = executable
+            script = root / 'probe.ps1'
+            script.write_text(r'''param($Source, $Python)
+$ErrorActionPreference = 'Stop'
+. $Source
+function Get-Command { return @() }
+function Get-CostGuardRegisteredPython { return @() }
+$found = Find-CostGuardPython
+if (-not $found.Executable) { throw 'Non-PATH interpreter missed' }
+Write-Output $found.Executable
+''', encoding='utf-8-sig')
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File', str(script),
+                str(ROOT / 'src/python_discovery.ps1'), str(actual)], env=dict(os.environ, LOCALAPPDATA=str(root), WINDIR=''),
+                capture_output=True, text=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn('python.exe', result.stdout)
 
     def test_terminal_entrypoints_keep_separate_persistent_console(self):
         for path in ("windows/Legacy/Cost-Guard.cmd", "windows/Legacy/Cost-Guard-Watch.cmd",
