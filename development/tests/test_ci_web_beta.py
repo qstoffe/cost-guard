@@ -131,10 +131,10 @@ class CiEvidenceTests(unittest.TestCase):
 
     def test_native_profile_is_focused_and_named_cases_execute_directly(self):
         windows = run_tests.NATIVE_WEB_PATTERNS["win32"]
-        self.assertEqual(("test_windows_web.py", "test_windows_web_activity.py"), windows[:2])
-        self.assertEqual(("test_windows_clipboard.py", "test_web_browser_links.py"), windows[2:4])
-        self.assertEqual(14, len(windows))
-        self.assertEqual(3, len(run_tests.NATIVE_WEB_PATTERNS["darwin"]))
+        self.assertEqual(("test_windows_web.py", "test_windows_launcher.py", "test_launcher_feedback.py",
+                          "test_windows_web_activity.py", "test_windows_clipboard.py", "test_web_browser_links.py"), windows[:6])
+        self.assertEqual(16, len(windows))
+        self.assertEqual(5, len(run_tests.NATIVE_WEB_PATTERNS["darwin"]))
         self.assertNotIn("test_web_lifecycle.py", windows)
         selector = "test_web_lifecycle.LifecycleTests.test_windows_held_lifetime_file_cannot_be_deleted_or_replaced"
         self.assertIn(selector, windows)

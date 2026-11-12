@@ -158,8 +158,8 @@ class MacCompatibilityChecks(unittest.TestCase):
             with self.subTest(launcher=launcher.name):
                 content = launcher.read_text(encoding="utf-8")
                 self.assertTrue(content.startswith("#!/bin/zsh"))
-                self.assertIn("find_python()", content)
-                self.assertIn("3.11", content)
+                self.assertIn("cg_find_python", content)
+                self.assertIn("python_discovery.sh", content)
                 self.assertIn("CG_ROOT=", content)
         self.assertIn("--test-service-start", launchers[2].read_text(encoding="utf-8"))
 

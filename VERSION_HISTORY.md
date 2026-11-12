@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.29 - 2026-11-12
+
+- Web, Legacy report/Watch and Diagnostics share Python-independent installed-runtime discovery per OS. Windows uses installed-only launcher/manager listings, PEP 514 registry views and standard install directories; macOS adds versioned Python.org/Homebrew and common user-local layouts. Bounded isolated probes skip old, broken and hanging candidates without installing anything or changing PATH.
+- Startup failures separate outcome, specific cause, next action and Diagnostics. Redirected launchers remain plain/nonblocking; a browser-only failure correctly says Web is running. Generated Finder apps rediscover Python on each launch while retaining secure cache fingerprint/inventory validation.
+
 ## v81.28 - 2026-11-11
 
 - Sessions silently completes expired-catalog recovery, clearing transient status on successful publication and subsequent polls without a browser reload. Existing five-second refresh, keyed metric updates and bounded reopen remain unchanged.

@@ -131,8 +131,8 @@ class WindowsShellContractTests(unittest.TestCase):
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("SetConsoleCtrlHandler([IntPtr]::Zero, $false)", driver,
                       "explicitly enable Ctrl+C before Python, including legacy direct callers")
-        self.assertIn("sys.version_info >= (3,11)", driver)
-        self.assertIn("Install Python 3.11+", driver)
+        self.assertIn("Find-CostGuardPython", driver)
+        self.assertIn("Get-CostGuardPythonFailure", driver)
         self.assertIn("$global:LASTEXITCODE = $code", driver)
         self.assertNotIn("Read-Host", driver)
         self.assertNotRegex(driver, r"(?m)^\s*exit\b")

@@ -15,13 +15,15 @@ from src.version import VERSION
 from .instance_state import _private, _safe
 from .process_identity import InstanceConflict
 
-SOURCES = ("macos/launcher.applescript", "macos/Cost-Guard-Web.command",
+SOURCES = ("macos/launcher.applescript", "macos/Cost-Guard-Web.command", "src/python_discovery.sh",
            "cost-guard-web.py", "src/web/macos_app.py", "src/web/macos_launch.py",
            "src/web/native_macos.py", "src/web/macos_status.py", "src/web/objc_bridge.py")
 
 
 def app_source(root):
-    command = shlex.join([sys.executable, str(root / "cost-guard-web.py"), "--launch-macos"])
+    # Re-resolve installed Python even if the interpreter used to build this app moved.
+    # The .command is also the direct fallback; fingerprint/inventory checks stay intact.
+    command = shlex.join(["/bin/zsh", str(root / "macos/Cost-Guard-Web.command")])
     literal = command.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
     template = (root / SOURCES[0]).read_text(encoding="utf-8")
     if template.count("{{LAUNCH_COMMAND}}") != 1:

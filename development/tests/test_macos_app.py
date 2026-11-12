@@ -45,7 +45,7 @@ class MacAppTests(unittest.TestCase):
         executable.chmod(0o700)
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "applet"}))
         self.assertEqual(arguments[:2], ["/usr/bin/osacompile", "-o"])
-        self.assertIn("--launch-macos", Path(arguments[3]).read_text())
+        self.assertIn("Cost-Guard-Web.command", Path(arguments[3]).read_text())
         self.assertEqual(options["timeout"], 30)
         self.assertNotIn("shell", options)
         return Mock(returncode=0)
@@ -150,7 +150,8 @@ class MacAppTests(unittest.TestCase):
         literal = source.split('do shell script "', 1)[1].split('"\n', 1)[0]
         command = json.loads('"' + literal + '"')
         self.assertEqual(macos_app.shlex.split(command),
-                         [python, str(self.root / "cost-guard-web.py"), "--launch-macos"])
+                          ['/bin/zsh', str(self.root / 'macos/Cost-Guard-Web.command')])
+        self.assertNotIn(python, command, 'Finder must rediscover Python after an old location disappears')
         self.assertNotIn("{{LAUNCH_COMMAND}}", source)
         self.assertIn("errorNumber is 4", source)
 

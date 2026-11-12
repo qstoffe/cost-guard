@@ -6,18 +6,12 @@ import sys
 from src.config import ConfigError, load_configuration
 from .instance_state import InstanceStore
 from .lifecycle import launch
+from .launch_messages import messages, print_failure
 from .macos_app import prepare_app
 from .process_identity import InstanceConflict
 from .startup import StartupProgress
 
-MESSAGES = {
-    "tray_unavailable": "The native macOS menu could not start. Use a logged-in desktop and retry; CLI remains available.",
-    "instance_start_timeout": "Web startup timed out. Run Diagnostics and retry.",
-    "gui_or_server_start_failed": "Web host failed to start. Run Diagnostics; CLI remains available.",
-    "configuration_unavailable": "Check config/user-config.jsonc, then retry.",
-    "instance_conflict": "Existing Web instance could not be verified/stopped. Do not delete its state; run Diagnostics.",
-    "browser_open_failed": "Web is running. Use menu-bar Open Cost Guard to retry the default browser.",
-}
+MESSAGES = messages('macos')
 
 
 def native_preflight(root):
@@ -58,7 +52,7 @@ def launch_macos(root):
         result = launch(root, "src.web.native_macos", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
             store.log("browser_open_failed")
-            print("Cost Guard: " + MESSAGES["browser_open_failed"])
+            print_failure("browser_open_failed", 'macos')
             return 4
         progress("handoff")
         print("Cost Guard: Running; use the CG menu to Open or Exit.")
@@ -70,8 +64,9 @@ def launch_macos(root):
     except Exception:
         code = "gui_or_server_start_failed"
     if store:
-        store.log(code)
-    print("Cost Guard: " + MESSAGES[code])
-    print("Legacy CLI: macos/Legacy/Cost-Guard.command or python cost-guard-cli.py")
-    print("Diagnostics: development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command")
+        try:
+            store.log(code)
+        except (OSError, InstanceConflict):
+            print("Cost Guard: Private startup diagnostic could not be recorded.")
+    print_failure(code, 'macos')
     return 1

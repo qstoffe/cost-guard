@@ -3,7 +3,7 @@ param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd.'
+$message = "COST GUARD COULD NOT START`n`nReason: The Windows Web launcher failed.`n`nNext step: Run Cost Guard Diagnostics, then retry."
 $script:frame = 0
 $script:activity = $null
 function Start-LaunchActivity {
@@ -43,54 +43,35 @@ function Stop-LaunchActivity {
         $script:activity = $null
     }
 }
-function Find-WebPython {
-    $tested = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($candidate in @(@{Name = 'py.exe'; Args = @('-3')}, @{Name = 'python.exe'; Args = @()})) {
-        foreach ($application in @(Get-Command $candidate.Name -All -CommandType Application -ErrorAction SilentlyContinue)) {
-            if (-not $application -or -not $application.Source -or -not $tested.Add($application.Source)) { continue }
-            $arguments = $candidate.Args
-            $probe = $null
-            try {
-                # A broken launcher must not strand an invisible discovery process.
-                $info = [Diagnostics.ProcessStartInfo]::new()
-                $info.FileName = $application.Source
-                $info.Arguments = (($arguments + @('-c', '"import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)"')) -join ' ')
-                $info.UseShellExecute = $false
-                $info.CreateNoWindow = $true
-                $info.RedirectStandardOutput = $true
-                $info.RedirectStandardError = $true
-                $probe = [Diagnostics.Process]::Start($info)
-                $deadline = [Diagnostics.Stopwatch]::StartNew()
-                while (-not $probe.WaitForExit(120) -and $deadline.ElapsedMilliseconds -lt 5000) {
-                    Write-LaunchActivity
-                }
-                if (-not $probe.HasExited) {
-                    $probe.Kill() # Only this exact discovery process, never a PID/name search.
-                    $probe.WaitForExit(1000) | Out-Null
-                    continue
-                }
-                if ($probe.ExitCode -eq 0) {
-                    return @{Executable = $application.Source; Arguments = $arguments}
-                }
-            } catch { continue }
-            finally { if ($probe) { $probe.Dispose() } }
-        }
+function Get-WebFailureText {
+    param([string]$Failure)
+    $messages = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'launch_messages.json') -Raw | ConvertFrom-Json
+    $entry = $messages.PSObject.Properties[$Failure]
+    if (-not $entry) { return $null }
+    $reason = if ($entry.Value -is [string]) { $entry.Value } else { $entry.Value.windows }
+    $title = 'COST GUARD COULD NOT START'
+    $action = 'Preserve Web state; run Diagnostics, then retry. Legacy CLI remains available.'
+    if ($Failure -eq 'configuration_unavailable') { $action = 'Check config/user-config.jsonc, then retry.' }
+    if ($Failure -eq 'browser_open_failed') {
+        $title = 'COST GUARD WEB IS RUNNING'
+        $action = 'Use tray Open Cost Guard to retry the browser.'
     }
-    return $null
+    return "$title`n`nReason: $reason`n`nNext step: $action"
 }
 $code = 1
 $python = $null
 try {
     Start-LaunchActivity
-    $found = Find-WebPython
+    . (Join-Path (Split-Path -Parent $PSScriptRoot) 'python_discovery.ps1')
+    $found = Find-CostGuardPython -Activity { Write-LaunchActivity }
     $python = if ($found) { $found.Executable } else { $null }
     [array]$pythonArgs = if ($found) { $found.Arguments } else { @() }
     if (-not $python) {
-        $message = 'Python 3.11 or newer was not found. Install Python, then retry Cost Guard.'
+        $message = Get-CostGuardPythonFailure $found.Failure
     } else {
         # Drain internal stages without repainting the label or accumulating lines.
         # Keep only allowlisted failure text; raw subprocess exceptions stay private.
-        $safe = @()
+        $safe = $null
         $info = [Diagnostics.ProcessStartInfo]::new()
         $info.FileName = $python
         $info.Arguments = (($pythonArgs + @('-u', ('"' + (Join-Path $root 'cost-guard-web.py') + '"'), '--launch-windows')) -join ' ')
@@ -100,14 +81,15 @@ try {
         $info.RedirectStandardError = $true
         $child = [Diagnostics.Process]::Start($info)
         try {
-            $errors = $child.StandardError.ReadToEndAsync()
+            $errors = $child.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
             while ($true) {
                 $line = $child.StandardOutput.ReadLineAsync()
                 while (-not $line.IsCompleted) { Write-LaunchActivity; Start-Sleep -Milliseconds 120 }
                 $value = $line.GetAwaiter().GetResult()
                 if ($null -eq $value) { break }
-                if ($value -like 'Cost Guard: *') {
-                    $safe += $value
+                if ($value -match '^Cost Guard failure: ([a-z_]{1,64})$') {
+                    $known = Get-WebFailureText $matches[1]
+                    if ($known) { $safe = $known }
                 }
             }
             while (-not $child.WaitForExit(120)) { Write-LaunchActivity }
@@ -115,7 +97,7 @@ try {
         } finally { $child.Dispose() }
         if ($code -eq 0) { exit 0 }
         # Python emits only fixed allowlisted failure text; never display raw exceptions.
-        if ($safe.Count -gt 0) { $message = $safe[-1] }
+        if ($safe) { $message = $safe }
     }
 } catch {
     $code = 1
@@ -157,14 +139,13 @@ try {
 } catch {
     Write-Host 'Private startup diagnostic could not be recorded.'
 }
+$message += "`n`nDiagnostics: development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd"
 Write-Host $message
-Write-Host 'Diagnostics: development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd'
-Write-Host 'Legacy CLI: windows\Legacy\Cost-Guard.cmd or python cost-guard-cli.py (requires Python 3.11+).'
 if (-not $Detached -and [Environment]::UserInteractive -and
     -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected) {
     try {
         Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show($message + "`nRun Cost Guard Diagnostics for details.`nLegacy CLI: windows\Legacy\Cost-Guard.cmd", 'Cost Guard') | Out-Null
+        [System.Windows.Forms.MessageBox]::Show($message, 'Cost Guard') | Out-Null
     } catch {
         # Only a genuinely interactive launcher can retain an error prompt.
         Read-Host 'Press Enter to return' | Out-Null

@@ -11,7 +11,7 @@ class SourceGuard:
              "requirements.txt", "config/default-config.jsonc")
     TREES = ("src", "windows", "macos")
     SUFFIXES = {".py", ".pyw", ".html", ".css", ".js", ".json", ".svg", ".ico",
-                ".png", ".ps1", ".cmd", ".command", ".applescript", ".cs"}
+                ".png", ".ps1", ".sh", ".cmd", ".command", ".applescript", ".cs"}
     SKIP = {"__pycache__", ".git", ".venv", "venv", "node_modules", "cache", "logs",
             "diagnostics", "development"}
 

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.28, 2026-11-11), the supported distribution.
+Use **current `main`** (v81.29, 2026-11-12), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -32,6 +32,29 @@ git pull --ff-only
 ```
 
 Install **Python 3.11+**; standard OpenCode installations need no configuration.
+
+Desktop launchers also look for installed Python outside PATH: Windows launcher/manager
+listings, registrations and standard install directories; macOS versioned Python.org,
+Homebrew and common user-local installations. Nothing is downloaded or installed.
+If discovery fails, its spaced error distinguishes no usable candidate, older-only
+versions and candidates that failed/timed out—not proof Python is uninstalled.
+
+For an unusual custom installation, invoke its executable directly from the repository:
+
+```powershell
+# Windows PowerShell: replace this example with the installed executable's real path.
+& 'C:\custom Python\python.exe' .\cost-guard-web.py --launch-windows
+```
+
+```sh
+# macOS Terminal: replace this example with the installed executable's real path.
+"/custom Python/bin/python3" ./cost-guard-web.py --launch-macos
+```
+
+The same executable can run `cost-guard-cli.py` or
+`development/tools/collect_diagnostics.py` instead. No PATH edit/reinstall is necessary
+for a usable custom interpreter. If **Web is running** but the browser failed, use
+the tray/menu **Open Cost Guard** action rather than reinstalling Python.
 
 ### Cost Guard — the default Web application
 
@@ -357,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.27 (2026-11-11):** Accounts and Full Watch estimate secondary/later quota Capacity and its 30-day equivalent from usable same-window priced subtotals, with explicit partial-pricing qualification. Unsupported evidence stays unknown with a specific explanation. [Cause and verification](development/journal/web/secondary-capacity.md).
+**v81.29 (2026-11-12):** Desktop launchers find normal installed Python outside PATH, skip unsuitable candidates with finite probes, and show spaced, cause-specific startup failures. Finder apps rediscover an interpreter instead of pinning a stale executable. [Discovery policy and verification](development/journal/python-discovery.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -160,7 +161,7 @@ def command_failure(result, store):
 
 def preflight_observations(home):
     values = []
-    for case in ('shell-1', 'shell-2'):
+    for case in ('shell-1', 'shell-2', 'shell-3'):
         path = home / ('ci-preflight-' + case + '.json')
         if path.is_file():
             value = dict(case=case, **json.loads(path.read_text()))
@@ -169,6 +170,30 @@ def preflight_observations(home):
                 value['child'] = json.loads(trace.read_text())
             values.append(value)
     return values
+
+
+def macos_python_fixture(root, home, environment):
+    """Actual CI interpreter in disposable standard non-PATH layouts, no install."""
+    user = home / 'fixture-user'
+    version = '.'.join(map(str, sys.version_info[:2]))
+    primary = user / f'Library/Frameworks/Python.framework/Versions/{version}/bin/python3'
+    fallback = user / f'.pyenv/versions/{version}/bin/python3'
+    for executable in (primary, fallback):
+        executable.parent.mkdir(parents=True)
+        executable.symlink_to(sys.executable)
+    binary = home / 'shell-utilities'
+    binary.mkdir()
+    for name in ('dirname', 'sleep'):
+        (binary / name).symlink_to(shutil.which(name))
+    environment.update(HOME=str(user), PATH=str(binary))
+    # This exact environment has no PATH Python, no interactive profile or developer shell.
+    selected = subprocess.run(['/bin/zsh', '-c',
+        'source "$1"; cg_find_python || exit 8; print -r -- "$PYTHON"', 'discovery',
+        str(root / 'src/python_discovery.sh')], env=environment, capture_output=True, timeout=25)
+    assert selected.returncode == 0 and Path(selected.stdout.decode().strip()).resolve() == Path(sys.executable).resolve()
+    return primary, dict(outcome='PASS', actual_python=version, path_python=False,
+        install_tree='synthetic user Python.org framework plus pyenv fallback',
+        interpreter='real CI Python; symlinks only, no install or system-directory mutation')
 
 
 def detached(root, home):
@@ -181,6 +206,7 @@ def detached(root, home):
     identity_checks = []
     handoff = {}
     result = None
+    discovery = {}
 
     def observed_identity(pid):
         current = process_identity(pid)
@@ -227,7 +253,13 @@ def detached(root, home):
             command = [str(entry)] if sys.platform == 'darwin' else ['cmd.exe', '/d', '/c', str(entry)]
             if sys.platform == 'darwin':
                 assert os.access(entry, os.X_OK)
-            for attempt in range(2):
+                primary, discovery = macos_python_fixture(root, home, environment)
+            for attempt in range(3 if sys.platform == 'darwin' else 2):
+                if attempt == 2:
+                    from src.web.macos_app import app_source
+                    primary.unlink()  # Fixture-owned symlink only; installed Python stays intact.
+                    literal = app_source(root).split('do shell script "', 1)[1].split('"\n', 1)[0]
+                    command = shlex.split(json.loads('"' + literal + '"'))
                 case = environment['CG_CI_CASE'] = 'shell-' + str(attempt + 1)
                 previous = store.read()
                 result = subprocess.run(command, cwd=home, env=environment, capture_output=True, timeout=60)
@@ -244,6 +276,8 @@ def detached(root, home):
                     assert process_identity(previous['pid']) != previous['process']
                 if sys.platform == 'darwin':
                     assert b'Cost Guard.app' in result.stdout, 'production_helper_preparation_not_observed'
+                    if attempt == 2:
+                        discovery['generated_command_after_primary_removed'] = 'PASS (real fallback interpreter and native startup)'
             state = store.read()
             assert state and control(state, "status")["ready"]
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
@@ -265,7 +299,7 @@ def detached(root, home):
         current = store.read()
         if current:
             stop_existing(store, current)
-    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks,
+    return dict(outcome="PASS", installed_python=discovery, registered_browser_handoff=handoff, startup_identity_checks=identity_checks,
         preflight_observations=preflight_observations(home), checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
          "spaces and Unicode source path", "production launcher preflight / restart / unchanged preferences and checkout identity",
