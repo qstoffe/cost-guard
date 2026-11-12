@@ -9,6 +9,7 @@ from threading import RLock
 import time
 
 from src.analysis.cache import dependency_signature
+from src.analysis.ai_stats import POLICY as STATS_POLICY
 from src.reports import ReportKind, ReportRequest
 from .report_control import ManagedReport
 
@@ -29,6 +30,8 @@ def usable(result, now_ms):
     """Qualified historical data remain deliverable; cadence owns refresh age."""
     if not result or result.get('error') or not result.get('view'):
         return False
+    if result['view'].get('kind') == 'ai-stats' and result['view'].get('ai_stats_policy') != STATS_POLICY:
+        return False  # A prior derived schema must regenerate, never relax browser validation.
     observed = result.get('source', {}).get('observed_at_ms')
     return (type(observed) is int and 0 <= observed <= now_ms
             and result['source'].get('status') in {'acquired', 'partial'})
@@ -163,8 +166,12 @@ class DataDispatcher:
                     row['period'] == request.stats_scope for row in result['view'].get('ai_stats', ()))))
             work = ((result or {}).get('view') or {}).get('ai_stats_work') or {}
             scoped = work.get('scopes', {})
-            if ready and (not entry['result'] or request.kind is not ReportKind.AI_STATS or
-                    scoped.get(request.stats_scope, {}).get('ready') is not False):
+            old_schema = (request.kind is ReportKind.AI_STATS and result and result.get('view') and
+                result['view'].get('kind') == 'ai-stats' and result['view'].get('ai_stats_policy') != STATS_POLICY)
+            if request.kind is ReportKind.AI_STATS and scoped:
+                ready = ready and scoped.get(request.stats_scope, {}).get('ready') is True
+            ready = ready and not old_schema
+            if ready:
                 entry.update(result=result, result_id=key, failures=0, error=None)
             if snapshot['status'] in {'queued', 'running'}:
                 continue
@@ -176,16 +183,18 @@ class DataDispatcher:
                 entry.update(due=self.clock() + delay + spread, terminal=False, finished=self.clock(), requested=False)
             else:
                 error = (result or {}).get('error') or {}
-                entry['error'] = error.get('code') or snapshot.get('error') or 'report_unavailable'
+                entry['error'] = error.get('code') or snapshot.get('error') or (
+                    'ai_stats_schema_changed' if old_schema else 'ai_stats_no_progress'
+                    if request.kind is ReportKind.AI_STATS and snapshot['status'] == 'complete' else 'report_unavailable')
                 if entry['error'] == 'source_identity_changed':
                     entry['result'] = None
                 entry['failures'] = min(12, entry['failures'] + 1)
-                retryable = (error.get('retryable') is True or
+                retryable = (error.get('retryable') is True or entry['error'] in {'ai_stats_no_progress', 'ai_stats_schema_changed'} or
                     not error and entry['error'] in WORKER_INTERRUPTS)
                 entry['terminal'] = not retryable
                 pending = entry['error'] in {'concurrent_source_change', 'history_revision_churn',
                     'ai_stats_revision_churn', 'ai_stats_checkpoint_busy', 'history_checkpoint_busy',
-                    'report_cache_busy', 'session_catalog_changed'}
+                    'report_cache_busy', 'session_catalog_changed', 'ai_stats_schema_changed'}
                 entry['due'] = self.clock() + (min(60, 2 ** entry['failures']) if pending else
                     min(3600, 60 * 2 ** entry['failures']))
 

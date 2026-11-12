@@ -48,7 +48,8 @@ async function main() {
       percent:typeof current==='undefined'?null:current?.percent,
       hidden:document.hidden, managed:typeof demand!=='undefined' && !!demand,
       checkedAgo:typeof current==='undefined'?null:Date.now()-current?.checkedAt,
-      scheduled:typeof cachedReportTimer!=='undefined' && cachedReportTimer!==null})`,target);
+       scheduled:typeof cachedReportTimer!=='undefined' && cachedReportTimer!==null,
+       trace:typeof __reportTrace==='undefined'?null:__reportTrace})`,target);
     server.stdin.write('{"command":"jobs-status"}\n');
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));
@@ -211,9 +212,17 @@ async function main() {
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),0,'failure is not an empty successful period');
-    assert.match(await evaluate(`output.textContent`),/Counting paused/);
+    assert.equal(await evaluate(`[...output.querySelectorAll('.ai-stat')].every(c=>c.textContent==='Loading…' && c.childNodes.length===1 && !c.children.length)`),true);
+    assert.match(await evaluate(`notice.textContent`),/Historical report unavailable/);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-detail a').length`),0);
+    for(const code of ['source_permission_denied','http_auth_failure','unsupported_version','report_invalid_result',
+        'report_cache_unavailable','ai_stats_no_progress']) {
+      await evaluate(`api=async()=>{throw new Error('${code}')}; void acquire(current)`);
+      await until(`current.failed && !current.loading`);
+      assert.equal(await evaluate(`[...output.querySelectorAll('.ai-stat')].length===12 && [...output.querySelectorAll('.ai-stat')].every(c=>c.textContent==='Loading…' && c.childNodes.length===1 && !c.children.length)`),true,code);
+      assert.equal(await evaluate(`notice.textContent.length>0 && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
+    }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
     await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===12`);
     checks.push('cold failure has truthful report status, no fake zero cards/record links/Retry/toolbar; overdue automatic lifecycle restores genuine results; known-empty evidence remains covered separately');

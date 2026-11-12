@@ -62,10 +62,14 @@ def accept(job, result):
     previous = job.get('covered', -1)
     job['stalls'] = 0 if completed > previous else min(6, job.get('stalls', 0) + 1)
     job['covered'] = completed
-    # Settling a fun snapshot is not a claim that every root was scanned. Leave
-    # remaining/ready truthful; a later scheduled refresh can improve the figures.
-    if work.get('checkpoint_error') == 'ai_stats_checkpoint_unavailable' or job['stalls'] >= 6:
-        job['status'] = 'complete'
+    # An unready snapshot cannot finish successfully: browsers correctly refuse
+    # it, and a successful dispatcher cadence would strand cold demand for 15m.
+    # BUSY keeps this logical scan/checkpoints with bounded backoff; a persistent
+    # write/progress fault is typed separately and supervised by host recovery.
+    error = work.get('checkpoint_error')
+    if error == 'ai_stats_checkpoint_unavailable' or job['stalls'] >= 6 and error != 'ai_stats_checkpoint_busy':
+        job.update(status='failed', error=error or 'ai_stats_no_progress')
+        job['result'] = dict(result, error=dict(code=job['error'], retryable=True))
         return
     now = time.monotonic()
     delay = min(60, 2 ** min(6, job['stalls'])) if job['stalls'] else 0

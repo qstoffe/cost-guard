@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000689: `assets/ai-stats.js` owns the permanent Loading-only card invariant;
+`app.js` owns separate cold-error feedback and attempt-qualified application.
+`stats_jobs.py` and `dispatch.py` distinguish unready exhaustion from success,
+retain busy-checkpoint scans and regenerate old projection policies. Coverage:
+Stats resume/dispatch tests, loading/lifetime VM, rendered Stats matrix and real
+read-only installation probe. [Current evidence and limits](../../journal/web/ai-stats.md#loading-only-and-supervised-recovery--fr000689).
+
 FR000687 scoped P2: `application/model_help.py` owns recorded-selector copy;
 prompt parts, scalar Sessions and compact matched runs retain raw identities separately
 from effective prices. `test_recorded_model_help.py`, existing alias/cache/cost tests,
