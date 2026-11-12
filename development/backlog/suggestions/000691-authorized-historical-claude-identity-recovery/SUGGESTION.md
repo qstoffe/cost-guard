@@ -1,5 +1,7 @@
 # Suggestion 000691 — Authorized historical Claude identity and CCost diagnosis/recovery
 
+**Superseded for execution by owner-approved highest-priority FR000692 (2026-11-12).** The owner explicitly grants local historical session/database/SDK/plugin/transcript read access, including other workers' sessions; the prior FR000687 private-history restriction is revoked for FR000692. The original historical evidence below remains archival; **the new FR has only Complete-after-real-local-case-verification or On Hold outcomes, never another Suggestion.**
+
 **Non-executable owner inbox proposal; no Ready priority or implementation approval.**
 Origin method: `selected-worker-deferral`, FR000687, 2026-11-12.
 Source baseline `b3e6cb436bd735c556b563cec31fb4f8efb0d293`; reconciled default `696eaba`.
