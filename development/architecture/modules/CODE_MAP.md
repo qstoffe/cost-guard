@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000683: `assets/help.js::watchHover` owns the open-only 1000ms exact-target check
+and thirty-second trusted-pointer idle lease, shared by Full Watch and Mini PiP.
+Opening tickets and owner/lifetime cleanup stay in the same controller. Coverage:
+`integration/web_help.cjs` virtual hover/clock and `probe_web_help.cjs --hover-watchdog`
+with `probe_help_watchdog.cjs` deliberately suppressing native exits in actual PiP.
+[Tradeoff and verification](../../journal/web/contextual-help.md#fr-000683-bounded-hover-watchdog-2026-11-12).
+
 FR000682: `analysis/ai_stats.py::_token_metrics` derives observed integer traffic,
 sharing `ai_stats_rates.py` denominators without cost/time fillers. Application Stats
 prepares exact-total help and unit-independent rates. `assets/ai-stats.js` owns twelve

@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -86,7 +86,16 @@ async function main() {
         console.log(JSON.stringify({outcome:evidence.outcome,checks,errors}));return;
       }
       await headerHelp.matrix();
-     await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+      await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+      await require('./probe_help_watchdog.cjs')({command,evaluate,until,owner,mini,checks});
+      if(scope==='--hover-watchdog') {
+        assert.deepEqual(errors,[]);
+        evidence={outcome:'PASS',browser:version.product,scope,checks,layouts,errors,
+          limitations:['Synthetic Live data through shipped HTTP/CSP/SSE and actual Document PiP.',
+            'Native CDP pointer exits deliberately intercepted before controller handlers; not physical Windows pointer/chrome/other-app proof.',
+            'Physical OS event delivery UNVERIFIED. The thirty-second stale-CSS lease is covered by the deterministic virtual clock.']};
+        return;
+      }
       await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
       await require('./probe_cost_groups.cjs')({command,evaluate,until,owner,mini,checks,layouts});
     async function focus(id,selector) {

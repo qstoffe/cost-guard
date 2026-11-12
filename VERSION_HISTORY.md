@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.31 - 2026-11-12
+
+- Shared Web/Mini hover help revalidates the exact label/panel about once per second only while open, preserving the transfer grace and cleaning up Popover/ARIA state even when all exit events are missing. Delayed openings also recheck current hover and document lifetime.
+- A thirty-second lease renewed only by actual pointer interaction bounds stale browser hover signals. Stationary mouse-only help can therefore expire; keyboard-focus and deliberate click/touch-pinned help have no hover timeout. Live redraws cannot renew or resurrect it; no background poll, network or host work is added.
+- Scope-limited acceptance retains a reproduced mixed-input Mini Total-heading hover-opening failure in both tested Chromium browsers; Suggestion 000684 tracks it without weakening the safety guard. Physical OS pointer behavior and complete live history/provider teardown proof remain unverified, not PASS.
+
 ## v81.30 - 2026-11-12
 
 - AI Stats adds observed Total Tokens (Input/Cached input/Cache write/Output, reasoning once) and calendar/workday/active-hour token consumption. Both reuse canonical deduplicated requests and existing time denominators; missing usage/source evidence is qualified, never filled from guessed cost or converted with currency.

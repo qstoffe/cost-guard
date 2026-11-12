@@ -100,6 +100,20 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
   Escape/actions suppress immediate reopening; content refresh cannot show help.
   Action suppression survives window-focus restoration, but new hover after leave
   or new intentional keyboard focus can show it again. Touch does not open hover help.
+- FR000683 (v81.31): one controller-owned self-scheduling timeout revalidates an
+  **open hover** about every **1000ms** against its exact connected `pointerTarget`
+  or panel's current `:hover`, document visibility and window lifetime. Negative
+  hover evidence uses the existing 150ms transfer grace. Pending 600ms openings
+  also revalidate target/hover; timer tickets reject obsolete callbacks. Unsupported
+  hover queries are inconclusive, never perpetual permission to remain open.
+  A monotonic **30-second pointer-idle lease** bounds even falsely retained CSS hover.
+  Only trusted pointer entry/movement/down inside the label/panel renews it; no
+  stored coordinates, focus, selector poll, `refresh` or Live redraw can do so.
+  With no OS-wide cursor API, truly stationary reading may expire too: intentional
+  re-entry can reopen, and deliberate keyboard/pinned help has no hover lease.
+  Close/Escape/actions, owner changes, replacement, hidden/pagehide and PiP teardown
+  cancel exactly the owned watchdog; closed/focus/pinned states do no recurring work.
+  [Evidence and physical-OS limitation](../../journal/web/contextual-help.md#fr-000683-bounded-hover-watchdog-2026-11-12).
 - No links/buttons or focus trap inside tooltips. Interactive advanced help uses
   native `details/summary` or a suitable nonmodal disclosure. Critical status stays
   visible outside hover help.

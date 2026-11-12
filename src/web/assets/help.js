@@ -20,15 +20,42 @@ const ContextHelp = (() => {
         focus, focus === leaf ? offset(end) : end);
     }
   }
-  const HOVER_DELAY = 600;
+  const HOVER_DELAY = 600, HOVER_CHECK = 1000, HOVER_IDLE = 30000;
   function controller(doc) {
     if (documents.has(doc)) return documents.get(doc);
     const win = doc.defaultView || window, panel = doc.createElement('div');
     panel.id = 'context-help'; panel.className = 'context-help'; panel.hidden = true;
     panel.setAttribute('role', 'tooltip'); panel.setAttribute('popover', 'manual');
     let active = null, blocked = null, timer, opening, pending = null, origin = null, keyboard = true, fragments = null;
+    let watchdog, hoverDeadline = 0;
+    const now = () => win.performance?.now() ?? Date.now();
     const cancel = () => { win.clearTimeout(timer); timer = undefined; };
     const cancelOpening = () => { win.clearTimeout(opening); opening = undefined; pending = null; };
+    const cancelWatchdog = () => { win.clearTimeout(watchdog); watchdog = undefined; };
+    const hovered = node => node.matches?.(':hover');
+    const valid = target => target?.ownerDocument === doc && target.isConnected &&
+      entries.get(target).pointerTarget.ownerDocument === doc && entries.get(target).pointerTarget.isConnected &&
+      doc.visibilityState !== 'hidden' && !win.closed;
+    function pointerInteraction(event) {
+      // CSS hover and the last coordinates may survive an OS-window exit. Only
+      // actual input renews the lease; refresh/focus/polling cannot certify presence.
+      if (event?.isTrusted && event.pointerType !== 'touch') hoverDeadline = now() + HOVER_IDLE;
+    }
+    function watchHover() {
+      if (origin !== 'hover') { cancelWatchdog(); return; }
+      if (watchdog !== undefined) return;
+      const target = active, pointerTarget = entries.get(target).pointerTarget;
+      const ticket = win.setTimeout(() => {
+        if (watchdog !== ticket) return;
+        watchdog = undefined;
+        if (active !== target || origin !== 'hover') return;
+        if (!valid(target) || entries.get(target).pointerTarget !== pointerTarget ||
+            panel.hidden || !panel.isConnected || now() >= hoverDeadline) { close(); return; }
+        if (hovered(pointerTarget) === false && hovered(panel) === false) exit(target);
+        watchHover();
+      }, Math.min(HOVER_CHECK, Math.max(0, hoverDeadline - now())));
+      watchdog = ticket;
+    }
     function position() {
       if (!active) return;
       if (!active.isConnected) { close(); return; }
@@ -67,6 +94,7 @@ const ContextHelp = (() => {
     }
     function close(suppress = false) {
       cancel();
+      cancelWatchdog();
       if (suppress && pending) blocked = pending;
       cancelOpening();
       if (active) {
@@ -81,7 +109,7 @@ const ContextHelp = (() => {
     function show(target, source) {
       cancel();
       cancelOpening();
-      if (target === blocked || !target.isConnected) return;
+      if (target === blocked || !valid(target)) return;
       const content = entries.get(target).content;
       if (!(typeof content === 'function' ? content() : content)) return;
       if (active !== target) { close(); active = target; }
@@ -94,6 +122,7 @@ const ContextHelp = (() => {
       // Manual Popover avoids browser focus restoration and automatic reopening.
       if (panel.showPopover && !panel.matches(':popover-open')) panel.showPopover();
       refresh();
+      if (active) watchHover();
     }
     function leave(target) {
       if (pending === target) cancelOpening();
@@ -107,7 +136,7 @@ const ContextHelp = (() => {
         if (active === target && origin === 'hover') close();
       }, 150); // Lets the pointer cross the small gap into the help surface.
     }
-    panel.addEventListener('pointerenter', cancel);
+    panel.addEventListener('pointerenter', event => { pointerInteraction(event); cancel(); });
     panel.addEventListener('pointerleave', () => { if (active) exit(); });
     doc.addEventListener?.('keydown', event => {
       if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) keyboard = true;
@@ -115,6 +144,7 @@ const ContextHelp = (() => {
     }, true);
     doc.addEventListener?.('pointerdown', event => {
       keyboard = false;
+      if (active && (entries.get(active).pointerTarget.contains(event.target) || panel.contains(event.target))) pointerInteraction(event);
       cancelOpening();
       if (active && !active.contains(event.target) && !panel.contains(event.target)) close(true);
       if (blocked && !blocked.contains(event.target)) blocked = null;
@@ -133,7 +163,9 @@ const ContextHelp = (() => {
     doc.addEventListener?.('pointermove', event => {
       if (pending && !entries.get(pending).pointerTarget.contains(event.target)) cancelOpening();
       if (!active || origin !== 'hover') return;
-      if (entries.get(active).pointerTarget.contains(event.target) || panel.contains(event.target)) cancel();
+      if (entries.get(active).pointerTarget.contains(event.target) || panel.contains(event.target)) {
+        pointerInteraction(event); cancel();
+      }
       else exit();
     }, true);
     win.addEventListener?.('blur', () => { cancelOpening(); if (origin === 'hover') close(); });
@@ -143,8 +175,8 @@ const ContextHelp = (() => {
     doc.addEventListener?.('scroll', position, true);
     // A route/row replacement may remove a hovered trigger without pointerleave.
     if (win.MutationObserver) new win.MutationObserver(() => {
-      if (pending && !pending.isConnected) cancelOpening();
-      if (active && !active.isConnected) close();
+      if (pending && !valid(pending)) cancelOpening();
+      if (active && !valid(active)) close();
     }).observe(doc.body, {childList: true, subtree: true});
     const value = {leave, refresh, dismiss(target) {
       if (active && target.contains(active) || pending && target.contains(pending)) close(true);
@@ -153,11 +185,18 @@ const ContextHelp = (() => {
       else { blocked = null; show(target, 'pinned'); }
     }, enter(target, event) {
       if (event?.pointerType === 'touch' || target === blocked || pending === target) return;
+      pointerInteraction(event);
       if (active === target) { cancel(); return; }
       cancelOpening();
       if (origin === 'focus' || origin === 'pinned') return;
-      close(); pending = target;
-      opening = win.setTimeout(() => { if (pending === target) show(target, 'hover'); }, HOVER_DELAY);
+      keyboard = false;
+      close(); pending = target; hoverDeadline = now() + HOVER_IDLE;
+      const ticket = win.setTimeout(() => {
+        if (opening !== ticket || pending !== target) return;
+        if (!valid(target) || hovered(entries.get(target).pointerTarget) === false) { cancelOpening(); return; }
+        show(target, 'hover');
+      }, HOVER_DELAY);
+      opening = ticket;
     },
     focus(target) { if (keyboard) show(target, 'focus'); },
     blur(target) {

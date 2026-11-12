@@ -1,6 +1,108 @@
 # Shared Web and Mini contextual help
 
-Current grouping/capacity follow-up: **FR 000620 / v80.200**, recorded below. The FR 000582
+## FR 000683: bounded hover watchdog (2026-11-12)
+
+Base `c33e761`, product v81.31. The shared `help.js` controller now owns one
+self-scheduling timeout only while a visible panel has hover ownership. Each
+1000ms check revalidates the exact connected label or panel's browser `:hover`,
+document visibility, window lifetime and target identity. Negative evidence uses
+the existing 150ms transfer allowance. Opening revalidates after 600ms; obsolete
+opening/watchdog tickets cannot affect a replacement or re-entered target.
+
+A monotonic 30-second pointer-idle lease supplies the independent finite bound:
+polling, stale CSS, focus, synthetic movement and Live refresh cannot extend it.
+Only trusted pointer interaction on the label/panel renews the lease. This is a
+deliberate compromise, not OS cursor detection: a browser can retain stale hover
+and has no general external-window mouse-position API, so truly stationary
+mouse-only reading may also expire after thirty seconds. Intentional re-entry
+can reopen; keyboard focus and deliberate passive click/touch pins have no hover
+lease. Close, Escape, actions, owner/target changes and document/PiP lifecycle
+cancel the owned timer. No host/request work, new dependency or Mini cadence.
+
+Verified safety scope:
+
+- Deterministic virtual clock/hover tests pass with every exit/move/blur event
+  absent, including ARIA restoration, hidden Popover, one watchdog and zero timers
+  after close. Stale-true and inconclusive selectors both expire at thirty seconds;
+  genuine pointer input keeps reading alive, and panel transfer retains its grace.
+  Live refresh/synthetic input/focus cannot renew hover. Focus/pin survive sixty
+  virtual seconds with no watchdog. Opening races, old callbacks, exact labels,
+  removed labels, hidden/closed windows, teardown and separate/reopened documents
+  are covered in the registered `test_web_help.py` owner.
+- Owned hidden **Edge 157.0.4341.46** and **Chrome 157.0.8103.51** pass
+  `probe_web_help.cjs --hover-watchdog` through shipped HTTP/CSP/SSE and actual
+  Document PiP. Window-capture interception suppresses native trusted pointer exit,
+  leave, outside movement and blur before any controller handler. Silent exits
+  during the delay produce no popup; open Mini return/header/quota and Full Watch
+  help close in about **1.15–1.20 seconds**, with ARIA/Popover cleanup and no Live
+  resurrection. Neither hover selector nor production timer is mocked there.
+- Each browser also passes 24 label/padding/theme/zoom cases (Classic/Web light/
+  dark, wide/narrow, 100/150%), transfer/re-entry, lingering mouse focus, real
+  mouse/touch/Enter/Space action dismissal, deliberate keyboard help and passive
+  touch pin/outside dismissal. No browser runtime errors. A development iteration
+  exposed keyboard ownership loss during pointer-presence updates; renewal no
+  longer changes input modality, and incidental entry after keyboard focus has a
+  deterministic regression. Final browser runs pass without weakening assertions.
+
+Final gates and scope-limited delivery decision:
+
+- Local Full: **185 isolated groups, zero failures, 150.9s**, four workers.
+  Working-tree validation: **11 passes, zero failures, seven advisory warnings**;
+  no budget/baseline changed. Those passes do not supersede the separate failed
+  integration probes below.
+- The broader Edge Mini invocation is **FAILED**, with 122 layout observations
+  and nine completed check groups before its Duration/Total-heading hover abort.
+  Already-confirmed scope includes theme/activity/width/density, configured time,
+  current Mini help and source-shaped context flows. `manual-only` independently
+  **PASSES** 25 layouts, both sizing modes, real pointer/Enter/Space/touch Fit,
+  immediate help dismissal, narrow panning, remembered reopen and one SSE.
+  Remaining duration cases after the first abort and the intervening
+  history-readiness subprobe are **NOT RUN**, not a full Mini PASS.
+- Focused `help-only` reproduces a mixed touch/keyboard → Total-heading mouse
+  opening failure in both named browsers. Trusted pointer AND mouse events arrive,
+  yet native hover is false at 600ms, so the opening guard cancels. Geometry/hit
+  test, synchronous PiP/opener native reads, quiet no-CDP observation, explicit
+  touch setup, fixed two-point motion and pre-entry compositor capture do not
+  resolve it. A bounded trace finds hover becomes true only after a natural Mini
+  render's next frame; that is correlation, not an established cause. Temporary
+  instrumentation was removed, original failing assertion retained; intentional
+  keyboard cases now actually send Tab. The [non-executable Suggestion 000684](../../backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
+  preserves the reproduced gap, attempts, uncertainty and future acceptance.
+- **Decision Delegate authorizes partial acceptance**, excluding reliable hover
+  opening for that precisely reproduced mixed-input path. The independent finite
+  orphan fix and tested keyboard/touch alternatives remain useful; no accounting,
+  security, source-integrity or data-loss consequence or blocked Ready dependency
+  was identified. Whole-FR On Hold would unnecessarily withhold the verified safety
+  correction. This is the Delegate's decision, **not owner approval**, not a claim
+  of full acceptance and not permission to execute the Suggestion.
+- Real-installation `probe_web_live.py --watch-cards`: **FAILED** with
+  `probe_watch_cards_timeout` at 90s; history was loading, **872/3149** checked.
+  Source V2, one Live owner, advancing publications/346 HTTP Live reads and an
+  independently published daily result were observed. Full history certification
+  is **UNVERIFIED**. Final elapsed 91.5798s, pending work empty, zero owned
+  processes and `cleanup_failures: []`, but two native quota-provider waiters
+  remained in the final thread snapshot.
+- Distinct basic `probe_web_live.py`: verified V2, one owner, two streams,
+  advancing verified stream IDs and stable origin in 1.1708s, but **FAILED** with
+  `probe_owned_workers_remaining` (two provider HTTP/usage waiters). No owned
+  processes/pending work/cleanup failures. Cancellation surfaced one history-batch/
+  advance error in that short teardown. These positive source observations are
+  **not full-probe PASS**; natural retirement of the two waiters is **UNVERIFIED**,
+  not a proven persistent leak. The Python probe does not execute changed help JS;
+  provider calls can outlive their bounded close join.
+- **Decision Delegate minor verification exception:** full history certification
+  and zero-worker teardown proof are excluded for this browser-only FR. No source/
+  provider repair or separate proposal is authorized/needed for that caveat. Exact
+  outcome codes/counts above remain visible; no acquisition failure was hidden.
+
+**UNVERIFIED:** physical Windows PiP → browser chrome → another app pointer travel
+and native OS blur delivery. Headless target switches emit no native blur; the
+existing explicit blur injection proves its handler only. The original intermittent
+incident and its exact OS trigger are not claimed reproduced. This FR explicitly
+permits that physical evidence gap; no user/delegate exception is used. No visible
+desktop action, inference, shared OpenCode stop, ZIP, tag or GitHub Release.
+
+Earlier grouping/capacity follow-up: **FR 000620 / v80.200**, recorded below. The FR 000582
 inventory and evidence here are historical; removed preview/row/freshness cues are
 not current UI recommendations. Current writing/placement policy lives in the module contract.
 
