@@ -4,7 +4,8 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature
-from src.analysis.context import ContextEpochs, session_watch_context
+from src.analysis.context import ContextEpochs
+from src.analysis.session_context import session_context_observation
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
@@ -12,7 +13,7 @@ from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .models import SessionUsageRow
 
-ALGORITHM = "session-summary-3"
+ALGORITHM = "session-summary-4"
 NAMESPACE = "session-summary"
 
 
@@ -31,8 +32,10 @@ def context_fields(item, catalog):
         key=lambda record: (record.prompt_time_ms, record.prompt_id), default=None)
     if record is None:
         return dict(context_detail="No supported session context anchor.")
-    state = session_watch_context(snapshot, item.bundle, record, catalog, ContextEpochs(snapshot, item.bundle))
-    detail = ("Provisional text estimate." if state.detail == "provisional text estimate" else
+    observation = session_context_observation(snapshot, item.bundle, record, catalog, ContextEpochs(snapshot, item.bundle))
+    state = observation.value
+    detail = ("Previous same-session Ctx; current prompt updating." if observation.status == 'pending' and state.next_tokens is not None else
+              "Provisional text estimate." if state.detail == "provisional text estimate" else
               "Estimated next incoming session context." if state.next_tokens is not None else
               "No supported context anchor in the current session epoch.")
     return dict(context_tokens=state.next_tokens, context_detail=detail)

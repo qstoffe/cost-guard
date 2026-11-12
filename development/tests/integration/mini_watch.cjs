@@ -50,7 +50,8 @@ let now = 1000;
 class Clock extends Date { static now() { return now; } }
 const context = vm.createContext({document: doc(), window: win(), URL, Date: Clock, input});
 const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
-for (const file of ['render', 'account-cards', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+for (const file of ['render', 'account-cards', 'watch', 'mini']) vm.runInContext(fs.readFileSync(
+  file==='mini' && process.argv[2] ? process.argv[2] : `src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {
   const owner = win(); owner.top = owner; owner.isSecureContext = true; owner.location = {href: 'http://127.0.0.1:1234/#/watch'};
@@ -83,6 +84,14 @@ function setup() {
   const opening = controller.toggle(), child = win(); test.opened(child); await opening;
   assert.equal(button.textContent, 'Mini Watch: On'); assert.equal(button.attributes['aria-pressed'], 'true');
   let view = controller.view;
+  if(input.replay) {
+    const values=[];
+    for(const publication of input.replay) {
+      controller.update(publication);controller.render();
+      values.push(view.promptRows.get('root')?.children[4].textContent);
+    }
+    console.log(JSON.stringify(values));return;
+  }
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
   assert.equal(view.body.children.length, 2);
     assert.equal(view.body.children[0].children[2].textContent, '2');

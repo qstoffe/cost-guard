@@ -8,6 +8,7 @@ from .history_publication import HistoryPublication
 from .card_workers import CardRequest
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError
 from src.reports.session_history import retain_unverified_row, unverified_refresh
+from src.reports.watch_context import retain_session_context
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
@@ -32,6 +33,7 @@ class CardSession:
     history_status: SourceStatus = field(default_factory=SourceStatus)
     batchable: bool = True
     retry_on_tick: bool = False
+    last_context: object = None
 
 
 class WatchCards:
@@ -140,6 +142,11 @@ class WatchCards:
                             or (old.completed_at_ms is not None and old.completed_at_ms <= row.at_ms)):
                         entry.terminals.pop(key, None)
             entry.cost.observe(capture.cost_snapshot)
+            context = retain_session_context(capture.context, entry.last_context,
+                snapshot if capture.authoritative else None)
+            if context is not None:
+                entry.last_context = context
+            capture = replace(capture, context=context)
             entry.capture, entry.tools, entry.snapshot = replace(capture, cost_snapshot=None), dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
             representative = capture.history_row
@@ -282,7 +289,7 @@ class WatchCards:
         state = entry.source_status.state(retained=capture is not None) or entry.state
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
-                "", (), state=state, session_cost=entry.cost.value,
+                "", (), state=state, session_context=retain_session_context(None, entry.last_context), session_cost=entry.cost.value,
                 session_cost_state=entry.cost.status)
         representative = focal if focal is not None else capture.history_row
         rows = (representative,) if representative is not None else ()
@@ -312,7 +319,7 @@ class WatchCards:
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,
-            capture.context if state != "unavailable" else None, entry.cost.value,
+            capture.context, entry.cost.value,
             "unavailable" if state == "unavailable" else entry.cost.status,
             observed_at_ms=None if capture.retained else capture.observed_at_ms,
             context_handoff=(dict(capture.context_handoffs).get(focal.event_id)
@@ -326,7 +333,8 @@ class WatchCards:
             for focal in focals:
                 active.append((focal.at_ms, key, focal.event_id, self._card(entry, focal, now_ms)))
             if not focals and key in self.active_candidates and entry.verified_generation != entry.generation:
-                placeholder = WatchCard(key, entry.root.title or key, "", (), state="loading")
+                placeholder = WatchCard(key, entry.root.title or key, "", (), state="loading",
+                    session_context=retain_session_context(None, entry.last_context))
                 active.append((entry.root.created_at_ms, key, "", placeholder))
         history = self.history.project(self, now_ms)
         pending = any(key in self.active_candidates and entry.latest_ms is None for key, entry in self.sessions.items())

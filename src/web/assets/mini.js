@@ -38,12 +38,27 @@ const MiniWatch = (() => {
   // Independent clocks prevent healthy prompt ticks from hiding a stuck Daily lane.
   class Observations {
     constructor() {
-      this.started = Date.now(); this.clocks = new Map(); this.view = null;
+      this.started = Date.now(); this.clocks = new Map(); this.view = null; this.contexts = new Map();
     }
     observed(key, token, now) {
       const old = this.clocks.get(key)?.token;
       const fresh = typeof token === 'number' && typeof old === 'number' ? token > old : token !== old;
       if (token != null && fresh) this.clocks.set(key, {token, at: now});
+    }
+    context(card) {
+      const summary = card.session_summary, current = summary?.context;
+      const old = this.contexts.get(card.session_id);
+      const changed = current?.context_scope && old &&
+        (current.context_scope !== old.context_scope || current.context_epoch !== old.context_epoch ||
+         current.context_provider && old.context_provider && current.context_provider !== old.context_provider ||
+         current.context_model && old.context_model && current.context_model !== old.context_model);
+      if (changed || current?.context_state === 'invalidated') this.contexts.delete(card.session_id);
+      let value = current;
+      if (Number.isFinite(current?.watch_next_context_tokens) && current?.context_state !== 'invalidated')
+        this.contexts.set(card.session_id, current);
+      else if (!changed && current?.context_state !== 'invalidated' && this.contexts.has(card.session_id))
+        value = {...old, context_state: 'pending', warning: current?.warning};
+      return value === current ? card : {...card, session_summary: {...summary, context: value}};
     }
     update(publication, now) {
       const view = publication?.view;
@@ -59,7 +74,8 @@ const MiniWatch = (() => {
         const old = oldCards.get(key);
         const value = card.state === 'observed' ? card :
           old ? {...old, state: card.state, session_summary: card.session_summary} : card;
-        oldCards.set(key, value); return value;
+        const qualified = this.context(value);
+        oldCards.set(key, qualified); return qualified;
       });
       if (prompts) {
         const stamps = cards.map(card => [card.session_id, card.focal_id, card.observed_at_ms]);
@@ -89,13 +105,17 @@ const MiniWatch = (() => {
       this.view = {...view,
         active_cards: prompts ? cards : [...oldCards.values()],
         // The producer owns atomic history retention, invalidation and source scope.
-        history_cards: view.history_cards || [],
+        history_cards: (view.history_cards || []).map(card => this.context(card)),
         // Missing refresh data retains this day's usable summary only. The
         // configured boundary below still clears yesterday, even disconnected.
         daily_usage: daily ? dailyUsable || !previous?.daily_usage ||
           daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage :
           previous?.daily_usage?.day_end_ms > now ? previous.daily_usage : null,
         accounts: accounts ? {...view.accounts, accounts} : previous?.accounts};
+      if (prompts && view.history_state === 'observed') {
+        const present = new Set([...cards, ...(view.history_cards || [])].map(card => card.session_id));
+        for (const key of this.contexts.keys()) if (!present.has(key)) this.contexts.delete(key);
+      }
     }
     snapshot(now) {
       const view = this.view;
@@ -443,16 +463,10 @@ const MiniWatch = (() => {
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
-        const source = historical ? card.session_summary?.context : item?.live_context;
+        const summaryContext = card.session_summary?.context;
+        const source = historical || summaryContext?.context_scope ? summaryContext : item?.live_context;
         let context = display(source, 'watch_next_context_tokens');
-        const handoff = card.context_handoff, old = row.lastContext;
-        const retained = !historical && !prompt?.execution_unverified && prompt?.in_progress &&
-          source?.watch_next_context_tokens == null && handoff && old &&
-          old.id === handoff.previous_id && old.tokens === handoff.previous_tokens;
-        if (retained) context = old.text;
-        else row.lastContext = !prompt?.execution_unverified && Number.isFinite(source?.watch_next_context_tokens) &&
-          (!historical || source.watch_next_context_tokens === item?.live_context?.watch_next_context_tokens) ?
-          {id: prompt.event_id, tokens: source.watch_next_context_tokens, text: context} : null;
+        const retained = source?.context_state === 'pending' && Number.isFinite(source.watch_next_context_tokens);
         this.rowHelp(row, session, item, card, context, historical, retained);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
@@ -642,11 +656,9 @@ const MiniWatch = (() => {
       // Live value. They are not fresh source/presentation publications.
       if (typeof value?.view?.now_ms === 'number' && value.view.now_ms < this.publication?.view?.now_ms) return;
       // A changed source cannot inherit prompt observations or displayed context.
-      const scope = JSON.stringify([this.instance, value?.view?.source_label, value?.view?.history_scope]);
+      const scope = JSON.stringify([this.instance, value?.view?.source_label]);
       if (scope !== this.sourceScope) {
         this.sourceScope = scope; this.observations = new Observations();
-        for (const view of [this.view, this.measure?.view])
-          if (view) for (const row of view.promptRows.values()) row.lastContext = null;
       }
       const epoch = JSON.stringify([value?.view?.now_ms, value?.source_observed_at_ms]);
       if (epoch !== this.epoch) { this.epoch = epoch; this.receivedAt = Date.now(); }

@@ -56,8 +56,7 @@ There is no Earlier Sessions button, separate history section or Duration column
   Credits/USD, real zero, **N/A** for wholly unpriced work and pending **Loading…**
   remain distinct. Neither amount substitutes for the other; both are reference
   costs, not verified billing. Full Watch and canonical completeness are unchanged.
-- **Ctx:** the running/recent representative's supported next-incoming estimate; a
-  historical-only row uses the last valid **session-level next-request context**, not
+- **Ctx:** the last valid **session-level next-request context**, not
    stale historical prompt context or a sum. Value help includes **Next Ctx**, matching
    the visible cell, and **Δ Ctx**, the selected representative prompt's own change.
    Historical Δ is explicitly labeled: the session estimate may be later. Source-prepared
@@ -73,19 +72,22 @@ anchor still takes precedence. Running tool loops update from their latest suppo
 root request without waiting for the prompt to finish. Before the first request,
 only a proven prior baseline permits a disclosed provisional text estimate.
 
-When another prompt starts in the same session, Mini can keep its previously
-displayed Ctx until the new prompt has a supported estimate. Help labels this as a
+When another prompt starts in the same session, Mini keeps its last valid
+Ctx until the new prompt has a supported estimate. Help labels this as a
 **previous same-session estimate; current prompt pending refresh**. Δ Ctx still
 belongs only to the new prompt, never the previous one. Fresh evidence replaces
 the retained value immediately, even when the formatted number stays the same.
-The source must validate the exact continuing predecessor and raw context value;
-compaction, reset/move/model boundaries, incompatible known models, inactive
-history, unsupported current requests and execution uncertainty disable carry-forward.
-A removed row, changed host/source or newly opened Mini cannot borrow an old value.
-Historical-only context can seed a resumed handoff only when its displayed value
-also matches that exact prompt's source-validated continuing estimate. First-ever
-or genuinely unavailable context keeps its honest **N/A** presentation. Nothing is
-saved in browser storage, and Full Watch's context calculation is unchanged.
+Missing handoff fields, partial/retrying captures, an unbound new model, Stop/error
+status, execution uncertainty and history-publication restarts are **pending**, not
+context resets. A fresh Mini can use an already verified same-session summary,
+including after close/reopen; it need not have rendered the preceding prompt.
+Explicit compaction/reset/rewind/move, incompatible known provider/model, removed
+active anchors and changed source/host clear or replace the old value immediately.
+No other session's or incompatible historical prompt's tokens can seed it. First-ever
+or genuinely invalid context keeps honest **N/A**. Full Watch's Context footer and
+the Sessions catalog Ctx use the same source-owned continuation rule. Prompt Ictx,
+Δ, cost and other prompt metrics remain independent. No timer-based grace period,
+browser storage, extra history read or provider request is introduced.
 
 Leaving current active history does not erase a retained, complete same-epoch
 prompt-local pair. A historical row can therefore show session **300k** with prompt

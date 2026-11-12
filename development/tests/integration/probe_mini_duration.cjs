@@ -10,6 +10,8 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks}) => {
     c.state='observed';c.session_id='duration-synthetic';c.focal_id=r.prompt.event_id='duration-prompt';
     Object.assign(r.prompt,{in_progress:true,execution_unverified:false,has_error:false,aborted:false});
     r.display_units={};r.display.watch_duration_ms='11s';r.model='<img src=x onerror=alert(1)>';
+    r.prompt.display.main_model_help='Main model: <img src=x onerror=alert(1)>';
+    for(const values of Object.values(r.prompt.display_units || {}))values.main_model_help=r.prompt.display.main_model_help;
     c.session_summary.cost={known_ccost:'562',complete:false,observed_requests:3,priced_requests:2,
       display:{known_ccost:'?562',account_ccost:'562'},display_units:{
         credits:{known_ccost:'?562',account_ccost:'562'},usd:{known_ccost:'?$5.62',account_ccost:'$5.62'}}};

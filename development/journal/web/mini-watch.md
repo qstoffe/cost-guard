@@ -5,6 +5,100 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Persistent session Ctx (FR000690)
+
+Scoped v81.35 delta against `bd74062349614c7e6a7fd0c21fb7257c621a607f`,
+checked locally 2026-11-13. This supersedes FR000666's destructive missing-permission
+rule, not its cross-session safety or the earlier sections' evidence scopes.
+
+`analysis/session_context.py` resolves **pending / ready-current / invalidated**
+from the already acquired root, canonical `ContextEpochs` and session continuation.
+Full analyzed history can seed a legitimate previous anchor even outside the card
+slice or without a known current model. Compaction events (including not-yet-analyzed
+triggers), boundaries, known provider/model conflicts and removed active anchors
+are positive invalidation; prompt start, Stop/error and missing telemetry are not.
+Source instance/generation/observation epoch, canonical root and actual boundary
+digests qualify compact guidance. `CardSession` retains only the last-good compact
+context, without another source watcher/history read. Pending retention never copies
+old price guidance into an unknown new model. Current numeric evidence replaces it
+immediately, including equal numbers and supported post-boundary anchors.
+
+Mini consumes session summaries and retains supplementary observations in the
+Controller, not prompt/DOM rows. Independent history owner/scope changes no longer
+erase Ctx. Close/reopen and a fresh Mini use the legitimate source summary; no
+browser storage, timer grace, expensive refresh or context arithmetic is added.
+Full Watch's footer **was affected** and now receives the same prepared session
+observation, with pending provenance in help. Sessions catalog **was affected**:
+scalar summary algorithm 4 uses the same observation and labels carried context.
+Prompt Ictx/Δ, cost, effort, other warnings, selection, geometry and cadence retain
+their existing owners and meanings.
+
+Evidence:
+
+- Final local Full: **186 bounded groups, 2323 passed tests, zero failures, 155.6s**;
+  four native macOS zsh/PTY tests skipped on Windows. Package validator: **11 passes,
+  zero failures, seven existing advisory warnings**; no cap/baseline/dependency change.
+  An intermediate Full run caught old historical rows leaking into an active refresh
+  placeholder. Retaining only session Ctx while preserving empty prompt membership
+  repaired that causal regression; focused card/guidance/context and final Full passed.
+  The earlier failed run remains `scratch:/full-final.json`; final is
+  `scratch:/full-repaired.json`.
+- RED source-shaped V2 normalization → analysis/capture/Live → original renderer:
+  **230k → N/A → N/A → 235k**. The first new-prompt publication has null prompt-local
+  raw Ctx and no `context_handoff`; the second is still pending. Replaying the same
+  publications through the fix gives **230k → 230k → 230k → 235k**. The original
+  Mini VM also failed the one-frame missing-permission oracle before implementation.
+- Focused source/VM/footer/catalog cases cover unknown/partial/retrying/unverified
+  observations, Stop/error, rapid repeated prompts, a predecessor outside captured
+  rows, explicit compaction/reset/move/model boundaries, source replacement,
+  removed membership, equal-number replacement, remount/reopen and older publications.
+  Existing broader context/child/concurrency/Watch regressions remain registered.
+- Actual hidden **Chrome 157.0.8103.51 Document PiP** and shipped HTTP/CSP/SSE:
+  source-shaped sequence passed with **0.5s / 5.1s** pending gaps, yellow new prompt
+  while raw Ctx is null, real timer draws, unchanged row, bounded width, focus/AX,
+  delayed hover/touch, history-owner change, invalidation controls, close/reopen and
+  exact raw **230000** current replacement. Full Watch footer asserts the same values.
+  The additional **touch → Tab/focus → Escape/blur → outside → one mouse arrival**
+  Ctx sequence also passed without guard/timing changes or retry-until-PASS.
+- Independent unchanged history-readiness probe passed actual Full/Mini DOM/AX
+  loading, silent refreshing/failure, source switch and unchanged popup size.
+  Independent lifecycle/Fit run passed **25 layouts**, four theme/scheme combinations,
+  Credits/USD, narrow/wide windows, pointer/Enter/Space/touch Fit, both sizing modes,
+  remembered reopen, scroll, one SSE and no storage/passive native resize.
+- Read-only installed **V2** probe passed real context export/formatting, one Live
+  owner, two coherent advancing streams and cleanup (**zero owned threads/processes**,
+  shared OpenCode untouched). It saw one supported running context and **zero natural
+  handoffs**: the owner's rapid real transition is **NOT VERIFIED**, not a production
+  handoff PASS. Earlier history stayed loading; one background history batch/advance
+  error was recorded, not certified as completed history.
+
+### Scoped verification exception
+
+The additional broad PiP portfolio remains **FAIL**. Its first failure was an old
+Duration fixture injecting `row.model` while current model help uses prepared
+recorded-model tokens; the fixture was corrected to inject the same literal unsafe
+text into that prepared help, preserving its escaping assertion. The next run
+reproduced the already documented **Total-heading mixed-input hover does not open**
+(Classic/light/Credits, hovered and focused window, hidden help panel). Later Duration
+variants after that assertion were **NOT RUN**, not passed by isolated checks.
+
+**Decision Delegate** explicitly authorized an **FR000690-only minor verification
+exception**, after the mixed-input **Ctx**, unchanged history-readiness and independent
+Fit/lifecycle checks above passed. Rationale: isolate the known unrelated Total defect
+without expanding into general hover/watchdog repair; no original Ctx acceptance is
+waived. The failed assertion remains enabled. The defect and unrun later Duration
+scope remain unverified/unresolved; no whole-portfolio PASS is claimed. Existing
+[Suggestion000684](../../backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
+owns that follow-up; no duplicate proposal or owner approval is implied.
+
+Raw local evidence: `scratch:/context-mixed-order.json`, `scratch:/history-isolated.json`,
+`scratch:/manual-isolated.json`, `scratch:/mini-full.json` and
+`scratch:/mini-full-repaired.json`. No paid request, source write, visible desktop
+interaction, ZIP, tag or GitHub Release. Physical OS frames/work areas, macOS pixels
+and screen-reader speech are not tested or changed. Final Full/validator results are
+recorded in the completed task report; earlier successful checks are not retroactive
+PASS for the failed broad portfolio.
+
 ## Relative Activity ages (FR000672)
 
 Scoped v81.22 delta against `2fd4375360ca0ebf1d100fc2af270f3fb9486163`,

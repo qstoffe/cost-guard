@@ -77,16 +77,21 @@ using an inset leading-edge keyboard cue and a forced-colors system-outline fall
 and actual `ReportLoading.View` remain unchanged. Startup/focus, loading, pricing and
 hosted routing probes cover the distinction. [Evidence](../../journal/web/models-focus.md).
 
-FR000666 adds source-owned `context_handoffs` to canonical card capture, not an
-estimator or acquisition lane. Active-history proof, exact predecessor identity/raw
-tokens, absent current root usage and no compaction/context/model conflict qualify
-Mini-only carry-forward. Only fresh verified cards export the handoff. Mini retains
-its already-displayed formatted token, labels it as a previous same-session estimate,
-and keeps current prompt Δ independent. Fresh values, authoritative invalidation,
-row removal and source/host changes replace/clear it without a timer or persistence.
-Historical summaries qualify only with matching prompt context and later source proof.
-Full Watch, report/Watch calculations and geometry are unchanged.
-[Evidence and limits](../../journal/web/mini-watch.md#same-session-ctx-handoff-fr000666).
+FR000690 supersedes FR000666's one-shot predecessor permission. The pure
+`analysis/session_context.py` observation reuses `ContextEpochs` and canonical
+continuation estimates over the already analyzed root, not the bounded card slice.
+It distinguishes pending, ready-current and explicit invalidation. Source/root and
+boundary/compaction digests qualify compact report guidance; `CardSession` owns
+last-good continuity through partial captures, without retaining a second history.
+Mini's Controller observation map is supplementary presentation retention, separate
+from DOM/focal/history-publication identity. Known source/epoch/model incompatibility
+clears it; new qualified numbers replace immediately, including equal values.
+Fresh Mini, Full Watch's footer and Sessions scalar summary consume the same session
+observation. Prompt Ictx/Δ, arithmetic, acquisition cadence and PiP geometry do not
+change. Pending unknown models carry no prior model's price warning. No persistence,
+new watcher/read/interval or wall-clock expiry. The legacy `context_handoff` field
+remains wire-compatible but no longer authorizes or invalidates current Mini Ctx.
+[Evidence and limits](../../journal/web/mini-watch.md#persistent-session-ctx-fr000690).
 
 FR000662 reuses `ReportLoading.View` only as a visual controller for first detail
 loading; it does not join finite report admission. `session.js` measures validated,
@@ -244,10 +249,10 @@ the pricing journal separates rendered layout evidence from real-source checks.
 
 FR000667 extends the catalog below from six to **seven columns/comparators**, adding
 CTX after Duration. `reports/session_summary.py::context_fields` reuses analysis
-`session_watch_context`/`ContextEpochs` for the latest non-subtask root prompt and
+`session_context_observation`/`ContextEpochs` for the latest non-subtask root prompt and
 later compaction. Complete same-source/revision snapshots qualify either numeric
 CTX or an authoritative unavailable anchor; compact/partial evidence cannot finish
-a CTX sort. Algorithm `session-summary-3` lazily invalidates old scalar entries,
+a CTX sort. Algorithm `session-summary-4` (FR000690) lazily invalidates old scalar entries,
 without invalidating unrelated analysis. Changed source revisions clear obsolete
 context before display-token generation; unchanged outage values can remain
 explicitly retained. No Watch capture, PiP, additional indexer or browser acquisition
