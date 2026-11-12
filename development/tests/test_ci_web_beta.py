@@ -79,7 +79,8 @@ class CiEvidenceTests(unittest.TestCase):
                         'test_watch_grouping.py', 'test_web_quota_ccost.py'):
             self.assertIn(pattern, run_tests.QUICK_PATTERNS)
         for pattern in ('test_web_runtime.py', 'test_web_dispatch.py', 'test_web_views.py',
-                        'test_claude_alias_cache.py', 'test_windows_web.py', 'test_foundation.py'):
+                         'test_claude_alias_cache.py', 'test_recorded_model_help.py',
+                         'test_windows_web.py', 'test_foundation.py'):
             self.assertNotIn(pattern, run_tests.QUICK_PATTERNS)
             self.assertIn(pattern, run_tests.FULL_ONLY_PATTERNS)
         with patch.object(run_tests, '_run_pattern', side_effect=lambda pattern, **_: (pattern, 0, .1, '')) as run, \
