@@ -23,7 +23,7 @@ stop_activity() {
 trap stop_activity EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [[ -t 2 ]]; then activity & SPINNER=$!; fi
+if [[ -t 0 && -t 1 && -t 2 ]]; then activity & SPINNER=$!; fi
 
 source "$CG_ROOT/src/python_discovery.sh"
 cg_find_python || {

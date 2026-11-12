@@ -343,24 +343,36 @@ sleep 0.4
 exit "$CG_FAKE_EXIT"
 ''', encoding='utf-8')
             python.chmod(0o700)
-            for code in (0, 4):
-                with self.subTest(exit_code=code):
+            for code, redirected in ((0, None), (4, None), (4, 'stdin'), (4, 'stdout')):
+                with self.subTest(exit_code=code, redirected=redirected):
                     master, slave = os.openpty()
                     try:
                         env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'], CG_FAKE_EXIT=str(code))
+                        if redirected is None:
+                            os.write(master, b'\n')  # acknowledge through this hidden test PTY only
                         child = subprocess.run([shutil.which('zsh'), str(command)], cwd=root, env=env,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
+                            stdin=subprocess.DEVNULL if redirected == 'stdin' else slave,
+                            stdout=subprocess.PIPE if redirected == 'stdout' else slave,
+                            stderr=slave, timeout=5)
                         self.assertEqual(code, child.returncode)
-                        self.assertIn(b'Checking native support', child.stdout)
-                        self.assertIn(('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos').encode(), child.stdout)
                         # Darwin may discard queued PTY output on the last slave
                         # close. Read while our slave remains open, with a deadline.
                         readable, _, _ = select.select([master], [], [], 1)
-                        self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
-                        activity = os.read(master, 8192).decode('utf-8')
+                        if redirected is None:
+                            self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
+                        activity = os.read(master, 8192).decode('utf-8') if readable else ''
+                        activity += (child.stdout or b'').decode('utf-8')
+                        self.assertIn('Checking native support', activity)
+                        self.assertIn('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos', activity)
                         self.assertIn('Launching web', activity)
-                        self.assertIn('[|]', activity)
-                        self.assertIn('[/]', activity)
+                        if redirected is None:
+                            self.assertIn('[|]', activity)
+                            self.assertIn('[/]', activity)
+                        else:
+                            self.assertNotIn('[|]', activity)
+                            self.assertNotIn('Press Return', activity)
+                            self.assertNotIn('\x1b', activity)
+                            self.assertNotIn('\r', activity.replace('\r\n', '\n'))
                     finally:
                         os.close(slave)
                         os.close(master)

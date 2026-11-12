@@ -4,7 +4,7 @@ param([ValidateSet('report', 'watch', 'diagnostics')][string]$Mode = 'report')
 $ErrorActionPreference = 'Stop'
 $code = 1
 # Feedback belongs only to this console, never to the caller's prompt.
-$interactiveStatus = -not [Console]::IsOutputRedirected
+$interactiveStatus = -not [Console]::IsOutputRedirected -and -not [Console]::IsInputRedirected
 if ($env:COST_GUARD_LAUNCHER_STATUS -ne 'pending') {
     if ($interactiveStatus) { Write-Host -NoNewline 'Cost Guard: Checking requirements...' }
     else { Write-Host 'Cost Guard: Checking requirements...' }

@@ -73,6 +73,7 @@ class LauncherFeedbackTests(unittest.TestCase):
         self.assertLess(feedback, text.index("Add-Type -TypeDefinition"))
         self.assertLess(feedback, text.index("Find-CostGuardPython"))
         self.assertIn("[Console]::IsOutputRedirected", text)
+        self.assertIn("[Console]::IsInputRedirected", text)
         self.assertIn("python_discovery.ps1", text)
         self.assertIn("SetConsoleCtrlHandler([IntPtr]::Zero, $false)", text)
         self.assertIn("$code = $LASTEXITCODE", text)
@@ -125,7 +126,7 @@ class LauncherFeedbackTests(unittest.TestCase):
                                   f". '{driver}' -Mode report\n"
                                   "exit $LASTEXITCODE\n", encoding="utf-8")
                 result = subprocess.run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)],
-                                        capture_output=True, text=True, timeout=20)
+                                        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
                 self.assertEqual(9009, result.returncode)
                 self.assertLess(result.stdout.index("Checking requirements"), result.stdout.index("No usable Python"))
                 self.assertNotIn("\x1b", result.stdout)
