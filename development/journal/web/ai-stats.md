@@ -1,9 +1,91 @@
-# AI Stats: fun-first numbers and resumable history
+# AI Stats: observed token traffic, ready cards and resumable history
 
 Source revision: 9b9fdf389d93d90a09bfa13e9b075b564d026961
 Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
 Last checked: 2026-11-09
 Status: current
+
+## Observed token traffic and ready card shells — FR000682
+
+Scoped delta against `431ef684b3e6c654fefc718d29c4adf00ca310b8`, checked
+2026-11-12 on Windows. Earlier sections retain historical evidence, not the current
+token/readiness policy. v81.30 adds two Overview cards and preserves the ten earlier
+cost/time facts and optional matched-run fact. No architecture layer moves.
+
+`analysis/ai_stats.py::_token_metrics` sums only known physical I/C/W/O counters,
+folding reasoning into Output once, over the existing canonical request population
+and completion-time membership. Integer total and an exact decimal-string export
+survive through final compact display. Unknown counters are not zero, missing prices
+never supply tokens, and source/pending/undated evidence qualifies the known subtotal.
+`ai_stats_rates.py` supplies the same denominators as cost; token active intensity is
+withheld for unknown, inferred, running or zero/nonzero-incompatible active time.
+Application text/help is monetary-unit independent. Typed pricing outages get empty
+catalogs only in the finite Stats service; no provider/shared-price-cache writes.
+
+Policy `fun-2-tokens` rejects old retained ten-card views. Compact usage algorithm 5
+is unchanged: no unrelated history invalidation or new source crawl. Coverage alone
+advances to v3 so an undated request cannot certify an old-root exclusion. Existing
+source/revision/config/price keys, 256-root slices, 64-root batches, scan/checkpoint,
+host sharing/process bounds and automatic recovery remain the acquisition owners.
+
+The browser remembers only explicit scope-ready rows, qualified by source identity,
+observation and same-instance sequence. Twelve stable shells initially contain one
+plain `Loading…` text node each (status role, no poll-time node replacement or live
+announcement spam). All card contents attach together when ready; source/period
+changes cannot inherit foreign values. Matching ready last-good cards retain their
+nodes/focus/help during quiet refresh. Terminal cold failure is Unavailable, never
+fake zero or indefinite Loading. A 15rem minimum reserves normal ready-card geometry;
+long text can still expand accessibly, without clipping or nested scrolling.
+
+### Optional generation-speed feasibility
+
+Omitted as explicitly allowed by this FR, not a deferred acceptance exception.
+The bounded read-only inventory inspects at most 32 already-acquired assistant
+messages per finite child and emits only counts: observed V2 samples had all 32
+created/completed/streamed fields, **zero qualified generation intervals**. V1 lacks
+that streamed metadata. Neither normalized created/completed nor V2 streamed proves
+first/last output-token boundaries or excludes queue/TTFT/tools/final metadata bursts.
+`TraceEntry` and existing compact usage retain completion and counters, not those
+per-token intervals. The regression changes absent/burst/slow streamed metadata
+without changing any of the twelve metrics. No timing field is promoted into TPS,
+no winner is invented, and no second history scan/network/inference is introduced.
+
+### Verification and measured tradeoffs
+
+- Full: **185 groups, 2,302 passed, four native-macOS zsh/PTY skips, zero failures
+  or errors, 150.0s**. Final focused Stats/rates/recovery/resume/token discovery and
+  scope/sequence VM passed after the final coverage/schema refinements. Validator:
+  **11 passes, zero failures, seven existing advisory warnings**, no budget increase.
+  Initial Full exposed two causal stale-count/grouping assertions (repaired) and one
+  one-second spawned-detail timing failure under concurrent load; isolated detail
+  and final Full passed unchanged. A focused dispatch run hit its default 25s cap;
+  its normal Full-equivalent 240s bound passed all 51 tests in 28.2s.
+- Hidden Edge: **PASS, 18 checks, 12 layouts, 80 text layouts, 72 evidence/theme/unit
+  states, 1,350 contrast samples, zero runtime errors**. Loading-only cold/partial/
+  switched shells, normal shell-to-ready height/width stability, atomic contents,
+  terminal failure, ready-zero, currency-independent tokens, keyboard/touch/help,
+  enlarged text/themes and focus retention passed. Production two-tab/slice proof
+  reused exactly 24 hydrations, completed both goals and exited owned children cleanly.
+- Fixed-history paired builder benchmark: 12 and 512 roots × 20 requests, all three
+  measured selections (7/30/all), cold/warm/changed. All ten old metric signatures
+  matched; cold/warm/changed hydration counts stayed **512/0/5**, **2/1/1** slices.
+  For 512-root 30 days: baseline/current **4.4364/4.3478s** cold,
+  **1.3249/1.2320s** warm, **1.4004/1.1908s** changed. Across selections cold was
+  baseline **3.84–4.44s**, current **4.02–4.47s**; this single noisy sample is not a
+  speedup claim. Prepared five-period view grew **19,862 → 26,684 bytes (+6,822)**.
+  The new two-card projection has real CPU/payload overhead, not zero cost.
+- Read-only real installation with an owned disposable cache: five periods/twelve
+  metrics and raw token/rate/denominator/unit identities checked. Cold30 **188.200s,
+  13 slices**; fresh warm30 **8.078s**, All reuse **0s** (not a cold scan), fresh
+  warmAll **7.928s**. Final result payloads **427,808–428,809 bytes**. Mutable-source
+  timing overlapped other checks; it is installation proof, not a paired speed claim.
+  No OpenCode stop, source write, transcript export or paid inference.
+
+Evidence in this worker's own scratch: `scratch:/full-tests-final.{log,json}`,
+`scratch:/ai-stats-browser-final.json`, `scratch:/ai-stats-benchmark.jsonl`,
+`scratch:/ai-stats-live.jsonl`. No delegated exception/deferral. Physical desktop,
+actual screen-reader speech, real touch hardware and non-Chromium engines remain
+unverified; hidden DOM/AX and emulated input do not claim those outcomes.
 
 ## Comparable hourly rates — FR000655
 

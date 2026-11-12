@@ -10,6 +10,8 @@ from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
 from src.domain.session_tree import root_by_session
+from src.pricing.base import PricingUnavailableError
+from src.pricing.catalog import PricingCatalog
 from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, ModelCatalogChanged, coverage, coverage_key,
                                 decoded, exclusion, payload)
 from .migration_notice import migration_gap_notes
@@ -49,7 +51,17 @@ class StatsAcquisition:
         self.service, self.scope = service, scope
         service.metrics.mode = 'ai-stats'
         service.progress(WorkProgress('Loading reference prices', 'pricing'))
-        self.reference = service._load_comparison_catalog()
+        # A typed price outage cannot erase independently observed token traffic.
+        # These empty catalogs are local to this finite Stats service, not provider
+        # or shared-price-cache writes; existing fun cost fallback stays separate.
+        try:
+            service._load_catalog()
+        except PricingUnavailableError:
+            service.catalog = PricingCatalog(())
+        try:
+            self.reference = service._load_comparison_catalog()
+        except PricingUnavailableError:
+            self.reference = service.comparison_pricing_catalog = PricingCatalog(())
         self.periods = windows(service.timezone_id, service.now_ms)
         service.progress(WorkProgress('Checking history revisions', 'catalog'))
         sessions = service.session_catalog()

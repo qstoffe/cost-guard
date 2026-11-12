@@ -20,8 +20,27 @@ from src.web.jobs import ReportJobs
 
 def isolated_report(sender, request):
     from src.cache import CacheDatabase
-    with patch('src.web.composition.CacheDatabase', lambda _root: CacheDatabase(Path(os.environ['COST_GUARD_PROBE_CACHE']))):
+    from src.reports.ai_stats import payload
+    inventory = dict(sampled=0, created=0, completed=0, streamed=0, qualified_generation_intervals=0)
+
+    def observed(bundle, reference, snapshot, config):
+        # Inspect only already-acquired messages, retain counts, never text/IDs/times.
+        for message in snapshot.messages:
+            if inventory['sampled'] >= 32:
+                break
+            if message.role.value != 'assistant':
+                continue
+            inventory['sampled'] += 1
+            inventory['created'] += message.created_at_ms > 0
+            inventory['completed'] += message.completed_at_ms is not None
+            inventory['streamed'] += 'streamed_at_ms' in message.metadata
+        return payload(bundle, reference, snapshot, config)
+
+    with patch('src.web.composition.CacheDatabase', lambda _root: CacheDatabase(Path(os.environ['COST_GUARD_PROBE_CACHE']))), \
+            patch('src.reports.ai_stats.payload', observed):
         measured_report(sender, request)
+    print(json.dumps(dict(timing_inventory=inventory,
+        qualification='created/completed/streamed do not establish first/last output-token generation boundaries')), flush=True)
 
 
 def check_rates(result):
@@ -46,6 +65,17 @@ def check_rates(result):
             assert display['active_rate'] == expected
             assert len(display['rate_help'].split('\n\n')) == 3
             assert display['rate_help'].endswith('(Total CCost ÷ active AI hours)')
+        metrics = {m['metric']: m for m in row['metrics']}
+        tokens, traffic = metrics['total-tokens'], metrics['token-rate']
+        assert len(metrics) == 12 and int(tokens['exact_value']) == tokens['value']
+        for field in ('calendar_days', 'workdays', 'calendar_hours', 'workday_hours', 'active_hours'):
+            assert traffic['rates'][field] == rates[field]
+        assert Decimal(traffic['rates']['total']) == tokens['value']
+        assert 'display_units' not in tokens and 'display_units' not in traffic
+        if tokens['status'] == 'complete':
+            assert Decimal(traffic['rates']['calendar_rate']) == (Decimal(tokens['value']) / rates['calendar_hours'] if rates['calendar_hours'] else 0)
+        if not traffic['reasons']:
+            assert Decimal(traffic['rates']['active_rate']) == (Decimal(tokens['value']) * 3_600_000 / duration if duration else 0)
         checks.append(row['period'])
     return checks
 
@@ -83,7 +113,8 @@ def main():
                         print(json.dumps(dict(scope=scope, attempt=attempt, status=job['status'],
                             seconds=round(time.monotonic() - started, 3), error=job['error'],
                              result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
-                             rate_checks=check_rates(result),
+                              rate_checks=check_rates(result),
+                              payload_bytes=len(json.dumps(result, separators=(',', ':')).encode()),
                              progress=job.get('progress'), work=job.get('work'), metric_states=states)), flush=True)
                         break
                     time.sleep(.05)

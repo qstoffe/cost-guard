@@ -325,7 +325,7 @@ class MatchedInputsTests(unittest.TestCase):
         history = source(1)
         service = self.service(history)
         result = service.build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
-        self.assertTrue(all(len(period.metrics) == 10 for period in result.ai_stats))
+        self.assertTrue(all(len(period.metrics) == 12 for period in result.ai_stats))
         self.assertEqual('match-speed-gap', result.ai_stats[-1].matched.metric)
         self.assertEqual(3, history.load_count, 'no separate deep match scan')
         with patch.object(history, 'load_session_snapshot', side_effect=AssertionError('warm history hydration')):

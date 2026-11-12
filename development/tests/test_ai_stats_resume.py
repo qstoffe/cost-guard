@@ -50,7 +50,7 @@ class StatsResumeTests(unittest.TestCase):
 
         for report in (first, second):
             self.assertEqual(5, len(report.ai_stats))
-            self.assertTrue(all(len(row.metrics) == 10 and all(m.value is not None for m in row.metrics)
+            self.assertTrue(all(len(row.metrics) == 12 and all(m.value is not None for m in row.metrics if m.metric != 'token-rate')
                                 for row in report.ai_stats))
         self.assertFalse(first.ai_stats_work['scopes']['7-days']['ready'])
         self.assertGreater(first.ai_stats[1].metrics[1].value, 0)
@@ -101,6 +101,7 @@ class StatsResumeTests(unittest.TestCase):
                        dict(pending=True), dict(complete=False)):
             self.assertIsNone(coverage({**base, **change})['end'])
         self.assertEqual(11, coverage(base)['end'])
+        self.assertIsNone(coverage({**base, 'usage': [dict(completed=0)]})['end'])
 
     def test_old_timing_algorithm_and_coverage_proofs_cannot_be_promoted(self):
         from src.cache.repository import CacheEntry
@@ -116,7 +117,7 @@ class StatsResumeTests(unittest.TestCase):
         self.assertEqual(ALGORITHM, saved.algorithm_version)
         self.assertIsNone(StatsAcquisition._decode(replace(saved,
             algorithm_version='ai-stats-evidence-3-matched-first-input-1'), root, saved.source_revision))
-        old = CacheEntry(COVERAGE, 'synthetic', dict(end=1, matched=True), revision, 'ai-stats-coverage-1')
+        old = CacheEntry(COVERAGE, 'synthetic', dict(end=1, matched=True), revision, 'ai-stats-coverage-2')
         self.assertFalse(exclusion(old, revision, NOW))
         self.assertTrue(exclusion(replace(old, algorithm_version=COVERAGE), revision, NOW))
 

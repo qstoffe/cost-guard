@@ -55,9 +55,46 @@ def rate_tokens(raw, reasons=()):
     return {'calendar_rate': calendar, 'workday_rate': workday, 'active_rate': active, 'rate_help': help_text}
 
 
+def compact_volume(value):
+    """Round only display, without the fun-cost cap or a binary float conversion."""
+    amount = Decimal(value)
+    for scale, suffix in ((10**12, 'T'), (10**9, 'B'), (10**6, 'M'), (1000, 'K')):
+        if amount >= scale:
+            return f'{amount / scale:.1f}'.removesuffix('.0') + suffix
+    return f'{amount:.1f}'.removesuffix('.0')
+
+
+def traffic_tokens(values):
+    reasons = values.get('reasons', ())
+    if values['metric'] == 'total-tokens':
+        total = int(values['value'])
+        qualifier = 'Partial ' if reasons and total else ''
+        return {'value': qualifier + compact_volume(total) if not reasons or total else 'Unavailable',
+            'trait': '' if reasons else 'The robots have been snacking on context again.',
+            'token_help': f'{qualifier}{total} observed tokens: Input + Cached input + Cache write + Output '
+                '(including reasoning once). Repeated context reads count again. Token traffic, not context size, '
+                'billing or quota.' + (' Missing usage, pending requests or source gaps prevent a complete total.' if reasons else '')}
+    raw = values['rates']
+    rates = dict(raw.fields) if hasattr(raw, 'fields') else raw
+    def amount(key):
+        return 'Unavailable' if rates[key] is None else compact_volume(rates[key]) + ' tokens/h'
+    return {'value': amount('active_rate'), 'calendar_rate': amount('calendar_rate'),
+        'workday_rate': amount('workday_rate') if rates['workdays'] else
+            'Unavailable' if {'source-incomplete', 'unknown-request-time'}.intersection(reasons) else 'No workdays',
+        'active_rate': amount('active_rate'),
+        'trait': '' if reasons else 'The silicon buffet even has office hours. Allegedly.',
+        'rate_help': 'Calendar average: Total Tokens ÷ (calendar days × 24).\n\n'
+            'Workday average: Total Tokens ÷ (configured workdays × 8).\n\n'
+            'Active AI average: Total Tokens ÷ overlap-safe AI Working Time hours. '
+            'Activity-hour consumption is not model generation speed in tokens/second. '
+            'Unavailable means token usage or the time denominator is not sufficiently evidenced.'}
+
+
 def stat_tokens(values):
     if 'metric' not in values:
         return {}
+    if values['metric'] in ('total-tokens', 'token-rate'):
+        return traffic_tokens(values)
     metric, value = values['metric'], number(values['value'])
     if metric in ('original-thinker', 'match-speed-gap'):
         return {'value': 'Original Thinker' if metric == 'original-thinker' else f'{Decimal(value):.1f}×',

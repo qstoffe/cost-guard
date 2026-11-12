@@ -435,8 +435,9 @@ async function acquire(state, background = false, prices = false) {
           if (demand && !prices && state.result && state.dataRevision === revision) break;
          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
-         if (state.section === 'ai-stats') {
-           AIStatsView.remember(state, job.result);
+          if (state.section === 'ai-stats') {
+            AIStatsView.remember(state, job.result);
+            if (!state.result) throw new Error('report_unavailable');
           } else state.result = job.result;
           state.dataRevision = revision;
           if (demand && !prices && !job.publication_id) state.dispatchRefresh = 'scheduled';

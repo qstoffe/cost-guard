@@ -155,9 +155,9 @@ class ObservedStatsTests(unittest.TestCase):
                 period=period, start=start, now=NOW, zone='Europe/Stockholm', source_complete=False)
             dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()
 
-            self.assertEqual('fun-1', dto['ai_stats_policy'])
-            self.assertEqual(10, len(stats.metrics))
-            for metric in dto['ai_stats'][0]['metrics']:
+            self.assertEqual('fun-2-tokens', dto['ai_stats_policy'])
+            self.assertEqual(12, len(stats.metrics))
+            for metric in dto['ai_stats'][0]['metrics'][:10]:
                 self.assertTrue(Decimal(metric['value']).is_finite())
                 self.assertGreaterEqual(Decimal(metric['value']), 0)
                 self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
@@ -166,6 +166,8 @@ class ObservedStatsTests(unittest.TestCase):
                     text = metric.get('display_units', {}).get(unit, metric['display'])['value']
                     self.assertRegex(text, r'\d')
                     self.assertNotRegex(text + metric['display']['trait'], forbidden)
+            self.assertEqual('partial', stats.metrics[-2].status)
+            self.assertIsNone(stats.metrics[-1].value)
             self.assertGreater(stats.metrics[1].value, 8)
             self.assertGreaterEqual(stats.metrics[2].value, HOUR)
             self.assertEqual(stats.metrics[0].value * 8, stats.metrics[0].rates.robot_day)
@@ -190,6 +192,9 @@ class ObservedStatsTests(unittest.TestCase):
         for roots in ((), (unanchored,)):
             values = calculate(roots)
             for metric in values.values():
+                if metric.metric == 'token-rate' and roots:
+                    self.assertIsNone(metric.value)
+                    continue
                 self.assertEqual(0, metric.value)
                 self.assertIsNone(metric.session_id)
                 self.assertEqual('', metric.detail)
@@ -211,7 +216,8 @@ class ObservedStatsTests(unittest.TestCase):
 
         self.assertEqual(3, result.history_omitted_roots)
         self.assertEqual(5, len(result.ai_stats))
-        self.assertTrue(all(m.value == 0 for row in result.ai_stats for m in row.metrics))
+        self.assertTrue(all(m.value == 0 for row in result.ai_stats for m in row.metrics if m.metric != 'token-rate'))
+        self.assertTrue(all(row.metrics[-1].value is None for row in result.ai_stats))
         self.assertTrue(all(m.session_id is None for row in result.ai_stats for m in row.metrics))
 
 

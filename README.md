@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.29 (2026-11-12):** Desktop launchers find normal installed Python outside PATH, skip unsuitable candidates with finite probes, and show spaced, cause-specific startup failures. Finder apps rediscover an interpreter instead of pinning a stale executable. [Discovery policy and verification](development/journal/python-discovery.md).
+**v81.30 (2026-11-12):** AI Stats adds observed Total Tokens and three-row Token Consumption Rate cards. Pending cards show only Loading until their period is verified; missing usage and unavailable rates stay honest. No extra history scan or speculative model-speed ranking. [Meaning and loading](docs/web-beta.md#ai-stats).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

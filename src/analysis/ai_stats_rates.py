@@ -16,9 +16,9 @@ class HourlyRates:
     calendar_hours: int
     workday_hours: int
     active_hours: Decimal
-    calendar_rate: Decimal
+    calendar_rate: Decimal | None
     workday_rate: Decimal | None
-    active_rate: Decimal
+    active_rate: Decimal | None
     robot_day: Decimal
     robot_period: Decimal
 

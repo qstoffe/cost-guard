@@ -45,7 +45,8 @@ def evidence_views():
     for name, roots, complete, price in cases:
         period = period_stats(roots, lambda *_: price, period='all', start=None, now=now,
                               zone='UTC', source_complete=complete)
-        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,))).to_json()
+        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,),
+            ai_stats_work=dict(scopes={period.period: dict(ready=True)}))).to_json()
         result.append(dict(name=name, result={**base, 'view': view}))
     # Fixed seven local date slots; these are calculated in Python, never in JS.
     from .active_hour import epoch
@@ -59,7 +60,8 @@ def evidence_views():
         period = period_stats((synthetic,), lambda *_: Decimal(840), period=period_name,
             start=clock - 7 * 86_400_000 if period_name == '7-days' else epoch('2026-11-06T23:00:00+00:00'),
             now=clock, zone='Europe/Stockholm')
-        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,))).to_json()
+        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,),
+            ai_stats_work=dict(scopes={period.period: dict(ready=True)}))).to_json()
         result.append(dict(name=name, result={**base, 'view': view}))
     return result
 
@@ -80,7 +82,7 @@ def stats_result(request):
                 cache_repository=CacheRepository(database), config={'timezone': 'UTC'}, now_ms=now, progress=progress)
 
         result = ReportApplication(factory).execute(request).to_json()
-        # Keep the baseline at ten cards; optional matched facts have separate probes.
+        # Keep the baseline at twelve cards; optional matched facts have separate probes.
         for period in result['view']['ai_stats']:
             period['matched'] = None
         return result

@@ -85,17 +85,19 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       current.result=${JSON.stringify(item.result)};current.period=current.result.view.ai_stats[0].period;current.stats.update(current);
       ReportView.setUnit(${JSON.stringify(unit)},output);`);
     const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat')].map(card=>({
-      value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
+      metric:card.dataset.metric,value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
       state:!!card.querySelector('.ai-stat-state')}))`);
     const expected=item.result.view.ai_stats[0].metrics;
-    assert.equal(rendered.length,10);
-    rendered.forEach((card,index)=>{
-      if (index !== 0) assert.equal(card.value,expected[index].display_units?.[unit]?.value || expected[index].display.value);
-      assert.equal(card.trait,expected[index].display.trait);
+    assert.equal(rendered.length,12);
+    rendered.forEach(card=>{
+      const metric=expected.find(m=>m.metric===card.metric);
+      if (!['hourly-rate','token-rate'].includes(card.metric)) assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
+      assert.equal(card.trait,metric.display.trait);
       assert.equal(card.state,false);
-      assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
+      if (!['total-tokens','token-rate'].includes(card.metric))
+        assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
     });
-    const rates=await evaluate(`[...document.querySelectorAll('.ai-stat-rate')].map(row=>({
+    const rates=await evaluate(`[...document.querySelector('[data-metric="hourly-rate"]').querySelectorAll('.ai-stat-rate')].map(row=>({
       label:row.getAttribute('aria-label'),value:row.querySelector('.ai-stat-rate-value').textContent}))`);
     assert.deepEqual(rates.map(row=>row.label),['Calendar average','Workday average','Active AI average']);
     assert.deepEqual(rates.map(row=>row.value),['calendar_rate','workday_rate','active_rate'].map(key=>
@@ -106,9 +108,9 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     if (item.name==='no-workdays') assert.equal(rates[1].value,'No workdays');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
-    assert.doesNotMatch(await evaluate(`output.textContent`),forbidden);
+    assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].filter(c=>!['total-tokens','token-rate'].includes(c.dataset.metric)).map(c=>c.textContent).join(' ')`),forbidden);
     assert.equal(await evaluate(`document.getElementById('report-updating')`),null);
-    for (const affected of theme==='classic' && unit==='credits' ? expected.map((_,i)=>i) : [0]) {
+    for (const affected of theme==='classic' && unit==='credits' ? [0,1,4,5,6,7,8,9,10,11] : [0]) {
       await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
         document.querySelectorAll('.ai-stat h4 button')[${affected}].focus();`);
       await until(`!document.getElementById('context-help').hidden`);
@@ -116,7 +118,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       await escape();
     }
     const ax=await command('Accessibility.getFullAXTree',{},tab);
-    assert.doesNotMatch(ax.nodes.filter(node=>!node.ignored).map(node=>[node.name?.value,node.description?.value].join(' ')).join('\n'),forbidden);
+    assert.doesNotMatch(ax.nodes.filter(node=>!node.ignored).map(node=>[node.name?.value,node.description?.value].join(' ')).join('\n'),/vault|PRIVATE_SOURCE/);
     states.push({case:item.name,theme,unit,rendered,rates});
   }
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.period='all'; current.stats.update(current);
@@ -129,5 +131,5 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hourly appetite when it's actually working/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
-  checks.push('twelve canonical evidence cases: ten cards with three Python-prepared rates, example/faster robot/no-workdays, both units/three themes; no state/reason DOM, focused heading retained');
+  checks.push('twelve canonical evidence cases: twelve cards with Python-prepared rates; legacy fun copy retained, token availability qualified, both units/three themes and focused heading retained');
 };

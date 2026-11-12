@@ -149,7 +149,7 @@ async function main() {
      checks.push('complete no-match, partial coverage, retained background failure and unavailable alert remain truthful with no empty shared notice');
     await evaluate(`location.hash='#/ai-stats'`);await until(`current.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),11);
-    assert.match(await evaluate(`document.querySelectorAll('.ai-stat')[10].textContent`),/Biggest AI Speed Gap.*3.0×/);
+    assert.match(await evaluate(`document.querySelectorAll('.ai-stat')[12].textContent`),/Biggest AI Speed Gap.*3.0×/);
     checks.push('existing ten AI Stats cards preserved plus conditional eleventh matched-run fact, no separate Comparisons job');
     await evaluate(`location.hash='#/comparisons'`);await until(`current.section==='comparisons'`);
     await evaluate(`window.__hold=false;window.__release=null;api=async(p,v)=>{if(p==='/api/reports'){__calls++;if(__hold)await new Promise(r=>__release=r)}return __api(p,v)};

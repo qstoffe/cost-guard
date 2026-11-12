@@ -14,22 +14,30 @@ async function main(){
   S.observe(state,work(20,20,true)); assert.ok(state.percent<100,'coverage alone is not an applied period result');
   S.observe(state,work(20,20,true,[{period:'7-days'}])); assert.ok(state.percent<100,'legacy rows are not fun-policy results');
   const metrics=['hourly-rate','total-cost','working-time','average-cost','expensive-session',
-    'longest-session','busiest-day','night-owl','streak','parallel'].map(metric=>({metric,value:'12',
-      display:{value:'12',trait:'synthetic',calendar_rate:'1',workday_rate:'2',active_rate:'3',rate_help:'synthetic'}}));
-  const accepted={observed_at_ms:100,view:{kind:'ai-stats',ai_stats_policy:'fun-1',
-    ai_stats:[{period:'7-days',metrics}]}};
+    'longest-session','busiest-day','night-owl','streak','parallel','total-tokens','token-rate'].map(metric=>({metric,value:'12',exact_value:'12',
+      display:{value:'12',trait:'synthetic',calendar_rate:'1',workday_rate:'2',active_rate:'3',rate_help:'synthetic',token_help:'synthetic'}}));
+  const accepted={observed_at_ms:100,view:{kind:'ai-stats',ai_stats_policy:'fun-2-tokens',
+    ai_stats:[{period:'7-days',metrics}],ai_stats_work:{scopes:{'7-days':{ready:true}}}}};
   S.remember(state,accepted);
   const partial={observed_at_ms:200,view:{...accepted.view,
     ai_stats_work:{scopes:{'7-days':{ready:false}}}}};
   S.remember(state,partial);
   assert.equal(state.result,accepted,'newer incomplete slice cannot erase a prior same-period result');
   const cold={period:'7-days'};S.remember(cold,partial);
-  assert.equal(cold.result,partial,'cold source-backed best-effort values remain allowed');
+  assert.equal(cold.result,null,'cold partial figures must not become final-looking cards');
   partial.view.ai_stats_work.scopes['7-days'].ready=true;
   S.remember(state,partial);
   assert.equal(state.result,partial,'coherent replacement is accepted');
   S.remember(state,accepted);
   assert.equal(state.result,partial,'late old publication cannot roll back the accepted observation');
+  const latest={...partial,instance_id:'same-worker',sequence:2};S.remember(state,latest);
+  S.remember(state,{...latest,sequence:1});assert.equal(state.result,latest,'same-observation older sequence cannot replace ready facts');
+  S.remember(state,partial);
+  const foreign={...accepted,observed_at_ms:50,source:{identity:'old-source'}};
+  S.remember(state,foreign);assert.equal(state.result,partial,'older foreign source cannot roll back ready cards');
+  S.remember(state,{...partial,observed_at_ms:300,source:{identity:'new-source'},view:{...partial.view,
+    ai_stats_work:{scopes:{'7-days':{ready:false}}}}});
+  assert.equal(state.result,null,'different current source cannot inherit old ready values');
   const calls=[],pending=[];
   const api=async(_path,value)=>{calls.push(value.stats_scope);await new Promise(resolve=>pending.push(resolve));};
   const priority=S.prioritize(state,api);

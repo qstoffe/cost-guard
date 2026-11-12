@@ -27,6 +27,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_active_hour.py",
     "test_ai_stats.py",
     "test_ai_stats_rates.py",
+    "test_ai_stats_tokens.py",
     "test_ai_stats_recovery.py",
     "test_ai_stats_resume.py",
     "test_matched_inputs.py",

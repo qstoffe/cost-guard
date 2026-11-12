@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000682: `analysis/ai_stats.py::_token_metrics` derives observed integer traffic,
+sharing `ai_stats_rates.py` denominators without cost/time fillers. Application Stats
+prepares exact-total help and unit-independent rates. `assets/ai-stats.js` owns twelve
+stable shells and authoritative scope-ready retention (`fun-2-tokens`); compact
+usage stays reusable, coverage v3 rejects undated-request exclusion proofs. Coverage: Stats/token/rates/resume tests,
+`probe_ai_stats_loading.cjs`, production slices/two-tab/browser probes and read-only
+`probe_ai_stats.py`; [current evidence and TPS exclusion](../../journal/web/ai-stats.md#observed-token-traffic-and-ready-card-shells--fr000682).
+
 FR000681: `src/python_discovery.ps1` / `.sh` own bounded pre-Python installed-runtime
 resolution shared by each OS's Web, Legacy and Diagnostics launchers. Fixed Web
 failure reasons live in `web/launch_messages.json`, rendered by Python and the
