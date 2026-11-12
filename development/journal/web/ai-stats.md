@@ -7,10 +7,8 @@ Status: current
 
 ## Summary
 
-FR000689 is a scoped working-tree delta against the revision above. The owning
-[reports contract](../../architecture/modules/reports.md#web-ai-stats-acquisition-and-accounting)
-and source define current behavior. Historical measurements below retain their
-original scope, not renewed whole-module verification.
+FR000689 scoped delta; historical measurements retain their scope, not a fresh audit.
+Current [reports contract](../../architecture/modules/reports.md#web-ai-stats-acquisition-and-accounting).
 
 **Pending means exactly one `Loading…` text node in each of twelve stable cards,
 including queued, deferred, failed and interrupted attempts. A real blocker is
@@ -19,53 +17,65 @@ same-source/same-period values survive refresh.** Never invent failed-acquisitio
 zeros or relax schema/source checks. All ready cards remain playful best effort,
 not accounting evidence or a scientific benchmark. No Pause/Retry/Refresh action.
 
-Owners remain reports/analysis/application Stats, finite jobs/dispatcher and browser
-retention/presentation. No extra scan, inference or source write; exact owners/tests
-are in [CODE_MAP](../../architecture/modules/CODE_MAP.md).
+Owners/tests: [CODE_MAP](../../architecture/modules/CODE_MAP.md). Boundaries retained;
+no extra scan, inference or source write.
 
 ## Loading-only and supervised recovery — FR000689
 
 ### Confirmed defects and repair
 
-- `View.update` explicitly produced `Counting paused.` for failed/interrupted cold
-  attempts. Pending cards now have one invariant, including accessible interiors.
-- `app.js::show` hid errors when `state.result` was null. Cold/background errors
-  now reach the separate existing `role=status` notice with specific actionable copy.
-- `stats_jobs.accept` called exhausted/nonbusy-checkpoint **unready** work complete.
-  Dispatcher treated row presence as success and assigned the 900-second freshness
-  cadence, while browser scope-readiness correctly rejected the same result. It is
-  now a typed retryable checkpoint/no-progress failure, not a successful report.
-  Dispatcher retains scoped-ready publications only; persistent retryable blockers
-  have page-level feedback while demand remains pending.
+- `View.update` produced `Counting paused.` on cold failures/interruption; all pending
+  interiors, including accessibility, now follow the invariant above.
+- `app.js::show` hid cold errors (`state.result == null`); cold/background errors now
+  reach the separate existing actionable `role=status` notice.
+- `stats_jobs.accept` called exhausted/nonbusy-checkpoint **unready** work complete;
+  dispatcher accepted row presence and assigned 900s cadence despite browser rejection.
+  Now typed retryable checkpoint/no-progress failure, scoped-ready publications only;
+  persistent blockers have page-level feedback while demand stays pending.
 - BUSY/LOCKED beyond six nonadvancing slices keeps the same job/scan/observation and
   bounded backoff, so unlocking can resume its checkpoints. Nonbusy write failure
   and no-progress use host-supervised bounded retry, never false readiness.
 - Prior Stats policies regenerate using the shared policy and existing compact
   invalidation; unrelated reports/native history are not deleted/reset.
-- Old incomplete finished publications wait five seconds before rediscovery rather
-  than ending as ready or hot-looping. Admission/result/catch/finally are attempt-
-  qualified; retired failures cannot mutate a replacement. Healthy admission clears
-  old waiting feedback; visible leases promote existing logical demand.
+- Incomplete finished publications wait5s before rediscovery, not fake success/hot-loop.
+  Admission/result/catch/finally are attempt-qualified; retired failures cannot mutate
+  replacements. Healthy admission clears waiting feedback; leases promote demand.
 
 ### Historical incident attribution
 
-**Owner's exact earlier failed attempt: NOT VERIFIED.** Read-only inspection of the
-ordinary checkout's exact derived product instance directory found no `instance.json`,
-`diagnostics.json` or `lifecycle.log`. Its repository logs inventory had only recovery
-artifacts, not error/crash reports. No sibling checkout, other worker/session private
-record, raw transcript or credential was searched. Missing live instance metadata
-alone was not treated as proof that historical diagnostics were absent: Decision
-Delegate specifically directed the subsequent targeted diagnostics/tail check.
+**Owner's exact earlier failed attempt: NOT VERIFIED.** The ordinary checkout's exact
+derived product directory had no `instance.json`, `diagnostics.json` or `lifecycle.log`;
+its logs inventory held only recovery artifacts. Delegate directed the latter two
+checks: missing instance metadata alone was insufficient. No unrelated private search.
 
-These reproduced defects do not prove the owner's historical cause. The first new
-baseline was invalidated by this worker editing runtime source: SourceGuard stopped
-the host with cancelled jobs/no host fault. That setup failure is not incident/source-
-outage evidence. Final replay freezes runtime files and records a sanitized chain.
+Initial baseline invalid: this worker edited runtime; SourceGuard stopped the host
+(cancelled jobs/no fault), not incident/outage evidence. Later replays froze runtime.
 
 ### Verification status
 
-Final results and the Delegate's historical-attribution disposition are recorded
-here before delivery; no pending or failed check is a PASS.
+- Full: all 185 groups ran, 184 passed; foundation's version oracle raced a version
+  edit. Its rerun passed that assertion; a validator subprocess timed out under load,
+  then passed isolated (5.650s). All tests passed across runs, not one green Full.
+  Focused resume/dispatch 74 tests and lifetime VM pass; validator 11 pass/7 advisories.
+- Headless Edge matrix passed 19 checks/160 pending combinations. Enhanced matrix
+  covered six operational codes but hit its parent deadline during final slices;
+  separate production-slice rerun passed: narrow at 2/24 roots, 12 children, exactly
+  24 hydrations, broad goal completed, no active child/host fault/HTTP threads.
+- Frozen fixed-live failed its 540s readiness condition: connected healthy host,
+  unchanged source guard, Stats still running after ten slices. Cause unproved.
+  Warmed traced replay passed Stats/Token Mix in 48.045/16.152s (partial source).
+  Tightened replay passed in 47.759/20.791s: actual visible interest/90s lease → queued
+  admission → running → complete, 3164/3164 roots, `fun-3-responses`, strict valid,
+  default30 ready/12 cards; five scopes ready. Stats acquired; Mix partial.
+  Simulated browser faults automatically recovered over real results, retaining
+  last-good DOM; cold faults had Loading/page notice. Clean owned exits/no errors.
+  Evidence: `scratch:/fixed-live.json`,
+  `scratch:/traced-live.json`, `scratch:/verified-live.json`, `scratch:/final-slices.json`.
+- **Decision Delegate** authorized the minor historical-attribution exception to
+  acceptance7: original failure/cache state, cold-upgrade timing and causal replay
+  NOT VERIFIED; failed540s unresolved. Frozen warm successes prove current recovery,
+  not historical cause; new-state instrumentation cannot restore absent records.
+  No Suggestion/hold; no cold/schema/security waiver.
 
 ## Evidence
 
@@ -80,38 +90,33 @@ py -3 development/tests/integration/probe_ai_stats.py --cold-and-warm --budget-s
 py -3 development/tests/integration/benchmark_ai_stats.py --baseline <historical-revision> --sliced
 ```
 
-Real probes own host/children, never stop/write OpenCode, and export only sanitized
-aggregate/code/provenance facts. Managed chain proof differs from standalone timings
-and synthetic faults; a warmed cache is not cold. Freeze runtime/version during tests.
+Probes own host/children; no OpenCode stop/write. Export aggregates/codes/provenance;
+managed chain, standalone timing and synthetic faults differ. Warm is not cold;
+freeze runtime/version.
 
 ### Documentation method
 
-The helper rejected the oversized existing journal before writes (`KNOWLEDGE_LIMIT`).
-For this FR, foreground **Decision Delegate** authorized direct consolidation to
-≤12,288 bytes and surgical reports/CODE_MAP edits, preserving unrelated provenance.
-No helper/limit/diagram change, helper PASS or product/test waiver. Older exceptions
-were scoped to their own deliveries, not reused.
+After pre-write `KNOWLEDGE_LIMIT`, foreground **Decision Delegate** authorized direct
+consolidation ≤12,288 bytes and surgical reports/CODE_MAP edits, preserving provenance.
+No helper/limit/diagram change, helper PASS or test waiver. Old exceptions stay scoped.
 
 ## Sampled response podium — FR000685
 
 Historical delta against `f9ee34f59c1106df88dd01c7907344a7bccc373d`, 2026-11-12.
-Policy `fun-3-responses` replaces only Token Consumption Rate with Top 3 weighted
-model/effort response-output tok/s; Total Tokens, cost/time and optional matched facts
-retain their owners. Sparse/partial/estimated ready observations never become N/A.
+Policy `fun-3-responses`: Top 3 weighted model/effort response-output tok/s replaces
+only Token Consumption Rate. Other metrics/matched facts retain owners; sparse,
+partial or estimated ready observations never become N/A.
 
 V2 2.2.7 OpenAPI and released tag
 [`fedc6f208aa2bd54c1019227214568083f6380ad`](https://github.com/anomalyco/opencode/tree/fedc6f208aa2bd54c1019227214568083f6380ad)
-were traced through runner/step, publish-llm-event and message-updater. The stream
-drains and publishes streamed before awaiting tools; tools can overlap it. This
-released-version linkage is not a binary audit.
+were traced through runner/step, publish-llm-event and message-updater: stream drains
+before awaiting tools, which can overlap it. Released linkage, not a binary audit.
 
-Prefer independent observed step pairs, then assistant created→valid same-response
-streamed; absent/invalid streamed falls back to completion clipped at explicit native
-tool execution start. Multiple steps need independent pairs, not a multiplied message
-interval. Completion-time membership, canonical clone dedup and reasoning-once output
-remain. Queue/TTFT/network/setup bias and fallback clipping can distort speed; this
-is approximate response round-trip throughput, never pure decoding speed. V1 absence
-of streamed metadata does not prevent the broader fallback proxy.
+Prefer independent step pairs, then assistant created→valid same-response streamed;
+otherwise completion clipped at native tool start. Multiple steps need independent
+pairs, not multiplied message intervals. Completion membership, canonical clone dedup
+and reasoning-once output remain. Queue/TTFT/network/setup and fallback clipping bias
+this round-trip proxy, never pure decoding speed. V1 can use the broader fallback.
 
 Per-root/model and final period/model samples each retain ≤32: newest eight, then
 lowest call-identity-hash 24. Final period filters precede selection; future/as-of

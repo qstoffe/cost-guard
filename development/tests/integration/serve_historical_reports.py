@@ -32,8 +32,11 @@ def main():
                 break
             if command != 'jobs-status':
                 raise ValueError('unknown_probe_command')
-            print(json.dumps({'jobs': [dict(status=row['status'], error=row['error'],
-                progress=row['progress'], slices=row.get('slices', 0)) for row in host.jobs._jobs.values()],
+            print(json.dumps({'jobs': [dict(kind=row['request'].kind.value,
+                status=row['status'], error=row['error'] or (row.get('result') or {}).get('error'),
+                progress=row['progress'], slices=row.get('slices', 0),
+                work=((row.get('result') or {}).get('view') or {}).get('ai_stats_work'))
+                for row in host.jobs._jobs.values()],
                 'host_failed': host.failure is not None, 'host_reason': host.reason,
                 'source_guard': host.guard.status}), flush=True)
     finally:

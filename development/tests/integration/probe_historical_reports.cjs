@@ -3,28 +3,38 @@ const assert = require('node:assert/strict');
 
 module.exports = async function({command,evaluate,until,tab,checks}) {
   const observations=[];
-  await evaluate(`window.__traceApi=api; window.__reportTrace=[];
+  await evaluate(`window.__traceApi=api; window.__reportTrace=[]; window.__traceSeen=new Map();
     api=async function(path,...args) {
       const value=await __traceApi(path,...args);
       if(path==='/api/interest' || path==='/api/data' || path.startsWith('/api/jobs/')) {
         const result=value.result, work=result?.view?.ai_stats_work;
         const row={endpoint:path.startsWith('/api/jobs/')?'job':path, id:value.id,
+          section:args[0]?.section, visible:args[0]?.visible, lease:value.lease_seconds,
           refresh:value.refresh, terminal:value.terminal, error:value.error || result?.error?.code,
           status:value.status, policy:result?.view?.ai_stats_policy, valid:result?.view?.kind==='ai-stats'?AIStatsView.valid(result):undefined,
           ready:work?.scopes?.[current?.period]?.ready, completed:work?.completed,total:work?.total,
           checkpoint:work?.checkpoint_error, host:hostState.kind};
-        const signature=JSON.stringify(row);
-        if(__reportTrace.length<32 && signature!==JSON.stringify(__reportTrace.at(-1))) __reportTrace.push(row);
+        const key=row.endpoint+':'+(row.id||row.section||''); const signature=JSON.stringify(row);
+        if(signature!==__traceSeen.get(key)) {
+          __traceSeen.set(key,signature); __reportTrace.push(row);
+          if(__reportTrace.length>96) __reportTrace.splice(1,1);
+        }
       }
       return value;
-    };`);
+    }; if(demand) demand.api=api;`);
   for(const section of ['ai-stats','token-mix']) {
     const started=Date.now();
     await evaluate(`location.hash='#/${section}'`);
-    await until(`current?.section==='${section}' && current.result && !current.loading && !current.failed`,tab,540000);
+    await until(`current?.section==='${section}'`,tab);
+    if(section==='ai-stats') assert.equal(await evaluate(`!!current.result ||
+      (output.querySelectorAll('.ai-stat').length===12 && [...output.querySelectorAll('.ai-stat')].every(c=>c.textContent==='Loading…' && c.childNodes.length===1))`),true);
+    await until(`current?.section==='${section}' && current.result && !current.loading && !current.failed &&
+      (current.section!=='ai-stats' || current.result.view.ai_stats_work.scopes[current.period].ready===true)`,tab,540000);
     const summary=await evaluate(`({source:current.result.source.status,
       observed:current.result.source.observed_at_ms,
       valid:current.section==='ai-stats'?AIStatsView.valid(current.result):TokenMixView.valid(current.result),
+      policy:current.result.view.ai_stats_policy, scope:current.period,
+      ready:current.result.view.ai_stats_work?.scopes?.[current.period]?.ready,
       periods:current.result.view.ai_stats?.map(row=>({period:row.period,nonzero:Number(row.metrics[1].value)>0})),
       models:current.result.view.model_token_mix?.length,publishers:current.result.view.publisher_token_mix?.length,
       nonzeroTokens:Number(current.result.view.token_mix?.known_total_tokens)>0,
@@ -32,12 +42,15 @@ module.exports = async function({command,evaluate,until,tab,checks}) {
       failed:!!current.failed,interrupted:!!current.interrupted,trace:__reportTrace})`);
     assert.equal(summary.valid,true);assert.ok(['acquired','partial'].includes(summary.source));
     if(section==='ai-stats') {
-      assert.equal(summary.periods.length,5);assert.ok(summary.periods.every(row=>row.nonzero));
+      assert.equal(summary.periods.length,5);assert.equal(summary.cards,12);assert.equal(summary.ready,true);
+      const scopes=[];
       for(const period of ['today','7-days','30-days','month','all']) {
         await evaluate(`selectStats(current,'${period}')`);
-        await until(`current.result?.view.ai_stats.some(row=>row.period==='${period}') && !!output.querySelector('.ai-stat')`,tab);
-        assert.equal(await evaluate(`current.period==='${period}' && document.querySelectorAll('.ai-stat-value').length>=10`),true);
+        await until(`current.period==='${period}' && current.result?.view.ai_stats_work.scopes['${period}'].ready===true &&
+          AIStatsView.valid(current.result) && document.querySelectorAll('.ai-stat-value').length===12`,tab,60000);
+        scopes.push(period);
       }
+      summary.readyPeriods=scopes;
       await until(`!current.loading`,tab,60000);
     } else {
       assert.ok(summary.models>0 && summary.publishers>0 && summary.nonzeroTokens);
@@ -76,7 +89,7 @@ module.exports = async function({command,evaluate,until,tab,checks}) {
     await evaluate(`api=__historyApi; scheduleCachedReport()`);
     await until(`!current.loading && !current.failed && current.result && !!output.querySelector('.ai-stat,.token-mix-table')`,tab,15000);
   }
-  checks.push('Real read-only V2 host: both valid nonempty reports, five periods, retained warm navigation/provenance, both units, three themes and 360/800/1280/1920px; no report toolbar/actions');
+  checks.push('Real read-only V2 host: both valid reports, all five Stats scopes ready with twelve cards, retained warm navigation/provenance, both units, three themes and 360/800/1280/1920px; no report toolbar/actions');
   checks.push('Controlled browser transport faults over real retained results: last-good DOM preserved, cold failure has no zero cards, automatic host lookups recover without clicks/reload/service restart');
   return observations;
 };
