@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.34 - 2026-11-12
+
+- Every unready AI Stats card contains exactly Loading, including failed/interrupted/deferred attempts. Cold operational errors remain visible outside the cards; quiet refresh retains valid same-source, same-period values without manual Retry controls.
+- Unready exhausted/checkpoint-failed slices no longer become successful cached reports. Busy checkpoints retain the same logical scan with bounded backoff; typed persistent failures use supervised recovery. Older Stats projection policies regenerate independently of other reports, without weakening validation or deleting source history.
+
 ## v81.33 - 2026-11-12
 
 - Request-bearing model help leads with exact recorded provider/model, even for a single model. Alias selectors stay separate from explicitly labelled current-catalog pricing estimates; friendly Claude labels retain their brand. Prompt/child/compaction, Full/Mini Watch, Sessions/detail, Comparisons and sampled AI Stats use server-prepared identities without hover acquisition or repricing.

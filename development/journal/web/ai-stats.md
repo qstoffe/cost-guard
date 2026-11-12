@@ -1,494 +1,197 @@
-# AI Stats: sampled responses, best effort and resumable history
+# AI Stats: loading, sampled responses and resumable history
 
-Source revision: 9b9fdf389d93d90a09bfa13e9b075b564d026961
-Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
-Last checked: 2026-11-09
+Source revision: a6d4c606fc0ac4f8c62dceeb03844b6a46671b55
+Checked revision: a6d4c606fc0ac4f8c62dceeb03844b6a46671b55
+Last checked: 2026-11-12
 Status: current
 
-## Sampled response podium — FR000685
+## Summary
 
-Scoped delta against `f9ee34f59c1106df88dd01c7907344a7bccc373d`, 2026-11-12, Windows.
-The permanent [best-effort / never Unavailable contract](../../architecture/modules/reports.md#ai-stats--best-effort--never-unavailable)
-supersedes older conservative token/failure display conventions below. Every ready
-card retains fun values, including sparse, partial and estimated observations. Total
-Tokens arithmetic, cost/time cards and optional matched fact calculations are unchanged.
-Only Token Consumption Rate becomes the Top 3 sampled response-output tok/s podium.
+FR000689 is a scoped working-tree delta against the revision above. The owning
+[reports contract](../../architecture/modules/reports.md#web-ai-stats-acquisition-and-accounting)
+and source define current behavior. Historical measurements below retain their
+original scope, not renewed whole-module verification.
 
-### Timing feasibility and source trace
+**Pending means exactly one `Loading…` text node in each of twelve stable cards,
+including queued, deferred, failed and interrupted attempts. A real blocker is
+page-level, never a card label. Ready values appear atomically; matching ready
+same-source/same-period values survive refresh.** Never invent failed-acquisition
+zeros or relax schema/source checks. All ready cards remain playful best effort,
+not accounting evidence or a scientific benchmark. No Pause/Retry/Refresh action.
 
-The installed OpenCode **2.2.7** `/openapi.json` has Assistant `time.created`, optional
-`completed`/`streamed`, and separate tool `created`/`ran`/`completed`. Cost Guard's
-`current_union_message_to_legacy_bundle` maps current union messages to the canonical
-assistant; `normalize_message_bundle` preserves assistant times and per-step usage.
-`normalize_invocations` prefers step usage over the cumulative message fallback.
-V1 uses the same canonical invocation contract; missing streamed metadata is irrelevant
-to this broader response-round-trip proxy. Streamed is not a first-to-last token clock.
+Owners remain reports/analysis/application Stats, finite jobs/dispatcher and browser
+retention/presentation. No extra scan, inference or source write; exact owners/tests
+are in [CODE_MAP](../../architecture/modules/CODE_MAP.md).
 
-Exact-version source: released tag **v2.2.7** resolves to
-[`fedc6f208aa2bd54c1019227214568083f6380ad`](https://github.com/anomalyco/opencode/tree/fedc6f208aa2bd54c1019227214568083f6380ad).
-The installed CLI's adjacent version file and running API both report 2.2.7; the
-tag's root/core manifests agree. This is released-version linkage, not a reproducible
-binary audit. In [`runner/step.ts:73–162`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/runner/step.ts#L73-L162),
-`started` is captured before `llm.stream`; tool calls fork while the provider stream
-continues. The stream is drained, `publisher.streamed()` runs, **then** tool fibers
-are awaited. [`publish-llm-event.ts:121–143`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/runner/publish-llm-event.ts#L121-L143)
-publishes the same assistant ID. [`message-updater.ts:220–276`](https://github.com/anomalyco/opencode/blob/fedc6f208aa2bd54c1019227214568083f6380ad/packages/core/src/session/message-updater.ts#L220-L276)
-maps started to created, Step.Streamed event time to streamed, and Step.Ended to
-completed; retries clear old streamed/completed fields before reuse.
+## Loading-only and supervised recovery — FR000689
 
-Stats prefers an independent observed step pair, then created to valid same-response
-streamed, preserving response/tool overlap but excluding subsequent tool-only waiting.
-Missing/invalid streamed falls back to created/completed clipped at explicit native
-tool execution start; wire scalars distinguish native `ran` from inherited times. Multiple
-steps require separate observed pairs: a synthesized message interval is never
-multiplied across responses. Known output plus separately normalized reasoning is the
-numerator, never input/cache traffic. Aborted/incomplete/zero-output and impossible
-individual intervals do not suppress healthy calls. Canonical completion timestamp,
-source/step identity and clone precedence still own period membership and dedup.
-Assistant creation can include small client setup and streamed includes local event
-handling; fallback completion can include finalization, and fallback first-tool clipping
-can understate overlapping response duration (upward TPS bias). This is a fun approximate
-response throughput, not a network
-instrumentation guarantee or pure decoding benchmark.
+### Confirmed defects and repair
 
-### Bounded sample and design decision
+- `View.update` explicitly produced `Counting paused.` for failed/interrupted cold
+  attempts. Pending cards now have one invariant, including accessible interiors.
+- `app.js::show` hid errors when `state.result` was null. Cold/background errors
+  now reach the separate existing `role=status` notice with specific actionable copy.
+- `stats_jobs.accept` called exhausted/nonbusy-checkpoint **unready** work complete.
+  Dispatcher treated row presence as success and assigned the 900-second freshness
+  cadence, while browser scope-readiness correctly rejected the same result. It is
+  now a typed retryable checkpoint/no-progress failure, not a successful report.
+  Dispatcher retains scoped-ready publications only; persistent retryable blockers
+  have page-level feedback while demand remains pending.
+- BUSY/LOCKED beyond six nonadvancing slices keeps the same job/scan/observation and
+  bounded backoff, so unlocking can resume its checkpoints. Nonbusy write failure
+  and no-progress use host-supervised bounded retry, never false readiness.
+- Prior Stats policies regenerate using the shared policy and existing compact
+  invalidation; unrelated reports/native history are not deleted/reset.
+- Old incomplete finished publications wait five seconds before rediscovery rather
+  than ending as ready or hot-looping. Admission/result/catch/finally are attempt-
+  qualified; retired failures cannot mutate a replacement. Healthy admission clears
+  old waiting feedback; visible leases promote existing logical demand.
 
-Root/model/effort summaries and final period/model samples each retain at most 32:
-newest eight, then bottom identity-hash 24 from the remainder. Canonical identity,
-not array index or containing root/revision, drives deterministic selection. An index
-only references that revision's existing usage record. Final period filters happen
-before sampling; future completions cannot evict eligible recent calls. Summary as-of
-and next-excluded-future bounds force existing-path reacquisition when necessary.
-Revision changes rebuild affected summaries. No second historical scan or paid probe.
+### Historical incident attribution
 
-Foreground **Decision Delegate** approved this bounded hierarchical design: cache
-retention is per root/model (not a globally constant 32 facts/model), final ranking is
-32/model/period, and historical-window sampling can lose eligible older candidates.
-This disclosed selection bias is a design interpretation, **not an acceptance/test
-waiver**. Small samples display their actual count and never trigger a quality gate.
+**Owner's exact earlier failed attempt: NOT VERIFIED.** Read-only inspection of the
+ordinary checkout's exact derived product instance directory found no `instance.json`,
+`diagnostics.json` or `lifecycle.log`. Its repository logs inventory had only recovery
+artifacts, not error/crash reports. No sibling checkout, other worker/session private
+record, raw transcript or credential was searched. Missing live instance metadata
+alone was not treated as proof that historical diagnostics were absent: Decision
+Delegate specifically directed the subsequent targeted diagnostics/tail check.
 
-The foreground **Decision Delegate** approved the supported endpoint order after the
-bounded temporal inventory and exact-version source trace. No arbitrary timing-quality
-or minimum-sample gate was introduced; missing streamed is not a rejection condition.
+These reproduced defects do not prove the owner's historical cause. The first new
+baseline was invalidated by this worker editing runtime source: SourceGuard stopped
+the host with cancelled jobs/no host fault. That setup failure is not incident/source-
+outage evidence. Final replay freezes runtime files and records a sanitized chain.
 
-### Verification and measured tradeoffs
+### Verification status
 
-- Read-only real installation, owned disposable cache: optimized cold30 **145.768s,
-  13 slices**, fresh warm30 **8.539s**, All reuse **0s** (not cold), fresh warmAll
-  **9.048s**. All five periods checked all twelve metrics, unchanged hourly formulas,
-  three model ranks and actual 24–32 sampled calls. Payload **432,456–432,476 bytes**.
-  Pre-change observation: cold **136.074s**, warm30 **7.527s**, warmAll **6.875s**,
-  payload **428,527–428,561 bytes**. Mutable source/concurrency prevent paired causal
-  claims. No source writes, shared-service stop, paid inference or transcript export.
-- Temporal inventory: at most 32 already-acquired positive responses per child;
-  streamed always followed the chosen eligible tool start, no missing/out-of-bounds
-  streamed in these samples. Median differences were **1–187ms**, with a **4,287ms**
-  tail; completion minus streamed reached **211,932ms**. Native tool completion
-  occurred both before and after streamed. This motivated the pinned source trace
-  and final stream-end preference, rather than subtracting genuine tool overlap.
-  **The live run preceded that final endpoint edit**; focused tests verify the edit.
-- Fixed canonical history, exact base builder/formulas, 12/512 roots × 20 requests,
-  7/30/all × cold/warm/1%-changed: **18 old-ten-metric signatures matched**;
-  hydration **512/0/5**, slices **2/1/1** unchanged. For 512 roots, base/current cold
-  **2.35–2.49/2.83–2.96s**, warm **0.61–0.71/1.21–1.24s**, changed
-  **0.70–0.73/1.04–1.12s**. Current five-period view **26,069 bytes**; historical
-  view size is unmeasured, not a fabricated baseline. Current shared dependencies
-  support both builders, not a whole old runtime. Profiling repaired repeated
-  candidate rehash/sort overhead; initial live implementation **310s cold / 20–26s
-  warm** was not accepted as final performance.
-- **Scoped Decision Delegate performance acceptance:** the residual measured runtime
-  increase is accepted for this new statistic because sampling/acquisition remain
-  bounded, hydration/slices and old formulas match, payload grows about 4KB, and the
-  major hot loop was repaired. This is **not unchanged-performance PASS**, a future
-  regression allowance, or a waiver of responsiveness, loading/focus or tests.
-- Hidden Edge browser: **PASS, 19 checks, zero runtime errors**, including 0/1/2/3
-  medals, sample counts/speeds, all-card best-effort states, loading/last-good/error,
-  narrow/enlarged-text/theme/unit/help/focus and production two-tab finite slices.
-  Exactly **24 hydrations**, 12 finite children, clean owned cleanup. Unchanged UI
-  evidence stands for the backend endpoint refinement. Physical OS rendering,
-  actual screen-reader speech, real touch hardware and non-Chromium remain unproved.
-
-Final Full: **185 groups passed, zero failed groups, 143.5s**, four isolated workers.
-Final validator: **11 passes, zero failures, seven existing advisory warnings**, no
-raised budgets. Final focused endpoint/token oracles: **15 tests passed**; scope/
-sequence Node VM passed. Initial Full runs
-exposed stale token expectations, a payload wrapper dropping the new `now` keyword,
-an introduced test indentation error, and the historical assertion that streamed could
-not affect any metric. That last assertion now proves only the podium changes and
-invalid markers fall back; all other metrics/matched facts must remain identical.
-These failures were repaired, not counted as PASS.
-Evidence: `scratch:/ai-stats-optimized.jsonl`, `scratch:/ai-stats-benchmark-optimized.jsonl`,
-`scratch:/ai-stats-browser-final.json`, `scratch:/tokens-stream.txt`,
-`scratch:/full-tests-stream.txt`, `scratch:/full-tests-final-delivery.txt` and
-`scratch:/validation-final.txt`.
-
-## Observed token traffic and ready card shells — FR000682 (historical)
-
-Scoped delta against `431ef684b3e6c654fefc718d29c4adf00ca310b8`, checked
-2026-11-12 on Windows. Earlier sections retain historical evidence, not the current
-token/readiness policy. v81.30 adds two Overview cards and preserves the ten earlier
-cost/time facts and optional matched-run fact. No architecture layer moves.
-
-`analysis/ai_stats.py::_token_metrics` sums only known physical I/C/W/O counters,
-folding reasoning into Output once, over the existing canonical request population
-and completion-time membership. Integer total and an exact decimal-string export
-survive through final compact display. Unknown counters are not zero, missing prices
-never supply tokens, and source/pending/undated evidence qualifies the known subtotal.
-`ai_stats_rates.py` supplies the same denominators as cost; token active intensity is
-withheld for unknown, inferred, running or zero/nonzero-incompatible active time.
-Application text/help is monetary-unit independent. Typed pricing outages get empty
-catalogs only in the finite Stats service; no provider/shared-price-cache writes.
-
-Policy `fun-2-tokens` rejects old retained ten-card views. Compact usage algorithm 5
-is unchanged: no unrelated history invalidation or new source crawl. Coverage alone
-advances to v3 so an undated request cannot certify an old-root exclusion. Existing
-source/revision/config/price keys, 256-root slices, 64-root batches, scan/checkpoint,
-host sharing/process bounds and automatic recovery remain the acquisition owners.
-
-The browser remembers only explicit scope-ready rows, qualified by source identity,
-observation and same-instance sequence. Twelve stable shells initially contain one
-plain `Loading…` text node each (status role, no poll-time node replacement or live
-announcement spam). All card contents attach together when ready; source/period
-changes cannot inherit foreign values. Matching ready last-good cards retain their
-nodes/focus/help during quiet refresh. Terminal cold failure is Unavailable, never
-fake zero or indefinite Loading. A 15rem minimum reserves normal ready-card geometry;
-long text can still expand accessibly, without clipping or nested scrolling.
-
-### Optional generation-speed feasibility
-
-Omitted as explicitly allowed by this FR, not a deferred acceptance exception.
-The bounded read-only inventory inspects at most 32 already-acquired assistant
-messages per finite child and emits only counts: observed V2 samples had all 32
-created/completed/streamed fields, **zero qualified generation intervals**. V1 lacks
-that streamed metadata. Neither normalized created/completed nor V2 streamed proves
-first/last output-token boundaries or excludes queue/TTFT/tools/final metadata bursts.
-`TraceEntry` and existing compact usage retain completion and counters, not those
-per-token intervals. The regression changes absent/burst/slow streamed metadata
-without changing any of the twelve metrics. No timing field is promoted into TPS,
-no winner is invented, and no second history scan/network/inference is introduced.
-
-### Verification and measured tradeoffs
-
-- Full: **185 groups, 2,302 passed, four native-macOS zsh/PTY skips, zero failures
-  or errors, 150.0s**. Final focused Stats/rates/recovery/resume/token discovery and
-  scope/sequence VM passed after the final coverage/schema refinements. Validator:
-  **11 passes, zero failures, seven existing advisory warnings**, no budget increase.
-  Initial Full exposed two causal stale-count/grouping assertions (repaired) and one
-  one-second spawned-detail timing failure under concurrent load; isolated detail
-  and final Full passed unchanged. A focused dispatch run hit its default 25s cap;
-  its normal Full-equivalent 240s bound passed all 51 tests in 28.2s.
-- Hidden Edge: **PASS, 18 checks, 12 layouts, 80 text layouts, 72 evidence/theme/unit
-  states, 1,350 contrast samples, zero runtime errors**. Loading-only cold/partial/
-  switched shells, normal shell-to-ready height/width stability, atomic contents,
-  terminal failure, ready-zero, currency-independent tokens, keyboard/touch/help,
-  enlarged text/themes and focus retention passed. Production two-tab/slice proof
-  reused exactly 24 hydrations, completed both goals and exited owned children cleanly.
-- Fixed-history paired builder benchmark: 12 and 512 roots × 20 requests, all three
-  measured selections (7/30/all), cold/warm/changed. All ten old metric signatures
-  matched; cold/warm/changed hydration counts stayed **512/0/5**, **2/1/1** slices.
-  For 512-root 30 days: baseline/current **4.4364/4.3478s** cold,
-  **1.3249/1.2320s** warm, **1.4004/1.1908s** changed. Across selections cold was
-  baseline **3.84–4.44s**, current **4.02–4.47s**; this single noisy sample is not a
-  speedup claim. Prepared five-period view grew **19,862 → 26,684 bytes (+6,822)**.
-  The new two-card projection has real CPU/payload overhead, not zero cost.
-- Read-only real installation with an owned disposable cache: five periods/twelve
-  metrics and raw token/rate/denominator/unit identities checked. Cold30 **188.200s,
-  13 slices**; fresh warm30 **8.078s**, All reuse **0s** (not a cold scan), fresh
-  warmAll **7.928s**. Final result payloads **427,808–428,809 bytes**. Mutable-source
-  timing overlapped other checks; it is installation proof, not a paired speed claim.
-  No OpenCode stop, source write, transcript export or paid inference.
-
-Evidence in this worker's own scratch: `scratch:/full-tests-final.{log,json}`,
-`scratch:/ai-stats-browser-final.json`, `scratch:/ai-stats-benchmark.jsonl`,
-`scratch:/ai-stats-live.jsonl`. No delegated exception/deferral. Physical desktop,
-actual screen-reader speech, real touch hardware and non-Chromium engines remain
-unverified; hidden DOM/AX and emulated input do not claim those outcomes.
-
-## Comparable hourly rates — FR000655
-
-Scoped delta against `791e0f45e6eeca1a3a184635ffcfdbe5c125ad3c` (2026-11-09):
-the first retained card now shows Calendar average, Workday average and Active AI
-average, all per hour. `application/ai_stats.py::rate_tokens` formats the existing
-raw `active_rate` directly, never the rounded shift or capped legacy `Stat.value`.
-Calendar/workday denominators, period membership, unioned elapsed activity and the
-Stats-only best-effort policy are unchanged. Typed raw `robot_day`/`robot_period`
-compatibility fields remain; their prepared card tokens are no longer emitted.
-
-One safe plain-text title tooltip retains three short paragraphs in row order,
-each ending with a compact formula. Reference-Credit active-intensity tiers retain
-gentle snack/buffet jokes without salary/replacement claims. Idle and uncertain
-inputs keep neutral copy; the browser's cold-failure help matches prepared idle
-help. Existing ContextHelp, DOM identity and currency bindings own live refresh.
-No acquisition, source, pricing, dependency, layout or other-card behavior changes.
-
-Deterministic oracles cover 840 Credits / 7 dates / 5 workdays / 28 active hours =
-5/21/30 CCost/h ($0.05/$0.21/$0.30 per hour), independent denominator changes,
-100 Credits / two overlapping active hours = 50 CCost/h and one minute = 6000
-CCost/h, raw Decimal-before-formatting, tier boundaries, zero active time,
-no-workdays, all five periods and both units. The rates file is now explicitly
-registered in Quick/Full so its regressions also run in the normal suite.
-
-The integrated browser was disconnected. The existing hidden Edge probe is the
-non-disruptive alternative; no physical desktop, screen-reader speech or real
-touch-device proof is inferred. The historical FR000644 results do not prove this delta.
-
-Current verification: Full **181 files, 2,217 passed, two macOS-only skips, zero
-failures/errors, 133.9s**. Validator **11 passes, zero failures, seven existing
-advisory warnings**, no budget increase. `scratch:/full-tests.log`,
-`scratch:/full-tests.json`, `scratch:/validation.log`.
-
-Hidden Edge **PASS, 17 checks, 72 state/theme/unit cases, nine layouts, 80 text
-layouts, 1,350 contrast samples, zero runtime errors**. Three formula paragraphs
-fit at 360/1280 widths, enlarged text/zoom and all themes/units; real keyboard,
-hover, emulated touch, live focused help, Escape suppression, retained failures,
-ten-card identity and production finite slices/two-tab association passed. Owned
-browser/server exited cleanly. `scratch:/ai-stats-browser.json`.
-
-Read-only real installation: four error-free completed requests, five periods ×
-ten metrics; raw rate identities and both-unit active-rate tokens/formula help
-checked. Cold30 **135.612s**, warm30 **5.054s**, All reuse **0s** (not a cold scan),
-fresh warmAll **5.462s**. Disposable own cache, no OpenCode writes/stops. Timings
-overlapped Full/browser checks and mutable source, not a paired performance claim.
-`scratch:/ai-stats-live.jsonl`. No acceptance exception or deferral was needed.
-
-## Historical first-card implementation — FR000644 (presentation superseded by FR000655)
-
-Implementation delta from `a835c7881f368cb82fd1363e856183b1d45f7d45` (2026-11-09),
-not a fresh audit of unchanged reports. `analysis/ai_stats_rates.py` computes
-nominal local date/workday denominators and hypothetical shifts from the existing
-period cost and unioned/bounded duration. `Stat.value` retains the original capped
-active-hour rate for compatibility/traits; explicit raw `rates` retain the uncapped
-active basis, calendar/workday averages, robot shift and workday-count projection.
-All amounts are canonical reference Credits; only final application tokens use
-`ccost_amount()` (100 Credits/$1). No browser division, source scan or price lookup
-is added. Shared compact evidence/cache identities remain reusable.
-
-Today is one date, rolling 7/30 use exactly 7/30 local slots ending today while
-their cost membership remains trailing hours, month ends today, and All time starts
-at the earliest positive included request/activity evidence. Gaps count; guessed
-interval recovery never supplies an invented calendar beginning. Existing timezone,
-`is_workday()` and configured SE/weekend-only calendar own eligibility. DST retains
-nominal 24/8-hour divisors without changing measured work. No-workdays is distinct
-from zero cost; zero active time keeps the other rows and a neutral zero robot.
-
-Only the retained first card gets three labeled accessible groups. Existing grid,
-trait and title ContextHelp remain; Python prepares all unit variants and math help.
-Focused heading/card identity and unit bindings survive updates. Other nine metrics,
-matched facts, Watch, CLI and canonical valuation are unchanged.
-
-Deterministic coverage: 840/7 dates/5 workdays/28 active hours yields 5, 21 and 240
-Credits; changing active time alone to 7h yields a 960-Credit robot. Christmas SE
-versus weekend-only changes W=4/5 and workday/period projections, not the shift.
-Tests also cover morning Today, weekend/holiday zero workdays, DST/year/month edges,
-exact rolling cost boundaries, local All-time gaps/request beginnings, overlap,
-broken/zero duration, both unit tokens and configuration through warm evidence.
-
-Read-only real-installation cold/warm probe completed four requests, all five
-periods × ten metrics, with all rate identities and both-unit tokens checked:
-cold30 **116.184s**, warm30 **6.114s**, All reuse **0s** (not a cold scan), fresh
-warmAll **5.512s**. No job/result errors. It used a disposable owned cache and did
-not stop or write OpenCode. Mutable-source timings overlapped Full tests and are
-not a paired performance comparison. Evidence: `scratch:/ai-stats-live.jsonl`.
-
-Full: **179 files, zero failures, 123.6s**. Validator: **11 passes, zero failures,
-seven existing advisory warnings**, no budget increase. Later targeted checks cover
-the final exact active-hour help formatting (Stats/recovery/resume all passed).
-Evidence: `scratch:/full-tests.log`.
-Final hidden Edge browser probe: **PASS, 16 checks, 72 state/theme/unit cases,
-9 layouts, 80 text layouts, 1,350 contrast samples; zero runtime errors**. It checks
-the three-way example, independent faster robot, no-workdays, ten stable cards,
-both units and focused help, actual text/clipping geometry at 360/520/1280 widths,
-100–200% text and 125% zoom, Classic/Web light/dark, keyboard/touch/Escape, session
-links, retained failure/update behavior and production finite slices/two-tab reuse.
-Owned browser/host processes exited cleanly. Evidence:
-`scratch:/ai-stats-browser-final.json`. An initial probe found a fixture period
-selection mismatch after the new Today case; correcting that harness state preserved
-the product assertions and the full rerun passed.
-The integrated desktop browser was disconnected; hidden Chromium is the
-non-disruptive browser route. No physical touch, native desktop or actual
-screen-reader speech is claimed, and no permission/acceptance exception is inferred.
-
-## Earlier fun-first implementation
-
-FR000633 implementation delta against the revision above, not a fresh audit of
-unchanged reports. The owner deliberately replaced conservative AI Stats-only
-calculation/presentation: ten finite numbers and playful traits in every period,
-with no evidence caveats, badges or hidden explanations. Canonical Watch, Sessions,
-CLI, Token Mix, Comparisons, valuation and execution-duration contracts stay strict.
-No source writes, paid inference, new service or persisted prompt text are added.
-
-Owners: `src/analysis/ai_stats.py` calculates Stats; `src/reports/ai_stats.py` and
-`ai_stats_evidence.py` acquire/checkpoint/project; `src/application/ai_stats.py`
-prepares both units; `src/web/stats_jobs.py` schedules bounded slices;
-`assets/ai-stats.js`, `app.js` and `cached-reports.js` retain/render fun results.
-Responsibilities/dependencies are unchanged; CODE_MAP changes are navigation-only.
-
-### Stats-only heuristic rules
-
-- `fun-1` unions reliable measured intervals first and clips to period/observation.
-  Broken known-start intervals use the next root-local timestamp, capped at four
-  hours, or one minute if absent. Running unknown ends use observation, capped at
-  four hours. Missing starts use a real request timestamp with a bounded supplied
-  duration or preceding one minute. No timestamp means no invented date.
-- Request-only activity gets one-minute preceding pulses. Broken histories may
-  fill uncovered request timestamps; complete measured histories do not gain time
-  from requests at their edge. Union/dedup, half-open concurrency, selected-local
-  calendar/DST splitting and stable record ties remain. Winners/links use real roots.
-- Valid finite nonnegative known cost up to $1e9/request wins. Missing prices use
-  pooled known same-model cost/token (capped $.001/token), otherwise $.000003/token.
-  Missing input/output assumes 250/1,000 tokens; cached/write assumes zero. Guessed
-  tokens cap at ten million and supplement at $10/request. Known cost is retained.
-  Pending time-only activity gets $.003/root; fully empty known tokens stay zero.
-- Zero denominators produce zero, not null. Rates cap at $1e9; prepared numeric
-  displays clamp to 1e12 and percentages to 100. These are fun-page rules, not a
-  change to canonical telemetry, CCost or global `None`/`source_complete` meaning.
-
-### Acquisition, cache and presentation
-
-All five rows publish from usable slices before complete coverage. Changed roots
-may retain this observation's usable Stats facts but lose newer-revision proof;
-deleted roots are removed. Actual `ai_stats_work` remaining/readiness stays truthful.
-No private progress of 100 means a partial scan finished. Six nonadvancing slices or
-nonbusy checkpoint failure settle a usable snapshot; BUSY retries back off. Existing
-256-root slices, 64-root batches, maximum-four V2 reads, 100,000-root/250,000-fact
-limits and finite-process/cancellation/security ownership remain.
-
-Stats compact algorithm is `ai-stats-evidence-5-fun-1`; coverage remains version 2.
-Projection/browser policy `fun-1` rejects old conservative retained results without
-invalidating unaffected shared evidence. Private reason/status/source diagnostic
-facts survive, but prepared display emits only value/trait. State, explanation,
-interval and technical-history-summary DOM are removed, not CSS-hidden. Warm
-updates retain cards; a never-successful cold failure gets ten playful zeros and no
-invented session links. Optional matched facts retain their independent eligibility.
+Final results and the Delegate's historical-attribution disposition are recorded
+here before delivery; no pending or failed check is a PASS.
 
 ## Evidence
 
-Reproduce on a local workstation with disposable own caches:
+Reproduce on a local workstation, with owned disposable browser profiles/caches:
 
 ```text
 py -3 development/tools/run_tests.py --suite full
 py -3 development/tools/validate_package.py --working-tree
 node development/tests/integration/probe_ai_stats.cjs <headless-browser> <output-json>
-py -3 development/tests/integration/benchmark_ai_stats.py --baseline 9b9fdf389d93d90a09bfa13e9b075b564d026961 --sliced
+node development/tests/integration/probe_ai_stats.cjs <headless-browser> <output-json> --live-history
 py -3 development/tests/integration/probe_ai_stats.py --cold-and-warm --budget-seconds 600
+py -3 development/tests/integration/benchmark_ai_stats.py --baseline <historical-revision> --sliced
 ```
 
-Focused tests cover mixed missing starts/ends/tokens/prices, running/old/incomplete
-roots, all five periods/both units, empty/extreme inputs, healthy formulas, DST,
-ties/dedup, early slices, revision churn, bounded stalls and checkpoint recovery.
-`test_web_dispatch.py` preserves strict rejection/omission for Token Mix/Comparisons
-while asserting the deliberate Stats exception. Single-pipe mock dispatch disables
-speculative background admission; real process/production probes are separate.
+Real probes own host/children, never stop/write OpenCode, and export only sanitized
+aggregate/code/provenance facts. Managed chain proof differs from standalone timings
+and synthetic faults; a warmed cache is not cold. Freeze runtime/version during tests.
 
-Initial read-only observation covered **2,980 roots**. Final post-sharing probe:
-four complete/error-free requests, five periods × ten values; cold30 **129.005s/12
-slices**, warm30 **6.774s/1 slice**, All reuse **0s** (not a new cold scan), fresh
-warmAll **6.216s/1 slice**. Private missing-duration/price/running reasons survived.
-These mutable-source timings overlapped other tests: acquisition/population proof,
-not paired speedup or browser paint. `scratch:/ai-stats-live-delivery.jsonl`.
+### Documentation method
 
-Final post-sharing Full: **174 files, zero failures, 124.1s**, four isolated workers.
-Validator: **11 passes, zero failures, seven existing warnings**, no raised budgets.
-Follow-up focused Stats/recovery/resume/Token Mix: **62 tests passed**; focused
-Stats/recovery/resume after sharing: **51 tests passed**.
+The helper rejected the oversized existing journal before writes (`KNOWLEDGE_LIMIT`).
+For this FR, foreground **Decision Delegate** authorized direct consolidation to
+≤12,288 bytes and surgical reports/CODE_MAP edits, preserving unrelated provenance.
+No helper/limit/diagram change, helper PASS or product/test waiver. Older exceptions
+were scoped to their own deliveries, not reused.
 
-Hidden Edge complete probe: **PASS, 16 checks, 54 canonical state/theme/unit cases,
-9 layouts, 80 enlarged-text layouts, 1,350 contrast samples, zero runtime errors**.
-Actual HTTP/assets, hover/focus/touch help, keyboard/session links, retained warm
-refresh, cold-failure zeros and all five periods/units were exercised. Production
-two-tab fixture: 7 days ready at 2/24 roots; 12 finite children/exactly 24 hydrations;
-original broad goal resumed without another selection. All owned host/browser/
-worker resources closed cleanly. Post-sharing rerun passed the same full probe:
-`scratch:/ai-stats-browser-delivery.json`.
+## Sampled response podium — FR000685
 
-Profiling identified repeated local-day boundary construction as the largest
-Stats-local self-time consumer. Boundaries now reuse one calculation-local entry
-per calendar day, preserving timezone/DST behavior; a disjoint spring-transition/
-next-day regression pins actual night/day totals. Healthy costs skip unused rate
-pooling, and aligned request/value sequences avoid repeated rich-entry hashing.
-No persistent cache, new dependencies, canonical analysis change or heuristic
-change is involved. The benchmark now waits on explicit selected-scope readiness
-and applies the same sliced settings to both capable builders; earlier current-only
-sliced timings were not a like-for-like latency comparison.
+Historical delta against `f9ee34f59c1106df88dd01c7907344a7bccc373d`, 2026-11-12.
+Policy `fun-3-responses` replaces only Token Consumption Rate with Top 3 weighted
+model/effort response-output tok/s; Total Tokens, cost/time and optional matched facts
+retain their owners. Sparse/partial/estimated ready observations never become N/A.
 
-The Delegate did not accept the initial residual cold CPU regression (about 68%
-for 30 days and 44% for All time). It directed one bounded preparation-sharing
-repair before reconsideration: `StatsObservation` now reuses unclipped intervals/
-flags and request deduplication only for exactly identical ordered root populations
-within one projection. Every period still clips timestamps, pools fallback rates,
-evaluates completeness and calculates matched facts independently. No persistent
-cache, cross-slice invalidation or reduced publication frequency was introduced.
+V2 2.2.7 OpenAPI and released tag
+[`fedc6f208aa2bd54c1019227214568083f6380ad`](https://github.com/anomalyco/opencode/tree/fedc6f208aa2bd54c1019227214568083f6380ad)
+were traced through runner/step, publish-llm-event and message-updater. The stream
+drains and publishes streamed before awaiting tools; tools can overlap it. This
+released-version linkage is not a binary audit.
 
-Sharing diagnostic: **120 mixed-input five-period parity cases** and six fixed
-large-history all-period signatures match the saved pre-sharing fun implementation.
-30-day cold projection fell **24.19→18.11s**, CPU **49.58→43.77s**; 7-day warm
-projection **3.86→2.77s**, CPU **6.28→5.31s**. Workload overlap limits causal claims.
-`scratch:/sharing-diagnostic.jsonl` retains the bounded driver/results.
+Prefer independent observed step pairs, then assistant created→valid same-response
+streamed; absent/invalid streamed falls back to completion clipped at explicit native
+tool execution start. Multiple steps need independent pairs, not a multiplied message
+interval. Completion-time membership, canonical clone dedup and reasoning-once output
+remain. Queue/TTFT/network/setup bias and fallback clipping can distort speed; this
+is approximate response round-trip throughput, never pure decoding speed. V1 absence
+of streamed metadata does not prevent the broader fallback proxy.
 
-Final historical-builder/formula benchmark: **18 selected-period parity comparisons
-passed**, 12/2,700 roots × 20 requests, three scopes, cold/warm/1% changed. Both
-builders use fresh services/256-root slices; hydrations remain **2,700/0/27**, with
-11 cold slices. First numeric results: **1.10–1.44s vs 31.70–32.64s**. Large-history
-seconds below are baseline/current, not ceilings:
+Per-root/model and final period/model samples each retain ≤32: newest eight, then
+lowest call-identity-hash 24. Final period filters precede selection; future/as-of
+bounds reject stale reuse. Identity is source/session/message/step/parent/order, not
+array index or root container. Algorithm `ai-stats-evidence-6-response-stream` affects
+Stats only; shared compact usage and coverage v3 remain independently reusable.
+The foreground Delegate approved these hierarchical caps and historical-window bias
+as design interpretation, not a quality/test waiver. One sensible timed call can race.
 
-| Scope | Cold wall | Cold CPU | Warm wall | Changed wall |
-| --- | ---: | ---: | ---: | ---: |
-| 7 days | 32.27/39.89 | 30.41/38.94 | 4.83/4.27 | 4.67/4.44 |
-| 30 days | 31.70/35.85 | 30.80/35.28 | 5.56/4.61 | 5.60/5.06 |
-| All | 32.64/36.08 | 31.28/35.14 | 6.02/4.15 | 6.45/4.60 |
+Historical owned-cache cold30 **145.768s/13 slices**, warm30/All **8.539/9.048s**,
+payload **432,456–432,476 bytes** versus pre-change **136.074/7.527/6.875s** and
+**428,527–428,561 bytes**. Mutable-source concurrency prevents paired speed claims.
+Live preceded final endpoint preference; focused tests checked it. ≤32/child timing
+samples had median stream/tool deltas **1–187ms**, tail **4,287ms**, completion−stream
+up to **211,932ms**, with native tool ends on either side.
 
-`scratch:/ai-stats-benchmark-delivery.jsonl`. Historical builder/formulas use current
-shared dependencies, not a complete old runtime. Baseline partly overlapped other
-checks; exact causal percentages and real-source comparative overhead are unproved.
+Fixed 12/512-root ×20-call benchmark, 7/30/all, cold/warm/1%-changed: 18 old-ten-metric
+signatures matched, hydration **512/0/5**, slices **2/1/1**. Base/current 512-root cold
+**2.35–2.49/2.83–2.96s**, warm **0.61–0.71/1.21–1.24s**, changed
+**0.70–0.73/1.04–1.12s**. Current view **26,069 bytes**; old size unmeasured. Profiling
+removed repeated hash/sort overhead; initial **310s cold/20–26s warm** was not final.
+Delegate accepted residual cost for the new statistic with unchanged hydration/slices
+and formulas, bounded sampling and ~4KB payload growth: not zero-cost/future-regression
+PASS. Full **185/0 failed/143.5s**, validator **11/0/7**, Edge **19 checks**.
+Historical evidence: `scratch:/ai-stats-optimized.jsonl`,
+`scratch:/ai-stats-benchmark-optimized.jsonl`, `scratch:/ai-stats-browser-final.json`.
 
-**Current Decision Delegate performance exception:** after the directed repair and
-parity proof, the foreground Delegate accepted criterion 6's measured residual cold
-completion CPU increase (**28%/14.6%/12.3%**) for earlier numeric publication, unchanged
-scanning and improved warm/changed measurements. This is not a blanket nonregression
-PASS or guaranteed ceiling. No extra scanning, warm regression, stall, retention/
-period leakage, other-report or future-change waiver; Full/validator/CI remain required.
+## Observed token traffic and ready card shells — FR000682
 
-### Historical findings and scoped decisions
+Historical delta against `431ef684b3e6c654fefc718d29c4adf00ca310b8`, 2026-11-12:
+reasoning-once observed traffic/exact totals, currency-independent help, coverage v3
+and source-qualified shells. Unknowns are not cost-derived tokens. FR000689 supersedes
+old terminal labels. Generation speed was explicitly omitted for absent token timing;
+FR000685 later uses a broader proxy.
 
-FR000619's earlier 2,787-root observation recovered measured time but intentionally
-left 4–5 unavailable and 3–5 partial cards; FR000633 supersedes that accepted policy.
-Its native compaction finding remains valid: explicit completed-part `time.end` can
-recover canonical timing; creation time/status/summary alone cannot prove an end.
-Canonical compaction normalization is not changed here.
+Historical Full **185/0 failed/150s**, validator **11/0/7**, Edge **18 checks**.
+Fixed hydration **512/0/5**, slices **2/1/1**, view **19,862→26,684 bytes**;
+real cold30 **188.200s/13 slices**, warm30/All **8.078/7.928s**. Timings were noisy,
+not a speedup claim; no acceptance exception. Full prior measurement table remains
+in Git at this note's source revision and `scratch:/ai-stats-benchmark.jsonl`.
 
-Earlier FR000614/FR000615/FR000617 lifecycle and FR000619 performance/documentation
-exceptions grant no present waiver.
+## Comparable hourly rates — FR000655
 
-**Current Decision Delegate documentation-method exception:** the legacy knowledge
-helper rejected the requested read with `KNOWLEDGE_LIMIT` before writes because
-existing leaves exceeded 12KiB. The foreground read-only Delegate authorized direct
-patching for this FR only: consolidate this leaf to <=12,288 UTF-8 bytes, surgically
-update the AI Stats section/table in `architecture/modules/reports.md`, and change
-only its CODE_MAP row/scoped provenance. Preserve unrelated provenance; no helper
-changes, raised limits, whole-module audit, diagram rewrite or helper PASS. No
-product/test waiver was granted by that documentation decision; the separate cold
-performance decision above is narrowly scoped. The FR separately owns user docs.
+Against `791e0f45e6eeca1a3a184635ffcfdbe5c125ad3c`, 2026-11-09: raw Decimal
+calendar/workday/active rates, not rounded shifts/capped Stat.value. Three help formulas:
+840 Credits/7 dates/5 workdays/28 active hours = **5/21/30 CCost/h**; 100 Credits/two
+overlapping hours = **50/h**, one minute = **6000/h**. DST/zero/units/focus stay covered.
+Historical Full **181/0 failed/133.9s**, validator **11/0/7**, Edge **17 checks**;
+real cold/warm30/All **135.612/5.054/5.462s** (not paired). No acceptance exception.
+
+## Three perspectives on the first card — FR000644
+
+Historical delta against `a835c7881f368cb82fd1363e856183b1d45f7d45`, 2026-11-09;
+shift UI is superseded by FR000655. Local nominal 24/8-hour denominators reuse
+`quota_pace.is_workday`/unioned activity; 100 Credits=$1. Rolling/calendar/All/DST
+membership stays distinct. Historical Full **179/0 failed**, validator **11/0/7**,
+Edge **16 checks**; old shift formulas are not current hourly display.
+
+## Earlier fun-first implementation
+
+FR000633 against `9b9fdf389d93d90a09bfa13e9b075b564d026961` changed bounded
+Stats-only heuristics, never canonical accounting/source records. Git retains the
+constants/old tables. Cold-failure zeros/unready-success settling are superseded.
+Observation-local sharing retains independent period clipping/pooling; 120 mixed
+cases, six large signatures and 18 old-builder comparisons matched. Hydration
+**2700/0/27**, 11 cold slices. After directed repair Delegate accepted residual cold
+CPU **28%/14.6%/12.3%** for early figures, not future/source/retention waivers or
+scope-ready paint proof. Full **174/0 failed**, validator **11/0/7**, Edge **16 checks**.
 
 ## Next investigations
 
-Physical-device rendering, screen-reader speech, non-Chromium paint and aggregate
-job memory remain unproved. Integrated browser was disconnected; no integrated PASS.
-These are evidence limits, not new task gates.
+Historical attribution, physical desktop/touch, screen-reader speech, non-Chromium
+and aggregate job memory remain unproved; hidden DOM/AX is not those outcomes.
+No inferred authority for model calls/destructive cache or source repair.
 
 ## Rejected hypotheses
 
-- A CSS-hidden badge or replacing nulls with ten indiscriminate zeros is not the
-  requested repair: Stats must actually use available time/cost and compute ratios.
-- Complete scan coverage is not a prerequisite for entertaining numeric results;
-  conversely early rows are not proof of complete scanning. Benchmarks/probes must
-  wait on explicit scope readiness when measuring completed acquisition.
-- The retained-card browser test must keep its accepted result during a real warm
-  refresh, not delete that result before expecting it to remain visible.
-- The Token Mix browser fixture omitted `source.observed_at_ms`; the production
-  retention guard correctly withheld it. Supply the canonical observation in that
-  fixture, rather than weakening Token Mix admission to accommodate invalid data.
-- Importing today's formulas into the historical builder makes parity vacuous.
-  The fixed-history comparator loads both historical builder and historical analysis,
-  with current shared dependencies, not a whole historical runtime.
-- Canonical missing ends remain unknown. Stats-only guessed intervals cannot be
-  promoted into billing/history proof, invented dates, records or source mutations.
+- A string rename alone fixes liveness, or failed acquisition means empty: false.
+- Missing instance metadata proves no historical diagnostics: false; check exact paths.
+- Source-edit probe shutdown reproduces the owner's private incident: false.
+- Streamed proves pure decoding speed: false; the podium uses a broader proxy.
+- Today's formulas in an old comparator prove parity: false; load historical formulas.
+- Stats estimates certify canonical missing ends: false; accounting/security stay strict.

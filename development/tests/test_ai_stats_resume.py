@@ -120,6 +120,16 @@ class StatsResumeTests(unittest.TestCase):
         old = CacheEntry(COVERAGE, 'synthetic', dict(end=1, matched=True), revision, 'ai-stats-coverage-2')
         self.assertFalse(exclusion(old, revision, NOW))
         self.assertTrue(exclusion(replace(old, algorithm_version=COVERAGE), revision, NOW))
+        before = self.source.load_count
+        with self.original.cache_repository.database.connect(operation='write') as connection:
+            connection.execute('UPDATE cache_entries SET algorithm_version=? WHERE namespace=?',
+                ('ai-stats-evidence-5-fun-1', NAMESPACE))
+
+        rebuilt = self.build(scope='all')
+
+        self.assertEqual(before + 5, self.source.load_count)
+        self.assertEqual('fun-3-responses', project(rebuilt).to_json()['ai_stats_policy'])
+        self.assertTrue(all(scope['ready'] for scope in rebuilt.ai_stats_work['scopes'].values()))
 
     def test_active_root_cannot_be_skipped_using_its_previous_stable_exclusion(self):
         from development.tests.fixtures.synthetic_month import make_root_snapshot
@@ -252,7 +262,7 @@ class StatsResumeTests(unittest.TestCase):
                 self.assertTrue(failures[0]['controlled_write_lock'])
                 self.assertIsNone(partial['error'])
                 self.assertEqual('ai_stats_checkpoint_busy', partial['view']['ai_stats_work']['checkpoint_error'])
-                self.assertIsNotNone(entry['result'])
+                self.assertIsNone(entry['result'], 'unready slices are not accepted publications')
                 self.assertFalse(entry['terminal'])
                 for _ in range(12):
                     clock[0] = max(clock[0] + .1, entry['due'],
@@ -442,7 +452,7 @@ class StatsResumeTests(unittest.TestCase):
         self.assertTrue({2, 4, 6, 8, 9} <= seen)
         self.assertIsNone(jobs._active)
 
-    def test_stalled_work_settles_boundedly_without_claiming_complete_coverage(self):
+    def test_stalled_work_fails_truthfully_instead_of_publishing_unready_success(self):
         from src.web.stats_jobs import accept
         job = dict(request=ReportRequest(ReportKind.AI_STATS), result=None)
         result = dict(error=None, view=dict(ai_stats=[], ai_stats_work=dict(completed=0)))
@@ -450,12 +460,45 @@ class StatsResumeTests(unittest.TestCase):
         for _ in range(7):
             accept(job, result)
 
-        self.assertEqual('complete', job['status'])
-        self.assertNotIn('error', job)
+        self.assertEqual('failed', job['status'])
+        self.assertEqual('ai_stats_no_progress', job['error'])
+        self.assertEqual(dict(code='ai_stats_no_progress', retryable=True), job['result']['error'])
         self.assertEqual([], job['result']['view']['ai_stats'])
         accept(job, dict(error=None, view=dict(ai_stats=[dict(period='30-days')],
             ai_stats_work=dict(completed=1))))
         self.assertEqual('complete', job['status'])
+
+    def test_busy_slices_keep_logical_checkpoint_and_resume_after_more_than_six_stalls(self):
+        from src.web.stats_jobs import accept, request
+        job = dict(request=ReportRequest(ReportKind.AI_STATS), result=None)
+        partial = dict(error=None, view=dict(ai_stats=[], ai_stats_work=dict(completed=1,
+            checkpoint_error='ai_stats_checkpoint_busy', scopes={'30-days': dict(ready=False)})))
+        first = request(job, 'same-job')
+
+        for _ in range(10):
+            accept(job, partial)
+
+        resumed = request(job, 'same-job')
+        self.assertEqual('queued', job['status'])
+        self.assertEqual(first.scan, resumed.scan)
+        self.assertEqual(first.observation_ms, resumed.observation_ms)
+        self.assertGreater(job['not_before'], job['queued_at'])
+        ready = dict(error=None, view=dict(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(completed=5, scopes={'30-days': dict(ready=True)})))
+        accept(job, ready)
+        self.assertEqual('complete', job['status'])
+
+    def test_unwritable_checkpoint_is_retryable_failure_not_a_ready_snapshot(self):
+        from src.web.stats_jobs import accept
+        job = dict(request=ReportRequest(ReportKind.AI_STATS), result=None)
+        result = dict(error=None, view=dict(ai_stats=[dict(period='30-days')], ai_stats_work=dict(
+            completed=1, checkpoint_error='ai_stats_checkpoint_unavailable', scopes={'30-days': dict(ready=False)})))
+
+        accept(job, result)
+
+        self.assertEqual('failed', job['status'])
+        self.assertEqual(dict(code='ai_stats_checkpoint_unavailable', retryable=True), job['result']['error'])
+        self.assertIsNone(result['error'], 'the incoming DTO stays immutable')
 
 
 if __name__ == '__main__':

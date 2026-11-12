@@ -184,9 +184,11 @@ fun facts. Sparse observations, missing prices/counters, old roots, partial cove
 and approximated intervals must never produce Unavailable/N/A, quality badges or
 hidden values. One sensible timed response can race. Invalid individual denominators
 are excluded, not used to poison another model or period. Do not fabricate activity.
-Actual acquisition keeps plain Loading-only shells; matching ready last-good data
-survives refresh. Genuine operational failure stays a truthful **page-level error**,
-with paused shells if no last-good result, never fake success or endless Loading.
+**AI Stats: pending means exactly Loading in every card, including queued, deferred,
+failed and interrupted attempts. A genuine blocker is page-level, never a card label.
+Ready values are atomic and last-good retained.** This FR000689 standing rule
+supersedes the earlier paused-shell exception. Cold errors are visible outside the
+cards; healthy recovery clears the attempt's error, never substitutes false zeros.
 Python and JS policy comments, `test_ai_stats_tokens.py`, recovery tests and
 `probe_ai_stats_{states,podium,loading}.cjs` link/enforce this permanent contract.
 
@@ -236,9 +238,11 @@ interval/matched-run scalars, never prompts. Stats evidence algorithm
 `ai-stats-evidence-5-fun-1` invalidates old semantics without replacing shared base
 evidence; coverage proof format remains 2. Each slice keeps the 256-root/64-batch/
 maximum-four-read bounds, fixed transient namespace and source/revision/pricing
-keys. Checkpoint errors retain acquired figures; six nonadvancing slices or a
-nonbusy checkpoint failure settle a fun snapshot without falsifying coverage.
-BUSY/LOCKED retries use bounded backoff. Root/fact/memory and process ownership
+keys. FR000689: an unready exhausted/nonbusy-checkpoint slice is a typed retryable
+failure, not successful publication. BUSY/LOCKED retains the logical scan and bounded
+backoff beyond six slices. Only selected-scope-ready publications earn successful
+cadence; obsolete Stats policies regenerate without invalidating other reports.
+Root/fact/memory and process ownership
 limits remain. Restart reuses valid disposable evidence, never a second source.
 
 `src/analysis/ai_stats.py` policy `fun-1` alone supplements missing time/cost with

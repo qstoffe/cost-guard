@@ -34,7 +34,8 @@ def main():
                 raise ValueError('unknown_probe_command')
             print(json.dumps({'jobs': [dict(status=row['status'], error=row['error'],
                 progress=row['progress'], slices=row.get('slices', 0)) for row in host.jobs._jobs.values()],
-                'host_failed': host.failure is not None}), flush=True)
+                'host_failed': host.failure is not None, 'host_reason': host.reason,
+                'source_guard': host.guard.status}), flush=True)
     finally:
         deadline.cancel()
         host.close()

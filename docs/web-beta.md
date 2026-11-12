@@ -609,7 +609,11 @@ ready same-period cards stay visible
 during refresh and interrupted updates; period changes reuse only the matching
 period's result. A genuinely empty period gets cheerful zero-style figures (and
 **No workdays** where appropriate), but failed acquisition without a valid result
-shows a truthful page-level error and paused card shells, **never synthetic zero cards or endless Loading**. Incomplete refresh
+shows a truthful, actionable page-level notice **outside** the cards. All twelve
+unready card interiors still contain exactly **Loading…**, never paused/counting
+labels or synthetic zero values. Host-owned recovery keeps checking automatically;
+persistent blockers remain visible rather than silently hiding behind Loading.
+Incomplete refresh
 slices do not replace an already accepted same-period result. There is no
 Load/Refresh/Retry toolbar or Cancel button in any report state.
 Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**

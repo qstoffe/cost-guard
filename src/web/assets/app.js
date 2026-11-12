@@ -199,7 +199,9 @@ function show(state) {
     refresh.hidden = true;
     heading.hidden = true;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
-    if (state.result && state.failed) notice.textContent = state.message;
+    if (state.failed) notice.textContent = state.message;
+    else if (['report_cache_unavailable', 'ai_stats_checkpoint_unavailable', 'ai_stats_no_progress'].includes(state.waitingReason))
+      notice.textContent = failure(state.waitingReason, state);
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }
   if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
@@ -297,10 +299,11 @@ function failure(code, state) {
       report_unavailable: 'Historical report worker was interrupted; recovery is automatic.',
       worker_unavailable: 'Historical report worker could not start; recovery is automatic.',
       report_invalid_result: 'Historical report returned an invalid result; no usage values were substituted.',
+      ai_stats_no_progress: 'AI Stats could not advance its saved work. Check local cache access and disk space; automatic recovery checks continue.',
       report_cache_busy: 'Historical report cache is busy; saved work will resume automatically.',
       report_cache_unavailable: 'Historical report cache is unavailable. Check local cache access or disk space; automatic checks continue.',
       history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space.',
-      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space.',
+      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space; automatic recovery checks continue.',
       ai_stats_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
       history_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
       history_no_progress: 'History could not resume its saved work (history_no_progress); no totals were substituted.',
@@ -371,9 +374,11 @@ async function acquire(state, background = false, prices = false) {
         const scope = state.section === 'ai-stats' ? state.request : request;
         const retryOnce = retry;
         retry = false; // Only the explicit user attempt may clear host backoff.
-        const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
-          demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
-        state.active = admission.id;
+         const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
+           demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
+         if (state.attempt !== attempt) return;
+         state.active = admission.id;
+         state.waitingReason = null;
         if (attempt.retries) ReportLoading.reset(state);
         if (demand && !prices) {
           // Retained publication identity is independent of an active refresh.
@@ -401,6 +406,7 @@ async function acquire(state, background = false, prices = false) {
   }
   try {
     await admit();
+    if (state.attempt !== attempt) return;
     if (state.section === 'ai-stats' && request.stats_scope !== state.request.stats_scope)
       AIStatsView.prioritize(state, api, !!demand);
     show(state);
@@ -408,7 +414,8 @@ async function acquire(state, background = false, prices = false) {
       // Poll the same logical work even after a long hidden/background period.
       attempt.check(hostState);
        const job = publication || await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
-       publication = null;
+        publication = null;
+       if (state.attempt !== attempt) return;
       attempt.check(hostState);
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
@@ -426,8 +433,10 @@ async function acquire(state, background = false, prices = false) {
           if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_invalid_result');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
           if (state.section === 'comparisons') state.pageNavigation = false;
-         if (state.section === 'ai-stats' && !job.result.view.ai_stats.some(row => row.period === state.period)) {
-           await admit(); continue; // A simultaneous scope change finished a different period.
+          if (state.section === 'ai-stats' && !job.result.view.ai_stats_work?.scopes?.[state.period]?.ready) {
+            // A finished slice is not a ready period. Keep demand and a bounded
+            // lookup interval even for an old host's incomplete publication.
+            await attempt.poll(null, 5000); await admit(); continue;
          }
           const initial = !state.result || state.withheld;
           const revision = [job.publication_id || state.active, job.result.instance_id,
@@ -462,27 +471,31 @@ async function acquire(state, background = false, prices = false) {
         await attempt.poll(state.active, state.pageNavigation ? 1000 : 500);
     }
   } catch (error) {
+    if (state.attempt !== attempt) return;
     if (attempt.reason) error = new Error(attempt.reason);
     if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
       state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
       state.orderRetried = true;
       demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
     }
-    state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
+    state.message = prices ? 'Price list refresh failed; previous prices retained' : background && !automaticHistory(state) ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message, state)}`;
     if (prices) state.priceMessage = state.message;
     state.failed = true;
   } finally {
-     if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError, state); }
-     state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
-     show(state); scheduleCachedReport();
+     const owned = state.attempt === attempt;
+     if (owned) {
+      if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError, state); }
+      state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
+      show(state); scheduleCachedReport();
+     }
     for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);
-    if (priceFocus && state === current && document.activeElement === document.body)
+    if (owned && priceFocus && state === current && document.activeElement === document.body)
       output.querySelector('[data-model-control="refresh"]')?.focus({preventScroll: true});
-    if (state.retryOrder && state === current && !document.hidden && hostState.writable) {
+    if (owned && state.retryOrder && state === current && !document.hidden && hostState.writable) {
       state.retryOrder = false; acquire(state);
     }
-    if (state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
+    if (owned && state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
          JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }
 }

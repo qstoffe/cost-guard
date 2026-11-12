@@ -87,7 +87,8 @@ async function main(){
     assert.equal(admissions.length,count,'return never duplicates in-flight work');
     await hide(true);await go('watch');
     if(section==='comparisons')now+=150000; // Hidden timers may be throttled past the client budget.
-    const result={view:{kind:section==='models'?'normal':section,ai_stats:[{period:'30-days',start_ms:0,end_ms:now}]},
+    const result={view:{kind:section==='models'?'normal':section,ai_stats:[{period:'30-days',start_ms:0,end_ms:now}],
+      ai_stats_work:{scopes:{'30-days':{ready:true}}}},
       scope:{timezone_id:'UTC'},source:{status:'acquired',observed_at_ms:now},observed_at_ms:now};
     jobs.get(active).status='complete';jobs.get(active).result=result;
     await tick();
@@ -239,7 +240,7 @@ async function main(){
       await hostTick();
     }
     assert.equal(ids.refresh.hidden,true,'no Retry button while recovering');
-    const retainedResult={view:{kind:section,ai_stats:[{period:'30-days'}]},source:{status:'acquired',observed_at_ms:now}};
+    const retainedResult={view:{kind:section,ai_stats:[{period:'30-days'}],ai_stats_work:{scopes:{'30-days':{ready:true}}}},source:{status:'acquired',observed_at_ms:now}};
     managedResponse={id:'published',result_id:'published',result:retainedResult,refresh:'scheduled'};
     await hostTick();
     assert.equal(recovering.result,retainedResult);assert.equal(recovering.failed,false);
@@ -251,6 +252,7 @@ async function main(){
     // A cold terminal failure stays truthful, but lookups can see relevant host recovery.
     await go('watch');run(`views.delete('#/${section}')`);await go(section);
     const cold=run('current');assert.equal(cold.failed,true);assert.equal(cold.result,null);
+    assert.match(ids.notice.textContent,/cache is unavailable/,'cold blocker is visible outside card content');
     assert.equal(ids.refresh.hidden,true);
     assert.equal(ids.toolbar.hidden,true,'no redundant toolbar after a cold history failure');
     const scheduled=run('cachedReportTimer');
@@ -264,6 +266,31 @@ async function main(){
     assert.equal(cold.result,retainedResult);assert.equal(cold.failed,false);
   }
   assert.ok(lookups.every(body=>body.retry===false),'automatic history never bypasses host backoff with explicit Retry');
+  // Incomplete old-host publications cannot finish an attempt or hot-loop lookup.
+  await go('watch');run(`views.delete('#/ai-stats')`);
+  const partialStats={view:{kind:'ai-stats',ai_stats:[{period:'30-days'}],
+    ai_stats_work:{scopes:{'30-days':{ready:false}}}},source:{status:'acquired',observed_at_ms:now}};
+  managedResponse={id:'old-publication',result_id:'old-publication',result:partialStats,refresh:'scheduled'};
+  await go('ai-stats');const stats=run('current');
+  assert.equal(stats.loading,true);assert.equal(stats.result,null);assert.equal(stats.failed,false);
+  const beforeLookup=lookups.length;await settle();
+  assert.equal(lookups.length,beforeLookup,'an incomplete completion waits five seconds');
+  managedResponse={id:null,result:null,refresh:'delayed',error:'ai_stats_checkpoint_unavailable',terminal:false};
+  await hostTick();
+  assert.equal(stats.loading,true);assert.equal(stats.failed,false);
+  assert.match(ids.notice.textContent,/cache access or disk space/,'persistent retryable blocker has operational feedback');
+  const readyStats={...partialStats,view:{...partialStats.view,ai_stats_work:{scopes:{'30-days':{ready:true}}}}};
+  managedResponse={id:'ready',result_id:'ready',result:readyStats,refresh:'scheduled'};
+  await hostTick();
+  assert.equal(stats.result,readyStats);assert.equal(stats.loading,false);assert.equal(ids.notice.textContent,'');
+  // Late failure/finally from a retired request never mutates a replacement attempt.
+  run(`window.__savedApi=api;api=async()=>await new Promise((resolve,reject)=>{window.__rejectOld=reject;});void acquire(current)`);
+  await settle();
+  run(`window.__newAttempt={controller:new AbortController()};current.attempt=window.__newAttempt;current.failed=false;
+    window.__rejectOld(new Error('report_invalid_result'))`);
+  await settle();
+  assert.equal(stats.attempt,context.window.__newAttempt);assert.equal(stats.loading,true);assert.equal(stats.failed,false);
+  run(`api=window.__savedApi;current.loading=false;current.attempt=null`);
   // Host owns source retries; only a previously observed live view earns quiet grace.
   run(`liveValue={view:{}}; connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:null})`);
   assert.equal(ids['host-state'].hidden,false,'no successful observation cannot be disguised as retained success');

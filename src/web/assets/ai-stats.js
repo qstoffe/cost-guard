@@ -148,12 +148,15 @@ const AIStatsView = (() => {
       this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
     }
     update(state) {
+      // AI Stats: pending means exactly Loading in every card, including queued,
+      // deferred, failed and interrupted attempts. A genuine blocker is page-level,
+      // never a card label. Ready values are atomic and last-good retained.
       const e = ReportView.element;
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
       const ready = state.result?.view?.ai_stats_work?.scopes?.[state.period]?.ready === true;
       const row = ready && valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
       if (!row) {
-        const message = state.failed || state.interrupted ? 'Counting paused.' : 'Loading…';
+        const message = 'Loading…';
         for (const item of this.cards.values()) {
           if (item.pending !== message) {
             item.card.replaceChildren(message); item.pending = message;

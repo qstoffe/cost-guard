@@ -23,13 +23,22 @@ module.exports = async ({evaluate,checks}) => {
     const retained=cards.every((c,i)=>c.firstChild===nodes[i]);
     state.period='all';state.result={...original,view:{...original.view,
       ai_stats_work:{scopes:{all:{ready:false}}}}};view.update(state);const switched=pending();
-     state.failed=true;view.update(state);const failed=cards.every(c=>c.textContent==='Counting paused.' && c.children.length===0);
+     let failed=true, cases=0;
+     const invalid=structuredClone(original);invalid.view.ai_stats_policy='fun-2-tokens';
+     const malformed=structuredClone(original);malformed.view.ai_stats[0].metrics=[];
+     for(const result of [null,partial,invalid,malformed])
+       for(const failedAttempt of [false,true]) for(const interrupted of [false,true])
+         for(const loading of [false,true]) for(const phase of ['queued','deferred','parked','backoff','source_starting']) {
+           Object.assign(state,{period:'30-days',result,failed:failedAttempt,interrupted,loading,phase});
+           view.update(state);failed &&= pending();cases++;
+         }
     state.failed=false;state.result=original;state.period='30-days';view.update(state);
     const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
       c.getBoundingClientRect().height===before[i].height);
-    parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,order};
+     parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,order,cases};
   })()`);
-  for(const [key,value] of Object.entries(result)) if(key!=='order') assert.equal(value,true,key);
+   for(const [key,value] of Object.entries(result)) if(!['order','cases'].includes(key)) assert.equal(value,true,key);
+   assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
     'AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
   checks.push('twelve stable shells: plain Loading-only cold/partial/period switch; no repeated poll mutations; atomic ready; truthful terminal failure; token unit independence; six ordered Overview cards');

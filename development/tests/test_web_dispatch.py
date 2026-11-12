@@ -242,6 +242,46 @@ class DispatcherTests(unittest.TestCase):
         self.assertFalse(self.dispatch.lookup(request)['terminal'])
         self.assertNotEqual(key, self.dispatch.lookup(request)['id'])
 
+    def test_unready_completed_stats_are_not_cached_for_the_success_cadence(self):
+        request = ReportRequest(ReportKind.AI_STATS)
+        key = self.dispatch.lookup(request)['id']
+        partial = result(1_000_000)
+        partial['view'].update(ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=False)}))
+        self.jobs.values[key].update(status='complete', result=partial)
+
+        waiting = self.dispatch.lookup(request)
+
+        self.assertIsNone(waiting['result'])
+        self.assertEqual('ai_stats_no_progress', waiting['error'])
+        self.assertFalse(waiting['terminal'])
+        self.assertIsNone(waiting['id'])
+        self.now = self.dispatch.entries[request]['due']
+        self.assertNotEqual(key, self.dispatch.lookup(request)['id'])
+
+    def test_prior_stats_policy_regenerates_without_accepting_old_podium_or_resetting_other_reports(self):
+        request = ReportRequest(ReportKind.AI_STATS)
+        key = self.dispatch.lookup(request)['id']
+        old = result(1_000_000)
+        old['view'].update(kind='ai-stats', ai_stats_policy='fun-2-tokens', ai_stats=[dict(period='30-days')],
+            ai_stats_work=dict(scopes={'30-days': dict(ready=True)}))
+        self.jobs.values[key].update(status='complete', result=old)
+        unrelated = self.dispatch.lookup(self.models)['id']
+
+        waiting = self.dispatch.lookup(request)
+
+        self.assertFalse(usable(old, 1_000_000))
+        self.assertIsNone(waiting['result'])
+        self.assertFalse(waiting['terminal'])
+        self.assertEqual('ai_stats_schema_changed', waiting['error'])
+        self.now = self.dispatch.entries[request]['due']
+        fresh = self.dispatch.lookup(request)['id']
+        self.assertNotEqual(key, fresh)
+        current = dict(old, view=dict(old['view'], ai_stats_policy='fun-3-responses'))
+        self.jobs.values[fresh].update(status='complete', result=current)
+        self.assertIs(current, self.dispatch.lookup(request)['result'])
+        self.assertEqual(unrelated, self.dispatch.entries[self.models]['job'])
+
     def test_cache_connection_fault_is_typed_without_claiming_source_disconnection(self):
         import sqlite3
         from src.application import ReportApplication
