@@ -166,15 +166,15 @@ class MiniWatchTests(unittest.TestCase):
 
     def test_handoff_requires_active_comparable_source_predecessor_and_no_current_estimate(self):
         capture = handoff_capture(handoff_snapshot())
-        self.assertEqual((('next', ('u', 172_000)),), capture.context_handoffs)
+        self.assertEqual((('next', ('u', 230_000)),), capture.context_handoffs)
         self.assertIsNone(capture.rows[-1].watch_next_context_tokens)
         self.assertIsNone(capture.rows[-1].watch_delta_context_tokens)
         wire = project_live(handoff_frame(self.frame, 'pending')).to_json()
-        self.assertEqual({'previous_id': 'u', 'previous_tokens': 172_000},
+        self.assertEqual({'previous_id': 'u', 'previous_tokens': 230_000},
             wire['active_cards'][0]['context_handoff'])
         self.assertEqual('N/A', wire['active_cards'][0]['rows'][0]['live_context']['display']['watch_next_context_tokens'])
         fresh = handoff_capture(handoff_snapshot('fresh')).rows[-1]
-        self.assertEqual(175_002, fresh.watch_next_context_tokens)
+        self.assertEqual(235_000, fresh.watch_next_context_tokens)
         self.assertTrue(fresh.in_progress)
         unverified = handoff_capture(handoff_snapshot('unverified')).rows[-1]
         self.assertTrue(unverified.execution_unverified)

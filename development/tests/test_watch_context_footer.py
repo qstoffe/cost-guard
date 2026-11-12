@@ -103,7 +103,7 @@ class WatchContextFooterTests(unittest.TestCase):
         self.assertTrue(all('context_cell' not in row for row in rows))
         self.assertIn('incoming_context_tokens', rows[0]['prompt'])
         entry.state = 'unavailable'
-        self.assertIsNone(cards._card(entry, focal, 4000).session_context)
+        self.assertEqual(120000, cards._card(entry, focal, 4000).session_context.tokens)
 
     def test_out_of_order_capture_cannot_revive_pre_compaction_cell_warning(self):
         capture, item = self.capture(120000)
@@ -111,7 +111,8 @@ class WatchContextFooterTests(unittest.TestCase):
         entry = CardSession(item.session, 'revision', 7, capture=capture, state='observed')
         cards.sessions[capture.session_id] = entry
         compacted = replace(capture, observed_at_ms=capture.observed_at_ms + 1,
-            context=replace(capture.context, tokens=None, text='', severity=PriceWarningSeverity.NONE))
+            context=replace(capture.context, tokens=None, text='', severity=PriceWarningSeverity.NONE,
+                context_state='invalidated'))
 
         cards.accept(CardResult(capture.session_id, 7, 'rows', (compacted, (), None)), 5000)
         cards.accept(CardResult(capture.session_id, 7, 'rows', (capture, (), None)), 5001)

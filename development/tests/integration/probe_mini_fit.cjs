@@ -65,6 +65,10 @@ async function main() {
       await open();await require('./probe_mini_context.cjs')({evaluate,until,fixture,command,pip:await pipSession(),open,close,checks:evidence.checks});
       evidence.outcome='PASS';return;
     }
+    if(scope==='history-only') {
+      await require('./probe_history_readiness.cjs')({fixture,evaluate,until,command,sessionId,open,close,checks:evidence.checks});
+      evidence.outcome='PASS';return;
+    }
     if(scope==='dates-only') {
       await open();await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
       await capture('activity');

@@ -127,8 +127,11 @@ const WatchView = (() => {
     const icon = contextWarningIcon(); target.warningIcon = icon.node; target.warningOutline = icon.outline;
     target.contextValue = el('span', undefined, 'watch-session-context');
     target.contextLabel = el('span', 'Context: ');
-    const line = el('div'), help = ContextHelp.value(el('span'), 'Estimated context for the next request in this session.\nPrice warnings concern its price tier, not a session spending limit.');
+    const line = el('div'), help = el('span');
     help.append(target.contextLabel, target.contextValue);
+    target.contextHelp = ContextHelp.value(help, () => 'Estimated context for the next request in this session.' +
+      (target.contextState === 'pending' ? '\nPrevious same-session Ctx; current prompt updating.' : '') +
+      '\nPrice warnings concern its price tier, not a session spending limit.');
     target.warningText = el('span'); target.warningLead = el('span');
     target.warningImpact = el('span'); target.warningEnd = el('span');
     target.warningText.append(target.warningLead, target.warningImpact, target.warningEnd);
@@ -136,6 +139,8 @@ const WatchView = (() => {
     return line;
   }
   function drawContext(target, context) {
+    target.contextState = context?.context_state;
+    ContextHelp.refresh(target.contextHelp);
     const warning = context?.warning;
     target.summary.dataset.guidance = warning?.guidance_state || 'ready';
     const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);

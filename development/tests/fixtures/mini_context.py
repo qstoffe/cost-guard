@@ -15,38 +15,41 @@ from src.watch.observers import CatalogObservation
 
 
 def handoff_snapshot(phase='pending'):
-    snapshot = context_snapshot(incoming=160_000, outputs=(12_000,), active=True)
+    snapshot = context_snapshot(incoming=218_000, outputs=(12_000,), active=True)
     if phase == 'prior':
         return snapshot
-    raw = [dict(info=dict(id='next', sessionID='root', role='user', time={'created': 2000}),
+    raw = [dict(info=dict(id='next', sessionID='root', role='user', time={'created': 2200}),
                 parts=[dict(id='next-text', type='text', text='Continue')]),
            dict(info=dict(id='next-assistant', sessionID='root', parentID='next', role='assistant',
-                          time={'created': 2100}), parts=[])]
-    if phase in {'fresh', 'tools', 'model', 'unverified', 'partial-usage'}:
+                           time={'created': 2300}), parts=[])]
+    if phase in {'fresh', 'equal', 'tools', 'model', 'unverified', 'partial-usage'}:
         raw[-1]['info'].update(providerID='github-copilot', modelID='other' if phase == 'model' else 'gpt-test')
-    if phase in {'fresh', 'tools', 'partial-usage'}:
-        raw[-1]['info'].update(time={'created': 2100, 'completed': 2200}, finish='tool-calls',
-            tokens={'input': 172_000, 'output': 3000, 'cache': {'read': 0, 'write': 0}})
+    if phase in {'fresh', 'equal', 'tools', 'partial-usage'}:
+        raw[-1]['info'].update(time={'created': 2300, 'completed': 2400}, finish='tool-calls',
+            tokens={'input': 230_000, 'output': 4998, 'cache': {'read': 0, 'write': 0}})
         if phase == 'partial-usage':
             del raw[-1]['info']['tokens']['input']
+        if phase == 'equal':
+            raw[0]['parts'] = []
+            raw[-1]['info']['tokens']['output'] = 0
     provenance = lambda session, event=None: prov(session, event, 'v2')
     messages = snapshot.messages + tuple(normalize_message_bundle(item, provenance)[0] for item in raw)
     root = replace(snapshot.root, active=phase != 'unverified')
     return replace(snapshot, root=root, sessions=(root,), messages=messages,
         parts=tuple(part for message in messages for part in message.parts),
         invocations=tuple(item for message in messages for item in normalize_invocations(message, provenance)),
-        events=snapshot.events + (NormalizedEvent('next', 'root', EventKind.USER_PROMPT, 2000,
-            provenance('root', 'next'), 'Continue'),),
+        events=snapshot.events + (NormalizedEvent('next', 'root', EventKind.USER_PROMPT, 2200,
+            provenance('root', 'next'), '' if phase == 'equal' else 'Continue'),),
         active_contexts=(ActiveContext('root', tuple(message.message_id for message in messages)
             if phase != 'inactive' else ('next', 'next-assistant')),),
         context_boundaries=(ContextBoundary('root', phase, 1900),)
             if phase in {'reset', 'model-selection', 'move'} else (),
-        complete=phase != 'incomplete', source_revision='handoff-' + phase)
+        complete=phase not in {'incomplete', 'early'}, source_revision='handoff-' + phase)
 
 
-def handoff_capture(snapshot):
-    service = SimpleNamespace(now_ms=2300, config={}, _load_catalog=catalog,
-        _analyze_snapshot=lambda value: analyze_snapshot(value, now_ms=2300, tracked_provider=None),
+def handoff_capture(snapshot, now_ms=2500):
+    service = SimpleNamespace(now_ms=now_ms, config={}, _load_catalog=catalog,
+        _analyze_snapshot=lambda value: analyze_snapshot(value, now_ms=now_ms, tracked_provider=None),
         _threshold_multiplier=None)
     return capture_rows(service, snapshot.root, fresh=snapshot)[0]
 

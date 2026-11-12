@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.35 - 2026-11-13
+
+- Session-level Ctx retains its last valid same-source estimate during rapid new-prompt setup, missing handoffs, partial captures and execution uncertainty. Mini reopening, Full Watch's Context footer and the Sessions catalog share source-owned pending/current/invalidated observations; new values and proven boundaries replace immediately. Prompt Ictx/Δ and context arithmetic stay independent.
+- Native hidden PiP proves the missing-first-handoff 230k → 230k → 230k → 235k sequence. The owner's natural live handoff remains unobserved. A Decision Delegate exception excludes the known unrelated Total-heading mixed-input hover failure and its unrun later Duration cases; neither is claimed fixed or PASS.
+
 ## v81.34 - 2026-11-12
 
 - Every unready AI Stats card contains exactly Loading, including failed/interrupted/deferred attempts. Cold operational errors remain visible outside the cards; quiet refresh retains valid same-source, same-period values without manual Retry controls.
