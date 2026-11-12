@@ -5,8 +5,9 @@ from src.analysis.timezones import format_local_timestamp
 from src.display import duration_text, context_tokens
 from src.numbers import ccost_amount
 from src.pricing.identities import unverified_alias
-from src.domain.model_identity import CATALOG_ESTIMATE_HELP
+from src.domain.model_identity import catalog_display_name
 from .contracts import record
+from .model_help import request_model_help
 
 
 def run(value):
@@ -15,11 +16,12 @@ def run(value):
         cost_complete main_ccost subagent_ccost incoming_context_ccost extra_ccost duration_ms
         next_context_tokens token_mix_percent token_totals calls linked_agents errors'''.split()
     labels = {(item['provider'], item['model']): item.get('display_name') for item in value.model_identities}
+    recorded = {(p, m, e): selected for p, m, e, selected in value.recorded_models}
     return record(**{name: getattr(value, name) for name in names}, match_run=True,
-        model_label=value.model_label or unverified_alias(value.model, value.provider) or value.model,
-        model_identity_help=CATALOG_ESTIMATE_HELP if value.model_identities else '',
-        selected_models=tuple(sorted({item['resolution']['selected_model'] for item in value.model_identities})),
+        model_label=catalog_display_name(value.provider, value.model_label) or unverified_alias(value.model, value.provider) or value.model,
         contributors=tuple(record(provider=p, model=m, model_label=labels.get((p, m)) or unverified_alias(m, p) or m,
+                                  model_help=request_model_help(p, recorded.get((p, m, e), ()),
+                                      catalog_model=m if labels.get((p, m)) else None),
                                   effort=e, calls=n, ccost=c, complete=known)
                            for p, m, e, n, c, known in value.contributors))
 

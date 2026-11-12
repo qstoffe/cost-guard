@@ -18,6 +18,19 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000687 P2-only delta: `application/model_help.py` formats recorded selectors, not
+friendly labels or inferred providers. Prompt parts group by recorded selection as
+well as role/effective model/effort/tier; compactions use their own entries. Sessions
+retain up to 64 sorted raw provider/model contributors and lazily reject old resolved
+summaries lacking the recorded-help marker. Matched runs persist selectors per
+provider/effective-model/effort group; old records without that evidence are misses.
+AI Stats podiums retain selectors from the same bounded sample without changing
+sampling, weights or speed. No global identity/pricing semantic bump is needed.
+Saved replies with no usage carry separate prompt-qualified selections, explicitly
+not contributor evidence. Empty-aggregate arithmetic stays unchanged; help qualifies
+unknown usage/cost. Browser renderers consume prepared text, without identity parsing,
+catalog calls, repricing or new question icons. [Scope and proof](../../journal/recorded-model-help.md).
+
 FR000658: `matched_inputs.py` emits actual comparison verification/groups/previews
 stages while preserving all-history revision/index checks and ephemeral page-only
 preview hydration. No offset-only or unqualified pinned-index cache is added.

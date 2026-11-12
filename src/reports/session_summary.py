@@ -59,6 +59,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             values = dict(cached.payload)
             semantics = values.pop("model_identity_semantics", None)
             identity_values = values.pop('model_identity_dependencies', ())
+            raw_help = values.pop('recorded_model_help', False)
+            if identity_values and not raw_help:
+                raise ValueError('outdated_recorded_model_help')
             if not payload_current(service.source, identity_values) or not identity_values and not current(service.source,
                     (ModelRef(*value.split('/', 1)) for value in values.get('contributor_models', ()))):
                 raise ValueError('changed_model_catalog')
@@ -115,6 +118,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = dependencies(item.bundle.trace_entries)
+        values['recorded_model_help'] = True
         values["ccost"] = str(row.ccost)
         try:
             service.cache_repository.put(NAMESPACE, key, values,

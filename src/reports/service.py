@@ -29,6 +29,7 @@ from src.cache import CacheRepository
 from src.numbers import ccost_amount
 from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
 from src.domain.acquisition import AcquisitionMetrics
+from src.domain.model_identity import catalog_display_name
 from src.domain.progress import WorkProgress
 from src.domain.ccost import ReferenceValuation
 from src.domain.session_tree import root_activity, root_for_session, root_by_session
@@ -309,9 +310,10 @@ class ReportService:
                 if record.main_model_id == primary), "")
             name = (models[primary].display_name if primary in models and models[primary].resolution
                     and models[primary].display_name else catalog.display_name(primary, provider))
+            name = catalog_display_name(provider, name)
             prompt_count = len(item.bundle.prompts)
-            identities = sorted({f"{entry.model.provider}/{entry.model.model}"
-                for entry in item.bundle.trace_entries if entry.model.provider and entry.model.model})
+            identities = sorted({f"{entry.model.provider}/{entry.model.recorded_model}"
+                for entry in item.bundle.trace_entries if entry.model.provider and entry.model.recorded_model})
             contributors = tuple(value for value in identities if len(value) <= 256)[:64]
             rows.append(SessionUsageRow(
                 session_id=item.session.session_id,

@@ -151,7 +151,7 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                 elif mode == 'summary':
                     row, _ = session_summary(fresh, raw[0].root, raw[0].source_revision)
                     session_summary(fresh, raw[1].root, raw[1].source_revision)
-                    self.assertEqual('Sonnet 4', row.model)
+                    self.assertEqual('Claude Sonnet 4', row.model)
                 elif mode == 'mix':
                     report = fresh.build_token_mix_history()
                     self.assertIn('Sonnet 4', [row.model for row in report.model_token_mix])
@@ -159,7 +159,7 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                     build_ai_stats(fresh, 'all')
                 else:
                     report = fresh.build(ReportRequest(ReportKind.COMPARISONS))
-                    self.assertIn('Sonnet 4', [run.model_label for group in report.comparisons.groups for run in group.runs])
+                    self.assertIn('Claude Sonnet 4', [run.model_label for group in report.comparisons.groups for run in group.runs])
                 # Match previews read visible representatives in addition to cache repair.
                 self.assertEqual(loads + (2 if mode == 'matches' else 1), fresh.source.load_count)
                 self.assertEqual(raw, tuple(fresh.source.snapshots.values()))
@@ -189,8 +189,8 @@ class ClaudeAliasCacheTests(unittest.TestCase):
             second = fresh.build(ReportRequest(ReportKind.SESSIONS, session_limit=None))
             warm = reopen(fresh).build(ReportRequest(ReportKind.SESSIONS, session_limit=None))
 
-            self.assertEqual('Sonnet 5.5', first.session_usage[0].model)
-            self.assertEqual('Sonnet 4.5', second.session_usage[0].model)
+            self.assertEqual('Claude Sonnet 5.5', first.session_usage[0].model)
+            self.assertEqual('Claude Sonnet 4.5', second.session_usage[0].model)
             self.assertEqual(second.session_usage[0].model, warm.session_usage[0].model)
             self.assertEqual(second.session_usage[0].ccost, warm.session_usage[0].ccost)
             self.assertEqual(raw, server.fixture['messages'])
@@ -338,7 +338,7 @@ test.doCleanups()
                     capture_output=True, text=True, encoding='utf-8', timeout=15)
                 self.assertEqual(0, completed.returncode, completed.stderr)
                 value = json.loads(completed.stdout)
-                expected = 'Sonnet 5.5' if desktop else LABEL
+                expected = 'Claude Sonnet 5.5' if desktop else LABEL
                 self.assertEqual(expected, value['model'])
                 self.assertEqual(expected, value['watch'])
                 self.assertEqual(desktop, value['complete'])

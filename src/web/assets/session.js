@@ -27,8 +27,12 @@ const SessionDetail = (() => {
     label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
       () => [ReportView.costHelp(value), ReportView.display(value, 'cost_detail_help')].filter(text => text && text !== 'N/A').join('\n\n'));
-    return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,
-      value.display?.calls ?? String(value.calls ?? 'N/A'), ReportView.display(value, 'duration_ms'),
+    const model = ContextHelp.value(el('span', value.watch_model || value.model_effort || 'N/A'),
+      () => ReportView.display(value, 'model_detail_help'));
+    const calls = ContextHelp.value(el('span', value.display?.calls ?? String(value.calls ?? 'N/A')),
+      () => ReportView.display(value, 'calls_help'));
+    return [label, model, value.watch_effort || 'N/A', cost,
+      calls, ReportView.display(value, 'duration_ms'),
       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
       ReportView.costValue(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
   }

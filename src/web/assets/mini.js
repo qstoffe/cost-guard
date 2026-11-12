@@ -383,11 +383,8 @@ const MiniWatch = (() => {
     promptDetails(item, prefix, highlight) {
       const prompt = item?.prompt, detail = prompt?.cost_detail;
       if (!prompt) return [prefix, 'Latest prompt details unavailable'].filter(Boolean).join('\n\n');
-      const main = [...new Set((detail?.parts || []).filter(part => part.role === 'main' && part.provider_id && part.model_id)
-        .map(part => part.provider_id + '/' + part.model_id))];
-      const model = item.model && item.model !== 'N/A' ? item.model : 'N/A';
       const before = [prompt.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`,
-        `Main model: ${model}${main.length === 1 && !model.includes(main[0]) ? ' [' + main[0] + ']' : ''}`,
+        ReportView.display(prompt, 'main_model_help'),
         `Effort: ${item.effort || 'N/A'}`].join('\n');
       const duration = `Duration: ${ReportView.display(item, 'watch_duration_ms')}`, lines = [];
       if (prompt.calls != null) lines.push(`Calls: ${prompt.calls}`);

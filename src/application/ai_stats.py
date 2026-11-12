@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 from src.display import duration_text
 from src.numbers import ccost_amount, ccost_unit
+from .model_help import request_model_help
 
 COPY = {
     'hourly-rate': ('Budget build. Dangerous potential.', 'Standard-issue silicon. Surprisingly functional.', 'Premium silicon has expensive tastes.'),
@@ -86,6 +87,8 @@ def traffic_tokens(values):
 
 def response_tokens(row):
     return dict(label=f'{row.provider}/{row.model}' + (f' · {row.variant}' if row.variant else ''),
+                model_help=request_model_help(row.provider, row.recorded_models,
+                    catalog_model=row.model if row.catalog_estimate else None),
                 speed=('<0.1' if row.tokens_per_second < Decimal('.1') else compact_volume(row.tokens_per_second)) + ' tok/s',
                 sample=f'{row.sampled_calls} sampled call' + ('s' if row.sampled_calls != 1 else ''))
 

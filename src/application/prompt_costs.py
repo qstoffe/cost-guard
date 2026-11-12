@@ -2,8 +2,8 @@
 from decimal import Decimal
 
 from src.numbers import ccost_amount
-from src.domain.model_identity import CATALOG_ESTIMATE_HELP
 from .contracts import record
+from .model_help import request_model_help
 from .reference_cost import issue_records, unavailable_help
 
 MAX_PARTS = 24
@@ -14,11 +14,11 @@ def grouped_parts(parts):
     groups, identities = {}, {}
     for part in parts:
         role = "main" if part.agent == 0 else "subagents"
-        key = (role, part.provider_id, part.model_id, part.variant, part.price_tier)
+        key = (role, part.provider_id, part.model_id, part.variant, part.price_tier, part.selected_models)
         groups.setdefault(key, []).append(part)
         identities.setdefault(part.model or part.model_id, set()).add((part.provider_id, part.model_id))
     result = []
-    for (role, provider, model_id, variant, tier), items in groups.items():
+    for (role, provider, model_id, variant, tier, _selected), items in groups.items():
         first = items[0]
         categories = tuple(None if any(item.categories[index] is None for item in items) else
             sum((item.categories[index] for item in items), Decimal(0)) for index in range(4))
@@ -61,13 +61,15 @@ def detail_tokens(values):
     if detail is None:
         return {}
     detail = dict(detail.fields)
-    sections, models, calls = [], [], []
+    sections, models, calls, main_models = [], [], [], []
     for part in detail["parts"]:
         part = dict(part.fields)
         owner = "Main prompt" if part["role"] == "main" else "Subagents"
-        identity = part["model"] or part["model_id"] or "Unrecorded model"
-        if part["qualify_model"]:
-            identity += f" [{part['provider_id']}/{part['model_id']}]"
+        identity_help = request_model_help(part['provider_id'], part['selected_models'] or (part['model_id'],),
+            catalog_model=part['model_id'] if part.get('catalog_estimate') else None)
+        identity, _, note = identity_help.partition('\n')
+        if part['role'] == 'main':
+            main_models.append('Main model: ' + identity_help)
         if part["effort"] and part["effort"] != "N/A":
             identity += " · " + part["effort"]
         heading = owner + " — " + identity
@@ -76,14 +78,12 @@ def detail_tokens(values):
             agents = f" ({part['agent_count']} agent{'s' if part['agent_count'] != 1 else ''})"
             heading += agents
             call_heading += agents
-        models.append(heading + (f"\n  {part['provider_id']}/{part['model_id']}" if part['provider_id'] and part['model_id'] else
-            "\n  Provider/model identity unrecorded") + ("\n  Effort unreported" if part["effort"] in {None, "", "N/A"} else ""))
-        calls.append(f"{call_heading}: {part['calls']}")
-        lines = [heading]
-        if part.get('catalog_estimate'):
-            note = CATALOG_ESTIMATE_HELP + " Selected: " + ", ".join(part['selected_models'])
-            lines.append(note)
-            models[-1] += "\n" + note
+        models.append(heading + ('\n' + note if note else '') +
+            ("\n  Effort unreported" if part["effort"] in {None, "", "N/A"} else ""))
+        if part['role'] == 'subagents':
+            main_models.append(models[-1])
+        calls.append(f"{call_heading}: {part['calls']}" + ('\n' + note if note else ''))
+        lines = [heading] + ([note] if note else [])
         if part["role"] == "subagents":
             count = str(part["prompt_count"]) if part["prompts_complete"] else (
                 f"at least {part['prompt_count']} observed (incomplete boundaries)" if part["prompt_count"] else
@@ -109,6 +109,13 @@ def detail_tokens(values):
         models.append(note + f" ({detail['model_count']} distinct models overall)")
         calls.append(note + f": {detail.get('omitted_calls', 0)} calls")
     linked = detail["linked_agent_count"]
+    if not detail['parts'] and values.get('recorded_selections'):
+        selection = '\n'.join('Recorded selection: ' + value for value in values['recorded_selections'])
+        selection += '\nUsage unavailable; cost unknown. Selection is not executed-model or contribution proof.'
+        models.append(selection)
+        main_models.append(selection)
+        calls.append(selection + '\nNo request usage recorded; no model calls inferred.')
+        sections.append(selection + '\nThe displayed aggregate is an empty observed subtotal, not known zero consumption.')
     if not detail["parts"] and values.get("calls", 0):
         sections.append("Detailed request attribution unavailable; no per-model costs can be established.")
     if detail.get("agents_without_usage"):
@@ -125,6 +132,6 @@ def detail_tokens(values):
         calls.append(("Total Calls: " if detail["calls_complete"] else "Observed Calls (incomplete request evidence): ")
             + str(detail["observed_calls"]))
     return {"cost_detail_help": "\n\n".join(sections),
-             "model_detail_help": model_help if detail["model_count"] > 1 or linked or any(
-                 dict(part.fields).get('catalog_estimate') for part in detail['parts']) else "",
-            "calls_help": "\n".join(calls) if detail["group_count"] > 1 or linked and calls else ""}
+            "model_detail_help": model_help,
+            "main_model_help": '\n\n'.join(dict.fromkeys(main_models)) or 'Main model identity unrecorded',
+            "calls_help": "\n".join(calls)}

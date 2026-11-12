@@ -21,6 +21,12 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000687 scoped P2: `application/model_help.py` owns recorded-selector copy;
+prompt parts, scalar Sessions and compact matched runs retain raw identities separately
+from effective prices. `test_recorded_model_help.py`, existing alias/cache/cost tests,
+`replay_owned_models.py` and `probe_web_help.cjs --raw-models` cover provenance.
+[Delivery limits](../../journal/recorded-model-help.md) exclude historical repair and full-catalog proof.
+
 FR000685: `analysis/ai_stats_responses.py` owns bounded deterministic response sampling
 and weighted per-model TPS; `reports/ai_stats_responses.py` extracts already-acquired
 request-level intervals. `ai_stats_evidence.py` owns revision/time-valid summaries;

@@ -14,6 +14,7 @@ from src.analysis.models import CompactionRecord, PromptRecord, RootAnalysisBund
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import billed_spend, comparison_cost
 from src.domain import SessionSnapshot
+from src.domain.model_identity import catalog_display_name
 from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection
@@ -141,7 +142,7 @@ class PromptRowProjector:
                          if entry.model.model == record.main_model_id and entry.model.provider == record.main_provider_id
                          and entry.model.resolution and entry.model.display_name), None)
         if resolved is not None:
-            model = resolved.display_name
+            model = catalog_display_name(resolved.provider, resolved.display_name)
             model_label = model + (f" ({effort})" if effort != "N/A" else "")
         return PromptProjection(
             at_ms=record.prompt_time_ms,
@@ -191,6 +192,9 @@ class PromptRowProjector:
                 {entry.session_id for entry in record.entries[record.root_entry_count:]
                  if entry.session_id != record.session_id}),
             cost_parts=prompt_cost_parts(record, catalog),
+            recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'
+                for message in self.replies.get((record.session_id, record.prompt_id), ())
+                if message.model.provider and message.model.recorded_model}))[:24] if not record.entries else (),
             abort_at_ms=record.abort_time_ms,
             completed_successfully=record.completed_successfully,
             running_cost_warning=bool(record.in_progress and self.running_warning_ccost > 0
@@ -218,7 +222,7 @@ class PromptRowProjector:
         if resolved is not None:
             _model, effort = effort_model_parts(catalog, record.model_id,
                 interpret_effort(record.variant, attributable=bool(record.variant), compaction=True), record.provider_id)
-            label = resolved.display_name + (f" ({effort})" if effort != "N/A" else "")
+            label = catalog_display_name(resolved.provider, resolved.display_name) + (f" ({effort})" if effort != "N/A" else "")
         valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         return PromptProjection(
             at_ms=record.created_at_ms,
@@ -241,6 +245,7 @@ class PromptRowProjector:
             token_mix_percent=(mix_percent((record.input_tokens, record.cache_read_tokens,
                 record.cache_write_tokens, record.output_tokens)) if mix_known(record) else None),
             is_compaction=True,
+            cost_parts=prompt_cost_parts(record, catalog),
             in_progress=record.in_progress,
             delta_context_tokens=state.delta_tokens if state else None,
             next_context_tokens=state.next_tokens if state else None,

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.33 - 2026-11-12
+
+- Request-bearing model help leads with exact recorded provider/model, even for a single model. Alias selectors stay separate from explicitly labelled current-catalog pricing estimates; friendly Claude labels retain their brand. Prompt/child/compaction, Full/Mini Watch, Sessions/detail, Comparisons and sampled AI Stats use server-prepared identities without hover acquisition or repricing.
+- Scoped P2 delivery only: historical diagnosis/recovery and full-catalog live acceptance are not delivered. Five saved native successes reconcile through offline normalization/pricing; one native failure has unknown usage and seven models were not run. Failed saved selections have explicit unknown-cost help, without changing empty-aggregate arithmetic. See the scoped evidence journal and published follow-ups.
+
 ## v81.32 - 2026-11-12
 
 - AI Stats replaces the hourly Token Consumption Rate table with a Top 3 provider/model/effort podium: sampled output (reasoning once) divided by summed approximate response round-trip seconds, not prompt/tool workflow time or a decoding benchmark. Deterministic recent/identity-spread sampling caps displayed model samples at 32 calls and reuses existing bounded acquisition.

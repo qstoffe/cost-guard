@@ -26,6 +26,8 @@ class ModelResponse:
     output_tokens: int
     duration_ms: int
     sampled_calls: int
+    recorded_models: tuple[str, ...] = ()
+    catalog_estimate: bool = False
 
     @property
     def tokens_per_second(self):
@@ -90,8 +92,12 @@ def podium(roots, entries, start, now):
     groups = {}
     for call in selected:
         key = model_key(call.entry)
-        output, duration, count = groups.get(key, (0, 0, 0))
-        groups[key] = (output + call.entry.tokens.output + call.entry.tokens.reasoning,
-                       duration + call.duration_ms, count + 1)
-    rows = [ModelResponse(*key, *values) for key, values in groups.items()]
+        values = groups.setdefault(key, [0, 0, 0, set(), False])
+        values[0] += call.entry.tokens.output + call.entry.tokens.reasoning
+        values[1] += call.duration_ms
+        values[2] += 1
+        values[3].add(call.entry.model.recorded_model)
+        values[4] |= bool(call.entry.model.resolution and call.entry.model.display_name)
+    rows = [ModelResponse(*key, *values[:3], tuple(sorted(values[3])), values[4])
+        for key, values in groups.items()]
     return tuple(sorted(rows, key=lambda r: (-r.tokens_per_second, r.provider, r.model, r.variant))[:3])

@@ -64,12 +64,12 @@ setTimeout(() => {
             match = re.search(r'<pre id="probe-result">(.*?)</pre>', completed.stdout, re.S)
             assert match, 'missing_dom_result'
             value = json.loads(html.unescape(match[1]))
-            label = 'Sonnet 5.5' if args.desktop_catalog else LABEL
+            label = 'Claude Sonnet 5.5' if args.desktop_catalog else LABEL
             assert value['label'] == 'claude-agent/' + label and value['stable'], value
             if args.desktop_catalog:
-                assert 'historic executed version unconfirmed' in value['help'] and 'Selected: sonnet' in value['help'], value
+                assert 'historic executed version unconfirmed' in value['help'] and 'claude-agent/sonnet' in value['help'], value
             else:
-                assert LABEL in value['help'] and '[sonnet]' in value['help'], value
+                assert 'claude-agent/sonnet' in value['help'] and LABEL not in value['help'], value
             assert 'Claude Sonnet 4' not in value['label'] + value['help'], value
             checks.append(value)
     args.evidence.write_text(json.dumps(dict(outcome='PASS', restarts=checks), indent=2), encoding='utf-8')

@@ -1,14 +1,15 @@
 // Actual hidden Chromium + Document PiP, shipped HTTP/CSP/SSE; no personal profile.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output, scope] = process.argv.slice(2);
+const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--help-audit'], {windowsHide:true,stdio:['pipe','pipe','pipe']});
+   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--help-audit',
+     ...(scope==='--raw-models'?['--raw-models',replay]:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
   let serverErrors = '';
   server.stderr.on('data', chunk => {serverErrors = (serverErrors + chunk.toString()).slice(-12000);});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
@@ -75,7 +76,16 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-     await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+      if(scope === '--raw-models') {
+        const capture=JSON.parse(await fs.readFile(replay,'utf8'));
+        await require('./probe_raw_models.cjs')({command,evaluate,until,owner,mini,checks,layouts,capture});
+        assert.deepEqual(errors,[]);
+        evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+          limitations:['Owned native captures replayed offline for Full/Mini; synthetic production-projected finite views.',
+            'No historical recovery, full-catalog live PASS, physical desktop or assistive-technology proof.']};
+        return;
+      }
      const headerHelp=require('./probe_help_headers.cjs')({command,evaluate,until,owner,mini,checks,layouts});
       if(scope === '--ccost-unavailable') {
          await require('./probe_ccost_unavailable.cjs')({command,evaluate,until,owner,mini,checks,layouts});
@@ -189,14 +199,14 @@ async function main() {
     const title=await evaluate(mini,`document.querySelector('.mini-prompts tr[data-id="root"] .mini-session').textContent`);
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
-    const retainedHelp=await focus(mini,'.mini-prompts tr[data-id="root"] .mini-cost-value > span:first-child');
+    const retainedHelp=await focus(mini,'.mini-prompts tr[data-id="root"] td:nth-child(3) .mini-cost-value');
     assert.match(retainedHelp,/Prompt #[\s\S]*Main model:/);assert.doesNotMatch(retainedHelp,/Source evidence:/);
-    assert.match(await focus(mini,'.mini-prompts tr[data-id="root"] .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+ in this session: Keep completed literally/);
+    assert.match(await focus(mini,'.mini-prompts tr[data-id="root"] .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+: Keep completed literally/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:nth-child(2) button');
      assert.equal(heading,'The name of the session.');
      const totalHeading=await focus(mini,'.mini-prompts > table th:nth-child(3) button');
-     assert.match(totalHeading,/First: the representative prompt’s reference CCost[\s\S]*In parentheses: the entire session’s reference CCost/);
+     assert.match(totalHeading,/represented prompt’s reference cost, not provider billing/i);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update=helpMiniUpdate;delete window.helpMiniUpdate;delete window.helpMiniEpoch;miniWatch.update(liveValue)`);

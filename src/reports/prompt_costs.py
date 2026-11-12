@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from src.analysis.comparisons import effort_model_parts
 from src.analysis.effort import interpret_effort
-from src.analysis.models import PromptRecord
+from src.analysis.models import CompactionRecord, PromptRecord
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost
 from src.domain.reference_cost import ReferenceCostIssue
@@ -45,24 +45,24 @@ def _price_tier(entry, catalog):
     return f"{tier.name} ({lower}–{upper} input tokens)"
 
 
-def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[PromptCostPart, ...]:
+def prompt_cost_parts(record: PromptRecord | CompactionRecord, catalog: PricingCatalog) -> tuple[PromptCostPart, ...]:
     """Preserve session/model/effort identity and each physical request's price tier.
 
     Root-entry slicing is the analysis attribution boundary, not a time/provider
     heuristic. Unknown telemetry cannot manufacture zero category contributions.
     """
-    if not record.breakdown_known:
+    if isinstance(record, PromptRecord) and not record.breakdown_known:
         return ()
     groups = {}
     agents = {record.session_id: 0}
     for index, entry in enumerate(record.entries):
-        session = record.session_id if index < record.root_entry_count else entry.session_id
+        session = record.session_id if isinstance(record, CompactionRecord) or index < record.root_entry_count else entry.session_id
         if session not in agents:
             agents[session] = len(agents)
-        key = (session, entry.model.provider, entry.model.model, entry.variant, _price_tier(entry, catalog))
+        key = (session, entry.model.provider, entry.model.model, entry.variant, _price_tier(entry, catalog), entry.model.recorded_model)
         groups.setdefault(key, []).append(entry)
     result = []
-    for (session, provider, model_id, variant, tier), entries in groups.items():
+    for (session, provider, model_id, variant, tier, _recorded), entries in groups.items():
         total = comparison_cost(entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         amounts = [Decimal(0)] * 4
         known = [True] * 4
@@ -85,5 +85,5 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
                 for entry in entries if entry.logical_prompt_id)),
             all(entry.logical_prompt_id is not None for entry in entries), total.unavailable,
             tuple(sorted({entry.model.recorded_model for entry in entries})),
-            any(entry.model.resolution is not None for entry in entries)))
+            any(entry.model.resolution is not None and entry.model.display_name for entry in entries)))
     return tuple(result)
