@@ -45,7 +45,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
             self.assertEqual((0, 'complete', ()), (result[key].value, result[key].status, result[key].reasons))
             item = result[key]
             display = stat_tokens(asdict(item))
-            self.assertRegex(display['value'], r'0')
+            if key != 'token-rate':
+                self.assertRegex(display['value'], r'0')
             self.assertTrue(display['trait'])
             if key in ('total-tokens', 'token-rate'):
                 continue
@@ -264,15 +265,16 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         self.assertIsNone(result['error'])
         metrics = {m['metric']: m for m in result['view']['ai_stats'][-1]['metrics']}
         self.assertEqual((393, 'complete'), (metrics['total-tokens']['value'], metrics['total-tokens']['status']))
-        self.assertEqual(393, Decimal(metrics['token-rate']['rates']['total']))
+        self.assertNotIn('rates', metrics['token-rate'])
+        self.assertNotRegex(str([m['display'] for m in metrics.values()]), r'Unavailable|N/A')
         self.assertIn('unpriced-requests', metrics['total-cost']['reasons'])
 
-    def test_streamed_metadata_cannot_create_a_model_generation_ranking_or_change_token_traffic(self):
+    def test_streamed_response_endpoint_changes_only_podium_and_invalid_markers_fall_back(self):
         original, source = self.original(1)
         first = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
         sid, snapshot = next(iter(source.snapshots.items()))
-        # Atomic final bursts, slow TTFT and missing metadata have no qualified
-        # first/last output-token interval in the supported compact evidence.
+        # Stream end is now a response endpoint, never a first-token clock.
+        # The three synthetic calls each have 10 output tokens and 200ms fallback.
         for delay in (0, 1, 1_000_000):
             source.snapshots[sid] = replace(snapshot, source_revision=str(delay), messages=tuple(
                 replace(m, metadata={**m.metadata, 'streamed_at_ms': m.created_at_ms + delay})
@@ -280,7 +282,13 @@ class AIStatsAcquisitionTests(unittest.TestCase):
 
             changed = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
 
-            self.assertEqual(first.ai_stats, changed.ai_stats)
+            for before, after in zip(first.ai_stats, changed.ai_stats):
+                self.assertEqual(tuple(m for m in before.metrics if m.metric != 'token-rate'),
+                                 tuple(m for m in after.metrics if m.metric != 'token-rate'))
+                self.assertEqual(before.matched, after.matched)
+            podium = changed.ai_stats[-1].metrics[-1].podium
+            self.assertEqual((30, 3 if delay == 1 else 600, 3),
+                             (podium[0].output_tokens, podium[0].duration_ms, podium[0].sampled_calls))
             self.assertTrue(all(len(row.metrics) == 12 for row in changed.ai_stats))
 
     def test_source_warning_or_migration_gap_exposes_only_safe_metric_reasons(self):

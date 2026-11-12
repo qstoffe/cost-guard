@@ -23,7 +23,7 @@ module.exports = async ({evaluate,checks}) => {
     const retained=cards.every((c,i)=>c.firstChild===nodes[i]);
     state.period='all';state.result={...original,view:{...original.view,
       ai_stats_work:{scopes:{all:{ready:false}}}}};view.update(state);const switched=pending();
-    state.failed=true;view.update(state);const failed=cards.every(c=>c.textContent==='Unavailable' && c.children.length===0);
+     state.failed=true;view.update(state);const failed=cards.every(c=>c.textContent==='Counting paused.' && c.children.length===0);
     state.failed=false;state.result=original;state.period='30-days';view.update(state);
     const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
       c.getBoundingClientRect().height===before[i].height);

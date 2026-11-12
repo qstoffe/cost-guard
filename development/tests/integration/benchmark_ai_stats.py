@@ -66,6 +66,8 @@ def scenario(builder, size, scope, selected, sliced=False):
             def comparable(row):
                 value = asdict(row)
                 value['metrics'] = [m for m in value['metrics'] if m['metric'] not in ('total-tokens', 'token-rate')]
+                for metric in value['metrics']:
+                    metric.pop('podium', None)  # Additive transport field, not an old-card calculation.
                 return value
             signature = hashlib.sha256(json.dumps(comparable(row), default=str, sort_keys=True).encode()).hexdigest()
             all_periods = hashlib.sha256(json.dumps([comparable(row) for row in report.ai_stats],
@@ -74,7 +76,8 @@ def scenario(builder, size, scope, selected, sliced=False):
                 seconds=round(elapsed, 4), cpu_seconds=round(used_cpu, 4), selected_sha256=signature,
                 all_periods_sha256=all_periods, first_usable_seconds=round(first_usable, 4),
                 hydrated=source.load_count - before, slices=slices, periods=len(report.ai_stats),
-                view_bytes=len(json.dumps(project(report).to_json(), separators=(',', ':')).encode()),
+                view_bytes=len(json.dumps(project(report).to_json(), separators=(',', ':')).encode())
+                    if hasattr(row.metrics[0], 'podium') else None,
                 metrics=service.metrics.snapshot())
             yield result
 

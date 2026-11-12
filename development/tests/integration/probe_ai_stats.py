@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+from statistics import median
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -21,26 +22,66 @@ from src.web.jobs import ReportJobs
 def isolated_report(sender, request):
     from src.cache import CacheDatabase
     from src.reports.ai_stats import payload
-    inventory = dict(sampled=0, created=0, completed=0, streamed=0, qualified_generation_intervals=0)
+    from src.reports.ai_stats_responses import response_bounds, response_duration, _explicit_tool_start
+    inventory = dict(sampled=0, plausible_responses=0, positive_output=0, tool_responses=0,
+                     tool_clipped=0, missing_streamed=0, outside_streamed=0,
+                     streamed_before_tool=0, streamed_equal_tool=0, streamed_after_tool=0,
+                     rejected_tool_starts=0, streamed_before_tool_end=0, streamed_after_tool_end=0,
+                     min_ms=None, max_ms=None)
+    deltas = dict(tool_from_created=[], streamed_from_tool=[], completed_from_streamed=[])
 
-    def observed(bundle, reference, snapshot, config):
+    def observed(bundle, reference, snapshot, config, **kwargs):
         # Inspect only already-acquired messages, retain counts, never text/IDs/times.
-        for message in snapshot.messages:
+        messages = {(m.session_id, m.message_id): m for m in snapshot.messages}
+        for request in snapshot.invocations:
             if inventory['sampled'] >= 32:
                 break
-            if message.role.value != 'assistant':
+            message = messages.get((request.session_id, request.message_id))
+            bounds = response_bounds(request, message)
+            if bounds is None or request.tokens.output + request.tokens.reasoning <= 0:
                 continue
             inventory['sampled'] += 1
-            inventory['created'] += message.created_at_ms > 0
-            inventory['completed'] += message.completed_at_ms is not None
-            inventory['streamed'] += 'streamed_at_ms' in message.metadata
-        return payload(bundle, reference, snapshot, config)
+            left, right, _independent = bounds
+            duration = response_duration(request, message)
+            inventory['positive_output'] += request.tokens.output + request.tokens.reasoning > 0
+            if duration:
+                inventory['plausible_responses'] += 1
+                inventory['min_ms'] = min(inventory['min_ms'] or duration, duration)
+                inventory['max_ms'] = max(inventory['max_ms'] or duration, duration)
+            all_tools = [(at, p) for p in message.parts if type(at := _explicit_tool_start(p)) is int] if message else []
+            tools = [(at, p) for at, p in all_tools if left < at <= right]
+            inventory['rejected_tool_starts'] += len(all_tools) - len(tools)
+            if tools:
+                at, part = min(tools, key=lambda pair: pair[0])
+                inventory['tool_responses'] += 1
+                streamed = message.metadata.get('streamed_at_ms')
+                stream_end = type(streamed) is int and left < streamed <= right
+                inventory['tool_clipped'] += not _independent and not stream_end and duration == at - left
+                if type(streamed) is not int:
+                    inventory['missing_streamed'] += 1
+                elif not left <= streamed <= right:
+                    inventory['outside_streamed'] += 1
+                else:
+                    inventory['streamed_before_tool'] += streamed < at
+                    inventory['streamed_equal_tool'] += streamed == at
+                    inventory['streamed_after_tool'] += streamed > at
+                    deltas['tool_from_created'].append(at - left)
+                    deltas['streamed_from_tool'].append(streamed - at)
+                    deltas['completed_from_streamed'].append(right - streamed)
+                    native = part.data.get('observed_time', {})
+                    end = native.get('completed', native.get('end'))
+                    if type(end) is int:
+                        inventory['streamed_before_tool_end'] += streamed <= end
+                        inventory['streamed_after_tool_end'] += streamed > end
+        return payload(bundle, reference, snapshot, config, **kwargs)
 
     with patch('src.web.composition.CacheDatabase', lambda _root: CacheDatabase(Path(os.environ['COST_GUARD_PROBE_CACHE']))), \
             patch('src.reports.ai_stats.payload', observed):
         measured_report(sender, request)
     print(json.dumps(dict(timing_inventory=inventory,
-        qualification='created/completed/streamed do not establish first/last output-token generation boundaries')), flush=True)
+        timing_deltas={key: dict(count=len(values), min=min(values), median=median(values), max=max(values))
+                       for key, values in deltas.items() if values},
+        qualification='approximate response round trip: independent step pair, stream end, then native-tool/completion fallback; not decoding speed')), flush=True)
 
 
 def check_rates(result):
@@ -68,14 +109,17 @@ def check_rates(result):
         metrics = {m['metric']: m for m in row['metrics']}
         tokens, traffic = metrics['total-tokens'], metrics['token-rate']
         assert len(metrics) == 12 and int(tokens['exact_value']) == tokens['value']
-        for field in ('calendar_days', 'workdays', 'calendar_hours', 'workday_hours', 'active_hours'):
-            assert traffic['rates'][field] == rates[field]
-        assert Decimal(traffic['rates']['total']) == tokens['value']
+        assert 'rates' not in traffic
         assert 'display_units' not in tokens and 'display_units' not in traffic
-        if tokens['status'] == 'complete':
-            assert Decimal(traffic['rates']['calendar_rate']) == (Decimal(tokens['value']) / rates['calendar_hours'] if rates['calendar_hours'] else 0)
-        if not traffic['reasons']:
-            assert Decimal(traffic['rates']['active_rate']) == (Decimal(tokens['value']) * 3_600_000 / duration if duration else 0)
+        assert len(traffic['podium']) <= 3
+        previous = None
+        for racer in traffic['podium']:
+            expected = Decimal(racer['output_tokens']) * 1000 / racer['duration_ms']
+            assert Decimal(racer['tokens_per_second']) == expected and 1 <= racer['sampled_calls'] <= 32
+            assert previous is None or previous >= expected
+            previous = expected
+        for card in row['metrics']:
+            assert 'Unavailable' not in json.dumps(card['display']) and 'N/A' not in json.dumps(card['display'])
         checks.append(row['period'])
     return checks
 
@@ -113,7 +157,9 @@ def main():
                         print(json.dumps(dict(scope=scope, attempt=attempt, status=job['status'],
                             seconds=round(time.monotonic() - started, 3), error=job['error'],
                              result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
-                              rate_checks=check_rates(result),
+                               rate_checks=check_rates(result),
+                               podium_counts={row['period']: [r['sampled_calls'] for m in row['metrics']
+                                   if m['metric'] == 'token-rate' for r in m['podium']] for row in result['view']['ai_stats']},
                               payload_bytes=len(json.dumps(result, separators=(',', ':')).encode()),
                              progress=job.get('progress'), work=job.get('work'), metric_states=states)), flush=True)
                         break

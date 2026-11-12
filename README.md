@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.31, 2026-11-12), the supported distribution.
+Use **current `main`** (v81.32, 2026-11-12), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.31 (2026-11-12):** Mini Watch and shared Web hover help recover even when every pointer-exit event is missed. An open-only watchdog and thirty-second pointer-idle limit prevent indefinite stale popups; keyboard and deliberately pinned help remain independent. [Help behavior and limitation](docs/web-beta.md#contextual-help).
+**v81.32 (2026-11-12):** AI Stats' Token Consumption Rate becomes a sampled Top 3 model-response output tok/s podium. Every ready Stats card follows the permanent best-effort policy; sparse or incomplete observations never become Unavailable. Other card calculations remain unchanged. [AI Stats](docs/web-beta.md#ai-stats).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

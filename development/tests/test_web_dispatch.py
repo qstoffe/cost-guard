@@ -775,10 +775,8 @@ class SharedEvidenceTests(unittest.TestCase):
                     for row in value['view']['ai_stats']:
                         self.assertEqual(12, len(row['metrics']))
                         for metric in row['metrics']:
-                            if metric['metric'] == 'token-rate':
-                                self.assertIsNone(metric['value'])
-                            else:
-                                self.assertEqual('0', str(metric['value']))
+                            self.assertEqual('0', str(metric['value']))
+                            self.assertNotRegex(str(metric['display']), r'Unavailable|N/A')
                             self.assertFalse(metric.get('session_id'))
                 else:
                     self.assertIsNone(value['view'])

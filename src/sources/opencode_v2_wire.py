@@ -390,6 +390,8 @@ def current_union_message_to_legacy_bundle(
         if fallback_type and not part.get("type"):
             part["type"] = fallback_type
         native_time = part.get("time") if isinstance(part.get("time"), Mapping) else {}
+        # Preserve observed boundaries separately from _part_time's fallbacks.
+        part["observed_time"] = dict(native_time)
         part["time"] = _part_time(part, time_map)
         if part.get("type") == "tool":
             if native_time.get("ran") is not None:
@@ -398,6 +400,7 @@ def current_union_message_to_legacy_bundle(
                 part["tool"] = str(part["name"])
             state = dict(part.get("state")) if isinstance(part.get("state"), Mapping) else {}
             state_time = dict(state.get("time")) if isinstance(state.get("time"), Mapping) else {}
+            part["execution_started_at_ms"] = native_time.get("ran", state_time.get("start"))
             created = native_time.get("ran", native_time.get("created", part["time"].get("start")))
             completed = native_time.get("completed", part["time"].get("end"))
             if created is not None:

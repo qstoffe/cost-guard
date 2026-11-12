@@ -133,7 +133,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix, publisher_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
-| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition; scope-ready twelve-card presentation, observed token traffic/rates alongside Stats-only fun cost/time heuristics; configured-local calendar/DST and overlap-safe execution; no accounts/request rows or CLI change |
+| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition; scope-ready twelve-card presentation, observed token traffic and bounded response podium alongside Stats-only fun cost/time heuristics; configured-local calendar/DST and overlap-safe execution; no accounts/request rows or CLI change |
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
@@ -162,21 +162,51 @@ browser proof retain their actual limits in the Token Mix journal.
 
 ## Web AI Stats acquisition and accounting
 
-FR000682 current delta (2026-11-12): `fun-2-tokens` preserves the ten historical
-fun figures below and appends exact observed `total-tokens`/`token-rate` metrics.
-They use the same canonical deduplication/event membership and rate denominators,
-but never guessed usage or timing. Missing counters/source/pending evidence qualify
-the total and withhold precise rates; unknown/guessed/running active time withholds
-the active rate. Application owns compact/exact-help text, independent of CCost units.
-A typed pricing outage uses empty catalogs in that finite Stats service only, not
-provider/shared-cache writes, so actual traffic remains available. Compact usage
-algorithm 5 stays reusable; coverage v3 alone rejects undated-request exclusions.
-The browser stores only authoritative ready period snapshots, rejects older/foreign
-publications, and atomically reveals twelve stable Loading-only card shells. A cold
-terminal failure is Unavailable, not fabricated zero or indefinite Loading. Existing
-last-good same-period refresh, host scheduling and the optional matched-run fact keep
-their owners. No qualified per-invocation generation interval exists in captured
-facts, so no TPS ranking/scan is added. [Evidence](../../journal/web/ai-stats.md#observed-token-traffic-and-ready-card-shells--fr000682).
+### AI Stats = best effort / never Unavailable
+
+Standing owner policy, FR000685 (2026-11-12), for **every current and future card**:
+AI Stats is playful best effort, not trustworthy accounting or a scientific benchmark.
+Ready cards show observed/estimated numbers, sampled rankings or genuine empty-period
+fun facts. Sparse observations, missing prices/counters, old roots, partial coverage
+and approximated intervals must never produce Unavailable/N/A, quality badges or
+hidden values. One sensible timed response can race. Invalid individual denominators
+are excluded, not used to poison another model or period. Do not fabricate activity.
+Actual acquisition keeps plain Loading-only shells; matching ready last-good data
+survives refresh. Genuine operational failure stays a truthful **page-level error**,
+with paused shells if no last-good result, never fake success or endless Loading.
+Python and JS policy comments, `test_ai_stats_tokens.py`, recovery tests and
+`probe_ai_stats_{states,podium,loading}.cjs` link/enforce this permanent contract.
+
+Policy `fun-3-responses` preserves all cost/time/Total Tokens arithmetic and replaces
+only the token hourly table. `analysis/ai_stats_responses.py` owns per-model weighted
+output/seconds and deterministic ranking, with exact provider/model/effort identities.
+`reports/ai_stats_responses.py` extracts call-level timing from already-acquired
+invocations/messages: explicit independent step pairs, otherwise assistant start to
+valid same-response streamed end (V2 provider-stream drain before awaiting tools).
+Missing/invalid streamed metadata falls back to completion clipped at native tool
+execution start when present, never a quality veto. Genuine stream/tool overlap stays
+inside the response interval; tool-only waiting does not. Adapter
+`observed_time`/execution-start scalars distinguish actual times from synthesized
+part fallbacks. Completion-time membership is unchanged by clipping. No prompt active
+time, stream-to-finish decoding claim, benchmark speed or source mutation supplies TPS.
+Queue/TTFT/network and small client setup/finalization bias remain in the approximation.
+
+Sampling retains <=32 timing references per root/provider/model/effort, then selects
+<=32/model/period: newest eight followed by lowest SHA256 call-identity hashes from
+the remainder. Identity includes source/session/message/step/parent/order, not root
+container, usage-array position or revision; canonical step/message/clone dedup precedes
+final selection. This hierarchical historical-window sample is not a uniform reservoir.
+One model cannot starve another; actual sampled count is displayed. Root summaries
+exclude future completions at pinned acquisition now; as-of/next-future bounds reject
+reuse after clock rollback or when excluded future data becomes eligible. Existing
+revision/config/source keys invalidate changed facts. Algorithm
+`ai-stats-evidence-6-response-stream` invalidates only affected Stats evidence; shared compact
+usage and coverage v3 remain independent. Existing 256-root slices/64-root batches
+own all acquisition, with no second scan/background loop. Application prepares values,
+labels and help; JS only presents three retained medal rows and stable title help.
+The foreground Decision Delegate approved these explicit per-root/final caps and
+historical-window bias as a design interpretation, not a test or acceptance waiver.
+[Source trace and measurements](../../journal/web/ai-stats.md#sampled-response-podium--fr000685).
 
 Historical cost/time policy and acquisition baseline:
 

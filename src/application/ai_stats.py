@@ -68,26 +68,26 @@ def traffic_tokens(values):
     reasons = values.get('reasons', ())
     if values['metric'] == 'total-tokens':
         total = int(values['value'])
-        qualifier = 'Partial ' if reasons and total else ''
-        return {'value': qualifier + compact_volume(total) if not reasons or total else 'Unavailable',
-            'trait': '' if reasons else 'The robots have been snacking on context again.',
-            'token_help': f'{qualifier}{total} observed tokens: Input + Cached input + Cache write + Output '
+        return {'value': compact_volume(total),
+            'trait': 'The robots have been snacking on context again.',
+            'token_help': f'{total} observed tokens: Input + Cached input + Cache write + Output '
                 '(including reasoning once). Repeated context reads count again. Token traffic, not context size, '
                 'billing or quota.' + (' Missing usage, pending requests or source gaps prevent a complete total.' if reasons else '')}
-    raw = values['rates']
-    rates = dict(raw.fields) if hasattr(raw, 'fields') else raw
-    def amount(key):
-        return 'Unavailable' if rates[key] is None else compact_volume(rates[key]) + ' tokens/h'
-    return {'value': amount('active_rate'), 'calendar_rate': amount('calendar_rate'),
-        'workday_rate': amount('workday_rate') if rates['workdays'] else
-            'Unavailable' if {'source-incomplete', 'unknown-request-time'}.intersection(reasons) else 'No workdays',
-        'active_rate': amount('active_rate'),
-        'trait': '' if reasons else 'The silicon buffet even has office hours. Allegedly.',
-        'rate_help': 'Calendar average: Total Tokens ÷ (calendar days × 24).\n\n'
-            'Workday average: Total Tokens ÷ (configured workdays × 8).\n\n'
-            'Active AI average: Total Tokens ÷ overlap-safe AI Working Time hours. '
-            'Activity-hour consumption is not model generation speed in tokens/second. '
-            'Unavailable means token usage or the time denominator is not sufficiently evidenced.'}
+    return {'value': '' if values.get('podium') else
+                'The stopwatch is waiting for a timed response.' if values.get('detail') else
+                'No races yet. The podium is polished.',
+        'trait': 'The silicon sprint podium.',
+        'response_help': 'Approximate output tokens per second across sampled model responses. '
+            'Output (including reasoning once) ÷ summed response seconds; up to 32 sampled calls per model and effort. '
+            'Client-observed response round trip includes network, queueing and time to first token, not just decoding. '
+            'Local tool execution is excluded. Newest eight plus identity-spread historical samples; '
+            'small samples and historical-window selection are best effort.'}
+
+
+def response_tokens(row):
+    return dict(label=f'{row.provider}/{row.model}' + (f' · {row.variant}' if row.variant else ''),
+                speed=('<0.1' if row.tokens_per_second < Decimal('.1') else compact_volume(row.tokens_per_second)) + ' tok/s',
+                sample=f'{row.sampled_calls} sampled call' + ('s' if row.sampled_calls != 1 else ''))
 
 
 def stat_tokens(values):
