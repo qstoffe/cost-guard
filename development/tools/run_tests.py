@@ -200,6 +200,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_diagnostics_ux.py",
     "test_pricing_identities.py",
     "test_claude_alias_identity.py",
+    "test_recorded_model_help.py",
     "test_claude_alias_cache.py",
     "test_claude_code_accounts.py",
     "test_claude_transport.py",
