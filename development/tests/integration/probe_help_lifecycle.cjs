@@ -43,7 +43,7 @@ module.exports = async function lifecycle({command,evaluate,until,owner,mini,che
     await until(id,`document.querySelector('#context-help').matches(':popover-open')`);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:-30,y:-30},id);
     await evaluate(id,`new Promise(resolve=>setTimeout(resolve,220))`);
-    assert.equal(await evaluate(id,`document.querySelector('#context-help').hidden`),false,'keyboard ownership survives pointer exit');
+    assert.equal(await evaluate(id,`document.querySelector('#context-help').hidden`),false,'keyboard ownership survives pointer exit: '+selector);
     await evaluate(id,`document.activeElement.blur()`);
   }
   for (const activation of ['mouse','touch','Enter','Space']) {

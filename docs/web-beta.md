@@ -88,6 +88,21 @@ button retains focus. Keyboard-focus help and deliberately pinned passive help a
 distinct; action activation dismisses its help immediately. Live updates never reopen
 dismissed help without a new interaction.
 
+While hover help is open, a small browser-only check runs about once per second so
+missed pointer-exit events cannot leave it stranded. Browsers cannot reliably reveal
+the pointer's position in another app and can retain a stale hover flag. Hover help
+therefore closes after **30 seconds without actual pointer interaction**, even if
+the mouse appears stationary over it. Leave and re-enter the label to read again, or
+use keyboard focus / tap passive help to keep it open without that hover limit.
+Live updates do not renew the limit. No check runs while help is closed or owned by
+keyboard focus or a deliberate pin; no server/report work is triggered.
+
+Known limitation: a reproduced Mini touch/keyboard-to-mouse sequence can fail to
+open Total-heading hover help because the browser reports no hover at the opening
+check. Keyboard/tap help remains an alternative. Physical desktop prevalence is
+unverified; [the follow-up and evidence](../development/backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
+are tracked separately from the orphan-prevention fix.
+
 Full Watch’s **CCost** value help separates first-request incoming-context cost
 from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
 shares, not prices. **Model** names the main model even when other linked models

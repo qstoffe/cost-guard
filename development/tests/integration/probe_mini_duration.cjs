@@ -75,11 +75,17 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks}) => {
         await key('Escape');await evaluate('miniWatch.view.doc.activeElement.blur()');
         await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pip);
         const point=await evaluate(`(()=>{const r=${heading}.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
-        if(method==='focus')await evaluate(`${heading}.focus()`);
+        if(method==='focus') { await key('Tab');await evaluate(`${heading}.focus()`); }
         if(method==='hover')await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pip);
         if(method==='touch')for(const type of ['touchStart','touchEnd'])await command('Input.dispatchTouchEvent',{
           type,touchPoints:type==='touchStart'?[{...point,id:1,radiusX:1,radiusY:1,force:1}]:[]},pip);
-        await until(`${panel}.matches(':popover-open')`);
+        await until(`${panel}.matches(':popover-open')`).catch(async error=>{
+          const state=await evaluate(`({method:'${method}',theme:'${theme}',scheme:'${scheme}',unit:'${unit}',
+            focus:miniWatch.view.doc.activeElement?.tagName,heading:${heading}.outerHTML,
+            hovered:${heading}.matches(':hover'),windowFocus:miniWatch.view.doc.hasFocus(),
+            panel:${panel}.outerHTML})`);
+          throw new Error(error.message+' '+JSON.stringify(state));
+        });
         assert.equal(await evaluate(`${panel}.textContent`),'The entire session’s reference cost, including attributed linked subagents.');
       }
       await key('Escape');await key('Tab');
