@@ -49,15 +49,22 @@ def native_export(source, session_id, epoch, cancelled):
         if len({message['id'] for message in data['messages']}) != len(data['messages']):
             raise SessionExportError('export_invalid_response')
         # The CLI emits the native data, not the HTTP {data: ...} envelope.
-        payload = json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode('utf-8')
-        if len(payload) > MAX_EXPORT_BYTES:
-            raise SessionExportError('export_too_large')
+        # Bound indentation expansion before retaining an oversized serialized copy.
+        payload = bytearray()
+        for chunk in json.JSONEncoder(ensure_ascii=False, allow_nan=False, indent=2).iterencode(data):
+            encoded = chunk.encode('utf-8')
+            if len(payload) + len(encoded) >= MAX_EXPORT_BYTES:  # Reserve the final newline.
+                raise SessionExportError('export_too_large')
+            payload.extend(encoded)
+            if cancelled() or time.monotonic() >= deadline:
+                raise SessionExportError('export_cancelled')
+        payload.extend(b'\n')
         reader.refresh_observation_epoch()
         if reader.observation_epoch != epoch:
             raise SessionExportError('export_source_changed')
         if cancelled() or time.monotonic() >= deadline:
             raise SessionExportError('export_cancelled')
-        return payload
+        return bytes(payload)
     except SourceError as error:
         if error.http_status in (404, 405, 501):
             code = 'export_unavailable'

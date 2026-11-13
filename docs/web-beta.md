@@ -215,6 +215,15 @@ Choose a destination and `.json` filename, or Cancel without starting an export.
 Other browsers use a normal download: browser settings may save automatically to
 Downloads rather than showing a picker. Cost Guard does not remember a save path.
 
+Both routes suggest the observed **session title + `.json`**, preserving case,
+spaces and valid Unicode. Invalid filename characters and misleading controls are
+removed (for example, `Fix:Auth|Tests?` becomes `FixAuthTests.json`); trailing dots/
+spaces are dropped and long stems are limited to 200 UTF-8 bytes. Empty or reserved
+names such as `CON` use `session-<session-id>.json`. Your browser/OS controls name
+collisions and the final save location. Native JSON is human-readable UTF-8 with
+two-space indentation and a final newline; data and whitespace inside strings
+are unchanged.
+
 Export needs an observed session in the currently selected OpenCode V2 instance
 and a compatible native export API (verified with OpenCode **2.2.6**). It also works
 for sessions created by isolated LIVE servers using the shared database; opening
@@ -223,8 +232,9 @@ Unsupported sources/versions show **Export unavailable**, with the CLI alternati
 `opencode session export <session-id> --sanitize`. Errors never substitute a summary
 or silently truncated JSON. Reopen an expired/source-changed selection before retrying.
 
-Transfers are read-only, one at a time, limited to **16 MiB** and a **four-second**
-source deadline. Larger exports require the native CLI. Transcripts are not staged
+Transfers are read-only, one at a time, limited to **16 MiB** (including final JSON
+indentation/newlines) and a **four-second** source deadline. Oversize output fails,
+never silently falling back to minified JSON. Larger exports require the native CLI. Transcripts are not staged
 in Cost Guard's cache or repository. Successful real native Save As destination
 selection and disk writing remain **UNVERIFIED** under the owner's limited
 acceptance-evidence exception; browser fallback files and deterministic native

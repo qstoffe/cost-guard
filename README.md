@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.45, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.46, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.45 (2026-11-14):** Full Watch keeps Running disclosures stable through same-call revisions and changing job membership. Expanded activity is indented; failed physical calls expose bounded, privacy-filtered source input and safe reason categories without changing counts or accounting. [Activity and privacy](docs/watch-activity.md).
+**v81.46 (2026-11-14):** Session exports use the observed title for safe `.json` filenames and pretty-print native sanitized JSON. Unicode and JSON values are preserved; trusted-click Save As, browser fallback and the final 16 MiB limit remain protected. [Export behavior](docs/web-beta.md#export-a-session-as-json).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -119,7 +119,7 @@ const SessionDetail = (() => {
         }
         let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
         if (!this.attached || generation !== this.generation) return;
-        this.exporter?.update(this.token, data.export_available === true);
+        this.exporter?.update(this.token, data.export_available === true, data.result?.view?.prompt_blocks?.[0]?.title);
         if (!data.result) {
           this.sourceStatus(data);
           return;
@@ -161,7 +161,7 @@ const SessionDetail = (() => {
         this.status.textContent = this.data ? '' : `Session unavailable (${error.message}).`;
         this.status.hidden = !this.status.textContent;
         this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
-        if (error.message === 'detail_expired') this.token = null;
+        if (error.message === 'detail_expired') { this.token = null; this.exporter?.close(); }
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally { this.busy = false; }
     }

@@ -322,6 +322,10 @@ action help instead of a separate trigger/passive caption. The empty status regi
 occupies no space; real operation/error feedback remains. Shared help attaches
 before the save listener, dismissing synchronously without delaying the picker;
 restored picker focus is dismissed in the same synchronous turn.
+FR000702 supplies the observed detail title with the selected token before the
+click; the action removes unsafe filename characters, bounds the stem and captures
+one name for picker/fallback. Token/source retirement clears it and aborts pending
+work. The ID-based ASCII transport filename and strict response checks stay intact.
 `app.js` keeps attachment bytes separate from analytics DTOs and validates host
 identity, MIME, disposition and complete length before exposing a Blob.
 `session_detail.py` binds an unexpired detail lease to its canonical source,
@@ -332,7 +336,9 @@ nonblocking export slot and host/selection/connection cancellation.
 `sources/opencode_v2_export.py` validates the registered source's native OpenAPI
 capability and obtains `sanitize=true` transfer through a private bounded transport.
 It returns native `{info, messages}` (CLI shape), not projected prompt rows or the
-HTTP envelope. Identity/schema/size/incomplete-read failures produce no successful
+HTTP envelope. Two-space UTF-8 JSON plus a final newline preserves native values;
+bounded incremental encoding rejects pretty expansion above 16 MiB before return.
+Identity/schema/size/incomplete-read failures produce no successful
 file; HTTP response bytes use no-store/nosniff and an ASCII attachment filename.
 Maximum export is 16 MiB with a four-second absolute source deadline; no disk
 staging, new OpenCode process, cache, model call or source write is introduced.

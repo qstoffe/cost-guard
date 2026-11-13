@@ -53,7 +53,7 @@ def main():
     with export_source() as (native, state, _):
         source = SyntheticMonthSource(1, 3, month_start_ms=1000)
         snapshot = source.snapshots.pop('root-0000')
-        root = replace(snapshot.root, session_id=SESSION, title='Synthetic LIVE-style å 日本語')
+        root = replace(snapshot.root, session_id=SESSION, title='Synthetic: LIVE-style å 日本語 🚀?')
         source.snapshots[SESSION] = replace(snapshot, root=root, sessions=(root,), **{
             field: tuple(replace(item, session_id=SESSION) for item in getattr(snapshot, field))
             for field in ('messages', 'parts', 'events', 'invocations')})
@@ -63,7 +63,7 @@ def main():
         host = WebHost(config, jobs=HelpAuditJobs())
         host.live = ExportRuntime(service, host.events.publish)
         host.start(); host.publish_ready()
-        print(json.dumps({'url': host.browser_url(), 'session': SESSION}), flush=True)
+        print(json.dumps({'url': host.browser_url(), 'session': SESSION, 'transfer': state.transfer}), flush=True)
         try:
             for line in sys.stdin:
                 command = json.loads(line)['command']

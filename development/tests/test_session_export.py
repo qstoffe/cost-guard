@@ -14,6 +14,7 @@ from unittest.mock import patch
 from development.tests.fixtures.session_export import export_source, SESSION, TRANSFER
 from src.application.session_detail import SessionDetails
 from src.sources.errors import SessionExportError
+from src.sources.opencode_v2_export import MAX_EXPORT_BYTES
 from src.web.http import LoopbackServer
 from src.web.observations import WebObservations
 
@@ -29,6 +30,36 @@ def selected_details(source):
 
 
 class NativeExportTests(unittest.TestCase):
+    def test_pretty_utf8_preserves_native_values_order_and_string_whitespace(self):
+        with export_source() as (source, state, _):
+            state.transfer['info']['nested'] = {'values': [None, True, False, 1.5, 'Quotes "å 🚀"\n  next\tline']}
+
+            result = source.export_session(SESSION, source.observation_epoch, lambda: False)
+
+            self.assertEqual(state.transfer, json.loads(result))
+            self.assertEqual(list(state.transfer), list(json.loads(result)))
+            self.assertTrue(result.startswith(b'{\n  "info": {\n'))
+            self.assertIn(b'\n    "nested": {\n      "values": [\n', result)
+            self.assertIn('Quotes \\"å 🚀\\"\\n  next\\tline'.encode(), result)
+            self.assertTrue(result.endswith(b'\n}\n'))
+
+    def test_final_pretty_bytes_enforce_real_limit_including_newline(self):
+        with export_source() as (source, state, _):
+            state.transfer['info']['padding'] = ''
+            overhead = len((json.dumps(state.transfer, ensure_ascii=False, indent=2) + '\n').encode())
+            state.transfer['info']['padding'] = 'x' * (MAX_EXPORT_BYTES - overhead)
+            # Compact upstream still fits when pretty output grows beyond the limit.
+            state.body = json.dumps({'data': state.transfer}, ensure_ascii=False, separators=(',', ':')).encode()
+
+            result = source.export_session(SESSION, source.observation_epoch, lambda: False)
+
+            self.assertEqual(MAX_EXPORT_BYTES, len(result))
+            state.transfer['info']['padding'] += 'å'
+            state.body = json.dumps({'data': state.transfer}, ensure_ascii=False, separators=(',', ':')).encode()
+            self.assertLess(len(state.body), MAX_EXPORT_BYTES)
+            with self.assertRaisesRegex(SessionExportError, '^export_too_large$'):
+                source.export_session(SESSION, source.observation_epoch, lambda: False)
+
     def test_complete_native_payload_preserves_types_lifecycle_unicode_and_zero_assistants(self):
         with export_source() as (source, state, _):
             for messages in ([], TRANSFER['messages'], [
@@ -153,6 +184,9 @@ class ExportHttpTests(unittest.TestCase):
                 self.assertEqual('no-store', headers['Cache-Control'])
                 self.assertEqual('nosniff', headers['X-Content-Type-Options'])
                 self.assertEqual('application/json; charset=utf-8', headers['Content-Type'])
+                self.assertEqual(len(body), int(headers['Content-Length']))
+                self.assertTrue(body.startswith(b'{\n  "info": {'))
+                self.assertTrue(body.endswith(b'\n}\n'))
                 self.assertEqual(f'attachment; filename="opencode-{SESSION}-sanitized.json"', headers['Content-Disposition'])
                 self.assertEqual(owner.nonce, headers['X-CG-Instance'])
                 self.assertTrue(server.exports.slot.acquire(False))
