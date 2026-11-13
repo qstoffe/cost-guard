@@ -357,3 +357,138 @@ replacement. The previous 47 checkpoint matches remain valid.
 This addendum does not implement the Cost Guard repair or modify
 the current **On Hold** status, binary P0 acceptance,
 native approval conditions or restart/browser test gate.
+
+## V6 owner-executed exact per-request identity proof — 2026-11-13
+
+**Read-only local validation from owner-supplied, pseudonymized `FR000692-read-only-metadata-v6` JSON.**
+The full uploaded file (not the truncated chat preview) was independently counted.
+V6 corrects the previous probe's omission of legacy inline content in
+`session_message.data.content[*].native` and resolves native
+`(sessionID, messageID)` pairs against exact saved Claude SDK
+`assistant.uuid` and `assistant.message.model` within their named transcripts.
+All data remained local except for this bounded metadata report; no
+raw UUIDs, prompt text, directory paths or credentials are copied to GitHub.
+
+| Evidence category | Exact result |
+| --- | ---: |
+| Same-day candidate sessions | 49 |
+| Claude-related session selections (including five empty) | 19 |
+| Assistant-bearing sessions | 14 |
+| Alias-defect sessions | **12** |
+| Usage-bearing, alias-defect OpenCode assistant requests | **87/87** with at least one DIRECT UUID-to-model association |
+| Distinct native SDK reply pairs across the 87 | **174** |
+| Native pairs resolving to exact SDK reply with concrete model | **174/174** |
+| Missing SDK reply for alias native pair | **0** |
+| Alias request with conflicting directly joined model values | **0** |
+| Native pairs pointing to older-than-current plugin SDK session | **86** across **40** alias requests |
+| Concrete Fable5.2 success control | 1 request / 1 direct joined reply |
+| Failed concrete Haiku4.5 control | 1 saved assistant step, **zero recognized usage**, 4 direct joined replies |
+| Entire assistant-bearing inventory | **89** stored assistant steps, **179/179** direct pairs resolved, zero conflicts |
+| Exact SDK transcript files found | **21** |
+| Other nearby-mtime transcript files surveyed | 41 (search candidates, not exact ownership proof) |
+| JSONL parse errors / read failures / budget skips | 0 |
+
+**Alias identity ledger — precise persisted source reply proof:**
+
+| Saved Claude Agent selector | Defect sessions | Stored known-usage requests with direct reply links | Distinct directly resolved SDK replies | Actual SDK `message.model` |
+| --- | ---: | ---: | ---: | --- |
+| `sonnet` | 9 | 84 | 171 | `claude-sonnet-5-5` |
+| `opus` | 1 | 1 | 1 | `claude-opus-5-5` |
+| `haiku` | 1 | 1 | 1 | `claude-haiku-5-5` |
+| `fable` | 1 | 1 | 1 | `claude-fable-5-1` |
+| **Total** | **12** | **87** | **174** | |
+
+**The previous five Sonnet gaps are closed for the saved request-to-reply
+model association, not merely suggested by timing.** Original saved steps /
+current checkpoint matches were `8/1`, `8/1`, `10/1`, `20/12`, `23/14`.
+V6 now finds, respectively: **8 steps / 19 direct SDK reply pairs**,
+**8 / 13**, **10 / 20**, **20 / 42**, **23 / 48**. Each individual step has
+at least one exact matched assistant reply, and all direct replies on that
+step name the same concrete Sonnet 5.5. Their 86 exact references to
+earlier SDK session IDs prove why using just the plugin's last
+`claudeSessionID` would miss historical execution.
+
+**Technical handoff — source path confirmed in existing Cost Guard code:**
+
+1. The v2.2.7/v2.3.0 upstream Claude Agent converter preserves native
+   `sessionID` and `messageID` on saved assistant content even though the
+   executed `response-metadata.modelId` was discarded from the stored
+   assistant envelope. In the local v2.2.7 records the source native keys
+   are on **inline assistant `content[*].native`**; the separate
+   `session_part` table is empty for these cases. Newer split-part
+   arrangements also need to be admitted.
+2. Existing Cost Guard
+   [`src/sources/opencode_v2_wire.py`](../../src/sources/opencode_v2_wire.py)
+   `current_union_message_to_legacy_bundle` copies assistant
+   `content[*]` to normalized parts; the
+   [`src/sources/opencode_v2_normalization.py`](../../src/sources/opencode_v2_normalization.py)
+   normalizer retains `native` inside each `NormalizedPart.data`.
+   Thus the **read-only native reply references already cross the source
+   boundary**. Confirm on the actual registered HTTP service during
+   implementation; do not read only envelope `native`, latest plugin KV,
+   or mutable `/api/model` by deleted original location.
+3. Resolve each source-qualified `(sdk_session_id, sdk_reply_uuid)`
+   independently, across *all referenced historical SDK sessions*, against
+   exactly matching Claude JSONL `assistant.uuid`, reading
+   `assistant.message.model`. This lookup must not be constrained to
+   the most recent plugin checkpoint session ID. Qualify any transcript
+   file ambiguity, deleted directory, missing file, bad JSON or conflicting
+   UUID/model; fail closed rather than attribute a different response.
+   Index referenced SDK session IDs once per bounded source snapshot;
+   avoid rescanning thousands of JSONL files for every UI cell.
+4. Apply an **executed-release evidence override** at the appropriate
+   source identity stage before mutable DesktopModelCatalog alias
+   resolution in
+   [`src/sources/opencode_v2.py`](../../src/sources/opencode_v2.py)
+   `_normalize_messages`. Preserve separately: source provider route,
+   original recorded selector (`sonnet`, `opus`, etc.), exact executed
+   model ID(s), source provenance, optional effort, and mutable
+   current-catalog estimation. `ModelRef`/`ModelResolution` and cache
+   validation need the right immutable/verified semantics — do *not*
+   pretend SDK evidence is a `desktop-catalog-estimate`, or rewrite
+   OpenCode's original SQLite rows.
+5. Source-revision and derived-cost caches must treat changes in
+   proven model evidence as an input dependency; invalidate dependent
+   identity/price projections while respecting current cache contracts.
+   Prefer reusing existing shared model-resolution surfaces, so Sessions,
+   Session details, Full/Mini Watch and CCost all agree. Support later
+   native part migrations and cold application restarts.
+6. A saved OpenCode step can reference **1 to 6 distinct Claude SDK
+   assistant UUIDs** (37 single, 25 double, 19 triple, 3 quadruple,
+   3 sixfold within the 87 defect requests). Every linked UUID in
+   the actual defects resolves to the **same** model within its step.
+   The future general resolver must handle mixed-version steps and
+   multiple replies/retries without guessing a single model or
+   double-counting SDK repeated usage. Provider charge/reference CCost
+   is still a **separate** verification: only apply a price when
+   historical executed model, I/C/W/O usage and applicable reference
+   rates are all actually supported.
+7. Tests must cover the exact 12 alias histories (counts **87/87**),
+   all five former multi-SDK gaps, deleted project locations,
+   conflicting/unavailable transcripts, no native metadata,
+   multiple executed models inside one step, old inline vs new split
+   parts, failed concrete Haiku4.5 consumption remaining **unknown**
+   rather than fabricated zero, cost-cache/effort/provider isolation,
+   and native response metadata preservation on a new bounded test.
+   The owner requires exact live installed-state readback after
+   warm/cold and two normal Cost Guard restarts before Complete.
+
+**What this proves vs what it does not:**
+
+- **PROVEN on the owner's actual local source:** all 87 persisted
+  alias-defect assistant usage requests carry one or more *direct*
+  native UUID references to real Claude replies with the concrete
+  executed model release recorded as above; all 174 references resolve,
+  none conflict. The v4 conclusion that 40 requests lacked any
+  exact model evidence is superseded; that probe omitted inline content.
+- **NOT YET PROVEN:** a fully installed Cost Guard implementation,
+  final UI/cold-warm/two-restart display, availability and correctness
+  of historical price rates, billed invoice equivalence, all future
+  alias/fork cases, or truly zero consumption for the failed pinned
+  Haiku selection. An SDK reply model is source-qualified release
+  evidence, not automatically an invoice or proof that every possible
+  hidden contributing SDK response was captured.
+
+**Workflow status unchanged:** this addendum documents owner-supplied
+proof only. FR000692 remains **On Hold** until the owner explicitly
+moves it back to Ready; P0 acceptance has not been weakened or met.
