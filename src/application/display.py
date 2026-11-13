@@ -58,6 +58,19 @@ def amount_tokens(values):
                     "total_main_ccost": "total_main_estimated", "total_subagent_ccost": "total_subagent_estimated"}[key]
             unresolved = values.get(flag, False)
         tokens[key] = ccost_amount(decimal(values[key]), unresolved=unresolved)
+    if "main_ccost" in values and "subagent_ccost" in values and ("prompt_count" in values or "known_ccost" in values):
+        tokens["session_cost_help"] = (f"Whole root session tree\nAll main requests: {ccost_amount(decimal(values['main_ccost']))}"
+            f"\nAll linked subagent requests: {ccost_amount(decimal(values['subagent_ccost']))}"
+            f"\nTotal CCost: {tokens.get('ccost', tokens.get('known_ccost'))}" +
+            ("\nPartial cost coverage; unavailable usage is not zero." if not values.get("complete", True) else "") +
+            "\nReference valuation, not actual billing. Amounts are independently rounded.")
+    if "total_ccost" in values and "other_ccost" in values:
+        tokens["session_cost_help"] = (f"Whole root session tree\nAll main requests: {tokens['total_main_ccost']}"
+            f"\nAll linked subagent requests: {tokens['total_subagent_ccost']}"
+            f"\nOutside prompt/compaction rows: {ccost_amount(decimal(values['other_ccost']))} ({values['other_calls']} calls)"
+            f"\nTotal CCost: {tokens['total_ccost']}" +
+            ("\nPartial cost coverage; unavailable usage is not zero." if not values.get("comparison_cost_complete", True) else "") +
+            "\nReference valuation, not actual billing. Amounts are independently rounded.")
     for key in ("billed_cost", "billed_today", "billed_month", "remaining_money", "limit_money"):
         if key in values:
             tokens[key] = money(decimal(values[key]))
@@ -358,10 +371,14 @@ def _with_display(value, timezone_id, now_ms):
     tokens.update(session_model_tokens(values))
     tokens.update(quota_tokens(values))
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
-    unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing})
-                            for unit, items in variants.items()}) if differing else None
+    # Large cost help is already present in the selected display. Unit maps are
+    # overlays in every consumer; don't duplicate the selected copy per card.
+    cost_help = {"cost_detail_help", "mini_cost_detail_help", "session_cost_help"}
+    unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing
+                            and not (key in cost_help and items[key] == tokens[key])})
+                             for unit, items in variants.items()}) if differing else None
     # Opaque keyed maps and canonical quota reference values need no display recursion.
-    opaque = {"by_model", "by_day_utc", "current_context_sources", "ccost_reference"}
+    opaque = {"by_model", "by_day_utc", "current_context_sources", "ccost_reference", "cost_detail"}
     fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
     quota_variants = (("quota_display", quota_displays(values)),) if "remaining_fraction" in values else ()

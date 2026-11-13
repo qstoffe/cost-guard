@@ -29,7 +29,7 @@ class PromptProjectionTests(unittest.TestCase):
                                   snapshot=self.snapshot, catalog=self.prices, config={}, **kwargs)
 
     def test_single_row_projection_is_identical_to_block_row(self):
-        bundle = replace(self.bundle, prompts=(self.record,), compactions=())
+        bundle = replace(self.bundle, prompts=(self.record,), compactions=(), trace_entries=self.record.entries)
 
         row = self.projector(bundle).prompt(self.record)
         block = self.block(bundle)
@@ -111,7 +111,7 @@ class PromptProjectionTests(unittest.TestCase):
     def test_unknown_reference_price_propagates_incomplete_totals_not_billing_fallback(self):
         unknown = replace(self.record, entries=tuple(replace(item, model=ModelRef("provider", "unknown-model"))
                                                     for item in self.record.entries))
-        bundle = replace(self.bundle, prompts=(unknown,), compactions=())
+        bundle = replace(self.bundle, prompts=(unknown,), compactions=(), trace_entries=unknown.entries)
 
         block = self.block(bundle)
 
@@ -145,8 +145,8 @@ class PromptProjectionTests(unittest.TestCase):
             row = self.projector().compaction(partial, 1)
 
             self.assertIsNone(row.token_mix_percent)
-            self.assertEqual((record.model_calls, self.projector().compaction(record, 1).ccost),
-                (row.calls, row.ccost))
+            self.assertEqual((record.model_calls, Decimal("0.006")), (row.calls, row.ccost))
+            self.assertTrue(row.unresolved_cost)
 
     def test_completed_partial_rows_do_not_leave_an_unlabelled_subset_total_or_change_other_totals(self):
         original = self.block()
@@ -158,6 +158,5 @@ class PromptProjectionTests(unittest.TestCase):
             block = self.block(replace(self.bundle, **{name: records}))
 
             self.assertEqual("N/A", block.total_mix_text)
-            self.assertEqual((original.total_ccost, original.total_calls, original.total_ictx_cost_text,
-                original.total_extra_cost_text), (block.total_ccost, block.total_calls,
-                block.total_ictx_cost_text, block.total_extra_cost_text))
+            self.assertEqual((original.total_ccost, original.total_calls), (block.total_ccost, block.total_calls))
+            self.assertEqual(("N/A", "N/A"), (block.total_ictx_cost_text, block.total_extra_cost_text))

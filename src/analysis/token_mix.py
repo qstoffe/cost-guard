@@ -32,7 +32,8 @@ class TokenMix:
 
     @property
     def cost_complete(self) -> bool:
-        return self.costs is not None and self.priced_requests == self.request_count
+        return (self.costs is not None and self.priced_requests == self.request_count
+                and all(value is not None for value in self.totals))
 
     @property
     def total_tokens(self) -> int | None:
@@ -93,7 +94,8 @@ def priced_token_mix(
     priced = 0
     for model, tokens in items:
         # Same zero-usage and unknown-price rules as analysis.valuation.comparison_cost.
-        parts = valuation(model, tokens) if tokens.total else (Decimal(0),) * 4
+        complete = all(name in tokens.known_fields for name in MIX_FIELDS)
+        parts = valuation(model, tokens) if tokens.total or not complete else (Decimal(0),) * 4
         if parts is None:
             continue
         for index, value in enumerate(parts):

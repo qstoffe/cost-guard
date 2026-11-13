@@ -131,9 +131,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
         ambiguous = any(value.observed_requests and providers[route] != 1 for route, value in unassigned)
         if unknown.observed_requests and not ambiguous:
             # Include proven requests only for this account, never another account's history.
-            value = replace(proven, known_ccost=proven.known_ccost + unknown.known_ccost,
-                            observed_requests=proven.observed_requests + unknown.observed_requests,
-                            priced_requests=proven.priced_requests + unknown.priced_requests)
+            value = combined_cost((proven, unknown))
             attribution = "provider-attributed estimate; not verified account/billing attribution"
             estimated_scopes.append(name)
         elif unknown.observed_requests:

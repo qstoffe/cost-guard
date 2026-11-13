@@ -118,7 +118,7 @@ module.exports = async function defaultEffort({command,evaluate,until,owner,mini
   for(const mode of ['focus','hover','touch']) {
     const text=await open(owner,'.session-history-table tr[data-id="mixed-effort"] td:nth-child(2) .help-value',mode);
     assert.match(text,/Main prompt — anthropic\/claude-sonnet-5-5 · default \(high\)/);
-    assert.match(text,/Subagents — anthropic\/claude-opus-5-5 · default \(medium\)/);
+    assert.match(text,/Subagent 1 — anthropic\/claude-opus-5-5 · default \(medium\)/);
     assert.doesNotMatch(text,/default \([a-z]+\)\*|Likely effort/);
   }
   for(const selector of ['.watch-active th:nth-child(5) button','.session-history-table th:nth-child(3) button','.comparison-table th:nth-child(4) button'])

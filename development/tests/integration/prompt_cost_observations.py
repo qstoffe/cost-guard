@@ -39,7 +39,7 @@ def observe_prompt_cost(get, cookie, owner):
                     assert row['linked_agent_count'] == cli.linked_agent_count
                     assert sum((p.known_ccost for p in cli.cost_parts), Decimal(0)) == cli.ccost
                     for observed in parts:
-                        expected = [p for p in cli.cost_parts if (
+                        expected = [p for p in cli.cost_parts if p.agent == observed['agent'] and (
                             'main' if p.agent == 0 else 'subagents', p.provider_id, p.model_id, p.variant, p.price_tier) == (
                             observed['role'], observed['provider_id'], observed['model_id'], observed['variant'], observed['price_tier'])]
                         assert expected

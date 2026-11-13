@@ -67,7 +67,7 @@ class PromptCostDetailTests(unittest.TestCase):
             prompt = wire[kind][0]["rows"][0]["prompt"]
             self.assertIn("Main prompt — github-copilot/gpt-test · default (high) / High",
                           prompt["display"]["cost_detail_help"])
-            self.assertIn("Subagents — github-copilot/claude-test · Low (1 agent)", prompt["display"]["cost_detail_help"])
+            self.assertIn("Subagent 1 — github-copilot/claude-test · Low", prompt["display"]["cost_detail_help"])
             self.assertIn("• Cached input: $0.04", prompt["display_units"]["usd"]["cost_detail_help"])
             self.assertIn("github-copilot/claude-test", prompt["display"]["model_detail_help"])
             self.assertEqual(str(row.ccost), prompt["ccost"])
@@ -103,10 +103,12 @@ class PromptCostDetailTests(unittest.TestCase):
         waiting = self.project(without_usage)
         self.assertEqual(1, waiting.linked_agent_count)
         displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
-        self.assertIn("1 linked subagent(s) have no recorded request usage", displayed["model_detail_help"])
-        self.assertIn("1 linked subagent(s) have no recorded request usage", displayed["cost_detail_help"])
+        self.assertTrue(waiting.unresolved_cost)
+        self.assertIn("Subagent 1 — Request usage unavailable; model/effort unknown", displayed["model_detail_help"])
+        self.assertIn("CCost: N/A", displayed["cost_detail_help"])
+        self.assertIn("Partial cost coverage", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
-        self.assertIn("Subagents — github-copilot/gpt-test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
+        self.assertIn("Subagent 1 — github-copilot/gpt-test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
         self.assertEqual("cu", record.entries[-1].logical_prompt_id)
 
     def test_partial_telemetry_and_unpriced_agents_never_manufacture_category_zeroes(self):
@@ -121,10 +123,10 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual((None,) * 4, row.cost_parts[0].categories)
         self.assertEqual(0, row.cost_parts[1].priced_requests)
         self.assertNotIn("• Output: 0", help_text)
-        self.assertIn("Some category amounts are unavailable", help_text)
+        self.assertIn("Some category amounts are unavailable; subtotal includes known priced usage.", help_text)
         self.assertIn("Reference price data cannot currently be checked", help_text)
         self.assertNotIn("has no listed reference price", help_text)
-        self.assertIn("Total CCost: ?", help_text)
+        self.assertIn("Total CCost: ?<0.1", help_text)
 
     def test_tiers_and_live_corrections_reconcile_unrounded_not_displayed_shares(self):
         snapshot = make_uncompacted_snapshot(running=True)
@@ -160,13 +162,16 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(row.calls, sum(item.calls for item in row.cost_parts))
         displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]
         groups = displayed["cost_detail"]["parts"]
-        combined = next(group for group in groups if group["variant"] == "low")
-        self.assertEqual(("subagents", 2, 2), (combined["role"], combined["agent_count"], combined["calls"]))
+        separate = [group for group in groups if group["variant"] == "low"]
+        self.assertEqual(2, len(separate))
+        combined = separate[0]
+        self.assertEqual(("subagents", 1, 1), (combined["role"], combined["agent_count"], combined["calls"]))
         # Two physical requests, each (100 input * 1 + 10 output * 4) / 10000 Credits.
-        self.assertEqual(D(".028"), D(combined["known_ccost"]))
-        self.assertEqual((D(".02"), D(0), D(0), D(".008")), tuple(D(value) for value in combined["categories"]))
-        self.assertIn("Subagents — github-copilot/gpt-test · Low (2 agents): 2", displayed["display"]["calls_help"])
-        self.assertIn("Subagents — github-copilot/gpt-test · Low (2 agents)", displayed["display"]["model_detail_help"])
+        self.assertEqual([D(".014"), D(".014")], [D(group["known_ccost"]) for group in separate])
+        self.assertEqual((D(".01"), D(0), D(0), D(".004")), tuple(D(value) for value in combined["categories"]))
+        for group in separate:
+            self.assertIn(f"Subagent {group['agent']} — github-copilot/gpt-test · Low: 1", displayed["display"]["calls_help"])
+            self.assertIn(f"Subagent {group['agent']} — github-copilot/gpt-test · Low", displayed["display"]["model_detail_help"])
         self.assertFalse(combined["prompts_complete"], "unparented requests cannot establish prompt boundaries")
         self.assertEqual(0, combined["prompt_count"])
 
@@ -182,8 +187,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(1, row.linked_agent_count)
         self.assertEqual((1, 1), tuple(part.agent for part in child_parts))
         self.assertEqual(D(20), next(part.known_ccost for part in child_parts if part.model_id == "claude-test"))
-        self.assertIn("Subagents — github-copilot/claude-test · High (1 agent)", text)
-        self.assertNotIn("Subagent 1", text)
+        self.assertIn("Subagent 1 — github-copilot/claude-test · High", text)
+        self.assertIn("Subagent 1 total (all own request groups): 21", text)
         self.assertEqual(row.ccost, sum(part.known_ccost for part in row.cost_parts))
 
     def test_bounded_export_preserves_honest_omitted_count_and_subtotal(self):
@@ -204,7 +209,7 @@ class PromptCostDetailTests(unittest.TestCase):
 
         same = replace(row, cost_parts=tuple(replace(p, variant=None) for p in parts))
         detail = self.wire(same)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]
-        self.assertEqual((2, 0, 29), (len(detail["parts"]), detail["omitted_parts"], detail["parts"][1]["agent_count"]))
+        self.assertEqual((24, 6, 1), (len(detail["parts"]), detail["omitted_parts"], detail["parts"][1]["agent_count"]))
 
     def test_provider_identity_zero_calls_and_missing_category_data_stay_honest(self):
         row = self.project(make_uncompacted_snapshot())
@@ -257,7 +262,7 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual((1, 3, 2, True), tuple(group[key] for key in ("agent_count", "calls", "prompt_count", "prompts_complete")))
         help_text = wire["display"]["cost_detail_help"]
         self.assertEqual(1, help_text.count("Number of prompts:"))
-        self.assertIn("(1 agent)\n• Number of prompts: 2\n• Input:", help_text)
+        self.assertIn("• Number of prompts: 2\n• Input:", help_text)
         self.assertIn("• Number of prompts: 2\n• Input: $", wire["display_units"]["usd"]["cost_detail_help"])
         self.assertNotIn("prompt_ids", str(wire))
         self.assertNotIn("cu2", str(wire))
@@ -294,7 +299,9 @@ class PromptCostDetailTests(unittest.TestCase):
             invocations=(*snapshot.invocations, request)))
         group = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"][1]
 
-        self.assertEqual((2, 2, True), (group["agent_count"], group["prompt_count"], group["prompts_complete"]))
+        self.assertEqual((1, 1, True), (group["agent_count"], group["prompt_count"], group["prompts_complete"]))
+        self.assertEqual(2, len([part for part in self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"]
+            if part["role"] == "subagents"]))
 
     def test_missing_and_ambiguous_prompt_boundaries_qualify_observed_count(self):
         snapshot = make_uncompacted_snapshot()

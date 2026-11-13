@@ -21,6 +21,18 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000700: `analysis/coverage.py` qualifies linked usage; `valuation.py` retains
+within-tree sibling multiplicity and canonical physical provenance. Session-cost
+contributions retain known amounts separately from completeness. `prompt_costs.py`
+in reports/application owns individual-agent groups; display exports compact Mini
+and whole-session role help. Cache algorithms: analysis 21, scalar summary 7,
+token-mix evidence 2. Coverage: `test_recursive_cost_coverage.py`, attribution,
+cost-detail, session-cache, period/mix and Full/Mini suites; hidden
+`probe_web_help.cjs ... --watch-only` and read-only `probe_recursive_root.py
+--session-id <authorized-root> --output <owned-file>`. The global Earlier-selector
+probe timed out; [evidence/limits](../../journal/recursive-subagent-ccost.md) distinguish
+that gap from the native root and controlled/rendered projection checks.
+
 FR000699: `application/quota_estimates.py` formats raw tooltip amounts separately
 from unchanged visible estimate rounding; `quota_ccost.py` exports compact numeric
 help and Mini amount/status tokens. `display.py::web_quota_reset` adds configured-local

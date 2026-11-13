@@ -58,6 +58,20 @@ Date totals de-duplicate exact fork-cloned requests; session views retain availa
 
 OpenCode V2 `subagent` and legacy `task` tools share one child-link interpretation for prompt accounting and linked Watch activity. Structured tool-state `sessionID`/`sessionId` metadata takes precedence; an exact native tool-result wrapper is only a fallback. A real parent-child relationship and valid invocation times are required. Nested/background requests remain on the initiating prompt, and repeated or overlapping observations do not add Calls twice. If that child is invoked again later, the later invocation opens a separate window. Missing ancestry/timing cannot be repaired from copied prose or a cost difference. Whole-session totals independently include available root-tree usage: compactions, unallocatable work, missing history or unknown prices can legitimately keep a total different from visible prompt rows.
 
+Independent sibling requests remain distinct even when model, token counters and
+completion time match. Repeated physical captures count once; fork-clone matching
+across trees preserves the largest observed within-tree multiplicity. Whole-session
+help separates all main requests from all linked descendants; an explicit outside-row
+bucket retains valid work that cannot be assigned to a prompt or compaction.
+
+A linked child is not proof of spending. Complete inactive history with no assistant
+request can establish no recorded execution; pending, partial acquisition and
+unavailable usage cannot establish zero. Response text/reasoning without counters
+is an observed request with unknown usage. Known safely priced categories remain a
+partial subtotal; unknown placeholder counters never contribute. Multi-tier prices
+require complete input-category evidence to choose a tier. Missing source/counter
+coverage remains incomplete even if every observed known contribution is priced.
+
 Reports reflect available history. Watch's `Total today` CCost combines available usage since local midnight with request observations retained for the current process; deletion after observation does not erase it. It cannot recover usage deleted before Watch could observe it, and restarting Watch rebuilds only from then-available history. This is process-local state, not a persistent ledger.
 
 A plain session report is a single snapshot, never an implicit Watch. Active rows retain `[RUNNING]`; their observed token mix and incoming/extra CCost use completed-report definitions and rounding when telemetry, attribution and prices support them. Missing categories make percentages unknown; missing prices never become zero or billed-cost substitutions. Totals include supported running observations, with unknown aggregate diagnostics when active evidence is incomplete. Elapsed running duration uses the report observation clock without inventing completion. Printed output never refreshes; request `<session-id> --watch` explicitly for tracking. Date and Watch modes retain their existing projections.

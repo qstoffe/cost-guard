@@ -20,6 +20,7 @@ from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
 from src.analysis.models import MixEvidence
+from src.analysis.coverage import AgentCoverage
 from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot, QuotaComponent
 from .prompt_costs import PromptCostPart
@@ -109,6 +110,7 @@ class PromptProjection:
     linked_agent_count: int = 0
     cost_parts: tuple[PromptCostPart, ...] = ()
     recorded_selections: tuple[str, ...] = ()  # Saved replies without request usage; not contributors.
+    agent_coverage: tuple[AgentCoverage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +146,8 @@ class SessionPromptBlock:
     rate_provisional: bool = False
     session_context: WatchContextGuidance | None = None
     ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
+    other_ccost: Decimal = Decimal(0)
+    other_calls: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +178,8 @@ class SessionUsageRow:
     effort_pending: bool = False
     main_models: tuple[SessionModel, ...] = ()
     subagent_models: tuple[SessionModel, ...] = ()
+    main_ccost: Decimal = Decimal(0)
+    subagent_ccost: Decimal = Decimal(0)
 
 
 @dataclass(frozen=True, slots=True)

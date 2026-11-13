@@ -1,7 +1,7 @@
 """CCost: reference valuation of observed usage, independent of actual billing."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable, Mapping
@@ -23,10 +23,11 @@ class ComparisonCost:
     by_model: Mapping[str, Decimal] = field(default_factory=dict)
     by_day_utc: Mapping[str, Decimal] = field(default_factory=dict)
     unavailable: tuple[ReferenceCostIssue, ...] = ()
+    source_complete: bool = True
 
     @property
     def complete(self) -> bool:
-        return self.priced_requests == self.observed_requests
+        return self.source_complete and self.priced_requests == self.observed_requests
 
     @property
     def ccost(self) -> Decimal | None:
@@ -34,18 +35,41 @@ class ComparisonCost:
 
 
 def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
-    """Use billing's clone fingerprint, retaining independent source instances."""
-    first: dict[tuple[str | None, str], str] = {}
-    result = []
-    for entry in sorted(entries, key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id)):
-        fingerprint = billing_request_fingerprint(entry)
-        key = entry.source_instance, fingerprint
-        if fingerprint and key in first and first[key] != entry.session_id:
+    """Retain independent calls within a tree; clone matching is cross-tree only.
+
+    Equal tokens/model/completion time never identify two sibling requests.
+    Repeated captures of a physical request use its canonical source identity.
+    Legacy fork matching retains the largest observed tree multiplicity.
+    """
+    physical, legacy = {}, []
+    for entry in entries:
+        if not entry.invocation_id:
+            legacy.append(entry)
             continue
+        key = (entry.source_instance, entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
+        previous = physical.get(key)
+        if previous is not None:
+            # Prefer complete telemetry over a partial capture; equally complete
+            # later publications may correct the physical request's counters.
+            chosen = max((previous, entry), key=lambda value: (
+                len(value.tokens.known_fields), value.completed_at_ms, value is entry))
+            tree = previous if previous.parent_session_id else entry
+            entry = replace(chosen, root_session_id=tree.root_session_id, parent_session_id=tree.parent_session_id)
+        physical[key] = entry
+    groups, ungrouped = {}, []
+    for entry in sorted((*physical.values(), *legacy), key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id)):
+        fingerprint = billing_request_fingerprint(entry)
         if fingerprint:
-            first.setdefault(key, entry.session_id)
-        result.append(entry)
-    return tuple(result)
+            trees = groups.setdefault((entry.source_instance, fingerprint), {})
+            tree = entry.root_session_id if entry.parent_session_id or entry.root_session_id == entry.session_id else entry.session_id
+            trees.setdefault(tree, []).append(entry)
+        else:
+            ungrouped.append(entry)
+
+    result = ungrouped
+    for trees in groups.values():
+        result.extend(max(trees.values(), key=len))
+    return tuple(sorted(result, key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id)))
 
 
 def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: ReferenceValuation, *,
@@ -56,9 +80,12 @@ def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: Referenc
     by_day: dict[str, Decimal] = {}
     day_names: dict[int, str] = {}  # whole UTC days since the epoch -> "YYYY-MM-DD", formatted once
     issues = set()
+    usage_complete = True
     for entry in entries:
         observed += 1
-        value = reference_valuation(entry.model, entry.tokens) if entry.tokens.total else Decimal(0)
+        usage_known = {"input", "cache_read", "cache_write", "output"} <= set(entry.tokens.known_fields)
+        usage_complete = usage_complete and usage_known
+        value = reference_valuation(entry.model, entry.tokens) if entry.tokens.total or not usage_known else Decimal(0)
         if value is None:
             if diagnose is not None:
                 issues.add(diagnose(entry.model, entry.tokens))
@@ -74,7 +101,7 @@ def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: Referenc
         if day is None:
             day = day_names[day_index] = datetime.fromtimestamp(entry.completed_at_ms / 1000, timezone.utc).strftime("%Y-%m-%d")
         by_day[day] = by_day.get(day, Decimal(0)) + value
-    return ComparisonCost(total, observed, priced, by_model, by_day, bounded_issues(issues))
+    return ComparisonCost(total, observed, priced, by_model, by_day, bounded_issues(issues), usage_complete)
 
 
 def billed_spend(entries: Iterable[TraceEntry]) -> Decimal | None:
@@ -85,6 +112,6 @@ def billed_spend(entries: Iterable[TraceEntry]) -> Decimal | None:
             total += entry.reported_cost
         elif entry.cost_disposition in {CostDisposition.BILLED, CostDisposition.INCLUDED_SUBSCRIPTION}:
             continue
-        elif entry.tokens.total:
+        elif entry.tokens.total or not {"input", "cache_read", "cache_write", "output"} <= set(entry.tokens.known_fields):
             return None
     return total

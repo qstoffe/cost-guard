@@ -42,8 +42,8 @@ def copilot(used="850", identity="one"):
 
 def request(name, *, when=NOW, amount=6_200_000, provider="github-copilot", ref=None, model="gpt-test"):
     return replace(trace_entries(make_snapshot())[0], message_id=name, step_part_id=None,
-                   completed_at_ms=when, model=ModelRef(provider, model), tokens=TokenUsage(input=amount),
-                   account_ref=ref)
+                    completed_at_ms=when, model=ModelRef(provider, model), tokens=TokenUsage(input=amount),
+                    account_ref=ref, root_session_id=None, parent_session_id=None, invocation_id=name)
 
 
 def project(accounts, entries=(), *, now=NOW, zone="Europe/Stockholm", acquired=START, watch=False):

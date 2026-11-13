@@ -28,6 +28,19 @@ class ProbeObservations:
         self.tool_invocations = tool_invocations
         self.invocation_commands = set()
         self.invocation_timeouts = set()
+        self.guard_change = None
+
+    def guard_snapshot(self, original, guard):
+        current = original(guard)
+        baseline = getattr(guard, 'baseline', current)
+        if current != baseline:
+            with self.lock:
+                if self.guard_change is None:
+                    added, removed = current.keys() - baseline.keys(), baseline.keys() - current.keys()
+                    modified = {key for key in current.keys() & baseline.keys() if current[key] != baseline[key]}
+                    self.guard_change = dict(added=len(added), removed=len(removed), modified=len(modified),
+                        files=sorted(added | removed | modified)[:20])
+        return current
 
     def observe_invocation(self, original, part):
         """Compare already-acquired native text in memory; retain only opaque IDs."""
@@ -90,7 +103,11 @@ class ProbeObservations:
         from src.web.jobs import ReportJobs
         from src.web.events import EventHub
         from src.web.http import LoopbackServer
+        from src.web.change_guard import SourceGuard
         with ExitStack() as stack:
+            original_snapshot = SourceGuard._snapshot
+            stack.enter_context(patch.object(SourceGuard, '_snapshot',
+                lambda guard: self.guard_snapshot(original_snapshot, guard)))
             if self.tool_invocations:
                 from src.watch import tools, invocation
                 original = invocation.invocation
@@ -120,6 +137,8 @@ class ProbeObservations:
                 pending=[dict(phase=phase, seconds=round(now - started, 4))
                          for (_, phase), started in self.pending.items()],
                 http_requests=self.http_requests, http_max_seconds=self.http_maximum)
+        result.update(source_guard=getattr(getattr(host, "guard", None), "status", None),
+            guard_change=self.guard_change)
         owned = [thread for thread in threads() if thread.name.startswith('cost-guard-')]
         frames = sys._current_frames()
         result.update(owned_threads=len(owned), owned_processes=len(multiprocessing.active_children()),

@@ -57,7 +57,9 @@ def card(value, now_ms):
             cost=None if cost is None else record(known_ccost=cost.total.known_ccost,
                 observed_requests=cost.total.observed_requests, priced_requests=cost.total.priced_requests,
                 ccost_unavailable=issue_records(cost.total.unavailable),
-                complete=cost.total.complete and cost.source_complete),
+                complete=cost.total.complete and cost.source_complete,
+                **({"main_ccost": cost.main_ccost, "subagent_ccost": cost.subagent_ccost}
+                    if cost.main_ccost is not None else {})),
             state=value.session_cost_state, cache_available=None if cost is None else cost.cache_available))
 
 

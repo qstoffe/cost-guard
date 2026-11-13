@@ -8,6 +8,7 @@ from typing import Mapping, Sequence
 from src.analysis.context import ContextEpochs, context_composition, estimate_next_context
 from src.analysis.models import RootAnalysisBundle
 from src.analysis.duration import accumulated_duration
+from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import EventKind, SessionSnapshot
 from src.domain.progress import observe_work
 from src.domain.reference_cost import bounded_issues
@@ -73,10 +74,31 @@ def _diagnostic_cost_shares(parts: Sequence[tuple[Decimal | None, Decimal | None
 def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                    projector: PromptRowProjector, mix_values: tuple[int, int, int, int],
                     diagnostic_parts: Sequence[tuple[Decimal | None, Decimal | None]],
-                    mix_complete: bool = True) -> SessionPromptBlock:
+                     mix_complete: bool = True, lifetime: bool = True) -> SessionPromptBlock:
     total_ccost = sum((row.ccost for row in rows), Decimal(0))
     prompt_rows = [row for row in rows if not row.is_compaction]
     total_subagent = sum((row.subagent_ccost for row in prompt_rows), Decimal(0))
+    total_calls = sum(row.calls for row in rows)
+    complete = all(not row.unresolved_cost for row in rows)
+    billed = (sum((row.billed_cost for row in rows), Decimal(0))
+              if all(row.billed_cost is not None for row in rows) else None)
+    other_ccost, other_calls = Decimal(0), 0
+    if lifetime:
+        entries = unique_usage(projector.bundle.trace_entries)
+        catalog = projector.catalog
+        valuation = comparison_cost(entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
+        total_subagent = comparison_cost((entry for entry in entries if entry.session_id != session_id),
+            catalog.reference_valuation).known_ccost
+        # Causal row assignment can legitimately leave requests outside a prompt.
+        # They belong to the tree total, never to an arbitrary prompt residual.
+        assigned = {entry.sort_order for record in (*projector.bundle.prompts, *projector.bundle.compactions)
+                    for entry in record.entries}
+        other = comparison_cost((entry for entry in entries if entry.sort_order not in assigned),
+            catalog.reference_valuation)
+        other_ccost, other_calls = other.known_ccost, other.observed_requests
+        total_ccost, total_calls = valuation.known_ccost, valuation.observed_requests
+        billed = billed_spend(entries)
+        complete = valuation.complete and projector.bundle.usage_coverage_complete
     breakdown_known = all(row.breakdown_known for row in prompt_rows) if prompt_rows else True
     ictx_text, extra_text = _diagnostic_cost_shares(diagnostic_parts)
     mix = mix_percent(mix_values)
@@ -93,7 +115,9 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         title=title or session_id,
         rows=tuple(rows),
         total_ccost=total_ccost,
-        total_calls=sum(row.calls for row in rows),
+        total_calls=total_calls,
+        other_ccost=other_ccost,
+        other_calls=other_calls,
         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows),
         total_ictx_cost_text=ictx_text,
         total_extra_cost_text=extra_text,
@@ -113,7 +137,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         total_main_estimated=any(row.main_estimated for row in prompt_rows)
                              or any(row.is_compaction and row.unresolved_cost for row in rows),
         total_subagent_estimated=any(row.subagent_estimated for row in prompt_rows),
-        comparison_cost_complete=all(not row.unresolved_cost for row in rows),
+        comparison_cost_complete=complete,
         ccost_unavailable=bounded_issues(issue for row in rows if row.comparison_cost
             for issue in row.comparison_cost.unavailable),
         rate_usage_complete=all({"input", "cache_read", "cache_write", "output"} <= set(entry.tokens.known_fields)
@@ -121,8 +145,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                             and not any(row.in_progress and not row.calls for row in rows),
         rate_provisional=any(row.in_progress for row in rows),
         session_context=card_context(projector, session_id, projector.threshold_multiplier),
-        billed_cost=(sum((row.billed_cost for row in rows), Decimal(0))
-                     if all(row.billed_cost is not None for row in rows) else None),
+        billed_cost=billed,
     )
 
 
@@ -184,4 +207,5 @@ def build_prompt_block(
     rows = _coherent_watch_deltas(rows, epochs=projector.epochs, session_id=session_id,
                                  subtask_ids=frozenset(record.prompt_id for record in bundle.prompts if record.prompt_kind == "subtask"))
     return _session_block(session_id=session_id, title=title, rows=rows, projector=projector,
-                          mix_values=tuple(mix_values), diagnostic_parts=diagnostic_parts, mix_complete=mix_complete)
+                          mix_values=tuple(mix_values), diagnostic_parts=diagnostic_parts, mix_complete=mix_complete,
+                          lifetime=start_ms is None and end_ms is None)

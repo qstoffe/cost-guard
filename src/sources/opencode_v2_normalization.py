@@ -14,6 +14,7 @@ from src.domain import (
 from .errors import SourceDataError
 from .opencode_errors import normalize_abort_reason, normalize_error_name
 from .opencode_tokens import token_usage
+from .opencode_requests import response_tokens
 
 ProvenanceFactory = Callable[[str, str | None], Provenance]
 
@@ -164,13 +165,14 @@ def normalize_invocations(message: NormalizedMessage, provenance: ProvenanceFact
                 finish_reason=message.finish_reason, error_name=message.error_name,
             ))
         return result
-    if message.tokens is None:
+    tokens = response_tokens(message)
+    if tokens is None:
         return []
     request_id = message.metadata.get("provider_request_id") if isinstance(message.metadata, Mapping) else None
     return [ModelInvocation(
         invocation_id=message.message_id, session_id=message.session_id,
         created_at_ms=message.created_at_ms, completed_at_ms=message.completed_at_ms,
-        model=message.model, tokens=message.tokens, cost=message.cost, provenance=message.provenance,
+        model=message.model, tokens=tokens, cost=message.cost, provenance=message.provenance,
         initiating_event_id=message.parent_message_id,
         provider_request_id=str(request_id) if request_id else None, message_id=message.message_id,
         variant=message.variant, summary=message.summary,

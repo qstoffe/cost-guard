@@ -360,6 +360,7 @@ const MiniWatch = (() => {
       cell.append(value);
       const promptCost = this.el('span', '', 'mini-cost-value'), sessionCost = this.el('span', '', 'mini-cost-value');
       ContextHelp.value(promptCost, () => row.costHelp);
+      ContextHelp.value(sessionCost, () => row.totalCostHelp);
       row.children[2].append(promptCost); row.children[3].append(sessionCost);
       ContextHelp.value(row.children[4], () => row.contextHelp || 'Context estimate unavailable');
       return row;
@@ -377,6 +378,8 @@ const MiniWatch = (() => {
       const prompt = item?.prompt;
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
       row.costHelp = this.promptDetails(item, ReportView.costHelp(prompt), highlight);
+      row.totalCostHelp = ReportView.costHelp(card.session_summary?.cost, 'known_ccost') ||
+        'Whole-session reference CCost, including main and linked subagent requests; not actual billing.';
       const warning = card.session_summary?.context?.warning;
       row.children[4].dataset.guidance = warning?.guidance_state || 'ready';
       const delta = ReportView.display(item?.live_context, 'watch_delta_context_tokens');
@@ -404,11 +407,11 @@ const MiniWatch = (() => {
       const prompt = item?.prompt, detail = prompt?.cost_detail;
       if (!prompt) return [prefix, 'Latest prompt details unavailable'].filter(Boolean).join('\n\n');
       const before = [prompt.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`,
-        ReportView.display(prompt, 'main_model_help'),
+        ReportView.display(prompt, 'mini_cost_detail_help') || ReportView.display(prompt, 'main_model_help'),
         `Effort: ${ReportView.display(prompt, 'effort_tooltip') || item.effort || 'N/A'}`].join('\n');
       const duration = `Duration: ${ReportView.display(item, 'watch_duration_ms')}`, lines = [];
       if (prompt.calls != null) lines.push(`Calls: ${prompt.calls}`);
-      if (prompt.linked_agent_count) lines.push(`Linked subagents: ${prompt.linked_agent_count} (included in prompt cost)`);
+      if (prompt.linked_agent_count) lines.push(`Linked subagents: ${prompt.linked_agent_count} (known usage included in prompt cost)`);
       if (prompt.has_additional_model || detail?.model_count > 1) lines.push('Multiple models contributed to prompt cost');
       if (prompt.unresolved_cost) lines.push('Partial pricing / attribution');
       if (prompt.cost_estimated) lines.push('Estimated attribution');

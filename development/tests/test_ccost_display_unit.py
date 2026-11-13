@@ -112,7 +112,8 @@ class CCostDisplayUnitTests(unittest.TestCase):
                     self.assertIn(row["display"]["ccost"], text)
             def raw(value):
                 if isinstance(value, dict):
-                    return {key: raw(item) for key, item in value.items() if key not in {"display", "ccost_display_unit"}}
+                    return {key: raw(item) for key, item in value.items()
+                        if key not in {"display", "display_units", "ccost_display_unit"}}
                 return [raw(item) for item in value] if isinstance(value, list) else value
             self.assertEqual(raw(credits), raw(usd))
         profile = _MetricProfile([Decimal("0.01"), Decimal("0.02"), Decimal("0.03")], {"promptCostMinSamples": 2})

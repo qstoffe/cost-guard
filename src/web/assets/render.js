@@ -113,6 +113,7 @@ const ReportView = (() => {
   const ccost = (row, key = 'ccost') => display(row, key) +
     (row?.cost_estimated && key === 'ccost' ? ' (estimated)' : '');
   function costHelp(row, key = 'ccost') {
+    if (['total_ccost', 'known_ccost'].includes(key) && display(row, 'session_cost_help') !== 'N/A') return display(row, 'session_cost_help');
     if (!row || display(row, key) !== 'N/A') return '';
     if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. N/A does not mean zero cost.';
     return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. N/A does not mean zero cost.';

@@ -73,7 +73,7 @@ class SubagentAttributionTests(unittest.TestCase):
             self.assertTrue(prompt["has_additional_model"])
             self.assertEqual([25, 25, 25, 25], prompt["token_mix_percent"])
         displayed = live["active_cards"][0]["rows"][0]["prompt"]
-        self.assertIn("Subagents — github-copilot/claude-test · Low (1 agent)", displayed["display"]["cost_detail_help"])
+        self.assertIn("Subagent 1 — github-copilot/claude-test · Low", displayed["display"]["cost_detail_help"])
         self.assertIn("github-copilot/claude-test", displayed["display"]["model_detail_help"])
         self.assertIn("$2.24", displayed["display_units"]["usd"]["cost_detail_help"])
         stream = io.StringIO()
@@ -215,10 +215,10 @@ class SubagentAttributionTests(unittest.TestCase):
             row = block.rows[0]
             with self.subTest(kind=kind):
                 self.assertEqual((3, 1), (row.calls, row.linked_agent_count))
-                self.assertEqual(kind == "unpriced", row.unresolved_cost)
+                self.assertEqual(kind != "zero", row.unresolved_cost)
                 self.assertEqual(kind != "partial", row.token_mix_percent is not None)
                 self.assertIsNone(row.billed_cost)  # native zero is not reference billing
-                self.assertEqual(D(122) if kind in {"zero", "unpriced"} else D(224), row.ccost)
+                self.assertEqual(D(142) if kind == "partial" else D(122), row.ccost)
 
     def test_child_uses_its_own_price_tier_even_when_it_shares_the_parent_model(self):
         with incident_source() as (source, _server):

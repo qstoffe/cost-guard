@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.44 - 2026-11-13
+
+- Recursive CCost retains distinct parallel sibling requests even when their model, tokens and completion time match. Physical recaptures and cross-tree fork clones remain deduplicated; root totals explicitly retain valid work outside prompt/compaction rows.
+- Full Watch and Mini help separates each linked agent's recorded model/effort, Calls and own-request subtotal. Whole-session help distinguishes main versus all linked requests. Missing acquisition/usage stays partial or unavailable, not zero; safely priced known categories survive cache reuse without selecting an unsupported price tier.
+- Affected analysis, scalar-session and token-mix caches rebuild lazily. No native history rewrite, paid replay or new hover-time acquisition is introduced.
+
 ## v81.43 - 2026-11-13
 
 - Web Accounts, Full Watch and Mini quota help uses concise Capacity/Monthly Capacity and numeric Used/Remaining, formatting original raw reference amounts as whole Credits or two-decimal USD. Inferred amounts retain `~`; visible 5%-tolerant estimate rounding and canonical accounting are unchanged. Tiny tooltip values use `<1 Credits` or `<$0.01` rather than a misleading zero; meaningful unavailable/partial/restricted states remain.

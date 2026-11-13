@@ -361,7 +361,7 @@ test.doCleanups()
         alias = trace_entries(mixed)[0]
         identity = dependency_signature((alias.source_instance, alias.session_id, mixed.invocations[0].invocation_id))
         value['contributions'][identity] = dict(fingerprint=dependency_signature((alias.model,
-            alias.tokens, alias.completed_at_ms)), amount='123')
+            alias.tokens, alias.completed_at_ms)), amount='123', complete=True)
         value.update(known_ccost=str(D('123') + D('6.89')), priced_requests=2)
         original.cache_repository.put(COST_NAMESPACE, key, value, source_revision=entry.source_revision,
             algorithm_version=entry.algorithm_version)

@@ -17,6 +17,7 @@ from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
 from .prompt_index import PromptIndex, prompt_owners
 from .child_links import ChildLinkIndex, OPEN_END, part_time as _part_time, scoped_entries
+from .coverage import child_coverage, coverage_complete, unrepresented_usage
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
 TOOL_CALLS_CONTINUATION_GRACE_MS = 60_000
@@ -32,6 +33,7 @@ def trace_entries(
     result: list[TraceEntry] = []
     owners = prompt_owners(snapshot)
     selections = {(event.session_id, event.event_id): event.metadata for event in snapshot.events}
+    parents = {session.session_id: session.parent_session_id for session in snapshot.sessions}
     for order, invocation in enumerate(snapshot.invocations):
         observe_work('analyzing', 1)
         reported = invocation.cost.amount if invocation.cost is not None else 0
@@ -59,6 +61,9 @@ def trace_entries(
             account_ref=invocation.account_ref,
             logical_prompt_id=owners.get((invocation.session_id, invocation.initiating_event_id)),
             selected_effort=_selected_effort(invocation, selections),
+            root_session_id=snapshot.root.session_id,
+            invocation_id=invocation.invocation_id,
+            parent_session_id=parents.get(invocation.session_id),
         ))
     return tuple(sorted(result, key=lambda item: (item.completed_at_ms, item.sort_order)))
 
@@ -441,6 +446,10 @@ def build_prompt_record(
         key=lambda entry: (entry.completed_at_ms, entry.sort_order),
     )
     child_entries = scoped_entries(snapshot, timeline.entries, scopes, tracked_provider) if scopes else []
+    agents = child_coverage(snapshot, sorted(child_ids), child_messages, child_entries)
+    background_fields.update(agent_coverage=agents,
+        usage_coverage_complete=snapshot.complete and coverage_complete(agents)
+            and not unrepresented_usage(attempt_messages, root_entries))
     prompt_message = timeline.messages.get(ref.prompt_id)
     prompt_context_approx = _message_approx_context_tokens(prompt_message) or math.ceil(len(ref.prompt_text) / 4)
     previous_before_prompt = timeline.index.before_prompt(ref.prompt_time_ms)

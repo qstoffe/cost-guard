@@ -92,7 +92,7 @@ module.exports = async function rawModels({command,evaluate,until,owner,mini,che
     ...rawCapture.synthetic_views.session.prompt_blocks[0],rows:rawCapture.synthetic_prompt_cases.map((row,index)=>({...row,id:'case-'+index}))}]}}});`);
   for(const mode of ['focus','hover','touch']) {
     const mixed=await open(owner,'.session-history-table tr[data-id="case-0"] td:nth-child(2) .help-value',mode);
-    assert.match(mixed,/Main prompt — claude-agent\/claude-sonnet-5-5[\s\S]*Subagents — github-copilot\/claude-sonnet-5-5/);
+    assert.match(mixed,/Main prompt — claude-agent\/claude-sonnet-5-5[\s\S]*Subagent 1 — github-copilot\/claude-sonnet-5-5/);
     const compact=await open(owner,'.session-history-table tr[data-id="case-1"] td:nth-child(2) .help-value',mode);
     assert.match(compact,/openrouter\/vendor\/future-release/);assert.doesNotMatch(compact,/claude-agent|github-copilot/);
   }

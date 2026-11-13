@@ -7,6 +7,7 @@ from .billing import CostEstimator, ProviderScope
 from .causal import TRACKED_PROVIDER_DEFAULT, build_prompt_records, trace_entries
 from .compaction import completed_compactions
 from .models import RootAnalysisBundle
+from .coverage import snapshot_coverage_complete
 
 
 def snapshot_is_stable(snapshot: SessionSnapshot) -> bool:
@@ -98,6 +99,7 @@ def analyze_snapshot(
         root_session_id=snapshot.root.session_id,
         source_revision=snapshot.source_revision,
         trace_entries=entries,
+        usage_coverage_complete=snapshot_coverage_complete(snapshot, entries),
         prompts=prompts,
         compactions=compactions,
         cacheable=snapshot_is_stable(snapshot) and not any(record.in_progress for record in prompts)

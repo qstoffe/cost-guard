@@ -255,7 +255,8 @@ class EffortSourceTests(unittest.TestCase):
             _, block = project(source.load_session_snapshot("ses_current"))
             running = next(row for row in block.rows if row.event_id == "msg_run_user")
             self.assertTrue(running.in_progress)
-            self.assertEqual(0, running.calls)
+            self.assertEqual(1, running.calls, "streamed response text proves execution, not its token usage")
+            self.assertTrue(running.unresolved_cost)
             self.assertEqual("gpt-6.1-sol (High)", running.model_effort)
 
     def test_interim_v2_does_not_copy_session_variant_to_assistant(self):

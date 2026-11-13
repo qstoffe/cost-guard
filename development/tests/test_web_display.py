@@ -99,10 +99,10 @@ class WebDisplayTests(unittest.TestCase):
         def compare_units(credits, usd):
             if isinstance(credits, dict):
                 if "display" in credits:
-                    variants = credits.get("display_units", {})
-                    self.assertEqual(credits["display"], {**usd["display"], **variants.get("credits", {})})
-                    self.assertEqual(usd["display"], {**credits["display"], **variants.get("usd", {})})
-                    self.assertEqual(variants, usd.get("display_units", {}))
+                    for base in (credits, usd):
+                        variants = base.get("display_units", {})
+                        self.assertEqual(credits["display"], {**base["display"], **variants.get("credits", {})})
+                        self.assertEqual(usd["display"], {**base["display"], **variants.get("usd", {})})
                 for key in credits.keys() - {"display", "display_units", "ccost_display_unit"}:
                     compare_units(credits[key], usd[key])
             elif isinstance(credits, list):

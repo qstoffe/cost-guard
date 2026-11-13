@@ -42,9 +42,12 @@ class SyntheticNoticeAttributionTests(unittest.TestCase):
             self.assertEqual(["msg_current_user", "msg_mid_run"], list(rows))
             first, mid_run = rows["msg_current_user"], rows["msg_mid_run"]
             self.assertEqual(2, first.calls, "work after a notice stays on the prompt current at that time")
-            self.assertEqual(2, mid_run.calls)
+            self.assertEqual(3, mid_run.calls, "the streamed response is an observed call with unknown usage")
+            self.assertTrue(mid_run.unresolved_cost)
             self.assertTrue(mid_run.in_progress)
-            self.assertGreater(mid_run.billed_cost or 0, 0, "its reported request cost is not hidden")
+            self.assertIsNone(mid_run.billed_cost, "unknown streamed usage cannot certify a full billed total")
+            self.assertGreater(sum(request.cost.amount for request in snapshot.invocations
+                if request.message_id in {"msg_b1", "msg_b2"}), 0, "reported request costs remain source evidence")
             self.assertTrue(mid_run.model_effort.startswith("claude-opus-5-5"), mid_run.model_effort)
             self.assertEqual(len(snapshot.invocations), sum(row.calls for row in rows.values()),
                              "no request is hidden from the session rows")

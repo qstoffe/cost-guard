@@ -47,7 +47,7 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
       assert.ok(help.startsWith(`Incoming Context CCost (I): ${d.incoming_context_ccost}\nExtra CCost (E): ${d.extra_ccost}\n`), JSON.stringify({index,unit,help,d}));
       assert.match(help, /first attributed request[\s\S]*Output, later requests and linked subagents[\s\S]*unavailable, not zero/);
       assert.ok(help.endsWith(d.cost_detail_help), 'entire prepared rich breakdown survives unchanged');
-      assert.match(help, /Main prompt — fixture\/main · High[\s\S]*Subagents — fixture\/child-a · Low[\s\S]*Number of prompts: 1[\s\S]*Subagents — fixture\/child-b · Medium[\s\S]*incomplete boundaries[\s\S]*Cached input: N\/A[\s\S]*Partial pricing[\s\S]*Total CCost:/);
+      assert.match(help, /Main prompt — fixture\/main · High[\s\S]*Subagent 1 — fixture\/child-a · Low[\s\S]*Number of prompts: 1[\s\S]*Subagent 2 — fixture\/child-b · Medium[\s\S]*incomplete boundaries[\s\S]*Cached input: N\/A[\s\S]*Partial pricing[\s\S]*Total CCost:/);
       assert.equal((help.match(/Total CCost:/g) || []).length, 1);
       assert.ok(target.events.focus && target.events.click && target.events.pointerenter);
       if (expected[index] === 'N/A') assert.match(help, /CCost cannot be calculated/);

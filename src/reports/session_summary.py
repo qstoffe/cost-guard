@@ -17,7 +17,7 @@ from .models import SessionUsageRow
 from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 
-ALGORITHM = "session-summary-6"
+ALGORITHM = "session-summary-7"
 NAMESPACE = "session-summary"
 
 
@@ -83,6 +83,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             if set(values) != {field.name for field in fields(SessionUsageRow)}:
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
+            for role in ("main_ccost", "subagent_ccost"):
+                values[role] = Decimal(values[role])
             values["contributor_models"] = tuple(values["contributor_models"])
             for role in ("main_models", "subagent_models"):
                 values[role] = decode_models(values[role])
@@ -101,6 +103,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             values["ccost_unavailable"] = issues
             row = SessionUsageRow(**values)
             if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
+                    and all(value.is_finite() and value >= 0 for value in (row.main_ccost, row.subagent_ccost))
+                    and row.main_ccost + row.subagent_ccost == row.ccost
                     and isinstance(row.title, str) and isinstance(row.model, str)
                     and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending"))
                     and row.context_qualified
@@ -141,6 +145,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         values['model_identity_dependencies'] = identity_values
         values['recorded_model_help'] = True
         values["ccost"] = str(row.ccost)
+        for role in ("main_ccost", "subagent_ccost"):
+            values[role] = str(getattr(row, role))
         try:
             service.cache_repository.put(NAMESPACE, key, values,
                 source_revision=actual, algorithm_version=ALGORITHM, busy_timeout_ms=50,

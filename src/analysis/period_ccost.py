@@ -50,7 +50,8 @@ def account_usage_routes(account: AccountSnapshot, *, proven: bool = False) -> t
 def combined_cost(values: Iterable[ComparisonCost]) -> ComparisonCost:
     values = tuple(values)
     return ComparisonCost(sum((v.known_ccost for v in values), Decimal(0)),
-        sum(v.observed_requests for v in values), sum(v.priced_requests for v in values))
+        sum(v.observed_requests for v in values), sum(v.priced_requests for v in values),
+        source_complete=all(v.source_complete for v in values))
 
 
 def quota_window(component: QuotaComponent, now_ms: int, *, include_monthly: bool = False) -> tuple[int, int, str] | None:
@@ -113,11 +114,13 @@ class _Series:
     times: list[int]
     totals: list[Decimal]
     priced: list[int]
+    incomplete: list[int]
 
     def between(self, start: int, end: int) -> ComparisonCost:
         left, right = bisect_left(self.times, start), bisect_left(self.times, end)
         return ComparisonCost(self.totals[right] - self.totals[left], right - left,
-                              self.priced[right] - self.priced[left])
+                              self.priced[right] - self.priced[left],
+                              source_complete=self.incomplete[right] == self.incomplete[left])
 
 
 class PeriodCCostIndex:
@@ -135,10 +138,11 @@ class PeriodCCostIndex:
             for identity in ("provider", account):
                 for model in (None, canonical_model_name(entry.model.model)):
                     key = provider, identity, model
-                    series = self._series.setdefault(key, _Series([], [Decimal(0)], [0]))
+                    series = self._series.setdefault(key, _Series([], [Decimal(0)], [0], [0]))
                     series.times.append(entry.completed_at_ms)
                     series.totals.append(series.totals[-1] + value.known_ccost)
                     series.priced.append(series.priced[-1] + value.priced_requests)
+                    series.incomplete.append(series.incomplete[-1] + (not value.source_complete))
 
     def cost(self, provider: str, identity: object, start: int, end: int,
              model_id: str | None = None) -> ComparisonCost:

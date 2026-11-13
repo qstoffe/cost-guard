@@ -18,6 +18,15 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000700: prompt detail preserves individual linked sessions, including nested
+agents, rather than collapsing same-model siblings. Application prepares bounded
+Full/compact Mini help in both units; session rows and root summaries expose main
+versus descendant known amounts. Lifetime prompt blocks value the canonical full
+tree and separately report unassigned requests; finite date scopes retain their
+own row populations. Source completeness and known subtotals are independent.
+Scalar summary 7 rejects old role-less or non-reconciling records. Prior Sessions
+main-model/default-effort contracts remain intact. [Verification](../../journal/recursive-subagent-ccost.md).
+
 FR000696: `reports/session_effort.py` aggregates only usage-bearing canonical
 requests, preserving selected effort and recorded provider/model evidence rather
 than inferring one setting from the dominant model. Mixed selections and unknown

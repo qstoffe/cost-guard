@@ -57,7 +57,8 @@ def prompt_cost_parts(record: PromptRecord | CompactionRecord, catalog: PricingC
     if isinstance(record, PromptRecord) and not record.breakdown_known:
         return ()
     groups = {}
-    agents = {record.session_id: 0}
+    agents = {record.session_id: 0, **({identity: index + 1 for index, identity in
+        enumerate(record.linked_session_ids)} if isinstance(record, PromptRecord) else {})}
     for index, entry in enumerate(record.entries):
         session = record.session_id if isinstance(record, CompactionRecord) or index < record.root_entry_count else entry.session_id
         if session not in agents:

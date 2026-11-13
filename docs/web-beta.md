@@ -141,17 +141,24 @@ remain unchanged. An N/A daily amount can explain itself; ordinary positive part
 daily amounts gain no new help or warning.
 
 Hover/focus the **CCost value** in either Watch table for Input, Cached input,
-Cache write, Output and Subtotal, grouped into **Main prompt** and **Subagents**
-by provider/model, actual effort and price tier (tier names/boundaries are not shown).
-Repeated agents share a group with their contributing-session count and a first
-**Number of prompts** bullet counting distinct canonical child prompts in that group,
-not agents or physical requests. Missing boundaries show N/A or a qualified observed
-lower bound. Categories are unrounded reference-cost contributions,
+Cache write, Output and Subtotal, grouped into **Main prompt** and individual
+**Subagent N** entries, including nested agents. Each agent retains its own
+provider/model, effort, Calls and subtotal even when siblings share a model.
+Multiple own-request model/effort/tier groups retain an agent total; descendants
+are separate contributors, never included twice. A **Number of prompts** bullet
+counts distinct canonical child prompts, not agents or requests. Missing boundaries
+show N/A or an observed lower bound. Categories are reference-cost contributions,
 not token percentages. Unknown categories remain N/A and omitted groups retain their
 known cost/call coverage. **Calls** uses the same groups for physical model requests,
 not tools. Hover, focus or tap **Model** for recorded linked-agent models and effort,
 even when main and all agents share one model. Unrecorded usage remains qualified;
 multi-model main-only work also retains help without a participation star.
+Missing child history, pending acquisition and executed requests with missing
+counters retain explicit partial/unavailable coverage, not invented zero spend.
+Mini uses shorter per-agent prompt help. Its Total value and Sessions/session-detail
+totals explain the whole root tree's main versus linked-request contributions,
+not merely the latest prompt. Both Credits and USD help is prepared by the server;
+independently rounded lines can differ from the displayed total's rounded sum.
 **Token Mix %** has header help only, not another per-cell popup.
 
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews

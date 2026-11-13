@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from decimal import Decimal
 from functools import lru_cache
 from typing import Iterable
@@ -160,7 +160,8 @@ class PricingCatalog:
         model = self.reference_prices(model_ref.model)
         if model is None:
             return None
-        return price_token_usage(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
+        parts = known_reference_categories(model, tokens)
+        return None if parts is None else sum(parts, Decimal(0))
 
     def reference_issue(self, model_ref: ModelRef, tokens: TokenUsage) -> ReferenceCostIssue:
         return reference_issue(self, model_ref, tokens)
@@ -174,14 +175,15 @@ class PricingCatalog:
         model = self.reference_prices(model_ref.model)
         if model is None:
             return None
-        return price_token_categories(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
+        return known_reference_categories(model, tokens)
 
     def reference_usage(self, model_ref: ModelRef, tokens: TokenUsage) -> Decimal | None:
         """Diagnostic reference usage, preserving the context resolver's selection."""
         if unverified_alias(model_ref.model, model_ref.provider):
             return None
         model = self.reference_prices(model_ref.model, exact=model_ref.resolution is not None)
-        return None if model is None else price_token_usage(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
+        parts = None if model is None else known_reference_categories(model, tokens)
+        return None if parts is None else sum(parts, Decimal(0))
 
     def reference_input_context(
         self,
@@ -209,6 +211,23 @@ class PricingCatalog:
             + Decimal(cache_read_tokens) / million * tier.per_million_cache_read
             + Decimal(cache_write_tokens) / million * write_rate
         )
+
+
+def known_reference_categories(model: CCostPricing, tokens: TokenUsage):
+    """Known-category subtotal, never a claim that absent counters were zero.
+
+    A multi-tier request needs complete input telemetry to select its price.
+    Fixed-tier requests can retain their known contribution; callers separately
+    carry telemetry completeness. Placeholder values in unknown fields are ignored.
+    """
+    fields = ("input", "cache_read", "cache_write", "output")
+    known = set(tokens.known_fields)
+    if not known.intersection(fields) and not tokens.reasoning:
+        return None
+    if len(model.tiers) != 1 and not set(fields[:3]) <= known:
+        return None
+    observed = replace(tokens, **{name: 0 for name in fields if name not in known})
+    return price_token_categories(model, observed, observed.input + observed.cache_read + observed.cache_write)
 
 
 def price_token_categories(
