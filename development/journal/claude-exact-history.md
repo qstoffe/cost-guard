@@ -232,6 +232,8 @@ Do not assign an executed model to unmatched historical requests merely from the
 single model present in a later transcript, adjacency in time or a mutable
 catalog. Exact costs and completeness remain unverified.
 
+**Cross-check of exact usage mapping:** OpenCode v2.2.7's [Claude Agent usage accumulator](https://github.com/anomalyco/opencode/blob/v2.2.7/packages/core/src/plugin/provider/claude-agent/language-model/usage.ts) takes input/cache counts from the *last* SDK API call in a turn but **sums output and reasoning across its recorded messages**; one normalized OpenCode usage row therefore need not match one transcript assistant entry's raw usage vector. Inference from equal token counts or proximity alone must not replace reply UUID/step ownership. This helps explain why raw row counts and reply/checkpoint counts differ, but does not itself prove a specific missing historical step.
+
 **Next implementation-worker investigations:**
 
 1. Reconcile the actual `native` storage shape with the earlier source observation;
