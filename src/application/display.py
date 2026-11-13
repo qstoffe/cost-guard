@@ -3,9 +3,11 @@
 Only already-exported fields are inspected; no source/provider access, valuation,
 ranking or arbitrary object introspection. CLI and Web consume shared primitives.
 """
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
+import math
 
-from src.analysis.timezones import format_local_timestamp
+from src.analysis.timezones import format_local_timestamp, resolve_timezone
 from src.display import (TOKEN_CATEGORIES, TOKEN_CATEGORY_LEGEND, compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage, token_volume)
 from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, ccost_unit, remaining_capacity
@@ -75,7 +77,7 @@ def amount_tokens(values):
             estimated = values.get("capacity_basis") == "ratio"
             tokens[key] = ("N/A" if amount is None else estimate_amount(amount) if estimated else
                            ccost_amount(amount) if ccost_unit() == "usd" else remaining_capacity(amount))
-            tokens[key + "_help"] = ("Remaining/" + ("workday" if key.endswith("workday") else "day") + " — " +
+            tokens[key + "_help"] = ("Remaining/" + ("workday" if key.endswith("workday") else "day") + ": " +
                                     estimate_help(amount)) if estimated and amount is not None else ""
     if "unaccounted_usage" in values:
         tokens["unaccounted_usage"] = unaccounted_usage(decimal(values["unaccounted_usage"]))
@@ -112,15 +114,33 @@ def quota_tokens(values):
 
 
 def watch_reset(quota, timezone_id, now_ms):
-    """Full Web Watch alone uses Duration notation; all other reset tokens stay CLI-owned."""
-    values = dict(quota.fields)
-    deadline = values["reset_at_ms"]
+    return web_quota_reset(dict(quota.fields), timezone_id, now_ms)
+
+
+def web_quota_reset(values, timezone_id, now_ms):
+    """Web-only countdown and local calendar context from one authoritative clock."""
+    deadline = values.get("reset_at_ms")
     if values.get("window_active") is False and deadline is None:
         return "Window not started"
-    if (isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0
-            or not 0 < deadline - now_ms < 604_800_000):
-        return format_reset(deadline, timezone_id, now_ms=now_ms)
-    return f"Reset in {duration_text(deadline - now_ms)}, {format_local_timestamp(deadline, timezone_id, '%H:%M')}"
+    if isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0:
+        return "Reset unknown"
+    try:
+        if not math.isfinite(deadline):
+            return "Reset unknown"
+        zone = resolve_timezone(timezone_id)
+        target = datetime.fromtimestamp(deadline / 1000, timezone.utc).astimezone(zone)
+        current = datetime.fromtimestamp(now_ms / 1000, timezone.utc).astimezone(zone)
+    except (OverflowError, OSError, ValueError):
+        return "Reset unknown"
+    remaining = deadline - now_ms
+    if remaining <= 0:
+        return "Reset expired"
+    clock = target.strftime("%H:%M")
+    if remaining > 604_800_000:
+        return f"Reset at {clock}, {target:%Y-%m-%d}"
+    day = ("today" if target.date() == current.date() else
+           ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()])
+    return f"Reset in {duration_text(remaining)}, {clock} {day}"
 
 
 def metric_time_tokens(values, timezone_id, now_ms):
@@ -128,14 +148,19 @@ def metric_time_tokens(values, timezone_id, now_ms):
     tokens = {}
     for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms", "start_ms", "end_ms"):
         if key in values:
-            tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
+            if key == "reset_at_ms":
+                deadline = values[key]
+                try:
+                    tokens[key] = (format_local_timestamp(deadline, timezone_id) if
+                        not isinstance(deadline, bool) and isinstance(deadline, (int, float)) and math.isfinite(deadline) else "unknown")
+                except (OverflowError, OSError, ValueError):
+                    tokens[key] = "unknown"
+            else:
+                tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
     if "reset_at_ms" in values and now_ms is not None:
         tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
                            else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
-        tokens["web_reset"] = tokens["reset"]
-        deadline = values["reset_at_ms"]
-        if isinstance(deadline, (int, float)) and 86_400_000 <= deadline - now_ms < 604_800_000:
-            tokens["web_reset"] = f"Reset in {int((deadline - now_ms) // 3_600_000)}h, {format_local_timestamp(deadline, timezone_id)}"
+        tokens["web_reset"] = web_quota_reset(values, timezone_id, now_ms)
     if "used_percent" in values and "quota" in values and now_ms is not None:
         tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
     if "duration_seconds" in values:

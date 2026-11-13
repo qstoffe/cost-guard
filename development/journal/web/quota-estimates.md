@@ -1,7 +1,8 @@
 # Quota guesstimate display precision
 
-Current policy: FR000663 tightens the estimate-only bound to **5%** and separates
-Usage/period Capacity/30-day Capacity help. See [current evidence](quota-tooltip-separation.md).
+Current policy: FR000663 keeps the estimate-only bound at **5%**. FR000699
+replaces its verbose help with normally formatted raw numeric amounts and local
+reset days. See [current evidence](quota-tooltip-separation.md).
 The FR000641 results and ten-percent exception below are historical, not current behavior.
 
 2026-11-09 · FR000641 · v80.221

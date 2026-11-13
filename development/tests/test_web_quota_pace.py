@@ -28,7 +28,7 @@ class WebQuotaPaceTests(unittest.TestCase):
         self.assertEqual(('613', '1839'), (pace['ccost_per_day'], pace['ccost_per_workday']))
         self.assertEqual(('600', '1800'), tuple(pace['display'][key] for key in ('ccost_per_day', 'ccost_per_workday')))
         self.assertEqual('$6.00', pace['display_units']['usd']['ccost_per_day'])
-        self.assertIn('613 Credits ($6.13)', pace['display_units']['usd']['ccost_per_day_help'])
+        self.assertEqual('Remaining/day: ~$6.13', pace['display_units']['usd']['ccost_per_day_help'])
         self.assertEqual('ratio', pace['capacity_basis'])
 
     def test_same_reference_budget_and_full_precision_on_both_surfaces(self):
@@ -105,7 +105,7 @@ class WebQuotaPaceTests(unittest.TestCase):
 
         self.assertEqual('400', wire['ccost_pace']['ccost_per_day'])
         self.assertEqual('ratio', wire['ccost_pace']['capacity_basis'])
-        self.assertIn('unpriced usage may make this low', wire['display']['capacity_help'])
+        self.assertIn('Partial pricing / attribution.', wire['display']['capacity_help'])
 
     def test_verified_native_reference_mapping_drives_pace_without_observed_cost(self):
         quota = QuotaComponent('Monthly', 'fixed', used=D(3), limit=D(10), remaining=D(7), unit='messages',

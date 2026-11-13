@@ -122,6 +122,16 @@ Normal Copilot reports reconcile native used credits with indexed CCost over a v
 
 ## Transport-neutral application boundary and parity inventory
 
+FR000699 keeps quota arithmetic/canonical Decimals below presentation. The pure
+`application/quota_estimates.py::reference_help_amount` formats raw numeric help
+independently of unchanged visible estimate rounding. `quota_ccost.py` prepares
+both display units, including Mini's amount/status tokens. `display.py` owns
+Web-only duration/clock/local-day reset text from the server observation; the
+CLI formatter is unchanged. Shared cards and Mini consume these tokens without
+calculations or new fetches. Tests: quota CCost/precision/pace, Web display/Watch
+quota, account-period and Full/Mini VM suites; hidden Accounts quota driver.
+[Current evidence and scoped tiny-value decision](../../journal/web/quota-tooltip-separation.md).
+
 FR000638 adds Web-only `quota.ccost_pace`: `quota_record` binds native calendar counts
 by quota identity, and `quota_ccost.py` shares its unrounded accepted reference Remaining
 with the existing quota tokens. `with_display` exports distinct raw `ccost_per_day` /

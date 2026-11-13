@@ -30,7 +30,7 @@ module.exports=async({command,evaluate,fixture,until,navigate,sessionId,checks})
       assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),/Native Used|Native Remaining/);
       await evaluate(`capacityRows[3].querySelector('span').focus()`);
       await until(`document.getElementById('context-help').textContent.includes('30 days ÷ 604800 seconds')`);
-      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Theoretical standardized 30-day[\s\S]*30 days ÷ 604800 seconds/);
+      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/^Monthly Capacity: ~/);
     }
     await evaluate(`capacityRows[2].querySelector('span').focus()`);
     await fixture('secondary-capacity-complete');

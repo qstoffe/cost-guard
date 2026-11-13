@@ -80,10 +80,11 @@ def check_estimate_quotas(accounts):
                     rendered = Decimal(display[key].removeprefix('~'))
                     assert abs(rendered - original) <= original / 20, 'estimate display tolerance'
                     assert original == 0 or rendered > 0, 'positive estimate display'
-                    if key == 'monthly_capacity':
-                        assert 'not an actual monthly provider entitlement' in display[key + '_help'], 'monthly provenance help'
-                    else:
-                        assert 'not verified provider usage' in display[key + '_help'], 'estimate provenance help'
+                    # Independent ordinary Credits rule, not estimate rounding.
+                    expected = '<1' if 0 < original < 1 else ccost_amount(original, unit='credits')
+                    assert '~' + expected + ' Credits' in display[key + '_help'], 'raw numeric help'
+                    assert not re.search(r'(?i)unrounded|guesstimate|provider-reported|observed same-window|÷',
+                                         display[key + '_help']), 'concise quota help'
                     count += 1
     return dict(checked_amounts=count)
 

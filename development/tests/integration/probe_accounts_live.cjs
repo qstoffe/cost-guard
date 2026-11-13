@@ -157,7 +157,7 @@ async function main() {
     await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'}));
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'remaining'}));})()`);
     assert.match(await evaluate(`savedCard.querySelector('.watch-quota-summary').textContent`), /remaining.*\$/);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`), /^Source-confirmed full-window[\s\S]*Unrounded Capacity: 25000 Credits \(\$250.00\)/);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent`), 'Capacity: $250.00');
     assert.equal(await evaluate('document.activeElement===savedHelp'),true);
     for (const width of [1200,360]) for (const theme of ['classic','light','dark']) {
       await command('Emulation.setDeviceMetricsOverride', {width,height:800,deviceScaleFactor:1.5,mobile:false},sessionId);

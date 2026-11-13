@@ -1169,7 +1169,7 @@ never add them together. Unknown duration/recurrence, inactive/expired/stale dat
 incompatible reference units, contradictory native data or no usable priced sample show **?**
 with the actual reason in help (including missing period history or ambiguous accounts).
 A positive same-window priced subtotal remains useful when other requests lack prices:
-Capacity help explicitly qualifies the estimate as potentially low. Raw CCost and native
+Capacity help keeps a short partial pricing/attribution warning. Raw CCost and native
 fraction, not rounded display text, determine period and Monthly Capacity; partial pricing
 alone never suppresses those estimates. Proven native monthly windows have only their own Capacity line;
 eligibility follows normalized source-period facts, not the displayed label.
@@ -1197,15 +1197,15 @@ substitutions. Unavailable reference costs show **(?)**; confirmed empty windows
 show Used **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
-reset and partial/estimated attribution without raw source/observation logs.
-Each Capacity label and value share one intrinsic help target: one explanatory
-sentence, then its exact unrounded reference calculation or genuine source allowance.
+reset and concise partial/uncertain-attribution warnings without raw source/observation logs.
+Each Capacity label and value share one intrinsic help target with its normally
+formatted raw amount, not the rounded visible estimate or a calculation essay.
 Native Used/Remaining/reset facts belong to the separate usage summary, not Capacity.
 The native summary remains a help target even when Capacity is unknown.
 Account CCost Today label and number explain daily scope and real attribution notes.
 Copilot's verified reference Used and Remaining use one provider snapshot and sum to
 Capacity internally; independent OpenCode-observed period cost can differ.
-For percentage-only quotas Capacity/Remaining are explicitly explained extrapolations, not
+For percentage-only quotas Capacity/Remaining are extrapolations, not
 provider-promised allocation. Numeric ratio-derived Capacity shows a leading **~**
 directly before the amount; verified directly comparable native allowances do not.
 Unknown/missing figures never get a marker. Provenance follows each quota across units
@@ -1213,19 +1213,21 @@ and orientations, including Accounts and Mini's Capacity help. Missing native us
 changes CCost, not native units. Accounts shares Full Watch's identity-matched
 period costs and reference figures; Mini keeps one compact primary line with
 **Capacity: value** then **Next reset: value** in its subscription-text help,
-followed only by applicable primary unrounded-estimate help.
+followed only by useful numeric Remaining and concise exceptional statuses.
 Both facts belong only to the visible primary window, with canonical local reset/countdown,
 **Window not started** or honest unknowns. No secondary-quota or unrelated CCost prose
 is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts use
 separate intrinsic help on Usage, period Capacity and Monthly Capacity. Usage explains
 the selected native Used/Remaining percentage, quantities, reset and restrictions—never
-reference Capacity mathematics. Period Capacity shows the full available unrounded
-reference Credits and actual same-window observed-cost ÷ native-used-fraction inputs,
-or the genuine source-confirmed allowance/provenance without a fabricated ratio.
-Monthly Capacity shows its own unrounded period Capacity × (30 days ÷ verified full
-duration), not an actual monthly entitlement. Unknown/unlimited figures explain why
-there is no numeric calculation. All three follow
-the same choice immediately, without more polling.
+reference Capacity mathematics. Period Capacity help formats the original raw
+reference amount: **Capacity: ~3066 Credits** or **Capacity: ~$30.66** for a raw
+3065.617… Credits, even while the card shows **~3000** / **~$30.00**.
+Monthly Capacity independently formats its raw 30-day equivalent, retaining **~**.
+Verified native allowances have no approximation prefix. Credits use ordinary
+upward whole-number formatting; positive values below 1 use **<1 Credits**.
+USD has exactly two decimals, or **<$0.01** only when a positive value would round
+to zero. Unknown/unlimited and meaningful partial/restricted warnings remain explicit.
+Unit changes refresh all three immediately, without more polling.
 
 **Quota guesstimate precision:** ratio-derived Remaining/Capacity, every theoretical
 30-day Monthly Capacity and genuinely estimated Remaining/day or /workday use the
@@ -1237,13 +1239,11 @@ monthly equivalents from a rounded display. For example, 613 → **600 / $6.00**
 550 → **550 / $5.50**, 949 → **950 / $9.50**, 52,343 → **50000 / $500.00**.
 Conversion to USD happens after Credit-space rounding and keeps `$` plus two decimals.
 Fractional Credits retain necessary precision; positive amounts below USD display
-precision use **<$0.01**, not zero. Estimate help, including both shared-card Capacity
-metrics, explains when currency precision cannot retain the 5% Credit-space tolerance.
+precision use **<$0.01**, not zero. These are visible-estimate rules only.
 
-Remaining and pace help retains the **guesstimate before display rounding** in full
-Decimal Credits (plus ordinary USD in USD mode), not verified provider usage. Shared-card
-Capacity/Monthly Capacity expose their own raw calculation as described above; Mini retains its
-existing primary-line calculation help. Unit switches and Live updates refresh the same
+Remaining and pace help also uses normally formatted original raw amounts, never
+arbitrary Decimal expansions, formulas or routine provenance paragraphs.
+Unit switches and Live updates refresh the same
 bound help without fetching. Source-confirmed allowances, observed period Used, Today,
 prompt/session costs, native percentages/bars, billing and CLI formatting are unchanged.
 
@@ -1254,10 +1254,12 @@ subscription header. Other windows, CCost and the card body remain unchanged.
 Provider restrictions without numeric exhaustion and stale/unavailable observations
 keep their separate truthful warnings. Accepted recovery clears the emphasis.
 
-For resets under seven days, full Watch uses the same Duration notation as prompt
-rows: **Reset in 1h28m, 20:09**, or **Reset in 1d3h, 14:30**. The local clock comes
-from the actual deadline; its full date/time is available on hover/focus. Seven days
-or more keeps the calendar date. Expired, unknown and not-started windows remain
+Through exactly seven elapsed days, Web reset lines use Duration notation and local
+calendar context after the clock: **Reset in 1h28m, 20:09 today** or
+**Reset in 1d3h, 14:30 Saturday**. Today means the same configured-local calendar
+date, not merely less than 24 hours away; otherwise the English weekday is shown.
+Beyond seven days use **Reset at 09:00, 2026-11-23**. Full date/time is also
+available on hover/focus. Expired, unknown and not-started windows remain
 explicit. Existing Live publications update countdowns without browser clocks or
 additional provider polls; Accounts and Mini's Next reset share this wording, while CLI is unchanged.
 

@@ -11,7 +11,8 @@ import unittest
 from development.tests.fixtures.watch_summary import summary_watch, authoritative_allowances
 from development.tests.integration.probe_web_live import check_reference_quotas
 from src.analysis.valuation import ComparisonCost
-from src.application.display import with_display
+from src.application.display import with_display, web_quota_reset
+from src.application.contracts import record
 from src.application.live_projection import project_live
 from src.application.projection import account
 from src.application.watch_accounts import watch_account, watch_quota
@@ -119,9 +120,10 @@ class WebWatchQuotaTests(unittest.TestCase):
 
     def test_watch_reset_uses_duration_notation_and_keeps_other_reset_consumers(self):
         now = int(datetime(2026, 11, 3, 18, 41, tzinfo=timezone.utc).timestamp() * 1000)
-        cases = ((12_000, '12s, 18:41'), (90_000, '1m30s, 18:42'),
-            (5_280_000, '1h28m, 20:09'), (97_200_000, '1d3h, 21:41'),
-            (604_799_000, '6d23h, 18:40'))
+        cases = ((12_000, '12s, 18:41 today'), (90_000, '1m30s, 18:42 today'),
+            (300_000, '5m, 18:46 today'), (5_280_000, '1h28m, 20:09 today'),
+            (82_800_000, '23h, 17:41 Wednesday'), (97_200_000, '1d3h, 21:41 Wednesday'),
+            (604_799_000, '6d23h, 18:40 Tuesday'), (604_800_000, '7d, 18:41 Tuesday'))
         for elapsed, expected in cases:
             quota = QuotaComponent('Primary', reset_at_ms=now + elapsed)
 
@@ -129,9 +131,10 @@ class WebWatchQuotaTests(unittest.TestCase):
 
             with self.subTest(elapsed=elapsed):
                 self.assertEqual('Reset in ' + expected, wire['display']['watch_reset'])
+                self.assertEqual('Reset in ' + expected, wire['quota']['display']['web_reset'])
                 self.assertEqual(format_reset(now + elapsed, 'UTC', now_ms=now), wire['quota']['display']['reset'])
                 self.assertEqual(now + elapsed, wire['quota']['reset_at_ms'])
-        for deadline, active, expected in ((now + 604_800_000, None, 'Reset at 2026-11-10 18:41'),
+        for deadline, active, expected in ((now + 604_800_001, None, 'Reset at 18:41, 2026-11-10'),
                 (now, None, 'Reset expired'), (now - 1, None, 'Reset expired'),
                 (None, None, 'Reset unknown'), (None, False, 'Window not started'), (0, None, 'Reset unknown')):
             quota = QuotaComponent('Primary', reset_at_ms=deadline, window_active=active)
@@ -143,9 +146,11 @@ class WebWatchQuotaTests(unittest.TestCase):
 
     def test_primary_and_secondary_reset_follow_live_time_across_midnight_and_dst(self):
         for start, elapsed, expected in (
-                ((2026, 11, 3, 22, 50), 5_280_000, 'Reset in 1h28m, 01:18'),
-                ((2026, 3, 29, 0, 30), 7_200_000, 'Reset in 2h, 04:30'),
-                ((2026, 10, 25, 0, 30), 7_200_000, 'Reset in 2h, 03:30')):
+                ((2026, 11, 3, 22, 50), 5_280_000, 'Reset in 1h28m, 01:18 Wednesday'),
+                ((2026, 3, 29, 0, 30), 7_200_000, 'Reset in 2h, 04:30 today'),
+                ((2026, 10, 25, 0, 30), 7_200_000, 'Reset in 2h, 03:30 today'),
+                ((2026, 12, 31, 22, 30), 3_600_000, 'Reset in 1h, 00:30 Friday'),
+                ((2026, 1, 31, 22, 30), 3_600_000, 'Reset in 1h, 00:30 Sunday')):
             now = int(datetime(*start, tzinfo=timezone.utc).timestamp() * 1000)
             frame = summary_watch()
             item = frame.quota.accounts[0]
@@ -162,6 +167,18 @@ class WebWatchQuotaTests(unittest.TestCase):
                     self.assertEqual(expected, slot['display']['watch_reset'])
                     self.assertNotEqual(expected, updated['display']['watch_reset'])
                     self.assertEqual(slot['quota']['display']['reset_at_ms'], updated['quota']['display']['reset_at_ms'])
+
+    def test_web_reset_invalid_deadlines_never_fabricate_calendar_context(self):
+        for deadline in (None, True, False, 'invalid', 0, -1, float('nan'), float('inf'), 10**30):
+            with self.subTest(deadline=deadline):
+                self.assertEqual('Reset unknown', web_quota_reset({'reset_at_ms': deadline}, 'UTC', 1000))
+                if isinstance(deadline, float):
+                    with self.assertRaises(TypeError):
+                        record(reset_at_ms=deadline)
+                    continue
+                tokens = with_display(record(reset_at_ms=deadline), 'UTC', 1000).to_json()['display']
+                self.assertEqual('Reset unknown', tokens['web_reset'])
+                self.assertEqual('unknown', tokens['reset_at_ms'])
 
     def test_owner_fixture_matches_cli_without_reconciling_independent_cost(self):
         frame = summary_watch()

@@ -41,24 +41,23 @@ def estimate_amount(raw):
     return "<$0.01" if rounded > 0 and value == "$0.00" else value
 
 
-def usd_precision_help(raw):
-    """Currency quantization is separate from the estimate's Credit-space bound."""
-    if ccost_unit() == "usd" and raw > 0:
-        rounded = rounded_estimate(raw)
-        with localcontext() as context:
-            context.prec = max(context.prec, len(raw.as_tuple().digits) + 4, raw.adjusted() + 5)
-            currency_credits = rounded.quantize(Decimal(1), rounding=ROUND_HALF_UP)
-            if not within_tolerance(raw, currency_credits):
-                return "\nTwo-decimal USD display cannot retain the 5% Credit-space tolerance; use the raw Credits above."
-    return ""
+def reference_help_amount(value, *, inferred=False):
+    """Ordinary unit precision from raw Credits, never the visible estimate."""
+    try:
+        raw = Decimal(value) if value is not None and not isinstance(value, bool) else None
+    except (InvalidOperation, TypeError, ValueError):
+        return "?"
+    if raw is None or not raw.is_finite() or raw < 0:
+        return "?"
+    if ccost_unit() == "credits":
+        amount = ("<1" if 0 < raw < 1 else ccost_amount(raw)) + " Credits"
+    else:
+        amount = ccost_amount(raw)
+        if raw > 0 and amount == "$0.00":
+            amount = "<$0.01"
+    return ("~" if inferred else "") + amount
 
 
 def estimate_help(raw):
-    rounded = rounded_estimate(raw)
-    if rounded is None:
-        return ""
-    text = "Guesstimate before display rounding: " + exact_number(raw) + " Credits"
-    if ccost_unit() == "usd":
-        text += " (" + ccost_amount(raw) + ")"
-    text += ".\nUnrounded calculation, not verified provider usage or a guaranteed balance."
-    return text + usd_precision_help(raw)
+    amount = reference_help_amount(raw, inferred=True)
+    return "" if amount == "?" else amount

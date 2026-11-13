@@ -51,7 +51,7 @@ const ReportView = (() => {
   const quotaLabel = quota => quota.label.replace(/^\p{L}/u, letter => letter.toUpperCase());
   const capacityKnown = (quota, monthly = false) => quota.ccost_reference?.[monthly ? 'monthly_capacity' : 'capacity'] != null;
   function quotaCapacityHelp(quota, monthly = false) {
-    if (quota.unlimited && !monthly) return 'The provider reports an unlimited quota; no finite reference Capacity applies.';
+    if (quota.unlimited && !monthly) return 'Capacity: Unlimited';
     const explanation = display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
     if (explanation && explanation !== 'N/A') return explanation;
     if (!capacityKnown(quota, monthly)) return monthly ?
@@ -61,14 +61,10 @@ const ReportView = (() => {
   }
   function quotaUsageHelp(quota) {
     const view = quotaView(quota), native = quota.quota_display;
-    const meaning = quota.unlimited ? 'The provider reports no finite usage limit.' : view.percent && view.percent !== '—' ?
-      `${quota.origin === 'provider_native' ? 'The provider reports' : 'Quota status shows'} ${view.percent} of this quota window ${view.mode}.` :
-      `Native ${view.mode} percentage is unavailable.`;
-    return meaning + '\n\n' +
-      `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
+    return (quota.unlimited ? 'Unlimited\n' : '') +
+      `Used: ${native?.used.native || view.native}\nRemaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'N/A'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
       display(quota, 'web_reset') +
-      (quota.model_id ? '\nApplies to model: ' + quota.model_id : '') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
       (['stale', 'unavailable', 'error', 'paused', 'invalid'].includes(quota.status) ? '\nQuota status: ' + quota.status + '.' : '') +
       ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +

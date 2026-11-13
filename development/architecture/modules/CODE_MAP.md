@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000699: `application/quota_estimates.py` formats raw tooltip amounts separately
+from unchanged visible estimate rounding; `quota_ccost.py` exports compact numeric
+help and Mini amount/status tokens. `display.py::web_quota_reset` adds configured-local
+calendar context without changing CLI reset formatting. Shared `assets/render.js`
+and `mini.js` consume those tokens. Coverage: quota CCost/precision/pace,
+Web display/Watch quota, Full/Mini VM tests, and `probe_accounts_live.cjs --quota-only`.
+[Evidence/formatting decision](../../journal/web/quota-tooltip-separation.md).
+
 FR000698: `reports/session_models.py` derives bounded executed main/subagent model
 facts; `session_summary.py` uses algorithm 6 for Web catalog rows only.
 `application/model_help.py` prepares role-separated text, `session_catalog.py`

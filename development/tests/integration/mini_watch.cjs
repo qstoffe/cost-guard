@@ -220,12 +220,12 @@ function setup() {
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
   for (const [index, line] of [...view.accounts.children].entries()) {
     const primary = input.view.accounts.accounts[index].primary;
-    const extra = [primary.quota.display.ccost_capacity_help, primary.quota.display.ccost_remaining_help].filter(Boolean);
-    assert.equal(line.helpText, [`Capacity: ${primary.quota.display.ccost_capacity}\nNext reset: ${primary.display.watch_reset}`, ...extra].join('\n'));
-    if (primary.quota.display.capacity_basis === 'ratio') {
-      assert.match(line.helpText,/Guesstimate before display rounding:/);
-      assert.match(line.helpText,/not verified provider usage/);
-    } else assert.equal(line.helpText.split('\n').length, 2);
+    const extra = [primary.quota.display.ccost_remaining_help && `Remaining: ${primary.quota.display.remaining_amount}`,
+      primary.quota.display.quota_help_status].filter(Boolean);
+    if (!['available','partial'].includes(input.view.accounts.accounts[index].observation.availability) || input.view.quota_stale)
+      extra.push('Quota observation is stale or unavailable.');
+    assert.equal(line.helpText, [`Capacity: ${primary.quota.display.capacity_amount}\nNext reset: ${primary.display.watch_reset}`, ...extra].join('\n'));
+    assert.doesNotMatch(line.helpText, /Unrounded|Guesstimate|estimate|Observed same-window|Provider-reported fraction|÷/);
   }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
   assert.equal(retained.children[0].children[0].tabIndex,0);
@@ -238,10 +238,10 @@ function setup() {
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
   const scopedDisplay = scopedPrimary.display;
-  for (const [capacity, usd, reset] of [['100', '$1.00', 'Reset in 1h, 12:00'],
-      ['100 (guesstimate)', '$1.00 (guesstimate)', 'Window not started'], ['N/A', 'N/A', 'unknown']]) {
-    scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,ccost_capacity:capacity},
-      display_units:{credits:{ccost_capacity:capacity},usd:{ccost_capacity:usd}}};
+  for (const [capacity, usd, reset] of [['3066 Credits', '$30.66', 'Reset in 1h, 12:00 today'],
+      ['~3066 Credits', '~$30.66', 'Reset in 23h, 10:00 Saturday'], ['?', '?', 'Reset unknown']]) {
+    scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,capacity_amount:capacity},
+      display_units:{credits:{capacity_amount:capacity},usd:{capacity_amount:usd}}};
     scopedPrimary.display = {...scopedDisplay,watch_reset:reset};
     for (const unit of ['credits','usd']) {
       vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
