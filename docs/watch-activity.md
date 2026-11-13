@@ -74,7 +74,8 @@ Screening cannot guarantee recognition of every private value. Treat even eligib
 paths/commands as private local information.
 Details remain in process memory and the authenticated loopback Live publication,
 not Cost Guard caches, diagnostics, logs or telemetry. Each detail is bounded to
-roughly 4 KiB of formatted input; huge arguments are omitted, not silently cut off.
+roughly 4 KiB of formatted input across each foreground/background list; concurrent
+entries share that budget. Huge arguments are omitted explicitly, not silently cut off.
 
 For recognized OpenCode shell/bash inputs, a supplied positive finite numeric
 timeout is labeled in **milliseconds**, for example `timeout: 120000 ms (2 min)`
@@ -83,15 +84,29 @@ or proof of eventual termination. Running duration remains separate. No supplied
 timeout means no invented default; zero, negative, string and other-tool timeout
 values retain their raw meaning without invented units or an “unlimited” claim.
 
-Background jobs remain separate from foreground calls. A single source-confirmed
-job can show its original inputs only through an unambiguous canonical tool/call
-link in the same prompt scope. Aggregated jobs, missing links and unavailable
-registry evidence never borrow a foreground command. They show an honest
-input-unavailable disclosure instead.
+Background jobs remain separate from foreground calls. Expansion lists up to five
+individually identified invocations in stable start/identity order, with an honest
+`+N more` for additional jobs. Two observed tool calls do not imply two running jobs.
+The compact Running summary and original counts/duration are unchanged.
+Each job needs an unambiguous session/assistant/physical-call or native-shell join
+inside the canonical prompt/linked-child scope. Missing original input may use the
+same V2 location-scoped shell observation's command/cwd/shell; optional experimental
+shell-job recovery is restricted to the verified 2.2.7 API and exact owning session.
+It does not create a mandatory experimental dependency or an expansion-time read.
+Session-only records without a prompt-qualified join are not assigned to a prompt.
+Commands from other sessions or contradictory identities are never displayed.
+
+When original input and registry command text differ, the independently linked
+original input alone is shown, with a qualification: registry details are withheld
+and the executed form is not verified. Runtime setup can legitimately differ from
+the requested command; Cost Guard does not parse wrappers or guess equivalence.
+Privacy-withheld input is never rescued via that conflicting registry command.
+Absent input, missing original links, unobservable registry and awaiting verified
+live source each get specific explanations alongside the known Running facts.
 
 Duration-only updates preserve expansion, detail nodes, selection and focus.
 Different physical calls, source generations and corrected call revisions reset
-the disclosure. Terminal/unverified prompts and unavailable/retained observations
+only the affected entry; unrelated jobs stay expanded. Terminal/unverified prompts and unavailable/retained observations
 clear the live input; existing status/count lifecycle and CLI/Mini are unchanged.
 
 ## Width and colors

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.37 - 2026-11-13
+
+- Full Watch lists up to five individually scoped running foreground/background invocations, retaining correct totals and unchanged tool-call accounting. Multiple background shells no longer lose all command details merely because there is more than one job. Duration ticks retain unaffected disclosure nodes, selection and focus.
+- Exact native job/session/prompt joins recover missing command/cwd/shell fields from the existing V2 shell observation, with optional exact-session experimental recovery on the verified 2.2.7 contract. All inputs use the same privacy/budget boundary. Command-only registry differences retain proven original input with a truthful qualification; identity conflicts still withhold everything. Missing live evidence clears commands and explains why, rather than showing generic unavailable prose.
+
 ## v81.36 - 2026-11-13
 
 - Session detail now advances during source acquisition: admitted/selected, revision verification, reading, analysis, projection and publication have explicit source-owned milestones. Known local work totals contribute measured stage fractions; heterogeneous units and elapsed time never fabricate a denominator.

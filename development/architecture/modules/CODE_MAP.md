@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000688: `sources/opencode_v2_background.py` owns exact native-job registry recovery;
+`watch/invocation.py` owns bounded multi-job identity, canonical-first mismatch
+handling and the common privacy filter. `cards.py`/`live_projection.py` retain live
+verification gates; `watch.js` reconciles affected job entries only. Coverage:
+invocation/card/Live/V1 parity tests, Watch VM and hidden `probe_watch_invocation.cjs`
+plus authenticated `probe_web_help.cjs ... --watch-shells` / `probe_watch_jobs.cjs`.
+[Source evidence and acceptance clarification](../../journal/web/watch-invocation.md#multi-job-command-recovery--fr-000688).
+
 FR000686: `domain/progress.py::DetailProgress` owns the explicit source milestone
 budget; `watch/detail_capture.py::WorkMeter` transports it separately from scalar
 liveness work, qualified by `application/session_detail.py` attempt identity.

@@ -25,7 +25,7 @@ from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.acquisition import LiveAcquisition
 from src.watch.coordinator import WatchCoordinator
-from src.watch.models import WatchCard
+from src.watch.models import ToolInvocation, WatchCard
 from src.watch.observers import LiveEventPump, PumpResult
 from src.sources.base import SourceChange
 from src.reports import ReportRequest
@@ -40,6 +40,30 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_two_live_background_details_are_exported_only_for_verified_running_prompt(self):
+        frame = outcome_watch()
+        card = frame.active_cards[0]
+        row = card.rows[0]
+        jobs = tuple(ToolInvocation(f'job-{i}', 'r1', f'command:\npython task{i}.py', '',
+                                    'shell', 1000 + i, 'background') for i in (1, 2))
+        tool = replace(row.tool, background_invocation=None, background_invocations=jobs,
+                       background_invocation_count=2, background_kinds=('shell', 'shell'))
+        card = replace(card, rows=(replace(row, tool=tool),), state='observed')
+
+        wire = project_live(replace(frame, active_cards=(card,))).to_json()
+
+        exported = wire['active_cards'][0]['rows'][0]['tool']
+        self.assertEqual(2, exported['background_invocation_count'])
+        self.assertEqual(['command:\npython task1.py', 'command:\npython task2.py'],
+                         [item['text'] for item in exported['background_invocations']])
+        self.assertNotIn('background_invocations', wire['rows'][0]['tool'] if wire['rows'] else {})
+        for state in ('loading', 'retrying', 'partial', 'unavailable'):
+            wire = project_live(replace(frame, active_cards=(replace(card, state=state),))).to_json()
+            self.assertEqual([], wire['active_cards'][0]['rows'][0]['tool']['background_invocations'])
+        for prompt in (replace(row.prompt, execution_unverified=True), replace(row.prompt, in_progress=False)):
+            wire = project_live(replace(frame, active_cards=(replace(card, rows=(replace(row, tool=tool, prompt=prompt),)),))).to_json()
+            self.assertEqual([], wire['active_cards'][0]['rows'][0]['tool']['background_invocations'])
+
     def test_detail_future_fault_does_not_end_independent_live_or_catalog_publication(self):
         from concurrent.futures import Future
         from src.application.session_detail import SessionDetails

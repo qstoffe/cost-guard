@@ -283,6 +283,10 @@ class BackgroundActivity:
     # Original canonical tool identity, only when supplied by the source.
     tool_part_id: str = ""
     tool_call_id: str = ""
+    # Ephemeral, source-observed scalar invocation fields, never output/metadata.
+    # Consumers must apply the same privacy filter as canonical tool input.
+    invocation_input: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    invocation_reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)

@@ -213,7 +213,7 @@ class WatchCardTests(unittest.TestCase):
 
     def test_invocation_clears_during_source_revision_reverification(self):
         root = self.roots[0]
-        row = replace(self.capture.rows[-1], in_progress=True)
+        row = replace(self.capture.rows[-1], in_progress=True, background_kinds=('shell', 'shell'))
         capture = replace(self.capture, rows=(row,), observed_ids=frozenset({row.event_id}), observed_at_ms=1000)
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog((root,), active=(root.session_id,)))
@@ -221,7 +221,8 @@ class WatchCardTests(unittest.TestCase):
         entry = cards.sessions[root.session_id]
         detail = ToolInvocation("physical", "revision", 'command:\npython tokenizer.py --mode=fast\n\ntimeout:\n120000 ms (2 min)', '')
         entry.tools[row.event_id] = ToolObservation(running_tool="shell", running_ms=30_000,
-            running_invocation=detail, background_invocation=detail)
+            running_invocation=detail, background_invocation=detail,
+            running_invocations=(detail,), background_invocations=(detail, replace(detail, identity='second')))
 
         first = cards.project(2000)[0][0].rows[0].tool
         self.assertEqual(detail, cards.project(2001)[0][0].rows[0].tool.running_invocation)
@@ -231,6 +232,9 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual(detail, first.running_invocation)
         self.assertIsNone(verifying.running_invocation)
         self.assertIsNone(verifying.background_invocation)
+        self.assertEqual(2, len(first.background_invocations))
+        self.assertEqual((), verifying.running_invocations)
+        self.assertEqual((), verifying.background_invocations)
         self.assertEqual(first.tool_count, verifying.tool_count)
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):

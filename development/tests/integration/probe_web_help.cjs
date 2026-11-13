@@ -4,12 +4,12 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--watch-shells'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
    const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--help-audit',
-     ...(scope==='--raw-models'?['--raw-models',replay]:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
+      ...(scope==='--raw-models'?['--raw-models',replay]:scope==='--watch-shells'?['--watch-shells']:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
   let serverErrors = '';
   server.stderr.on('data', chunk => {serverErrors = (serverErrors + chunk.toString()).slice(-12000);});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
@@ -56,7 +56,15 @@ async function main() {
     await command('Page.navigate',{url:launch.url},owner);
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===2`);
     await evaluate(owner,`location.hash='#/watch'`);
-     await until(owner,`current?.watch?.cards.size>0`);
+      await until(owner,`current?.watch?.cards.size>0`);
+      if(scope==='--watch-shells') {
+        await require('./probe_watch_jobs.cjs')({command,evaluate,until,owner,checks,layouts,output});
+        assert.deepEqual(errors,[]);
+        evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+          limitations:['Synthetic commands through shipped authentication/HTTP/CSP/SSE/Full Watch.',
+            'Headless native browser input, not physical desktop or the owner incident.']};
+        console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
+      }
      if(scope==='--quiet-refresh' || scope==='--sessions-quiet-refresh') {
        await require('./probe_quiet_refresh.cjs')({command,evaluate,until,owner,checks,layouts,
          sessionsOnly:scope==='--sessions-quiet-refresh'});

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.36, 2026-11-13), the supported distribution.
+Use **current `main`** (v81.37, 2026-11-13), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.36 (2026-11-13):** Opening a session advances the existing loading bar during actual source work, using source-owned milestones and known stage fractions. Verified row transfer uses 70–95%; only the applied table reaches 100%. Opaque waits retain their proven watermark, without a clock animation or extra source reads. [Evidence and limits](development/journal/web/session-loading.md#source-driven-whole-operation-progress-fr000686).
+**v81.37 (2026-11-13):** Full Watch expands running work into separately identified foreground/background invocations, including concurrent shells. Exact native job links can recover missing commands from V2's existing registry observation; privacy, live verification and truthful mismatch/missing-source explanations remain mandatory. [Evidence and limits](development/journal/web/watch-invocation.md#multi-job-command-recovery--fr-000688).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

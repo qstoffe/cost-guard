@@ -31,20 +31,57 @@ const WatchView = (() => {
     const target = disclosure(); target.node.className = 'watch-running-tool';
     target.note = el('p', undefined, 'detail'); target.input = el('pre', undefined, 'watch-invocation');
     target.list.append(target.input, target.note);
+    target.jobs = new Map();
     return target;
   }
-  function drawInvocation(target, label, detail) {
-    const identity = label ? JSON.stringify([detail?.identity, detail?.revision]) : '';
+  function drawInvocation(target, label, detail, reason = '') {
+    const identity = label ? JSON.stringify([detail?.identity, detail?.revision, reason]) : '';
     const changed = identity !== target.identity;
     // A changed/ended call invalidates old content even while it has focus.
     if (changed) {
       target.node.open = false; target.identity = identity;
       text(target.input, detail?.text || '');
-      text(target.note, label ? detail ? detail.qualification : 'Invocation details unavailable from the current source.' : '');
+      text(target.note, label ? detail ? detail.qualification : reason : '');
       target.note.hidden = !target.note.textContent;
     }
     if (changed || !protectedNode(target.summary) || !label) text(target.summary, label);
     target.node.hidden = !label;
+  }
+  function drawInvocations(target, label, details, total, verified, mode, legacy) {
+    const reason = !verified ? 'Awaiting verified live source; previous commands cleared.' :
+      mode === 'background' ? 'Original call links missing; only background activity is observable.' :
+      'Command not recorded in the current tool event.';
+    const rows = verified ? (details?.length ? details : legacy ? [legacy] : []) : [];
+    // Preserve the established single-call layout and compatibility fields.
+    if (rows.length <= 1 && total <= 1) {
+      for (const job of target.jobs.values()) job.node.remove();
+      target.jobs.clear();
+      if (target.input.parentNode !== target.list) target.list.append(target.input, target.note);
+      drawInvocation(target, label, rows[0], reason);
+      return;
+    }
+    if (target.input.parentNode === target.list) {
+      target.input.remove(); target.note.remove(); target.identity = undefined;
+    }
+    text(target.input, ''); // Never retain commands in detached compatibility nodes.
+    target.node.hidden = !label;
+    if (!label) { target.list.replaceChildren(); target.jobs.clear(); target.node.open = false; return; }
+    if (!protectedNode(target.summary)) text(target.summary, label);
+    const wanted = [], keep = new Set();
+    rows.slice(0, 5).forEach((detail, index) => {
+      const key = detail.identity; keep.add(key);
+      const fresh = !target.jobs.has(key);
+      const job = target.jobs.get(key) || invocationDisclosure(); target.jobs.set(key, job);
+      const name = detail.kind || 'Tool';
+      drawInvocation(job, `${name} ${index + 1} — ${mode}, running`, detail);
+      if (fresh) job.node.open = true; // Parent is the initially collapsed privacy boundary.
+      wanted.push(job.node);
+    });
+    for (const [key, job] of target.jobs) if (!keep.has(key)) { job.node.remove(); target.jobs.delete(key); }
+    const omitted = Math.max(0, total - Math.min(rows.length, 5));
+    text(target.note, !verified || !rows.length ? reason : omitted ? `+${omitted} more running ${mode} items; details not shown.` : '');
+    target.note.hidden = !target.note.textContent;
+    wanted.push(target.note); reconcile(target.list, wanted);
   }
   function fragments(target, parts) {
     const signature = JSON.stringify(parts);
@@ -286,12 +323,12 @@ const WatchView = (() => {
       if (unidentified > 0) toolLines.push([[`${unidentified} × unidentified tool/outcome`, 'watch-activity-error']]);
       drawDisclosure(this.tools, toolParts, toolLines, 'No tool calls');
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
-      drawInvocation(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
-        verified ? tool?.running_invocation : null);
+      drawInvocations(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
+        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation);
       const kinds = tool?.background_kinds || [];
       const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
-      drawInvocation(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
-        verified && kinds.length === 1 ? tool?.background_invocation : null);
+      drawInvocations(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
+        tool?.background_invocations, kinds.length, verified, 'background', kinds.length === 1 ? tool?.background_invocation : null);
     }
   }
   class View {

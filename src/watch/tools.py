@@ -9,7 +9,7 @@ from src.analysis.child_links import ChildLinkIndex
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .models import SkillObservation, ToolObservation, ToolOutcome
-from .invocation import background_invocation, invocation
+from .invocation import MAX_INPUT_TEXT, MAX_INVOCATIONS, background_invocations, invocation
 from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
@@ -20,7 +20,8 @@ def without_live_activity(tool: ToolObservation) -> ToolObservation:
     """Keep final counts, removing every indicator of ongoing execution."""
     return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
         active_todo="", background_kinds=(), background_ms=0,
-        running_invocation=None, background_invocation=None)
+        running_invocation=None, background_invocation=None, running_invocations=(),
+        background_invocations=(), running_invocation_count=0, background_invocation_count=0)
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
@@ -151,7 +152,7 @@ def observe_tools(
     counts: dict[str, int] = {}
     outcomes: dict[tuple[str, str], int] = {}
     running_tool, running_ms = "", 0
-    running_part = None
+    running_parts = []
     order = 0
     messages = _prompt_messages(snapshot, parents, is_compaction)
     skills: dict[str, tuple[int, int]] = {}
@@ -188,23 +189,32 @@ def observe_tools(
             owner = failure_skill(part.data, script)
             if owner:
                 skill_failures[owner] = skill_failures.get(owner, 0) + 1
-        elif not outcome and status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
-            running_tool, running_ms = name, now_ms - start
-            running_part = part
+        elif not outcome and status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS:
+            running_parts.append(part)
+            if now_ms - start > running_ms:
+                running_tool, running_ms = name, now_ms - start
         if _is_todo_tool(part):
             order += 1
             candidates.append((start, order, _todo_state(part)))
     todos = None
     if candidates:
         _, _, todos = max(candidates, key=lambda item: (item[0], item[1]))
+    background_details, background_count = background_invocations(snapshot, messages, physical) if include_invocations else ((), 0)
+    running_parts.sort(key=lambda part: (_part_start(part), part.session_id, part.part_id))
+    budget = MAX_INPUT_TEXT // max(1, min(len(running_parts), MAX_INVOCATIONS))
+    running_details = tuple(replace(invocation(part, budget=budget), started_at_ms=_part_start(part))
+                            for part in running_parts[:MAX_INVOCATIONS]) if include_invocations else ()
     summary = dict(
         tool_counts=tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0]))),
         tool_outcomes=tuple(ToolOutcome(name, outcome, count) for (name, outcome), count in sorted(
             outcomes.items(), key=lambda item: (item[0][1] != "failed", -item[1], item[0][0]))),
         failed_count=sum(count for (_, outcome), count in outcomes.items() if outcome == "failed"),
         running_tool=running_tool, running_ms=running_ms,
-        running_invocation=invocation(running_part) if include_invocations and running_part else None,
-        background_invocation=background_invocation(snapshot, messages, physical) if include_invocations else None,
+        running_invocation=running_details[0] if running_details else None,
+        background_invocation=background_details[0] if background_count == 1 and background_details[0].text else None,
+        running_invocations=running_details, background_invocations=background_details,
+        running_invocation_count=len(running_parts) if include_invocations else 0,
+        background_invocation_count=background_count,
         skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))
                      for skill in sorted(skills, key=lambda item: skills[item], reverse=True)),
     )

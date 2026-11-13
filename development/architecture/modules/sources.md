@@ -35,6 +35,20 @@ remain unwrapped. Ordinary single/batch snapshot semantics are unchanged.
 
 `opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding attempt as neutral `TerminalEvidence`. A failed/interrupted run with no assistant binds to its initiating user/synthetic message, never an earlier assistant; system notices are transparent, while compaction and ambiguous timestamps block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched`, `agent-switched`, and `model-switched` items become non-billable context boundaries. When supported, the documented session-context route contributes only path-free active message IDs; unsupported evidence stays absent. `opencode_v2_background.py` maps background jobs/completion notices to neutral `BackgroundActivity`/`BACKGROUND_COMPLETION`; a job without notice runs until its location's shell registry drops it.
 
+FR000688 preserves the existing single lazy shell-registry observation per hydrated
+session containing unfinished job starts. It now retains only command/cwd/shell and
+ownership scalars as ephemeral `BackgroundActivity.invocation_input`; raw registry
+objects/output/environment never cross the Watch boundary. Exact native shell/job
+IDs and assistant/session links qualify recovery, not name/path/time similarity.
+Duplicate/conflicting origins or supplied IDs withhold detail. Missing original
+background input requires positive registry presence, never an inferred live job
+from outage alone. Verified source 2.2.7 may make one optional exact-session
+`kind=shell,status=running,descendants=false` experimental job read when ordinary
+shell command ownership is absent; unsupported/404 stays normal no-detail evidence.
+Each separately hydrated child has its own exact session filter. Unjoined session
+records are not promoted into prompt activities. No new worker, persistent command
+cache, expansion fetch or mandatory experimental dependency is added.
+
 `/api/event` decodes current JSON-string and legacy object events. Hints invalidate snapshots; explicit live actors supplement only a matching persisted cancellation. End/disconnect/failure requires authoritative resync; older history and a fresh source never invent actors.
 
 Web's isolated card-service factory may explicitly inherit a detached copy of the
