@@ -19,6 +19,8 @@
 
 ## Separate task dispositions
 
+Cost Guard's administrative migration is published in [PR #297](https://github.com/qstoffe/cost-guard/pull/297).
+
 [FR000692](../../ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md)
 returns intact to Ready priority `000001`, with the required owner clarification
 on saved-history reads, worker-private exclusions and up-to-48-hours real effort.
