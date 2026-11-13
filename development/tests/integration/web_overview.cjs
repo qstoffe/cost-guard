@@ -6,8 +6,10 @@ class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.attrs = {}; this.text = ''; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
-  append(...values) { this.children.push(...values); }
-  replaceChildren(...values) { this.children = values; this.text = ''; }
+  append(...values) { for (const node of values) this.insertBefore(node,null); }
+  insertBefore(node,next) { node.remove(); this.children.splice(next?this.children.indexOf(next):this.children.length,0,node); node.parentNode=this; }
+  remove() { if(this.parentNode) { const list=this.parentNode.children;list.splice(list.indexOf(this),1);this.parentNode=null; } }
+  replaceChildren(...values) { for(const node of [...this.children])node.remove();this.text='';this.append(...values); }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(key, handler) { this.events[key] = handler; }
 }
@@ -29,9 +31,9 @@ assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative Price List Cost ↓', 'Release date ↕']);
 assert.equal(all(output, 'h3').length, 0, 'definitions belong to heading help, not cards');
-assert.equal(output.children[0].textContent, 'GitHub Reference Pricing(GitHub Copilot · View source)');
-assert.equal(output.children[1].className, 'model-tools', 'notices/filters precede table');
-assert.equal(output.children[3].className, 'overview-models');
+assert.equal(output.children[0].children[0].textContent, 'GitHub Reference Pricing(GitHub Copilot · View source)');
+assert.equal(output.children[0].children[1].className, 'model-tools', 'notices/filters precede table');
+assert.equal(output.children[0].children[3].className, 'overview-models');
 assert.equal(all(output, 'details').length, 0, 'no Models explanations disclosure');
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);

@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
+   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -84,7 +84,15 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+       await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+       if(scope==='--control-focus') {
+         await require('./probe_control_focus.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,checks,layouts,
+           limitations:['Shipped authenticated host and actual headless Document PiP; synthetic report/source data.',
+             'Not a physical OS-window event trace or a reproduction of the owner’s sporadic incident.']};
+         console.log(JSON.stringify({outcome:'PASS',cases:layouts.length,checks}));return;
+       }
       if(scope === '--raw-models' || scope === '--effort-defaults') {
         const capture=JSON.parse(await fs.readFile(replay,'utf8'));
         await require(scope==='--effort-defaults'?'./probe_default_effort.cjs':'./probe_raw_models.cjs')({command,evaluate,until,owner,mini,checks,layouts,capture});

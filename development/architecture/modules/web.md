@@ -16,6 +16,18 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000695 (v81.39) retains one Models presentation root in `render.js`. Price rows are
+keyed by publisher/model and prepared presentation signature; benchmark rows by
+source configuration ID. Section controls/date/status remain outside row revision.
+Price publication never detaches the benchmark root, and `show()` no longer uses a
+price render as a generic benchmark lookup trigger. Initial entry, explicit benchmark
+work, route reentry and the existing independent publication poll own those reads.
+`control-focus.js` installs one modality controller per main/PiP document, including
+same-element pointer activation; only marked pointer-owned focus outlines are gated.
+Native focus/order, keyboard-only refresh recovery, active-route/toggle/pressed
+styles and all acquisition/security boundaries remain. No timers, blur-on-click,
+new source work or persisted browser state. [Evidence/limits](../../journal/web/models-isolation.md).
+
 ### Architecture 120 source map
 
 Static trace checked on `3f994921849ae2cf6f87245c6f3a010353fcbd08`, 2026-11-10;

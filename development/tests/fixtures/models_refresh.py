@@ -20,19 +20,21 @@ from .report_runtime import FakeSource
 from .benchmark import payload
 
 
-def benchmark_payload():
+def benchmark_payload(changed=False):
     value = payload()
     value['fetched_at_ms'] = int(time.time() * 1000)
     for row in value['pages'][0]['rows'][:4]:
         row['metadata'].update(model_display=dict(label='GPT-Test', url='https://openai.com/gpt-test'),
             model_org=dict(label='OpenAI', url='https://openai.com'))
+    if changed:
+        value['pages'][0]['rows'][0]['metrics']['accuracy'] = 72
     return value
 
 
 class BenchmarkRefreshJobs:
     """Controlled public-read outcomes; the production lane still owns coalescing/cache."""
     def __init__(self):
-        self.fetches, self.hold, self.offline = 0, False, False
+        self.fetches, self.hold, self.offline, self.changed = 0, False, False, False
 
     def submit(self, request):
         self.fetches += 1
@@ -40,7 +42,7 @@ class BenchmarkRefreshJobs:
 
     def snapshot(self, key):
         return dict(status='running' if self.hold else 'failed' if self.offline else 'complete',
-            result=dict(benchmark=benchmark_payload()))
+            result=dict(benchmark=benchmark_payload(self.changed)))
 
     def tick(self):
         pass

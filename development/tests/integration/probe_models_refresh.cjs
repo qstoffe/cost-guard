@@ -17,7 +17,7 @@ async function main() {
   const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending = new Map(); let sequence = 0, buffer = '', phase = 'startup'; const errors = [], checks = [], layouts = [];
+  const pending = new Map(); let sequence = 0, buffer = '', phase = 'startup'; const errors = [], checks = [], layouts = [], requests = [];
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
     while ((index=buffer.indexOf('\0'))>=0) {
@@ -25,6 +25,10 @@ async function main() {
       if (value.id) { const entry=pending.get(value.id); pending.delete(value.id);
         if (entry) {clearTimeout(entry.timer); value.error?entry.reject(new Error(JSON.stringify(value.error))):entry.resolve(value.result);} }
       else if (value.method==='Runtime.exceptionThrown') errors.push(value.params.exceptionDetails.text);
+      else if (value.method==='Network.requestWillBeSent') {
+        const route = new URL(value.params.request.url).pathname;
+        if(route.startsWith('/api/models')) requests.push({route,method:value.params.request.method,at:Date.now()});
+      }
     }
   });
   const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{
@@ -55,7 +59,7 @@ async function main() {
     const launch=JSON.parse((await lines.next()).value); // One-use credential stays private.
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId:id}=await command('Target.attachToTarget',{targetId,flatten:true});
-    await command('Page.enable',{},id); await command('Runtime.enable',{},id);
+    await command('Page.enable',{},id); await command('Runtime.enable',{},id); await command('Network.enable',{},id);
     await command('Page.bringToFront',{},id);
     await command('Page.navigate',{url:launch.url},id);
     await until(id,`typeof current!=='undefined' && !!current?.result && !current.loading && hostState.writable`);
@@ -63,6 +67,14 @@ async function main() {
       sample:current.result.view.token_mix,models:current.result.view.model_comparison,choice:current.models})`);
     const initial=await read(); assert.equal((await mode('status')).fetches,1);
     await until(id,`document.querySelectorAll('.benchmark-table tbody tr').length===4 && !current.benchmark.loading && !current.benchmark.refresh.disabled`);
+    if (['--isolation-baseline','--isolation-only'].includes(baseline)) {
+      phase='isolation';
+      const isolation=await require('./probe_models_isolation.cjs').probeIsolation({command,evaluate,until,id,mode,requests,
+        fixture:async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);},
+        baseline:baseline==='--isolation-baseline'});
+      evidence={outcome:baseline==='--isolation-baseline'?'OBSERVED':'PASS',browser:(await command('Browser.getVersion')).product,...isolation};
+      console.log(JSON.stringify(evidence));return;
+    }
     phase='models-values';
     checks.push(...await probeModelsValues({command,evaluate,until,id,fixture:async command=>{
       server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);

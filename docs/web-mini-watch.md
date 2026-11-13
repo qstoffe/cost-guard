@@ -10,6 +10,11 @@ requests focus of the **existing** owning tab without deliberately closing Mini.
 Restoring a minimized window depends on the browser/OS; the native return-to-tab
 control is the fallback. Closing/reloading the owner ends Mini. A fresh page starts Off.
 
+Mini shares Web's per-document pointer/keyboard focus contract. Pointer/touch use of
+**Cost Guard · Watch**, Fit or help does not keep an extra keyboard-style outer ring
+after the action. Tab/Enter/Space retain a visible focus cue, including after returning
+focus to the owner. This does not change native browser/OS window chrome.
+
 ## One session activity table
 
 The always-visible table has exactly five columns:

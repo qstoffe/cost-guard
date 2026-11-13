@@ -627,6 +627,7 @@ const MiniWatch = (() => {
         // Avoid an unstyled first layout creating a vertical scrollbar which then
         // steals the measured header width and keeps itself alive through wrapping.
         await Promise.all(styles);
+        if (typeof ControlFocus !== 'undefined') ControlFocus.install(doc);
         if (request.cancelled || this.ended || win.closed || this.window !== win) { this.release(win); win.close(); return; }
         this.view = new View(doc, () => {
           this.returnToWatch();

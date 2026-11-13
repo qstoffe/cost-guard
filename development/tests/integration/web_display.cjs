@@ -6,8 +6,10 @@ class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.attrs = {}; this.text = ''; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
-  append(...values) { this.children.push(...values); }
-  replaceChildren(...values) { this.children = values; this.text = ''; }
+  append(...values) { for (const node of values) this.insertBefore(node,null); }
+  insertBefore(node,next) { node.remove(); this.children.splice(next?this.children.indexOf(next):this.children.length,0,node); node.parentNode=this; }
+  remove() { if(this.parentNode) { const list=this.parentNode.children;list.splice(list.indexOf(this),1);this.parentNode=null; } }
+  replaceChildren(...values) { for(const node of [...this.children])node.remove();this.text='';this.append(...values); }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(key, handler) { this.events[key] = handler; }
 }
