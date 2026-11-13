@@ -220,3 +220,59 @@ Detailed findings and methodology:
 **FR000692 remains On Hold.** This is a documentation-only
 investigation update; it is neither product repair nor a
 permission bypass or approval to promote the FR.
+
+## V6 owner-executed exact per-request identity proof — 2026-11-13
+
+**V6 is now owner-run and resolves the earlier per-request evidence blocker.**
+The owner supplied a read-only, sanitized local OpenCode+Claude Agent
+SDK metadata export. For the **12 exact alias-defect sessions**,
+**all 87/87 saved known-usage OpenCode assistant requests** contain
+at least one *direct* `session_message.data.content[*].native`
+`(sessionID, messageID)` reference to a real local Claude SDK
+`assistant.uuid` with `assistant.message.model`. There are
+**174 distinct exact reply pairs, 174 resolved, 0 missing and 0
+model conflicts**; all linked replies agree within each request.
+Verified request releases: **84 Sonnet 5.5, 1 Opus 5.5, 1 Haiku 5.5,
+1 Fable 5.1**. Successful pinned Fable 5.2 additionally has one
+resolved saved reply. Failed pinned Haiku 4.5 has four linked
+responses but no recognized usage — do not invent zero billing.
+
+The prior `8/1`, `8/1`, `10/1`, `20/12`, `23/14` checkpoint gaps are
+**superseded**, not waived: v6 proves respectively **8/19**, **8/13**,
+**10/20**, **20/42**, **23/48** (saved assistant usage requests /
+exact native UUID-to-model linked replies). **86** linked replies
+across **40** alias requests name earlier SDK sessions, not the
+latest SDK session ID in plugin KV. Do not restrict recovery
+to that last ID or to deleted source-directory `/api/model` results.
+Do not fall back from exact UUIDs to approximate time/token matches.
+
+**Implementation entrypoint exists in Cost Guard already:**
+`src/sources/opencode_v2_wire.py` passes V2 assistant inline
+`content[*]` through to parts, and
+`src/sources/opencode_v2_normalization.py` retains their
+`native` in `NormalizedPart.data`. At the source identity resolution
+stage (`src/sources/opencode_v2.py::_normalize_messages`,
+`src/sources/opencode_v2_model_identity.py`), implement a bounded
+read-only `(sdk_session_id, assistant_uuid) -> executed message.model`
+join across *all exact referenced* old Claude SDK session transcripts;
+preserve recorded alias + provider + effort + executed-model provenance.
+Use an **immutable historical execution evidence** semantics, not a
+current-location catalog guess; review `ModelRef`, derived identity
+cache keys, `src/analysis/session_cost.py` and all downstream UI
+consumers. Handle multi-reply steps and genuinely mixed/missing
+SDK evidence fail-closed; do not rewrite source OpenCode history
+or double count SDK usage.
+
+**Gate still outstanding:** implementing this deterministic recovery,
+real installed current HTTP/source-access verification, complete
+supported CCost/rate handling, exact 12-case Sessions + detail +
+Watch/Mini display and normal cold/warm/two-restart acceptance.
+The four linked saved replies in the failed concrete Haiku case
+do not establish actual charge. No production Cost Guard fix
+or browser/restart test was performed in the metadata investigation.
+Detailed counted findings, source pointers and deterministic test
+matrix are in [the V6 journal investigation]
+(../../../journal/claude-exact-history.md#v6-owner-executed-exact-per-request-identity-proof--2026-11-13).
+
+**Status remains On Hold.** This is a documentation-only
+evidence update. Only the human owner may reactivate FR000692.
