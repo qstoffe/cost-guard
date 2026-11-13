@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.42 - 2026-11-13
+
+- Web Sessions shows the latest executed main-thread model instead of the largest-cost contributor or “Multiple models”. A trailing `*` denotes confirmed distinct recorded provider/model selections across the canonical session tree; child-only or saved-but-unexecuted selections never supply the main value.
+- Shared value help separates bounded main and subagent bullet groups, preserves recorded-selector/catalog/default-effort provenance and qualifies incomplete evidence. A new disposable summary version rebuilds old role-less records; Model sorting follows the displayed main name across the selected period. CLI, costing, Watch and Session detail remain unchanged.
+
 ## v81.41 - 2026-11-13
 
 - Watch and Mini show separately source-verified post-start finished prompts while cold Earlier history is still loading, including requests completed entirely between polls. Canonical finish evidence, bounded changed-root priority and retained five-session candidates preserve strict global-history proof and reconcile without duplicate rows.

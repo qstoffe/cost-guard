@@ -17,7 +17,7 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   assert.notEqual(initial[2],'Loading…'); assert.notEqual(initial[3],'Loading…'); assert.notEqual(initial[5],'Loading…');
   assert.equal(initial[7],'1000k');
   await fixture('live-progress');
-  await until(`${row}.cells[5].textContent === '2' && ${row}.cells[2].textContent === 'Multiple models'`);
+  await until(`${row}.cells[5].textContent === '2' && ${row}.cells[2].textContent.endsWith('*')`);
   assert.equal(await evaluate('keptRow.isConnected && keptLink.isConnected && document.activeElement===keptLink'),true);
   assert.notEqual(await evaluate(`${row}.cells[4].textContent`),initial[4]);
   assert.match(await evaluate(`${row}.cells[1].textContent`),/RUNNING/);

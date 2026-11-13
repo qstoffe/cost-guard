@@ -294,7 +294,7 @@ class ReportService:
             diagnose=self._load_comparison_catalog().reference_issue,
         )
 
-    def _session_rows(self, roots: Sequence[AnalyzedRoot]) -> tuple[SessionUsageRow, ...]:
+    def _session_rows(self, roots: Sequence[AnalyzedRoot], *, catalog_models=False) -> tuple[SessionUsageRow, ...]:
         catalog = self._load_catalog()
         rows: list[SessionUsageRow] = []
         for item in roots:
@@ -316,7 +316,7 @@ class ReportService:
             identities = sorted({f"{entry.model.provider}/{entry.model.recorded_model}"
                 for entry in item.bundle.trace_entries if entry.model.provider and entry.model.recorded_model})
             contributors = tuple(value for value in identities if len(value) <= 256)[:64]
-            rows.append(SessionUsageRow(
+            row = SessionUsageRow(
                 session_id=item.session.session_id,
                 title=item.session.title or item.session.session_id,
                 model=name,
@@ -340,7 +340,11 @@ class ReportService:
                     record.in_progress for record in item.bundle.prompts)
                     and len(contributors) == len(identities)
                     and all(entry.model.provider and entry.model.model for entry in item.bundle.trace_entries)),
-            ))
+            )
+            if catalog_models:
+                from .session_models import model_fields
+                row = replace(row, **model_fields(item, catalog))
+            rows.append(row)
         return tuple(rows)
 
     def _prompt_block(

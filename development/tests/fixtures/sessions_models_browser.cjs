@@ -1,0 +1,58 @@
+// Authenticated source -> summary -> DTO -> keyed table and shared help.
+const assert = require('node:assert/strict');
+module.exports = async ({evaluate, until, fixture, command}) => {
+  const checks = [], layouts = [];
+  await fixture('models-source');
+  await evaluate("location.hash='#/sessions?period=today&sort=model&direction=1'");
+  await until('current.catalog?.data?.sort==="model" && !current.catalog.busy && !current.catalog.operation');
+  const page = () => evaluate('current.catalog.data.view.session_usage.map(row=>[row.session_id,row.model,row.multiple_models])');
+  const ascending = await page();
+  assert.equal(ascending.length,25);
+  assert.equal(ascending[0][1],'Model-00');
+  assert.equal(await evaluate('current.catalog.body.rows[0].cells[2].textContent'),'Model-00*');
+  assert.equal(await evaluate('current.catalog.body.rows[1].cells[2].textContent'),'Model-01');
+  assert.equal(await evaluate('current.catalog.body.rows[2].cells[2].textContent'),'Model-02');
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+  await evaluate('window.modelTarget=current.catalog.body.rows[0].cells[2].firstChild;modelTarget.focus()');
+  await until('document.getElementById("context-help")?.matches(":popover-open")');
+  const help = await evaluate('document.getElementById("context-help").textContent');
+  assert.match(help,/Main models used in session\n• main-provider\/Earlier[\s\S]*• main-provider\/Model-00/);
+  assert.match(help,/\n\nSub-agents used in session\n• child-provider\/Child/);
+  await fixture('models-update');
+  await until('document.getElementById("context-help").textContent.includes("child-provider/Child-new")');
+  assert.equal(await evaluate('document.activeElement===modelTarget && modelTarget.isConnected'),true);
+  await evaluate('current.catalog.body.rows[1].cells[2].firstChild.focus()');
+  assert.doesNotMatch(await evaluate('document.getElementById("context-help").textContent'),/Sub-agents/);
+  await evaluate('current.catalog.body.rows[2].cells[2].firstChild.focus()');
+  assert.match(await evaluate('document.getElementById("context-help").textContent'),/Sub-agents used in session\n• main-provider\/Model-02/);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await evaluate('document.activeElement.blur()');
+  const point = await evaluate('(()=>{const r=modelTarget.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+  await until('document.getElementById("context-help").matches(":popover-open")');
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+  await until('document.getElementById("context-help").hidden');
+  await command('Emulation.setTouchEmulationEnabled',{enabled:true});
+  await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+  await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await until('document.getElementById("context-help").matches(":popover-open")');
+  await command('Emulation.setTouchEmulationEnabled',{enabled:false});
+  await evaluate('current.catalog.next.click()');
+  await until('current.catalog.data.offset===25 && !current.catalog.busy');
+  assert.equal(await evaluate('current.catalog.body.rows.length'),5);
+  assert.equal(await evaluate('current.catalog.body.rows[4].cells[2].textContent'),'N/A');
+  assert.match(await evaluate('current.catalog.body.rows[4].value.display.model_help'),/No attributable executed main-thread model[\s\S]*Sub-agents/);
+  await evaluate("location.hash='#/sessions?period=today&sort=model&direction=-1'");
+  await until('current.catalog.data.direction===-1 && !current.catalog.busy');
+  assert.equal((await page())[0][1],'Model-29');
+  for (const width of [360,1366]) {
+    await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+    const geometry = await evaluate('({width:innerWidth,page:document.documentElement.scrollWidth,columns:current.catalog.headers.length})');
+    assert.ok(geometry.page<=width+1);assert.equal(geometry.columns,8);layouts.push(geometry);
+  }
+  checks.push('source-backed latest main identity/star, two bullet groups, main-only omission, same-model roles, child-only N/A');
+  checks.push('shared keyboard/Escape, hover/leave, touch, focused open-help source-revision refresh');
+  checks.push('period-qualified Model asc/desc, unknown last, 25+5 paging, long name and 360/1366 layouts; Effort column retained');
+  return {checks,layouts};
+};

@@ -42,6 +42,7 @@ def observe_sessions(get, cookie, host, driver):
     arrival = None
     cold_running = 0
     multiple_model_rows = 0
+    main_model_help_rows = subagent_help_rows = 0
     for _ in range(30):
         current = request('/api/sessions', dict(token=token, sort='ctx'))
         coverage.append(current['indexed'])
@@ -64,6 +65,15 @@ def observe_sessions(get, cookie, host, driver):
             assert models == sorted(set(models))
             cold_running += bool(row['running'] and not row['has_summary'])
             multiple_model_rows += bool(row['multiple_models'] and len(models) > 1)
+            help_text = row['display']['model_help']
+            assert len(help_text) <= 32768
+            if row['has_summary']:
+                assert 'Main models used in session\n• ' in help_text or 'No attributable executed main-thread model' in help_text
+                assert 'Multiple models' not in help_text
+                if 'Sub-agents used in session' in help_text:
+                    assert 'Sub-agents used in session\n• ' in help_text
+                    subagent_help_rows += 1
+                main_model_help_rows += 'Main models used in session\n• ' in help_text
         visible_coverage.append(sum(row['indexed'] for row in latest['view']['session_usage']))
         if original and any(row['session_id'] not in original for row in latest['view']['session_usage']):
             arrival = 'changed_first_page_observed; no session created by probe'
@@ -116,6 +126,7 @@ def observe_sessions(get, cookie, host, driver):
             index_metrics=progress[-1]['metrics'],
             metric_attribution='shared lane includes independent host/other-lease work; synthetic fixture isolates exact hydration',
             cold_running_observations=cold_running, multi_model_observations=multiple_model_rows,
+            main_model_help_observations=main_model_help_rows, subagent_help_observations=subagent_help_rows,
             contributor_contract='validated bounded distinct identities; no identities exported by probe',
             context_contract='validated raw tokens, server formatting and qualified states; no context sizes exported',
             exact_owner_incident='not established by this read-only observation',

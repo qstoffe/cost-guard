@@ -146,6 +146,10 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command in ("models-source", "models-update"):
+                from development.tests.fixtures.sessions_models import models_source
+                models_source(source, updated=command == "models-update")
+                host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
             elif command == "period-source":
                 now, day = 1_794_571_200_000, 86_400_000  # 2026-11-13 12:00 UTC
                 service.now_ms = now

@@ -891,13 +891,19 @@ duration/model. The last measured execution duration is not extrapolated during 
 Keyed cells, links and help targets remain connected during metric changes; selection/focus
 can defer reordering, but do not freeze live values.
 
-Hover, keyboard-focus or tap the **Multiple models** text to see the actual distinct
-provider/model contributors, including canonically attributed child requests. Shared
-ContextHelp handles Escape/leave and refreshes an open list in place. Running, incomplete,
-retained or bounded/truncated lists say **observed so far**; missing identities are explicit.
-There is no extra column, question-mark button, native title popup or per-row browser fetch.
+**Model** shows the most recently used main-thread prompt's model, never the largest-cost
+model or a later child/compaction request. A literal trailing **\*** means at least two
+distinct recorded provider/model selections actually participated in the canonical tree.
+Saved-but-unexecuted selections do not count; absent main execution evidence stays N/A/pending.
+Hover, keyboard-focus or tap the whole value for **Main models used in session** and,
+only when attributable children exist, **Sub-agents used in session**, with separate
+bulleted identities. The same model may appear in both groups without adding a star.
+Recorded aliases remain distinct from current-catalog estimates; applicable default-effort
+detail stays qualified. Shared ContextHelp handles Escape/leave and refreshes open help
+with the cell. Running, incomplete, retained or bounded/truncated lists say **observed so far**.
+There is no extra column, question-mark button, native title popup or hover-time source fetch.
 
-Last activity descending is the default. All eight server comparators use canonical values, not formatted strings; exact CCost, selected effort, numeric count/millisecond duration, CTX tokens and deterministic ID ties span the selected population. Activity/name metadata works immediately. Metric sorts wait for complete revision-qualified scalar keys, never a browser-side ordering of the visible 25. Canonically unknown/partial keys sort last; a model still awaiting source evidence is not a known unknown.
+Last activity descending is the default. All eight server comparators use canonical values, not formatted strings; the displayed main model name (ignoring its star), exact CCost, selected effort, numeric count/millisecond duration, CTX tokens and deterministic ID ties span the selected population. Activity/name metadata works immediately. Metric sorts wait for complete revision-qualified scalar keys, never a browser-side ordering of the visible 25. Canonically unknown/partial keys sort last; a model still awaiting source evidence is not a known unknown.
 
 Slow sort/page navigation temporarily replaces only the grid and pager with one centered **0–100%** bar. **Sorting sessions by CCost** (or the requested column / **Loading Sessions page N**) stays above it; **Indexed X of N sessions** or **Prepared X of N sessions** stays immediately below, followed by a separate current-work line and **Cancel**. The host reports actual cache-check, summary-read, projection, queued or retry-wait boundaries, never timer-inferred source detail. Fixed nodes and reserved text slots keep these regions stable; screen readers announce meaningful phases/failures rather than every count/stage tick. An uncached last page uses its actual size, not the 25-row maximum. Warm matching responses apply without a loading layout swap. Progress is measured, not clock-filled; genuine lost coverage explicitly revalidates while preserving unchanged keys. **100%** means the requested page was actually applied. Cancel's own hover/focus/touch help explains whether it restores the previous period, sort and page or just the previous page. Cancellation immediately restores that retained DOM, URL, focus and scroll, ignoring late replies while preserving shared cache/index work. No global report cancellation is added.
 
