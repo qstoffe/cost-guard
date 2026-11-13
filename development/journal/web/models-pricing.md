@@ -7,6 +7,14 @@ Status: current
 
 ## Summary
 
+### Source-owned DOM and input modality — FR000695 / v81.39
+
+Price publication now retains its Models root and benchmark sibling; equal
+records keep physical row identity. Pointer activation no longer triggers
+keyboard-only price focus recovery. [RED/after browser and real-source evidence,
+including the precise unverified PiP focus-transfer boundary](models-isolation.md).
+Earlier transport, valuation and platform proof below retains its original scope.
+
 ### Toolbar alignment — FR 000618 / v80.198, 2026-11-07
 
 Scoped delta on `a80b5128ea18f40d07d1d89708e0d5ae7159efb6`; the earlier

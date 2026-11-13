@@ -1,6 +1,7 @@
 // Shared control contract across real opener and native Document PiP documents.
 const assert = require('node:assert/strict');
 module.exports = async function controlFocus({command,evaluate,until,owner,mini,checks,layouts}) {
+  const transitions=[];
   const key = async (id,key,code,windowsVirtualKeyCode) => {
     for(const type of ['keyDown','keyUp']) await command('Input.dispatchKeyEvent',{type,key,code,windowsVirtualKeyCode,
       ...(type==='keyDown'&&['Enter',' '].includes(key)?{text:key==='Enter'?'\r':' '}:{})},id);
@@ -27,6 +28,7 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
       await command('Emulation.setTouchEmulationEnabled',{enabled:true},id);
       await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]},id);
       await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},id);
+      await until(id,`!document.querySelector(${JSON.stringify(selector)}).matches(':active')`);
       await command('Emulation.setTouchEmulationEnabled',{enabled:false},id);
     } else {
       await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},id);
@@ -35,6 +37,35 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
       await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point},id);
     }
   };
+  // Observe the untouched native return, not merely callback execution. In
+  // particular no bringToFront/focus emulation may establish the asserted result.
+  for(const input of ['mouse','Enter',' ']) {
+    await evaluate(owner,`location.hash='#/models';window.focusProbePip=miniWatch.window;
+      window.focusProbeEvents=[];if(!window.focusProbeListening){focusProbeListening=true;
+      for(const type of ['focus','blur'])window.addEventListener(type,()=>focusProbeEvents.push(type));}`);
+    await until(owner,`current.section==='models'`);
+    await evaluate(mini,`window.focusProbeEvents=[];if(!window.focusProbeListening){focusProbeListening=true;
+      for(const type of ['focus','blur'])window.addEventListener(type,()=>focusProbeEvents.push(type));}`);
+    await command('Page.bringToFront',{},mini);
+    if(input!=='mouse')await tabTo(mini,'.mini-summary');
+    const before={owner:await evaluate(owner,'document.hasFocus()'),mini:await evaluate(mini,'document.hasFocus()')};
+    assert.equal(before.mini,true,'PiP actually focused before native return');
+    if(input==='mouse')await pointer(mini,'.mini-summary');
+    else await key(mini,input,input==='Enter'?'Enter':'Space',input==='Enter'?13:32);
+    await until(owner,`current.section==='watch'`);
+    const after={owner:await evaluate(owner,'document.hasFocus()'),mini:await evaluate(mini,'document.hasFocus()'),
+      ownerEvents:await evaluate(owner,'focusProbeEvents'),miniEvents:await evaluate(mini,'focusProbeEvents'),
+      sameWindow:await evaluate(owner,'miniWatch.window===focusProbePip&&!miniWatch.window.closed'),
+      style:await sample(mini,'.mini-summary')};
+    assert.equal(after.sameWindow,true);
+    assert.equal(after.style.active,false);
+    assert.equal(after.style.outline,input==='mouse'?'none':'solid');
+    await command('Page.bringToFront',{},mini); // Now deliberately revisit, before Tab.
+    const revisit=await sample(mini,'.mini-summary');
+    assert.equal(revisit.outline,input==='mouse'?'none':'solid');
+    assert.equal(revisit.active,false);
+    transitions.push({input,before,after,revisit,focusTransferVerified:after.owner&&!after.mini});
+  }
   const exercise = async (id,selector) => {
     await command('Page.bringToFront',{},id);
     await tabTo(id,selector);
@@ -130,4 +161,5 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
   await tabTo(owner,'nav a[href="#/settings"]');
   assert.equal((await sample(owner,'nav a[href="#/settings"]')).outline,'solid');
   checks.push('native mouse/touch/Tab and Enter/Space: all eight nav entries, Models filter/sort, Watch/help, AI Stats period, Sessions sort/pager/detail/export cancellation, Settings help, actual PiP return/Fit/header; selected state and keyboard rings preserved; 360/1280 Classic/Web 100/150%, forced colors/reduced motion');
+  return {focusTransferVerified:transitions.every(value=>value.focusTransferVerified),transitions};
 };

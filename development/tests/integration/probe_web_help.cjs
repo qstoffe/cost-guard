@@ -86,12 +86,12 @@ async function main() {
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
        await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
        if(scope==='--control-focus') {
-         await require('./probe_control_focus.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         const focus=await require('./probe_control_focus.cjs')({command,evaluate,until,owner,mini,checks,layouts});
          assert.deepEqual(errors,[]);
-         evidence={outcome:'PASS',browser:version.product,checks,layouts,
+         evidence={outcome:focus.focusTransferVerified?'PASS':'MATRIX_PASS_FOCUS_TRANSFER_UNVERIFIED',browser:version.product,checks,layouts,...focus,
            limitations:['Shipped authenticated host and actual headless Document PiP; synthetic report/source data.',
              'Not a physical OS-window event trace or a reproduction of the owner’s sporadic incident.']};
-         console.log(JSON.stringify({outcome:'PASS',cases:layouts.length,checks}));return;
+         console.log(JSON.stringify({outcome:evidence.outcome,cases:layouts.length,checks,transitions:focus.transitions}));return;
        }
       if(scope === '--raw-models' || scope === '--effort-defaults') {
         const capture=JSON.parse(await fs.readFile(replay,'utf8'));
@@ -255,12 +255,18 @@ async function main() {
     }
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope === '--watch-only' ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : scope === '--live-status' ? ['Live surfaces and cached-report routes only; synthetic Sessions catalog/detail are not configured in this host.'] : [])]};
+  } catch (error) {
+    evidence={outcome:'FAIL',reason:error.message,checks,layouts};
+    throw error;
   } finally {
     clearTimeout(deadline);
     await fs.writeFile(output,JSON.stringify(evidence,null,2));
     await command('Browser.close').catch(()=>{});if(child.exitCode===null)child.kill();
     server.stdin.end();await new Promise(resolve=>server.once('exit',resolve));
-    await fs.rm(profile,{recursive:true,force:true});await fs.rm(config,{recursive:true,force:true});
+    for(const directory of [profile,config]) {
+      try { await fs.rm(directory,{recursive:true,force:true}); }
+      catch(error) { console.error('Probe cleanup retained owned directory: '+error.code); }
+    }
   }
   console.log(JSON.stringify(evidence));
 }
