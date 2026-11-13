@@ -91,8 +91,9 @@ async function main() {
               inference_calls:0,personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify({outcome:evidence.outcome,checks,measurements:details.measurements})); return;
           }
-        if (mode === '--catalog-navigation-only') {
-          const details = await require('../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
+        if (mode === '--periods-only' || mode === '--catalog-navigation-only') {
+          const details = await require(mode === '--periods-only' ? '../fixtures/sessions_periods_browser.cjs' :
+            '../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
             command:(method, params) => command(method, params, sessionId)});
           checks.push(...details.checks); layouts.push(...details.layouts);
           assert.deepEqual(errors, []);
@@ -123,7 +124,7 @@ async function main() {
        }
        if (mode === '--dates-only') {
          await evaluate(`location.hash='#/sessions'`);
-         await until('current.catalog?.data?.view.session_usage.length===50');
+         await until('current.catalog?.data?.view.session_usage.length===25');
          const original = await evaluate(`({raw:current.catalog.data.view.session_usage[0].last_activity_ms,
            zone:current.catalog.data.view.timezone_id,text:current.catalog.body.rows[0].cells[0].textContent})`);
          assert.equal(original.zone,'UTC');
@@ -146,7 +147,7 @@ async function main() {
          assert.doesNotMatch(values.body,forbidden);
          values.help.forEach(text=>assert.doesNotMatch(text,forbidden));
          assert.ok(values.help.some(text=>/1970-01-\d{2} \d{2}:\d{2}/.test(text)));
-         checks.push('real Sessions 50-row HTTP/DTO/DOM configured-UTC activity unchanged by two locales/two browser zones; Stockholm spring/fall DST');
+         checks.push('real Sessions 25-row HTTP/DTO/DOM configured-UTC activity unchanged by two locales/two browser zones; Stockholm spring/fall DST');
          checks.push('complete 1001-row session detail and all clock help searched for 12-hour/date-order leaks');
          assert.deepEqual(errors,[]);
          evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
@@ -160,7 +161,7 @@ async function main() {
      const captures=await evaluate('reportKinds.length');
      for(const hash of retiredHashes) {
        await command('Page.navigate',{url:launch.url.split('#')[0]+hash},sessionId);
-       await until('location.hash === "#/sessions" && current?.catalog?.data?.total === 120');
+        await until('location.hash.startsWith("#/sessions?period=today&") && current?.catalog?.data?.total === 120');
        assert.equal(await evaluate('current.catalog.data.sort'),'activity');
        assert.equal(await evaluate('current.catalog.data.direction'),-1);
        assert.equal(await evaluate('document.querySelectorAll("input[type=date], #scope-controls form").length'),0);
@@ -170,7 +171,7 @@ async function main() {
      }
      await evaluate("history.replaceState(null,'','/#/reports?date=invalid')");
      await command('Page.reload',{},sessionId);
-     await until('location.hash === "#/sessions" && current?.catalog?.data?.total === 120');
+      await until('location.hash.startsWith("#/sessions?period=today&") && current?.catalog?.data?.total === 120');
      assert.deepEqual(await evaluate('reportKinds'),[],'cold legacy reload never starts even a Normal/date report');
      for(const width of [1920,360]) {
        await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
@@ -180,11 +181,11 @@ async function main() {
        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
      }
      await evaluate("location.hash='#/settings'"); await until('current.section === "settings"');
-     await evaluate("location.hash='#/reports?date=invalid'"); await until('location.hash === "#/sessions"');
+      await evaluate("location.hash='#/reports?date=invalid'"); await until('location.hash.startsWith("#/sessions?period=today&")');
      await evaluate("location.hash='#/token-mix'"); await until('current.section === "token-mix"');
-     await evaluate('history.back()'); await until('location.hash === "#/sessions" && current.catalog');
+      await evaluate('history.back()'); await until('location.hash.startsWith("#/sessions?period=today&") && current.catalog');
      await evaluate('history.back()'); await until('location.hash === "#/settings"');
-     await evaluate('history.forward()'); await until('location.hash === "#/sessions" && current.catalog');
+      await evaluate('history.forward()'); await until('location.hash.startsWith("#/sessions?period=today&") && current.catalog');
      assert.deepEqual(await evaluate('reportKinds'),[]);
      checks.push('retired-hashes-valid-invalid-reload-back-forward-no-jobs-or-date-filter-wide-narrow-nav');
       for(const section of ['token-mix']) {
@@ -213,19 +214,19 @@ async function main() {
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),
-       ['Last activity','Session name','Model','CCost','Prompts','Duration','CTX']);
-    assert.equal(await evaluate('document.querySelectorAll("#result tbody tr").length'),50);
+       ['Last activity','Session name','Model','Effort','CCost','Prompts','Duration','CTX']);
+    assert.equal(await evaluate('document.querySelectorAll("#result tbody tr").length'),25);
     assert.equal(await evaluate('getComputedStyle(document.querySelector(".toolbar")).display'),'none');
     assert.equal(await evaluate('document.querySelector("#scope-controls").textContent'),'');
-     checks.push('minimal-seven-column-catalog');
-    await evaluate('document.querySelectorAll("#result th button")[4].click()');
+     checks.push('eight-column-catalog-with-period-selector');
+    await evaluate('document.querySelectorAll("#result th button")[5].click()');
     await until('current.catalog.data.sort === "prompts" && !current.catalog.data.pending_sort');
     assert.equal(await evaluate('current.catalog.data.total'),120);
     checks.push('cold-to-global-metric-sort-ready');
     await evaluate("location.hash='#/sessions'"); await until('current.catalog.data.sort === "activity"');
      const older=await evaluate('document.querySelector(".page-navigation button:last-child").destination');
     await evaluate(`location.hash=${JSON.stringify(older)}`);
-    await until('current.catalog.data.offset === 50');
+    await until('current.catalog.data.offset === 25');
     const membership=await evaluate('[...document.querySelectorAll("#result tbody tr")].map(row=>row.dataset.id)');
     const before=Date.now(); await fixture('arrive');
     await evaluate('current.catalog.load()');

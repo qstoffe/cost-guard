@@ -16,6 +16,17 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000696 (v81.40) scopes Sessions before scalar indexing. The validated `period`
+is carried by URL/request, lease and immutable epoch. `session_catalog_scope.py`
+reuses AI Stats window boundaries and bisects the cheap tree-activity index;
+`session_catalog.py` schedules the fair bounded union of interested populations,
+prioritizing their 25 visible summaries. HTTP never hydrates history. Pinned older
+pages retain the issued window; first pages reconcile calendar/rolling cutoffs.
+`sessions.js` owns the five accessible period buttons and eight-column keyed DOM,
+with Effort directly after Model; `reports.js` and transport admit 25-row offsets.
+Shared acquisition, Retry/Cancel, quiet refresh, unknown-last comparators and
+horizontal panning retain their owners. [Evidence/limits](../../journal/web/sessions-periods.md).
+
 FR000695 (v81.39) retains one Models presentation root in `render.js`. Price rows are
 keyed by publisher/model and prepared presentation signature; benchmark rows by
 source configuration ID. Section controls/date/status remain outside row revision.

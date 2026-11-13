@@ -8,21 +8,21 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   const row = 'document.querySelector("tr[data-id=root-0121]")';
   assert.equal(await evaluate(`${row}.querySelector('a').getAttribute('href')`),'#/sessions/root-0121');
   assert.match(await evaluate(`${row}.cells[1].textContent`),/\[RUNNING\] Synthetic 0121/);
-  assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>cell.textContent)`),Array(5).fill('Loading…'));
+  assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>cell.textContent)`),Array(6).fill('Loading…'));
   await evaluate(`window.keptRow=${row}; window.keptLink=keptRow.querySelector('a'); keptLink.focus();`);
   await fixture('live-hydrate');
-  await until(`${row}.cells[4].textContent === '1'`);
+  await until(`${row}.cells[5].textContent === '1'`);
   assert.equal(await evaluate('keptLink.isConnected && document.activeElement===keptLink'),true);
   const initial = await evaluate(`[...${row}.cells].map(cell=>cell.textContent)`);
   assert.notEqual(initial[2],'Loading…'); assert.notEqual(initial[3],'Loading…'); assert.notEqual(initial[5],'Loading…');
-  assert.equal(initial[6],'1000k');
+  assert.equal(initial[7],'1000k');
   await fixture('live-progress');
-  await until(`${row}.cells[4].textContent === '2' && ${row}.cells[2].textContent === 'Multiple models'`);
+  await until(`${row}.cells[5].textContent === '2' && ${row}.cells[2].textContent === 'Multiple models'`);
   assert.equal(await evaluate('keptRow.isConnected && keptLink.isConnected && document.activeElement===keptLink'),true);
-  assert.notEqual(await evaluate(`${row}.cells[3].textContent`),initial[3]);
+  assert.notEqual(await evaluate(`${row}.cells[4].textContent`),initial[4]);
   assert.match(await evaluate(`${row}.cells[1].textContent`),/RUNNING/);
-  assert.equal(await evaluate(`${row}.cells[6].textContent`),'2000k');
-  checks.push('cold canonical running proof; five pending cells hydrate; root CTX advances 1000k to 2000k with new prompt; focused link survives');
+  assert.equal(await evaluate(`${row}.cells[7].textContent`),'2000k');
+  checks.push('cold canonical running proof; six pending cells hydrate; root CTX advances 1000k to 2000k with new prompt; focused link survives');
 
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
@@ -61,7 +61,7 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   assert.doesNotMatch(await evaluate(`${row}.cells[1].textContent`),/RUNNING/);
   assert.deepEqual(await evaluate(`[...${row}.cells].slice(3).map(cell=>cell.textContent)`),ended);
   await fixture('recover'); await fixture('live-resume');
-  await until(`${row}.cells[4].textContent === '3' && ${row}.cells[1].textContent.includes('RUNNING')`);
+  await until(`${row}.cells[5].textContent === '3' && ${row}.cells[1].textContent.includes('RUNNING')`);
   checks.push('source outage retains qualified metrics; reconnect and later prompt reacquire running and counts');
   for (const theme of ['classic','light','dark']) for (const width of [360,1366,1920]) for (const zoom of [1,1.5]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
@@ -72,10 +72,10 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
       pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,
       innerVertical:pan.scrollHeight>pan.clientHeight,nowrap:[...keptRow.cells].every(cell=>getComputedStyle(cell).whiteSpace==='nowrap'),
       numericFit:[...keptRow.cells].filter((_,i)=>i!==1).every(cell=>cell.scrollWidth<=cell.clientWidth+1)};})()`);
-    assert.equal(layout.columns,7);assert.equal(layout.rows,50);assert.ok(layout.pageWidth<=width+1);
+    assert.equal(layout.columns,8);assert.equal(layout.rows,25);assert.ok(layout.pageWidth<=width+1);
     assert.equal(layout.innerVertical,false);assert.equal(layout.nowrap,true);assert.equal(layout.numericFit,true);
     layouts.push({theme,width,zoom,...layout});
   }
-  checks.push('Classic/Web light/dark; 360/1366/1920; 100/150% zoom; seven columns/50 rows/document scroll');
+  checks.push('Classic/Web light/dark; 360/1366/1920; 100/150% zoom; eight columns/25 rows/document scroll');
   return {checks,layouts};
 };

@@ -18,6 +18,15 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000696: `reports/session_effort.py` aggregates only usage-bearing canonical
+requests, preserving selected effort and recorded provider/model evidence rather
+than inferring one setting from the dominant model. Mixed selections and unknown
+attribution remain distinct. The bounded scalar DTO carries dedicated Effort help
+through `application/session_effort.py` and the existing default formatter.
+`session-summary-5` lazily rejects old/malformed fields and includes the vendor
+evidence revision; source/model dependencies still qualify reuse. No native
+history, pricing, CCost or AI Stats population semantics change.
+
 FR000687 P2-only delta: `application/model_help.py` formats recorded selectors, not
 friendly labels or inferred providers. Prompt parts group by recorded selection as
 well as role/effective model/effort/tier; compactions use their own entries. Sessions

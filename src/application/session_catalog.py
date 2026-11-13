@@ -1,7 +1,7 @@
 """Shared live catalog, bounded scalar indexing and stable server-side page epochs.
 
 HTTP reads never acquire history. Metric ordering is admitted only with keys for
-every root; an unindexed root is not a canonically unknown metric.
+every period-eligible root; an unindexed root is not a canonically unknown metric.
 """
 from collections import OrderedDict
 from dataclasses import replace
@@ -11,6 +11,7 @@ import time
 from uuid import uuid4
 
 from src.analysis.cache import dependency_signature
+from src.analysis.model_identity import payload_current
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -18,13 +19,22 @@ from src.reports.session_summary import session_summary
 from src.sources.errors import SourceError
 
 from .projection import project
+from .session_catalog_scope import CatalogEpoch, PAGE_SIZE, catalog_window, population
 
-SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
+SORTS = ("activity", "name", "model", "effort", "ccost", "prompts", "duration", "ctx")
+
+
+def effort_sort(key):
+    if key is None:
+        return None
+    levels = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "default", "multiple")
+    return (levels.index(key) if key in levels else len(levels), key)
 
 
 def sort_value(row, key):
     return {"activity": row.last_activity_ms, "name": row.title.casefold(),
         "model": "multiple models" if row.multiple_models else row.model.casefold() if row.model != "N/A" else None,
+        "effort": effort_sort(row.effort_key),
         "ccost": row.ccost if row.complete else None, "prompts": row.prompt_count,
         "duration": row.duration_ms, "ctx": row.context_tokens if row.context_qualified else None}[key]
 
@@ -41,8 +51,9 @@ def ordered(rows, key, direction):
 
 
 class SessionCatalog:
-    def __init__(self, *, clock=time.monotonic):
+    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC"):
         self.clock = clock
+        self.clock_ms = clock_ms
         self.lock = Lock()
         self.roots = OrderedDict()
         self.rows = {}
@@ -57,13 +68,15 @@ class SessionCatalog:
         self.work = None
         self.work_sequence = 0
         self.activity = {}
+        self.activity_index = ()
         self.active = frozenset()
         self.prompt_activity = {}
         self.watch_activity = {}
         self.leases = OrderedDict()
         self.state = "loading"
         self.dependencies = None
-        self.timezone_id = "UTC"
+        self.model_dependencies = {}
+        self.timezone_id = timezone_id
         self.unit = "credits"
         self.turn = 0
         self.checked_at = -100
@@ -91,18 +104,26 @@ class SessionCatalog:
 
     def _targets(self):
         browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
-        if any(lease.get('sort') not in (None, 'activity', 'name') for lease in browsing):
-            return set(self.roots)
         selected = {key for lease in browsing for key in lease.get('visible', ())}
-        if selected:
-            return selected
+        for lease in browsing:
+            if not lease.get('pinned') and lease.get('sort') not in (None, 'activity', 'name'):
+                lease['candidates'] = self._population(lease['period'])[1]
+                selected.update(lease['candidates'])
+        if browsing:
+            return selected & self.roots.keys()
         if not self.warm or self.clock() < self.background_due:
             return set()
         return set(self.last_page or sorted(self.roots,
-            key=lambda key: (-(self.activity.get(key) or 0), key))[:50]) & self.roots.keys()
+            key=lambda key: (-(self.activity.get(key) or 0), key))[:PAGE_SIZE]) & self.roots.keys()
 
-    def observe(self, observation, *, unavailable=False):
+    def _population(self, period):
+        window = catalog_window(period, self.timezone_id, self.clock_ms())
+        return window, population(self.roots, self.activity_index, window)
+
+    def observe(self, observation, *, unavailable=False, timezone_id=None):
         with self.lock:
+            if timezone_id is not None:
+                self.timezone_id = timezone_id
             if unavailable or observation is None:
                 self.state = "source_unavailable"
                 return
@@ -118,6 +139,8 @@ class SessionCatalog:
                     lease['epochs'].clear()
                 self.last_page = ()
             self.activity = root_activity(observation.sessions)
+            self.activity_index = tuple(sorted((at, key) for key, at in self.activity.items()
+                if key in self.roots and type(at) is int and at > 0))
             self.active = observation.live_candidates
             previous_revisions = self.revisions
             self.revisions = dict(observation.revisions)
@@ -135,6 +158,8 @@ class SessionCatalog:
                           else value for key, value in self.valid.items()}
             self.rows = {key: row for key, row in self.rows.items()
                           if previous_roots[key].provenance == self.roots[key].provenance}
+            self.model_dependencies = {key: value for key, value in self.model_dependencies.items()
+                                       if key in self.rows}
             self.prompt_activity = {key: value for key, value in self.prompt_activity.items()
                 if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance}
             self.failures = {key: failure for key, failure in self.failures.items()
@@ -190,11 +215,15 @@ class SessionCatalog:
         delay = 30 if failure else 5
         return (self.clock() - self.attempted.get(key, -100) >= delay
                 and (not self._current(key) or key in self.active or self.rows[key].running
-                     or not self.rows[key].context_qualified and any(lease.get('sort') == 'ctx'
-                         and self._browsing(lease) for lease in self.leases.values())))
+                     or not self.rows[key].context_qualified and self._requested(key, 'ctx')
+                     or not self.rows[key].effort_qualified and self._requested(key, 'effort')))
+
+    def _requested(self, key, sort):
+        return any(lease.get('sort') == sort and self._browsing(lease)
+            and key in lease.get('candidates', ()) for lease in self.leases.values())
 
     def _candidate(self):
-        # Only requested rows, or global scalar keys required by a requested
+        # Only requested rows, or scoped scalar keys required by a requested
         # metric sort. Activity/name navigation never hydrates pages 2..N.
         candidates = [key for key in self._targets() if self._eligible(key)]
         if not candidates:
@@ -225,6 +254,18 @@ class SessionCatalog:
         start = self.clock()
         with self.lock:
             targets = self._targets()
+            identities = {key: self.model_dependencies[key] for key in targets
+                          if key in self.valid and key in self.model_dependencies}
+        # Native model/default observations can change without a history revision.
+        # Validate only this lane's eligible roots, using the source's bounded catalog.
+        changed = [key for key, values in identities.items() if not payload_current(service.source, values)]
+        with self.lock:
+            for key in changed:
+                self.valid.pop(key, None)
+                self.failures.pop(key, None)
+                self.attempted.pop(key, None)
+            if changed:
+                self.generation += 1
         for _ in range(4):
             with self.lock:
                 if self.state != "observed":
@@ -239,8 +280,10 @@ class SessionCatalog:
                 self.metrics['retries'] += int(key in self.failures)
                 retrying = key in self.failures
             try:
+                identity_values = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
-                    on_stage=lambda stage: self._stage(stage, retrying))
+                    on_stage=lambda stage: self._stage(stage, retrying),
+                    on_dependencies=identity_values.extend)
             except (SourceError, PricingUnavailableError) as error:
                 with self.lock:
                     if key in self.roots and revision == self.revisions.get(key):
@@ -253,13 +296,15 @@ class SessionCatalog:
                             and revision == self.revisions.get(key)):
                         if actual == revision:
                             self.rows[key] = row
+                            self.model_dependencies[key] = identity_values
                             self.valid[key] = actual, self.clock()
                             self.prompt_activity[key] = self.attempted[key], row.running
-                            if not row.context_qualified and any(lease.get('sort') == 'ctx'
-                                    and self._browsing(lease) for lease in self.leases.values()):
+                            partial = ('context' if not row.context_qualified and self._requested(key, 'ctx') else
+                                       'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
+                            if partial:
                                 self.failures[key] = revision, False
                                 self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
-                                self.failure_reasons[key] = 'partial_source_context'
+                                self.failure_reasons[key] = 'partial_source_' + partial
                             else:
                                 self.failures.pop(key, None)
                                 self.failure_counts.pop(key, None)
@@ -287,24 +332,29 @@ class SessionCatalog:
             self.work_sequence += 1
             self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
-    def _rows(self):
+    def _rows(self, keys):
         rows = []
-        for key, root in self.roots.items():
+        now = self.clock_ms()
+        for key in keys:
+            root = self.roots[key]
             value = self.rows.get(key) or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False)
             if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
                 value = replace(value, context_tokens=None,
                     context_detail="Source revision changed; waiting for current session context.")
+            activity = self.activity.get(key)
             rows.append(replace(value, title=root.title or "Untitled session",
-                last_activity_ms=self.activity.get(key), archived=root.archived_at_ms is not None))
+                last_activity_ms=activity if type(activity) is int and 0 < activity <= now else None,
+                archived=root.archived_at_ms is not None))
         return rows
 
     def _key_current(self, key, sort):
         return (self._current(key) and not (sort == 'model' and self.rows[key].model_pending)
+                and not (sort == 'effort' and (self.rows[key].effort_pending or not self.rows[key].effort_qualified))
                 and not (sort == 'ctx' and not self.rows[key].context_qualified))
 
-    def _progress(self, sort, pending, selected, indexed, pinned):
-        keys = tuple(self.roots) if pending else tuple(row.session_id for row in selected)
+    def _progress(self, sort, pending, selected, indexed, pinned, candidates):
+        keys = candidates if pending else tuple(row.session_id for row in selected)
         completed = indexed if pending else sum(self._current(key) for key in keys)
         failed = [key for key in keys if key in self.failures and
                   (self.failures[key][1] or self.failure_counts.get(key, 0) >= 3)]
@@ -321,8 +371,9 @@ class SessionCatalog:
                 stage='waiting_retry' if any(key in self.failures for key in keys) else
                       'queued' if pending or completed < len(keys) else 'ready'))
 
-    def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None):
+    def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today"):
         with self.lock:
+            window, candidates = self._population(period)
             self._expire()
             if token is None:
                 if len(self.leases) >= 32:
@@ -335,42 +386,49 @@ class SessionCatalog:
             lease["touched"] = self.clock()
             if 'interest_until' in lease:
                 lease['interest_until'] = self.clock() + 90
-            lease['sort'] = sort
-            indexed = sum(self._key_current(key, sort) for key in self.roots)
-            pending = sort not in ("activity", "name") and indexed != len(self.roots)
+            indexed = sum(self._key_current(key, sort) for key in candidates)
+            pending = sort not in ("activity", "name") and indexed != len(candidates)
             if offset == 0:
                 applied = "activity" if pending else sort
                 order = -1 if pending else direction
-                rows = ordered(self._rows(), applied, order)
+                rows = ordered(self._rows(candidates), applied, order)
                 latest = next(reversed(lease["epochs"]), None)
                 previous = lease["epochs"].get(latest)
-                if previous is not None and previous[1:] == (applied, order) and tuple(
-                        row.session_id for row in previous[0]) == tuple(row.session_id for row in rows):
+                if (previous is not None and (previous.sort, previous.direction) == (applied, order)
+                        and previous.window.identity == window.identity and tuple(
+                        row.session_id for row in previous.rows) == tuple(row.session_id for row in rows)):
                     epoch = latest
+                    window = previous.window
                 else:
                     epoch = uuid4().hex
-                    lease["epochs"][epoch] = rows, applied, order
+                    lease["epochs"][epoch] = CatalogEpoch(rows, applied, order, window)
                 while len(lease["epochs"]) > 8:
                     lease["epochs"].popitem(last=False)
             else:
                 if epoch not in lease["epochs"]:
                     raise KeyError("catalog_expired")
-                rows, applied, order = lease["epochs"][epoch]
-                if applied != sort:
+                snapshot = lease["epochs"][epoch]
+                rows, applied, order = snapshot.rows, snapshot.sort, snapshot.direction
+                if (applied != sort or order != direction or snapshot.window.period != period
+                        or snapshot.window.timezone_id != self.timezone_id):
                     raise KeyError('catalog_expired')
+                window = snapshot.window
+                candidates = tuple(row.session_id for row in rows)
+                indexed = sum(self._key_current(key, sort) for key in candidates)
                 # These global keys were already qualified when the epoch was
                 # published. New arrivals must not invalidate its older pages.
                 pending = False
                 if offset >= len(rows):
                     raise KeyError('catalog_expired')
-                if any(row.session_id not in self.roots for row in rows[offset:offset + 50]):
+                if any(row.session_id not in self.roots for row in rows[offset:offset + PAGE_SIZE]):
                     raise KeyError('catalog_expired')
-            selected = rows[offset:offset + 50]
+            lease.update(sort=sort, period=period, candidates=candidates, pinned=offset > 0)
+            selected = rows[offset:offset + PAGE_SIZE]
             lease["visible"] = tuple(row.session_id for row in selected)
             self.last_page = lease['visible']
             # Older pages retain membership/order; only independently observed
             # values may change. Deleted rows retain their epoch evidence.
-            fresh = {row.session_id: row for row in self._rows()}
+            fresh = {row.session_id: row for row in self._rows(lease['visible'])}
             selected = tuple(fresh.get(row.session_id, row) for row in selected)
             report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", (), session_usage=selected)
             result = project(report, self.timezone_id, self.unit).to_json()
@@ -383,18 +441,23 @@ class SessionCatalog:
                 row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
                     "ready" if current else "retained" if row["has_summary"] else "pending")
                 row["running"] = self._running(key, bool(row["running"] and current and not unavailable))
-                row["metric_states"] = {name: row["metric_state"] for name in ("model", "ccost", "prompts", "duration", "ctx")}
+                row["metric_states"] = {name: row["metric_state"] for name in ("model", "effort", "ccost", "prompts", "duration", "ctx")}
                 if current and not self.rows[key].context_qualified:
                     row["metric_states"]["ctx"] = "unavailable"
                 if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
                     row["metric_states"]["ctx"] = "unavailable" if unavailable else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].model_pending:
                     row["metric_states"]["model"] = "pending"
-            return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,
+                if current and not self.rows[key].effort_qualified:
+                    row["metric_states"]["effort"] = "unavailable"
+                if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].effort_pending:
+                    row["metric_states"]["effort"] = "pending"
+            return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=PAGE_SIZE,
+                period=period, window=dict(start_ms=window.start_ms, end_ms=window.end_ms, timezone_id=window.timezone_id),
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
-                available=len(self.roots), state=self.state, view=result,
+                available=len(candidates), state=self.state, view=result,
                 requested_sort=sort, requested_direction=direction,
-                progress=self._progress(sort, pending, selected, indexed, offset > 0),
+                progress=self._progress(sort, pending, selected, indexed, offset > 0, candidates),
                 age_ms=None if self.observed is None else int(max(0, self.clock() - self.observed) * 1000),
                 page_ready=sum(self._current(row.session_id) for row in selected if row.session_id in self.roots))
 

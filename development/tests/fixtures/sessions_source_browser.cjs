@@ -14,7 +14,7 @@ module.exports = async ({evaluate, until}) => {
         revalidating:value.progress.revalidating,running_rows:value.view.session_usage.filter(row=>row.running).length,
         controller:sourceCatalog.generation,token_same:args[1].token===value.token,
         epoch_same:args[1].epoch===value.epoch,aborted:args[2]?.aborted??false});return value;};
-    sourceCatalog.headers[3].th.querySelector('button').click()`);
+    sourceCatalog.headers[4].th.querySelector('button').click()`);
   await until('sourceCatalog.sort==="ccost"');
   const started = Date.now(), samples=[];
   while (Date.now()-started<135000) {
@@ -46,7 +46,7 @@ module.exports.recovery = async ({evaluate, until, command}) => {
     }`);
   const total = await evaluate('recoveryCatalog.data.total');
   const pages = [];
-  for (const offset of total>50 ? [0,50] : [0]) {
+  for (const offset of total>25 ? [0,25] : [0]) {
     if(offset) {
       await evaluate('location.hash=recoveryCatalog.next.destination');
       // Real page preparation can make measured source progress beyond the
@@ -68,8 +68,8 @@ module.exports.recovery = async ({evaluate, until, command}) => {
         focus:document.activeElement===link,scroll:scrollY===scroll,
         status:view.status.textContent,recovering:!!view.recovering,rebased:!!view.rebased};})()`);
     assert.equal(result.retained,true);assert.equal(result.offset,0);assert.equal(result.newEpoch,true);
-    assert.equal(result.token,true);assert.equal(result.coherent,true);assert.equal(result.rowCount,Math.min(50,total));
-    assert.equal(result.pageOne,true);assert.equal(result.header,'descending');assert.equal(result.url,'#/sessions?sort=activity&direction=-1');
+    assert.equal(result.token,true);assert.equal(result.coherent,true);assert.equal(result.rowCount,Math.min(25,total));
+    assert.equal(result.pageOne,true);assert.equal(result.header,'descending');assert.equal(result.url,'#/sessions?period=today&sort=activity&direction=-1');
     if(!offset)assert.equal(result.focus,true);
     assert.equal(result.scroll,true);assert.equal(result.status,'');assert.equal(result.recovering,false);assert.equal(result.rebased,false);
     for(let poll=0;poll<3;poll++) {

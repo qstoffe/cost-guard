@@ -245,7 +245,7 @@ async function main() {
   race.detach(); assert.equal(timers.size, 0);
   let resolveCatalog;
   const catalogCalls = [];
-  const catalogData = {token: 'catalog', epoch: 'epoch', total: 0, size: 50, offset: 0,
+  const catalogData = {token: 'catalog', epoch: 'epoch', total: 0, size: 25, offset: 0, period:'today',
     sort: 'activity', direction: -1, state: 'observed', view: {session_usage: []}};
   context.catalogApi = async (path, value) => {
     catalogCalls.push(value);
@@ -286,28 +286,28 @@ async function main() {
     context.coldCatalog.update({...catalogData,pending_sort:true,total:1,view:{session_usage:[{
       session_id:'first',title:'First usable row',indexed:false,metric_state:'pending'}]}});
     assert.equal(context.coldCatalog.body.children.length,0,'pending Activity fallback is never applied as the requested sort');
-    const cold = Array.from({length:50}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
+     const cold = Array.from({length:25}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
-   catalog.update({...catalogData,total:51,view:{session_usage:cold}});
-   assert.equal(catalog.body.children.length, 50);
+   catalog.update({...catalogData,total:26,view:{session_usage:cold}});
+   assert.equal(catalog.body.children.length, 25);
    assert.ok(catalog.body.children.every(row => row.children.slice(2).every(cell => cell.textContent === 'Loading…')));
    assert.equal(catalog.previous.tag, 'button'); assert.equal(catalog.previous.disabled,true); assert.equal(catalog.next.disabled,false);
-   catalog.next.events.click(); assert.match(context.location.hash, /offset=50/);
+   catalog.next.events.click(); assert.match(context.location.hash, /offset=25/);
    const known = {...cold[0],indexed:true,has_summary:true,metric_state:'ready',running:true,prompt_count:0,model:'N/A',display:{ccost:'0.00',duration_ms:'0s'}};
-   catalog.update({...catalogData,offset:50,total:51,view:{session_usage:[known]}});
+   catalog.update({...catalogData,offset:25,total:26,view:{session_usage:[known]}});
    assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
    assert.equal(catalog.body.children[0].className,'session-running');
    assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
-    assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s','N/A']);
+    assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','N/A','0.00','0','0s','N/A']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
     assert.equal(catalog.body.children[0].className,'');
      // Age/background updates retain the grid; an explicit pending navigation has progress.
-    const usable = {...catalogData,total:51,age_ms:7200000,view:{session_usage:cold.map((row, index) =>
+    const usable = {...catalogData,total:26,age_ms:7200000,view:{session_usage:cold.map((row, index) =>
       ({...known,session_id:row.session_id,title:'Loaded '+index}))}};
     catalog.update(usable);
     const firstRow = catalog.body.children[0], labelBefore = catalog.label.textContent;
-    catalog.update({...usable,pending_sort:true,sort:'activity',indexed:1,available:51,view:{session_usage:[]}});
+    catalog.update({...usable,pending_sort:true,sort:'activity',indexed:1,available:26,view:{session_usage:[]}});
     assert.equal(catalog.body.children[0],firstRow);
     assert.equal(catalog.label.textContent,labelBefore);
     assert.equal(catalog.status.textContent,'');
@@ -320,7 +320,7 @@ async function main() {
       assert.equal(catalog.loader.root.hidden,false);
       assert.equal(catalog.loader.bar.max,100);
     catalog.attached=true;
-     for (const direction of [1,-1]) for (const offset of [0,50]) {
+     for (const direction of [1,-1]) for (const offset of [0,25]) {
        const requests=[]; let expire=true;
        catalog.configure(new URLSearchParams(`offset=${offset}&epoch=expired&sort=ccost&direction=${direction}`));
       catalog.token='expired';
@@ -335,7 +335,7 @@ async function main() {
       assert.equal(requests[1].token,null); assert.equal(requests[1].offset,0);
        assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,direction);
       assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
-       assert.equal(context.location.hash,`#/sessions?sort=ccost&direction=${direction}`);
+       assert.equal(context.location.hash,`#/sessions?period=today&sort=ccost&direction=${direction}`);
        assert.match(catalog.label.textContent,/Page 1 of 2/);
        assert.equal(catalog.status.textContent,'','successful lease recovery has no live-region announcement');
        assert.equal(catalog.status.hidden,true);
@@ -355,9 +355,9 @@ async function main() {
     catalog.api=async (_,request)=> {if(request.action==='interest')return {}; failures++;throw new Error('catalog_expired');};
     await catalog.load();
     assert.equal(failures,2,'one bounded reopen even when the source keeps expiring');
-    assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/expired|unavailable/);
+    assert.equal(catalog.body.children.length,25); assert.match(catalog.status.textContent,/expired|unavailable/);
      catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
-     assert.equal(catalog.body.children.length,50); assert.match(catalog.status.textContent,/unavailable/);
+     assert.equal(catalog.body.children.length,25); assert.match(catalog.status.textContent,/unavailable/);
      catalog.api=async (_,request)=>request.action==='interest'?{}:{...usable,sort:'ccost',direction:-1};
      await catalog.load();
      assert.equal(catalog.status.textContent,'','a later successful poll retires a real failure too');
@@ -366,7 +366,7 @@ async function main() {
      vm.runInContext('globalThis.rebasedCatalog = new SessionsCatalog.View(catalogApi)',context);
      const rebasedView=context.rebasedCatalog;
      rebasedView.configure(new URLSearchParams('sort=ccost&direction=-1'));
-     rebasedView.update({...usable,sort:'ccost',direction:-1,offset:50});rebasedView.attached=true;
+     rebasedView.update({...usable,sort:'ccost',direction:-1,offset:25});rebasedView.attached=true;
      const protectedRow=rebasedView.body.children[0], protectedLink=protectedRow.children[1].children[0];
      document.activeElement=protectedLink;protectedLink.blur=()=>{document.activeElement=null;};
      const savedSelection=selected;selected=null;
@@ -378,7 +378,7 @@ async function main() {
        return {...usable,sort:'ccost',direction:-1,epoch:'replacement-epoch',view:{session_usage:replacement}};
      };
      await rebasedView.poll();
-     assert.equal(rebasedView.body.children.length,50);
+     assert.equal(rebasedView.body.children.length,25);
      assert.deepEqual(rebasedView.body.children.map(row=>row.dataset.id),replacement.map(row=>row.session_id));
      assert.equal(protectedRow.parentNode,null,'incompatible focused membership is retired before relabeling');
      assert.equal(document.activeElement,null);
@@ -397,8 +397,8 @@ async function main() {
     catalog.update({...catalogData,total:1,view:{session_usage:[multiple]}});
     assert.equal(liveRow.children[1].children[0],link,'focused link survives live metric deltas');
     assert.equal(liveRow.children[2].children[0],model,'metric/help target remains keyed');
-    assert.equal(liveRow.children[3].textContent,'1.25?','focus cannot freeze live cost');
-    assert.equal(liveRow.children[4].textContent,'2');
+    assert.equal(liveRow.children[4].textContent,'1.25?','focus cannot freeze live cost');
+    assert.equal(liveRow.children[5].textContent,'2');
     model.events.focus();
     assert.match(document.body.children.at(-1).textContent,/alpha\/model[\s\S]*beta\/model[\s\S]*Observed so far/);
     catalog.update({...catalogData,total:1,view:{session_usage:[{...multiple,contributor_models:['alpha/model','beta/model','child/model'],
@@ -407,7 +407,7 @@ async function main() {
     document.activeElement=null;
     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,metric_states:{model:'pending'},duration_ms:null}]} });
     assert.equal(liveRow.children[2].textContent,'Loading…');
-    assert.equal(liveRow.children[4].textContent,'0','known zero count remains independent of pending model');
+    assert.equal(liveRow.children[5].textContent,'0','known zero count remains independent of pending model');
     catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
    assert.ok(catalog.body.children[0].children.slice(2).every(cell=>cell.textContent==='Unavailable'));
    assert.equal(catalog.body.children[0].className,'');

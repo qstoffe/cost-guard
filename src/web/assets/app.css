@@ -279,7 +279,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 [data-section="sessions"] main { padding-top: .65rem; }
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
-.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(5, max-content); }
+.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(6, max-content); }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
   width: max-content; min-width: 0; max-width: 100%; }
 .session-detail > .sessions-table-pan { width: fit-content; max-width: 100%; }

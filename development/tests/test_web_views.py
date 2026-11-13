@@ -168,7 +168,7 @@ class WebViewTests(unittest.TestCase):
             settings_root = Path(tmp).resolve() / "settings"
             (settings_root / "config").mkdir(parents=True)
             shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
-            catalog = SessionCatalog()
+            catalog = SessionCatalog(clock_ms=lambda: now)
             details = SessionDetails(clock=lambda: now / 1000)
             # Finite report warming above cannot initialize SessionHistory's
             # separate observed-history analysis. Keep that cold acquisition out

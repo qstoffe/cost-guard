@@ -54,6 +54,7 @@ from .sampling import AnalyzedRoot, latest_prompts, latest_token_prompts, recent
 from .history import HistoryRequirements, WatchHistoryAcquisition
 from .acquisition import RootAcquisition
 from .session_summary import context_fields
+from .session_effort import effort_fields
 
 from .models import (
     AccountsQuotasProjection,
@@ -332,6 +333,7 @@ class ReportService:
                 last_activity_ms=item.session.updated_at_ms,
                 contributor_models=contributors,
                 **context_fields(item, self._load_comparison_catalog()),
+                **effort_fields(item),
                 model_pending=(name == "N/A" and not item.bundle.trace_entries
                                and any(record.in_progress for record in item.bundle.prompts)),
                 contributor_models_complete=(item.snapshot is not None and item.snapshot.complete and not any(

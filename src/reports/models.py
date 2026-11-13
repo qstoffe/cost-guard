@@ -24,6 +24,7 @@ from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot, QuotaComponent
 from .prompt_costs import PromptCostPart
 from .watch_context import WatchContextGuidance
+from .session_effort import SessionEffort
 
 
 class ReportKind(str, Enum):
@@ -164,6 +165,12 @@ class SessionUsageRow:
     context_tokens: int | None = None
     context_qualified: bool = True
     context_detail: str = "Session context unavailable."
+    effort: str = "N/A"
+    effort_key: str | None = None
+    effort_contributors: tuple[SessionEffort, ...] = ()
+    effort_details_complete: bool = True
+    effort_qualified: bool = True
+    effort_pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)

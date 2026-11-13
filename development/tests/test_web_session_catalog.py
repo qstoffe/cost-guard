@@ -1,6 +1,7 @@
 """Full-catalog keys, cold indexing, retained epochs and scalar-cache boundaries."""
 from dataclasses import replace
 from decimal import Decimal
+from functools import partial
 from pathlib import Path
 import shutil
 import time
@@ -28,13 +29,23 @@ from src.web.session_catalog import catalog_page
 from src.watch.web_coordinator import WebWatchCoordinator
 
 
+def all_time_catalog(**kwargs):
+    """Legacy full-history scenarios explicitly exercise the All time scope.
+
+    Period/default/clock behavior is tested separately without this convenience.
+    """
+    catalog = SessionCatalog(clock_ms=lambda: 1_000_000_000, **kwargs)
+    catalog.page = partial(catalog.page, period="all")
+    return catalog
+
+
 class SessionCatalogTests(unittest.TestCase):
     def setUp(self):
         self.clock = 0
         self.source = SyntheticMonthSource(120, 1, month_start_ms=1000)
         self.source.snapshots = {key: replace(value, complete=True) for key, value in self.source.snapshots.items()}
         self.service = report_service(self, self.source, now_ms=100_000_000)
-        self.catalog = SessionCatalog(clock=lambda: self.clock)
+        self.catalog = all_time_catalog(clock=lambda: self.clock)
         self.observe()
 
     def observe(self):
@@ -55,7 +66,7 @@ class SessionCatalogTests(unittest.TestCase):
             shutil.copyfile(Path(__file__).resolve().parents[2] / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
             runtime = SyntheticSessionsRuntime(root, source=source, clock_ms=lambda: 100_000_000)
             runtime.catalog.observe(observe_catalog(source, include_archived_revisions=True))
-            catalog = runtime.catalog.page()
+            catalog = runtime.catalog.page(period='all')
             runtime.catalog.interest(catalog['token'], True)
 
             runtime.catalog.tick(runtime.service)
@@ -65,22 +76,22 @@ class SessionCatalogTests(unittest.TestCase):
 
             self.assertEqual(detail['state'], 'observed')
             self.assertEqual(detail['total'], 70)
-            self.assertEqual(runtime.catalog.page(token=catalog['token'])['total'], 3)
+            self.assertEqual(runtime.catalog.page(token=catalog['token'], period='all')['total'], 3)
 
     def test_every_sort_orders_full_catalog_with_numeric_keys_and_stable_ties(self):
         self.index()
-        for sort in SORTS:
+        for sort in (key for key in SORTS if key != 'effort'):
             with self.subTest(sort=sort):
                 page = self.catalog.page(sort=sort, direction=-1)
                 self.assertFalse(page["pending_sort"])
                 self.assertEqual(page["total"], 120)
                 rows = page["view"]["session_usage"]
-                self.assertEqual(len(rows), 50)
+                self.assertEqual(len(rows), 25)
                 self.assertEqual(rows[0]["session_id"], "root-0119")
                 following = self.catalog.page(token=page["token"], offset=50, epoch=page["epoch"], sort=sort)
                 ids = [row["session_id"] for row in rows + following["view"]["session_usage"]]
-                self.assertEqual(len(set(ids)), 100)
-                self.assertEqual(ids[50], "root-0069")
+                self.assertEqual(len(set(ids)), 50)
+                self.assertEqual(ids[25], "root-0069")
 
     def test_new_arrivals_keep_older_epoch_stable_and_page_one_live(self):
         self.index()
@@ -129,11 +140,11 @@ class SessionCatalogTests(unittest.TestCase):
         catalog_page(self.catalog, {'action': 'interest', 'token': page['token'], 'visible': True})
         self.assertEqual(120, len(self.catalog._targets()))
         catalog_page(self.catalog, {'action': 'interest', 'token': page['token'], 'visible': False})
-        self.assertEqual(50, len(self.catalog._targets()))
+        self.assertEqual(25, len(self.catalog._targets()))
         self.assertIn(page['epoch'], self.catalog.leases[page['token']]['epochs'])
         self.catalog.interest(page['token'], True)
         self.clock += 91
-        self.assertEqual(50, len(self.catalog._targets()), 'expired visibility cannot retain a global sort scan')
+        self.assertEqual(25, len(self.catalog._targets()), 'expired visibility cannot retain a global sort scan')
 
     def test_scalar_cache_reuse_without_history_hydration_and_active_bypass(self):
         root = next(iter(self.catalog.roots.values()))
@@ -167,7 +178,7 @@ class SessionCatalogTests(unittest.TestCase):
             for _ in range(30):
                 self.clock += 6
                 self.catalog.tick(self.service)
-            self.assertLessEqual(len(acquired), 54, 'no speculative hydration of unvisited pages')
+            self.assertLessEqual(len(acquired), 29, 'no speculative hydration of unvisited pages')
             pending = self.catalog.page(token=first['token'], sort='prompts')
             self.assertTrue(pending['pending_sort'])
             for _ in range(30):
@@ -188,7 +199,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.observe()
         self.assertEqual(0, self.catalog.page()['age_ms'])
 
-    def test_unvisited_warming_is_bounded_to_first_fifty_rows(self):
+    def test_unvisited_warming_is_bounded_to_first_twenty_five_rows(self):
         self.catalog.enable_warm()
         acquired = []
         def summary(service, root, revision, **kwargs):
@@ -199,8 +210,8 @@ class SessionCatalogTests(unittest.TestCase):
                 if self.catalog.needed():
                     self.catalog.tick(self.service)
                 self.clock += 15
-        self.assertEqual(50, len(acquired))
-        self.assertEqual(50, len(set(acquired)))
+        self.assertEqual(25, len(acquired))
+        self.assertEqual(25, len(set(acquired)))
 
     def test_visible_second_page_finishes_during_quiet_background_delay_without_retry(self):
         self.catalog.enable_warm()
@@ -208,7 +219,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.catalog.interest(first['token'], True)
         for _ in range(13):
             self.catalog.tick(self.service)
-        self.assertEqual(50, self.catalog.page(token=first['token'])['page_ready'])
+        self.assertEqual(25, self.catalog.page(token=first['token'])['page_ready'])
         self.catalog.interest(first['token'], False)
         self.catalog.tick(self.service)
         quiet_due = self.catalog.background_due
@@ -224,18 +235,18 @@ class SessionCatalogTests(unittest.TestCase):
         before = self.source.load_count
 
         self.catalog.interest(first['token'], True)
-        for _ in range(13):
+        for _ in range(7):
             self.assertTrue(self.catalog.needed())
             self.catalog.tick(self.service)
         ready = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'])
 
-        self.assertEqual(50, ready['page_ready'])
+        self.assertEqual(25, ready['page_ready'])
         self.assertTrue(all(row['metric_state'] == 'ready' for row in ready['view']['session_usage']))
         self.assertEqual([row['session_id'] for row in second['view']['session_usage']],
                          [row['session_id'] for row in ready['view']['session_usage']])
         self.assertEqual(first['epoch'], ready['epoch'])
-        self.assertEqual(50, self.source.load_count - before)
-        self.assertEqual(100, len(self.catalog.valid), 'unvisited third page is not hydrated')
+        self.assertEqual(25, self.source.load_count - before)
+        self.assertEqual(50, len(self.catalog.valid), 'unvisited pages are not hydrated')
         self.assertLess(self.clock, self.catalog.background_due, 'visible work bypasses the quiet delay')
 
     def test_failed_rows_are_unavailable_or_retained_not_endlessly_pending(self):
@@ -299,7 +310,7 @@ class SessionCatalogTests(unittest.TestCase):
         for sort in ("ccost", "duration", "ctx"):
             for direction in (-1, 1):
                 page = self.catalog.page(sort=sort, direction=direction)
-                final = self.catalog.page(token=page["token"], offset=100, epoch=page["epoch"], sort=sort)
+                final = self.catalog.page(token=page["token"], offset=100, epoch=page["epoch"], sort=sort, direction=direction)
                 self.assertEqual(final["view"]["session_usage"][-1]["session_id"], key)
                 self.assertFalse(page["pending_sort"])
 
@@ -357,7 +368,7 @@ class SessionCatalogTests(unittest.TestCase):
             self.catalog.page(token=original['token'], epoch=original['epoch'], offset=150)
         latest = self.catalog.page(token=original['token'])
         self.assertEqual(latest['offset'], 0)
-        self.assertEqual(len(latest['view']['session_usage']), 50)
+        self.assertEqual(len(latest['view']['session_usage']), 25)
 
     def test_blocked_catalog_worker_does_not_occupy_detail_or_http_lane(self):
         entered, released, captured = Event(), Event(), Event()
@@ -447,7 +458,7 @@ class SessionCatalogTests(unittest.TestCase):
     def test_live_summary_fields_advance_independently_and_unknowns_are_not_zero(self):
         source = SyntheticMonthSource(1, 1, month_start_ms=1000, running_roots=1)
         service = report_service(self, source, now_ms=100_000)
-        catalog = SessionCatalog(clock=lambda: self.clock)
+        catalog = all_time_catalog(clock=lambda: self.clock)
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         page = catalog.page()
         catalog.tick(service)
@@ -533,10 +544,10 @@ class SessionCatalogTests(unittest.TestCase):
         capture, item = capture_rows(service, root)
         self.assertTrue(any(row.in_progress for row in capture.rows))
         entry = SimpleNamespace(capture=capture, snapshot=item.snapshot, source_status=SimpleNamespace(failed_at=None))
-        owner = SimpleNamespace(catalog_observation=observe_catalog(source, include_archived_revisions=True),
+        owner = SimpleNamespace(report_service=service, catalog_observation=observe_catalog(source, include_archived_revisions=True),
             cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
             catalog_job=None, _closed=True)
-        catalog = SessionCatalog(clock=lambda: self.clock)
+        catalog = all_time_catalog(clock=lambda: self.clock)
         loads = source.load_count
         WebWatchCoordinator.tick_catalog(owner, catalog)
         cold = catalog.page()["view"]["session_usage"][0]
@@ -634,7 +645,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(self.catalog.metrics['cache_hits'], 3217)
         warm = time.perf_counter()
         with patch('src.application.session_catalog.session_summary', side_effect=AssertionError('warm source hydration')):
-            for sort in SORTS:
+            for sort in (key for key in SORTS if key != 'effort'):
                 for direction in (-1, 1):
                     first = self.catalog.page(token=pending['token'], sort=sort, direction=direction)
                     last = self.catalog.page(token=first['token'], sort=sort, direction=direction,

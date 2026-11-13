@@ -7,7 +7,7 @@ module.exports = async ({vm, context, Node, timers}) => {
   const row = {session_id:'previous',title:'Previous',indexed:true,has_summary:true,metric_state:'ready',
     prompt_count:1,model:'Known',context_tokens:172000,context_detail:'Estimated next incoming session context.',
     display:{ccost:'1.00',duration_ms:'1s',context_tokens:'172k'}};
-  const previous = {token:'owned',epoch:'pinned',offset:50,total:117,size:50,sort:'activity',direction:-1,
+  const previous = {token:'owned',epoch:'pinned',offset:25,total:117,size:25,period:'today',sort:'activity',direction:-1,
     state:'observed',page_ready:1,view:{session_usage:[row]}};
   let delayed, signal;
   context.navigationApi = async (_, value, requestSignal) => {
@@ -20,18 +20,18 @@ module.exports = async ({vm, context, Node, timers}) => {
   const view = context.navigation;
   new Node('main').append(view.root); view.attached = true; view.token = previous.token;
   view.update(previous);
-  assert.equal(view.headers.length,7); assert.equal(view.headers[6].name,'CTX');
-  assert.equal(view.body.children[0].metrics[4].textContent,'172k');
+  assert.equal(view.headers.length,8); assert.equal(view.headers[7].name,'CTX');
+  assert.equal(view.body.children[0].metrics[5].textContent,'172k');
   const retained = view.body.children[0];
   view.next.focus();
    view.configure(new URLSearchParams('sort=ctx&direction=1'));
   const pending = view.load();
   view.cancelNavigation();
   assert.equal(signal.aborted, true);
-  assert.equal(view.offset, 50); assert.equal(view.sort, 'activity'); assert.equal(view.direction, -1);
+  assert.equal(view.offset, 25); assert.equal(view.sort, 'activity'); assert.equal(view.direction, -1);
   assert.equal(view.body.children[0], retained);
   assert.equal(document.activeElement, view.next);
-  assert.match(context.location.hash, /offset=50&epoch=pinned/);
+  assert.match(context.location.hash, /period=today.*offset=25&epoch=pinned/);
   delayed({...previous,sort:'ctx',offset:0}); await pending; await new Promise(setImmediate);
   assert.equal(view.data, previous, 'late cancelled completion cannot replace the restored snapshot');
   assert.ok(calls.some(value => value.action === 'interest' && !value.visible));
@@ -72,12 +72,12 @@ module.exports = async ({vm, context, Node, timers}) => {
   view.configure(new URLSearchParams('sort=activity&direction=-1&offset=100&epoch=pinned'));
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'pending',completed:4,total:17}});
   assert.equal(view.operation.kind,'page'); assert.equal(view.loader.bar.value,23);
-  assert.equal(view.task.textContent,'Loading Sessions page 3');
+  assert.equal(view.task.textContent,'Loading Sessions page 5');
   assert.equal(view.count.textContent,'Prepared 4 of 17 sessions');
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
   assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/http_auth_failure/);
   view.cancelNavigation(); await new Promise(setImmediate);
-  assert.equal(view.offset,50); assert.equal(view.body.children[0],retained);
+  assert.equal(view.offset,25); assert.equal(view.body.children[0],retained);
   view.configure(new URLSearchParams('sort=duration&direction=1'));
   view.update({...previous,sort:'duration',direction:1,offset:0,pending_sort:false});
   assert.equal(view.operation,null); assert.equal(view.loader.root.hidden,true);

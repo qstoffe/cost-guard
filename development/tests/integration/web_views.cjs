@@ -100,7 +100,9 @@ async function main() {
       active:current.active,attempted:current.attempted,kind:current.request?.kind},
     host:hostState.kind,
     catalog: current?.catalog && {busy:current.catalog.busy, pending:current.catalog.data?.pending_sort,
-      sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available},
+      sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available,
+      offset:current.catalog.offset, displayedOffset:current.catalog.data?.offset, label:current.catalog.label.textContent,
+      status:current.catalog.status.textContent, operation:current.catalog.operation?.kind, stage:current.catalog.loader.stage.textContent},
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
       state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
@@ -233,11 +235,13 @@ async function main() {
   navigate('models');
   assert.equal(ids.result.textContent, frozenModels, 'confirmed credits restores existing display tokens');
   navigate('sessions');
-   await until(() => ids.result.textContent.includes('1–50 of 55'));
-  assert.match(ids.result.textContent, /1–50 of 55/);
-  assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
+   await until(() => ids.result.textContent.includes('1–25 of 55'));
+  assert.match(ids.result.textContent, /1–25 of 55/);
+  assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
     const next = all(ids.result, 'button').find(node => node.textContent === 'Next');
     assert.equal(next.disabled, false);
+    navigate(next.destination.slice(2));
+    await until(() => ids.result.textContent.includes('26–50 of 55'));
     const olderPage = next.destination;
     assert.equal(all(ids['scope-controls'], 'details').length, 0, 'Sessions has no advanced report scope');
    navigate(olderPage.slice(2));
@@ -320,8 +324,8 @@ async function main() {
   for (const hash of ['reports', 'reports?date=2026-03-29', 'reports?date=2026-03-01:2026-03-29',
       'reports?date=2026-02-30', 'reports?date=%ZZ&sort=ccost&offset=50']) {
     navigate(hash);
-    await until(() => ids.result.textContent.includes('1–50 of 55'));
-    assert.equal(location.hash, '#/sessions', 'retired scope is discarded, not applied to Sessions');
+    await until(() => ids.result.textContent.includes('1–25 of 55') && location.hash.includes('period=today'));
+    assert.equal(location.hash, '#/sessions?period=today&sort=activity&direction=-1', 'retired scope is discarded, not applied to Sessions');
     assert.equal(ids.heading.textContent, 'Sessions');
     assert.equal(ids.content.focused, true, 'redirect target receives keyboard focus');
     assert.equal(all(ids['scope-controls'], 'form').length, 0);
@@ -332,7 +336,7 @@ async function main() {
   }
   assert.equal(vm.runInContext('[...views.values()].some(state => state.section === "reports")', context), false);
   navigate('sessions?limit=3');
-   await until(() => ids.result.textContent.includes('1–50 of 55'));
+   await until(() => ids.result.textContent.includes('1–25 of 55'));
    assert.equal(all(ids['scope-controls'], 'form').length, 0, 'obsolete limits cannot truncate the live catalog');
    navigate('token-mix');
    assert.equal(ids.refresh.hidden, true, 'automatic first load has no Load action');
@@ -384,11 +388,11 @@ async function main() {
   assert.equal(cmp('-0.010', '-0.009'), -1);
   assert.equal(cmp('1.00', '1'), 0);
   navigate('sessions');
-   await until(() => ids.result.textContent.includes('1–50 of 55'));
+    await until(() => ids.result.textContent.includes('1–25 of 55'));
   const beforeFilter = requests;
    assert.equal(all(ids.result, 'input').length, 0, 'catalog has no page-only presentation filter');
-   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
-   const column = all(all(ids.result, 'th')[3], 'button')[0];
+    assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
+    const column = all(all(ids.result, 'th')[4], 'button')[0];
    column.click();
    await handlers.hashchange();
    // Drive real HTTP refreshes rather than racing the normal five-second poll
@@ -398,7 +402,7 @@ async function main() {
      await vm.runInContext('current.catalog.load()', context);
      return vm.runInContext('current.catalog.data.sort', context) === 'ccost';
    });
-   assert.equal(all(ids.result, 'th')[3].attrs['aria-sort'], 'ascending');
+    assert.equal(all(ids.result, 'th')[4].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
     context.example = result;

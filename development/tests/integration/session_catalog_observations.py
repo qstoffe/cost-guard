@@ -32,7 +32,11 @@ def observe_sessions(get, cookie, host, driver):
         return result
 
     page = request('/api/sessions', {})
+    assert page['period'] == 'today' and page['size'] == 25
     token = page['token']
+    historical = request('/api/sessions', dict(period='all', sort='activity'))
+    historical_total = historical['total']
+    request('/api/sessions', dict(action='interest', token=historical['token'], visible=False))
     first_seconds = time.monotonic() - started
     original = {row['session_id'] for row in page['view']['session_usage']}
     arrival = None
@@ -42,7 +46,8 @@ def observe_sessions(get, cookie, host, driver):
         current = request('/api/sessions', dict(token=token, sort='ctx'))
         coverage.append(current['indexed'])
         progress.append(current['progress'])
-        assert len(current['view']['session_usage']) <= 50
+        assert len(current['view']['session_usage']) <= 25
+        assert current['period'] == 'today'
         assert current['pending_sort'] == (current['indexed'] != current['available'])
         if current['pending_sort']:
             assert current['sort'] == 'activity'
@@ -52,6 +57,8 @@ def observe_sessions(get, cookie, host, driver):
             assert tokens is None or type(tokens) is int and tokens >= 0
             assert row['display']['context_tokens'] == ('0' if tokens == 0 else context_tokens(tokens))
             assert row['metric_states']['ctx'] in ('ready', 'pending', 'retained', 'unavailable')
+            assert row['metric_states']['effort'] in ('ready', 'pending', 'retained', 'unavailable')
+            assert isinstance(row['effort'], str) and isinstance(row['effort_help'], str)
             models = row['contributor_models']
             assert len(models) <= 64 and all(isinstance(value, str) and 0 < len(value) <= 256 for value in models)
             assert models == sorted(set(models))
@@ -60,7 +67,7 @@ def observe_sessions(get, cookie, host, driver):
         visible_coverage.append(sum(row['indexed'] for row in latest['view']['session_usage']))
         if original and any(row['session_id'] not in original for row in latest['view']['session_usage']):
             arrival = 'changed_first_page_observed; no session created by probe'
-        # Keep the intended global sort's interest active during the observation,
+        # Keep the intended period sort's interest active during the observation,
         # rather than accidentally restoring Activity demand between every sample.
         request('/api/sessions', dict(token=token, sort='ctx'))
         time.sleep(1)
@@ -96,16 +103,18 @@ def observe_sessions(get, cookie, host, driver):
         block = detail['result']['view']['prompt_blocks'][0]
         assert 'session_context' in block and 'watch_model' in rows[0]
         cost_evidence = reference_cost_evidence([*latest['view']['session_usage'], block, *rows])
-        print(json.dumps(dict(sessions='ok', available=current['available'],
+        print(json.dumps(dict(sessions='ok', period=current['period'], historical_total=historical_total,
+            filtered_total=current['total'], available=current['available'], page_size=current['size'],
             indexed_before=coverage[0], indexed_after=coverage[-1],
             visible_indexed_before=visible_coverage[0], visible_indexed_after=visible_coverage[-1],
             visible_metric_states={state: sum(row.get('metric_state') == state for row in latest['view']['session_usage'])
                                    for state in ('ready', 'pending', 'retained', 'unavailable')},
-            metric_sort='pending' if current['pending_sort'] else 'global',
+            metric_sort='pending' if current['pending_sort'] else 'period-qualified',
             applied_sort=current['sort'], requested_sort=current['requested_sort'],
             progress_status=progress[-1]['status'], progress_reason=progress[-1]['reason'],
             progress_generations=len({item['generation'] for item in progress}),
             index_metrics=progress[-1]['metrics'],
+            metric_attribution='shared lane includes independent host/other-lease work; synthetic fixture isolates exact hydration',
             cold_running_observations=cold_running, multi_model_observations=multiple_model_rows,
             contributor_contract='validated bounded distinct identities; no identities exported by probe',
             context_contract='validated raw tokens, server formatting and qualified states; no context sizes exported',

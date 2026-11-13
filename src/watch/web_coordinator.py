@@ -105,7 +105,7 @@ class WebWatchCoordinator(WatchCoordinator):
         return roots
 
     def tick_catalog(self, catalog, *, unavailable=False):
-        catalog.observe(self.catalog_observation, unavailable=unavailable)
+        catalog.observe(self.catalog_observation, unavailable=unavailable, timezone_id=self.report_service.timezone_id)
         now = self.clock_ms()
         catalog.observe_prompts((entry.snapshot.root, any(row.in_progress for row in entry.capture.rows),
             (now - entry.capture.observed_at_ms) / 1000) for entry in self.cards.sessions.values()
