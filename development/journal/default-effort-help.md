@@ -74,11 +74,12 @@ unknown. No claim that every licensed Copilot route was executed is made.
 
 ## Verification and repairs
 
-- Full workstation suite: **188 groups passed** in 175.8, 186.9 and 156.1 seconds.
+- Full workstation suite: **188 groups passed** in 175.8, 186.9, 156.1 and 151.0 seconds.
   The latter runs include final malformed-catalog hardening and release facts;
-  the latest also includes the focused live-probe oracle regression.
+  the latest includes the corrected live-probe oracle and both current-V2 selection
+  cases (16 focused tests). No production edits followed the earlier full runs.
   the earlier inherited failing run is not counted as PASS.
-- 15 focused effort tests cover exact examples, config/package precedence,
+- 16 focused effort tests cover exact examples, config/package precedence,
   malformed/location/turnover evidence, two equal accounting identities with
   separate dependencies, real JSON matched-cache roundtrip/corruption, bounds,
   provider isolation, unknown compaction, visible values, costs and podium math.
@@ -152,3 +153,46 @@ Its lifecycle final snapshot actually showed **zero owned threads and processes*
 no pending tracked phases and no cleanup failures. Shutdown cancellation counters
 are distinct from pre-cleanup source errors. The earlier attempts' different
 cleanup limitations remain as recorded above.
+
+The Delegate identified the strict join's diagnostic limitation: current V2
+intentionally omits model selection from user messages; physical assistant
+requests retain their own provider/model/variant. The corrected probe therefore
+uses exact request-bound event selection when present, otherwise the persisted
+physical request's no-variant/default or explicit selection. Contradictory event
+identity is counted/excluded, not treated as missing. An absent variant does not
+prove a concrete executed effort. The new regression covers both this current-V2
+default path and the explicit negative case.
+
+One corrected, bounded attempt matched **37 physical requests** from two
+authoritative active captures: **37 explicit, zero default**, 37 absent user-model
+selections, zero identity conflicts, missing DTO groups, bounded omissions,
+unsupported-oracle defaults or raced samples. All 37 explicit DTO assertions
+passed. Nonfocal captured rows likewise supplied no default candidate, so no
+detail lease was opened. The requested live-default path remains **unobserved**,
+not PASS or proof of global absence. This attempt took 1.33 seconds, nine HTTP
+reads with maximum latency 0.0339 seconds, and ended with zero owned threads and
+processes, no pending phases and no cleanup failures. No broader discovery or
+traffic-generation wait was attempted; earlier failed observations remain distinct.
+
+## Scoped completion decision
+
+**Decision Delegate authorized completion with a narrow verification caveat.**
+Obtaining a positive recorded-default sample from this installation and rerunning
+the supplementary whole-history probe are not required for this delivery.
+Wider private-history discovery or waiting for different traffic would be
+disproportionate supplementary corroboration, not repair of a demonstrated defect.
+No further live sampling is required for this gap.
+
+- **Live-default coverage: UNOBSERVED.** Deterministic default cases, actual current
+  catalog evidence and shipped-browser interaction proof are independent evidence
+  types, not a substitute claim of real-default end-to-end observation.
+- **37 explicit-request assertions and final zero-worker cleanup: passed.**
+  The overall default probe did not pass.
+- **Broad history probe: failed at its observation cap; certification inconclusive.**
+  Unreached ranking/SSE checks remain **NOT RUN**. These runs certify neither
+  whole-history completion nor its performance.
+
+The exception removes no implementation behavior, attribution safeguard, loading
+correctness or performance requirement. Other Ready dependencies retain their own
+acceptance. Ordinary final verification, PR checks, merge and default readback
+remain required. The earlier Windows test-only spawn-margin decision is unchanged.

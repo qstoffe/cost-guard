@@ -250,6 +250,21 @@ class DefaultEffortHelpTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "default marker leaked"):
             check_row(saved.root.session_id, row, observed, saved)
 
+    def test_live_probe_current_v2_without_user_model_keeps_assistant_default_and_explicit(self):
+        from development.tests.integration.effort_live_observations import check_row
+        for variant, expected in ((None, "default_requests"), ("high", "explicit_requests")):
+            saved, _, row, wire = projected_snapshot(actual=variant,
+                model=ModelRef("anthropic", "claude-sonnet-5-5"))
+            saved = replace(saved, events=tuple(replace(event, metadata={}) for event in saved.events))
+            observed = dict(prompt=wire, model=row.watch_model, effort=row.watch_effort)
+
+            counts = check_row(saved.root.session_id, row, observed, saved)
+
+            self.assertGreater(counts[expected], 0)
+            self.assertGreater(counts["absent_event_metadata"], 0)
+            if variant is not None:
+                self.assertEqual(0, counts["default_requests"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,15 @@ NOTES = {
     "documentation": "Likely effort based on provider documentation",
     "unknown": "No supported concrete effort evidence",
 }
+COUNT_FIELDS = ("matched_events", "physical_requests", "absent_event_metadata",
+    "selection_conflicts", "selected_explicit", "selected_default", "missing_dto_groups",
+    "bounded_group_omissions", "matched_requests", "default_requests", "explicit_requests",
+    "unsupported_oracle_defaults")
+
+
+def request_counts(counts):
+    return {**{key: counts[key] for key in COUNT_FIELDS},
+            **{key: value for key, value in counts.items() if key not in COUNT_FIELDS}}
 
 
 def expected_default(invocation):
@@ -44,24 +53,35 @@ def expected_default(invocation):
 def matching_requests(session_id, row, snapshot):
     events = {event.event_id: event for event in snapshot.events if event.session_id == session_id}
     event = events.get(row.event_id)
-    if event is None:
-        return {}, ()
-    metadata = event.metadata
     invocations = tuple(item for item in snapshot.invocations if item.session_id == session_id
-        and item.initiating_event_id == event.event_id and not item.summary
-        and item.model.provider == metadata.get("provider_id")
-        and item.model.recorded_model == metadata.get("model_id"))
-    return metadata, invocations
+        and item.initiating_event_id == row.event_id and not item.summary)
+    return event, invocations
+
+
+def selected_effort(event, invocation):
+    metadata = event.metadata if event is not None else {}
+    identities = (("provider_id", invocation.model.provider), ("model_id", invocation.model.recorded_model))
+    if any(metadata.get(key) is not None and metadata[key] != actual for key, actual in identities):
+        return None, "selection_conflicts"
+    if all(metadata.get(key) == actual for key, actual in identities):
+        selected = metadata.get("variant", "")
+        if selected is not None:
+            return selected, ""
+    # Current V2 user messages deliberately have no model selection. A physical
+    # assistant request's persisted no-variant is default, not executed-level proof.
+    return invocation.variant or "", "absent_event_metadata"
 
 
 def check_row(session_id, row, wire, snapshot):
     """Compare source-qualified physical calls, never use the formatter as oracle."""
-    metadata, invocations = matching_requests(session_id, row, snapshot)
+    event, invocations = matching_requests(session_id, row, snapshot)
     parts = wire["prompt"].get("cost_detail", {}).get("parts", [])
     display = wire["prompt"]["display"]
-    counts = Counter(matched_events=1, qualified_invocations=len(invocations))
+    counts = Counter(matched_events=int(event is not None), physical_requests=len(invocations))
     for invocation in invocations:
-        selected = metadata.get("variant", "")
+        selected, exclusion = selected_effort(event, invocation)
+        if exclusion:
+            counts[exclusion] += 1
         if selected is None:
             continue
         counts["selected_explicit" if selected and selected.lower() != "default" else "selected_default"] += 1
@@ -174,30 +194,38 @@ def observe_effort_tooltips(get, cookie, owner):
             assert before == tuple(item.variant for item in snapshot.invocations), "recorded variant changed"
             if counts["default_requests"]:
                 print(json.dumps(dict(effort_tooltips="PASS", scope="matched_active_requests_only",
-                    **counts, raced_samples_discarded=raced, history_state=view.get("history_state"),
+                    **request_counts(counts), raced_samples_discarded=raced, history_state=view.get("history_state"),
                     full_history_certified=False, model_calls_started_by_probe=0)))
                 return
             for row in capture.rows:
-                metadata, invocations = matching_requests(card["session_id"], row, snapshot)
-                selected = metadata.get("variant", "")
-                if selected is None or selected and selected.lower() != "default":
-                    inspected["nonfocal_explicit_requests"] += len(invocations)
-                    continue
-                inspected["nonfocal_default_requests"] += len(invocations)
-                supported = [item for item in invocations if expected_default(item) is not None]
+                event, invocations = matching_requests(card["session_id"], row, snapshot)
+                supported = []
+                for item in invocations:
+                    selected, exclusion = selected_effort(event, item)
+                    if exclusion:
+                        inspected["candidate_" + exclusion] += 1
+                    if selected is None:
+                        continue
+                    if selected and selected.lower() != "default":
+                        inspected["nonfocal_explicit_requests"] += 1
+                        continue
+                    inspected["nonfocal_default_requests"] += 1
+                    if expected_default(item) is not None:
+                        supported.append(item)
+                    else:
+                        inspected["defaults_outside_oracle"] += 1
                 if not supported:
-                    inspected["defaults_outside_oracle"] += len(invocations)
                     continue
                 print(json.dumps(dict(effort_candidate="recorded_session", **inspected,
                     evidence_source=expected_default(supported[0])[1])))
                 result = observe_pinned_detail(get, cookie, card["session_id"], row, snapshot)
                 print(json.dumps(dict(effort_tooltips="PASS", scope="matched_recorded_session_detail",
-                    **result, **inspected, full_history_certified=False, model_calls_started_by_probe=0)))
+                    **request_counts(result), **inspected, full_history_certified=False, model_calls_started_by_probe=0)))
                 return
         if inspected["eligible_captures"]:
             break  # Diagnose this discovered evidence, not wait for different traffic.
         time.sleep(.25)
     print(json.dumps(dict(effort_tooltips="unobserved", scope="matched_active_requests_only",
-        **sum(coverage.values(), Counter()), raced_samples_discarded=raced,
+        **request_counts(sum(coverage.values(), Counter())), raced_samples_discarded=raced,
         **inspected, full_history_certified=False)))
     raise RuntimeError("probe_no_matched_default_request")

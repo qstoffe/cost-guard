@@ -7,8 +7,9 @@ Explicit selections, visible cells, pricing, costs and native history are unchan
 
 ## Evidence
 
-- Full local workstation suite: 188 groups passed three times; latest 156.1 seconds.
-- Fifteen focused effort tests, registered in Quick and Full: exact examples,
+- Full local workstation suite: 188 groups passed four times; latest 151.0 seconds,
+  after the final current-V2 probe correction and sixteen-test regression set.
+- Sixteen focused effort tests, registered in Quick and Full: exact examples,
   package/config/request precedence, location/dependency isolation, bounds,
   malformed input, matched JSON-cache roundtrip and visible/accounting invariants.
 - Real hidden Chrome and Edge pass the shipped DOM/PiP matrix across all affected
@@ -27,6 +28,10 @@ Explicit selections, visible cells, pricing, costs and native history are unchan
 - Follow-up diagnostic of two authoritative active captures: **unobserved** under
   the strict request join; no detail candidate opened. Final owned threads/processes
   were zero with no cleanup failure. This does not prove absence of default requests.
+- Corrected current-V2 attribution matched 37 physical requests, all explicit,
+  with no identity conflicts, missing groups or assertion mismatch. No recorded
+  default candidate appeared in that bounded population; its live proof remains
+  **unobserved**, not PASS. Final owned threads/processes were zero.
 - Working-tree validator: no failures; seven existing advisory size warnings.
 
 The original specification/research attachment moved intact. Runtime evidence is
@@ -40,7 +45,15 @@ replayed. Public source review is not installed-binary commit proof. Headless na
 input is not physical OS/screen-reader acceptance. Current model/provider estimates
 cannot reconstruct historical agent/command overrides.
 
-Decision Delegate authorized only a Windows test-spawn margin of two seconds,
+Decision Delegate authorized a Windows test-spawn margin of two seconds,
 with progressing fixture work extended beyond that interval; production watchdog,
-five-second bounds and Full gate remain unchanged. No acceptance gate was waived.
+five-second bounds and Full gate remain unchanged.
+
+Decision Delegate also authorized completion without a positive real-installation
+default sample or successful supplementary whole-history rerun: wider discovery
+would be disproportionate corroboration, not repair of a demonstrated defect.
+**Live-default coverage remains UNOBSERVED; the overall default probe did not pass.**
+Its 37 explicit-request assertions and final zero-worker cleanup passed. Broad
+history certification remains inconclusive; unreached ranking/SSE checks are
+**NOT RUN**. No behavior, attribution, loading or performance requirement is removed.
 See [source findings, commands, decision and detailed limits](../../../journal/default-effort-help.md).
