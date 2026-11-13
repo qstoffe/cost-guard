@@ -176,6 +176,7 @@ class WatchProjection:
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()
     active_cards: tuple[WatchCard, ...] = ()
     history_cards: tuple[WatchCard, ...] = ()
+    recent_finished_cards: tuple[WatchCard, ...] = ()
     cards_state: str | None = None
     history_state: str = "loading"
     history_scope: str = ""

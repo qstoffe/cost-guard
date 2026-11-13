@@ -123,6 +123,8 @@ class ProbeObservations:
         owned = [thread for thread in threads() if thread.name.startswith('cost-guard-')]
         frames = sys._current_frames()
         result.update(owned_threads=len(owned), owned_processes=len(multiprocessing.active_children()),
+            host_reason=getattr(host, 'reason', None) if getattr(host, 'reason', None) in {
+                "source_changed", "runtime_fault", "stopped"} else None,
             stacks=[dict(thread=thread.name, frames=[dict(file=Path(frame.filename).name,
                 function=frame.name, line=frame.lineno)
                 for frame in traceback.extract_stack(frames[thread.ident])[-8:]])

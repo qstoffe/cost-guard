@@ -28,6 +28,7 @@ class LiveAcquisition:
         self.observed_at_ms = None
         self.recovery_started = None
         self.source_status = SourceStatus(monotonic)
+        self.hint_read_due = 0.0
 
     @property
     def source_state(self):
@@ -54,7 +55,11 @@ class LiveAcquisition:
                     else:
                         self.resync = True
             if self.resync or self.hints:
-                self.deadline = min(self.deadline, now + 5)
+                # Coalesce bursts, but do not impose a fresh five-second idle
+                # delay on a prompt that already finished between observations.
+                # Recovery backoff remains authoritative even with buffered hints.
+                if self.error is None:
+                    self.deadline = min(self.deadline, max(now, self.hint_read_due))
         try:
             if now >= self.deadline:
                 if self.error is not None:
@@ -76,6 +81,7 @@ class LiveAcquisition:
                 self.frame = cycle.projection
                 self.observed_at_ms = self.frame.now_ms
                 self.deadline = self.monotonic() + owner._wait_delay_seconds(self.frame.active_count)
+                self.hint_read_due = self.monotonic() + 1.0
             elif self.error is not None:
                 # Retain the last good frame and its active/unknown lifecycle.
                 if self.frame is None:

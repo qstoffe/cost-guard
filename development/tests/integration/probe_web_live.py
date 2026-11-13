@@ -118,6 +118,8 @@ def main():
     parser.add_argument('--benchmark', action='store_true', help='Observe the independent public Harbor lane via authenticated local HTTP.')
     parser.add_argument('--benchmark-cold', action='store_true', help='Ignore this probe host\'s cached benchmark in memory; keep the on-disk last-good file.')
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--recent-finished", action="store_true",
+        help="Observe the bounded recent projection without claiming a full real-history oracle or generating prompts.")
     parser.add_argument("--effort-tooltips", action="store_true", help="Check recorded default selection in active Watch help; no whole-history wait.")
     parser.add_argument('--context-deltas', action='store_true', help='Check real card context export/formatting; counts only, no prompt text or source mutation.')
     parser.add_argument("--watch-seconds", type=int, default=90,
@@ -168,7 +170,7 @@ def main():
     streams = []
     observations = ProbeObservations(tool_invocations=args.tool_invocations)
     with observations.installed(), probe_lifecycle(host, streams, observations,
-            retirement_seconds=45 if args.effort_tooltips else 0):
+            retirement_seconds=45 if args.effort_tooltips or args.recent_finished else 0):
         host.start()
         shell_seconds = time.monotonic() - started
         server = host.server
@@ -271,7 +273,7 @@ def main():
             observations.stage = 'sessions'
             observe_sessions(get, cookie, host, owners[0])
         card_evidence = None
-        if args.watch_cards or args.tool_outcomes or args.context_deltas:
+        if args.watch_cards or args.tool_outcomes or args.context_deltas or args.recent_finished:
             observations.stage = 'watch_cards'
             first_rows = None
             publications = []
@@ -283,11 +285,29 @@ def main():
                 publications.append((time.monotonic(), state['sequence']))
                 if view.get('history_state') == 'loading':
                     assert not view.get('history_cards'), 'provisional history escaped the producer'
-                cards = [*view.get('active_cards', []), *view.get('history_cards', [])]
+                cards = [*view.get('active_cards', []), *view.get('history_cards', []),
+                    *view.get('recent_finished_cards', [])]
                 if any(card['rows'] for card in cards) and first_rows is None:
                     first_rows = round(time.monotonic() - started, 3)
                 if any('totals' in card or 'provisional' in card for card in cards):
                     raise RuntimeError('probe_watch_card_legacy_totals')
+                if args.recent_finished:
+                    recent = view.get('recent_finished_cards', [])
+                    assert len(recent) <= 5 and len({card['session_id'] for card in recent}) == len(recent)
+                    for card in recent:
+                        assert len(card['rows']) == 1 and not card['focal_id']
+                        prompt = card['rows'][0]['prompt']
+                        assert not prompt['in_progress'] and not prompt['execution_unverified']
+                        assert view['started_at_ms'] <= prompt['completed_at_ms'] <= view['now_ms']
+                        assert prompt['completed_successfully'] or prompt['aborted'] or prompt['has_error']
+                    if first_rows is not None and time.monotonic() - publications[0][0] >= 12:
+                        assert len(owners[0].coordinator.card_workers.jobs) <= 4
+                        card_evidence = dict(scope='recent_projection_only', recent_cards=len(recent),
+                            natural_recent_completion_observed=bool(recent), private_incident_reproduced=False,
+                            history_state=view['history_state'], history_checked=view['history_checked'],
+                            history_total=view['history_total'], first_rows_seconds=first_rows,
+                            publications=len(set(seq for _, seq in publications)))
+                        break
                 if args.context_deltas and not args.watch_cards and any(
                         row['live_context']['watch_delta_context_tokens'] is not None
                         for card in cards for row in card['rows']):
@@ -617,7 +637,7 @@ def main():
             for frame in traceback.extract_tb(host.failure.__traceback__)]}))
     if host.live.thread.is_alive() or host.thread.is_alive() or host.failure:
         raise RuntimeError('probe_shutdown_failed')
-    if args.benchmark:
+    if args.benchmark or args.recent_finished:
         # A short benchmark probe can finish during unrelated native quota HTTP.
         # Observe those exact in-process workers' natural exit, not change product
         # close latency, kill them, or weaken the final zero-owner assertion.

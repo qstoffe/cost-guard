@@ -37,7 +37,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self.guidance = CardGuidance(self.card_workers, self.report_service,
                 binding=guidance_binding, monotonic=self._monotonic)
         self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
-            costs=self.session_costs, guidance=self.guidance)
+            costs=self.session_costs, guidance=self.guidance, started_at_ms=self.started_at_ms)
         self.history_factory = service_factory
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
@@ -221,6 +221,7 @@ class WebWatchCoordinator(WatchCoordinator):
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
         proof = self.cards.history
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
+            recent_finished_cards=self.cards.recent.project(self.cards, now_ms),
             running=running_prompts(active, state),
             daily_usage=self.daily_usage,
             daily_state=self.daily_status.state(retained=self.daily_usage is not None) or ("loading" if self.daily_usage is None

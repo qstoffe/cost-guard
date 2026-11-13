@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.41 - 2026-11-13
+
+- Watch and Mini show separately source-verified post-start finished prompts while cold Earlier history is still loading, including requests completed entirely between polls. Canonical finish evidence, bounded changed-root priority and retained five-session candidates preserve strict global-history proof and reconcile without duplicate rows.
+- Live event hints now coalesce behind a one-second minimum read interval rather than adding up to five seconds of idle delay. Hints still require authoritative source reads; source recovery backoff, polling-only sources, terminal grace, pricing and native history remain unchanged.
+
 ## v81.40 - 2026-11-13
 
 - Sessions defaults to Today, with Today / 7 days / 30 days / This month / All time controlling the server population before indexing, sorting and 25-row paging. Cheap whole-tree activity selects eligible roots; period-qualified leases and epochs preserve older-page windows and bounded shared work.

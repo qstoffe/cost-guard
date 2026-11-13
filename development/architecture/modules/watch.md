@@ -15,6 +15,18 @@ Optional notice history uses `cache/model_notices.py` for resource-error classif
 
 ## Public contract
 
+FR000697 adds `recent_finished.py`: at most five immutable, exact-root canonical
+terminal cards qualified by engine-start/actual finish, complete snapshot, source
+provenance and accepted root generation/revision. Partial observations retain old
+evidence rather than replacing its finish; deletion/source identity and complete
+reclassification invalidate it. `cards.py` promotes post-baseline new/changed roots
+through the existing foreground permits, keeps the 3:1 historical fairness turn
+and retains bounded visible captures beyond terminal grace. Global `HistoryPublication`
+coverage/epoch is unchanged; an observed global publication atomically hides the
+overlay. Independent cost/context enrichment remains nonblocking. Live hints
+coalesce at a one-second minimum read interval, preserving source-error backoff;
+poll-only sources keep their existing cadence. [Evidence](../../journal/web/recent-finished.md).
+
 FR000647 is Full Watch presentation only: both prompt tables show the canonical
 CCost total token, with independently source-verified Incoming Context CCost (I)
 and Extra CCost (E) in the existing value help before unchanged grouped cost detail.

@@ -126,6 +126,7 @@ def main():
             if help_audit else None)
         ccost_frames = unavailable_frames(frame) if help_audit else None
         promotion_models = project(model_report(include_model_catalog=True)).to_json() if help_audit else None
+        recent_history = None
 
         def publish(state="running", value=frame, timezone_name="UTC"):
             current = int(time.time() * 1000)
@@ -167,6 +168,23 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command.startswith("recent-"):
+                    from development.tests.fixtures.recent_history import RecentHistoryFixture
+                    if recent_history is None or command == "recent-loading":
+                        recent_history = RecentHistoryFixture(root, int(time.time() * 1000) - 100_000)
+                    if command == "recent-converge":
+                        recent_frame = recent_history.converge()
+                    elif command.startswith("recent-finish-"):
+                        index, prompts = map(int, command.removeprefix("recent-finish-").split("-"))
+                        recent_frame = recent_history.finish(index, prompts)
+                    else:
+                        recent_frame = recent_history.frame()
+                    # Preserve unrelated fixture accounts/daily but use only the
+                    # actual source-qualified producer's card populations/proof.
+                    publish(value=replace(recent_frame, quota=frame.quota, daily_usage=frame.daily_usage))
+                    print(json.dumps(dict(ok=True, timings=recent_history.timings,
+                        source_reads=recent_history.source.load_count)), flush=True)
+                    continue
                 if command == 'claude-agent-account':
                     from development.tests.fixtures.claude_account import claude_account_frame
                     publish(value=claude_account_frame(frame))

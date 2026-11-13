@@ -904,3 +904,11 @@ describes the superseded paged Sessions layout; its finite-report retention find
 Windows startup maps native access denied separately from unavailable identity and preserves allowlisted state/coordination/control/readiness causes through console, existing dialog and lifecycle log. Diagnostics exports the latest bounded lifecycle event independently of historical host snapshots. `stale_instance_recovered` is retirement evidence, not an active ownership conflict. Regression tests cover legacy recovery, busy/unavailable proof, overlapping replacement, concurrent record changes, native API error/handle mapping and privacy-safe feedback/export. Non-UI Windows observation and isolated fixture evidence: [stale recovery](../governance/verification/windows-stale-recovery.md). Journal assessment: no-update; protocol ownership remains here, with no new coordinator or layer boundary.
 
 PowerShell 5.1: preserve `[array]$pythonArgs` (scalar `-3` splatting lost the command in a real probe). Use DirectoryInfo.SetAccessControl/private DACL, not Set-Acl requiring SeSecurityPrivilege. AST-extracted production functions/assignments test real py.exe handoff/private logs. Never elevate or change global policy. These owner facts replace a redundant journal log; historical evidence is unchanged.
+FR000697 exports `recent_finished_cards` independently of global history
+state/epoch. Full Watch and Mini share `WatchView.finishedCards` over only the
+server-qualified recent and certified/retained populations, deduplicating roots
+and preserving five-slot finish order. Mini's existing running protection still
+wins; recent cards use neutral historical styling, not an invented Running sighting.
+Loading context remains alongside recent cards. Keyed cards/rows survive final
+proof, reopen and route lifetime without a new connection or native resize.
+[Source/DOM evidence and limits](../../journal/web/recent-finished.md).

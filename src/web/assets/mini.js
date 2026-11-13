@@ -106,6 +106,7 @@ const MiniWatch = (() => {
         active_cards: prompts ? cards : [...oldCards.values()],
         // The producer owns atomic history retention, invalidation and source scope.
         history_cards: (view.history_cards || []).map(card => this.context(card)),
+        recent_finished_cards: (view.recent_finished_cards || []).map(card => this.context(card)),
         // Missing refresh data retains this day's usable summary only. The
         // configured boundary below still clears yesterday, even disconnected.
         daily_usage: daily ? dailyUsable || !previous?.daily_usage ||
@@ -151,8 +152,7 @@ const MiniWatch = (() => {
       });
       else add(finished, value, (a, b) => compare(a, b) > 0);
     }
-    const usable = view?.history_state === 'observed' || view?.history_epoch > 0;
-    for (const card of usable ? view?.history_cards || [] : []) {
+    for (const card of WatchView.finishedCards(view)) {
       const value = {card, item: card.rows?.[0], running: false, historical: true};
       add(finished, value, (a, b) => compare(a, b) >= 0);
     }
@@ -483,7 +483,8 @@ const MiniWatch = (() => {
         text(row.children[4], context); wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;
-      const notice = needsHistory && !(certified && wanted.length) ? WatchView.historyNotice(view, values.some(value => value.historical)) : '';
+      const notice = needsHistory && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
+        WatchView.historyNotice(view, values.some(value => value.historical)) : '';
       text(this.emptyPrompts.children[0].children[0], notice || (view?.cards_state === 'observed' ? 'No sessions' : 'Loading…'));
       this.emptyPrompts.setAttribute('role', 'status');
       reconcile(this.body, [...wanted, ...(!wanted.length || notice ? [this.emptyPrompts] : [])]);
