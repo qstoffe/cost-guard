@@ -12,6 +12,14 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 ## Writing patterns
 
+FR000695 (v81.39): `control-focus.js`, not the tooltip controller, owns per-document
+input modality for buttons, links, checkbox/radio filters and intrinsic help targets.
+Pointer ownership gates only the extra focus outline; native focus, keyboard cues,
+Popover dismissal, pinned help and true selected states are separate. Mini explicitly
+installs the same controller on its own document. The source-shaped same-element
+Tab → pointer reproduction and native PiP/route matrix are in
+[Models isolation evidence](../../journal/web/models-isolation.md).
+
 FR000694 (v81.38): `application/effort_help.py` alone formats semantic selected/effective
 facts as `default (level)`. Only `value_cell=True` adds the marker and one source-sensitive
 line; ordinary Model/CCost/Calls/Mini/Comparisons Model/Stats podium never reuse that

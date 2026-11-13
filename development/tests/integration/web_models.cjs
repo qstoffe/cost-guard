@@ -6,8 +6,10 @@ class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.attrs = {}; this.text = ''; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(n => n.textContent).join(''); }
-  append(...nodes) { this.children.push(...nodes); }
-  replaceChildren(...nodes) { this.children = nodes; this.text = ''; }
+  append(...nodes) { for (const node of nodes) this.insertBefore(node, null); }
+  insertBefore(node, next) { node.remove(); const index = next ? this.children.indexOf(next) : this.children.length; this.children.splice(index, 0, node); node.parentNode = this; }
+  remove() { if (this.parentNode) { const list = this.parentNode.children; list.splice(list.indexOf(this), 1); this.parentNode = null; } }
+  replaceChildren(...nodes) { for (const node of [...this.children]) node.remove(); this.text = ''; this.append(...nodes); }
   setAttribute(key, value) { this.attrs[key] = value; }
   addEventListener(key, handler) { this.events[key] = handler; }
 }
@@ -28,6 +30,12 @@ const button = name => all(output, 'button').find(n => n.textContent.startsWith(
 const click = (name, event = {}) => button(name).events.click(event);
 const check = (index, value) => { const input = all(output, 'input')[index]; input.checked = value; input.events.change(); };
 draw();
+const modelRoot=output.children[0],priceRows=[...rows()],benchmarkRoot=state.benchmark.root;
+view.pricing_retrieved_at_ms += 1000;draw();
+assert.equal(output.children[0],modelRoot,'new observation retains Models root');
+assert.equal(state.benchmark.root.parentNode,modelRoot,'benchmark never leaves its owner');
+assert.equal(state.benchmark.root,benchmarkRoot);
+assert.deepEqual(rows(),priceRows,'same price records retain physical rows');
 assert.equal(all(output, 'th').length, 9);
 assert.equal(all(output, 'input').length, 4);
 assert.equal(all(output, 'button').length, 11);
@@ -41,7 +49,7 @@ for (const heading of headings.slice(0, 2)) {
   assert.equal(source.className, 'model-source');
   assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
 }
-const more = output.children.at(-1), external = all(more, 'a');
+const more = all(output,'div').find(n=>n.className==='more-benchmarks'), external = all(more, 'a');
 assert.equal(more.className, 'more-benchmarks');
 assert.deepEqual(more.children.map(n => n.tag), ['h2', 'a', 'p']);
 assert.equal(external.length, 1);
@@ -189,6 +197,10 @@ assert.equal(controls.children.length, 0);
 // The benchmark retains five sortable headers, row-specific help and independent choices.
 state.benchmark.data = benchmark; state.benchmark.draw();
 const benchmarkRows = () => state.benchmark.body.children;
+const stableBenchmarkRows=[...benchmarkRows()];
+state.benchmark.data={...benchmark,refreshing:true,fetched_text:'new factual observation'};state.benchmark.draw();
+assert.deepEqual(benchmarkRows(),stableBenchmarkRows,'status/date-only draw retains benchmark rows');
+state.benchmark.data=benchmark;state.benchmark.draw();
 assert.deepEqual([...state.benchmark.headers].map(([th]) => th.textContent),
   ['Publisher ↕', 'Model ↕', 'Effort ↕', 'Relative Task Cost ↕', 'Solved ↓']);
 assert.equal(state.benchmark.headers[4][0].attrs['aria-sort'], 'descending');

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.38, 2026-11-13), the supported distribution.
+Use **current `main`** (v81.39, 2026-11-13), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.37 (2026-11-13):** Full Watch expands running work into separately identified foreground/background invocations, including concurrent shells. Exact native job links can recover missing commands from V2's existing registry observation; privacy, live verification and truthful mismatch/missing-source explanations remain mandatory. [Evidence and limits](development/journal/web/watch-invocation.md#multi-job-command-recovery--fr-000688).
+**v81.39 (2026-11-13):** Models refreshes retain independent pricing/benchmark sections and unchanged rows. Web and Mini Watch share pointer-aware focus cues without removing keyboard rings or active navigation/toggle highlights. [Evidence and limits](development/journal/web/models-isolation.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

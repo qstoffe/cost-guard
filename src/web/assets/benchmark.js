@@ -63,10 +63,10 @@ const BenchmarkView = (() => {
       head.append(row); this.table.append(head, this.body); this.scroll.append(this.table);
       this.empty = el('p', 'Benchmark unavailable / no benchmark data yet', 'benchmark-empty');
       this.root.append(heading, tools, this.scroll, this.empty);
-      this.checked = 0; this.loading = false; this.signature = '';
+      this.checked = 0; this.loading = false; this.signature = ''; this.rows = new Map();
       this.draw();
     }
-    attach(parent) { parent.append(this.root); }
+    attach(parent) { if (this.root.parentNode !== parent) parent.append(this.root); }
     controls(writable, api = this.api) {
       this.writable = writable; this.api = api;
       this.refresh.disabled = !writable || this.loading || this.manual || !!this.data.refreshing;
@@ -74,13 +74,14 @@ const BenchmarkView = (() => {
     }
     async refreshSource() {
       if (!this.api || this.refresh.disabled) return;
+      this.restoreFocus = typeof ControlFocus === 'undefined' ? () => {} : ControlFocus.retain(this.refresh);
       this.manual = true; this.status.textContent = 'Refreshing…'; this.controls(this.writable);
       try {
         await this.api('/api/models/benchmark/refresh', {});
         await this.load(this.api, true);
       } catch (_) {
         this.manual = false; this.status.textContent = 'Refresh failed; previous benchmark retained.';
-      } finally { this.controls(this.writable); }
+      } finally { this.controls(this.writable); if (!this.manual) this.restoreFocus?.(); }
     }
     async load(api, force = false) {
       if (this.loading || !force && Date.now() - this.checked < 5000) return;
@@ -88,15 +89,24 @@ const BenchmarkView = (() => {
       this.controls(this.writable, api);
       try {
         const data = await api('/api/models/benchmark');
-        const signature = JSON.stringify(data);
-        if (signature !== this.signature) { this.data = data; this.signature = signature; this.draw(); }
+        // Observation/progress is not row data. Keep rows, help and selection alive.
+        const signature = JSON.stringify([data.rows, data.efforts]);
+        this.data = data;
+        if (signature !== this.signature) { this.signature = signature; this.draw(); }
+        ReportView.text(this.fetched, 'Last fetched: ' + (data.fetched_text || 'Unavailable'));
+        ReportView.text(this.empty, data.fetched_at_ms ? 'No matching benchmark rows' : 'Benchmark unavailable / no benchmark data yet');
         if (!data.refreshing && this.manual) {
           this.manual = false;
           this.status.textContent = data.unavailable ? 'Refresh failed; previous benchmark retained.' : 'Benchmark refreshed.';
         } else if (data.refreshing) this.status.textContent = 'Refreshing…';
         else if (!this.manual) this.status.textContent = data.unavailable ? 'Benchmark unavailable; previous data retained.' : '';
-      } catch (_) { /* Last-good rows/date survive network/host failure. */ }
-      finally { this.loading = false; this.controls(this.writable); }
+      } catch (_) {
+        if (this.manual) { this.manual = false; this.status.textContent = 'Refresh failed; previous benchmark retained.'; }
+        // Last-good rows/date survive network/host failure.
+      } finally {
+        this.loading = false; this.controls(this.writable);
+        if (!this.manual) { this.restoreFocus?.(); this.restoreFocus = null; }
+      }
     }
     efforts() {
       const el = ReportView.element, selected = this.choice.efforts;
@@ -144,16 +154,25 @@ const BenchmarkView = (() => {
         (!this.choice.efforts || this.choice.efforts.has(row.effort || ''))).sort((a, b) => compare(a, b, keys[index], direction) ||
         a.model.localeCompare(b.model) || a.client.localeCompare(b.client) ||
         (a.effort || '').localeCompare(b.effort || '') || a.id.localeCompare(b.id));
-      this.body.replaceChildren();
+      const wanted = [];
       for (const item of rows) {
+        const signature = JSON.stringify(item);
+        let entry = this.rows.get(item.id);
+        if (!entry || entry.signature !== signature) {
         const row = el('tr');
         const model = ContextHelp.value(el('span', item.model, item.recent ? 'new' : ''), item.configuration_help);
         const cost = ContextHelp.value(el('span', item.relative_text), item.task_help);
         for (const value of [item.publisher, model, item.effort || 'N/A', cost, item.solved_text]) {
           const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); row.append(cell);
         }
-        this.body.append(row);
+        entry = {row, signature}; this.rows.set(item.id, entry);
+        }
+        wanted.push(entry.row);
       }
+      const keep = new Set(wanted);
+      for (const row of [...this.body.children]) if (!keep.has(row)) row.remove();
+      wanted.forEach((row, index) => { if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null); });
+      for (const [id, entry] of this.rows) if (!keep.has(entry.row)) this.rows.delete(id);
       this.fetched.textContent = 'Last fetched: ' + (this.data.fetched_text || 'Unavailable');
       this.empty.textContent = this.data.fetched_at_ms ? 'No matching benchmark rows' : 'Benchmark unavailable / no benchmark data yet';
       this.empty.hidden = rows.length > 0;

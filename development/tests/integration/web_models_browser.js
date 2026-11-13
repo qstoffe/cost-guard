@@ -55,7 +55,7 @@
        state.benchmark.data = BENCHMARK; state.benchmark.draw();
        const benchmark = output.querySelector('.benchmark-table');
        check(output.querySelectorAll('h2').length === 3 && benchmark.tHead.rows[0].cells.length === 5, 'two independent tables plus More Coding Benchmarks');
-       const more = output.lastElementChild, external = more.querySelector('a'), appearance = getComputedStyle(more);
+        const more = output.querySelector('.more-benchmarks'), external = more.querySelector('a'), appearance = getComputedStyle(more);
        check(more.className === 'more-benchmarks' && more.querySelectorAll('a').length === 1 && !more.querySelector('table,button,input'), 'final link-only section');
        check(appearance.borderTopWidth === '0px' && appearance.backgroundColor === 'rgba(0, 0, 0, 0)' && appearance.paddingTop === '0px', 'unboxed comparison link');
        check(external.href === 'https://artificialanalysis.ai/agents/coding-agents/' && external.target === '_blank' && external.rel === 'noopener noreferrer', 'safe official comparison destination');

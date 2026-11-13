@@ -26,6 +26,11 @@ refresh preserve their focus/scroll behavior. Keyboard route entry and **Skip to
 focus the named **Report content** landmark with an inset leading-edge cue (an inset
 system outline in forced-colors mode); interactive controls keep their own focus rings.
 
+Web and Mini Watch distinguish pointer/touch activation from keyboard navigation.
+Clicking a previously keyboard-focused control or menu link does not leave an extra
+outer keyboard ring. Tab restores the visible keyboard cue. Normal hover/press,
+active-page navigation highlighting and genuine toggled states are unchanged.
+
 ## Selected-source compatibility
 
 **OpenCode Desktop's product version is not Cost Guard's selected data-source
@@ -416,6 +421,13 @@ Offline/invalid retrieval retains the old table/date with **Price list refresh f
 previous prices retained**, allowing retry. Unchanged successful prices can advance
 the observation date without claiming a rate change. Filters, Shift multi-sort,
 Credits/USD, focus and horizontal panning are preserved where possible.
+
+Pricing and Coding Benchmark have separate retained DOM ownership. Each refresh
+changes only its own source's progress/date/data; the sibling table is not detached
+or rebuilt. Unchanged rows survive status polling and newer equal-data observations.
+Both refresh actions remain independently available, including concurrent requests;
+failures retain last-good rows/date and report feedback in the initiating toolbar.
+Independent due benchmark polling is not a forced price-list side effect.
 
 There is no **More information** disclosure or concept-card block. Header text alone
 reveals short Publisher/Model/Release-date definitions and a compact reference-ratio

@@ -5,6 +5,15 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Shared pointer/keyboard focus (FR000695)
+
+v81.39 installs the main Web's modality owner on the actual PiP document, including
+same-element return/Fit/help actions. Native hidden input verifies pointer resting
+styles, keyboard rings and same-window route return. Exclusive PiP-to-owner window
+focus transfer is **UNVERIFIED**: both tested headless browsers report both documents
+focused without distinguishing focus/blur events. This is not physical OS-window
+proof or a replay of the owner incident. [Detailed evidence/limits](models-isolation.md).
+
 ## Persistent session Ctx (FR000690)
 
 Scoped v81.35 delta against `bd74062349614c7e6a7fd0c21fb7257c621a607f`,

@@ -5,6 +5,11 @@ Scoped implementation/verification, not a whole-Web or pricing audit.
 
 ## Ownership and semantics
 
+FR000695 / v81.39 adds retained section/keyed-row ownership and a shared
+per-document pointer/keyboard focus contract without changing these acquisition
+boundaries. [Causal RED, independent overlap/failure cases, native control matrix,
+real sources and explicitly unverified exclusive PiP focus transfer](models-isolation.md).
+
 - Keep the existing independent `BenchmarkLane`, finite worker, complete Harbor
   4.0 validation and separate atomic last-good cache. Empty-body authenticated
   `POST /api/models/benchmark/refresh` records coalesced forced demand; the host

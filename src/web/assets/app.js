@@ -270,15 +270,16 @@ function show(state) {
       snapshotRender.first === output.firstChild;
     if (!retained) {
       const scroll = output.querySelector('.overview-models')?.scrollLeft;
-      const focused = document.activeElement?.getAttribute('data-model-control');
       ReportView.render(output, state.result, state);
       if (scroll != null && state.section === 'models') output.querySelector('.overview-models').scrollLeft = scroll;
-      if (focused && state.section === 'models') output.querySelector(`[data-model-control="${focused}"]`)?.focus({preventScroll: true});
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
     state.priceControls?.(!!csrf && hostState.writable);
     state.benchmark?.controls(!!csrf && hostState.writable, api);
-    if (state.section === 'models' && csrf && hostState.writable && !document.hidden) state.benchmark?.load(api);
+    // Initial attach only. Independent polling/route entry, not price publication,
+    // owns subsequent benchmark lookups.
+    if (state.section === 'models' && state.benchmark && (!state.benchmark.checked || state.benchmark.manual) &&
+        csrf && hostState.writable && !document.hidden) state.benchmark.load(api);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');
@@ -348,7 +349,8 @@ async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
-  let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh';
+  let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
+    (typeof ControlFocus === 'undefined' ? document.activeElement.matches(':focus-visible') : ControlFocus.keyboard(document));
   const movedPriceFocus = event => {
     if (event.target?.getAttribute('data-model-control') !== 'refresh') priceFocus = false;
   };
@@ -481,7 +483,7 @@ async function acquire(state, background = false, prices = false) {
     state.message = prices ? 'Price list refresh failed; previous prices retained' : background && !automaticHistory(state) ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message, state)}`;
     if (prices) state.priceMessage = state.message;
-    state.failed = true;
+    state.failed = !prices; // A retained price failure belongs only to its toolbar.
   } finally {
      const owned = state.attempt === attempt;
      if (owned) {
@@ -556,7 +558,11 @@ function navigate() {
     current.period ||= '30-days'; current.statsResults ||= new Map();
     current.request = {kind: 'ai-stats', stats_scope: current.period};
   }
-  if (route.section === 'models') current.refreshPrices = () => acquire(current, false, true);
+  if (route.section === 'models') {
+    const models = current;
+    models.refreshPrices = () => acquire(models, false, true);
+    if (csrf && hostState.writable && !document.hidden) models.benchmark?.load(api);
+  }
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
     current.detail = new SessionDetail.View(api, match[1]);

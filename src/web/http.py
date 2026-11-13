@@ -20,6 +20,7 @@ from .dispatch_http import handle as handle_dispatch
 from .session_export import SessionExports
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
+             "/control-focus.js": ("control-focus.js", "text/javascript; charset=utf-8"),
            "/favicon.ico": ("favicon.ico", "image/x-icon"),
            "/favicon-cg1.ico": ("favicon.ico", "image/x-icon"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),

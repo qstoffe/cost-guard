@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.39 - 2026-11-13
+
+- Models keeps stable section roots, toolbars and keyed price/benchmark rows. Source-local status and factual retrieval dates no longer tear down unchanged records; a price publication never detaches its benchmark sibling. Independent requests, errors, filters and sort state retain their existing backend owners.
+- Web and Mini Watch track pointer versus keyboard input per document. A pointer-activated button, navigation link, filter or help target no longer inherits an extra keyboard-like ring from earlier focus; Tab/Enter/Space cues and true route/toggle highlights remain. Hidden Chrome/Edge and actual native Document PiP checks cover the repaired paths, not a replay of the owner's stochastic physical-desktop incident.
+
 ## v81.38 - 2026-11-13
 
 - Model/effort tooltips retain the selected `default` and append the best supported effective level, such as `default (medium)`. Exact request evidence takes precedence over current location-qualified model/provider/package estimates and reviewed vendor defaults; unsupported routes remain `default (unknown)`. Explicit efforts, visible cells, native history and accounting are unchanged.

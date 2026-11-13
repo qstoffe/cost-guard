@@ -337,11 +337,13 @@ const ReportView = (() => {
     return heading;
   }
   function overviewModels(parent, view, state) {
-    const catalog = view.model_catalog;
-    const models = catalog?.rows || view.model_comparison;
+    if (state.modelView && state.modelView.choice === state.models) { state.modelView.update(view); state.modelView.attach(parent); return; }
+    const root = element('div', undefined, 'models-view');
+    let catalog = view.model_catalog;
+    let models = catalog?.rows || view.model_comparison;
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
-    parent.append(modelHeading('GitHub Reference Pricing', 'GitHub Copilot',
+    root.append(modelHeading('GitHub Reference Pricing', 'GitHub Copilot',
       'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing'));
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
     const prices = element('div', undefined, 'model-price-controls'), refresh = element('button', 'Refresh price list');
@@ -365,7 +367,7 @@ const ReportView = (() => {
     }
     checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\n\nIf availability cannot be checked, show the full catalog.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
-    tools.append(prices, filters); parent.append(tools, notices);
+    tools.append(prices, filters); root.append(tools, notices);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
@@ -373,10 +375,7 @@ const ReportView = (() => {
     const grid = element('table', undefined, 'overview-model-table');
     // Layout widths come from prepared text, never price arithmetic. Share each
     // marker/ratio/boundary track across rows, including long or multi-tier text.
-    const levels = models.flatMap(row => view.model_comparison_sample_size ? display(row, 'relative_cost').split(' → ') : []);
     const width = parts => Math.max(0, ...parts.map(value => value.length)) + 'ch';
-    grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
-    grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
     grid.setAttribute('role', 'table');
     grid.setAttribute('aria-label', 'Reference models');
     const head = element('thead'), header = element('tr'), body = element('tbody');
@@ -416,7 +415,12 @@ const ReportView = (() => {
         row.relative_levels?.length ? row.relative_levels.map(level => level.relative_cost) : [row.relative_cost],
         dateKey(row.release_date)][index];
     }
+    const rows = new Map();
+    let noticeSignature = '';
     function draw() {
+      const levels = models.flatMap(row => view.model_comparison_sample_size ? display(row, 'relative_cost').split(' → ') : []);
+      grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
+      grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
       const candidates = models.filter(row => choice.all || row.selectable !== false);
       const shown = candidates.filter(row => !choice.latest || !(choice.all ? row.superseded : catalog ? row.superseded_selectable : row.superseded));
       shown.sort((a, b) => {
@@ -433,8 +437,12 @@ const ReportView = (() => {
         text(label, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
         button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
       });
-      body.replaceChildren();
+      const wanted = [];
       for (const model of shown) {
+      const identity = JSON.stringify([model.publisher, model.model]);
+      const signature = JSON.stringify([model, view.model_comparison_sample_size, display(view, 'model_comparison_mix_help')]);
+      let entry = rows.get(identity);
+      if (!entry || entry.signature !== signature) {
       const row = element('tr', undefined, (model.display_roles || []).filter(role => role !== 'superseded').join(' '));
       row.setAttribute('role', 'row');
       for (const value of [model.publisher || 'N/A', element('span', model.model, model.recent ? 'new' : ''),
@@ -442,19 +450,27 @@ const ReportView = (() => {
         const cell = element('td'); cell.setAttribute('role', 'cell');
         cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
       }
-      body.append(row);
+      entry = {row, signature}; rows.set(identity, entry);
       }
-      notices.replaceChildren();
+      wanted.push(entry.row);
+      }
+      const keep = new Set(wanted);
+      for (const row of [...body.children]) if (!keep.has(row)) row.remove();
+      wanted.forEach((row, index) => { if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null); });
+      for (const [identity, entry] of rows) if (!keep.has(entry.row)) rows.delete(identity);
       const visible = new Set(shown.map(row => row.model));
       const recent = catalog?.recent_notices.filter(note => visible.has(note.model)) || [];
-      if (recent.length) notices.append(element('p', '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; '), 'new'));
-      if (!catalog && view.recent_model_notice && shown.some(row => row.recent)) notices.append(element('p', view.recent_model_notice, 'new'));
+      const notice = recent.length ? '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; ') :
+        !catalog && shown.some(row => row.recent) ? view.recent_model_notice || '' : '';
+      if (notice !== noticeSignature) {
+        notices.replaceChildren(); if (notice) notices.append(element('p', notice, 'new')); noticeSignature = notice;
+      }
       text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
-    grid.append(head, body); scroll.append(grid); parent.append(scroll);
-    parent.append(empty); draw();
+    grid.append(head, body); scroll.append(grid); root.append(scroll);
+    root.append(empty);
     if (typeof BenchmarkView !== 'undefined') {
-      state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(parent);
+      state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(root);
     }
     const more = element('div', undefined, 'more-benchmarks'), comparison = element('a',
       'Artificial Analysis – Coding Agent Index (performance vs cost)');
@@ -462,7 +478,19 @@ const ReportView = (() => {
     comparison.target = '_blank'; comparison.rel = 'noopener noreferrer';
     more.append(element('h2', 'More Coding Benchmarks'), comparison, element('p',
       'Compare coding agents and effort settings by benchmark performance versus average USD cost per task.'));
-    parent.append(more);
+    const availability = element('p', undefined, 'warning');
+    root.append(availability, more);
+    state.modelView = {
+      root, choice,
+      attach(target) { if (root.parentNode !== target) target.replaceChildren(root); },
+      update(value) {
+        view = value; catalog = view.model_catalog; models = catalog?.rows || view.model_comparison;
+        text(fetched, 'Last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
+        text(availability, view.model_availability_empty ? 'No available OpenCode models match the pricing catalog.' : '');
+        availability.hidden = !view.model_availability_empty; draw();
+      }
+    };
+    state.modelView.update(view); state.modelView.attach(parent);
   }
   function modelRelative(row, sampled, mixHelp) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
@@ -644,7 +672,6 @@ const ReportView = (() => {
   }
   function render(parent, result, state) {
     defaultUnit(result.view);
-    parent.replaceChildren();
     const view = result.view;
     const section = state.section || 'models';
     if (view.kind === 'token-mix') {
@@ -654,9 +681,9 @@ const ReportView = (() => {
     const overview = ['models', 'overview'].includes(section) && ['normal', 'all-models'].includes(view.kind);
     if (overview) {
       overviewModels(parent, view, state);
-      if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
       return;
     }
+    parent.replaceChildren();
     parent.append(element('p', `Snapshot: ${timestamp(result.observed_at_ms, view.timezone_id)} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
     if (result.source.status === 'partial') parent.append(element('p', Number.isSafeInteger(result.source.omitted_roots) && result.source.omitted_roots > 0 ?
       historyWarning(result) : `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));

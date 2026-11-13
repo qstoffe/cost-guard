@@ -259,6 +259,8 @@ def main():
                         lane_jobs.hold = mode == 'hold'
                     elif mode in {'offline', 'online'}:
                         lane_jobs.offline = mode == 'offline'
+                    elif mode in {'changed', 'unchanged'}:
+                        lane_jobs.changed = mode == 'changed'
                     else:
                         raise ValueError('unknown_benchmark_fixture_action')
                     print('{"ok":true}', flush=True)

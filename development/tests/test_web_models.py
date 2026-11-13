@@ -22,6 +22,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ModelsTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node is required for the shared focus contract")
+    def test_shared_control_focus_preserves_keyboard_and_document_lifetimes(self):
+        result = subprocess.run(["node", "development/tests/integration/control_focus.cjs"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_value_help_keeps_exact_native_rates_missing_fields_and_real_tier_boundaries(self):
         tier = PricingTier(max_input_tokens=200000, per_million_input=Decimal('0.000000000123456789'),
             per_million_cache_read=Decimal('0'), per_million_output=Decimal('15.1234567890123456789'))
