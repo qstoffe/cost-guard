@@ -43,6 +43,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_web_repeatability.py",
     "test_watch_cards.py",
     "test_watch_history_acquisition.py",
+    "test_watch_recent_finished.py",
     "test_watch_card_batches.py",
     "test_watch_card_readers.py",
     "test_v2_tree_brackets.py",

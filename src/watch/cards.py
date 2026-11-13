@@ -5,6 +5,7 @@ from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
 from .session_costs import SessionCostState
 from .history_publication import HistoryPublication
+from .recent_finished import RecentFinished
 from .card_workers import CardRequest
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError
 from src.reports.session_history import retain_unverified_row, unverified_refresh
@@ -34,10 +35,12 @@ class CardSession:
     batchable: bool = True
     retry_on_tick: bool = False
     last_context: object = None
+    inspect_recent: bool = False
 
 
 class WatchCards:
-    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None, guidance=None):
+    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None, guidance=None,
+                 started_at_ms=0):
         self.workers = workers
         self.costs = costs
         self.guidance = guidance
@@ -49,11 +52,23 @@ class WatchCards:
         self.on_duration = on_duration
         self.monotonic = monotonic
         self.history = HistoryPublication()
+        self.recent = RecentFinished()
+        self.started_at_ms = started_at_ms
+        self.catalogued = False
+        self.source_identity = frozenset()
         self.catalog_revision = 0
         self.evidence_revision = 0
         self.completion_paused = False
 
     def catalog(self, observation):
+        identity = frozenset((root.provenance.source_type, root.provenance.source_generation,
+            root.provenance.source_instance) for root in observation.roots)
+        if identity and self.source_identity and identity != self.source_identity:
+            self.sessions.clear()
+            self.history = HistoryPublication()
+            self.recent = RecentFinished()
+        if identity:
+            self.source_identity = identity
         previous = (self.active_candidates, {key: entry.revision for key, entry in self.sessions.items()})
         self.active_candidates = observation.active_candidates | observation.live_candidates
         roots = {root.session_id: root for root in observation.roots}
@@ -67,6 +82,7 @@ class WatchCards:
             if entry is None:
                 self.generation += 1
                 self.sessions[key] = CardSession(root, revision, self.generation)
+                self.sessions[key].inspect_recent = self.catalogued
                 if self.monotonic is not None:
                     self.sessions[key].source_status = SourceStatus(self.monotonic)
                     self.sessions[key].history_status = SourceStatus(self.monotonic)
@@ -80,8 +96,10 @@ class WatchCards:
                     if entry.capture is None:
                         entry.latest_ms = None
                     entry.refresh_requested = True
+                    entry.inspect_recent = True
                 elif (entry.capture is not None and any(row.in_progress or row.execution_unverified for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
                     entry.refresh_requested = True
+        self.catalogued = True
 
     def accept(self, result, now_ms):
         entry = self.sessions.get(result.session_id)
@@ -97,6 +115,12 @@ class WatchCards:
             return  # An acquisition scheduling cancellation is not a source failure.
         if result.phase == "rows":
             capture, tools, snapshot = result.value
+            source_rows = capture.rows
+            if (capture.session_id != entry.root.session_id or (snapshot is not None and
+                    (snapshot.root.session_id != entry.root.session_id
+                     or snapshot.root.provenance != entry.root.provenance))):
+                entry.refresh_requested = entry.retry_on_tick = True
+                return
             revision_matches = snapshot is None or snapshot.source_revision == entry.revision
             if entry.capture is not None and capture.observed_at_ms < entry.capture.observed_at_ms:
                 return
@@ -160,6 +184,8 @@ class WatchCards:
                 self.evidence_revision += 1
                 entry.history_status.clear()
                 entry.failure_code = ""
+                entry.inspect_recent = False
+                self.recent.observe(self, entry, source_rows, now_ms)
             else:
                 entry.verified_generation = 0
                 entry.refresh_requested = True
@@ -219,7 +245,7 @@ class WatchCards:
             needed = busy or unverified or key in historical
             if (due and needed and key not in self.workers.jobs
                     and (not completed_only or not entry.retry_on_tick)):
-                (active if busy else history).append((entry.admission_order, key, entry))
+                (active if busy or entry.inspect_recent else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
         # Metadata is an admission hint only, never a finish bound/proof.
         history.sort(key=lambda item: (item[0], -(item[2].root.updated_at_ms or 0), item[1]))
@@ -271,6 +297,7 @@ class WatchCards:
                 # otherwise changing early IDs can starve a stopped running card.
                 entry.admission_order = admission_turns[request.root.session_id]
         # Retain full source captures only for cards that can currently appear.
+        historical |= self.recent.entries.keys()
         for key, entry in self.sessions.items():
             if key not in historical and not self._focals(entry, now_ms):
                 entry.snapshot = None
@@ -281,17 +308,18 @@ class WatchCards:
     def _tick_costs(self, now_ms):
         if self.costs is None:
             return
-        visible = set(self._ranked_ids(now_ms)) | {key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
+        visible = set(self._ranked_ids(now_ms)) | self.recent.entries.keys() | {
+            key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
         self.costs.tick({key: entry.cost for key, entry in self.sessions.items()}, visible, now_ms)
 
-    def _card(self, entry, focal, now_ms):
+    def _card(self, entry, focal, now_ms, *, representative=None):
         capture = entry.capture
         state = entry.source_status.state(retained=capture is not None) or entry.state
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
                 "", (), state=state, session_context=retain_session_context(None, entry.last_context), session_cost=entry.cost.value,
                 session_cost_state=entry.cost.status)
-        representative = focal if focal is not None else capture.history_row
+        representative = representative or (focal if focal is not None else capture.history_row)
         rows = (representative,) if representative is not None else ()
         projected = []
         for row in rows:

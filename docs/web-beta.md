@@ -959,9 +959,16 @@ before running cards and no nested vertical scrolling or height cap. Collapsed/e
 history has no divider. The active list has no cap/filter/pager; concurrent prompts
 get separate cards, oldest focal first, with one row even during terminal grace.
 
-Earlier membership is published only after revision-matched complete evidence covers
-every potentially displacing root. Until then both Watch and Mini show **Loading
-earlier sessions…** only before the first usable set, not plausible catalog candidates.
+Global Earlier membership is published only after revision-matched complete evidence covers
+every potentially displacing root. Separately, a bounded recent lane admits exact root
+prompts whose source-confirmed success/error/abort finish is on or after the Live
+engine's start, including prompts completed entirely between polls and pre-existing
+prompts that finish afterward. These verified cards appear in both Watch and Mini
+alongside **Loading earlier sessions…** while the older population remains unverified.
+Catalog timestamps and event hints only prioritize inspection, never certify completion.
+Candidates survive terminal-grace expiry and ordinary refresh; canonical finish order,
+one representative per session and the existing five-slot protection apply. Final
+global proof atomically supersedes the overlay without restarting the visible cards.
 One source-scoped proof epoch carries the five/three population atomically; ordinary
 refresh retains qualified previously verified cards silently, with no appended footer,
 checked-root counter or accessible refresh announcement. Verified empty history stays
@@ -972,7 +979,7 @@ I/O failures or immediate authentication/schema errors remain typed and actionab
 recoverable failures retry without a manual Retry. Removal/resumption invalidate
 affected entries. Metadata is only an admission hint, not a finish-time proof; a
 continuously changing source may remain meaningfully unverified until coherent
-coverage is possible. Active prompts, Today and subscriptions do not wait for history.
+coverage is possible. Active prompts, verified post-start finishes, Today and subscriptions do not wait for history.
 
 Once membership is certified, supported names, finish times, model/effort and context
 appear without waiting for the independent whole-session **Total CCost** or shared

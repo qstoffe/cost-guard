@@ -131,8 +131,14 @@ normal foreground, including on first opening; their accessible outcome text rem
 accurate after the highlight expires. Refresh/reopen does not restart that grace.
 Full Watch keeps its separate per-prompt cards and Earlier list.
 
-The shared server still certifies five eligible historical winners **after excluding
-active/grace sessions**. Provisional candidates are not presented as the newest set.
+The shared server still certifies five eligible global historical winners **after excluding
+active/grace sessions**. A separate bounded lane supplies source-verified prompts that
+actually finished since the Live engine started, even if no poll saw them Running.
+They fill available slots during cold history loading and survive terminal-grace expiry.
+**Loading earlier sessions…** remains alongside them until global proof is ready;
+catalog timestamps alone never qualify a finished row. Both views share the same
+qualified candidates, canonical finish ordering and atomic final-history handoff.
+Provisional historical candidates are not presented as the newest set.
 Initial loading/unavailability is explicit; active rows, Today and subscriptions work
 independently. Certified rows and empty history remain quiet during normal refresh.
 Removal, resumption and source corrections retain the existing lifecycle guarantees.

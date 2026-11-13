@@ -5,10 +5,26 @@ const WatchView = (() => {
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
   function historyNotice(view, retained) {
+    if (view?.recent_finished_cards?.length && view?.history_state !== 'observed')
+      return view?.history_state === 'unavailable' ? 'Unable to load earlier sessions' : 'Loading earlier sessions…';
     if (retained) return '';
     if (view?.history_state === 'observed' || view?.history_epoch > 0) return 'No earlier sessions';
     if (view?.history_state === 'unavailable') return 'Unable to load earlier sessions';
     return 'Loading earlier sessions…';
+  }
+  function finishedCards(view) {
+    const usable = view?.history_state === 'observed' || view?.history_epoch > 0;
+    if (!view?.recent_finished_cards?.length) return usable ? view?.history_cards || [] : [];
+    const cards = new Map();
+    const compare = (a, b) => (a.rows?.[0]?.prompt?.completed_at_ms ?? 0) -
+      (b.rows?.[0]?.prompt?.completed_at_ms ?? 0) ||
+      a.session_id.localeCompare(b.session_id) ||
+      (a.rows?.[0]?.prompt?.event_id || '').localeCompare(b.rows?.[0]?.prompt?.event_id || '');
+    // Both inputs are server-qualified populations. Recent overlays replace a
+    // retained root, without making the pending global proof observed.
+    for (const card of [...(usable ? view?.history_cards || [] : []), ...(view?.recent_finished_cards || [])])
+      cards.set(card.session_id, card);
+    return [...cards.values()].sort(compare).slice(-5);
   }
   function protectedNode(node) {
     const selection = window.getSelection?.();
@@ -353,7 +369,7 @@ const WatchView = (() => {
     }
     update(result) {
       const view = result.view, active = view.active_cards || [];
-      const history = view.history_state === 'observed' || view.history_epoch > 0 ? view.history_cards || [] : [];
+      const history = finishedCards(view);
       this.earlier.dataset.hasHistory = String(history.length > 0);
       // A healthy host/stream retrying its source is not a disconnected stream.
       // Host health owns actionable failures; never duplicate them as table prose
@@ -395,5 +411,5 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, historyNotice};
+  return {View, ContextLine, historyNotice, finishedCards};
 })();

@@ -339,6 +339,39 @@ class LiveTests(unittest.TestCase):
             self.assertEqual('42', payload['accounts']['accounts'][0]['observation']['quotas'][0]['remaining'])
             self.assertEqual((reads, scans), (source.load_count, source.batch_calls))
 
+    def test_idle_hints_expedite_bounded_reads_without_shortening_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, owner = self.owner(tmp, make_uncompacted_snapshot(running=False))
+            now = [0.0]
+            driver = LiveAcquisition(owner, monotonic=lambda: now[0])
+            driver.tick()
+            while owner.today_ccost.history_pending:
+                driver.tick()
+            pump = LiveEventPump(Mock())
+            owner._event_pump = pump
+            with patch.object(owner, "acquire_cycle", wraps=owner.acquire_cycle) as acquire:
+                for at in (0.1, 0.2, 0.9):
+                    now[0] = at
+                    pump._put(PumpResult(change=SourceChange("fixture", "message.updated",
+                        source.snapshot.root.session_id)))
+                    driver.tick()
+                self.assertEqual(0, acquire.call_count, "event bursts cannot bypass the one-second read bound")
+                now[0] = 1.0
+                driver.tick()
+                self.assertEqual(1, acquire.call_count, "idle history must not impose the former five-second hint delay")
+                self.assertEqual((source.snapshot.root.session_id,), acquire.call_args.kwargs["hinted_session_ids"])
+            error = SourceUnavailableError("synthetic offline")
+            with patch.object(owner, "acquire_cycle", side_effect=error):
+                driver.deadline = now[0]
+                driver.tick()
+            retry = driver.deadline
+            owner._event_pump = pump
+            pump._put(PumpResult(resync_required=True))
+            now[0] += 0.1
+            with patch.object(owner, "acquire_cycle", side_effect=AssertionError("premature recovery")):
+                driver.tick()
+            self.assertEqual(retry, driver.deadline)
+
     def test_midnight_dst_and_partial_pricing_preserve_canonical_scopes(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             clock = [int(datetime(2026, 10, 24, 21, 59, tzinfo=timezone.utc).timestamp() * 1000)]

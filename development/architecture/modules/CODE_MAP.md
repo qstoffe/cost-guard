@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000697: `watch/recent_finished.py` owns bounded post-start terminal proof;
+`cards.py` owns changed-root admission/retention, and `acquisition.py` bounded
+event-hint promotion. `live_projection.py` exports the independent lane;
+`assets/watch.js::finishedCards` is shared by Full/Mini presentation.
+`test_watch_recent_finished.py`, `test_web_live.py`, `fixtures/recent_history.py`,
+`probe_recent_history.py` and `probe_mini_fit.cjs ... recent-only` cover cold source
+and actual PiP convergence. Read-only `probe_web_live.py --recent-finished`
+checks installation projection only, not a private quick-prompt reproduction.
+[Measured evidence/limits](../../journal/web/recent-finished.md).
+
 FR000696: `application/session_catalog_scope.py` owns period windows/cheap
 membership; `session_catalog.py` owns scoped lease demand, key qualification,
 epochs and 25-row pages. `reports/session_effort.py`, `session_summary.py` and
