@@ -31,7 +31,9 @@ const SessionDetail = (() => {
       () => ReportView.display(value, 'model_detail_help'));
     const calls = ContextHelp.value(el('span', value.display?.calls ?? String(value.calls ?? 'N/A')),
       () => ReportView.display(value, 'calls_help'));
-    return [label, model, value.watch_effort || 'N/A', cost,
+    const effort = ContextHelp.value(el('span', value.watch_effort || 'N/A'),
+      () => ReportView.display(value, 'effort_help'));
+    return [label, model, effort, cost,
       calls, ReportView.display(value, 'duration_ms'),
       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
       ReportView.costValue(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];

@@ -405,7 +405,7 @@ const MiniWatch = (() => {
       if (!prompt) return [prefix, 'Latest prompt details unavailable'].filter(Boolean).join('\n\n');
       const before = [prompt.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`,
         ReportView.display(prompt, 'main_model_help'),
-        `Effort: ${item.effort || 'N/A'}`].join('\n');
+        `Effort: ${ReportView.display(prompt, 'effort_tooltip') || item.effort || 'N/A'}`].join('\n');
       const duration = `Duration: ${ReportView.display(item, 'watch_duration_ms')}`, lines = [];
       if (prompt.calls != null) lines.push(`Calls: ${prompt.calls}`);
       if (prompt.linked_agent_count) lines.push(`Linked subagents: ${prompt.linked_agent_count} (included in prompt cost)`);

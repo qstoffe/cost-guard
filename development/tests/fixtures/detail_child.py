@@ -50,7 +50,7 @@ def run_fixture(shared, paths):
     try:
         with observing_work(meter.observe):
             if mode == 'progress':
-                for _ in range(15):
+                for _ in range(25):
                     meter.observe('reading', 1)
                     time.sleep(.1)
             source_type = DelayedDetailSource if mode == 'delayed' else SyntheticMonthSource

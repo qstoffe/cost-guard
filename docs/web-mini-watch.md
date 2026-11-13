@@ -72,6 +72,12 @@ anchor still takes precedence. Running tool loops update from their latest suppo
 root request without waiting for the prompt to finish. Before the first request,
 only a proven prior baseline permits a disclosed provisional text estimate.
 
+Prompt CCost help preserves a selected default as **`default (medium)`** (or the
+best supported level/`unknown`), independently for main and linked contributors.
+Explicit efforts are unchanged. Mini has no dedicated Effort column, so this help
+has no default asterisk or confidence footnote. Visible labels and amounts do not
+gain the parenthesized effort, and opening help never acquires source data.
+
 When another prompt starts in the same session, Mini keeps its last valid
 Ctx until the new prompt has a supported estimate. Help labels this as a
 **previous same-session estimate; current prompt pending refresh**. Δ Ctx still

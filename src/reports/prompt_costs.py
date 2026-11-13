@@ -8,6 +8,8 @@ from src.analysis.models import CompactionRecord, PromptRecord
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost
 from src.domain.reference_cost import ReferenceCostIssue
+from src.domain.effort import EffortEvidence
+from src.analysis.effort_defaults import effort_evidence
 from src.pricing.catalog import PricingCatalog
 
 
@@ -31,6 +33,7 @@ class PromptCostPart:
     unavailable: tuple[ReferenceCostIssue, ...] = ()
     selected_models: tuple[str, ...] = ()
     catalog_estimate: bool = False
+    effort_evidence: tuple[EffortEvidence, ...] = ()
 
 
 def _price_tier(entry, catalog):
@@ -85,5 +88,6 @@ def prompt_cost_parts(record: PromptRecord | CompactionRecord, catalog: PricingC
                 for entry in entries if entry.logical_prompt_id)),
             all(entry.logical_prompt_id is not None for entry in entries), total.unavailable,
             tuple(sorted({entry.model.recorded_model for entry in entries})),
-            any(entry.model.resolution is not None and entry.model.display_name for entry in entries)))
+            any(entry.model.resolution is not None and entry.model.display_name for entry in entries),
+            effort_evidence(entries)))
     return tuple(result)

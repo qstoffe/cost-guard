@@ -6,6 +6,8 @@ and account quota as separate semantic dimensions.
 """
 from __future__ import annotations
 
+from .effort import DefaultEffort
+
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
@@ -97,6 +99,7 @@ class ModelRef:
     model: str
     display_name: str | None = None
     resolution: ModelResolution | None = None
+    effort_default: DefaultEffort | None = field(default=None, compare=False)
 
     @property
     def recorded_model(self) -> str:

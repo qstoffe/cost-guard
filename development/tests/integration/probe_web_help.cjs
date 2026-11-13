@@ -4,12 +4,12 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--watch-shells'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
    const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--help-audit',
-      ...(scope==='--raw-models'?['--raw-models',replay]:scope==='--watch-shells'?['--watch-shells']:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
+      ...(['--raw-models','--effort-defaults'].includes(scope)?[scope,replay]:scope==='--watch-shells'?['--watch-shells']:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
   let serverErrors = '';
   server.stderr.on('data', chunk => {serverErrors = (serverErrors + chunk.toString()).slice(-12000);});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
@@ -54,7 +54,7 @@ async function main() {
     await command('Page.enable',{},owner);await command('Runtime.enable',{},owner);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
     await command('Page.navigate',{url:launch.url},owner);
-    await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===2`);
+    await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===${scope==='--effort-defaults'?5:2}`);
     await evaluate(owner,`location.hash='#/watch'`);
       await until(owner,`current?.watch?.cards.size>0`);
       if(scope==='--watch-shells') {
@@ -85,12 +85,12 @@ async function main() {
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
       await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
-      if(scope === '--raw-models') {
+      if(scope === '--raw-models' || scope === '--effort-defaults') {
         const capture=JSON.parse(await fs.readFile(replay,'utf8'));
-        await require('./probe_raw_models.cjs')({command,evaluate,until,owner,mini,checks,layouts,capture});
+        await require(scope==='--effort-defaults'?'./probe_default_effort.cjs':'./probe_raw_models.cjs')({command,evaluate,until,owner,mini,checks,layouts,capture});
         assert.deepEqual(errors,[]);
         evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
-          limitations:['Owned native captures replayed offline for Full/Mini; synthetic production-projected finite views.',
+          limitations:[scope==='--effort-defaults'?'Synthetic source-qualified effort cases projected by production reports; actual shipped DOM and Document PiP.':'Owned native captures replayed offline for Full/Mini; synthetic production-projected finite views.',
             'No historical recovery, full-catalog live PASS, physical desktop or assistive-technology proof.']};
         return;
       }

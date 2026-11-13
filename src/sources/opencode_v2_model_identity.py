@@ -7,6 +7,7 @@ import time
 
 from src.domain.model_identity import ModelResolution, desktop_catalog_candidate
 from .errors import SourceError
+from .opencode_v2_effort import observation
 
 
 def _text(value):
@@ -31,16 +32,24 @@ class DesktopModelCatalog:
             cached = self._observations.get(directory)
             if cached is not None and now - cached[0] < 30:
                 return cached[1]
-            models = {}
+            models, defaults = {}, {}
             try:
                 query = {"location[directory]": directory}
                 providers = self.client().json("/api/provider", query=query, phase="model_identity")
                 values = self.client().json("/api/model", query=query, phase="model_identity")
-                if all(isinstance(v, dict) and v.get("location", {}).get("directory") == directory
+                if all(isinstance(v, dict) and isinstance(v.get("location"), dict)
+                       and v["location"].get("directory") == directory
                        and isinstance(v.get("data"), list) for v in (providers, values)):
-                    present = any(p.get("id") == "claude-agent" for p in providers["data"] if isinstance(p, dict))
-                    for model in values["data"][:20000] if present else ():
+                    by_provider = {p["id"]: p for p in providers["data"][:2000]
+                                   if isinstance(p, dict) and _text(p.get("id"))}
+                    present = "claude-agent" in by_provider
+                    for model in values["data"][:20000]:
+                        if (isinstance(model, dict) and _text(model.get("providerID"))
+                                and _text(model.get("id")) and model.get("status") != "deprecated"):
+                            defaults[model["providerID"], model["id"]] = observation(
+                                directory, model["id"], by_provider.get(model["providerID"]), model)
                         if (isinstance(model, dict) and model.get("providerID") == "claude-agent"
+                                and present
                                 and model.get("status") != "deprecated" and _text(model.get("id"))
                                 and _text(model.get("name"))):
                             # Desktop uses findLast, not enabled/model-family matching.
@@ -49,11 +58,11 @@ class DesktopModelCatalog:
                 pass
             if len(self._observations) >= 256 and directory not in self._observations:
                 self._observations.pop(next(iter(self._observations)))
-            self._observations[directory] = (now, models)
-            return models
+            self._observations[directory] = (now, (models, defaults))
+            return models, defaults
 
     def lookup(self, directory, selected):
-        value = self._models(directory).get(selected)
+        value = self._models(directory)[0].get(selected)
         safe = value if value and _text(value[1]) else (value[0], None) if value else None
         # Qualify short SDK names since resolver v2. Invalidate only dependent
         # mutable projections, including previously unresolved/short-name costs.
@@ -61,7 +70,12 @@ class DesktopModelCatalog:
         return safe, signature
 
     def resolve(self, model, directory):
-        if model is None or model.provider != "claude-agent" or not directory:
+        if model is None or not directory:
+            return model
+        defaults = self._models(directory)[1]
+        model = replace(model, effort_default=defaults.get((model.provider, model.recorded_model)) or
+            observation(directory, model.recorded_model, None, None))
+        if model.provider != "claude-agent":
             return model
         selected = model.recorded_model
         if not desktop_catalog_candidate(selected, model.provider):
@@ -80,6 +94,12 @@ class DesktopModelCatalog:
 
     def current(self, models):
         for model in models:
+            effort = model.effort_default
+            if effort is not None:
+                actual = self._models(effort.scope)[1].get((model.provider, effort.selected_model)) or observation(
+                    effort.scope, effort.selected_model, None, None)
+                if actual.signature != effort.signature:
+                    return False
             resolution = model.resolution
             if resolution is None and desktop_catalog_candidate(model.model, model.provider):
                 return False  # A prior unresolved projection has no location observation.

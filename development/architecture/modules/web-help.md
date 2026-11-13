@@ -12,6 +12,20 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 ## Writing patterns
 
+FR000694 (v81.38): `application/effort_help.py` alone formats semantic selected/effective
+facts as `default (level)`. Only `value_cell=True` adds the marker and one source-sensitive
+line; ordinary Model/CCost/Calls/Mini/Comparisons Model/Stats podium never reuse that
+copy. Watch's Effort span is retained by `metricValue`; Session detail uses its existing
+protected-row lifecycle. Comparisons separates value-cell context from ordinary
+contributor provenance. Evidence is bounded to 24 distinct facts per group with an
+honest overflow marker, never a silently chosen conflicting default. Visible values,
+generic headers, benchmark filters and native selections stay unchanged.
+`test_default_effort_help.py`, `probe_web_help.cjs --effort-defaults` /
+`probe_default_effort.cjs` and `probe_effort_live.py` own regression/acceptance evidence.
+`probe_web_live.py --effort-tooltips` separately observes recorded selections through
+active Watch or one already-discovered pinned session detail, without certifying
+Earlier history. Its exclusions and unobserved results are not tooltip PASS.
+
 FR000653 scoped update (v81.2): Mini Ctx help has separate Next and Δ paragraphs,
 then independent threshold/price guidance. `analysis/context.py` retains a complete
 prompt-local pair independently of current history membership, with epoch/model/input

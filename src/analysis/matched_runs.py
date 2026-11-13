@@ -34,6 +34,7 @@ class MatchedRun:
     model_label: str = ''
     model_identities: tuple = ()  # Compact source-qualified mutable dependencies.
     recorded_models: tuple = ()  # (provider, effective model, effort, recorded selectors)
+    effort_evidence: tuple = ()  # Tooltip-only facts, separate from grouping/visible effort.
 
 
 @dataclass(frozen=True, slots=True)

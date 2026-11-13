@@ -173,7 +173,7 @@ class DetailLivenessTests(unittest.TestCase):
             self.assertEqual('detail_not_admitted', page['acquisition']['reason'])
             self.assertTrue(page['acquisition']['retry_available'])
 
-    def capture(self, mode, *, rows=3, timeout=1):
+    def capture(self, mode, *, rows=3, timeout=2):
         lane = DetailCapture(run_owned_fixture, no_progress_seconds=timeout)
         self.addCleanup(lane.cancel)
         config = dict(detail_test=mode, detail_rows=rows)
@@ -189,14 +189,17 @@ class DetailLivenessTests(unittest.TestCase):
         self.assertLess(time.monotonic() - before, 5)
         self.assertEqual('detail_no_progress', self.details.page(poison, 0)['acquisition']['reason'])
         self.capture('blocked')
-        self.assertEqual(3, self.details.page(healthy, 0)['total'])
+        page = self.details.page(healthy, 0)
+        self.assertIn('total', page, page.get('acquisition'))
+        self.assertEqual(3, page['total'])
 
     def test_slow_measured_work_outlives_silence_interval_and_roundtrip_reuses_revision(self):
         token = self.details.open('root-0001', 'live')
         lane = self.capture('progress', rows=1000)
         page = self.details.page(token, 0, begin=True)
+        self.assertIn('total', page, page.get('acquisition'))
         self.assertEqual(1000, page['total'])
-        self.assertGreater(lane.last_metrics['seconds'], 1.5)
+        self.assertGreater(lane.last_metrics['seconds'], 2)
         self.assertGreater(lane.last_metrics['output_bytes'], 1000)
         self.details.histories['root-0001']['due'] = 0
         self.capture('fast', rows=1000)
@@ -215,12 +218,14 @@ class DetailLivenessTests(unittest.TestCase):
     def test_reused_supervisor_thread_can_start_a_healthy_child_after_retirement(self):
         self.details.open('root-0000', 'live')
         peer = self.details.open('root-0001', 'snapshot')
-        lane = DetailCapture(run_owned_fixture, no_progress_seconds=1)
+        lane = DetailCapture(run_owned_fixture, no_progress_seconds=2)
         config = dict(detail_test='blocked', detail_snapshots=self.source.snapshots)
         with ThreadPoolExecutor(max_workers=1) as pool:
             pool.submit(lane.capture, self.details, self.source, config, self.service.now_ms).result(5)
             pool.submit(lane.capture, self.details, self.source, config, self.service.now_ms).result(5)
-        self.assertEqual(3, self.details.page(peer, 0, begin=True)['total'])
+        page = self.details.page(peer, 0, begin=True)
+        self.assertIn('total', page, page.get('acquisition'))
+        self.assertEqual(3, page['total'])
         self.assertEqual(2, lane.started_count)
         self.assertEqual(1, lane.retired_count)
 

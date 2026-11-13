@@ -1,10 +1,11 @@
 """Canonical first-prompt projection and compact private match-index codec."""
-from dataclasses import fields
+from dataclasses import fields, asdict
 from decimal import Decimal
 import re
 
 from src.analysis.input_identity import first_input, fingerprint
 from src.analysis.model_identity import dependencies
+from src.analysis.effort_defaults import effort_evidence
 from src.analysis.matched_runs import MatchedRun
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost, unique_usage
@@ -54,6 +55,8 @@ def project_run(snapshot, bundle, reference, config):
         len(entries), row.linked_agent_count, sum(bool(entry.error_name) for entry in entries), tuple(groups),
         model_label=row.watch_model, model_identities=tuple(dependencies(entries)),
         recorded_models=tuple((*key, tuple(sorted({entry.model.recorded_model for entry in requests})))
+                              for key, requests in sorted(contributors.items())),
+        effort_evidence=tuple((*key, tuple(asdict(value) for value in effort_evidence(requests)))
                               for key, requests in sorted(contributors.items())))
 
 
@@ -67,6 +70,31 @@ def encode_run(run):
     payload['contributors'] = [(*group[:4], str(group[4]), group[5]) for group in run.contributors]
     payload['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
     return payload
+
+
+def _effort_groups(groups, contributors):
+    keys = {group[:3] for group in contributors}
+    result = []
+    if not isinstance(groups, (list, tuple)) or len(groups) != len(keys):
+        raise ValueError('invalid_effort_groups')
+    for group in groups:
+        if (not isinstance(group, (list, tuple)) or len(group) != 4
+                or any(not isinstance(value, str) for value in group[:3])
+                or tuple(group[:3]) not in keys
+                or not isinstance(group[3], (list, tuple)) or not 1 <= len(group[3]) <= 24):
+            raise ValueError('invalid_effort_groups')
+        facts = []
+        for fact in group[3]:
+            if (not isinstance(fact, dict) or set(fact) != {'selected', 'effective', 'source', 'revision'}
+                    or fact['selected'] is not None and not isinstance(fact['selected'], str)
+                    or any(not isinstance(fact[name], str) for name in ('effective', 'source', 'revision'))
+                    or any(len(value) > 1024 or value and not value.isprintable()
+                           for value in fact.values() if isinstance(value, str))):
+                raise ValueError('invalid_effort_evidence')
+            facts.append(dict(fact))
+        keys.remove(tuple(group[:3]))
+        result.append((*group[:3], tuple(facts)))
+    return tuple(result)
 
 
 def decode_run(payload):
@@ -113,6 +141,7 @@ def decode_run(payload):
     if any(len(group) != 6 or type(group[3]) is not int or group[3] < 0 or type(group[5]) is not bool
            or not group[4].is_finite() or group[4] < 0 for group in values['contributors']):
         raise ValueError('invalid_match_contributors')
+    values['effort_evidence'] = _effort_groups(values['effort_evidence'], values['contributors'])
     for name in ('token_mix_percent', 'token_totals'):
         values[name] = None if values[name] is None else tuple(values[name])
         counts = values[name]

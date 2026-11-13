@@ -118,6 +118,7 @@ def main():
     parser.add_argument('--benchmark', action='store_true', help='Observe the independent public Harbor lane via authenticated local HTTP.')
     parser.add_argument('--benchmark-cold', action='store_true', help='Ignore this probe host\'s cached benchmark in memory; keep the on-disk last-good file.')
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--effort-tooltips", action="store_true", help="Check recorded default selection in active Watch help; no whole-history wait.")
     parser.add_argument('--context-deltas', action='store_true', help='Check real card context export/formatting; counts only, no prompt text or source mutation.')
     parser.add_argument("--watch-seconds", type=int, default=90,
         help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
@@ -166,7 +167,8 @@ def main():
         host.benchmark.snapshot = host.benchmark.cached = None
     streams = []
     observations = ProbeObservations(tool_invocations=args.tool_invocations)
-    with observations.installed(), probe_lifecycle(host, streams, observations):
+    with observations.installed(), probe_lifecycle(host, streams, observations,
+            retirement_seconds=45 if args.effort_tooltips else 0):
         host.start()
         shell_seconds = time.monotonic() - started
         server = host.server
@@ -470,6 +472,10 @@ def main():
             print(json.dumps(dict(prompt_token_mix='ok', observed_rows=len(previous), known_rows=len(known),
                 call_count_changes=usage_changes, mix_changes=changes, observation_seconds=12,
                 model_calls_started_by_probe=0)))
+        if args.effort_tooltips:
+            from development.tests.integration.effort_live_observations import observe_effort_tooltips
+            observations.stage = 'effort_tooltips'
+            observe_effort_tooltips(get, cookie, owners[0])
         observations.stage = 'streams'
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)

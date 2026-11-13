@@ -7,6 +7,7 @@ import json
 
 from .models import TraceEntry
 from .billing import billing_request_fingerprint
+from .effort_defaults import effort_evidence
 
 SAMPLE_LIMIT = 32
 RECENT_CALLS = 8
@@ -28,6 +29,7 @@ class ModelResponse:
     sampled_calls: int
     recorded_models: tuple[str, ...] = ()
     catalog_estimate: bool = False
+    effort_evidence: tuple = ()
 
     @property
     def tokens_per_second(self):
@@ -92,12 +94,13 @@ def podium(roots, entries, start, now):
     groups = {}
     for call in selected:
         key = model_key(call.entry)
-        values = groups.setdefault(key, [0, 0, 0, set(), False])
+        values = groups.setdefault(key, [0, 0, 0, set(), False, []])
         values[0] += call.entry.tokens.output + call.entry.tokens.reasoning
         values[1] += call.duration_ms
         values[2] += 1
         values[3].add(call.entry.model.recorded_model)
         values[4] |= bool(call.entry.model.resolution and call.entry.model.display_name)
-    rows = [ModelResponse(*key, *values[:3], tuple(sorted(values[3])), values[4])
+        values[5].append(call.entry)
+    rows = [ModelResponse(*key, *values[:3], tuple(sorted(values[3])), values[4], effort_evidence(values[5]))
         for key, values in groups.items()]
     return tuple(sorted(rows, key=lambda r: (-r.tokens_per_second, r.provider, r.model, r.variant))[:3])

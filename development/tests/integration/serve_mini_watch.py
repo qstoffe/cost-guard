@@ -51,7 +51,8 @@ def main():
             shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
         help_audit = sys.argv[2:3] == ['--help-audit']
         replay = None
-        if sys.argv[3:4] == ['--raw-models']:
+        effort_defaults = sys.argv[3:4] == ['--effort-defaults']
+        if sys.argv[3:4] in (['--raw-models'], ['--effort-defaults']):
             replay = json.loads(Path(sys.argv[4]).read_text(encoding='utf-8'))
         jobs = HelpAuditJobs() if help_audit else ReportJobs(target=finite_report)
         if sys.argv[2:] == ['--token-mix']:
@@ -134,8 +135,11 @@ def main():
                 # Replay at the publication boundary: periodic client redraws must see
                 # the same controlled wire, not silently restore the baseline fixture.
                 for group in ('active_cards', 'history_cards'):
+                    if effort_defaults:
+                        view[group] = [deepcopy(view['active_cards'][0]) for _ in replay['browser_rows']]
                     for index, card in enumerate(view[group]):
-                        prompt = deepcopy(next(row for row in replay['browser_rows'] if row['event_id'] == 'sonnet'))
+                        prompt = deepcopy(replay['browser_rows'][index] if effort_defaults else
+                            next(row for row in replay['browser_rows'] if row['event_id'] == 'sonnet'))
                         prompt.update(in_progress=group == 'active_cards', at_ms=current - 1000)
                         card['rows'][0].update(prompt=prompt, model=prompt['watch_model'], effort=prompt['watch_effort'])
                         card['session_id'] = f'replay-{group}-{index}'

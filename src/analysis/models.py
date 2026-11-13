@@ -45,6 +45,7 @@ class TraceEntry:
     source_instance: str | None = None
     account_ref: AccountRef | None = None
     logical_prompt_id: str | None = None  # Proven own-session canonical boundary; not a request or agent ID.
+    selected_effort: str | None = None  # Tooltip provenance only; variant/group/billing identity is unchanged.
 
     @property
     def request_input_approx(self) -> int:

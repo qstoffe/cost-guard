@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000694: `domain/effort.py` owns independent tooltip evidence;
+`sources/opencode_v2_effort.py` / the shared Desktop catalog own bounded current
+options, and `analysis/effort_defaults.py` owns exact reviewed vendor fallback.
+`application/effort_help.py` separates ordinary versus dedicated Effort-value copy.
+Prompt parts, matched runs and sampled Stats carry evidence without changing
+accounting/group identity. Coverage: `test_default_effort_help.py`, existing
+effort/cost/alias/cache groups, `probe_web_help.cjs --effort-defaults` and read-only
+`probe_effort_live.py`. [Evidence and limits](../../journal/default-effort-help.md).
+
 FR000688: `sources/opencode_v2_background.py` owns exact native-job registry recovery;
 `watch/invocation.py` owns bounded multi-job identity, canonical-first mismatch
 handling and the common privacy filter. `cards.py`/`live_projection.py` retain live
