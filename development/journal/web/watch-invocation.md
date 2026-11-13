@@ -1,5 +1,104 @@
 # Full Web Running invocation disclosure — FR 000632
 
+## Stable disclosures and physical failures — FR 000701
+
+2026-11-14 · v81.45 · base `4371765102ebbe0819cc6f61c8b642f0c9809eb2`.
+This refines the old revision-closes contract and supersedes the historical
+per-list text budgets below, not their privacy/source-ownership requirements.
+
+### Causal evidence and implementation
+
+Before the production change, the updated native-DOM VM acceptance failed at
+`web_watch_summary.cjs:80`: **false !== true**, “same physical job revisions
+preserve user expansion.” Existing code included revision in its reset key.
+`revision_observations()` now produces canonical source-shaped single/multiple
+foreground/background observations: physical IDs and starts remain equal,
+updated-at/input revisions change, and elapsed time increases by 10,000 ms.
+The rendered probe consumes those actual projected observations, not guessed
+command identity. This is a synthetic causal reproduction; the owner's original
+intermittent workstation event was not captured or claimed reproduced.
+
+Running always retains keyed per-call native nodes beneath its stable parent.
+Single-call styling avoids a redundant visible heading/gutter, except a focused
+or user-closed child control stays accessible. Same-call safe text/qualifications
+update in place; source identity loss still clears immediately. Selection endpoints
+are bounded through text correction, and surviving endpoints are restored across
+reordering (Chromium's atomic move preserved focus but initially lost the Range).
+Parent and surviving children preserve user choices through 1→2→1; new siblings
+start closed when joining an already expanded surviving group.
+
+`ToolFailure` is an opt-in Web observation over the existing canonical physical
+call pass, including linked-child windows and known direct-script failures.
+The same scalar allowlist/redactor formats failure input; exact fixed source
+codes/messages map only to File not found / Permission denied, otherwise Failure
+reason unavailable. No native output/error prose is copied. Ten failed members
+at most share one 4096-character ASCII-escaped **card-wide** input budget with
+the five-per-mode running lists. The first new worst-population regression with
+independent list maxima exceeded 2 MiB (2,769,484 bytes); production now allocates
+the common budget before formatting. Aggregate counts remain exact and omitted
+members explicit. No event/replay cap, file budget or test baseline was raised.
+
+Failed groups/children reconcile by tool/outcome and physical identity, without
+whole-list replacement. Success/removal, source-generation re-verification,
+retained/unavailable evidence and disconnect clear only invalid input, even under
+focus/selection. Verified terminal failed activity retains existing grace; running
+detail still disappears on terminal state. Logical nesting covers all activity
+families without shifting their top-level arrows.
+
+### Verification findings
+
+- Initial Full: **192/193 groups passed**, 164.1 seconds. V1's CLI/Web equality
+  comparator needed to exclude the new intentionally Web-only failure DTO just
+  as it excludes running details; it still compares every shared count/outcome/time,
+  asserts CLI failure details empty and checks available V1 Web failure members.
+  The focused V1 group passed after this causal test update.
+- Final Full: **193/193 groups successful**, 2410 tests, **2406 passed / four
+  skipped**, zero failed groups, 161.0 seconds. Retained machine-readable evidence:
+  `scratch:/full-tests-final.json`. The later release-date correction and JavaScript
+  indentation tidy do not change tested behavior.
+- Hidden Chrome **157.0.8103.51**: six Classic/Web light/Web dark × 1366/360 cases
+  passed after the selection repair. Coverage includes the four source-shaped
+  revision modes, manual close, same-input new identity, 1→2→1, reordering,
+  focus/selection/scroll, safe correction and invalidation, nested failed paths,
+  literal HTML, keyboard/mouse/touch, 125% CSS zoom, indentation and no expansion
+  resource requests. Evidence: `scratch:/browser-outcomes-final/` and
+  `scratch:/browser-outcomes-expanded/`. Expanded Classic/360 screenshot inspected:
+  distinct source paths, literal HTML as text, nested gutters and no overflow.
+- Working-tree validator: **11 passes, zero failures**, seven existing advisory
+  prose/module warnings; no cap raised.
+- The first real-source probe failed in **test instrumentation**: its old
+  `lambda part` could not forward `budget=` to the existing invocation formatter.
+  The observer now forwards keyword options and only checks a native timeout
+  label when that field survived the shared budget. No product source-read
+  behavior was changed to accommodate the observer.
+- The repaired broad `--watch-cards` attempt was **INCONCLUSIVE**, not PASS:
+  global Earlier was still loading **379/3210** at its 90-second operational cap.
+  Live advanced with no pre-cleanup runtime/source errors, SourceGuard unchanged,
+  and no cleanup failures. Global history completion is separate from this
+  activity-only FR; the task-focused probe avoids waiting for unrelated coverage.
+- A combined scoped probe actually observed four native failures/four details,
+  but no naturally Running invocation in its 60-second observation. It failed
+  `probe_no_live_invocation_observed`; **not an overall PASS**. Preserved native
+  command/timeout comparisons are not proof of a live Running DTO.
+- The standalone outcome probe pending at context handoff left no retrievable
+  result. Its exact process and children were absent before one scoped rerun;
+  no conflicting native probe was started. The retained rerun
+  `scratch:/native-outcomes-final.txt` **passed** against actual V2: two cards with
+  activity, **seven failures / seven failed details**, zero cancellations,
+  one Live owner, two verified advancing streams, original run origin retained,
+  zero model calls, SourceGuard unchanged, no phase/cleanup errors and zero
+  remaining owned threads/processes. Overall 1.73 seconds, not a benchmark.
+  This certifies observed activity only; Earlier was still loading.
+
+### Limits
+
+The original incident, physical desktop, screen-reader behavior, non-Chromium
+engines and other operating systems are not newly proved. Synthetic safe reasons
+do not establish what caused a real historical failure. Freeform credential
+screening is bounded, never guaranteed. No model inference, source mutation,
+OpenCode service restart/stop, persistent per-call ledger or release ZIP/tag/Release
+is introduced. CLI/Mini and canonical accounting remain outside the UI change.
+
 ## Multi-job command recovery — FR 000688
 
 2026-11-13 · v81.37 · base `002cea2cfa3b35756a0a449de2f036063b1dadc8` plus this delivery.

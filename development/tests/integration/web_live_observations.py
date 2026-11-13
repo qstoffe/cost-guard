@@ -42,10 +42,10 @@ class ProbeObservations:
                         files=sorted(added | removed | modified)[:20])
         return current
 
-    def observe_invocation(self, original, part):
+    def observe_invocation(self, original, part, **options):
         """Compare already-acquired native text in memory; retain only opaque IDs."""
         from src.watch.tool_contracts import tool_input
-        detail = original(part)
+        detail = original(part, **options)
         inputs = tool_input(part.data)
         command = inputs.get('command')
         if isinstance(command, str) and command and detail.text.startswith('command:\n' + command):
@@ -54,7 +54,8 @@ class ProbeObservations:
             timeout = inputs.get('timeout')
             if (str(part.data.get('tool') or part.data.get('name')).lower() in
                     {'shell', 'bash', 'functions.shell', 'functions.bash'} and
-                    type(timeout) in {int, float} and math.isfinite(timeout) and timeout > 0):
+                     type(timeout) in {int, float} and math.isfinite(timeout) and timeout > 0 and
+                     'timeout:\n' in detail.text):
                 assert f'timeout:\n{timeout} ms' in detail.text, 'observed native timeout units'
                 with self.lock:
                     self.invocation_timeouts.add(detail.identity)
@@ -111,7 +112,7 @@ class ProbeObservations:
             if self.tool_invocations:
                 from src.watch import tools, invocation
                 original = invocation.invocation
-                observed = lambda part: self.observe_invocation(original, part)
+                observed = lambda part, **options: self.observe_invocation(original, part, **options)
                 stack.enter_context(patch.object(tools, 'invocation', observed))
                 stack.enter_context(patch.object(invocation, 'invocation', observed))
             for owner, methods in (

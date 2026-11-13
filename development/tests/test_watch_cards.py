@@ -20,7 +20,7 @@ from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
 from src.watch.observers import CatalogObservation
 from src.watch.web_coordinator import WebWatchCoordinator
-from src.watch.models import ToolInvocation, ToolObservation
+from src.watch.models import ToolFailure, ToolInvocation, ToolObservation
 from src.web.events import MAX_EVENT_BYTES
 from src.sources.errors import SourceUnavailableError, http_failure, transport_failure
 
@@ -222,7 +222,8 @@ class WatchCardTests(unittest.TestCase):
         detail = ToolInvocation("physical", "revision", 'command:\npython tokenizer.py --mode=fast\n\ntimeout:\n120000 ms (2 min)', '')
         entry.tools[row.event_id] = ToolObservation(running_tool="shell", running_ms=30_000,
             running_invocation=detail, background_invocation=detail,
-            running_invocations=(detail,), background_invocations=(detail, replace(detail, identity='second')))
+            running_invocations=(detail,), background_invocations=(detail, replace(detail, identity='second')),
+            failed_invocations=(ToolFailure("shell", detail),))
 
         first = cards.project(2000)[0][0].rows[0].tool
         self.assertEqual(detail, cards.project(2001)[0][0].rows[0].tool.running_invocation)
@@ -235,6 +236,8 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual(2, len(first.background_invocations))
         self.assertEqual((), verifying.running_invocations)
         self.assertEqual((), verifying.background_invocations)
+        self.assertEqual(1, len(first.failed_invocations))
+        self.assertEqual((), verifying.failed_invocations)
         self.assertEqual(first.tool_count, verifying.tool_count)
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):

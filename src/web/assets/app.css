@@ -543,6 +543,11 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-invocation { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; min-width: 0; font: .8rem monospace; color: var(--ink); user-select: text; }
 .watch-activity details, .watch-activity p { margin-block: .2rem; }
 .watch-activity summary { width: fit-content; max-width: 100%; }
+.watch-activity-content { margin-inline-start: 1em; min-width: 0; }
+/* A single open call reads directly under Running. Its native node survives
+   multi-job transitions; never hide a closed control or its focused summary. */
+.watch-running-single[open]:not(:focus-within) > summary { display: none; }
+.watch-running-single[open]:not(:focus-within) > .watch-activity-content { margin-inline-start: 0; }
 .watch-history { padding: 0; }
 .watch-earlier { margin-top: 0; }
 .watch-earlier[open][data-has-history="true"] { border-bottom: 2px solid var(--control-line); padding-bottom: .75rem; margin-bottom: .75rem; }

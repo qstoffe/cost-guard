@@ -40,6 +40,27 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_failed_call_details_are_card_only_verified_and_retained_through_terminal_activity(self):
+        frame = outcome_watch()
+        card = frame.active_cards[0]
+        row = card.rows[0]
+        for terminal in (False, True):
+            prompt = replace(row.prompt, in_progress=not terminal)
+            current = replace(card, rows=(replace(row, prompt=prompt),))
+            payload = project_live(replace(frame, active_cards=(current,))).to_json()
+            details = payload["active_cards"][0]["rows"][0]["tool"]["failed_invocations"]
+            self.assertEqual(2, len(details))
+            self.assertNotEqual(details[0]["identity"], details[1]["identity"])
+            self.assertIn("src/example-1.py", details[0]["text"])
+            self.assertIn("src/example-2.py", details[1]["text"])
+            self.assertNotIn("failed_invocations", payload["rows"][0]["tool"])
+            for state in ("loading", "retrying", "partial", "unavailable"):
+                wire = project_live(replace(frame, active_cards=(replace(current, state=state),))).to_json()
+                self.assertEqual([], wire["active_cards"][0]["rows"][0]["tool"]["failed_invocations"])
+        unverified = replace(card, rows=(replace(row, prompt=replace(row.prompt, execution_unverified=True)),))
+        wire = project_live(replace(frame, active_cards=(unverified,))).to_json()
+        self.assertEqual([], wire["active_cards"][0]["rows"][0]["tool"]["failed_invocations"])
+
     def test_two_live_background_details_are_exported_only_for_verified_running_prompt(self):
         frame = outcome_watch()
         card = frame.active_cards[0]

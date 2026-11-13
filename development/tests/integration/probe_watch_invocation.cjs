@@ -7,7 +7,7 @@ module.exports = async (evaluate, command, session) => {
     target.summary.focus({preventScroll:true});
     return {collapsed:!target.node.open, text:target.input.textContent,
       noteHidden:target.note.hidden, note:target.note.textContent,
-      commandFirst:target.list.firstElementChild===target.input,
+      commandFirst:[...target.jobs.values()][0].list.firstElementChild===target.input,
       background:card.backgroundDetail.input.textContent}; })()`);
   assert.equal(initial.collapsed, true);
   assert.ok(initial.text.startsWith('command:\n"C:\\Python313\\python.exe" "D:\\dev\\scripts\\tokenizer.py" --mode=fast --limit=25\n'));
@@ -46,7 +46,7 @@ module.exports = async (evaluate, command, session) => {
     const changed=!target.node.open && target.input.textContent==='command:\\ngit diff';
     target.node.open=true; tool.running_invocation.revision='corrected'; tool.running_invocation.text='command:\\ngit log';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const corrected=!target.node.open && target.input.textContent==='command:\\ngit log';
+    const corrected=target.node.open && target.input.textContent==='command:\\ngit log';
     tool.background_kinds=['shell','shell']; ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const aggregate=card.backgroundDetail.input.textContent==='' && /Original call links missing/.test(card.backgroundDetail.note.textContent);
     INPUT.view.active_cards[0].state='unavailable'; ReportView.renderLive(document.getElementById('result'), INPUT, state);
@@ -73,15 +73,63 @@ module.exports = async (evaluate, command, session) => {
     }
     const stable=target.node.open && jobs.every(j=>j.node.open) && jobs[1].input.firstChild===original &&
       selection.toString()===selected && document.activeElement===focus && scrollY===y;
+    tool.background_invocations.reverse();
+    ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    const reordered={node:jobs[1].input.firstChild===original, selection:selection.toString()===selected,
+      focus:document.activeElement===focus, identity:target.jobs.get('shell-job-2')===jobs[1]};
+    tool.background_invocations.reverse();
     tool.background_invocations[0].revision='corrected'; tool.background_invocations[0].text='command:\\npython corrected.py';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const isolated=!jobs[0].node.open && jobs[1].node.open && jobs[1].input.firstChild===original;
+    const isolated=jobs[0].node.open && jobs[1].node.open && jobs[1].input.firstChild===original;
     const commands=jobs.map(j=>j.input.textContent.includes('python'));
     selection.removeAllRanges(); document.activeElement?.blur();
     Object.assign(tool,saved,{background_invocations:[]});
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    return {stable,isolated,commands,overflow:document.documentElement.scrollWidth>innerWidth}; })()`);
-  assert.deepEqual(multi, {stable:true,isolated:true,commands:[true,true],overflow:false});
+    return {stable,reordered,isolated,commands,overflow:document.documentElement.scrollWidth>innerWidth}; })()`);
+  assert.deepEqual(multi, {stable:true,reordered:{node:true,selection:true,focus:true,identity:true},
+    isolated:true,commands:[true,true],overflow:false});
+  const causal = await evaluate(`(() => {
+    const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+    const saved=structuredClone(INPUT.view.active_cards[0].rows[0].tool), results=[];
+    const render=()=>ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    for(const [name, [before,after]] of Object.entries(REVISIONS)) {
+      INPUT.view.active_cards[0].rows[0].tool=structuredClone(before); render();
+      const mode=name.startsWith('background')?'background':'running';
+      const target=mode==='background'?card.backgroundDetail:card.runningDetail;
+      target.node.open=true;
+      const job=[...target.jobs.values()][0]; job.node.open=true;
+      (name.endsWith('-1')?target.summary:job.summary).focus({preventScroll:true});
+      const original=job.input.firstChild, selection=getSelection(), range=document.createRange();
+      range.selectNodeContents(original); selection.removeAllRanges(); selection.addRange(range);
+      const focus=document.activeElement, y=scrollY;
+      INPUT.view.active_cards[0].rows[0].tool=structuredClone(after); render();
+      const revised=target.node.open && job.node.open && target.jobs.get(after[mode+'_invocations'][0].identity)===job &&
+        job.input.firstChild===original && selection.anchorNode===original && document.activeElement===focus &&
+        scrollY===y && job.input.textContent.includes('--limit=2000') &&
+        after[mode+'_ms']>before[mode+'_ms'] &&
+        after[mode+'_invocations'][0].started_at_ms===before[mode+'_invocations'][0].started_at_ms;
+      selection.removeAllRanges(); job.node.open=false; render();
+      const manual=!job.node.open; job.node.open=true;
+      const tool=INPUT.view.active_cards[0].rows[0].tool;
+      const sibling={...tool[mode+'_invocations'][0],identity:'identical-command-new-call'};
+      tool[mode+'_invocations'].push(sibling);
+      if(mode==='background') tool.background_kinds.push('shell');
+      else tool.running_invocation_count++;
+      render();
+      const child=target.jobs.get(sibling.identity), added=job.node.open && !child.node.open;
+      tool[mode+'_invocations']=[tool[mode+'_invocations'][0]];
+      if(mode==='background') tool.background_kinds=['shell']; else tool.running_invocation_count=1;
+      render();
+      const survived=target.jobs.get(job.identity)===job && job.node.open && target.node.open;
+      tool[mode+'_invocations']=[sibling]; render();
+      const switched=!target.node.open && job.input.textContent==='' && !job.node.open;
+      results.push({name,revised,manual,added,survived,switched});
+      document.activeElement?.blur();
+    }
+    INPUT.view.active_cards[0].rows[0].tool=saved; render(); return results; })()`);
+  assert.equal(causal.length, 4);
+  for (const item of causal) for (const name of ['revised','manual','added','survived','switched'])
+    assert.equal(item[name], true, item.name + ': ' + name);
   const position = await evaluate(`(() => {
     const target=[...state.watch.cards.values()].find(c=>c.value.session_id==='root').runningDetail;
     target.summary.scrollIntoView(); const r=target.summary.getBoundingClientRect();

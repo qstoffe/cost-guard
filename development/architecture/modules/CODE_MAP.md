@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000701: `watch/tools.py` retains physical failed-call members from the existing
+observation; `invocation.py` shares its privacy filter/card-wide input budget.
+`cards.py`/`live_projection.py` enforce verified activity lifetime, including
+terminal grace. `assets/watch.js` keys running/failed native controls independently
+of revisions and `app.css` owns logical nesting. Coverage: invocation, tool activity,
+card, Live, V1 parity and Watch VM suites; hidden `probe_watch_tool_outcomes.cjs`
+includes source-shaped revisions and `probe_watch_failures.cjs`. Real read-only
+`probe_web_live.py --tool-outcomes --tool-invocations` exports scalar evidence.
+[Causality, checks and limits](../../journal/web/watch-invocation.md#stable-disclosures-and-physical-failures--fr-000701).
+
 FR000700: `analysis/coverage.py` qualifies linked usage; `valuation.py` retains
 within-tree sibling multiplicity and canonical physical provenance. Session-cost
 contributions retain known amounts separately from completeness. `prompt_costs.py`

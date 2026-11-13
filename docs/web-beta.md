@@ -1108,9 +1108,11 @@ show milliseconds (for example `120000 ms (2 min)`), the configured limit rather
 than elapsed/remaining time; absent values never imply a default. Other schemas
 and special values get no invented units. Freeform screening cannot guarantee detection
 of every private value. Details are bounded, memory-only and authenticated/local;
-expanding executes nothing and does not fetch source data. Duration updates retain
-expansion/selection; changed calls, corrections and lost live evidence clear stale
-input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
+expanding executes nothing and does not fetch source data. Duration and verified
+same-call revisions retain the user's expansion/selection while safely updating
+content. Per-call nodes survive 1→2→1 job transitions; newly added siblings do not
+inherit an unrelated expanded state. Different physical calls and lost live evidence
+clear stale input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
 The compact **N failed / cancelled** count includes only evidenced, distinct tool
 outcomes. Expanded Tool Calls shows red tool-name/outcome subsets, for example
 **2 × grep failed** and **1 × execute cancelled**, below the ordinary all-call groups.
@@ -1119,6 +1121,16 @@ Explicit cancellation wins over error for one physical call; missing evidence is
 success or an invented outcome. Unidentified retained aggregate differences are
 labelled honestly. Expanded help explains counts and direct failure-only skill
 attribution; a recently loaded skill never inherits unrelated tool outcomes.
+Failed groups with source-owned members expand into separate physical-call
+disclosures, even for identical inputs. Each shows its own allowlisted/redacted
+path/command/arguments and a fixed safe reason category, or **Failure reason
+unavailable**; arbitrary native errors/output are not displayed. At most ten failed
+details share one 4 KiB card-wide input budget with running details, with honest
+omitted counts. Stable nested controls retain focus/expansion during Live updates;
+authoritative corrections remove only invalid members. Final failed activity
+retains the existing terminal grace, never a new history window. All expanded Tool
+Calls, Skills and Running content is indented using logical inline-start spacing,
+with deeper levels for individual failures and no narrow-screen overflow.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
 **CCost Today**, four pixels above subscriptions, shows current-local-day reference cost,

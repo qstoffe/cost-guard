@@ -16,7 +16,7 @@ module.exports = (card, helpText, document, select) => {
   assert.deepEqual(card.tools.list.children.slice(-3).map(node => node.textContent),
     ['2 × grep failed', '1 × execute cancelled', '1 × <img src=x onerror=alert(1)> cancelled']);
   assert.equal(card.tools.list.children.some(node => /failed \/ cancelled/.test(node.textContent)), false);
-  assert.ok(card.tools.list.children.slice(-3).every(node => node.children[0].className === 'watch-activity-error'));
+  assert.ok(card.tools.list.children.slice(-3).every(node => node.className === 'watch-activity-error'));
   assert.ok(card.tools.list.children.slice(0, 7).every(node => !node.children[0].className));
   assert.equal(card.tools.list.querySelectorAll('img').length, 0, 'tool names stay literal text');
   assert.equal(card.running.className, 'watch-running-tool');
@@ -29,19 +29,47 @@ module.exports = (card, helpText, document, select) => {
   card.drawActivity(tool);
   assert.equal(card.tools.list.children[0], first, 'unchanged activity keeps DOM');
   assert.equal(card.tools.node.open, true);
-  const summary = card.tools.summary.textContent, detail = card.tools.list.textContent;
-  const changed = {...tool, failed_count: 0, cancelled_count: 0, failed_or_cancelled_count: 0, outcomes: []};
-  for (const focus of [card.tools.summary, first]) {
+  const details = [
+    {identity:'call-a',revision:'r1',tool_name:'grep',text:'path:\nsrc/a.py',qualification:'',reason:'File not found'},
+    {identity:'call-b',revision:'r1',tool_name:'grep',text:'path:\nsrc/a.py',qualification:'',reason:'Failure reason unavailable'}
+  ];
+  const detailed = {...tool, failed_invocations:details};
+  card.drawActivity(detailed, true);
+  const group = card.tools.rows.get(JSON.stringify(['grep','failed']));
+  const a = group.jobs.get('call-a'), b = group.jobs.get('call-b');
+  group.node.open = true; b.node.open = true;
+  assert.equal(a.node.open, false, 'failed inputs initially private');
+  assert.equal(group.jobs.size, 2, 'identical inputs are separate physical calls');
+  assert.match(b.summary.textContent, /Failed call 2/);
+  for (const focus of [card.tools.summary, b.summary]) {
     document.activeElement = focus;
-    card.drawActivity(changed);
-    assert.equal(card.tools.summary.textContent, summary, 'focus retains coherent header and detail');
-    assert.equal(card.tools.list.textContent, detail);
+    card.drawActivity({...detailed, counts:[['grep',5]], failed_invocations:[
+      details[0], {...details[1], revision:'corrected',reason:'Permission denied'}]}, true);
+    assert.equal(group.jobs.get('call-b'), b);
+    assert.equal(group.node.open, true); assert.equal(b.node.open, true);
+    assert.equal(document.activeElement, focus);
+    assert.match(b.note.textContent, /Permission denied/);
   }
   document.activeElement = null;
-  select(first); card.drawActivity(changed);
-  assert.equal(card.tools.summary.textContent, summary, 'selected breakdown retains matching header');
-  assert.equal(card.tools.list.textContent, detail);
-  select(null); card.drawActivity(changed);
+  select(b.input); card.drawActivity(detailed, true);
+  assert.equal(group.jobs.get('call-b'), b);
+  assert.equal(b.node.open, true);
+  select(null);
+  card.drawActivity({...detailed, outcomes:[{tool_name:'grep',outcome:'failed',count:25}],
+    failed_or_cancelled_count:25}, true);
+  assert.match(group.note.textContent, /\+23 additional failed calls not shown/);
+  document.activeElement = b.summary;
+  card.drawActivity({...detailed, failed_invocations:[details[0]],
+    outcomes:[{tool_name:'grep',outcome:'failed',count:1}], failed_or_cancelled_count:1}, true);
+  assert.equal(group.jobs.has('call-b'), false, 'authoritative removal wins over focus');
+  assert.equal(b.input.textContent, '', 'removed nodes cannot retain former input');
+  assert.equal(b.node.open, false);
+  document.activeElement = null;
+  card.drawActivity(detailed, true);
+  card.drawActivity(detailed, false);
+  assert.equal(group.jobs.size, 0, 'disconnect/invalidation clears failed inputs too');
+  const changed = {...tool, failed_count: 0, cancelled_count: 0, failed_or_cancelled_count: 0, outcomes: []};
+  card.drawActivity(changed);
   assert.doesNotMatch(card.tools.summary.textContent, /failed|cancelled/);
   assert.equal(card.tools.list.children.length, 7, 'latest correction applies after interaction ends');
   card.drawActivity({...tool, outcomes: outcomes.slice(0, 1), running_tool: ''});

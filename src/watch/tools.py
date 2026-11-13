@@ -9,7 +9,10 @@ from src.analysis.child_links import ChildLinkIndex
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .models import SkillObservation, ToolObservation, ToolOutcome
-from .invocation import MAX_INPUT_TEXT, MAX_INVOCATIONS, background_invocations, invocation
+from .invocation import (
+    MAX_INPUT_TEXT, MAX_INVOCATIONS, MAX_FAILED_INVOCATIONS,
+    background_invocations, failed_invocations, invocation,
+)
 from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
@@ -108,6 +111,12 @@ def _tool_name(part) -> str:
     return str(part.data.get("tool") or part.data.get("name") or "").lower()
 
 
+def _physical_order(part):
+    call = part.data.get("callID")
+    return (_part_start(part), part.session_id,
+            ("call", call) if isinstance(call, str) and call else ("part", part.part_id))
+
+
 def _prompt_messages(snapshot: SessionSnapshot, parents: set[str], is_compaction: bool) -> list[NormalizedMessage]:
     """Use the same proven task/subagent windows as canonical prompt accounting."""
     messages = [
@@ -153,6 +162,7 @@ def observe_tools(
     outcomes: dict[tuple[str, str], int] = {}
     running_tool, running_ms = "", 0
     running_parts = []
+    failed_parts = []
     order = 0
     messages = _prompt_messages(snapshot, parents, is_compaction)
     skills: dict[str, tuple[int, int]] = {}
@@ -186,6 +196,8 @@ def observe_tools(
             key = (name, "failed" if outcome == "error" else "cancelled")
             outcomes[key] = outcomes.get(key, 0) + 1
         if outcome == "error":
+            if include_invocations:
+                failed_parts.append((name, part))
             owner = failure_skill(part.data, script)
             if owner:
                 skill_failures[owner] = skill_failures.get(owner, 0) + 1
@@ -199,9 +211,15 @@ def observe_tools(
     todos = None
     if candidates:
         _, _, todos = max(candidates, key=lambda item: (item[0], item[1]))
-    background_details, background_count = background_invocations(snapshot, messages, physical) if include_invocations else ((), 0)
-    running_parts.sort(key=lambda part: (_part_start(part), part.session_id, part.part_id))
-    budget = MAX_INPUT_TEXT // max(1, min(len(running_parts), MAX_INVOCATIONS))
+    running_parts.sort(key=_physical_order)
+    failed_parts.sort(key=lambda item: _physical_order(item[1]))
+    foreground_count = min(len(running_parts), MAX_INVOCATIONS)
+    failure_count = min(len(failed_parts), MAX_FAILED_INVOCATIONS)
+    background_details, background_count = background_invocations(
+        snapshot, messages, physical, other_count=foreground_count + failure_count) if include_invocations else ((), 0)
+    # One card-wide input budget keeps the existing 100-card SSE/replay bound
+    # even when every card has maximum foreground, background and failed lists.
+    budget = MAX_INPUT_TEXT // max(1, foreground_count + min(background_count, MAX_INVOCATIONS) + failure_count)
     running_details = tuple(replace(invocation(part, budget=budget), started_at_ms=_part_start(part))
                             for part in running_parts[:MAX_INVOCATIONS]) if include_invocations else ()
     summary = dict(
@@ -215,6 +233,7 @@ def observe_tools(
         running_invocations=running_details, background_invocations=background_details,
         running_invocation_count=len(running_parts) if include_invocations else 0,
         background_invocation_count=background_count,
+        failed_invocations=failed_invocations(failed_parts, snapshot.root.provenance, budget=budget),
         skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))
                      for skill in sorted(skills, key=lambda item: skills[item], reverse=True)),
     )
