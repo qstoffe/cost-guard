@@ -49,6 +49,8 @@ def navigation(page, evidence, *, enforce):
         if section == 'comparisons':
             page_at(page, 0)
         if section == 'sessions':
+            if page.locator('.sessions-periods').count():
+                page.get_by_role('button', name='All time', exact=True).click()
             page.wait_for_function('() => current.catalog?.data?.total===963 && !current.catalog.busy')
         if section == 'watch':
             page.wait_for_function('() => !!document.querySelector(".watch-card")')
@@ -88,7 +90,7 @@ def cold_models(context, host, root, evidence):
     host.dispatcher.invalidate()  # Only our disposable host's publications/jobs.
     page = context.new_page()
     try:
-        page.goto(host.server.origin + '/#/sessions')
+        page.goto(host.server.origin + '/#/sessions?period=all')
         page.wait_for_function('() => current.catalog?.usable && !current.catalog.busy', timeout=30000)
         page.evaluate(TRACE)
         before = page.evaluate('() => {scrollTo(0,document.documentElement.scrollHeight);recordNavigation("activation");return scrollY;}')

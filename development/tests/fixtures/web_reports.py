@@ -36,7 +36,7 @@ class SyntheticSessionsRuntime:
             pricing_provider=FakePricingProvider(), account_provider=None,
             cache_repository=CacheRepository(database), config=dict(load_configuration(root).values, timezone="UTC"),
             now_ms=self.clock_ms(), progress=lambda _: None)
-        self.catalog = SessionCatalog()
+        self.catalog = SessionCatalog(clock_ms=self.clock_ms, timezone_id="UTC")
         self.details = SessionDetails()
         self.stopping = Event()
         self.failure = None

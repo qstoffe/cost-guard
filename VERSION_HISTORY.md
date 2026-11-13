@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.40 - 2026-11-13
+
+- Sessions defaults to Today, with Today / 7 days / 30 days / This month / All time controlling the server population before indexing, sorting and 25-row paging. Cheap whole-tree activity selects eligible roots; period-qualified leases and epochs preserve older-page windows and bounded shared work.
+- Effort follows Model, preserving actual selected Default, explicit levels, Multiple efforts and unavailable attribution. Dedicated value help uses the existing evidence-qualified default disclaimer; a new disposable scalar-summary version rebuilds lazily without changing pricing or native history.
+
 ## v81.39 - 2026-11-13
 
 - Models keeps stable section roots, toolbars and keyed price/benchmark rows. Source-local status and factual retrieval dates no longer tear down unchanged records; a price publication never detaches its benchmark sibling. Independent requests, errors, filters and sort state retain their existing backend owners.

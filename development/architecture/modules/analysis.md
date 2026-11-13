@@ -15,6 +15,13 @@ Canonical domain, source-neutral analysis and disposable cache have separate own
 
 ## Public contract
 
+FR000696 reuses `ai_stats.windows` and configured-zone helpers for Sessions'
+Today/rolling/month boundaries without changing AI Stats. Cheap domain
+`session_tree.root_activity` supplies membership metadata; reports alone derive
+request effort from the existing `effort_defaults.request_effort` evidence.
+Application scope excludes invalid/future timestamps from finite populations;
+no new history scan, valuation engine or persistent temporal ledger is added.
+
 ### Canonical domain
 
 The domain separates:

@@ -4,16 +4,19 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature
+from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.context import ContextEpochs
 from src.analysis.session_context import session_context_observation
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
+from src.domain.effort import EffortEvidence
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
 from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .models import SessionUsageRow
+from .session_effort import SessionEffort, effort_name
 
-ALGORITHM = "session-summary-4"
+ALGORITHM = "session-summary-5"
 NAMESPACE = "session-summary"
 
 
@@ -43,12 +46,12 @@ def context_fields(item, catalog):
 
 def summary_key(service, root):
     provenance = root.provenance
-    return dependency_signature((ALGORITHM, provenance.source_type, provenance.source_generation,
+    return dependency_signature((ALGORITHM, EFFORT_REVISION, provenance.source_type, provenance.source_generation,
         provenance.source_instance, root.session_id, service._dependencies(service._load_catalog()),
         service._load_comparison_catalog().diagnostic_signature))
 
 
-def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None):
+def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -80,6 +83,11 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
             values["contributor_models"] = tuple(values["contributor_models"])
+            values["effort_contributors"] = tuple(SessionEffort(
+                part["provider"], part["model"], EffortEvidence(**part["evidence"]), part["requests"])
+                for part in values["effort_contributors"])
+            if not valid_effort(values):
+                raise ValueError("invalid_effort_summary")
             issues = tuple(ReferenceCostIssue(**issue) for issue in values["ccost_unavailable"])
             if len(issues) > 6 or any(issue.reason not in REASONS or not all(
                     isinstance(value, str) and len(value) <= 128 and (not value or value.isprintable())
@@ -89,7 +97,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             row = SessionUsageRow(**values)
             if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
                     and isinstance(row.title, str) and isinstance(row.model, str)
-                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified"))
+                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending"))
                     and row.context_qualified
                     and (row.context_tokens is None or type(row.context_tokens) is int and row.context_tokens >= 0)
                     and isinstance(row.context_detail, str) and len(row.context_detail) <= 128
@@ -103,6 +111,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and (row.duration_ms is None or type(row.duration_ms) is int and row.duration_ms >= 0)):
                 if metrics is not None:
                     metrics['cache_hits'] += 1
+                if on_dependencies is not None:
+                    on_dependencies(identity_values)
                 return row, revision
         except (KeyError, TypeError, ValueError, InvalidOperation):
             pass  # Disposable malformed summaries are misses, never source evidence.
@@ -117,10 +127,13 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     row = service._session_rows((item,))[0]
     row = replace(row, complete=row.complete and item.snapshot.complete)
     actual = item.bundle.source_revision
+    identity_values = dependencies(item.bundle.trace_entries)
+    if on_dependencies is not None:
+        on_dependencies(identity_values)
     if item.bundle.cacheable and not row.running and row.context_qualified:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
-        values['model_identity_dependencies'] = dependencies(item.bundle.trace_entries)
+        values['model_identity_dependencies'] = identity_values
         values['recorded_model_help'] = True
         values["ccost"] = str(row.ccost)
         try:
@@ -130,3 +143,18 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         except (OSError, sqlite3.Error):
             pass
     return row, actual
+
+
+def valid_effort(values):
+    key, parts = values["effort_key"], values["effort_contributors"]
+    if key is not None and (not isinstance(key, str) or not 0 < len(key) <= 64 or not key.isprintable()):
+        return False
+    expected = "N/A" if key is None else "Multiple efforts" if key == "multiple" else effort_name(key)
+    return (values["effort"] == expected and values["effort_qualified"] and not values["effort_pending"]
+        and len(parts) <= 24 and all(type(part.requests) is int and part.requests > 0
+            and all(isinstance(text, str) and 0 < len(text) <= limit and text.isprintable()
+                for text, limit in ((part.provider, 128), (part.model, 256)))
+            and (part.evidence.selected is None or isinstance(part.evidence.selected, str)
+                and len(part.evidence.selected) <= 64 and (not part.evidence.selected or part.evidence.selected.isprintable()))
+            and all(isinstance(text, str) and len(text) <= 256 and (not text or text.isprintable())
+                for text in (part.evidence.effective, part.evidence.source, part.evidence.revision)) for part in parts))

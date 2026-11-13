@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000696: `application/session_catalog_scope.py` owns period windows/cheap
+membership; `session_catalog.py` owns scoped lease demand, key qualification,
+epochs and 25-row pages. `reports/session_effort.py`, `session_summary.py` and
+`application/session_effort.py` own the bounded selected-effort scalar/cache/help.
+`assets/sessions.js` / `reports.js` own eight columns, selector and route offsets.
+Coverage: `test_session_catalog_periods.py` (5000-root hydration measurements),
+`test_session_effort.py`, existing catalog/detail/HTTP VM groups and
+`probe_web_sessions.cjs ... --periods-only`; read-only
+`probe_web_live.py --sessions`. [Evidence](../../journal/web/sessions-periods.md).
+
 FR000694: `domain/effort.py` owns independent tooltip evidence;
 `sources/opencode_v2_effort.py` / the shared Desktop catalog own bounded current
 options, and `analysis/effort_defaults.py` owns exact reviewed vendor fallback.

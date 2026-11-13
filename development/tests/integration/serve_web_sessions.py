@@ -60,7 +60,7 @@ class FixtureRuntime:
         self.publish = publish
         self.stopping = Event()
         self.details = SessionDetails()
-        self.catalog = SessionCatalog()
+        self.catalog = SessionCatalog(clock_ms=lambda: self.service.now_ms, timezone_id=self.service.timezone_id)
         self.unavailable = False
         self.scalar_hold = False
         self.live_root = None
@@ -134,7 +134,7 @@ def main():
     owner = unittest.TestCase()
     source = SyntheticMonthSource(120, 1, month_start_ms=1000)
     source.snapshots["root-0000"] = SyntheticMonthSource(1, 1001, month_start_ms=1000, running_roots=1).snapshots["root-0000"]
-    service = report_service(owner, source, now_ms=100_000_000)
+    service = report_service(owner, source, now_ms=10_000_000)
     jobs = CaptureJobs()
     host = WebHost(config, jobs=jobs)
     host.live = FixtureRuntime(service, host.events.publish)
@@ -146,6 +146,27 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command == "period-source":
+                now, day = 1_794_571_200_000, 86_400_000  # 2026-11-13 12:00 UTC
+                service.now_ms = now
+                activities = ([now - 1000] * 30 + [now - 3 * day] * 40 +
+                    [now - 20 * day] * 50 + [now - (31 + index % 699) * day for index in range(4880)])
+                samples = SyntheticMonthSource(5000, 1, month_start_ms=now - 730 * day)
+                values = {}
+                for index, ((key, snapshot), activity) in enumerate(zip(samples.snapshots.items(), activities)):
+                    if index == 2:
+                        snapshot = make_root_snapshot(index, 2, month_start_ms=now - 730 * day)
+                    root = replace(snapshot.root, updated_at_ms=activity)
+                    events = tuple(replace(event, metadata={**event.metadata,
+                        "variant": "high" if index == 1 or index == 2 and number else "default"})
+                        for number, event in enumerate(snapshot.events))
+                    values[key] = replace(snapshot, root=root, sessions=(root,), events=events,
+                        source_revision=f"period-{index}", complete=True)
+                source.snapshots = values
+                host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                host.live.scalar_hold = False
+            elif command == "period-empty":
+                service.now_ms += 2 * 86_400_000
             elif command in ('detail-blocked', 'detail-recover', 'detail-progress', 'detail-delayed'):
                 host.live.detail_mode = {'detail-blocked': 'blocked', 'detail-recover': 'fast',
                     'detail-progress': 'progress', 'detail-delayed': 'delayed'}[command]
@@ -161,6 +182,9 @@ def main():
                 catalog = host.live.catalog
                 if command == 'catalog-large':
                     source.snapshots = SyntheticMonthSource(3217, 1, month_start_ms=1000).snapshots
+                    source.snapshots = {key: replace(snapshot, root=replace(snapshot.root,
+                        created_at_ms=1000 + index * 1000, updated_at_ms=2000 + index * 1000))
+                        for index, (key, snapshot) in enumerate(source.snapshots.items())}
                     catalog.observe(observe_catalog(source, include_archived_revisions=True))
                 if command == 'catalog-churn':
                     snapshot = source.snapshots['root-0000']
@@ -179,7 +203,7 @@ def main():
                                 Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
                     if command == 'catalog-page-cold':
-                        keys = sorted(catalog.roots, reverse=True)[50:100]
+                        keys = sorted(catalog.roots, reverse=True)[25:50]
                         for key in keys:
                             catalog.valid.pop(key, None)
                     if command == 'catalog-churn':

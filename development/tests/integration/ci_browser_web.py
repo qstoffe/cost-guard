@@ -42,8 +42,10 @@ def check_pagers(browser, evidence):
             page.goto(host.browser_url())
             expect(page.locator('#result .overview-models')).to_be_visible(timeout=30000)
             layouts = []
-            for section, summary in [('sessions', 'Showing 1–50 of 963 sessions'), ('comparisons', 'Showing 1–10 of 321 groups')]:
+            for section, summary in [('sessions', 'Showing 1–25 of 963 sessions'), ('comparisons', 'Showing 1–10 of 321 groups')]:
                 page.get_by_role('link', name=section.title(), exact=True).click()
+                if section == 'sessions':
+                    page.get_by_role('button', name='All time', exact=True).click()
                 expect(page.locator('.page-navigation')).to_contain_text(summary, timeout=30000)
                 expect(page.locator('.page-navigation button').first).to_be_disabled()
                 for width in (360, 1366, 1920):
@@ -69,12 +71,12 @@ def check_pagers(browser, evidence):
                 page.set_viewport_size({'width': 1366, 'height': 900})
                 next_button = page.get_by_role('button', name='Next', exact=True)
                 next_button.click()
-                expect(page.locator('.page-navigation')).to_contain_text('Showing 51–100' if section == 'sessions' else 'Showing 11–20', timeout=30000)
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 26–50' if section == 'sessions' else 'Showing 11–20', timeout=30000)
                 expect(next_button).to_be_focused()
                 page.keyboard.press('Enter')
-                expect(page.locator('.page-navigation')).to_contain_text('Showing 101–150' if section == 'sessions' else 'Showing 21–30', timeout=30000)
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 51–75' if section == 'sessions' else 'Showing 21–30', timeout=30000)
                 next_button.tap()
-                expect(page.locator('.page-navigation')).to_contain_text('Showing 151–200' if section == 'sessions' else 'Showing 31–40', timeout=30000)
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 76–100' if section == 'sessions' else 'Showing 31–40', timeout=30000)
             assert not errors
             assert host.live.failure is None
             evidence['pager_layouts'] = layouts

@@ -21,7 +21,7 @@ const ReportRoutes = (() => {
     if (path === 'sessions') {
       const offset = params.get('offset') || '0', epoch = params.get('epoch');
       if (!/^(0|[1-9][0-9]{0,6})$/.test(offset) || Number(offset) > 1000000 ||
-          Number(offset) % 50 || epoch !== null && !/^[0-9a-f]{32}$/.test(epoch) || Number(offset) && !epoch)
+          Number(offset) % 25 || epoch !== null && !/^[0-9a-f]{32}$/.test(epoch) || Number(offset) && !epoch)
         return {title: 'Invalid session page', section: 'sessions'};
       request = null;
     }

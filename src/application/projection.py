@@ -15,6 +15,7 @@ from .prompt_costs import cost_detail
 from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
 from .benchmark import benchmark_view
+from .session_effort import session_effort_help
 
 
 def identity(parts) -> str:
@@ -209,8 +210,8 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail").fields +
-            (("ccost_unavailable", issue_records(item.ccost_unavailable)),))
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
+            (("effort_help", session_effort_help(item)), ("ccost_unavailable", issue_records(item.ccost_unavailable))))
             for item in report.session_usage),
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
