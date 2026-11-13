@@ -1,3 +1,15 @@
+# Superseded hold history — reactivated through FR000693
+
+2026-11-13. **Historical rationale, not an active hold.** The instruction-conflict
+prerequisite below is superseded by [merged Toolkit PR #406](https://github.com/qstoffe/opencode-toolkit/pull/406)
+and the corrected installed command actually received by a fresh ordinary worker.
+See [current verification](../../../journal/recorded-model-help.md#fr000693--verified-rule-loading-and-held-task-reactivation-2026-11-13).
+The owner-approved FR000693 releases this same task to Ready priority 000001.
+No affected sessions have been diagnosed or fixed by that administrative move;
+recoverability and the original all-cases-or-On-Hold acceptance remain unverified.
+
+The complete original hold text follows unchanged:
+
 # FR000692 — On Hold: historical-record access conflicts with current instruction
 
 2026-11-13. **On Hold, not Complete or PASS.** The entire original FR is preserved

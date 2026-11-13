@@ -147,3 +147,65 @@ only observation state had invalidated later probe cases. Obsolete header-copy
 assertions now match the shipped prompt-reference-cost wording. No acceptance was
 waived to obtain these results. Detailed private evidence remains in owned scratch;
 only the sanitized results above are published.
+
+## FR000693 — Verified rule loading and held-task reactivation, 2026-11-13
+
+This later entry supersedes only the **instruction-conflict access blocker**,
+not the historical NOT RUN outcomes above. The owner-approved FR000693 releases
+the same FR000692 after its two prerequisites; it does not implement that bug fix.
+
+- Toolkit's unauthorized direct edit `e2333ea` was reverted by
+  [commit f620f5d](https://github.com/qstoffe/opencode-toolkit/commit/f620f5d).
+  Cost Guard's unauthorized direct activation was reverted by
+  [commit a76e606](https://github.com/qstoffe/cost-guard/commit/a76e606), restoring
+  the original held FR and HOLD reason.
+- [Toolkit PR #406](https://github.com/qstoffe/opencode-toolkit/pull/406) subsequently
+  merged FR000471 at `2026-11-13T16:10:48Z`. Actual Toolkit default/source is
+  `6db9fb412b2f5ffdf4532c7dc9a3781fc5e391f7`; its
+  [command opening](https://github.com/qstoffe/opencode-toolkit/blob/6db9fb412b2f5ffdf4532c7dc9a3781fc5e391f7/commands/repo-backlog.md#L8)
+  distinguishes explicitly owner-authorized read-only saved OpenCode history from
+  isolated other-worker scratch/private state. Native permissions/source access
+  remain effective. This is normal merged PR evidence, not claimed human approval.
+- The owner's installed `commands/repo-backlog.md` SHA-256 is
+  `395622afbd410f8ebda3b034ed1b086c673e290214ad6996a88646a03d3a4f5b`;
+  installed `skills/shared-repo/references/backlog-worker.md` SHA-256 is
+  `2a9423551bf06140889d216006db2b9bff096ae1d9cb7bf9d34eed63d2023a3d`.
+  Both exactly equal the corresponding merged source files.
+- Crucially, this **fresh ordinary Repo Backlog invocation** actually delivered
+  that corrected opening to the worker, and the matching shared-repo worker
+  reference was loaded. This is direct current-session evidence, not merely a
+  disk hash, a synthetic host test or an assumption from GitHub main. No
+  installation, automatic reload, service restart, paid inference or historical
+  session read was needed/performed. Verification is scoped to these loaded
+  instructions, not every installed Toolkit component or all future sessions.
+- Toolkit's completion correctly reported owner-active loading **unverified at
+  its own delivery**. This later observation supplies the Cost Guard prerequisite;
+  it does not rewrite that historical report or automatically dispose its
+  Suggestion000472.
+
+FR000692 returns to Ready priority `000001` with the owner's explicit saved-history
+read permission, continued exclusion of other workers' scratch/stashes/private
+workflow checkpoints/live processes, and up-to-48-hours real-work clarification.
+The original FR body/acceptance remains intact outside that authorized addition;
+the complete original HOLD text remains in superseded `PRIOR-HOLD.md`. Native
+SDK source references are not private worker Checkpoint/Resume state.
+
+**Decision Delegate, not the owner, authorized a narrow sequencing exception**
+to FR000693 action 6: one atomic docs-only PR contains the reactivation and separate
+FR000693 Complete/progress, rather than publishing two sequential PRs. The current
+one-PR worker workflow and avoiding an intermediate published state motivate this;
+no dependency, verification or FR000692 all-exact-cases-or-On-Hold acceptance is
+waived. Local exact-once/body/history/progress checks precede publication; actual
+merged-default readback is required before reporting delivery and is **pending
+at this entry's preparation**, never predeclared PASS.
+
+Local verification: `scratch:/verify-reactivation.py` passed seven task-scoped
+groups (transition, original-content preservation, clarification/binary gate,
+ordinal/progress, relative links, evidence/disclosures and docs-only scope).
+`git diff --check` passed. These are administrative checks, not product tests.
+
+No architecture update: no product boundary, behavior or causal diagnosis changed.
+Product tests/live probes, packaging and version/release work are not required
+for this development-only change under the current direct worker instruction.
+No native data or third-party sessions were modified; no affected records were
+inspected, repaired or reverified. Those outcomes remain FR000692's mandatory work.
