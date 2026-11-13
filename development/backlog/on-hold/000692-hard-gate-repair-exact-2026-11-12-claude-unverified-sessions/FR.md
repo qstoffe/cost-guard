@@ -1,5 +1,18 @@
 # FR 000692 — P0 BLOCKER: Fix the EXACT 2026-11-12 Claude "version unverified" sessions on the owner's PC, or move THIS FR to On Hold
 
+**LATEST INVESTIGATION RESULT (owner's real v6 metadata, 2026-11-13):**
+All **87 of 87** known-usage Claude Agent alias-defect requests have
+source-qualified direct SDK reply UUID/model evidence: **174/174** reply
+references resolved, no missing targets or model conflicts. Versions are
+84 Sonnet 5.5, one each Opus 5.5, Haiku 5.5 and Fable 5.1.
+Evidence spans previous SDK-session generations; do not limit reads to the
+current plugin checkpoint. **Read the V6 owner-executed section at the
+bottom BEFORE implementing; it supersedes earlier untested/zero-match
+diagnostic statements, not their original chronological accuracy.**
+Implementation, real Cost Guard UI/cache/restart proof and supported pricing
+are still **NOT DONE**. **Current FR location/status: ON HOLD;
+only the owner may reactivate it.**
+
 **Highest-priority, explicitly owner-approved Ready to Develop (2026-11-12).** Permanent identity **000692**. Priority **000001** — **above every other Ready item**. This request responds to a **verified failed delivery boundary** in completed FR000687: the user upgraded/restarted Cost Guard and still sees **many of the SAME November 12, 2026 local sessions** labelled **`Claude Sonnet (version unverified)`**, plus **new Claude Agent model-test sessions** also labelled **`version unverified`**. Both prior historical and newly generated affected records must be investigated and corrected against the **actual installed local OpenCode source**.
 
 ## Owner clarification and verified reactivation — FR000693, 2026-11-13
