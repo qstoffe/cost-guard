@@ -122,3 +122,40 @@ Read these prior documents first; they are not new acceptance waivers:
 **Non-goals:** cosmetic string suppression, inventing a Claude release to make a cell look green, misattributing an unrelated model/provider or historical cost, deleting/rebuilding the owner's raw native data, unsafe modifications of the shared OpenCode service, creating another proposal instead of resolving the work, or changing unrelated application features.
 
 **Done means:** the owner's precise 2026-11-12 and FR000687-generated affected local sessions display the correct sourced model release and supported costs **after a real Cost Guard restart**, or **FR000692 is formally ON HOLD with technical proof why that exact result cannot be achieved**. Nothing between these two is approved.
+## Owner-supplied local checkpoint/transcript metadata follow-up — 2026-11-13
+
+The owner supplied a new, local, **read-only and sanitized** OpenCode SQLite +
+Claude Agent checkpoint + SDK JSONL metadata probe after the hold. The exact
+checkpoint-to-transcript hypothesis is now **positively demonstrated on real
+local saved records**, independent of the previously blocked native approval
+route: **47 distinct assistant-UUID/model joins across all 12 affected alias
+sessions**, plus one concrete Fable5.2 control (48 total, 13 sessions).
+Alias observations are **9 Sonnet 5.5, 1 Opus 5.5, 1 Haiku 5.5 and 1 Fable 5.1
+session**, with zero conflicting matched reply model IDs. The failed concrete
+Haiku4.5 session still has unknown final consumption, not established zero
+usage. The local probe found 14 exact SDK JSONL transcript files.
+
+**Do not overclaim this as recovered identities for all physical calls.**
+The affected twelve sessions previously had **87 normalized known-usage physical
+requests**; 47 exact *reply-UUID* joins are a different count/unit and do not
+yet establish per-request completeness. Long-running saved sessions can have
+more OpenCode assistant rows than retained checkpoint reply references.
+Current session transcript membership alone must not certify an older
+unmatched reply, especially across forks, turnovers and compactions. The
+probe's `native` metadata extractor also reported zero pairs despite earlier
+claims that such fields exist; reconcile the source shape rather than
+silently declaring the fields absent.
+
+**Use this as the first recovery lead on reactivation**: account for all 87
+physical requests using exact durable records where available, separate
+selected aliases/current catalog estimates/executed reply identities,
+recalculate only supported costs, then complete the original real
+same-session browser/cache/restart acceptance unchanged. The sanitized
+counted matrix, evidence qualification and ordered next steps are in
+[the 2026-11-13 follow-up journal](../../../journal/claude-exact-history.md#owner-supplied-local-checkpointtranscript-metadata-follow-up--2026-11-13).
+
+**Status is still On Hold.** This addendum does not alter mandatory P0 acceptance,
+change the current HOLD chronology, authorize any paid inference or product
+implementation, or promote the FR to Ready; explicit owner release and remaining
+source/access verification are still required.
+

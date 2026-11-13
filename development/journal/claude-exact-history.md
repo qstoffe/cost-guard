@@ -164,3 +164,106 @@ current development-only workflow waive **no** FR acceptance. No architecture
 update: product responsibilities and implementation did not change. The branch
 `fr-000692` preserves the administrative recovery point; private exact-case
 evidence stays outside the public repository in this worker's retained scratch.
+## Owner-supplied local checkpoint/transcript metadata follow-up — 2026-11-13
+
+**Investigation-only evidence, supplied by the owner after the On Hold decision.**
+A Python-standard-library read-only diagnostic inspected the owner's existing
+OpenCode SQLite history, Claude Agent plugin checkpoint records and exact locally
+named Claude SDK JSONL transcripts. The owner uploaded its bounded/sanitized v4
+metadata JSON for independent counting and source comparison; the private raw
+database, transcript content, session identifiers, directory paths, credentials
+and prompt text were not uploaded or published. The probe is a diagnostic, not
+product code or real Cost Guard after-repair evidence.
+
+**Inventory and exact checkpoint-to-transcript model observations:**
+
+- Same **49** candidate sessions for the 2026-11-12 Europe/Stockholm activity
+  window as in the prior inventory. **19** have Claude-related selected/session
+  metadata: **14** with stored assistant rows and **5** without any assistant
+  rows. Those five non-execution records are not additional confirmed alias
+  defects.
+- The 14 assistant-bearing cases contain **89** OpenCode assistant rows, **88**
+  with a positive token field (this includes one concrete Fable5.2 control).
+  This matches the shape of the earlier **12 alias-defect sessions / 87 known-usage
+  normalized physical requests**, plus one concrete known-usage control and
+  one failed concrete Haiku4.5 case. Assistant rows and normalized physical
+  requests are different units; count agreement is not an audited per-request join.
+- Exact checkpoint assistant UUID to the assistant UUID **within the very same
+  named Claude SDK session transcript** succeeds **48** times across **13**
+  sessions: **47** matched assistant UUIDs across **all 12 alias-defect sessions**,
+  plus **one** concrete Fable5.2 control. This was the previously untested
+  checkpoint-to-transcript read route, now executed on owner-supplied local data.
+  No matching reply UUID was assigned multiple conflicting model IDs.
+- The 12 affected alias sessions each have at least one concrete matched reply
+  model and a single concrete model throughout their individually retrieved
+  *current referenced SDK transcript*:
+
+  | Recorded alias | Defect sessions | Earlier normalized usage requests | Matched checkpoint assistant UUIDs | Exact SDK reply model |
+  | --- | ---: | ---: | ---: | --- |
+  | `claude-agent/sonnet` | 9 | 84 | 44 | `claude-sonnet-5-5` |
+  | `claude-agent/opus` | 1 | 1 | 1 | `claude-opus-5-5` |
+  | `claude-agent/haiku` | 1 | 1 | 1 | `claude-haiku-5-5` |
+  | `claude-agent/fable` | 1 | 1 | 1 | `claude-fable-5-1` |
+  | **Alias total** | **12** | **87** | **47** | |
+  
+- **14** exact SDK transcript files were located (from **1,408** JSONL
+  filenames checked): **94** assistant entries, **93** with a parseable Claude
+  model ID, one lacking that model, and **zero** contradictory models for the
+  same transcript assistant UUID. The concrete Fable5.2 control has one exact
+  checkpoint match. The known failed concrete Haiku4.5 case has four transcript
+  assistant entries with its concrete model but **zero matched reply checkpoints**
+  and no recognized final usage; it does not prove zero consumption.
+- The v4 extractor reports **0** `native` reference pairs from stored
+  assistant/part data, even though the earlier investigation described
+  `content.native` references. This discrepancy needs schema/field-by-field
+  reconciliation; a parser not finding these pairs is not proof those references
+  are absent. The checkpoint-based matches are independent of that extractor.
+
+**Strength and limits:** These are **source-qualified historical executed reply
+model observations, not mere mutable current-catalog guesses**. They establish
+at least one exact model-bearing Claude reply in each of the twelve previously
+unverified alias sessions. They **do not yet prove that all 87 independently
+normalized priced physical requests** individually map to those matched reply
+UUIDs or even to all responses in the current retained SDK transcript. Some
+long-running OpenCode sessions have 8, 10, 20 or 23 saved assistant rows but
+their presently retained checkpoint history or SDK file covers only a subset.
+A prior native session may have rotated, branched, resumed or become unavailable.
+Do not assign an executed model to unmatched historical requests merely from the
+single model present in a later transcript, adjacency in time or a mutable
+catalog. Exact costs and completeness remain unverified.
+
+**Cross-check of exact usage mapping:** OpenCode v2.2.7's [Claude Agent usage accumulator](https://github.com/anomalyco/opencode/blob/v2.2.7/packages/core/src/plugin/provider/claude-agent/language-model/usage.ts) takes input/cache counts from the *last* SDK API call in a turn but **sums output and reasoning across its recorded messages**; one normalized OpenCode usage row therefore need not match one transcript assistant entry's raw usage vector. Inference from equal token counts or proximity alone must not replace reply UUID/step ownership. This helps explain why raw row counts and reply/checkpoint counts differ, but does not itself prove a specific missing historical step.
+
+**Next implementation-worker investigations:**
+
+1. Reconcile the actual `native` storage shape with the earlier source observation;
+   inspect `session_message.data`, `session_part.data` and typed plugin checkpoint
+   evidence through sanctioned read-only local tools, not old assumed paths.
+2. Recover durable per-request associations for the longer sessions: earlier SDK
+   transcript generations, exact UUIDs, plugin checkpoint lifecycle, forks,
+   compaction and interrupted branches. Account for each of the **87** known-usage
+   normalized physical requests without pretending a checkpoint UUID equals a
+   physical request or accepting session-only guesses as per-request execution.
+3. Identify the minimum read-only Cost Guard identity adapter that can import
+   *proven* executed release per physical request; keep recorded selector,
+   executing model, current-catalog estimate and reference pricing provenance
+   separately. Preserve revisions and invalidate only dependent derived caches.
+   Include a separate future-recording repair for OpenCode's dropped
+   `response-metadata.modelId` when necessary.
+4. Reconcile actual reference-price availability and I/C/W/O for every supported
+   contributing request, preserving unknown usage for failed Haiku4.5. Verify
+   identical exact real sessions in the managed Cost Guard Web Sessions, detail
+   and Watch/Mini after the specified cold/warm/restart sequence and complete
+   normal tests. No actual product or browser acceptance has run as part of this
+   owner-provided metadata investigation.
+5. Resolve the separately documented native approval-completion mechanism or
+   establish a supported owner-provided exact-evidence path for remaining reads.
+   The **On Hold** state and binary owner acceptance remain intact until the
+   human owner explicitly releases the FR.
+
+**Important chronology:** The preceding On Hold report truthfully said SDK
+reads were **NOT RUN by that worker**. This later, independent,
+owner-executed metadata probe supplies new evidence and does **not** retroactively
+rewrite the failed native approval attempt, mark the FR Complete, repair any
+historical Cost Guard label or authorize an automatic Ready promotion.
+
