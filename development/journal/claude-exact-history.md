@@ -234,6 +234,27 @@ catalog. Exact costs and completeness remain unverified.
 
 **Cross-check of exact usage mapping:** OpenCode v2.2.7's [Claude Agent usage accumulator](https://github.com/anomalyco/opencode/blob/v2.2.7/packages/core/src/plugin/provider/claude-agent/language-model/usage.ts) takes input/cache counts from the *last* SDK API call in a turn but **sums output and reasoning across its recorded messages**; one normalized OpenCode usage row therefore need not match one transcript assistant entry's raw usage vector. Inference from equal token counts or proximity alone must not replace reply UUID/step ownership. This helps explain why raw row counts and reply/checkpoint counts differ, but does not itself prove a specific missing historical step.
 
+**Targeted residual gap, counted from the owner's v4 metadata:** exactly **five
+Sonnet alias sessions** have fewer current-checkpoint exact reply matches than
+saved OpenCode assistant usage rows: respectively **8 rows / 1 checkpoint
+match**, **8 / 1**, **10 / 1**, **20 / 12** and **23 / 14**. The other seven
+alias sessions have one checkpoint match per assistant row or more. This is a
+*coverage warning*, not a proof of forty distinct missing executed model calls:
+OpenCode steps and Claude replies are not 1:1, and some SDK transcripts contain
+more replies than checkpoint references. The current referenced SDK transcript
+has just **one assistant reply** in each of the 8/1, 8/1 and 10/1 cases;
+therefore older SDK generations/orphan transcripts or independent exact
+step-level references are particularly important there.
+
+**Read-only v5 investigation requested before implementation confidence:**
+audit each saved assistant step's exact native/API response references (if any),
+finish time and I/C/W/O; search bounded *other* local Claude SDK transcript files
+by timestamp and source directory without exposing their content. Never promote
+a timestamp/directory/model-family match to an executed-identity certificate.
+Try to recover previous generations and exact step/reply lineage, and classify
+each step as exact-link, candidate-only or unresolved. This v5 diagnostic has
+passed **synthetic** fixture tests; real results have NOT yet been provided.
+
 **Next implementation-worker investigations:**
 
 1. Reconcile the actual `native` storage shape with the earlier source observation;
