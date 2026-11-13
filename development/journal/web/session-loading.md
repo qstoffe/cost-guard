@@ -1,6 +1,12 @@
-# Determinate session-detail loading — FR 000662
+# Session-detail loading
+
+Current behavior is [FR000686's source-driven whole-operation plan](#source-driven-whole-operation-progress-fr000686).
+The original FR000662/FR000674/FR000673 observations below are historical evidence,
+including the intentionally superseded pre-acquisition 0% policy.
 
 ## Ownership and progress
+
+Original FR000662 policy (superseded by FR000686):
 
 `session.js` reuses `ReportLoading.View` and `.report-loading`, not finite-report
 admission or its waiting policy. Shared report code is unchanged. The first-open
@@ -183,3 +189,98 @@ rerun. Evidence: `scratch:/first-load.json` and `scratch:/loading-layouts.json`;
 FR000673's separate [pricing/account journal](../claude-agent-ccost.md) records the
 unrelated scoped live-inference exclusion. These source-shaped browser tests do
 not reproduce the owner's unidentified private incident.
+
+## Source-driven whole-operation progress FR000686
+
+2026-11-13, v81.36. Reproduced before changing product code: the existing authenticated
+browser fixture took 7939.7ms, emitted reading/analysis work, and painted **0 throughout
+every pending response**. The transfer-only allocation caused the apparent freeze.
+
+### Current contract and boundaries
+
+`domain/progress.py::DetailProgress` defines a **milestone budget**, not an estimate of
+time or one universal count denominator. Admission/selection = 3, revision verification
+= 10, source reading = 15–40, analysis = 40–55, projection = 55–65, publication = 65–69.
+Explicit entry alone proves the start of that stage. A known local completed/total
+can consume the remainder of its band; otherwise the stage holds its entry point.
+Only the parent accepting a successful source outcome marks source-ready at 70.
+Known V2 discovered-tree members and already-discovered publication rows contribute
+real local fractions. Analysis/projection currently expose entry milestones, not
+invented total work. Their very short stages may complete between browser paints.
+
+The child `WorkMeter` transports phase, percent and optional local counts separately
+from the heterogeneous cumulative liveness counter. Nested scalar checkpoints cannot
+prematurely switch the outer history stage. Existing 50ms parent observation and 500ms
+visible pending polling publish progress without new source reads or another worker.
+Phase/count observations contain no source text, identity paths or credentials.
+`SessionDetails` qualifies updates by its current attempt and exposes a safe attempt
+identifier; a new backend attempt starts its own plan. The browser retains only its
+display watermark across automatic retries and labels the retry/current attempt;
+previous-attempt counts never become a new denominator. Explicit cold Retry/new lease
+resets the bar. Existing generation guards reject late route results.
+
+Validated revision-pinned browser rows consume **70–95%**, with `floor(70+25*X/Y)`
+(empty success goes directly to 95). For 220 rows in 50-row chunks the sequence is
+**75, 81, 87, 92, 95**. Only the complete applied table sets 100, without a forced
+display delay. Shared ReportLoading/CSS, other report loaders, pricing, history
+identity and single-worker/retry/120-second silence supervision are unchanged.
+
+An opaque socket/read/analysis operation has no invented within-operation fraction.
+It can hold at its real phase milestone until the next actual event; this limitation
+is intentional. Repeated phases, liveness units, polls and elapsed time never creep
+toward completion. A stalled reading fixture holds **15**, then fails truthfully.
+Phase-only callbacks still cannot renew the silence watchdog.
+
+### Fresh verification and measured comparison
+
+- Full: **187/187 groups passed**, four workers, 240s/file bound, 149.9s. Focused
+  liveness and detail groups also passed. The final source-tree unit-counter addition
+  passed `test_source_history_loading.py`; it adds one observed completed tree unit,
+  not another read. Working-tree validation passed (seven existing advisory warnings).
+- VM coverage includes exact fractions for **0/1/25/50/220/1001 rows**, unknown positive
+  units, repeated/lower watermarks, retry/reset, detached late responses, malformed
+  revision/offset/count/duplicate chunks, 100 only after actual rows, quiet retention,
+  hidden polling and normal existing failure handling. Backend tests cover separate
+  milestones/fractions, invalid denominators, clock-only waits and rejected old attempts;
+  existing process tests retain poison/crash/locked-child/source-epoch coverage.
+- Actual authenticated **Sessions → click** in hidden Chrome157 ran the shipped HTTP,
+  JS, history owner and supervised child with representative delayed message batches.
+  Final cold run: **8287.9ms**, source pending sequence **0,3,10,16,18,21,23,27,29,32,34,
+  37,39,69**; several nonzero states survived separate requestAnimationFrame paints
+  while `result:null` and the table was absent. First nonzero = **608ms** after click;
+  first ready begin was 525.2ms after publication; all **1001 rows** applied 1456.3ms
+  after publication, then 100%. Warm matching refresh took **20.5ms**, one begin,
+  no chunks, same bar/first row and hidden loader. One child, one source snapshot read.
+- Matched reference product `f0c7318` ran in this worker's separate disposable baseline
+  checkout, with the same source-shaped batch delays and measurement-only fixture
+  instrumentation (scalar-only observer compatibility). Cold **8464.4ms**, warm
+  **16.6ms**, one child/one source snapshot read, **16 cold begins + 40 chunks**, no
+  nonzero pending value. Fixed: **15 cold begins + 40 chunks**; polling cadence unchanged.
+  These single-run observations show no extra hydration/child/HTTP workload, not a
+  statistically proven speedup. Startup/OS scheduling varies; synthetic batch waits
+  exist only in test source fixtures. Production has no intentional delay.
+- Chrome's standard loading probe passed **48 theme/scheme/width/CSS-zoom/reduced-motion
+  layouts**, plus stable max/value/accessibility structure, exact 220-row counts,
+  focus/selection/scroll retention, navigation/Back, hidden polling and late chunks.
+  Edge independently passed **48 native-page-zoom layouts**: unoverridden fixed-window
+  CSS viewport/DPR were 1336/1, 1069/1.25 and 891/1.5 at 100/125/150%, with CSS zoom 1.
+- The first standalone liveness browser run hit its obsolete `bar===0` assertion at
+  a truthful 15% reading-entry milestone; that run was **not PASS**. Updated acceptance
+  requires all blocked-reading samples to stay exactly 15. Fresh run passed three
+  watchdog retirements, healthy peer, unchanged failure budget under status bursts,
+  24 error layouts and keyboard Retry to 1001 rows in 2566ms (1067.8ms publication-to-DOM).
+  Navigation/Back/Forward closed the blocked lane; final retired-child count was 5.
+- Read-only real V2 installation: 3174 available sessions, 27 indexed during the
+  bounded sample, one-row pinned detail in **2.7s**, independent freeze consistency,
+  max detail HTTP **64ms**, one Live owner preserved. All owned processes/threads
+  closed; shared OpenCode untouched and zero initiated model calls. Global metric
+  sort stayed pending and natural arrival was unobserved; neither is claimed PASS.
+
+Compact retained evidence: `architecture/governance/verification/session-progress-686.json`.
+Detailed own-session traces: `scratch:/baseline-first-load.json`,
+`scratch:/baseline-matched.json`, `scratch:/first-load-final.json`,
+`scratch:/loading-layout.json`, `scratch:/loading-zoom.json`, `scratch:/liveness-final.json`.
+This is source-shaped reproduction and bounded real-installation evidence, **not**
+the owner's unidentified private incident. No physical input, spoken screen-reader,
+OS-scaling or macOS visual proof is inferred. No acceptance waiver was needed;
+no paid inference, shared-source writes, service stop, ZIP, tag or Release was added.

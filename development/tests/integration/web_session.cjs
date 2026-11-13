@@ -116,10 +116,18 @@ async function main() {
    assert.equal(pendingView.loader.root.hidden, true);
    assert.equal(pendingView.scroll.attributes['aria-busy'], 'false');
   assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
-  acquisition = {phase:'analyzing',attempts:2,completed:73,progress_age_seconds:1};
+   acquisition = {phase:'analyzing',attempts:2,completed:73,percent:40,progress_age_seconds:1};
   await pendingView.load();
   assert.match(pendingView.loader.stage.textContent,/Analyzing session history.*73 completed work units; attempt 2/);
-  assert.equal(pendingBar.value,0,'measured units with no denominator are never a fraction');
+   assert.equal(pendingBar.value,40,'source phase milestone advances without inventing a scalar denominator');
+   acquisition.completed=73000; await pendingView.load();
+   assert.equal(pendingBar.value,40,'arbitrary unknown units never advance the milestone');
+   acquisition={phase:'reading',percent:27,phase_completed:1,phase_total:2,attempts:2};
+   await pendingView.load(); assert.equal(pendingBar.value,40,'late lower watermark cannot regress');
+   assert.match(pendingView.loader.stage.textContent,/1 of 2 stage units/);
+   acquisition={phase:'retrying',percent:40,attempts:2}; await pendingView.load();
+   acquisition={phase:'selecting',percent:3,attempts:3}; await pendingView.load();
+   assert.equal(pendingBar.value,40,'automatic retry retains watermark, not claimed current-attempt fraction');
   acquisition = {phase:'failed',reason:'detail_no_progress',attempts:3,retry_available:true};
   await pendingView.load();
   assert.equal(pendingView.retry.hidden,false);
@@ -145,7 +153,7 @@ async function main() {
   assert.equal(pendingView.status.hidden, true);
   pendingView.detach(); assert.equal(timers.size, 0);
   // Exact counts, independent phase expectations and completion after applied rows.
-  for (const total of [0, 1, 220]) {
+   for (const total of [0, 1, 25, 50, 220, 1001]) {
     const full = JSON.parse(JSON.stringify(input.first)); full.total = total; full.revision = 'count-' + total;
     full.result.view.prompt_blocks[0].rows = Array.from({length: total}, (_, index) => ({...input.first.result.view.prompt_blocks[0].rows[0], id:'row-' + index}));
     const offsets = [];
@@ -164,12 +172,14 @@ async function main() {
     assert.equal(counted.body.children.length, total);
     assert.equal(counted.loader.bar.value, 100);
     assert.equal(updates.at(-1).rows, total, '100 follows the actual DOM application');
-    assert.ok(updates.every((state,index) => !index || state.percent >= updates[index-1].percent));
+     assert.ok(updates.every((state,index) => !index || state.percent >= updates[index-1].percent));
+     assert.deepEqual(updates.filter(state=>state.label==='Loading session history').map(state=>state.percent),
+       offsets.map(offset=>total ? Math.floor(70+25*Math.min(total,offset+50)/total) : 95));
     if (total === 220) {
       assert.deepEqual(offsets, [0,50,100,150,200]);
       assert.deepEqual(updates.filter(state => state.label === 'Loading session history').map(state => [state.percent,state.stage]),
-        [[21,'Loading session history (50 of 220)…'],[43,'Loading session history (100 of 220)…'],
-          [64,'Loading session history (150 of 220)…'],[86,'Loading session history (200 of 220)…'],[95,'Loading session history (220 of 220)…']]);
+         [[75,'Loading session history (50 of 220)…'],[81,'Loading session history (100 of 220)…'],
+           [87,'Loading session history (150 of 220)…'],[92,'Loading session history (200 of 220)…'],[95,'Loading session history (220 of 220)…']]);
     }
     const body = counted.body.children[0], bar = counted.loader.bar;
     counted.api = async () => ({state:'loading',pending:true,result:null}); await counted.load();

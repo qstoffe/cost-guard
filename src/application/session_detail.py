@@ -41,7 +41,7 @@ class SessionDetails:
             entry = self.histories.setdefault(session_id, dict(history=SessionHistory(), result=None,
                 revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
                 row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
-                acquisition=dict(phase='queued', reason=None, attempts=0, completed=0,
+                acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                     queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None))
             if entry['acquisition']['phase'] != 'failed':
                 entry["due"] = 0
@@ -80,7 +80,7 @@ class SessionDetails:
             entry = self.histories[lease['session_id']]
             entry['attempt'] = None
             entry['due'] = 0
-            entry['acquisition'] = dict(phase='queued', reason=None, attempts=0, completed=0,
+            entry['acquisition'] = dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                 queued_at=self.clock(), changed_at=self.clock(), started_at=None)
             lease['touched'] = self.clock()
 
@@ -100,7 +100,7 @@ class SessionDetails:
             self.histories.move_to_end(key)
             attempt = uuid4().hex
             entry['attempt'] = attempt
-            entry['acquisition'] = dict(phase='reading', reason=None,
+            entry['acquisition'] = dict(phase='selecting', reason=None, percent=3, attempt_id=attempt,
                 attempts=entry['acquisition']['attempts'] + 1, completed=0,
                 queued_at=self.clock(), changed_at=self.clock(), started_at=self.clock())
             return key, attempt, entry['history']
@@ -110,7 +110,7 @@ class SessionDetails:
             entry = self.histories.get(key)
             return entry is not None and entry['attempt'] == attempt and self._active(key)
 
-    def progress(self, key, attempt, phase, completed):
+    def progress(self, key, attempt, phase, completed, *, percent=0, phase_completed=-1, phase_total=-1):
         with self.lock:
             entry = self.histories.get(key)
             if entry is not None and entry['attempt'] == attempt:
@@ -119,6 +119,10 @@ class SessionDetails:
                     status['changed_at'] = self.clock()
                     status['completed'] = completed
                 status['phase'] = phase
+                status['percent'] = max(status['percent'], min(69, max(0, percent)))
+                measured = 0 <= phase_completed <= phase_total and phase_total > 0
+                status['phase_completed'] = phase_completed if measured else None
+                status['phase_total'] = phase_total if measured else None
 
     def finish(self, key, attempt, outcome):
         with self.lock:
@@ -146,7 +150,8 @@ class SessionDetails:
                 entry.update(outcome['metadata'])
                 entry['validated'] = self.clock()
                 entry['state'] = outcome['state']
-                status.update(phase='ready', reason=None, attempts=0)
+                status.update(phase='ready', reason=None, attempts=0, percent=70,
+                    phase_completed=None, phase_total=None)
                 entry['due'] = self.clock() + 5
             entry['generation'] += 1
 
@@ -157,6 +162,8 @@ class SessionDetails:
         if status['phase'] == 'queued' and age >= 120:
             status.update(phase='failed', reason='detail_not_admitted')
         return dict(phase=status['phase'], reason=status['reason'], attempts=status['attempts'],
+            attempt_id=status.get('attempt_id'), percent=status['percent'],
+            phase_completed=status.get('phase_completed'), phase_total=status.get('phase_total'),
             completed=status['completed'], progress_age_seconds=int(age),
             attempt_age_seconds=int(max(0, self.clock() - (status['started_at'] or self.clock()))),
             retry_available=status['phase'] == 'failed')

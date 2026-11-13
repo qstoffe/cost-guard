@@ -94,13 +94,15 @@ remains wire-compatible but no longer authorizes or invalidates current Mini Ctx
 [Evidence and limits](../../journal/web/mini-watch.md#persistent-session-ctx-fr000690).
 
 FR000662 reuses `ReportLoading.View` only as a visual controller for first detail
-loading; it does not join finite report admission. `session.js` measures validated,
-revision-pinned rich rows over 0–95%, then marks applied complete DOM at 100%.
+loading; it does not join finite report admission. `session.js` consumes validated
+source-owned milestones/known stage fractions over 0–70%, measures revision-pinned rich rows
+over 70–95%, then marks applied complete DOM at 100% (FR000686).
 Unknown source waits/retries retain a verified watermark, with no clock advancement.
 One stable determinate bar and stage-only live region survive loading polls; retained
 history bypasses the initial loader. Begin/chunk bounds, unique row IDs and a post-yield
 generation guard reject inconsistent/abandoned assemblies. No API/acquisition owner,
-export, pricing, report loader behavior or five-second polling change.
+export, pricing or other report loader behavior changes. Pending reads retain 500ms
+cadence; settled/quiet checks retain five seconds.
 [Verification and limits](../../journal/web/session-loading.md).
 
 FR000658 preserves the host/job/report ownership below. `app.js` escapes a rejected

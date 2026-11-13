@@ -6,8 +6,10 @@ import tempfile
 from threading import Event
 import time
 
+from src.domain.progress import DetailProgress
 
-PHASES = ('queued', 'reading', 'verifying', 'analyzing', 'publishing')
+
+PHASES = DetailProgress.phases
 MAX_DETAIL_BYTES = 256 * 1024 * 1024
 
 
@@ -20,13 +22,18 @@ class WorkMeter:
         self.shared = shared
         self.units = 0
         self.last_sent = 0
+        self.progress = DetailProgress()
 
-    def observe(self, phase, units=0):
+    def observe(self, phase, units=0, *, completed=None, total=None):
         self.units += max(0, units)
+        previous = self.progress.phase, self.progress.percent
+        self.progress.observe(phase, units, completed=completed, total=total)
         now = time.monotonic()
-        if now - self.last_sent >= .05 or units == 0:
+        if now - self.last_sent >= .05 or previous != (self.progress.phase, self.progress.percent) or units == 0:
             with self.shared.get_lock():
-                self.shared[:] = (PHASES.index(phase), self.units)
+                self.shared[:] = (PHASES.index(self.progress.phase), self.units, self.progress.percent,
+                    self.progress.completed if self.progress.completed is not None else -1,
+                    self.progress.total if self.progress.total is not None else -1)
             self.last_sent = now
 
 
@@ -105,7 +112,7 @@ class DetailCapture:
                 input_path, output_path = Path(directory.name) / 'input', Path(directory.name) / 'output'
                 write_payload(input_path, dict(history=history, key=key, config=config,
                     now_ms=now_ms, identity=identity, evidence=evidence))
-                shared = self.context.Array('d', (PHASES.index('reading'), 0))
+                shared = self.context.Array('d', (PHASES.index('selecting'), 0, 3, -1, -1))
                 process = self.context.Process(target=self.target, args=(shared, (str(input_path), str(output_path))))
                 self.process = process
                 last_units, changed_at = 0, time.monotonic()
@@ -118,12 +125,13 @@ class DetailCapture:
                         lock = shared.get_lock()
                         if lock.acquire(timeout=.05):
                             try:
-                                phase, units = shared[:]
+                                phase, units, percent, completed, total = shared[:]
                             finally:
                                 lock.release()
                             if units > last_units:
                                 last_units, changed_at = units, time.monotonic()
-                            details.progress(key, attempt, PHASES[int(phase)], int(units))
+                            details.progress(key, attempt, PHASES[int(phase)], int(units),
+                                percent=int(percent), phase_completed=int(completed), phase_total=int(total))
                         if self.stopping.is_set() or not details.current(key, attempt):
                             outcome = dict(error='detail_cancelled', terminal=True)
                             self._stop(process)
