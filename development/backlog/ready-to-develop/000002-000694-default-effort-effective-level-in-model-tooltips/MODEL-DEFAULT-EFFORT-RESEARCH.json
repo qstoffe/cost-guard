@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-13",
+  "purpose": "Research attachment to Cost Guard FR000694. NOT deployed runtime configuration, licensed model catalog, or evidence of request-specific executed effort.",
+  "scope": "31 distinct text/code models in the publicly available GitHub Copilot Models and pricing table as read on 2026-11-13. Excludes textless image-generation models and empty Fine-tuned section; collapses the repeated Long context price tiers.",
+  "caveats": [
+    "GitHub pricing Tier=Default means PRICE TIER, NOT reasoning-effort default. This file does not derive efforts from price tiers.",
+    "Values are vendor API/provider-package defaults for OMITTED effort; NOT proof of actual OpenCode/GitHub Copilot route selection or old per-request execution.",
+    "OpenCode provider, model and variant settings can override the API default. Exact installed source/config/route/request evidence takes precedence.",
+    "documented means an upstream source names that default for its API model; conditional requires corroboration for Copilot/OpenCode route; unresolved must NOT be guessed.",
+    "Research data is a starting snapshot. Implementer rechecks current catalog and source versions, maps exact provider/model IDs, and handles source changes and newly listed models.",
+    "Do not infer reasoning effort from whether a model produced reasoning tokens or from an application feature called thinking/auto."
+  ],
+  "sources": {
+    "github_pricing": "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing",
+    "opencode_models": "https://opencode.ai/docs/models",
+    "opencode_resolver": "https://github.com/anomalyco/opencode/blob/dev/packages/core/src/model-resolver.ts",
+    "opencode_openai": "https://github.com/anomalyco/opencode/blob/dev/packages/ai/src/providers/openai-options.ts",
+    "anthropic_effort": "https://platform.claude.com/docs/en/build-with-claude/effort",
+    "openai_reasoning": "https://developers.openai.com/api/docs/guides/reasoning",
+    "openai_latest": "https://developers.openai.com/api/docs/guides/latest-model",
+    "openai_nano": "https://developers.openai.com/api/docs/models/gpt-5.4-nano",
+    "openai_gpt53": "https://developers.openai.com/api/docs/models/gpt-5.3-codex",
+    "openai_astra_support": "https://community.openai.com/t/what-is-the-default-level-of-reasoning-for-gpt-6-astra/1408343/7",
+    "google_thinking": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking",
+    "xai_reasoning": "https://docs.x.ai/developers/model-capabilities/text/reasoning",
+    "moonshot_k3": "https://github.com/MoonshotAI/Kimi-K3"
+  },
+  "counts": {
+    "total": 31,
+    "byPublisher": {
+      "OpenAI": 10,
+      "Anthropic": 13,
+      "Google": 3,
+      "Microsoft": 1,
+      "xAI": 3,
+      "Moonshot AI": 1
+    },
+    "byConfidence": {
+      "conditional": 3,
+      "documented": 25,
+      "unresolved": 3
+    }
+  },
+  "rows": [
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-5.3-Codex",
+      "default_effort": "medium",
+      "evidence": [
+        "opencode_openai",
+        "openai_gpt53"
+      ],
+      "confidence": "conditional",
+      "note": "OpenCode first-party GPT-5 package sets reasoningEffort=medium; vendor recommends medium but the exact GitHub Copilot route/native effective default was not independently proven."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-5.4 nano",
+      "default_effort": "none",
+      "evidence": [
+        "openai_nano"
+      ],
+      "confidence": "documented",
+      "note": "Vendor model page explicitly says none (default); verify this selected API route has no override."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-5.6 Luna",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "GPT-5.6 family API default; provider/model settings may override."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-5.6 Sol",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "GPT-5.6 family API default; provider/model settings may override."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-5.6 Terra",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "GPT-5.6 family API default; provider/model settings may override."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-6 Astra",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_astra_support",
+        "openai_reasoning"
+      ],
+      "confidence": "conditional",
+      "note": "OpenAI Support Community post dated 2026-10-23 says omitted effort defaults to medium; public model guide does not explicitly label Astra default. Verify active route."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-6 Luna",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning",
+        "openai_latest"
+      ],
+      "confidence": "documented",
+      "note": "Vendor API default; preserve standard/pro execution mode independently."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-6 Sol",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning",
+        "openai_latest"
+      ],
+      "confidence": "documented",
+      "note": "Vendor API default; preserve standard/pro execution mode independently."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-6.1 Sol",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_reasoning",
+        "openai_latest"
+      ],
+      "confidence": "documented",
+      "note": "Vendor API default; preserve standard/pro execution mode independently."
+    },
+    {
+      "publisher": "OpenAI",
+      "model": "GPT-6.1 Terra",
+      "default_effort": "medium",
+      "evidence": [
+        "openai_latest"
+      ],
+      "confidence": "documented",
+      "note": "Vendor model/guide explicitly identifies medium default."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Haiku 4.5",
+      "default_effort": null,
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "unresolved",
+      "note": "Not named in the present Claude effort API availability list; do not assume high applies to this older model or that a numeric effort knob exists."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Haiku 5.5",
+      "default_effort": "medium",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": "Explicit medium API default."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Sonnet 4",
+      "default_effort": null,
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "unresolved",
+      "note": "Older Sonnet 4 is absent from current per-model effort availability; no supported numeric default established."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Sonnet 4.6",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": "Explicit high API default despite medium being a recommended working level."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Opus 4.8",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": "Explicit high API default; xhigh is a recommendation for coding, not the omitted-effort default."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Opus 5",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": ""
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Opus 5.5",
+      "default_effort": "medium",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": "Important changed default versus Opus 5."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Sonnet 5",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": ""
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Sonnet 5.5",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": "The Claude API default is high, even if user has tuned an agent to medium."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Opus 4.8 (fast mode) (preview)",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "conditional",
+      "note": "Parent Opus 4.8 vendor API default is high; the GitHub Copilot fast-mode route may apply different configuration. Verify the route before applying."
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Fable 5",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": ""
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Fable 5.1",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": ""
+    },
+    {
+      "publisher": "Anthropic",
+      "model": "Claude Fable 5.2",
+      "default_effort": "high",
+      "evidence": [
+        "anthropic_effort"
+      ],
+      "confidence": "documented",
+      "note": ""
+    },
+    {
+      "publisher": "Google",
+      "model": "Gemini 3.8 Flash",
+      "default_effort": "medium",
+      "evidence": [
+        "google_thinking"
+      ],
+      "confidence": "documented",
+      "note": "Google Cloud Gemini thinking_level defaults to MEDIUM; must verify Copilot route/model settings are equivalent."
+    },
+    {
+      "publisher": "Google",
+      "model": "Gemini 4 Argon",
+      "default_effort": "medium",
+      "evidence": [
+        "google_thinking"
+      ],
+      "confidence": "documented",
+      "note": "Google Cloud Gemini thinking_level defaults to MEDIUM; must verify Copilot route/model settings are equivalent."
+    },
+    {
+      "publisher": "Google",
+      "model": "Gemini 4 Carbon",
+      "default_effort": "medium",
+      "evidence": [
+        "google_thinking"
+      ],
+      "confidence": "documented",
+      "note": "Google Cloud Gemini thinking_level defaults to MEDIUM; must verify Copilot route/model settings are equivalent."
+    },
+    {
+      "publisher": "Microsoft",
+      "model": "MAI-Code-1.1-Flash",
+      "default_effort": null,
+      "evidence": [
+        "github_pricing"
+      ],
+      "confidence": "unresolved",
+      "note": "Listed in GitHub pricing, but no reliable first-party reasoning-effort default found during this research; verify native capabilities rather than invent low/medium."
+    },
+    {
+      "publisher": "xAI",
+      "model": "Grok 4.5",
+      "default_effort": "high",
+      "evidence": [
+        "xai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "xAI API omitted reasoning_effort defaults high."
+    },
+    {
+      "publisher": "xAI",
+      "model": "Grok 4.6",
+      "default_effort": "high",
+      "evidence": [
+        "xai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "xAI API omitted reasoning_effort defaults high."
+    },
+    {
+      "publisher": "xAI",
+      "model": "Grok 4.7",
+      "default_effort": "high",
+      "evidence": [
+        "xai_reasoning"
+      ],
+      "confidence": "documented",
+      "note": "xAI API omitted reasoning_effort defaults high."
+    },
+    {
+      "publisher": "Moonshot AI",
+      "model": "Kimi K3",
+      "default_effort": "max",
+      "evidence": [
+        "moonshot_k3"
+      ],
+      "confidence": "documented",
+      "note": "Moonshot's official model repository specifies low/high/max; max is the API default."
+    }
+  ]
+}
