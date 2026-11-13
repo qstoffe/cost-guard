@@ -125,9 +125,9 @@ class AccountPeriodCCostTests(unittest.TestCase):
         quotas = (wire['primary']['quota'], *(slot['quota'] for slot in wire['secondary']))
         self.assertEqual([D(1020), D(1120), D(1120)], [D(q['period_ccost']['cost']['known_ccost']) for q in quotas])
         self.assertTrue(all(q['display']['capacity_basis'] == 'ratio' for q in quotas))
-        self.assertTrue(all('estimated account attribution' in q['display']['capacity_help'] for q in quotas))
-        self.assertIn('unpriced usage', quotas[1]['display']['capacity_help'])
-        self.assertNotIn('unpriced usage', quotas[2]['display']['capacity_help'], 'model-specific numerator excludes the unpriced other model')
+        self.assertTrue(all('Account attribution uncertain.' in q['display']['capacity_help'] for q in quotas))
+        self.assertIn('Partial pricing / attribution.', quotas[1]['display']['capacity_help'])
+        self.assertNotIn('Partial pricing / attribution.', quotas[2]['display']['capacity_help'], 'model-specific numerator excludes the unpriced other model')
         missing = account_projections((native,), entries, FakePricingProvider().catalog,
             now_ms=NOW, today_start_ms=DAY, month_start_ms=MONTH, watch=True,
             observed_start_ms=DAY, require_history=True)[0]

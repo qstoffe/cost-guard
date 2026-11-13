@@ -6,7 +6,7 @@ import unittest
 from development.tests.fixtures.watch_summary import estimated_allowances, summary_watch
 from development.tests.integration.probe_web_live import check_estimate_quotas
 from src.application.live_projection import project_live
-from src.application.quota_estimates import estimate_amount, estimate_help, rounded_estimate, within_tolerance
+from src.application.quota_estimates import estimate_amount, estimate_help, reference_help_amount, rounded_estimate, within_tolerance
 from src.numbers import ccost_amount, ccost_display
 
 
@@ -58,17 +58,34 @@ class QuotaEstimateTests(unittest.TestCase):
                 self.assertEqual('', estimate_help(value))
         self.assertEqual(D(0), rounded_estimate(D('-0')))
 
-    def test_full_fractional_raw_help_and_small_currency_limit_do_not_change_generic_formatter(self):
+    def test_normally_formatted_raw_help_does_not_change_generic_or_visible_formatter(self):
         raw = D('613.1234567890123456789012345678')
         with ccost_display('credits'):
-            self.assertIn(str(raw) + ' Credits', estimate_help(raw))
+            self.assertEqual('~614 Credits', estimate_help(raw))
             self.assertEqual('600', estimate_amount(raw))
             self.assertEqual('614', ccost_amount(raw))
             self.assertEqual('0.00006', estimate_amount(D('.0000613')))
         with ccost_display('usd'):
-            self.assertIn('613.1234567890123456789012345678 Credits ($6.13)', estimate_help(raw))
-            self.assertIn('cannot retain the 5%', estimate_help(D('.25')))
+            self.assertEqual('~$6.13', estimate_help(raw))
+            self.assertEqual('~<$0.01', estimate_help(D('.25')))
             self.assertEqual('$6.13', ccost_amount(raw))
+
+    def test_raw_help_unit_matrix_and_tiny_positive_bounds(self):
+        for raw, credits, dollars in (
+                ('3065.617283945061728394506172', '3066 Credits', '$30.66'),
+                ('949.1234567890123456789012345', '950 Credits', '$9.49'),
+                ('0', '0 Credits', '$0.00'), ('-0', '0 Credits', '$0.00'),
+                ('.000001', '<1 Credits', '<$0.01'), ('.25', '<1 Credits', '<$0.01'),
+                ('.5', '<1 Credits', '$0.01'), ('.99', '<1 Credits', '$0.01'),
+                ('1', '1 Credits', '$0.01'), ('1.01', '2 Credits', '$0.01'),
+                ('1E80', '1' + '0' * 80 + ' Credits', '$1' + '0' * 78 + '.00')):
+            for unit, expected in (('credits', credits), ('usd', dollars)):
+                with self.subTest(raw=raw, unit=unit), ccost_display(unit):
+                    self.assertEqual(expected, reference_help_amount(D(raw)))
+                    self.assertEqual('~' + expected, reference_help_amount(D(raw), inferred=True))
+        for raw in (None, True, '', 'invalid', D('-1'), D('NaN'), D('sNaN'), D('Infinity')):
+            with self.subTest(raw=raw):
+                self.assertEqual('?', reference_help_amount(raw))
 
     def test_count_only_installation_oracle_covers_independent_fields_and_rejects_wrong_display(self):
         accounts = project_live(estimated_allowances(summary_watch())).to_json()['accounts']

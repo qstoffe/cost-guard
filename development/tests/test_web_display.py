@@ -47,7 +47,7 @@ class WebDisplayTests(unittest.TestCase):
         self.assertEqual(now, dto['observed_at_ms'])
         self.assertEqual(deadline, dto['reset_at_ms'])
         self.assertEqual('2026-03-28 13:00', dto['display']['observed_at_ms'])
-        self.assertEqual('Reset in 48h, 2026-03-30 14:00', dto['display']['web_reset'])
+        self.assertEqual('Reset in 2d, 14:00 Monday', dto['display']['web_reset'])
         self.assertEqual('Reset in 48h, Monday 14:00', dto['display']['reset'])
 
     def test_dual_units_format_unit_independent_clocks_once_with_dst_and_token_order_preserved(self):

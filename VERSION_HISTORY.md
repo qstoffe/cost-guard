@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.43 - 2026-11-13
+
+- Web Accounts, Full Watch and Mini quota help uses concise Capacity/Monthly Capacity and numeric Used/Remaining, formatting original raw reference amounts as whole Credits or two-decimal USD. Inferred amounts retain `~`; visible 5%-tolerant estimate rounding and canonical accounting are unchanged. Tiny tooltip values use `<1 Credits` or `<$0.01` rather than a misleading zero; meaningful unavailable/partial/restricted states remain.
+- Web quota resets retain the countdown and local clock, followed by today, an English weekday through seven elapsed days, or the local date beyond seven days. Primary/secondary cards, usage help and Mini share the server-prepared calendar context; CLI reset conventions are unchanged.
+
 ## v81.42 - 2026-11-13
 
 - Web Sessions shows the latest executed main-thread model instead of the largest-cost contributor or “Multiple models”. A trailing `*` denotes confirmed distinct recorded provider/model selections across the canonical session tree; child-only or saved-but-unexecuted selections never supply the main value.

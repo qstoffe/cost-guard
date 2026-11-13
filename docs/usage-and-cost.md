@@ -77,7 +77,7 @@ For verified account-scoped Copilot monthly AI credits, Capacity instead uses th
 actual included native limit and Remaining uses native credits remaining; independent
 observed Used CCost need not reconcile with them. No plan limits are hardcoded.
 Partial pricing alone does not withhold a useful positive same-window priced subtotal:
-Capacity help qualifies the provisional estimate because unpriced usage may make it low.
+Capacity help retains a short partial pricing/attribution warning because unpriced usage may make it low.
 No priced sample, missing period history, ambiguous attribution, stale/reset or invalid
 evidence still withhold extrapolation. Zero native usage cannot establish numeric Capacity.
 Full Watch shows Capacity above every quota bar; Mini keeps it in accessible help;
@@ -88,7 +88,22 @@ Remaining, divided before formatting by the unchanged local calendar counts. Cre
 round down; USD uses two decimals (a tiny positive value may display `$0.00`). Unknown,
 stale, unlimited, inactive or expired reference budgets omit pace rather than relabeling
 native units. CLI/native remaining pace and Mini's compact account list are unchanged.
-Clean figures have no estimate suffix; help explains their basis and uncertainty.
+Inferred visible Capacity and monthly equivalents keep `~` and the existing compact
+5%-tolerant rounding. Their help instead formats each independent raw amount:
+`Capacity: ~3066 Credits` or `Capacity: ~$30.66`, not the rounded card's `~3000`.
+Credits use ordinary upward whole-number formatting; positive sub-one tooltip
+amounts use `<1 Credits`. USD uses ordinary two-decimal reference conversion,
+with `<$0.01` only when a positive value would otherwise round to zero.
+Verified allowances have no `~`; derived 30-day equivalents always do.
+Usage/Remaining/pace help stays numeric, with concise exceptional warnings rather
+than formulas, provenance essays or arbitrary Decimal precision.
+
+Web reset lines share the configured-local clock and server observation time:
+`Reset in 23h, 03:00 Saturday`. After the clock, the day is `today` only on the
+same local date, otherwise the English weekday through exactly seven elapsed days;
+later deadlines use `Reset at HH:mm, YYYY-MM-DD`. Accounts, primary/secondary Full
+Watch and primary Mini help agree across midnight/DST. Unknown/expired/inactive
+states stay explicit; CLI reset formatting remains unchanged.
 
 Normal `Accounts Overview` sections show numeric `CCost today` and a separate `CCost this month`, with rolling CCost beside each existing quota percentage (`5h … 35% (37)`, `Week … 62% (150)`). No separate rolling-cost rows, provenance paragraphs or account footer are printed. Month-to-date uses the configured local calendar month from its first day's 00:00 through now for **all** detected providers, including subscriptions without a native monthly quota. It is not an extrapolation or sum of overlapping windows. History acquisition is independent of the latest-100 model-comparison sample; missing/deleted source history cannot be reconstructed.
 

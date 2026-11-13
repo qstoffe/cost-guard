@@ -98,7 +98,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
        assert.equal(rendered.capacities[0],`Monthly Capacity: ${capacity}`);
        assert.deepEqual(rendered.bars,mode==='used'?[.3,.3]:[.7,.7]);
        assert.ok(rendered.mini.includes(`${percent} ${mode} (${amount})`));
-       assert.ok(rendered.help.startsWith(`Capacity: ${capacity}\nNext reset: `));
+        assert.ok(rendered.help.startsWith(`Capacity: ${capacity}${unit==='credits'?' Credits':''}\nNext reset: `));
        assert.equal(rendered.local,'450');assert.equal(rendered.today,'34');
        assert.equal(rendered.raw,authoritative.raw);assert.equal(rendered.streams,authoritative.streams);
        assert.equal(rendered.reports,authoritative.reports);

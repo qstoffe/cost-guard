@@ -23,8 +23,11 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
         assert.ok(data.text.includes(`5-hour Capacity: ~${unit==='usd'?'$6.00':'600'}`));
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$6.00':'600'}/day`));
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$18.00':'1800'}/workday`));
-        assert.match(data.help,/6130 Credits/);
-        if(mode==='remaining') assert.match(data.help,/5517 Credits/); else assert.doesNotMatch(data.help,/5517 Credits/);
+        assert.ok(data.help.startsWith(`Capacity: ~${unit==='usd'?'$61.30':'6130 Credits'}\nNext reset: `));
+        if(mode==='remaining') assert.ok(data.help.includes(`Remaining: ~${unit==='usd'?'$55.17':'5517 Credits'}`));
+        else assert.doesNotMatch(data.help,/Remaining:/);
+        assert.doesNotMatch(data.help,/Unrounded|estimate|Provider-reported fraction used|Observed same-window|Guesstimate|÷/i);
+        assert.match(data.help,/\nNext reset: Reset (?:in [^,\n]+, \d{2}:\d{2} (?:today|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|at \d{2}:\d{2}, \d{4}-\d{2}-\d{2})(?:\n|$)/);
         assert.equal(data.raw,source.raw);assert.equal(data.streams,source.streams);assert.equal(data.reports,source.reports);
         assert.deepEqual(data.bars,mode==='used'?[.1,.1]:[.9,.9]);
         // Exercise the exact intrinsic targets, comparing server-owned raw help in both units.
@@ -34,10 +37,11 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
           await until(`document.querySelector('[role=tooltip]')?.matches(':popover-open')`);
           const text=await evaluate(`document.querySelector('[role=tooltip]').textContent`);
           if(targets[index].includes('summary')) {
-            assert.match(text,new RegExp('of this quota window '+mode));
+            assert.match(text,/^Used: [^\n]+\nRemaining: [^\n]+\nReset /);
             assert.doesNotMatch(text,/Capacity|CCost|÷|rolling|scope|pricing/);
           } else {
-            assert.match(text,/Unrounded .*Capacity/);
+            assert.match(text,/^(Monthly )?Capacity: ~/);
+            assert.doesNotMatch(text,/Unrounded|estimate|Provider-reported|Observed|Guesstimate|÷|×/i);
             assert.doesNotMatch(text,/Native Used:|Native Remaining:|rolling|scope/);
             const key=targets[index].includes('monthly')?'monthly_capacity_help':'capacity_help';
             const ordinal=targets.slice(0,index).filter(value=>value.includes('summary')).length-1;
@@ -61,15 +65,15 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
   await until(`document.querySelector('[role=tooltip]')?.textContent.includes('5517 Credits')`);
   assert.equal(await evaluate(`document.activeElement.className`),'watch-period-cost help-value');
   await evaluate(`window.estimateFocus=document.activeElement;ReportView.setUnit('usd',document.getElementById('result'))`);
-  await until(`document.querySelector('[role=tooltip]')?.textContent.includes('5517 Credits ($55.17)')`);
+  await until(`document.querySelector('[role=tooltip]')?.textContent==='Remaining: ~$55.17'`);
   assert.equal(await evaluate(`document.activeElement===estimateFocus`),true);
   await evaluate(`window.capacityFocus=document.querySelector('.watch-quota-capacity span');capacityFocus.focus()`);
-  await until(`document.querySelector('[role=tooltip]')?.textContent.includes('613 ÷ 0.1 = 6130 Credits ($61.30)')`);
+  await until(`document.querySelector('[role=tooltip]')?.textContent==='Capacity: ~$61.30'`);
   await fixture('quota-estimates-update');
-  await until(`document.querySelector('[role=tooltip]')?.textContent.includes('653 ÷ 0.1 = 6530 Credits ($65.30)')`);
+  await until(`document.querySelector('[role=tooltip]')?.textContent==='Capacity: ~$65.30'`);
   assert.equal(await evaluate(`document.activeElement===capacityFocus`),true);
   await evaluate(`estimateFocus.focus()`);
-  await until(`document.querySelector('[role=tooltip]')?.textContent.includes('5877 Credits ($58.77)')`);
+  await until(`document.querySelector('[role=tooltip]')?.textContent==='Remaining: ~$58.77'`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},sessionId);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},sessionId);
   assert.equal(await evaluate(`document.querySelector('[role=tooltip]')?.matches(':popover-open')`),false);
@@ -77,14 +81,14 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
   const point = await evaluate(`(() => {document.activeElement.blur();const n=document.querySelector('.watch-secondary-quota .watch-quota-capacity span');
     n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
-  await until(`document.querySelector('[role=tooltip]')?.matches(':popover-open') && document.querySelector('[role=tooltip]').textContent.startsWith('Estimated full-window reference CCost')`);
-  assert.match(await evaluate(`document.querySelector('[role=tooltip]').textContent`),/Unrounded Capacity \(estimate\): [\s\S]*÷[\s\S]*Credits/);
+  await until(`document.querySelector('[role=tooltip]')?.matches(':popover-open') && document.querySelector('[role=tooltip]').textContent.startsWith('Capacity: ~$')`);
+  assert.match(await evaluate(`document.querySelector('[role=tooltip]').textContent`),/^Capacity: ~\$\d+\.\d{2}$/);
   assert.doesNotMatch(await evaluate(`document.querySelector('[role=tooltip]').textContent`),/Native Used:|Native Remaining:|rolling|scope/);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1},sessionId);
   // Touch each shared target; no whole-card popup or cross-topic help.
-  for(const [selector,pattern] of [['.watch-quota-summary > .help-value:first-child',/of this quota window remaining/],
-      ['.watch-quota-capacity > .help-value',/653 ÷ 0.1 = 6530 Credits/],
-      ['.watch-secondary-quota .watch-monthly-capacity > .help-value',/× \(30 days ÷ 18000 seconds\)/]]) {
+  for(const [selector,pattern] of [['.watch-quota-summary > .help-value:first-child',/^Used: [^\n]+\nRemaining:/],
+      ['.watch-quota-capacity > .help-value',/^Capacity: ~\$65.30$/],
+      ['.watch-secondary-quota .watch-monthly-capacity > .help-value',/^Monthly Capacity: ~\$\d+\.\d{2}$/]]) {
     const point=await evaluate(`(() => {document.activeElement.blur();const n=document.querySelector('${selector}');
       n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
     await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]},sessionId);
@@ -99,8 +103,17 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
     n.scrollIntoView();const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[touch]},pipSession);
   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},pipSession);
-  await until(`miniWatch.window.document.querySelector('[role=tooltip]')?.textContent.includes('5877 Credits')`);
-  assert.match(await evaluate(`miniWatch.window.document.querySelector('[role=tooltip]').textContent`),/6530 Credits/);
+  await until(`miniWatch.window.document.querySelector('[role=tooltip]')?.textContent.includes('Remaining: ~$58.77')`);
+  assert.match(await evaluate(`miniWatch.window.document.querySelector('[role=tooltip]').textContent`),/^Capacity: ~\$65.30\nNext reset: /);
+  await evaluate(`window.quotaMiniTarget=miniWatch.view.accounts.children[0].children[0].children[0]`);
+  await change('ccost-unit','credits');
+  await until(`miniWatch.window.document.querySelector('[role=tooltip]')?.matches(':popover-open') &&
+    miniWatch.window.document.querySelector('[role=tooltip]').textContent.includes('Remaining: ~5877 Credits')`);
+  await fixture('quota-estimates');
+  await until(`miniWatch.window.document.querySelector('[role=tooltip]')?.textContent.includes('Remaining: ~5517 Credits')`);
+  assert.equal(await evaluate(`quotaMiniTarget===miniWatch.view.accounts.children[0].children[0].children[0]`),true);
+  assert.equal(await evaluate(`miniWatch.window.document.querySelectorAll('[role=tooltip]').length`),1);
+  assert.match(await evaluate(`miniWatch.window.document.querySelector('[role=tooltip]').textContent`),/^Capacity: ~6130 Credits\nNext reset: /);
   await change('web-theme','default');await change('ccost-unit','credits');
   checks.push('Estimate rounding: Accounts/Watch/open Mini, primary/secondary/monthly/independent pace, Classic/Web light/dark × Used/Remaining × Credits/USD; raw source, native fractions and fetch counts unchanged. Actual keyboard, delayed hover, touch, Escape and same-target Live/raw-help refresh verified.');
 };

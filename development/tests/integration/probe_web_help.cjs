@@ -206,7 +206,7 @@ async function main() {
     await evaluate(owner,`document.documentElement.style.zoom=''`);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
      const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-value');
-      assert.match(quota,/^Capacity: [^\n]+\nNext reset: [^\n]+\nCapacity — Guesstimate before display rounding: 1680 Credits\.\nUnrounded calculation, not verified provider usage or a guaranteed balance\.$/);
+      assert.match(quota,/^Capacity: ~1680 Credits\nNext reset: [^\n]+$/);
     assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
     await key(mini,'Escape');
     await evaluate(owner,`(() => {window.helpMiniUpdate=miniWatch.update;window.helpMiniEpoch=liveValue.view.now_ms;

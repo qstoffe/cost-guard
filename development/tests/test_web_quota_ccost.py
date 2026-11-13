@@ -32,10 +32,10 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertEqual(f'~${rounded / 100:.2f}', wire['display_units']['usd']['monthly_capacity'])
                 self.assertEqual(monthly, D(wire['ccost_reference']['monthly_capacity']))
                 self.assertTrue(wire['ccost_reference']['monthly_applicable'])
-                self.assertIn('Theoretical standardized 30-day reference equivalent', wire['display']['monthly_capacity_help'])
-                self.assertIn('not an actual monthly provider entitlement', wire['display']['monthly_capacity_help'])
-                self.assertIn(f'× (30 days ÷ {duration} seconds) = ', wire['display']['monthly_capacity_help'])
-                self.assertIn(format(monthly, 'f') + ' Credits', wire['display']['monthly_capacity_help'])
+                self.assertEqual('Monthly Capacity: ~' + ccost_amount(monthly) + ' Credits',
+                    wire['display']['monthly_capacity_help'])
+                self.assertEqual(f'Monthly Capacity: ~{ccost_amount(monthly, unit="usd")}',
+                    wire['display_units']['usd']['monthly_capacity_help'])
                 if capacity:
                     self.assertEqual('~' + capacity, wire['display']['ccost_capacity'])
 
@@ -45,11 +45,11 @@ class WebQuotaCCostTests(unittest.TestCase):
         wire = with_display(watch_quota(quota), now_ms=1000).to_json()['quota']['display']
         self.assertEqual(('native', '840', '~3600'),
             (wire['capacity_basis'], wire['ccost_capacity'], wire['monthly_capacity']))
-        self.assertIn('Source-verified', wire['ccost_help'])
+        self.assertEqual('Capacity: 840 Credits', wire['capacity_help'])
         unverified = with_display(watch_quota(replace(quota, reference_ccost_capacity=None)), now_ms=1000).to_json()['quota']['display']
         self.assertEqual('N/A', unverified['monthly_capacity'], 'requests and native money are not reference credits')
 
-    def test_capacity_help_keeps_exact_snapshot_inputs_and_distinct_native_provenance(self):
+    def test_capacity_help_formats_raw_snapshot_without_visible_estimate_rounding(self):
         raw_used = D('613.1234567890123456789012345')
         quota = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.8'), duration_seconds=18000, reset_at_ms=20000)
         period = QuotaPeriodProjection(quota, ComparisonCost(raw_used, 1, 1), None)
@@ -57,17 +57,17 @@ class WebQuotaCCostTests(unittest.TestCase):
         wire = with_display(watch_quota(quota, period), now_ms=1000).to_json()['quota']
 
         help_text = wire['display']['capacity_help']
-        self.assertIn('Observed same-window CCost used: 613.1234567890123456789012345 Credits', help_text)
-        self.assertIn('613.1234567890123456789012345 ÷ 0.2 = 3065.617283945061728394506172 Credits', help_text)
-        self.assertIn('3065.617283945061728394506172 × (30 days ÷ 18000 seconds)', wire['display']['monthly_capacity_help'])
-        self.assertNotIn('Observed', wire['display']['monthly_capacity_help'])
-        self.assertIn('Credits ($30.66)', wire['display_units']['usd']['capacity_help'])
+        self.assertEqual('Capacity: ~3066 Credits', help_text)
+        self.assertEqual('~3000', wire['display']['ccost_capacity'])
+        self.assertEqual('Monthly Capacity: ~441449 Credits', wire['display']['monthly_capacity_help'])
+        self.assertEqual('Capacity: ~$30.66', wire['display_units']['usd']['capacity_help'])
+        self.assertEqual('Monthly Capacity: ~$4414.49', wire['display_units']['usd']['monthly_capacity_help'])
+        self.assertEqual('3065.617283945061728394506172', wire['ccost_reference']['capacity'])
         verified = replace(quota, reference_ccost_capacity=D('949.1234567890123456789012345'))
 
         native = with_display(watch_quota(verified), now_ms=1000).to_json()['quota']['display']
 
-        self.assertIn('Unrounded Capacity: 949.1234567890123456789012345 Credits', native['capacity_help'])
-        self.assertIn('Source-verified reference CCost allowance.', native['capacity_help'])
+        self.assertEqual('Capacity: 950 Credits', native['capacity_help'])
         self.assertNotRegex(native['capacity_help'], r'÷|estimate|Observed')
         self.assertEqual('950', native['ccost_capacity'], 'normal verified formatter, not estimate rounding or ~')
 
@@ -122,10 +122,9 @@ class WebQuotaCCostTests(unittest.TestCase):
             for key in ('used', 'remaining', 'capacity')))
         self.assertEqual(('$1.00', '$9.00', '~$10.00'), tuple(wire['display_units']['usd']['ccost_' + key]
             for key in ('used', 'remaining', 'capacity')))
-        self.assertIn('observed CCost ÷ native fraction used', wire['display']['ccost_help'])
+        self.assertEqual('Used: 100 Credits\nRemaining: ~900 Credits', wire['display']['ccost_help'])
         self.assertEqual('ratio', wire['display']['capacity_basis'])
-        self.assertIn('not a guaranteed budget', wire['display']['ccost_help'])
-        self.assertIn('observed CCost ÷ native fraction used', wire['display']['ccost_brief'])
+        self.assertEqual('Used: 100 Credits', wire['display']['ccost_brief'])
         tiny = replace(quota, remaining_fraction=D('.99999'))
         exact = with_display(watch_quota(tiny, QuotaPeriodProjection(tiny, ComparisonCost(D(1), 1, 1), None)),
             now_ms=1000).to_json()['quota']
@@ -145,11 +144,9 @@ class WebQuotaCCostTests(unittest.TestCase):
             for key in ('used', 'remaining', 'capacity')))
         self.assertEqual('0.9', wire['remaining_fraction'])
         self.assertIn('5517 Credits', wire['display']['ccost_remaining_help'])
-        self.assertIn('6130 Credits ($61.30)', wire['display_units']['usd']['ccost_capacity_help'])
-        self.assertIn('Observed same-window CCost used: 613 Credits', wire['display']['capacity_help'])
-        self.assertIn('Provider-reported fraction used: 0.1', wire['display']['capacity_help'])
-        self.assertIn('Unrounded Capacity (estimate): 613 ÷ 0.1 = 6130 Credits', wire['display']['capacity_help'])
-        self.assertIn('not verified provider usage', wire['display']['ccost_capacity_help'])
+        self.assertEqual('Capacity: ~$61.30', wire['display_units']['usd']['ccost_capacity_help'])
+        self.assertEqual('Capacity: ~6130 Credits', wire['display']['capacity_help'])
+        self.assertEqual(wire['display']['capacity_help'], wire['display']['ccost_capacity_help'])
         self.assertEqual('$55.00', wire['display_units']['usd']['ccost_remaining'])
 
     def test_copilot_native_amounts_never_use_independent_observed_cost(self):
@@ -162,8 +159,8 @@ class WebQuotaCCostTests(unittest.TestCase):
             with self.subTest(limit=limit):
                 self.assertEqual((ccost_amount(D(used)), ccost_amount(D(remaining)), ccost_amount(D(limit))), tuple(wire['display']['ccost_' + key]
                     for key in ('used', 'remaining', 'capacity')))
-                self.assertIn('Provider-reported quota Used/Remaining', wire['display']['ccost_help'])
-                self.assertIn('OpenCode-observed CCost is separate', wire['display']['ccost_brief'])
+                self.assertEqual(f'Used: {used} Credits', wire['display']['ccost_help'])
+                self.assertEqual(f'Capacity: {limit} Credits', wire['display']['capacity_help'])
                 self.assertEqual((f'${D(used) / 100:.2f}', f'${D(remaining) / 100:.2f}', f'${D(limit) / 100:.2f}'),
                     tuple(wire['display_units']['usd']['ccost_' + key] for key in ('used', 'remaining', 'capacity')))
                 self.assertEqual(f'${D(limit) / 100:.2f}', wire['display_units']['usd']['ccost_capacity'])
@@ -253,7 +250,7 @@ class WebQuotaCCostTests(unittest.TestCase):
             wire = with_display(watch_quota(quota, provider_id=provider)).to_json()['quota']['display']
             with self.subTest(provider=provider, quota=quota):
                 self.assertEqual(('?', '?'), (wire['ccost_capacity'], wire['ccost_remaining']))
-                self.assertIn('Reference Capacity / Remaining unavailable', wire['ccost_brief'])
+                self.assertTrue(wire['capacity_help'].startswith('Capacity: ?\n'))
 
     def test_unreliable_or_out_of_window_ratio_is_unknown_not_zero_or_negative(self):
         base = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'), duration_seconds=18000, reset_at_ms=20000)
@@ -295,15 +292,15 @@ class WebQuotaCCostTests(unittest.TestCase):
         self.assertEqual('ratio', accounts[1]['display']['capacity_basis'])
         self.assertEqual('7%', accounts[1]['quota_display']['used']['percent'])
         for q in accounts[1:]:
-            self.assertIn('Estimate from priced requests; unpriced usage may make this low.', q['display']['capacity_help'])
-            self.assertIn('not a guaranteed provider budget', q['display']['capacity_help'])
+            self.assertIn('Partial pricing / attribution.', q['display']['capacity_help'])
+            self.assertNotRegex(q['display']['capacity_help'], r'(?i)estimate|unrounded|observed|provider-reported|÷')
             self.assertTrue(q['display_units']['usd']['ccost_capacity'].startswith('~$'))
         for key in ('capacity', 'monthly_capacity'):
             raw = D(accounts[1]['ccost_reference'][key])
             display_key = 'ccost_capacity' if key == 'capacity' else key
             rendered = D(accounts[1]['display'][display_key].removeprefix('~'))
             self.assertLessEqual(abs(raw - rendered), raw / 20)
-        self.assertIn('1020 ÷ 0.07 = 14571.42857142857142857142857 Credits', accounts[1]['display']['capacity_help'])
+        self.assertEqual('Capacity: ~14572 Credits\nPartial pricing / attribution.', accounts[1]['display']['capacity_help'])
         complete = with_display(watch_quota(weekly, QuotaPeriodProjection(weekly, ComparisonCost(D(1020), 3, 3), None)), now_ms=1000).to_json()['quota']
         self.assertEqual(accounts[1]['ccost_reference'], complete['ccost_reference'])
         self.assertNotIn('unpriced', complete['display']['capacity_help'])
@@ -344,7 +341,7 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertEqual((capacity, remaining), (wire['display']['ccost_capacity'], wire['display']['ccost_remaining']))
                 self.assertEqual('used' if quota.unlimited else 'remaining', wire['quota_display']['remaining']['mode'])
                 if quota.unlimited:
-                    self.assertIn('Unlimited quota', wire['display']['ccost_brief'])
+                    self.assertEqual('Capacity: Unlimited', wire['display']['capacity_help'])
 
     def test_idle_sdk_zero_has_native_full_remaining_without_numeric_cost_capacity(self):
         base = summary_watch().quota.accounts[0]
