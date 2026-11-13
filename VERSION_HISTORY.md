@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.46 - 2026-11-14
+
+- Session exports suggest the observed session title plus `.json` in both Save As and browser downloads. Unsafe filename characters are removed, valid Unicode/spaces are preserved, long names are bounded and unusable/reserved titles fall back to the selected session ID. Trusted-click activation and strict ID-based transport validation remain unchanged.
+- Native sanitized JSON uses two-space indentation and a final newline without changing data or string whitespace. The 16 MiB limit includes final UTF-8 formatting; oversize output fails without a partial or minified substitute.
+
 ## v81.45 - 2026-11-14
 
 - Full Web Watch preserves the user's Running disclosure state through verified same-call revisions, timer updates and 1→2→1 job membership. Source corrections update safe text in place; genuinely different calls and lost verification clear old details without inheriting an unrelated expanded state.

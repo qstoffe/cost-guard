@@ -156,3 +156,67 @@ Durable conclusions are here; disposable scalar evidence was recorded as
 `scratch:/session-export-browser.json`, `scratch:/installed-export.json` and
 `scratch:/full-tests.json`. Architecture and Web guide updated; no other boundary
 change or architecture audit is claimed.
+
+## FR000702 — title filenames and pretty native JSON, 2026-11-14
+
+v81.46 derives the display filename from the already-observed selected detail title,
+not the editable heading, prompt preview or export payload title. Both routes use
+the same name captured with the selected token at trusted click time. Unsafe path/
+control/directional characters are deleted; Unicode, case and internal spaces remain.
+Trailing dots/spaces are removed, the stem is bounded to 200 UTF-8 bytes, and empty/
+reserved device names fall back to `session-<canonical-id>.json`. Token/source
+retirement clears the title and aborts pending work; late responses cannot save for
+a new selection. The strict ID-shaped transport disposition remains unchanged.
+
+Native `{info, messages}` now uses two-space indentation and a final newline.
+Incremental UTF-8 encoding bounds expansion to the original 16 MiB including that
+newline, with cancellation/deadline checks and no compact/partial substitute.
+Upstream `sanitize=true`, identity/authentication/CSRF, four-second source budget,
+no persistent transcript staging and review-before-sharing guidance remain.
+
+Fresh verification:
+
+- Full local suite: **193 registered file targets PASS, zero failures, 166.7 s**.
+  Focused export/view checks: ten tests PASS. Coverage includes exact 16 MiB pretty
+  output and pretty-expanded overflow while the upstream compact response still
+  fits, UTF-8/string escapes/types/order, title safety/Unicode/reserved/long names,
+  selection retirement and unchanged strict attachment parser rejection.
+- Working-tree validator: **11 passes, zero failures, seven existing advisory
+  warnings** (three prose files and four Python modules). No caps were raised.
+- Owned hidden fresh-profile **Edge 157.0.4341.46**: all 24 theme/width/zoom/coarse
+  cases and trusted pointer/Tab/Enter/Space/touch/pending-hover behavior PASS.
+  The real native picker API receives the correct title-derived suggestion with
+  active user activation, then headless `AbortError` without export requests.
+  Handle-double commit/focus tests are separate from OS dialog proof.
+- Actual authenticated browser fallback downloads use the observed Unicode title
+  with invalid punctuation removed, not the different native payload title.
+  Pretty JSON parses identically to the synthetic native transfer, including
+  nested arrays and quotes/newlines/tabs inside strings. A repeat download uses
+  the browser's `(1)` collision suffix and leaves the first file unchanged.
+  Malformed source output creates no third file; focus/navigation/URL cleanup pass.
+  The initial collision probe failed under CDP's forced download override; using
+  owned profile preferences and default download behavior fixed the harness, not
+  the product. Final source encoding was rechecked in the browser.
+- Installed registered **V2**, this worker's own ongoing session only: native
+  sanitized export **107,127 bytes / 30 messages / 3,712 lines / 0.1975 s** with
+  final incremental encoding. Native values and conventional pretty formatting
+  verified in memory; only scalars retained. This single uncontrolled observation
+  is not worst-case performance or an exhaustive sanitization guarantee.
+
+**Decision Delegate exception (2026-11-14, FR000702 only):** fresh Windows
+filename-field presentation/editing, destination selection/completed native Save,
+real Cancel, and native modality/focus/tooltip observations remain **NOT RUN /
+UNVERIFIED for this revision**. This new minor evidence exception does not waive
+functionality, security, collision safety, size limits or the Full/validator gates.
+The Delegate inspected the requirements/implementation/probes and judged rebuilding
+a missing isolated-desktop/UIA harness disproportionate for this narrow change
+without a demonstrated native defect; it was not established impossible. No owner
+interruption, visible desktop authorization, Suggestion or hold was warranted.
+Residual uncertainty includes OS filename adjustments and native focus sequences.
+Predecessor owner/Delegate exceptions and real Cancel evidence remain historical;
+browser/double/headless proof is not equivalent fresh Windows dialog proof.
+
+Scalar scratch evidence: `scratch:/session-export-browser.json`,
+`scratch:/installed-export.json`, `scratch:/full-tests.json`. No other worker
+scratch, other private sessions, model calls, shared service changes or release ZIP.
+The Web guide, architecture module and release metadata describe only this delta.

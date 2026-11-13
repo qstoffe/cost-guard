@@ -10,6 +10,7 @@ class Node {
   append(...children) { for (const child of children) { child.remove(); this.children.push(child); child.parent = this; } }
   replaceChildren(...children) { for (const child of this.children) child.parent = null; this.children = []; this.append(...children); }
   insertBefore(child, before) { child.remove(); const index = before ? this.children.indexOf(before) : this.children.length; this.children.splice(index, 0, child); child.parent = this; }
+  after(child) { if (this.parent) this.parent.insertBefore(child, this.parent.children[this.parent.children.indexOf(this) + 1]); }
   remove() { if (this.parent) { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; } }
   contains(child) { return child === this || this.children.some(c => c.contains(child)); }
   querySelector(selector) { return this.children.find(child => selector[0] === '.' ? child.className === selector.slice(1) : child.tag === selector) || this.children.map(child => child.querySelector(selector)).find(Boolean); }
@@ -22,7 +23,7 @@ async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null, addEventListener(){}};
-    const context = vm.createContext({document, console, Date, URLSearchParams, AbortController, location: {},
+     const context = vm.createContext({document, console, Date, URLSearchParams, AbortController, TextEncoder, location: {},
      history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
     clearTimeout: id => timers.delete(id),
@@ -38,7 +39,7 @@ async function main() {
       return result;
     }});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const file of ['render', 'watch', 'report-loading', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+  for (const file of ['render', 'watch', 'report-loading', 'session-export', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000')", context);
   const view = context.view; view.attached = true;
   new Node('main').append(view.root);
@@ -82,6 +83,17 @@ async function main() {
    assert.equal(view.body.textContent, retained); assert.equal(view.status.textContent, '');
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
+  offline = false; page.export_available = true;
+  page.result.view.prompt_blocks[0].title = 'Observed: title å';
+  page.revision = 'renamed-session'; await view.load();
+  assert.equal(view.heading.textContent,'Observed: title å');
+  assert.equal(view.exporter.filename,'Observed title å.json');
+  view.heading.textContent = 'Editable DOM is not authority';
+  await view.load();
+  assert.equal(view.exporter.filename,'Observed title å.json');
+  page.export_available = false; await view.load();
+  assert.equal(view.exporter.filename,'session.json','source retirement clears the title');
+  assert.equal(view.exporter.button.disabled,true);
   view.detach();
   assert.ok(calls.some(call => call.action === 'close' && call.token === 'owned'));
   offline = false;

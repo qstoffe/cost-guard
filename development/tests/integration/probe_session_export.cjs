@@ -7,6 +7,10 @@ async function main() {
   const profile = await fs.mkdtemp(path.join(directory, 'export-browser-'));
   const workspace = await fs.mkdtemp(path.join(directory, 'export-host-'));
   const downloads = await fs.mkdtemp(path.join(directory, 'export-download-'));
+  await fs.mkdir(path.join(profile,'Default'));
+  await fs.writeFile(path.join(profile,'Default','Preferences'),JSON.stringify({
+    download:{default_directory:downloads,prompt_for_download:false}
+  }));
   const server = spawn('py', ['-3', 'development/tests/integration/serve_session_export.py', workspace],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit', resolve));
@@ -96,6 +100,8 @@ async function main() {
       }
     await evaluate(`location.hash='#/sessions/${launch.session}'`);
     await until(()=>evaluate('!!current?.detail?.data && !current.detail.exporter.button.disabled'), 'observed selection');
+    const filename = 'Synthetic LIVE-style å 日本語 🚀.json';
+    assert.equal(await evaluate('current.detail.exporter.filename'),filename,'observed detail title, not native payload title');
     for (const value of layouts) {
       await configure(value.theme,value.width,value.zoom,value.coarse);
       value.export=await measure('.session-export > button');
@@ -118,11 +124,12 @@ async function main() {
     // unsupported native dialog; record this separately from mocked save proof.
     await evaluate(`window.pickerProbe={available:typeof showSaveFilePicker==='function'};
       if(pickerProbe.available){const original=showSaveFilePicker;window.showSaveFilePicker=async options=>{
-        pickerProbe.activation=navigator.userActivation.isActive;try{return await original(options);}catch(error){pickerProbe.error=error.name;throw error;}};}`);
+         pickerProbe.activation=navigator.userActivation.isActive;pickerProbe.filename=options.suggestedName;try{return await original(options);}catch(error){pickerProbe.error=error.name;throw error;}};}`);
     await click();
     await until(()=>evaluate('!current.detail.exporter.operation'), 'native picker cancellation');
     await quiet();
     const picker = await evaluate('pickerProbe');
+    assert.equal(picker.filename,filename);
     assert.equal((await fixture('count')).requests, before, 'cancelled picker performs no native export');
     const activations = [];
     // Deferred picker doubles preserve the real trusted input/event ordering, but
@@ -130,7 +137,7 @@ async function main() {
     for (const activation of ['pointer','Enter','Space','touch','pending-hover']) {
       evidence.stage=activation;
       await leave();
-      await evaluate(`window.showSaveFilePicker=() => {window.pickerState={hidden:!(${helpVisible}),active:navigator.userActivation.isActive};
+      await evaluate(`window.showSaveFilePicker=options => {window.pickerState={hidden:!(${helpVisible}),active:navigator.userActivation.isActive,filename:options.suggestedName};
         return new Promise((resolve,reject)=>{window.cancelPicker=()=>reject(new DOMException('Cancelled','AbortError'));});};
         current.detail.exporter.button.blur();`);
       if (activation==='Enter' || activation==='Space' || activation==='touch') {
@@ -149,7 +156,7 @@ async function main() {
         await click();
       }
       await until(()=>evaluate('!!current.detail.exporter.operation'),'picker pending: '+activation);
-      assert.deepEqual(await evaluate('pickerState'),{hidden:true,active:true});
+      assert.deepEqual(await evaluate('pickerState'),{hidden:true,active:true,filename});
       await quiet(); await evaluate('cancelPicker()');
       await until(()=>evaluate('!current.detail.exporter.operation'),'picker double cancelled');
       await quiet();
@@ -169,20 +176,28 @@ async function main() {
     await quiet(); assert.deepEqual(await evaluate('saved'),[launch.session,'closed']);
     // Actual authenticated standard browser download, no picker support.
     await evaluate('window.showSaveFilePicker=undefined');
-    await command('Browser.setDownloadBehavior', {behavior:'allow',downloadPath:downloads}, null);
+    await command('Browser.setDownloadBehavior', {behavior:'default'}, null);
     await evaluate('current.detail.exporter.button.focus()');
     await click();
-    const filename = `opencode-${launch.session}-sanitized.json`;
     await until(async()=>{try{await fs.access(path.join(downloads,filename));return true;}catch{return false;}}, 'download');
-    const transfer = JSON.parse(await fs.readFile(path.join(downloads,filename),'utf8'));
+    const text = await fs.readFile(path.join(downloads,filename),'utf8'), transfer = JSON.parse(text);
+    assert.ok(text.startsWith('{\n  "info": {\n')); assert.ok(text.endsWith('\n}\n'));
+    assert.ok(text.includes('\n  "messages": [\n    {'));
+    assert.deepEqual(transfer,launch.transfer,'pretty JSON changes no native values or string whitespace');
     assert.equal(transfer.info.id,launch.session); assert.equal(transfer.messages.length,3);
     assert.equal(transfer.messages[1].outcome,'succeeded'); assert.equal(transfer.messages[2].type,'user');
     assert.equal(await evaluate('document.activeElement === current.detail.exporter.button'),true);
     await until(()=>evaluate('current.detail.exporter.url === null'), 'object URL release');
+    // Browser owns collision policy; a repeated download cannot overwrite the first.
+    await click();
+    const duplicate = 'Synthetic LIVE-style å 日本語 🚀 (1).json';
+    await until(async()=>{try{await fs.access(path.join(downloads,duplicate));return true;}catch{return false;}}, 'collision suffix');
+    assert.equal(await fs.readFile(path.join(downloads,filename),'utf8'),text);
+    assert.equal(await fs.readFile(path.join(downloads,duplicate),'utf8'),text);
     await fixture('invalid');
     await click();
     await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("incomplete export")'), 'malformed source feedback');
-    assert.deepEqual(await fs.readdir(downloads),[filename], 'no corrupt second download');
+    assert.deepEqual((await fs.readdir(downloads)).sort(),[filename,duplicate].sort(), 'no corrupt third download');
     await evaluate('location.hash="#/settings"');
     await until(()=>evaluate('current.section === "settings"'), 'navigation');
     evidence = {outcome:'PASS',browser:version.product,layouts,activations,native_picker:picker,
@@ -190,7 +205,8 @@ async function main() {
         'quiet one-action idle layout','computed Models parity across themes/width/zoom/coarse pointer',
         'pointer/Tab/Enter/Space/touch/pending-hover dismissal and stationary suppression','Escape and intentional re-entry',
         'handle-double commit and picker-focus suppression',
-        'authenticated fallback file has native lifecycle/types/unicode','focus retained','object URL released',
+         'title-derived picker and actual fallback filename; browser collision suffix without overwrite',
+         'pretty UTF-8 fallback equals native transfer, including string escapes','focus retained','object URL released',
         'malformed export saves no partial file','navigation preserved'],
       limitations:['Hidden native picker abort only; actual visible destination selection/write/cancel remains unverified.',
         'Synthetic LIVE-style native service, no Desktop session-list visibility assertion.'],

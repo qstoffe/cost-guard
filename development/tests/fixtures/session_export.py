@@ -15,7 +15,7 @@ SPECIFICATION = {'paths': {ROUTE: {'get': {'parameters': [
     {'name': 'sanitize', 'in': 'query', 'schema': {'enum': ['true', 'false']}}]}}},
     'components': {'schemas': {'SessionTransfer.Data': {'type': 'object', 'required': ['info', 'messages'],
         'properties': {'info': {'type': 'object'}, 'messages': {'type': 'array'}}}}}}
-TRANSFER = {'info': {'id': SESSION, 'title': 'Unicode å 日本語', 'time': {'created': 1},
+TRANSFER = {'info': {'id': SESSION, 'title': 'Unicode å 日本語', 'note': 'Quotes "🚀"\n  next\tline', 'time': {'created': 1},
     'metadata': {'outcome': 'succeeded'}}, 'messages': [
     {'id': 'msg_first', 'type': 'user', 'text': '[REDACTED]', 'time': {'created': 1}},
     {'id': 'msg_idle', 'type': 'idle', 'outcome': 'succeeded', 'time': {'created': 2}},
