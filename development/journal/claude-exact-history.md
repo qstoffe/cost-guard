@@ -287,4 +287,73 @@ reads were **NOT RUN by that worker**. This later, independent,
 owner-executed metadata probe supplies new evidence and does **not** retroactively
 rewrite the failed native approval attempt, mark the FR Complete, repair any
 historical Cost Guard label or authorize an automatic Ready promotion.
+## Owner v5 metadata audit and inline-native probe correction — 2026-11-13
 
+**New real owner-run v5 export; read-only, privately pseudonymized.**
+A complete local scan within v5's explicitly bounded source window observed
+**49** candidate sessions, **19** with Claude-related selections, **89** stored
+OpenCode assistant steps, of which **88** retain usage. It inspected 14 referenced
+SDK transcript files plus **48** other locally existing JSONL transcripts with
+assistant entries whose file modification time fell within ±3 days of
+2026-11-12; 1,408 JSONL filenames were examined overall. It reported zero
+oversize/budget skips, read errors or invalid JSON candidate lines. The orphan
+files are **potential prior generations**, *not* automatically proven to
+belong to an OpenCode session.
+
+**Cross-source usage observation (strong corroboration, not exact identity):**
+For **every one of the 88 usage-bearing OpenCode assistant steps**, at least
+one of v5's *eight exported nearest time/cwd candidates* has an exact
+four-field numeric match: OpenCode `input`, `output + reasoning`,
+`cache.read`, `cache.write` equal the SDK assistant's
+`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`. **All matching candidates for any step
+agree on one concrete model**: Sonnet5.5 for the Sonnet aliases,
+Opus5.5/Haiku5.5/Fable5.1 for their aliases, and Fable5.2 for the
+successful pinned control. No mismatching model identity appears among
+the **88** token-profile matches. **64 of 88** also have a matching
+candidate whose rounded recorded time delta is <0.15 seconds, but SDK
+timestamps and duplicated assistant messages require care; this is not
+64 authoritative UUID associations. One concrete failed Haiku4.5
+selection has no saved final usage and is outside the 88.
+
+**Discovered v3-v5 diagnostic blind spot and direct source confirmation:**
+v5 tried to extract `native` UUID pairs from the assistant envelope
+and separate `session_part` rows, but **did not inspect
+`session_message.data.content[*].native` inline parts**. Every
+v5-exported assistant step reported `part_count=0`, so the missing
+inline read is consequential. Upstream OpenCode v2.2.7
+[`session/projector.ts`'s `prepareAssistantParts`](https://github.com/anomalyco/opencode/blob/v2.2.7/packages/core/src/session/projector.ts)
+explicitly supports older assistant rows where parts remain in the
+`session_message.data.content` JSON array until a part write migrates
+them. The previous **zero native UUID pairs is therefore an extractor
+blind spot**, not an established absence from original data.
+The previous source investigation's report of `content.native`
+is compatible with this storage layout.
+
+**Focused v6 diagnostic prepared but NOT yet owner-run:**
+the new Python-only read-only probe inspects both inline
+`content[*].native` and separately persisted part-native metadata,
+extracts only exact UUID pairs, and checks them against the same
+Claude SDK transcript assistant UUID and model. It reports each step's
+raw-reference count, number found, unresolved references, observed
+model IDs and conflicting direct IDs; pseudonyms and bounded usage-only
+candidate metadata are exported, never contents, directories, tokens
+or credentials. *Here "tokens" means secrets, not numeric token usage.*
+An isolated **synthetic** SQLite/JSONL fixture with inline native
+parts, two source generations and zero split-part rows passed 2/2
+exact native-UUID-to-transcript model associations without copying
+private text, raw UUIDs or paths. **No real v6 result yet.**
+
+**Decision rule after owner-run v6:** Count exact native reply-UUID
+links separately from OpenCode assistant steps and physical SDK calls.
+A directly linked SDK reply proves that reply's model, but a
+multi-response OpenCode step may have additional responses. Require
+all contributing models/usage per step (including any distinct
+models across multiple SDK responses) to be reconciled before
+asserting a verified per-request price. Time/cwd/token matches
+are corroboration and search hints, not a general exact-UUID
+replacement. The previous 47 checkpoint matches remain valid.
+
+This addendum does not implement the Cost Guard repair or modify
+the current **On Hold** status, binary P0 acceptance,
+native approval conditions or restart/browser test gate.
