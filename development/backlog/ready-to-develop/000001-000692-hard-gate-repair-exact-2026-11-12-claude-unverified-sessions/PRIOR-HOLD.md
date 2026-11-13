@@ -1,3 +1,9 @@
+# Historical On Hold record — FR000692 (superseded 2026-11-13)
+
+**This is NOT an active hold.** The direct owner clarification distinguishes OpenCode session history from other agents' scratch and explicitly permits read-only investigation of the user's saved sessions. The Toolkit command has also been clarified. The same FR has been moved to Ready at priority 000001. Preserve the 2026-11-13 original hold reasoning verbatim below as audit history; it documents an authorization interpretation, not a proved technical impossibility.
+
+---
+
 # FR000692 — On Hold: historical-record access conflicts with current instruction
 
 2026-11-13. **On Hold, not Complete or PASS.** The entire original FR is preserved
