@@ -19,8 +19,8 @@ MONTH = local_month_start_ms("Europe/Stockholm", now_ms=NOW)
 
 def request(name, when, *, provider="claude-code", amount=1_000_000, ref=None, model="gpt-test"):
     return replace(trace_entries(make_snapshot())[0], session_id="root", message_id=name, step_part_id=None,
-                   completed_at_ms=when, model=ModelRef(provider, model), tokens=TokenUsage(input=amount),
-                   account_ref=ref)
+                    completed_at_ms=when, model=ModelRef(provider, model), tokens=TokenUsage(input=amount),
+                    account_ref=ref, root_session_id=None, parent_session_id=None, invocation_id=name)
 
 
 def subscription(provider="claude-code", identity="one"):

@@ -100,6 +100,7 @@ class WatchGuidanceTests(unittest.TestCase):
             entry = CardSession(snapshot.root, snapshot.source_revision, 7)
             cards.sessions[snapshot.root.session_id] = entry
             cards.accept(CardResult(snapshot.root.session_id, 7, 'rows', (capture, (), snapshot)), 4000)
+            accepted_rows = entry.capture.rows
             proof_before = (entry.verified_generation, cards.evidence_revision,
                 entry.capture.observed_at_ms, cards.history.epoch, cards.history.verified_at_ms)
             reads_before = source.load_count
@@ -118,7 +119,8 @@ class WatchGuidanceTests(unittest.TestCase):
             self.assertEqual(reads_before, source.load_count)
             self.assertEqual(proof_before, (entry.verified_generation, cards.evidence_revision,
                 entry.capture.observed_at_ms, cards.history.epoch, cards.history.verified_at_ms))
-            self.assertIs(capture.rows, entry.capture.rows)
+            self.assertIs(accepted_rows, entry.capture.rows)
+            self.assertEqual(capture.rows, accepted_rows)
             superseded = replace(context, owner_id='new-owner', tokens=None, text='',
                 price_threshold=None, multiplier=None, guidance_state='ready')
             self.assertEqual(superseded, complete_guidance(superseded, mix, catalog, context.guidance_signature))

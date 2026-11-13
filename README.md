@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.43, 2026-11-13), the supported distribution.
+Use **current `main`** (v81.44, 2026-11-13), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.43 (2026-11-13):** Web quota help shows concise, normally formatted raw Capacity amounts without calculation essays, while visible estimates keep their compact rounding. Next reset adds today, weekday or local date after the clock in Accounts, Full Watch and Mini. [Formatting and boundaries](docs/usage-and-cost.md#account-period-ccost).
+**v81.44 (2026-11-13):** Recursive CCost preserves independent parallel subagent requests and honest partial-usage subtotals. Full/Mini Watch shows individual agent model, effort, Calls and cost help; session totals distinguish main and linked work. [Counting and coverage](docs/usage-and-cost.md#what-cost-guard-counts).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

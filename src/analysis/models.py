@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Mapping
 
 from src.domain import AccountRef, CostDisposition, ModelRef, TokenUsage
+from .coverage import AgentCoverage
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +47,9 @@ class TraceEntry:
     account_ref: AccountRef | None = None
     logical_prompt_id: str | None = None  # Proven own-session canonical boundary; not a request or agent ID.
     selected_effort: str | None = None  # Tooltip provenance only; variant/group/billing identity is unchanged.
+    root_session_id: str | None = None  # Acquisition tree; independent siblings are not fork clones.
+    invocation_id: str | None = None  # Canonical physical request, private to analysis/cache.
+    parent_session_id: str | None = None  # Proven membership in the acquisition tree.
 
     @property
     def request_input_approx(self) -> int:
@@ -132,6 +136,8 @@ class PromptRecord:
     execution_duration_ms: int | None = None
     # Positive task links, including agents without a completed/priced request.
     linked_session_ids: tuple[str, ...] = ()
+    agent_coverage: tuple[AgentCoverage, ...] = ()
+    usage_coverage_complete: bool = True
 
     @property
     def model_calls(self) -> int:
@@ -175,3 +181,4 @@ class RootAnalysisBundle:
     prompts: tuple[PromptRecord, ...]
     compactions: tuple[CompactionRecord, ...]
     cacheable: bool
+    usage_coverage_complete: bool = True

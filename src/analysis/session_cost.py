@@ -11,6 +11,7 @@ import sqlite3
 from .cache import ANALYSIS_ALGORITHM_VERSION, dependency_signature
 from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
+from .coverage import snapshot_coverage_complete
 from src.domain.reference_cost import bounded_issues
 from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, unverified_alias
@@ -29,6 +30,8 @@ class SessionCost:
     cache_written: bool = False
     source_revision: str = ""
     valuation_revision: str = ""
+    main_ccost: Decimal | None = None
+    subagent_ccost: Decimal | None = None
 
 
 def session_cost_source_key(snapshot):
@@ -47,13 +50,16 @@ def _checkpoint(payload):
             if not isinstance(key, str) or not isinstance(value["fingerprint"], str):
                 return None
             amount = value["amount"]
+            if type(value["complete"]) is not bool:
+                return None
             if amount is not None and (not Decimal(amount).is_finite() or Decimal(amount) < 0):
                 return None
         total = Decimal(payload["known_ccost"])
         priced = payload["priced_requests"]
         if not total.is_finite() or total < 0 or priced != sum(value["amount"] is not None for value in values.values()):
             return None
-        return values, ComparisonCost(total, len(values), priced)
+        return values, ComparisonCost(total, len(values), priced,
+            source_complete=all(value["complete"] for value in values.values()))
     except (KeyError, TypeError, AttributeError, ValueError, InvalidOperation):
         return None
 
@@ -74,7 +80,8 @@ def reconcile_session_cost(repository, snapshot, catalog):
     checkpoint = _checkpoint(cached.payload) if cached is not None and cached.algorithm_version == ALGORITHM else None
     old, previous = checkpoint if checkpoint is not None else ({}, ComparisonCost())
     total, observed, priced = previous.known_ccost, previous.observed_requests, previous.priced_requests
-    current, valued = {}, 0
+    incomplete = sum(not value["complete"] for value in old.values())
+    current, valued, main = {}, 0, Decimal(0)
     issues = set()
     entries = unique_usage(trace_entries(snapshot))
     for entry in entries:
@@ -90,21 +97,27 @@ def reconcile_session_cost(repository, snapshot, catalog):
             if prior is not None:
                 total -= _known_amount(prior)
                 priced -= prior["amount"] is not None
+                incomplete -= not prior["complete"]
             else:
                 observed += 1
             cost = comparison_cost((entry,), catalog.reference_valuation)
             valued += 1
             total += cost.known_ccost
             priced += cost.priced_requests
+            incomplete += not cost.complete
             current[identity] = {"fingerprint": fingerprint,
-                "amount": str(cost.known_ccost) if cost.complete else None}
-        if current[identity]["amount"] is None:
+                "amount": str(cost.known_ccost) if cost.priced_requests else None, "complete": cost.complete}
+        if not current[identity]["complete"]:
             issues.add(catalog.reference_issue(entry.model, entry.tokens))
+        if entry.session_id == snapshot.root.session_id:
+            main += _known_amount(current[identity])
     for identity in old.keys() - current.keys():
         total -= _known_amount(old[identity])
         observed -= 1
         priced -= old[identity]["amount"] is not None
-    coverage = ComparisonCost(total, observed, priced, unavailable=bounded_issues(issues))
+        incomplete -= not old[identity]["complete"]
+    coverage = ComparisonCost(total, observed, priced, unavailable=bounded_issues(issues),
+        source_complete=not incomplete)
     written = False
     # Partial source brackets cannot replace an authoritative persisted checkpoint.
     if snapshot.complete and (current != old or checkpoint is None or cached.source_revision != snapshot.source_revision):
@@ -115,5 +128,5 @@ def reconcile_session_cost(repository, snapshot, catalog):
             written = True
         except (sqlite3.Error, OSError):
             available = False
-    return SessionCost(coverage, snapshot.complete, available, len(entries), valued, written,
-        snapshot.source_revision, catalog.diagnostic_signature)
+    return SessionCost(coverage, snapshot_coverage_complete(snapshot, entries), available, len(entries), valued, written,
+        snapshot.source_revision, catalog.diagnostic_signature, main, total - main)

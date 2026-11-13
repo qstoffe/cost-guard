@@ -547,7 +547,9 @@ class OpenCodeV1Source:
                     error_name=message.error_name,
                 ))
             return result
-        if message.tokens is None:
+        from .opencode_requests import response_tokens
+        tokens = response_tokens(message)
+        if tokens is None:
             return []
         result.append(ModelInvocation(
             invocation_id=message.message_id,
@@ -555,7 +557,7 @@ class OpenCodeV1Source:
             created_at_ms=message.created_at_ms,
             completed_at_ms=message.completed_at_ms,
             model=message.model,
-            tokens=message.tokens,
+            tokens=tokens,
             cost=message.cost,
             provenance=message.provenance,
             initiating_event_id=message.parent_message_id,

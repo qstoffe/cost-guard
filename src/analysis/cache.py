@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import nullcontext
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
@@ -17,7 +17,7 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 from .model_identity import encode_model, decode_model
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-20-effort-help"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-21-recursive-coverage"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
@@ -80,6 +80,9 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
         "account_ref": _flat_fields(entry.account_ref) if entry.account_ref else None,
         "logical_prompt_id": entry.logical_prompt_id,
         "selected_effort": entry.selected_effort,
+        "root_session_id": entry.root_session_id,
+        "invocation_id": entry.invocation_id,
+        "parent_session_id": entry.parent_session_id,
     }
 
 
@@ -105,10 +108,13 @@ def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
         account_ref=AccountRef(**data["account_ref"]) if data.get("account_ref") else None,
         logical_prompt_id=data.get("logical_prompt_id"),
         selected_effort=data.get("selected_effort"),
+        root_session_id=data.get("root_session_id"),
+        invocation_id=data.get("invocation_id"),
+        parent_session_id=data.get("parent_session_id"),
     )
 
 
-_PROMPT_NESTED = frozenset({"entries", "model_costs", "previous_entry", "pre_prompt_entry", "last_root_entry"})
+_PROMPT_NESTED = frozenset({"entries", "model_costs", "previous_entry", "pre_prompt_entry", "last_root_entry", "agent_coverage"})
 
 
 def _prompt_to_dict(record: PromptRecord) -> dict[str, Any]:
@@ -116,6 +122,7 @@ def _prompt_to_dict(record: PromptRecord) -> dict[str, Any]:
     for key in ("cost", "main_cost", "subagent_cost"):
         scalar[key] = str(getattr(record, key))
     scalar["entries"] = [_trace_to_dict(entry) for entry in record.entries]
+    scalar["agent_coverage"] = [asdict(agent) for agent in record.agent_coverage]
     scalar["model_costs"] = {key: str(value) for key, value in record.model_costs.items()}
     scalar["previous_entry"] = _trace_to_dict(record.previous_entry) if record.previous_entry else None
     scalar["pre_prompt_entry"] = _trace_to_dict(record.pre_prompt_entry) if record.pre_prompt_entry else None
@@ -134,6 +141,8 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
         values[key] = _trace_from_dict(values[key]) if values.get(key) else None
     values["background_kinds"] = tuple(str(value) for value in values.get("background_kinds", ()))
     values["linked_session_ids"] = tuple(str(value) for value in values.get("linked_session_ids", ()))
+    from .coverage import AgentCoverage
+    values["agent_coverage"] = tuple(AgentCoverage(**value) for value in values.get("agent_coverage", ()))
     return PromptRecord(**values)
 
 
@@ -157,6 +166,7 @@ def _bundle_to_dict(bundle: RootAnalysisBundle, dependencies: AnalysisDependenci
         "model_identity_semantics": MODEL_IDENTITY_SEMANTICS,
         "source_revision": bundle.source_revision,
         "cacheable": bundle.cacheable,
+        "usage_coverage_complete": bundle.usage_coverage_complete,
         "config_signature": dependencies.config_signature,
         "pricing_signature": dependencies.pricing_signature,
         "trace_entries": [_trace_to_dict(entry) for entry in bundle.trace_entries],
@@ -173,6 +183,7 @@ def _bundle_from_dict(data: Mapping[str, Any]) -> RootAnalysisBundle:
         prompts=tuple(_prompt_from_dict(item) for item in data.get("prompts", ())),
         compactions=tuple(_compaction_from_dict(item) for item in data.get("compactions", ())),
         cacheable=bool(data.get("cacheable", False)),
+        usage_coverage_complete=bool(data.get("usage_coverage_complete", False)),
     )
 
 

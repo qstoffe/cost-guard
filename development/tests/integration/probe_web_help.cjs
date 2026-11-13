@@ -197,7 +197,7 @@ async function main() {
        layouts.push({case:'daily-value-targets',width,zoom,...layout});
        for (const table of ['watch-active','watch-history']) {
          const text=await focus(owner,`.${table} tbody td:nth-child(6) .help-value`);
-          assert.match(text,/Main prompt[\s\S]*Subagents[\s\S]*Total CCost: 33/);
+          assert.match(text,/Main prompt[\s\S]*Subagent 1[\s\S]*Subagent 2[\s\S]*Total CCost: 33/);
          const bounds=await evaluate(owner,`(() => {const n=document.querySelector('#context-help'),r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight,scroll:n.scrollHeight>n.clientHeight};})()`);
          assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify({table,zoom,...bounds}));
          layouts.push({case:'rich-cost-bounds',table,width,zoom,...bounds});await key(owner,'Escape');
@@ -216,7 +216,8 @@ async function main() {
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
     const retainedHelp=await focus(mini,'.mini-prompts tr[data-id="root"] td:nth-child(3) .mini-cost-value');
-    assert.match(retainedHelp,/Prompt #[\s\S]*Main model:/);assert.doesNotMatch(retainedHelp,/Source evidence:/);
+    assert.match(retainedHelp,/Prompt #[\s\S]*Main prompt[\s\S]*Subagent 1[\s\S]*Subagent 2[\s\S]*Total CCost: 33/);
+    assert.doesNotMatch(retainedHelp,/Source evidence:/);
     assert.match(await focus(mini,'.mini-prompts tr[data-id="root"] .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+: Keep completed literally/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:nth-child(2) button');

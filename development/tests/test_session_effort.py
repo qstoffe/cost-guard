@@ -67,7 +67,8 @@ class SessionEffortTests(unittest.TestCase):
                          {("openai", "gpt-6.1-sol"), ("anthropic", "claude-sonnet-5-5")})
         compaction = replace(child, summary=True, selected_effort=None, variant=None)
         self.assertEqual(self.row((self.entry, compaction)).effort, "N/A")
-        failed = replace(self.entry, selected_effort="xhigh", tokens=TokenUsage(), error_name="aborted")
+        failed = replace(self.entry, selected_effort="xhigh", tokens=TokenUsage(), error_name="aborted",
+                         message_id="failed-attempt", invocation_id="failed-attempt")
         self.assertEqual(self.row((failed,)).effort, "N/A")
         self.assertEqual(self.row((self.entry, failed)).effort, "Default")
         pending = self.row((), prompts=(replace(self.item.bundle.prompts[0], in_progress=True),))

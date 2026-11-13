@@ -99,7 +99,7 @@ class WatchPromptCostTests(unittest.TestCase):
                         self.assertEqual("0", prompt["display"]["ccost"])
                         self.assertEqual("N/A", prompt["display"]["incoming_context_ccost"])
 
-    def test_independent_first_request_and_child_coverage_correct_without_changing_cli(self):
+    def test_independent_first_request_and_child_coverage_agree_with_cli_unknowns(self):
         snapshot = make_uncompacted_snapshot()
         known = TokenUsage(input=100, cache_read=300, output=40)
         no_output = TokenUsage(input=100, cache_read=300,
@@ -114,7 +114,7 @@ class WatchPromptCostTests(unittest.TestCase):
             rows, cli = self.capture(replace(snapshot, invocations=invocations))
             row = next(row for row in rows if row.event_id == "u_sub")
             legacy = with_display(report_prompt(cli["u_sub"])).to_json()
-            self.assertNotEqual("N/A", legacy["display"]["extra_ccost"])
+            self.assertEqual(not extra_known, legacy["display"]["extra_ccost"] == "N/A")
             self.assertNotIn("extra_ccost_known", legacy)
             for unit in ("credits", "usd"):
                 wire = self.wire((row,), unit)
@@ -122,7 +122,8 @@ class WatchPromptCostTests(unittest.TestCase):
                     value = wire[kind][0]["rows"][0]["prompt"]
                     for key, supported in (("incoming_context_ccost", incoming_known), ("extra_ccost", extra_known)):
                         self.assertEqual(supported, value[key + "_known"])
-                        self.assertEqual(str(getattr(cli["u_sub"], key)), value[key])
+                        expected = getattr(cli["u_sub"], key)
+                        self.assertEqual(None if expected is None else str(expected), value[key])
                         self.assertEqual(not supported, value["display"][key] == "N/A")
 
     @unittest.skipUnless(shutil.which("node"), "optional JavaScript VM unavailable")

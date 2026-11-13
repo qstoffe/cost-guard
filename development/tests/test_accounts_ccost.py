@@ -69,7 +69,7 @@ class ValuationTests(unittest.TestCase):
 
     def test_clones_deduplicate_within_source_but_not_across_sources(self):
         entry = trace_entries(make_snapshot())[0]
-        clone = replace(entry, session_id="fork")
+        clone = replace(entry, session_id="fork", root_session_id="fork", parent_session_id=None)
         other_source = replace(clone, source_instance="another-installation")
         self.assertEqual(2, len(unique_usage((entry, clone, other_source))))
 
@@ -159,7 +159,8 @@ class AccountsTests(unittest.TestCase):
                                    now_ms=100_000, today_start_ms=0, month_start_ms=0)
         self.assertEqual(D(100), rows[0].ccost_scopes[0][1].ccost)
         self.assertIsNone(rows[1].ccost_scopes[0][1])
-        unknown = replace(entry, account_ref=None, completed_at_ms=100_001)
+        unknown = replace(entry, account_ref=None, message_id="independent", invocation_id="independent",
+                          completed_at_ms=100_001)
         rows = account_projections((a, b), (entry, unknown), FakePricingProvider().catalog,
                                    now_ms=100_001, today_start_ms=0, month_start_ms=0)
         self.assertTrue(all(row.ccost_scopes[0][1] is None for row in rows))

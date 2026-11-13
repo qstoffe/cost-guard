@@ -20,7 +20,7 @@ from .token_mix_history import history_projection
 from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
 from .history_snapshots import load as load_snapshots, warnings as history_warnings
 
-ALGORITHM = 'web-token-mix-evidence-1'
+ALGORITHM = 'web-token-mix-evidence-2'
 NAMESPACE = 'web-token-mix-evidence'
 BATCH_SIZE = 64
 
@@ -40,13 +40,15 @@ def encode(bundle, reference):
     facts = []
     for entry in bundle.trace_entries:
         tokens = entry.tokens
-        costs = reference.reference_category_valuation(entry.model, tokens) if tokens.total else (Decimal(0),) * 4
+        complete = all(name in tokens.known_fields for name in ('input', 'cache_read', 'cache_write', 'output'))
+        costs = reference.reference_category_valuation(entry.model, tokens) if tokens.total or not complete else (Decimal(0),) * 4
         facts.append(dict(session=entry.session_id, parent=entry.parent_event_id, message=entry.message_id,
             part=entry.step_part_id, completed=entry.completed_at_ms, order=entry.sort_order,
             model=[entry.model.provider, entry.model.model, entry.model.display_name], variant=entry.variant,
             tokens=[tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning],
             known=list(tokens.known_fields), reported=str(entry.reported_cost), instance=entry.source_instance,
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
+        facts[-1].update(root=entry.root_session_id, invocation=entry.invocation_id, parent_session=entry.parent_session_id)
         if entry.selected_effort is not None:
             facts[-1]['selected_effort'] = entry.selected_effort
         if entry.model.resolution is not None or entry.model.effort_default is not None:
@@ -73,7 +75,8 @@ def decode(facts):
             fact['completed'], fact['order'], decode_model(fact['resolved_identity']) if 'resolved_identity' in fact
             else ModelRef(*fact['model']), fact['variant'], tokens,
             reported_cost=Decimal(fact['reported']), source_instance=fact['instance'],
-            selected_effort=fact.get('selected_effort'))
+            selected_effort=fact.get('selected_effort'), root_session_id=fact.get('root'),
+            invocation_id=fact.get('invocation'), parent_session_id=fact.get('parent_session'))
         costs = None if fact['costs'] is None else tuple(Decimal(value) for value in fact['costs'])
         if costs is not None and (len(costs) != 4 or any(not value.is_finite() or value < 0 for value in costs)):
             raise ValueError('invalid_costs')

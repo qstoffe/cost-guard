@@ -355,7 +355,8 @@ const SessionsCatalog = (() => {
               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
               if (key === 'effort') return [current.effort_help || 'No attributable executed request effort is available.',
                 state === 'ready' ? '' : 'Retained or pending source observation.'].filter(Boolean).join('\n');
-              if (key === 'ccost' && ReportView.costHelp(current)) return ReportView.costHelp(current);
+              if (key === 'ccost') return [ReportView.costHelp(current),
+                ReportView.display(current, 'session_cost_help')].filter(value => value && value !== 'N/A').join('\n\n');
               if (key === 'ctx') return [current.context_tokens == null ? '' : `${current.context_tokens.toLocaleString()} estimated tokens.`,
                 current.context_detail, state === 'retained' ? 'Retained from an earlier source observation; refresh pending.' :
                   state === 'pending' ? 'Source work is pending.' : state === 'unavailable' ? 'Source context unavailable.' : ''].filter(Boolean).join('\n');

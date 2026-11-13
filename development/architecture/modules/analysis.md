@@ -44,6 +44,16 @@ Equal numbers are not interchangeable. Analysis consumes capabilities/domain sem
 
 ### Analysis
 
+FR000700: `coverage.py` derives source-qualified child execution/acquisition states
+from the acquired snapshot only. `valuation.unique_usage` first canonicalizes
+physical source/session/invocation/message/step identities, then preserves maximum
+within-tree multiplicity for cross-tree fork matching. Equal sibling counters are
+not identities. `ComparisonCost.source_complete` and session contribution `complete`
+remain independent of safely priced known amounts; unknown multi-tier input never
+selects a price tier. Analysis 21 and dependent cache revisions rebuild derived
+facts, not native history. Recursive source-shaped regression evidence and local
+verification limits are in the [journal](../../journal/recursive-subagent-ccost.md).
+
 `analysis/period_ccost.py` resolves native duration/reset intervals, opt-in supported UTC calendar months, or explicit empty half-open scopes for provider-confirmed not-started windows. Empty scopes never select historical requests; contradictory evidence has no interval. Reports gate native costs on account availability. `AccountPeriodHistory` retains an immutable prefix index and acquisition boundary, not a native quota snapshot, so Web publication reprojects current accounts/windows without source I/O or repricing. Acquisition coverage is checked per scope: pending monthly history cannot erase an acquired Today/secondary window. Watch's `QuotaPeriodProjection` associates each quota (including equal-label model scopes) with its own cost and canonical pace. Today/local month/native monthly Watch CCost and UTC monthly residual accounting stay independent. Regression owners: `test_account_period_ccost.py`, `test_quota_period_lifecycle.py`, `test_watch_daily.py`, `test_copilot_unaccounted_usage.py`.
 
 `src/analysis/` owns attribution, prompt/child/synthetic/compaction semantics, clone billing de-duplication, context and comparisons over canonical domain/provider-neutral abstractions only.

@@ -124,10 +124,11 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     assert.equal(rows()[0].children[3].textContent,total);
     assert.equal(rows()[0].children[2].children[0].attributes['aria-label'],'Prompt reference CCost: '+amount);
     assert.equal(rows()[0].children[3].children[0].attributes['aria-label'],'Whole-session reference CCost: '+total);
-    const plain=rows()[0].children[3].children[0];
-    assert.equal(plain.className,'mini-cost-value');assert.equal(plain.tabIndex,undefined);
-    assert.equal(plain.attributes.title,undefined);assert.deepEqual(plain.events,{});
-    assert.equal(rows()[0].totalCostHelp,undefined);
+    const target=rows()[0].children[3].children[0];
+    assert.equal(target.className,'mini-cost-value help-value');assert.equal(target.tabIndex,0);
+    assert.equal(target.attributes.title,undefined);assert.ok(target.events.focus&&target.events.pointerenter);
+     assert.match(rows()[0].totalCostHelp,total==='Loading…'
+       ? /Whole-session reference CCost/ : /CCost cannot be calculated.*N\/A does not mean zero/);
   }
   // Source-corrected whole-session subtotals never replace the representative cost.
   const partial=card('subtotal',500,true),summary=partial.session_summary;

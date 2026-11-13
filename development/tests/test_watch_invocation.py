@@ -1,5 +1,6 @@
 """Invocation scope, privacy, source links and bounded immutable Web publication."""
 from dataclasses import asdict, replace
+from decimal import Decimal
 import json
 import unittest
 from unittest.mock import Mock, patch
@@ -374,6 +375,8 @@ class InvocationTests(unittest.TestCase):
             running_invocations=details, background_invocations=details, running_invocation_count=20,
             background_invocation_count=20, background_kinds=('shell',) * 20)
         card = replace(card, rows=(replace(row, tool=tool_observation),))
+        card = replace(card, session_cost=replace(card.session_cost,
+            main_ccost=Decimal("4000"), subagent_ccost=Decimal("582.125")))
         frame = replace(frame, active_cards=tuple(replace(card, session_id=f's{i}') for i in range(100)))
         hub = EventHub('multi-invocation-budget')
 

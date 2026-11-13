@@ -8,9 +8,9 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
       return {parts:p.cost_detail.parts.map(g=>({role:g.role,agents:g.agent_count,calls:g.calls})),
         mixHelp:!!c.children[7].querySelector('.help-value'),calls:p.display.calls_help};
     })()`);
-    assert.deepEqual(facts.parts,[{role:'main',agents:0,calls:2},{role:'subagents',agents:2,calls:2}]);
+    assert.deepEqual(facts.parts,[{role:'main',agents:0,calls:2},{role:'subagents',agents:1,calls:1},{role:'subagents',agents:1,calls:1}]);
     assert.equal(facts.mixHelp,false);
-    assert.match(facts.calls,/Subagents — fixture\/child-model · Low \(2 agents\): 2\nTotal Calls: 4/);
+    assert.match(facts.calls,/Subagent 1 — fixture\/child-model · Low: 1\nSubagent 2 — fixture\/child-model · Low: 1\nTotal Calls: 4/);
     await evaluate(owner,`document.querySelector('.${table} tbody td:nth-child(7) .help-value').focus()`);
     await until(owner,`document.querySelector('#context-help')?.matches(':popover-open')`);
     assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Total Calls: 4/);
@@ -43,7 +43,7 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
   for(const cell of sameModel) {assert.equal(cell.help,true);assert.equal(cell.label,'Model*');assert.match(cell.aria,/Linked subagents participated \(2\)/);}
   await evaluate(owner,`document.querySelector('.watch-active tbody td:nth-child(4) .help-value').focus()`);
   await until(owner,`document.querySelector('#context-help')?.matches(':popover-open')`);
-  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Main prompt — fixture\/main-model · High[\s\S]*Subagents — fixture\/main-model · Low/);
+  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Main prompt — fixture\/main-model · High[\s\S]*Subagent 1 — fixture\/main-model · Low[\s\S]*Subagent 2 — fixture\/main-model · Low/);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},owner);
   const stable=await evaluate(owner,`(() => {
     const real=Date.now,base=real(),p=structuredClone(liveValue),history=structuredClone(p.view.history_cards);

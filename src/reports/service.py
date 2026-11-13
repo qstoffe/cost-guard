@@ -288,11 +288,13 @@ class ReportService:
 
     def _range_comparison(self, roots: Sequence[AnalyzedRoot], start_ms: int, end_ms: int | None = None) -> ComparisonCost:
         entries = unique_usage(entry for item in roots for entry in item.bundle.trace_entries)
-        return comparison_cost(
+        valuation = comparison_cost(
             (entry for entry in entries if start_ms <= entry.completed_at_ms < (end_ms or self.now_ms + 1)),
             self._load_comparison_catalog().reference_valuation,
             diagnose=self._load_comparison_catalog().reference_issue,
         )
+        return replace(valuation, source_complete=valuation.source_complete and
+            all(item.bundle.usage_coverage_complete for item in roots))
 
     def _session_rows(self, roots: Sequence[AnalyzedRoot], *, catalog_models=False) -> tuple[SessionUsageRow, ...]:
         catalog = self._load_catalog()
@@ -322,6 +324,12 @@ class ReportService:
                 model=name,
                 multiple_models=len({(entry.model.provider, entry.model.model) for entry in item.bundle.trace_entries}) > 1,
                 ccost=valuation.known_ccost,
+                main_ccost=comparison_cost((entry for entry in unique_usage(item.bundle.trace_entries)
+                    if entry.session_id == item.session.session_id),
+                    self._load_comparison_catalog().reference_valuation).known_ccost,
+                subagent_ccost=comparison_cost((entry for entry in unique_usage(item.bundle.trace_entries)
+                    if entry.session_id != item.session.session_id),
+                    self._load_comparison_catalog().reference_valuation).known_ccost,
                 prompt_count=prompt_count,
                 complete=valuation.complete,
                 ccost_unavailable=valuation.unavailable,

@@ -96,7 +96,7 @@ def block(value, *, source_complete=True, details=False):
         total_mix_text current_context_tokens next_context_tokens next_context_cached_ccost
         next_context_fresh_ccost next_context_warning event_id duration_ms total_main_ccost total_subagent_ccost
         total_breakdown_known total_has_cost_breakdown total_main_estimated total_subagent_estimated
-        comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier""")
+        comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier other_ccost other_calls""")
     return ObjectValue(base.fields + (
         ("rows", tuple(prompt(row, details=details) for row in value.rows)),
         ("ccost_unavailable", issue_records(value.ccost_unavailable)),
@@ -211,7 +211,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
             (("model_help", session_model_help(item)), ("effort_help", session_effort_help(item)),
              ("ccost_unavailable", issue_records(item.ccost_unavailable))))
             for item in report.session_usage),

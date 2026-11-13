@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from dataclasses import replace
 from typing import Callable, Mapping
 
 from src.analysis.comparisons import compaction_model_timeline_name, effort_model_name, effort_model_parts
@@ -77,14 +78,14 @@ def _extra_ccost(catalog: PricingCatalog, record: PromptRecord | CompactionRecor
 def _prompt_metrics(catalog: PricingCatalog, record: PromptRecord, provisional: bool
                     ) -> tuple[tuple[int, int, int, int] | None, Decimal | None, Decimal | None]:
     """Use completed-report definitions, withholding unsupported active estimates."""
-    coverage_known = mix_known(record)
+    coverage_known = mix_known(record) and record.usage_coverage_complete
     active = record.in_progress
     supported = provisional and record.breakdown_known
     mix = (mix_percent((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
            if coverage_known and (not active or supported) else None)
     context_known = context_cost_known(record)
-    ictx = _context_ccost(catalog, record) if not active or supported and context_known else None
-    extra = _extra_ccost(catalog, record) if not active or supported and coverage_known else None
+    ictx = _context_ccost(catalog, record) if context_known and (not active or supported) else None
+    extra = _extra_ccost(catalog, record) if coverage_known and (not active or supported) else None
     return mix, ictx, extra
 
 
@@ -132,6 +133,7 @@ class PromptRowProjector:
         watch_warning = self.warning(live_tokens, watch_state.model_id)
         mix, ictx_ccost, extra_ccost = _prompt_metrics(catalog, record, self.snapshot_running_metrics)
         valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
+        valuation = replace(valuation, source_complete=valuation.source_complete and record.usage_coverage_complete)
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
         model_label = effort_model_name(catalog, record.main_model_id,
@@ -163,7 +165,7 @@ class PromptRowProjector:
             incoming_context_ccost=ictx_ccost,
             extra_ccost=extra_ccost,
             incoming_context_ccost_known=context_cost_known(record),
-            extra_ccost_known=mix_known(record),
+            extra_ccost_known=mix_known(record) and record.usage_coverage_complete,
             token_mix_percent=mix,
             in_progress=record.in_progress,
             execution_unverified=record.execution_unverified,
@@ -186,11 +188,13 @@ class PromptRowProjector:
             breakdown_known=record.breakdown_known,
             has_cost_breakdown=bool(record.breakdown_known and subagent.observed_requests),
             main_estimated=not main.complete,
-            subagent_estimated=not subagent.complete,
+            subagent_estimated=not subagent.complete or any(
+                agent.state not in {"usage-observed", "not-executed"} for agent in record.agent_coverage),
             has_additional_model=prompt_has_additional_model(record),
             linked_agent_count=len(set(record.linked_session_ids) |
                 {entry.session_id for entry in record.entries[record.root_entry_count:]
-                 if entry.session_id != record.session_id}),
+                  if entry.session_id != record.session_id}),
+            agent_coverage=record.agent_coverage,
             cost_parts=prompt_cost_parts(record, catalog),
             recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'
                 for message in self.replies.get((record.session_id, record.prompt_id), ())
@@ -238,8 +242,8 @@ class PromptRowProjector:
             unresolved_cost=not valuation.complete,
             calls=record.model_calls,
             incoming_context_tokens=record.input_context_tokens or None,
-            incoming_context_ccost=_context_ccost(catalog, record),
-            extra_ccost=_extra_ccost(catalog, record),
+            incoming_context_ccost=_context_ccost(catalog, record) if context_cost_known(record) else None,
+            extra_ccost=_extra_ccost(catalog, record) if mix_known(record) else None,
             incoming_context_ccost_known=context_cost_known(record),
             extra_ccost_known=mix_known(record),
             token_mix_percent=(mix_percent((record.input_tokens, record.cache_read_tokens,

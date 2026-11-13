@@ -42,7 +42,7 @@ class WorkloadMixTests(unittest.TestCase):
         entry = replace(base, model=ModelRef("claude-code", "gpt-test"), tokens=TokenUsage(input=2, output=3, reasoning=5))
         invalid = replace(entry, message_id="bad", step_part_id="bad", tokens=TokenUsage(input=999, known_fields=("input",)))
         unknown = replace(entry, message_id="unknown", step_part_id="unknown", model=ModelRef("github-copilot", "unknown"))
-        clone = replace(entry, session_id='fork')
+        clone = replace(entry, session_id='fork', root_session_id='fork', parent_session_id=None)
         entries = (entry,) * 100 + (clone, invalid, unknown)
 
         usage = priced_usage(unique_usage(entries), catalog.reference_category_valuation)

@@ -90,7 +90,8 @@ def make_snapshot(*, generation: str = "v1", running: bool = False) -> SessionSn
         ModelInvocation("i_next", "root", 2100, MODEL, TokenUsage(input=30, output=4), prov("root", "i_next", generation), completed_at_ms=None if running else 2300, cost=CostObservation(Decimal("0.30"), "USD", CostKind.PROVIDER_REPORTED), initiating_event_id="u_next", message_id="a_next"),
         ModelInvocation("i_comp", "root", 3100, MODEL, TokenUsage(input=40, cache_read=3, cache_write=2, output=4, reasoning=1), prov("root", "i_comp", generation), completed_at_ms=3300, cost=CostObservation(Decimal("0.40"), "USD", CostKind.PROVIDER_REPORTED), initiating_event_id="u_comp", message_id="a_comp", summary=True, finish_reason="stop"),
     )
-    return SessionSnapshot(root, (root, child), msgs, tuple(p for m in msgs for p in m.parts), events, inv, f"{generation}-rev-1")
+    return SessionSnapshot(root, (root, child), msgs, tuple(p for m in msgs for p in m.parts), events, inv, f"{generation}-rev-1",
+        complete=True)
 
 
 def make_uncompacted_snapshot(*, running: bool = False) -> SessionSnapshot:
