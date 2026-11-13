@@ -146,6 +146,21 @@ probe's `native` metadata extractor also reported zero pairs despite earlier
 claims that such fields exist; reconcile the source shape rather than
 silently declaring the fields absent.
 
+**Five-session pinpointed evidence gap (2026-11-13):** a second
+review of the owner's saved v4 metadata isolates five Sonnet alias sessions
+with **8/1, 8/1, 10/1, 20/12, and 23/14** (saved OpenCode assistant rows /
+exact current SDK checkpoint reply UUID matches). The three 8/1, 8/1 and
+10/1 sessions each have only one assistant reply in the *currently referenced*
+SDK transcript; examine earlier Claude SDK session generations rather than
+assuming the last confirmed Sonnet release applies to every earlier row.
+Checkpoint counts, OpenCode normalized requests and SDK responses differ by
+design, and OpenCode may aggregate several SDK responses into one usage row.
+A bounded metadata-only owner-run v5 probe for per-step references and possible
+orphan transcripts was synthetically tested, but its **real results are not
+yet supplied**. A timestamp/source-directory near-match is a **candidate
+only**, not execution proof. Further count/detail:
+[claude-exact-history journal](../../../journal/claude-exact-history.md).
+
 **Use this as the first recovery lead on reactivation**: account for all 87
 physical requests using exact durable records where available, separate
 selected aliases/current catalog estimates/executed reply identities,
