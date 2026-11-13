@@ -1,5 +1,7 @@
 # FR000692 — real exact-case inventory and native approval blocker
 
+**Current source-recovery finding (v6 owner-run, 2026-11-13):** all **87/87** alias-defect saved known-usage OpenCode requests have exact native SDK reply UUID-to-executed-model evidence (**174/174** links resolved, zero conflicting models). See [V6 proof below](#v6-owner-executed-exact-per-request-identity-proof--2026-11-13). Earlier “UNTESTED” statements accurately describe the former worker's hold, and are superseded for the local investigation, **not** for the still-unimplemented product fix. FR remains **On Hold**.
+
 2026-11-13; actual-default source baseline `9176d38c101ec4828a3f2e1032e6bd14b2299ee2`,
 Cost Guard v81.37, registered OpenCode **2.3.0**.
 **Investigation only; no identity repair or completion.**
@@ -479,8 +481,9 @@ earlier SDK session IDs prove why using just the plugin's last
   alias-defect assistant usage requests carry one or more *direct*
   native UUID references to real Claude replies with the concrete
   executed model release recorded as above; all 174 references resolve,
-  none conflict. The v4 conclusion that 40 requests lacked any
-  exact model evidence is superseded; that probe omitted inline content.
+  none conflict. V4's *apparent 40-request evidence-coverage gap* is
+  superseded: it did not inspect inline native content and never
+  established those historical requests lacked recoverable proof.
 - **NOT YET PROVEN:** a fully installed Cost Guard implementation,
   final UI/cold-warm/two-restart display, availability and correctness
   of historical price rates, billed invoice equivalence, all future
