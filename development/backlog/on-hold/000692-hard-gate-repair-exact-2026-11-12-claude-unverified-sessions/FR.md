@@ -155,9 +155,9 @@ SDK transcript; examine earlier Claude SDK session generations rather than
 assuming the last confirmed Sonnet release applies to every earlier row.
 Checkpoint counts, OpenCode normalized requests and SDK responses differ by
 design, and OpenCode may aggregate several SDK responses into one usage row.
-A bounded metadata-only owner-run v5 probe for per-step references and possible
-orphan transcripts was synthetically tested, but its **real results are not
-yet supplied**. A timestamp/source-directory near-match is a **candidate
+The owner has now run that v5 probe against the real local files. Its results
+and limits are recorded in the following follow-up. Exact per-step proof remains
+pending a corrected inline-content native-reference check. A timestamp/source-directory near-match is a **candidate
 only**, not execution proof. Further count/detail:
 [claude-exact-history journal](../../../journal/claude-exact-history.md).
 
@@ -173,4 +173,50 @@ counted matrix, evidence qualification and ordered next steps are in
 change the current HOLD chronology, authorize any paid inference or product
 implementation, or promote the FR to Ready; explicit owner release and remaining
 source/access verification are still required.
+## Owner v5 metadata audit and inline-native probe correction — 2026-11-13
 
+**Owner-supplied v5 real evidence, after prior v4:** 49 candidate
+sessions / 19 Claude-related / 89 saved assistant steps / **88 with
+usage**. All **88 usage-bearing steps** match a nearby locally saved
+Claude SDK assistant on *all four recorded token components*
+(input, output inclusive of reasoning, cache read and cache write).
+All numeric-token-matched candidate replies agree on the one
+expected concrete model for their selected route, and **64/88**
+have a matching candidate within 0.15 seconds of the step's
+end-time (from rounded timestamps). V5 also found **48 other
+transcript files** in its ±3-day file-mtime search, without
+read/budget skips. These are **strong metadata corroborations,
+NOT executed-identity UUID proof**. A candidate's matching
+numbers/time/directory must never be promoted to verified identity
+without corroborating source lineage.
+
+**Root cause of v5's misleading zero native refs:** The old
+probe inspected only envelope native fields and `session_part`;
+all 89 steps have zero separately stored part rows in the
+export. OpenCode 2.2.7's projector explicitly permits legacy
+assistant parts **inline within `session_message.data.content`**.
+The v5 probe omitted `content[*].native`, so its finding
+`native_reply_pairs=[]` is not evidence that the original
+references are missing. A newly prepared read-only **v6** probe
+checks both inline and separate parts and directly joins observed
+`(Claude SDK session UUID, reply UUID)` to the corresponding
+SDK transcript `assistant.uuid` and actual `message.model`.
+Its 2-step synthetic inline fixture passed; **real v6 results
+are NOT RUN yet**. Do not change owner binary acceptance, status
+or implementation schedule based on a synthetic test.
+
+**Next required decision gate:** count all real direct reply
+links per OpenCode step and verify that no potentially contributing
+response is assigned a model from timestamps or single later
+checkpoint alone. If source-qualified direct links do not cover
+every relevant response, continue with cross-generation
+lineage/reconciliation and preserve unknowns. Maintain separate
+selected alias, verified executed model, mutable catalog estimate
+and supported I/C/W/O cost; later implementation still needs
+post-fix exact-real-session UI/cache/two-restart verification.
+Detailed findings and methodology:
+[claude-exact-history](../../../journal/claude-exact-history.md#owner-v5-metadata-audit-and-inline-native-probe-correction--2026-11-13).
+
+**FR000692 remains On Hold.** This is a documentation-only
+investigation update; it is neither product repair nor a
+permission bypass or approval to promote the FR.
