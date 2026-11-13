@@ -3,7 +3,7 @@
 2026-11-13. **Historical rationale, not an active hold.** The instruction-conflict
 prerequisite below is superseded by [merged Toolkit PR #406](https://github.com/qstoffe/opencode-toolkit/pull/406)
 and the corrected installed command actually received by a fresh ordinary worker.
-See [current verification](../../../journal/recorded-model-help.md#fr000693--verified-rule-loading-and-held-task-reactivation-2026-11-13).
+See [current verification](../../../../journal/recorded-model-help.md#fr000693--verified-rule-loading-and-held-task-reactivation-2026-11-13).
 The owner-approved FR000693 releases this same task to Ready priority 000001.
 No affected sessions have been diagnosed or fixed by that administrative move;
 recoverability and the original all-cases-or-On-Hold acceptance remain unverified.
@@ -58,8 +58,8 @@ test count, title, alias or synthetic example.
 - Read this FR and the current repository development guide, which permits a
   delegated hold preserving the selected task and prohibits claiming unfinished
   implementation as delivery.
-- Read [FR000687's completion](../../complete/000194-000687-claude-agent-identity-recovery-and-raw-provider-model-help/COMPLETION.md)
-  and [its causal journal](../../../journal/recorded-model-help.md). They explicitly
+- Read [FR000687's completion](../../../complete/000194-000687-claude-agent-identity-recovery-and-raw-provider-model-help/COMPLETION.md)
+  and [its causal journal](../../../../journal/recorded-model-help.md). They explicitly
   report historical P0 reproduction/rechecks **NOT RUN**, P1 repair **not delivered**
   and P2 raw-model tooltip work only. They are existing public reports, not fresh
   reads of the owner's affected records.
@@ -67,7 +67,7 @@ test count, title, alias or synthetic example.
   successes and one failure without recognized final usage. These are **previously
   reported outcomes**, not an enumerated affected-case inventory or this worker's
   verification. Their reported installed version is not a fresh version check.
-- Read [Suggestion000691](../../suggestions/000691-authorized-historical-claude-identity-recovery/SUGGESTION.md)
+- Read [Suggestion000691](../../../suggestions/000691-authorized-historical-claude-identity-recovery/SUGGESTION.md)
   as archival context. Its asserted permission does not override the current direct
   instruction; it is not a replacement outcome or executable authorization.
 - Historical session APIs, SQLite/WAL, plugin KV, SDK transcripts, private test

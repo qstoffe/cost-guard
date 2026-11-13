@@ -1,5 +1,35 @@
 # FR 000692 — P0 BLOCKER: Fix the EXACT 2026-11-12 Claude "version unverified" sessions on the owner's PC, or move THIS FR to On Hold
 
+## Owner release from On Hold to Ready — 2026-11-13 (CURRENT STATUS)
+
+**READY TO DEVELOP — queue priority 000001, permanent FR000692.**
+The owner explicitly directed this *same* FR to be released from On Hold
+after confirming that the separate native permission mechanism has now
+been corrected on the owner's machine. The changed runtime permission
+state is **owner-reported, not independently retested by this
+documentation-only move**. Ordinary supported read-only local data access
+must be verified by the implementation worker; this release is not
+permission to bypass native denials or read unrelated worker-private scratch.
+
+The owner-run **V6 exact source-evidence investigation** below establishes
+all **87 of 87** known-usage historical alias-defect request identities
+through **174 of 174** concrete SDK reply UUID/model joins, including
+older SDK session generations. Begin from that evidence and the documented
+source integration path. The previous hold's evidence-only blocker is
+superseded, but **no Cost Guard product fix or real post-repair
+UI/cache/restart acceptance has happened**. Preserve the original mandatory
+all-targets-or-On-Hold completion gate and source-safe historical pricing.
+If a native implementation worker cannot read required local records,
+a narrowly scoped **owner-run read-only validator** on the actual installed
+computer is an acceptable alternate evidence collection path; it must
+still prove exactly the same real before/after records and full acceptance.
+Never treat the sanitized V6 JSON alone as sufficient to populate the
+program's live per-request UUID lookup.
+
+Historical hold records are retained as [the latest paused attempt](attachments/HOLD-2026-11-13.md)
+and [the superseded earlier hold](attachments/PRIOR-HOLD.md).
+They document prior circumstances, **not an active blocking instruction**.
+
 **LATEST INVESTIGATION RESULT (owner's real v6 metadata, 2026-11-13):**
 All **87 of 87** known-usage Claude Agent alias-defect requests have
 source-qualified direct SDK reply UUID/model evidence: **174/174** reply
@@ -10,8 +40,7 @@ current plugin checkpoint. **Read the V6 owner-executed section at the
 bottom BEFORE implementing; it supersedes earlier untested/zero-match
 diagnostic statements, not their original chronological accuracy.**
 Implementation, real Cost Guard UI/cache/restart proof and supported pricing
-are still **NOT DONE**. **Current FR location/status: ON HOLD;
-only the owner may reactivate it.**
+are still **NOT DONE**. **Current FR location/status: READY TO DEVELOP, priority 000001 (owner-released 2026-11-13); implementation and acceptance remain pending.**
 
 **Highest-priority, explicitly owner-approved Ready to Develop (2026-11-12).** Permanent identity **000692**. Priority **000001** — **above every other Ready item**. This request responds to a **verified failed delivery boundary** in completed FR000687: the user upgraded/restarted Cost Guard and still sees **many of the SAME November 12, 2026 local sessions** labelled **`Claude Sonnet (version unverified)`**, plus **new Claude Agent model-test sessions** also labelled **`version unverified`**. Both prior historical and newly generated affected records must be investigated and corrected against the **actual installed local OpenCode source**.
 
@@ -37,7 +66,7 @@ avenues and effort honestly; do not claim work that was not performed.
 Reactivation is authorized by FR000693 after [Toolkit PR #406](https://github.com/qstoffe/opencode-toolkit/pull/406)
 merged the reviewed rule and a fresh ordinary worker received the corrected
 installed command. [Verification and scope](../../../journal/recorded-model-help.md#fr000693--verified-rule-loading-and-held-task-reactivation-2026-11-13)
-and [the superseded original hold](PRIOR-HOLD.md) retain the evidence. This is
+and [the superseded original hold](attachments/PRIOR-HOLD.md) retain the evidence. This is
 **reactivation, not a model-identity fix or verification of any historical case**.
 The original binary acceptance below is unchanged: all exact affected November 12
 and owned native test sessions must be individually diagnosed, correctly resolved
@@ -182,7 +211,7 @@ same-session browser/cache/restart acceptance unchanged. The sanitized
 counted matrix, evidence qualification and ordered next steps are in
 [the 2026-11-13 follow-up journal](../../../journal/claude-exact-history.md#owner-supplied-local-checkpointtranscript-metadata-follow-up--2026-11-13).
 
-**Status is still On Hold.** This addendum does not alter mandatory P0 acceptance,
+**Historical note (V4 investigation: On Hold at that time).** This addendum does not alter mandatory P0 acceptance,
 change the current HOLD chronology, authorize any paid inference or product
 implementation, or promote the FR to Ready; explicit owner release and remaining
 source/access verification are still required.
@@ -230,7 +259,7 @@ post-fix exact-real-session UI/cache/two-restart verification.
 Detailed findings and methodology:
 [claude-exact-history](../../../journal/claude-exact-history.md#owner-v5-metadata-audit-and-inline-native-probe-correction--2026-11-13).
 
-**FR000692 remains On Hold.** This is a documentation-only
+**Historical note (V5 investigation: On Hold at that time).** This is a documentation-only
 investigation update; it is neither product repair nor a
 permission bypass or approval to promote the FR.
 
@@ -287,5 +316,5 @@ Detailed counted findings, source pointers and deterministic test
 matrix are in [the V6 journal investigation]
 (../../../journal/claude-exact-history.md#v6-owner-executed-exact-per-request-identity-proof--2026-11-13).
 
-**Status remains On Hold.** This is a documentation-only
+**Historical note (V6 investigation: On Hold at that time).** This is a documentation-only
 evidence update. Only the human owner may reactivate FR000692.

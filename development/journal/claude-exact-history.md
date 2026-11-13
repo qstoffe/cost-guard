@@ -1,11 +1,19 @@
 # FR000692 — real exact-case inventory and native approval blocker
 
-**Current source-recovery finding (v6 owner-run, 2026-11-13):** all **87/87** alias-defect saved known-usage OpenCode requests have exact native SDK reply UUID-to-executed-model evidence (**174/174** links resolved, zero conflicting models). See [V6 proof below](#v6-owner-executed-exact-per-request-identity-proof--2026-11-13). Earlier “UNTESTED” statements accurately describe the former worker's hold, and are superseded for the local investigation, **not** for the still-unimplemented product fix. FR remains **On Hold**.
+**Current backlog status after owner release (2026-11-13):
+[FR000692 is Ready to Develop, priority 000001](../backlog/ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md).**
+The owner reports the native permissions fix is installed, and explicitly
+released the held FR. The 87/87 exact V6 identity evidence below supersedes
+earlier untested join statements, but the implementation, historical
+pricing and real UI/restart verification are **NOT DONE**. Prior hold
+descriptions remain chronological observations, not active constraints.
+
+**Current source-recovery finding (v6 owner-run, 2026-11-13):** all **87/87** alias-defect saved known-usage OpenCode requests have exact native SDK reply UUID-to-executed-model evidence (**174/174** links resolved, zero conflicting models). See [V6 proof below](#v6-owner-executed-exact-per-request-identity-proof--2026-11-13). Earlier “UNTESTED” statements accurately describe the former worker's hold, and are superseded for the local investigation, **not** for the still-unimplemented product fix. FR was **On Hold** at that earlier time; it is now owner-released to **Ready to Develop**.
 
 2026-11-13; actual-default source baseline `9176d38c101ec4828a3f2e1032e6bd14b2299ee2`,
 Cost Guard v81.37, registered OpenCode **2.3.0**.
 **Investigation only; no identity repair or completion.**
-The Decision Delegate directed the [whole-FR hold](../backlog/on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/HOLD.md).
+The Decision Delegate directed the [whole-FR hold](../backlog/ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/attachments/HOLD-2026-11-13.md).
 The owner-protected original acceptance is unchanged.
 
 ## Real source inventory
@@ -493,5 +501,5 @@ earlier SDK session IDs prove why using just the plugin's last
   hidden contributing SDK response was captured.
 
 **Workflow status unchanged:** this addendum documents owner-supplied
-proof only. FR000692 remains **On Hold** until the owner explicitly
-moves it back to Ready; P0 acceptance has not been weakened or met.
+proof only. FR000692 was **On Hold** when this v6 audit was written; the owner
+subsequently released it to **Ready to Develop**. P0 acceptance has not been weakened or met.
