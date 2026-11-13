@@ -33,7 +33,7 @@ def effort_sort(key):
 
 def sort_value(row, key):
     return {"activity": row.last_activity_ms, "name": row.title.casefold(),
-        "model": "multiple models" if row.multiple_models else row.model.casefold() if row.model != "N/A" else None,
+        "model": row.model.casefold() if row.model != "N/A" else None,
         "effort": effort_sort(row.effort_key),
         "ccost": row.ccost if row.complete else None, "prompts": row.prompt_count,
         "duration": row.duration_ms, "ctx": row.context_tokens if row.context_qualified else None}[key]

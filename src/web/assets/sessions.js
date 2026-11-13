@@ -372,7 +372,7 @@ const SessionsCatalog = (() => {
         ReportView.text(row.activity, ReportView.timestamp(value.last_activity_ms, this.data.view.timezone_id));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
-        const texts = [value.multiple_models ? 'Multiple models' : value.model || 'N/A',
+        const texts = [(value.model || 'N/A') + (value.multiple_models && value.model && value.model !== 'N/A' ? '*' : ''),
           value.effort || 'N/A',
           () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
           () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];

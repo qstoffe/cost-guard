@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.41, 2026-11-13), the supported distribution.
+Use **current `main`** (v81.42, 2026-11-13), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.41 (2026-11-13):** Watch and Mini show verified newly finished prompts during cold Earlier loading, without requiring a Running sighting or weakening global-history proof. Changed roots receive bounded capture priority; source event hints avoid the former extra five-second idle delay. [Evidence and limits](development/journal/web/recent-finished.md).
+**v81.42 (2026-11-13):** Sessions shows the latest actually used main-thread model, with `*` for distinct models used across the session tree. Shared value help separates main and subagent models; Model sorting uses the visible main name, preserving period-scoped 25-row paging and Effort help. [Evidence and limits](development/journal/web/sessions-models.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

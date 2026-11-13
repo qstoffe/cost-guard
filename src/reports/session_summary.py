@@ -15,8 +15,9 @@ from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
 from .models import SessionUsageRow
 from .session_effort import SessionEffort, effort_name
+from .session_models import decode_models, valid_models
 
-ALGORITHM = "session-summary-5"
+ALGORITHM = "session-summary-6"
 NAMESPACE = "session-summary"
 
 
@@ -83,6 +84,10 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
             values["contributor_models"] = tuple(values["contributor_models"])
+            for role in ("main_models", "subagent_models"):
+                values[role] = decode_models(values[role])
+            if not valid_models(values):
+                raise ValueError("invalid_model_roles")
             values["effort_contributors"] = tuple(SessionEffort(
                 part["provider"], part["model"], EffortEvidence(**part["evidence"]), part["requests"])
                 for part in values["effort_contributors"])
@@ -124,7 +129,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     stage('reading_summary')
     item = service._analyze(root, detail=True, force_fresh=active)
     stage('projecting_summary')
-    row = service._session_rows((item,))[0]
+    row = service._session_rows((item,), catalog_models=True)[0]
     row = replace(row, complete=row.complete and item.snapshot.complete)
     actual = item.bundle.source_revision
     identity_values = dependencies(item.bundle.trace_entries)

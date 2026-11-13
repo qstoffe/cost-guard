@@ -21,6 +21,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000698: `reports/session_models.py` derives bounded executed main/subagent model
+facts; `session_summary.py` uses algorithm 6 for Web catalog rows only.
+`application/model_help.py` prepares role-separated text, `session_catalog.py`
+sorts the visible main name, and `assets/sessions.js` appends the mixed-model star.
+CLI projection, costing and detail/Watch semantics remain separate.
+Coverage: `test_session_models.py`, catalog/alias/effort suites and hidden
+`probe_web_sessions.cjs ... --models-only`; [evidence](../../journal/web/sessions-models.md).
+
 FR000697: `watch/recent_finished.py` owns bounded post-start terminal proof;
 `cards.py` owns changed-root admission/retention, and `acquisition.py` bounded
 event-hint promotion. `live_projection.py` exports the independent lane;

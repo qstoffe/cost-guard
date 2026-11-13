@@ -25,6 +25,7 @@ from src.domain import AccountSnapshot, QuotaComponent
 from .prompt_costs import PromptCostPart
 from .watch_context import WatchContextGuidance
 from .session_effort import SessionEffort
+from .session_models import SessionModel
 
 
 class ReportKind(str, Enum):
@@ -171,6 +172,8 @@ class SessionUsageRow:
     effort_details_complete: bool = True
     effort_qualified: bool = True
     effort_pending: bool = False
+    main_models: tuple[SessionModel, ...] = ()
+    subagent_models: tuple[SessionModel, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

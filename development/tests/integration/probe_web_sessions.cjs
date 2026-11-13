@@ -112,8 +112,9 @@ async function main() {
            personal_profile:false,desktop_effects:false};
          console.log(JSON.stringify({outcome:evidence.outcome,checks})); return;
        }
-       if (mode === '--live-only') {
-        const details = await require('../fixtures/sessions_live_browser.cjs')({evaluate, until, fixture,
+        if (mode === '--live-only' || mode === '--models-only') {
+         const details = await require(mode === '--models-only' ? '../fixtures/sessions_models_browser.cjs' :
+           '../fixtures/sessions_live_browser.cjs')({evaluate, until, fixture,
           command:(method, params) => command(method, params, sessionId)});
         checks.push(...details.checks); layouts.push(...details.layouts);
         assert.deepEqual(errors, []);
