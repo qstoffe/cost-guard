@@ -12,7 +12,66 @@ from development.tests.fixtures.detail_child import run_owned_fixture
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.application.session_detail import SessionDetails
 from src.sources.errors import FailureCode, SourceConcurrentChangeError, SourceSchemaError, SourceUnavailableError
-from src.watch.detail_capture import DetailCapture, DetailWorkerStopError
+from src.watch.detail_capture import DetailCapture, DetailWorkerStopError, WorkMeter
+
+
+class DetailProgressTests(unittest.TestCase):
+    def test_milestones_known_fractions_and_scalar_work_are_distinct(self):
+        from multiprocessing import get_context
+        shared = get_context('spawn').Array('d', (0, 0, 0, -1, -1))
+        meter = WorkMeter(shared)
+
+        meter.observe('selecting')
+        self.assertEqual(3, shared[2])
+        meter.observe('verifying')
+        self.assertEqual(10, shared[2])
+        meter.observe('reading')
+        self.assertEqual(15, shared[2])
+        meter.observe('analyzing', 73000)
+        self.assertEqual(15, shared[2], 'nested heterogeneous units cannot change stage/percent')
+        meter.observe('reading', 1, completed=1, total=2)
+        self.assertEqual([27, 1, 2], list(shared[2:]))
+        meter.observe('reading', completed=0, total=2)
+        self.assertEqual(27, shared[2], 'repeated/backward work retains the watermark')
+        meter.observe('reading', completed=2, total=2)
+        self.assertEqual(40, shared[2])
+        meter.observe('analyzing')
+        self.assertEqual(40, shared[2])
+        meter.observe('projecting')
+        self.assertEqual(55, shared[2])
+        meter.observe('publishing', completed=1, total=2)
+        self.assertEqual(67, shared[2])
+        meter.observe('publishing', completed=2, total=2)
+        self.assertEqual(69, shared[2], 'only accepted parent publication owns source completion')
+        for completed, total in ((1, None), (1, 0), (3, 2), (-1, 2)):
+            meter.observe('publishing', completed=completed, total=total)
+            self.assertEqual([69, -1, -1], list(shared[2:]))
+
+    def test_attempt_scoped_status_rejects_old_work_and_clock_does_not_advance_percent(self):
+        now = [1]
+        details = SessionDetails(clock=lambda: now[0])
+        token = details.open('root', 'live')
+        self.assertEqual(0, details.page(token, 0)['acquisition']['percent'])
+        key, attempt, _ = details.claim()
+
+        details.progress(key, attempt, 'reading', 73, percent=27, phase_completed=1, phase_total=2)
+        first = details.page(token, 0)['acquisition']
+        self.assertEqual((attempt, 27, 1, 2), tuple(first[name] for name in
+            ('attempt_id', 'percent', 'phase_completed', 'phase_total')))
+        now[0] = 30
+        details.progress(key, attempt, 'reading', 73, percent=15)
+        self.assertEqual(27, details.page(token, 0)['acquisition']['percent'])
+        self.assertEqual(29, details.page(token, 0)['acquisition']['progress_age_seconds'])
+        details.finish(key, attempt, dict(error='detail_no_progress'))
+        self.assertEqual(27, details.page(token, 0)['acquisition']['percent'])
+        now[0] = 36
+        _, second, _ = details.claim()
+        details.progress(key, attempt, 'publishing', 9000, percent=69)
+        after = details.page(token, 0)['acquisition']
+        self.assertNotEqual(attempt, second)
+        self.assertEqual((second, 3, None), (after['attempt_id'], after['percent'], after['phase_total']))
+        details.retry(token)
+        self.assertEqual(0, details.page(token, 0)['acquisition']['percent'])
 
 
 class DetailLivenessTests(unittest.TestCase):
@@ -57,7 +116,7 @@ class DetailLivenessTests(unittest.TestCase):
                     self.assertEqual('connection_reset', details.page(token, 0)['acquisition']['reason'])
                     details.retry(token)
                     work = []
-                    with observing_work(lambda phase, units=0: work.append((phase, units))):
+                    with observing_work(lambda phase, units=0, **_: work.append((phase, units))):
                         details.tick(service)
                     page = details.page(token, 0, begin=True)
                     self.assertIsNotNone(page['result'])

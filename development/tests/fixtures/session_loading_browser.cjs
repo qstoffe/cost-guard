@@ -72,7 +72,7 @@ module.exports = async function sessionLoading({evaluate, until, command}) {
   await evaluate(`(async()=>{loadingProbe.waiting=false;await loadingProbe.view.load()})()`);
   assert.equal(await evaluate('loadingProbe.view.body.rows.length'),220);
   const transferred = await evaluate('loadingProbe.events.filter(event=>event.stage.startsWith("Loading session history"))');
-  assert.deepEqual(transferred.map(event=>event.percent),[21,43,64,86,95]);
+   assert.deepEqual(transferred.map(event=>event.percent),[75,81,87,92,95]);
   assert.deepEqual(transferred.map(event=>event.stage),[50,100,150,200,220].map(count=>`Loading session history (${count} of 220)…`));
   assert.equal(await evaluate('loadingProbe.events.at(-1).percent===100 && loadingProbe.events.at(-1).rows===220'),true);
   await evaluate(`(async()=>{window.keptHistory=loadingProbe.view.body.firstChild;
@@ -179,15 +179,25 @@ module.exports.zoom = async function sessionLoadingZoom({evaluate,until,command,
 };
 
 module.exports.firstLoad = async function firstLoad({evaluate,until,fixture}) {
-  await fixture('detail-delayed');
-  await evaluate(`window.firstLoadEvents=[];window.firstLoadStart=performance.now();
+   await fixture('detail-delayed');
+   await evaluate(`window.firstLoadEvents=[];window.firstLoadStart=performance.now();window.detailRequests=[];
+     const fetchDetail=window.fetch;window.fetch=(url,options)=>{
+       if(url==='/api/detail')detailRequests.push(JSON.parse(options.body).action);
+       return fetchDetail(url,options);};
     const status=SessionDetail.View.prototype.sourceStatus;
-    SessionDetail.View.prototype.sourceStatus=function(value){status.call(this,value);
-      firstLoadEvents.push({at:performance.now(),phase:value.acquisition?.phase,
-        count:value.acquisition?.completed,percent:this.loader.bar.value,result:!!value.result});};
+     SessionDetail.View.prototype.sourceStatus=function(value){status.call(this,value);
+       firstLoadEvents.push({at:performance.now(),phase:value.acquisition?.phase,
+         count:value.acquisition?.completed,sourcePercent:value.acquisition?.percent,
+         completed:value.acquisition?.phase_completed,total:value.acquisition?.phase_total,
+         percent:this.loader.bar.value,result:!!value.result});
+       if(!value.result){const bar=this.loader.bar;requestAnimationFrame(()=>requestAnimationFrame(()=>
+         firstLoadEvents.push({paintAt:performance.now(),percent:bar.value,visible:!this.loader.root.hidden,
+           pending:!this.data,stable:bar===this.loader.bar,stage:this.loader.stage.textContent})));}};
     const update=SessionDetail.View.prototype.update;
     SessionDetail.View.prototype.update=function(value){update.call(this,value);window.firstLoadApplied=performance.now();};
-    location.hash='#/sessions/root-0000'`);
+     location.hash='#/sessions?sort=name&direction=1'`);
+   await until(`document.querySelector('a[href="#/sessions/root-0000"]')`);
+   await evaluate(`window.firstLoadStart=performance.now();document.querySelector('a[href="#/sessions/root-0000"]').click()`);
   await until('current.detail?.data?.total===1001 && !current.detail.busy');
   const lane=await fixture('detail-observe');
   const measured=await evaluate(`({elapsed:firstLoadApplied-firstLoadStart,
@@ -196,14 +206,29 @@ module.exports.firstLoad = async function firstLoad({evaluate,until,fixture}) {
   measured.publicationToDOM=measured.appliedAt-lane.metrics.published_at_ms;
   // timeOrigin, not the route start, qualifies the browser/host clock join.
   measured.publicationToBegin=await evaluate('performance.timeOrigin')+
-    measured.events.find(e=>e.result).at-lane.metrics.published_at_ms;
+     measured.events.find(e=>e.result).at-lane.metrics.published_at_ms;
   assert.ok(measured.elapsed>=5000 && measured.elapsed<15000,JSON.stringify(measured));
   assert.ok(measured.publicationToBegin>=0 && measured.publicationToBegin<1250,JSON.stringify(measured));
   assert.ok(measured.publicationToDOM>=0 && measured.publicationToDOM<3000,JSON.stringify(measured));
-  const pending=measured.events.filter(e=>!e.result);
-  assert.ok(pending.length>=5 && pending.length<20);
-  assert.ok(pending.some(e=>e.phase==='reading' && e.count>0));
-  assert.ok(pending.every(e=>e.percent===0),'opaque work must not manufacture a fraction');
+   const pending=measured.events.filter(e=>e.at && !e.result);
+   const paints=measured.events.filter(e=>e.paintAt);
+   assert.ok(pending.length>=5 && pending.length<25);
+   assert.ok(pending.some(e=>e.phase==='reading' && e.count>0));
+   assert.ok(new Set(pending.filter(e=>e.percent>0).map(e=>e.percent)).size>=3,'source work advances before any ready begin');
+   assert.ok(paints.some(e=>e.pending && e.visible && e.stable && e.percent>0 && e.percent<70),'an intermediate value survives a genuine pending browser paint');
+   assert.ok(pending.every((e,i)=>!i || e.percent>=pending[i-1].percent));
+   assert.ok(pending.some(e=>e.total>0 && e.completed>0));
+   measured.firstNonzero=pending.find(e=>e.percent>0).at-(await evaluate('firstLoadStart'));
+   measured.source=lane;
+   const warm=await evaluate(`(async()=>{const view=current.detail,bar=view.loader.bar,row=view.body.firstChild;
+     const start=performance.now(),before=detailRequests.length;await view.load();
+     return {milliseconds:performance.now()-start,requests:detailRequests.slice(before),
+       retained:row===view.body.firstChild,stable:bar===view.loader.bar,hidden:view.loader.root.hidden};})()`);
+   assert.ok(warm.retained && warm.stable && warm.hidden);
+   assert.deepEqual(warm.requests,['begin']);
+   assert.equal(lane.started,1);assert.equal(lane.metrics.work.snapshot_reads,1);
+   measured.warm=warm;
+   measured.requests=await evaluate('detailRequests');
   assert.equal(measured.rows,1001);assert.equal(measured.percent,100);
-  return {measurements:measured,checks:['deliberate 5s source acquisition: detached 500ms pending reads, actual work counts, zero until verified rows; publication-to-begin <1.25s and 1001-row DOM <3s; 100 only after apply']};
+   return {measurements:measured,checks:['authenticated Sessions click / supervised source-shaped ~5s message batches / real 500ms pending status; several source-owned nonzero values before ready begin and across browser paints; publication-to-begin <1.25s and 1001-row DOM <3s; 100 only after apply']};
 };

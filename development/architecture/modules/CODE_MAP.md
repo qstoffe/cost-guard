@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000686: `domain/progress.py::DetailProgress` owns the explicit source milestone
+budget; `watch/detail_capture.py::WorkMeter` transports it separately from scalar
+liveness work, qualified by `application/session_detail.py` attempt identity.
+`reports/session_history.py` owns phase entry/known publication rows; V2 snapshot
+hydration owns measured discovered-tree units. `assets/session.js` consumes source
+percent and remaps pinned transfer to 70–95%, completing only after applied DOM.
+Coverage: detail liveness/status, `web_session.cjs`, first-load/layout/native-zoom
+and liveness browser probes; [evidence](../../journal/web/session-loading.md#source-driven-whole-operation-progress-fr000686).
+
 FR000689: `assets/ai-stats.js` owns the permanent Loading-only card invariant;
 `app.js` owns separate cold-error feedback and attempt-qualified application.
 `stats_jobs.py` and `dispatch.py` distinguish unready exhaustion from success,

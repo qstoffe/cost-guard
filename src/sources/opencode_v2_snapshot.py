@@ -7,6 +7,7 @@ from threading import Event
 from typing import TYPE_CHECKING, Sequence
 
 from src.domain import SessionSnapshot
+from src.domain.progress import observe_work
 from .errors import FailureCode, SourceConcurrentChangeError, SourceDataError, SourceError, SourceSnapshotMemberError
 from .opencode_v2_catalog import V2CatalogIndex
 from .opencode_v2_events import normalize_event
@@ -20,7 +21,8 @@ def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id
                revision: str, stopped: Event | None = None) -> SessionSnapshot:
     messages, parts, boundaries, background, contexts = [], [], [], [], []
     notices: set[str] = set()
-    for native in tree:
+    observe_work('reading', completed=0, total=len(tree))
+    for number, native in enumerate(tree, 1):
         if stopped is not None and stopped.is_set():
             raise CancelledError()
         native_messages, native_parts, native_boundaries, native_background, native_notices, context = source._load_messages(native)
@@ -31,6 +33,7 @@ def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id
         notices.update(native_notices)
         if context is not None:
             contexts.append(context)
+        observe_work('reading', 1, completed=number, total=len(tree))
     sessions = tuple(source._normalize_session(item) for item in tree)
     events = tuple(event for message in messages
                    if (event := normalize_event(message, frozenset(notices))) is not None)

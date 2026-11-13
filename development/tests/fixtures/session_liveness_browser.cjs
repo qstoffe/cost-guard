@@ -46,9 +46,11 @@ module.exports = async function sessionLiveness({evaluate, until, fixture, comma
   await until('current.detail.retry.hidden===false && !current.detail.busy');
   const failed = await evaluate(`({text:current.detail.status.textContent,bar:current.detail.loader.bar.value,
     hidden:current.detail.loader.root.hidden,rows:current.detail.body.rows.length,
-    phases:detailEvents.map(event=>event.phase),attempts:detailReads.filter(read=>read.reason==='detail_no_progress').at(-1).attempts})`);
+     phases:detailEvents.map(event=>event.phase),reading:detailEvents.filter(event=>event.phase==='reading').map(event=>event.percent),
+     attempts:detailReads.filter(read=>read.reason==='detail_no_progress').at(-1).attempts})`);
   assert.match(failed.text,/No forward progress/); assert.match(failed.text,/Retry or return to Sessions/);
-  assert.equal(failed.attempts,3); assert.equal(failed.bar,0); assert.equal(failed.hidden,true); assert.equal(failed.rows,0);
+   assert.equal(failed.attempts,3); assert.equal(failed.bar,15); assert.equal(failed.hidden,true); assert.equal(failed.rows,0);
+   assert.ok(failed.reading.length>2 && failed.reading.every(percent=>percent===15),'stalled phase-entry milestone never creeps with polls/time/retries');
   assert.ok(failed.phases.includes('retrying')); assert.ok(failed.phases.includes('failed'));
   const terminal = await fixture('detail-observe');
   await evaluate(`Promise.all(Array.from({length:25},()=>api('/api/detail',

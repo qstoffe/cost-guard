@@ -108,6 +108,7 @@ const SessionDetail = (() => {
       this.busy = true;
       const generation = this.generation;
       try {
+        if (!this.token && !this.data) this.progress = {percent: 0, stage: 'Opening session…'};
         if (!this.token) this.loading('Opening session…');
         if (!this.token) {
           const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
@@ -183,10 +184,15 @@ const SessionDetail = (() => {
         return;
       }
       if (!data.result && acquisition) {
-        const phase = ({queued: 'Queued for session source', reading: 'Reading session source',
+        const phase = ({queued: 'Queued for session source', selecting: 'Selecting session source', reading: 'Reading session source',
           verifying: 'Verifying session revision', analyzing: 'Analyzing session history',
-          publishing: 'Preparing verified session history', retrying: 'Waiting to retry session source'})[acquisition.phase] || 'Waiting for session source';
-        this.loading(`${phase}… ${acquisition.completed || 0} completed work units; attempt ${acquisition.attempts || 0}; last progress ${acquisition.progress_age_seconds || 0}s ago${acquisition.reason ? ` (${acquisition.reason})` : ''}`, this.progress.percent, phase);
+          projecting: 'Building session table', publishing: 'Preparing verified session history',
+          retrying: 'Waiting to retry session source'})[acquisition.phase] || 'Waiting for session source';
+        const percent = Number.isFinite(acquisition.percent) && acquisition.percent >= 0 && acquisition.percent <= 70 ? acquisition.percent : this.progress.percent;
+        const work = Number.isSafeInteger(acquisition.phase_total) && acquisition.phase_total > 0 &&
+          Number.isSafeInteger(acquisition.phase_completed) && acquisition.phase_completed >= 0 && acquisition.phase_completed <= acquisition.phase_total ?
+          `${acquisition.phase_completed} of ${acquisition.phase_total} stage units; ` : '';
+        this.loading(`${phase}… ${work}${acquisition.completed || 0} completed work units; attempt ${acquisition.attempts || 0}; last progress ${acquisition.progress_age_seconds || 0}s ago${acquisition.reason ? ` (${acquisition.reason})` : ''}`, percent, phase);
         return;
       }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
@@ -201,9 +207,9 @@ const SessionDetail = (() => {
       if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
     }
     historyProgress(completed, total) {
-      // Overall phase budget: verified history transfer 0–95%; applied DOM 95–100%.
-      // Unknown source waits never advance it. Retries retain the last verified point.
-      this.loading(`Loading session history (${completed} of ${total})…`, total ? 95 * completed / total : 95,
+      // Source-owned milestones 0–70%; pinned rows 70–95%; applied DOM 100%.
+      // Scalar work/time never invent a fraction. Retries retain the proven watermark.
+      this.loading(`Loading session history (${completed} of ${total})…`, total ? 70 + 25 * completed / total : 95,
         'Loading session history');
     }
     loading(stage = this.progress.stage, percent = this.progress.percent, stageLabel = stage) {

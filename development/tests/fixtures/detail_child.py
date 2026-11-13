@@ -5,13 +5,30 @@ import unittest
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.application.session_detail import acquire_detail
-from src.domain.progress import observing_work
+from src.domain.progress import observe_work, observing_work
 from src.watch.detail_capture import WorkMeter, read_payload, write_payload
 from src.web.jobs import run_owned_report
 
 
 def run_owned_fixture(shared, paths):
     run_owned_report(run_fixture, shared, paths)
+
+
+class DelayedDetailSource(SyntheticMonthSource):
+    """Synthetic batched source latency inside the actual history acquisition."""
+    def get_session_tree_revision(self, session_id):
+        time.sleep(.3)
+        return super().get_session_tree_revision(session_id)
+
+    def load_session_snapshot(self, session_id):
+        snapshot = super().load_session_snapshot(session_id)
+        total = len(snapshot.messages)
+        for offset in range(0, total, 100):
+            # Each bounded source-shaped message batch is genuinely consumed.
+            batch = snapshot.messages[offset:offset + 100]
+            time.sleep(.24)
+            observe_work('reading', len(batch), completed=offset + len(batch), total=total)
+        return snapshot
 
 
 def run_fixture(shared, paths):
@@ -36,11 +53,8 @@ def run_fixture(shared, paths):
                 for _ in range(15):
                     meter.observe('reading', 1)
                     time.sleep(.1)
-            if mode == 'delayed':
-                for _ in range(20):
-                    meter.observe('reading', 1)  # Deliberately delayed synthetic source work.
-                    time.sleep(.25)
-            source = SyntheticMonthSource(2, payload['config'].get('detail_rows', 3), month_start_ms=1000)
+            source_type = DelayedDetailSource if mode == 'delayed' else SyntheticMonthSource
+            source = source_type(2, payload['config'].get('detail_rows', 3), month_start_ms=1000)
             if 'detail_snapshots' in payload['config']:
                 source.snapshots = payload['config']['detail_snapshots']
             service = report_service(owner, source, now_ms=payload['now_ms'])

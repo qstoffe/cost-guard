@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.36 - 2026-11-13
+
+- Session detail now advances during source acquisition: admitted/selected, revision verification, reading, analysis, projection and publication have explicit source-owned milestones. Known local work totals contribute measured stage fractions; heterogeneous units and elapsed time never fabricate a denominator.
+- Source preparation owns 0–70%, validated revision-pinned history transfer 70–95%, and complete table application alone reaches 100%. The stable accessible bar, bounded retries/watchdog, retained history and quiet refresh remain; no extra source scans or minimum animation time are introduced.
+
 ## v81.35 - 2026-11-13
 
 - Session-level Ctx retains its last valid same-source estimate during rapid new-prompt setup, missing handoffs, partial captures and execution uncertainty. Mini reopening, Full Watch's Context footer and the Sessions catalog share source-owned pending/current/invalidated observations; new values and proven boundaries replace immediately. Prompt Ictx/Δ and context arithmetic stay independent.

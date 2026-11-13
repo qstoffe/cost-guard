@@ -149,7 +149,7 @@ class SessionHistory:
         self.dependencies = None
 
     def acquire(self, service, session_id):
-        observe_work('reading')
+        observe_work('selecting')
         root = service.root_for_session(session_id)
         if root is None:
             return None, "session_missing"
@@ -182,12 +182,14 @@ class SessionHistory:
         # must never masquerade as a complete current source revision.
         snapshot, bundle, missing = analyze_observed(service, self.snapshot, fresh)
         item = AnalyzedRoot(root, bundle, False, snapshot)
+        observe_work('projecting')
         block = service._prompt_block(item, snapshot_running_metrics=True)
         observed = {event.event_id for event in fresh.events}
         previous = {row.event_id: row for row in self.report.prompt_blocks[0].rows} if self.report else {}
         row_observations = dict(self.row_observations)
         uncertain_refresh = unverified_refresh(self.snapshot, fresh)
         rows = []
+        observe_work('publishing', completed=0, total=len(block.rows))
         for row in block.rows:
             if uncertain_refresh:
                 row = retain_unverified_row(previous.get(row.event_id), row)
@@ -205,7 +207,7 @@ class SessionHistory:
                 row = replace(row, duration_ms=(max(old.duration_ms or 0, service.now_ms - old.at_ms)
                     if old.in_progress else old.duration_ms))
             rows.append(row)
-            observe_work('publishing', 1)
+            observe_work('publishing', 1, completed=len(rows), total=len(block.rows))
         block = replace(block, rows=tuple(rows),
                         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows))
         self.snapshot = snapshot
