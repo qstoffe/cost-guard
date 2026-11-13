@@ -1,19 +1,20 @@
 # FR000692 — real exact-case inventory and native approval blocker
 
-**Current backlog status after owner release (2026-11-13):
-[FR000692 is Ready to Develop, priority 000001](../backlog/ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md).**
-The owner reports the native permissions fix is installed, and explicitly
-released the held FR. The 87/87 exact V6 identity evidence below supersedes
-earlier untested join statements, but the implementation, historical
-pricing and real UI/restart verification are **NOT DONE**. Prior hold
-descriptions remain chronological observations, not active constraints.
+**Current backlog status (2026-11-13):
+[FR000692 is On Hold](../backlog/on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md).**
+After the owner's release, the implementation worker demonstrated a separate
+raw-versus-native Private-profile permission normalization mismatch. The
+Decision Delegate directed the whole-FR [current hold](../backlog/on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/HOLD.md).
+The 87/87 exact owner-run V6 evidence remains valid; implementation, historical
+pricing and real UI/restart acceptance are **NOT DONE**. Earlier status and
+hold descriptions below retain their chronology.
 
 **Current source-recovery finding (v6 owner-run, 2026-11-13):** all **87/87** alias-defect saved known-usage OpenCode requests have exact native SDK reply UUID-to-executed-model evidence (**174/174** links resolved, zero conflicting models). See [V6 proof below](#v6-owner-executed-exact-per-request-identity-proof--2026-11-13). Earlier “UNTESTED” statements accurately describe the former worker's hold, and are superseded for the local investigation, **not** for the still-unimplemented product fix. FR was **On Hold** at that earlier time; it is now owner-released to **Ready to Develop**.
 
 2026-11-13; actual-default source baseline `9176d38c101ec4828a3f2e1032e6bd14b2299ee2`,
 Cost Guard v81.37, registered OpenCode **2.3.0**.
 **Investigation only; no identity repair or completion.**
-The Decision Delegate directed the [whole-FR hold](../backlog/ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/attachments/HOLD-2026-11-13.md).
+The Decision Delegate directed the [whole-FR hold](../backlog/on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/attachments/HOLD-2026-11-13.md).
 The owner-protected original acceptance is unchanged.
 
 ## Real source inventory
@@ -503,3 +504,74 @@ earlier SDK session IDs prove why using just the plugin's last
 **Workflow status unchanged:** this addendum documents owner-supplied
 proof only. FR000692 was **On Hold** when this v6 audit was written; the owner
 subsequently released it to **Ready to Develop**. P0 acceptance has not been weakened or met.
+
+## Native Private-profile normalization blocker — 2026-11-13
+
+**New implementation-worker investigation, not a retroactive claim about V6.**
+Admission baseline `387945c6376a8b74220c0f6254f0ac790e2cfab9`, Cost Guard v81.44.
+The documentation-only hold branch advanced to actual default
+`130b72c8e0848313ae66676c32c189eef4491b01` before its change.
+
+The normal registered Cost Guard source reached OpenCode **2.3.0** and paginated
+**3,457 sessions**. All **49** November-12 activity candidates were read. Their
+same **14 assistant-bearing Claude cases** expose **89 saved rows / 179 direct
+native SDK reply references**: **12 alias sessions / 87 positive-usage requests /
+174 references**, one concrete Fable success/one reference, and one concrete
+failed Haiku/four references with **no token map**. The latter's consumption is
+unknown, not zero. Five empty Claude selections from owner-run V6 were not
+independently re-audited as a separate population in this worker.
+
+Fresh canonical snapshots still show **87/87 alias requests unverified**.
+Exact-location provider/model catalogs return 404 for all assistant-bearing
+Claude target locations; no unrelated catalog or time/token approximation was
+used. This is a real source baseline, **not Sessions/Watch browser acceptance**.
+The [current hold's per-case matrix](../backlog/on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/HOLD.md#what-was-actually-recovered-and-what-remains-unresolved)
+preserves the existing hashed session identities and separate counting units.
+
+The first native data-directory read was gated before operation/prompt and
+retired, not retried via SQLite/shell. HTTP independently recovered all exact
+references. A single exact SDK-transcript filename glob was then also gated
+with `REPO_BACKLOG_PERMISSION_DELEGATE_REQUIRED`; no alternate transcript
+read or access retry followed.
+
+Supported own-session and same-location agent metadata demonstrated the new
+lowest blocker. The actual worker is `build` with an absolute session location;
+Private selector/config files are byte-equal, config-override environment
+variables absent, native IDs/mode correct, and the Delegate's resolved system
+fingerprint matches. However installed `loadedPrivateProfile()` compares raw
+configured permission subsequences to loaded native arrays. Both fail because
+native rules expand `$HOME` and normalize Windows separators. Applying **only
+those transformations** makes the full contiguous subsequences match for both
+build and Delegate. This explains the unavailable intended automatic read
+admission; no owner refusal, configured transcript denial, missing transcript
+or irrecoverable historical identity is inferred.
+
+Matching public OpenCode **v2.3.0** source was freshly checked: the converter
+emits `response-metadata.modelId`, while `aisdk.ts::streamPartEvents` discards it.
+Actual history retains selected aliases and native references; the product
+still lacks the exact SDK-reply-to-model recovery. FR000687's P2 tooltips did
+not cross that loss/lookup boundary. The owner's V6 proof is not replaced by
+an untested session-only/catalog guess.
+
+The same-parent **Decision Delegate directed whole-FR On Hold**, without further
+retry, owner question, Toolkit modification or acceptance waiver. An owner-run
+validator is an alternative only if it establishes the same full real product
+acceptance; a standalone sanitized identity export cannot become the product's
+durable live lookup. Prerequisite: owner-controlled supported native-profile
+normalization/admission repair and verified required reads, or that fully
+equivalent validation route, followed by explicit owner release of this FR.
+
+No production changes, paid prompts, native-history writes, permission edits,
+installation/reload or shared-service stop occurred. SDK reply reads, managed
+installation identification, pricing, actual UI, cold/warm/two-restart and
+new-prompt acceptance remain **NOT RUN / UNVERIFIED**. Full/validator product
+gates are **NOT RUN** for this development-only administrative delta. No version,
+completed-progress increment or architecture update is needed. Branch
+[`fr-000692`](https://github.com/qstoffe/cost-guard/tree/fr-000692) retains the
+investigation; exact IDs/references and diagnostic comparisons stay in the
+worker's private owned scratch, never public Git.
+
+Scoped administrative verification passed six groups: original three tracked
+payloads preserved, no product/version/progress delta, 12/87/174 table against
+the private inventory, exclusion of exact private IDs/paths, affected local
+Markdown links, and `git diff --check`. These are not product acceptance.
