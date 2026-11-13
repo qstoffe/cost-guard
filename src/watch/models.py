@@ -34,6 +34,9 @@ class ToolInvocation:
     revision: str
     text: str
     qualification: str
+    kind: str = ""
+    started_at_ms: int = 0
+    mode: str = "foreground"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +55,10 @@ class ToolObservation:
     tool_outcomes: tuple[ToolOutcome, ...] = ()
     running_invocation: ToolInvocation | None = None
     background_invocation: ToolInvocation | None = None
+    running_invocations: tuple[ToolInvocation, ...] = ()
+    background_invocations: tuple[ToolInvocation, ...] = ()
+    running_invocation_count: int = 0
+    background_invocation_count: int = 0
 
     @property
     def cancelled_count(self) -> int:

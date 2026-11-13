@@ -21,7 +21,7 @@ module.exports = (card, helpText, document, select) => {
   assert.equal(card.tools.list.querySelectorAll('img').length, 0, 'tool names stay literal text');
   assert.equal(card.running.className, 'watch-running-tool');
    assert.equal(card.runningDetail.summary.textContent, 'Running: execute 12s');
-   assert.match(card.runningDetail.note.textContent, /Invocation details unavailable/);
+   assert.match(card.runningDetail.note.textContent, /Awaiting verified live source/);
   assert.equal(card.running.hidden, false);
   assert.match(helpText(card.tools.summary), /subset, not extra calls/);
   assert.match(helpText(card.tools.summary), /missing evidence is not success/);

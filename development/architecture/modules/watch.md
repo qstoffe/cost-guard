@@ -70,14 +70,21 @@ spans or withholds ambiguous credential/header syntax. Structured/content-bearin
 unsupported, oversized and absent input have separate qualifications; safe commands
 have no warning. Positive finite native shell/bash timeout numbers are presented in
 milliseconds with a compact duration, never an inferred default/countdown. No raw output/metadata/environment crosses the
-DTO. `BackgroundActivity` carries optional source-proven original part/call identities;
-one current registry-confirmed job must match exactly one scoped physical tool before
-its input is eligible. Unknown/aggregate jobs cannot borrow another command. Derived
+DTO. FR000688 adds bounded per-job lists to `ToolObservation` while retaining single
+compatibility fields. `BackgroundActivity` carries source-proven original part/call
+identities and ephemeral scalar registry input; each eligible job requires its own
+exact session/assistant/native-job join. Kind/time/name never supplies identity.
+`invocation.py` is the common privacy/4096-character list budget boundary (five entries,
+honest total). Native input takes precedence; command-only mismatch shows original
+input alone with executed-form uncertainty, while ownership/ID conflicts clear all
+text. Unknown/aggregate jobs cannot borrow another command. Derived
 details are retained with capture results, not recomputed on duration ticks or persisted.
 Unverified/retained captures, catalog generations awaiting re-verification and terminal
 prompts clear live detail. Opaque source-generation/physical-call identity and call-input
 revision drive native disclosure reconciliation; body nodes remain stable on duration
-updates. Freeform screening remains bounded, not guaranteed secret detection.
+updates; multi-job changes replace/reset only their own entry. Missing/unverified
+details show contextual Running facts and cause-specific prose, not a generic dead end.
+Freeform screening remains bounded, not guaranteed secret detection.
 
 
 Rolling account history extends the daily plan only to usable native/trailing-window starts, never a Watch calendar-month comparison. `src/reports/history.py` retains observed requests in that process-local scope and publishes after a finite plan completes. `src/analysis/period_ccost.py` indexes shared request valuation; source-free account queries advance on idle wakes/midnight without quota-driven history scans. Timestamp-only projection changes do not trigger redraws.

@@ -48,13 +48,40 @@ module.exports = async (evaluate, command, session) => {
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const corrected=!target.node.open && target.input.textContent==='command:\\ngit log';
     tool.background_kinds=['shell','shell']; ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const aggregate=card.backgroundDetail.input.textContent==='' && /unavailable/.test(card.backgroundDetail.note.textContent);
+    const aggregate=card.backgroundDetail.input.textContent==='' && /Original call links missing/.test(card.backgroundDetail.note.textContent);
     INPUT.view.active_cards[0].state='unavailable'; ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const unavailable=target.input.textContent==='' && !target.node.open;
     INPUT.view.active_cards[0].state='observed'; Object.assign(tool,saved);
     document.activeElement?.blur(); ReportView.renderLive(document.getElementById('result'), INPUT, state);
     return {changed,corrected,aggregate,unavailable}; })()`);
   assert.deepEqual(reset, {changed:true,corrected:true,aggregate:true,unavailable:true});
+  const multi = await evaluate(`(() => {
+    const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root'), target=card.backgroundDetail;
+    const tool=INPUT.view.active_cards[0].rows[0].tool, saved=structuredClone(tool);
+    tool.background_kinds=['shell','shell'];
+    tool.background_invocations=[1,2].map(i=>({identity:'shell-job-'+i,revision:'r1',kind:'shell',
+      text:'command:\\npython task'+i+'.py --check\\n\\ncwd:\\nC:/fixture',qualification:'',mode:'background'}));
+    ReportView.renderLive(document.getElementById('result'), INPUT, state); target.node.open=true;
+    const jobs=[...target.jobs.values()], original=jobs[1].input.firstChild;
+    jobs[1].summary.focus({preventScroll:true});
+    const range=document.createRange(); range.selectNodeContents(original);
+    const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    const selected=selection.toString(), focus=document.activeElement, y=scrollY;
+    for(let i=0;i<8;i++) {
+      tool.display.background_ms=(30+i)+'s';
+      ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    }
+    const stable=target.node.open && jobs.every(j=>j.node.open) && jobs[1].input.firstChild===original &&
+      selection.toString()===selected && document.activeElement===focus && scrollY===y;
+    tool.background_invocations[0].revision='corrected'; tool.background_invocations[0].text='command:\\npython corrected.py';
+    ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    const isolated=!jobs[0].node.open && jobs[1].node.open && jobs[1].input.firstChild===original;
+    const commands=jobs.map(j=>j.input.textContent.includes('python'));
+    selection.removeAllRanges(); document.activeElement?.blur();
+    Object.assign(tool,saved,{background_invocations:[]});
+    ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    return {stable,isolated,commands,overflow:document.documentElement.scrollWidth>innerWidth}; })()`);
+  assert.deepEqual(multi, {stable:true,isolated:true,commands:[true,true],overflow:false});
   const position = await evaluate(`(() => {
     const target=[...state.watch.cards.values()].find(c=>c.value.session_id==='root').runningDetail;
     target.summary.scrollIntoView(); const r=target.summary.getBoundingClientRect();

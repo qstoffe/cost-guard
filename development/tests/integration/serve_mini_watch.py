@@ -114,6 +114,11 @@ def main():
                  unresolved_cost=False, cost_estimated=False)),))
             for index, duration, cost in ((1, 600_000, "1.25"), (2, 1_200_000, "2.75")))
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
+        if sys.argv[3:4] == ['--watch-shells']:
+            from development.tests.fixtures.watch_tool_outcomes import two_shell_tools
+            cards = tuple(replace(card, rows=tuple(replace(row, tool=two_shell_tools(card.focal_id))
+                for row in card.rows)) for card in cards)
+            frame = replace(frame, active_cards=cards)
         cost_groups = (project_live(many_cost_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
             if help_audit else None)
         same_model = (project_live(same_model_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']

@@ -1046,9 +1046,14 @@ as the running prompt (theme-aware in Web light/dark). Separate background/subag
 Running rows are initially collapsed native disclosures of available invocation
 input, starting with the actual recorded command when available. Safe command text
 retains quoting/newlines, Windows paths, `--mode=fast` and harmless assignments; other
-tools show named parameters, never an invented shell command. A single background
-job needs a verified original-call link; aggregates or missing links show details
-unavailable. Recognized sensitive values are individually redacted when safe;
+tools show named parameters, never an invented shell command. Concurrent jobs get
+separate stable entries (up to five, with honest remaining totals), not one arbitrary
+command for an aggregate. Exact native job/session/prompt joins can recover missing
+V2 shell input; session-only records are not guessed onto a prompt. Missing links
+or verification show known activity facts and a specific reason. When registry text
+differs, only the independently proven original input is shown, with registry details
+withheld and executed form explicitly unverified. Identity conflicts suppress all
+commands. Recognized sensitive values are individually redacted when safe;
 ambiguous credentials/headers, unsupported/structured/content fields and oversized
 values have distinct omission reasons, not a blanket sensitive-input warning.
 Normal safe input has no warning. Supplied positive numeric shell/bash timeouts

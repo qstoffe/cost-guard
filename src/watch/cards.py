@@ -310,12 +310,18 @@ class WatchCards:
                 tool = replace(tool, running_tool=tool.running_tool if show_running else "",
                     running_ms=elapsed if show_running else 0,
                     running_invocation=tool.running_invocation if show_running else None,
+                    running_invocations=tuple(detail for detail in tool.running_invocations
+                        if now_ms - detail.started_at_ms >= RUNNING_VISIBLE_AFTER_MS) if show_running else (),
+                    running_invocation_count=tool.running_invocation_count if show_running else 0,
                     background_kinds=row.background_kinds if row.in_progress else (),
                     background_invocation=tool.background_invocation if row.in_progress and len(row.background_kinds) == 1 else None,
+                    background_invocations=tool.background_invocations if row.in_progress and row.background_kinds else (),
+                    background_invocation_count=tool.background_invocation_count if row.in_progress and row.background_kinds else 0,
                     background_ms=max(0, now_ms - row.background_started_ms)
                         if row.in_progress and row.background_kinds else 0)
                 if state != "observed" or entry.verified_generation != entry.generation or capture.retained or row.execution_unverified:
-                    tool = replace(tool, running_invocation=None, background_invocation=None)
+                    tool = replace(tool, running_invocation=None, background_invocation=None,
+                                   running_invocations=(), background_invocations=())
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,

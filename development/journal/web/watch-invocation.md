@@ -1,5 +1,114 @@
 # Full Web Running invocation disclosure — FR 000632
 
+## Multi-job command recovery — FR 000688
+
+2026-11-13 · v81.37 · base `002cea2cfa3b35756a0a449de2f036063b1dadc8` plus this delivery.
+This section supersedes historical single-background-job restrictions below, not
+their privacy, canonical ownership or verified-capture lifetime rules.
+
+### Reproduction and implementation
+
+The new pre-patch two-background-shell regression failed **2 != 0**: both complete
+original calls were available, but the single-job contract returned no detail.
+It now passes with two different job identities and the two correct commands.
+Foreground active-call lists are independent of all-call counts and background jobs.
+Five entries share each list's 4096-character ASCII-escaped text budget; totals remain
+complete. Child activities remain inside canonical parent/assistant windows, including
+work outliving the child's model response. Source/physical/job IDs, not tool names,
+paths, timestamps or substring similarity, qualify disclosure.
+
+The existing lazy V2 `/api/shell` observation now retains ephemeral command/cwd/shell
+scalars and exact ownership alongside native job IDs. Original input remains first
+choice; a native start still proving the exact session+assistant+shell join can
+recover missing normalized part/input. A returned call without its background flag
+needs positive registry evidence, never outage-based execution invention. Duplicate,
+wrong-session, conflicting-ID and retired-source evidence withholds text.
+On the **verified installed 2.2.7 contract only**, a missing ordinary ownership/command
+observation may use one optional experimental read filtered to the exact session,
+shell kind and running status, with descendants=false. Each hydrated child is read
+separately. 404/unsupported remains compatible; orphan session-only records are not
+assigned to prompts. No registry detail/output endpoint, new worker, expansion read,
+model call or persistent command cache was added. All new text uses the established
+allowlist/redaction/withholding boundary.
+
+### Real source finding and Decision Delegate acceptance clarification
+
+A bounded read of **this worker's own session only** on installed OpenCode V2 2.2.7
+found three exactly linked live shell jobs: the owned browser fixture server and
+two intentionally nonsecret 120-second controlled shell executions. The initial
+post-patch live check **FAILED**: registry command text included runtime-added
+PowerShell setup whereas canonical input retained the requested command. Strict
+string inequality therefore erased all three otherwise legitimate invocations.
+That is not proof that arbitrary unequal commands execute equivalently.
+
+**Decision Delegate** clarified FR000688's canonical-first/conflict requirement:
+when only command text differs, retain independently proven original input through
+the normal privacy/budget filter, withhold **all** registry supplemental fields and
+say: “Original tool input shown; registry command differs. Registry details withheld;
+executed form not verified.” Do not parse wrappers or infer equivalence. Ownership,
+ambiguous-origin, contradictory supplied-ID and source-safety reasons still suppress
+all text and take precedence. Privacy-withheld native input is never rescued through
+the conflicting registry command. Regressions distinguish these branches.
+This is an acceptance clarification, not a scope exclusion or permission to publish
+private command text. No Suggestion or hold was needed.
+
+After repair, the authorized own-session probe passed while two new controlled
+jobs were actually running: **two controlled commands recovered separately**, three
+live details/three live activities in the main scoped observation, zero model calls.
+Earlier controlled jobs were correctly terminal, not counted as concurrent work.
+All controlled jobs and the fixture server subsequently ended normally. Only scalar
+counts/reasons were emitted; no session IDs, commands, raw source payloads or auth
+were retained in public evidence. The owned probe is `scratch:/probe_own_shells.py`.
+This narrowly exercises actual source normalization/correlation, not a global
+catalog/history audit or diagnosis of the reported historical 2m06s instance.
+
+### Verification and overhead
+
+- Final Full: **187/187 test files passed**, zero failures, 143.6 seconds. New and
+  existing coverage includes canonical/legacy input, registry-only recovery,
+  multi-job and foreground-count semantics, native-ID/ownership/source conflicts,
+  redaction, missing/oversized/unsupported input, returned child work, retained/
+  unverified/terminal clearing, V1 parity and bounded DTO/replay publication.
+  The preceding Full run failed the V1 comparator because it excluded only the old
+  two Web-only fields. It now explicitly excludes the new Web-only lists/counts,
+  asserts CLI lists remain empty, and still compares every shared count/outcome/time.
+- Working-tree validation: 11 passes, zero failures, seven pre-existing advisory
+  prose/module warnings; no cap or baseline raised. Final documentation validation
+  is recorded by the delivery's check output.
+- Integrated browser disconnected. Permitted hidden **Edge 157.0.4341.46** passed
+  the invocation/outcome fixture's six Classic/Web light/Web dark × 1366/360 cases:
+  keyboard/mouse/touch, literal multiline input, timeout units, wrapping, unchanged
+  counts/colors, duration selection/focus/scroll and identity/revision/source cleanup.
+- The **shipped authenticated HTTP/bootstrap/CSP/SSE/Full Watch** host additionally
+  passed six two-shell theme/width cases via `probe_web_help.cjs ... --watch-shells`
+  and `probe_watch_jobs.cjs`, on final production source. Both correct commands are
+  visible on parent expansion; child entries and unaffected selections/focus/scroll
+  remain stable through repeated publications. Classic narrow and Web dark
+  screenshots were inspected; images and scalar results remain in `scratch:/browser/`.
+  This host test uses synthetic canonical commands, distinct from the real-source
+  probe above; it does not turn replay into live-incident evidence.
+- Mocked source read counts for 0/1/2/5/20 unfinished starts: **0/1/1/1/1** registry
+  observations per session capture, unchanged from baseline. Ordinary rich shell
+  records add **zero** API reads; the gated missing-record experimental branch adds
+  at most one exact-session read. V1, duration-only publication, quiet no-capture
+  work and disclosure expansion add no source reads.
+- Representative 100-card Live JSON bytes for 0/1/2/5/20 background jobs per card:
+  **869972 / 1055272 / 1067972 / 1365572 / 1379172**, displaying 0/1/2/5/5 entries.
+  Tests also cover simultaneous five-foreground/five-background lists with honest
+  larger totals under the 2 MiB event and 8 MiB replay bounds. This is payload/read
+  accounting, not a general CPU or real-history benchmark.
+
+### Explicit limits
+
+The owner's original running instance is **NOT VERIFIED**; no other session's
+scratch, private records or processes were inspected. Real registry-only missing-part
+and experimental daemon recovery are covered synthetically, not newly observed on
+the workstation. No prompt join is fabricated for session-only or multiple-shell
+code-mode records lacking native per-job origins. Physical desktop, assistive
+technology, other browser engines and non-Windows live behavior are not proved.
+No paid inference, OpenCode restart/stop, shell mutation endpoint, release ZIP,
+Git tag or GitHub Release was used. Existing CLI/Mini accounting remains unchanged.
+
 2026-11-08 · v80.207 · base `7eff2c84ca9f35ca69d41b0b45aea5aee2a5c890` plus this FR diff.
 Scoped feature evidence, not a whole-application architecture or performance audit.
 

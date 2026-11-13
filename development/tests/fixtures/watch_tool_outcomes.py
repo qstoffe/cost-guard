@@ -23,3 +23,14 @@ def outcome_watch():
         background_invocation=replace(detail, identity="background-call"))
     row = replace(card.rows[0], tool=tool)
     return replace(frame, rows=(row,), active_cards=(replace(card, rows=(row,)),))
+
+
+def two_shell_tools(scope):
+    """Two bounded synthetic commands for the authenticated shipped-host probe."""
+    details = tuple(replace(invocation(part(f'p-{i}', 'assistant', 'root', 'tool', {
+        'tool': 'shell', 'callID': f'{scope}-{i}', 'state': {'input': {
+            'command': f'python task{i}.py --check\nWrite-Output "synthetic {i}"',
+            'background': True, 'workdir': 'C:/fixture', 'timeout': 120000}}}, 1000)),
+        mode='background') for i in (1, 2))
+    return ToolObservation(tool_count=2, tool_counts=(('shell', 2),), background_kinds=('shell', 'shell'),
+        background_ms=20_000, background_invocations=details, background_invocation_count=2)

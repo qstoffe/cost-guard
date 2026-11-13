@@ -93,7 +93,11 @@ class V1WebWatchTests(unittest.TestCase):
                             else:
                                 self.assertEqual(cli_row.tool, replace(web_row.tool,
                                     running_invocation=cli_row.tool.running_invocation,
-                                    background_invocation=cli_row.tool.background_invocation))
+                                    background_invocation=cli_row.tool.background_invocation,
+                                    running_invocations=(), background_invocations=(),
+                                    running_invocation_count=0, background_invocation_count=0))
+                                self.assertEqual((), cli_row.tool.running_invocations)
+                                self.assertEqual((), cli_row.tool.background_invocations)
                             wire = project_live(web).to_json()
                             self.assertEqual(1, sum(c["session_id"] == "ses_root" for c in wire["active_cards"] + wire["history_cards"]))
                             self.assertEqual(phase in {"initial", "idle"}, web_row.prompt.in_progress)

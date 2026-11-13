@@ -2,13 +2,14 @@
 from dataclasses import asdict, replace
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot, part
 from development.tests.fixtures.watch_summary import summary_watch
 from src.application.live_projection import project_live
 from src.domain import BackgroundActivity
-from src.sources.opencode_v2_background import background_activities
+from src.sources.opencode_v2_background import background_activities, running_jobs
+from src.sources.errors import SourceUnavailableError
 from src.watch.invocation import invocation, MAX_INPUT_TEXT
 from src.watch.tools import observe_tools, without_live_activity
 from src.web.events import MAX_EVENT_BYTES, MAX_REPLAY_BYTES, EventHub
@@ -29,6 +30,166 @@ def snapshot_with(*parts, background=()):
 
 
 class InvocationTests(unittest.TestCase):
+    def test_two_background_shells_retain_separate_commands_and_identities(self):
+        first = tool('one', {'command': 'python first.py', 'background': True}, status='completed', call='one')
+        second = tool('two', {'command': 'python second.py', 'background': True}, status='completed', call='two')
+        jobs = (BackgroundActivity('bg-one', 'root', 'shell', 1000, 'a_next', tool_call_id='one'),
+                BackgroundActivity('bg-two', 'root', 'shell', 2000, 'a_next', tool_call_id='two'))
+
+        observed = observe_tools(snapshot_with(first, second, background=jobs), 'u_next',
+                                 now_ms=20_000, include_invocations=True)
+
+        details = getattr(observed, 'background_invocations', ())
+        self.assertEqual(2, len(details), 'both live jobs need their own disclosure, not one aggregate None')
+        self.assertIn('python first.py', details[0].text)
+        self.assertIn('python second.py', details[1].text)
+        self.assertNotEqual(details[0].identity, details[1].identity)
+        self.assertIsNone(observed.running_invocation, 'completed tool calls are not foreground running work')
+
+    def test_registry_recovers_missing_input_only_through_exact_session_job_and_prompt_join(self):
+        client = Mock()
+        client.json.return_value = {'data': [
+            {'id': 'job-one', 'status': 'running', 'command': 'python first.py --token synthetic-private',
+             'cwd': 'C:/fixture', 'shell': 'pwsh', 'metadata': {'sessionID': 'root'}},
+            {'id': 'job-peer', 'status': 'running', 'command': 'NEVER-EXPOSE-PEER',
+             'metadata': {'sessionID': 'peer'}}]}
+        items = [{'id': 'a_next', 'type': 'assistant', 'time': {'created': 1000}, 'content': [
+            {'id': 'p', 'callID': 'call', 'name': 'shell', 'type': 'tool',
+             'state': {'status': 'completed', 'metadata': {'shellID': 'job-one'}}}]}]
+        registry = running_jobs(client, 'C:/fixture')
+        jobs, _ = background_activities(items, session_id='root', running_jobs=lambda: registry)
+
+        # The canonical part has been lost, but the native start still proves its
+        # exact assistant message and shell identity. No call-name/time inference.
+        observed = observe_tools(snapshot_with(background=jobs), 'u_next', now_ms=20_000, include_invocations=True)
+
+        self.assertEqual(1, observed.background_invocation_count)
+        detail = observed.background_invocations[0]
+        self.assertIn('python first.py --token [redacted]', detail.text)
+        self.assertIn('cwd:\nC:/fixture', detail.text)
+        self.assertIn('shell:\npwsh', detail.text)
+        self.assertNotIn('synthetic-private', json.dumps(asdict(detail)))
+        self.assertNotIn('NEVER-EXPOSE-PEER', json.dumps(asdict(observed)))
+        client.json.assert_called_once_with('/api/shell', query={'location[directory]': 'C:/fixture'})
+        unrelated = observe_tools(snapshot_with(background=(replace(jobs[0], owner_message_id='other'),)),
+                                  'u_next', now_ms=20_000, include_invocations=True)
+        self.assertEqual((), unrelated.background_invocations)
+
+    def test_command_mismatch_keeps_proven_original_only_but_identity_conflict_withholds_everything(self):
+        original = tool(inputs={'command': 'python original.py', 'background': True}, status='completed')
+        for reason, inputs in [('', (('command', 'REGISTRY-MARKER'), ('cwd', 'REGISTRY-CWD'))),
+                               ('Conflicting job ownership; command withheld.', (('command', 'REGISTRY-MARKER'),))]:
+            job = BackgroundActivity('bg', 'root', 'shell', 1000, 'a_next', tool_call_id='call',
+                                     invocation_input=inputs, invocation_reason=reason)
+            observed = observe_tools(snapshot_with(original, background=(job,)), 'u_next', now_ms=20_000,
+                                     include_invocations=True)
+            detail = observed.background_invocations[0]
+            if reason:
+                self.assertEqual('', detail.text)
+                self.assertIn('Conflicting', detail.qualification)
+            else:
+                self.assertIn('python original.py', detail.text)
+                self.assertIn('executed form not verified', detail.qualification)
+            self.assertNotIn('REGISTRY-', json.dumps(asdict(detail)))
+        inconsistent = replace(job, invocation_reason='', tool_part_id='contradictory-part')
+        observed = observe_tools(snapshot_with(original, background=(inconsistent,)), 'u_next', now_ms=20_000,
+                                 include_invocations=True)
+        self.assertEqual('', observed.background_invocations[0].text)
+        sensitive = tool(inputs={'command': 'curl -u user:synthetic-private', 'background': True}, status='completed')
+        observed = observe_tools(snapshot_with(sensitive, background=(replace(job, invocation_reason=''),)),
+                                 'u_next', now_ms=20_000, include_invocations=True)
+        self.assertNotIn('command:', observed.background_invocations[0].text)
+        self.assertNotIn('REGISTRY-', json.dumps(asdict(observed)))
+        client = Mock()
+        client.json.return_value = {'data': [
+            {'id': 'job', 'status': 'running', 'command': 'PEER-COMMAND', 'metadata': {'sessionID': 'peer'}}]}
+        items = [{'id': 'a_next', 'type': 'assistant', 'time': {'created': 1000}, 'content': [{
+            'id': 'p', 'callID': 'call', 'name': 'shell', 'state': {
+                'input': {'background': True}, 'metadata': {'shellID': 'job'}}}]}]
+        registry = running_jobs(client, '')
+        jobs, _ = background_activities(items, session_id='root', running_jobs=lambda: registry)
+        self.assertEqual((), jobs[0].invocation_input)
+        self.assertIn('ownership', jobs[0].invocation_reason)
+        ambiguous = [*items, {**items[0], 'content': [{**items[0]['content'][0], 'callID': 'other'}]}]
+        jobs, _ = background_activities(ambiguous, session_id='root', running_jobs=lambda: registry)
+        self.assertEqual(('', '', ()), (jobs[0].tool_part_id, jobs[0].tool_call_id, jobs[0].invocation_input))
+        for metadata in ({'jobID': 'job', 'shellID': 'different'},
+                         {'jobID': 'job', 'sessionID': 'peer'}):
+            items[0]['content'][0]['state']['metadata'] = metadata
+            jobs, _ = background_activities(items, session_id='root', running_jobs=lambda: frozenset({'job'}))
+            self.assertEqual((), jobs[0].invocation_input)
+            self.assertIn('Conflicting', jobs[0].invocation_reason)
+
+    def test_experimental_recovery_is_exact_session_filtered_optional_and_never_guesses_prompt(self):
+        client = Mock()
+        client.json.side_effect = [{'data': []}, {'data': [
+            {'kind': 'shell', 'id': 'daemon-job', 'shellID': 'shell-one', 'sessionID': 'root',
+             'status': 'running', 'command': 'python resumed.py'},
+            {'kind': 'shell', 'id': 'daemon-two', 'shellID': 'shell-two', 'sessionID': 'root',
+             'status': 'running', 'command': 'python second.py'},
+            {'kind': 'shell', 'shellID': 'peer', 'sessionID': 'child-unproven',
+             'status': 'running', 'command': 'PEER-COMMAND'}]}]
+        registry = running_jobs(client, 'C:/fixture', session_id='root', experimental=True)
+        items = [{'id': 'a_next', 'type': 'assistant', 'time': {'created': 1000}, 'content': [
+            {'id': 'p', 'callID': 'call', 'name': 'shell', 'state': {'status': 'completed',
+                'metadata': {'shellID': 'shell-one'}}}]}]
+
+        jobs, _ = background_activities(items, session_id='root', running_jobs=lambda: registry)
+
+        self.assertEqual(1, len(jobs), 'session-level shell-two cannot be assigned to this prompt')
+        self.assertEqual((('command', 'python resumed.py'),), jobs[0].invocation_input)
+        self.assertNotIn('peer', registry.ids)
+        self.assertEqual({'sessionID': 'root', 'kind': 'shell', 'status': 'running', 'descendants': 'false'},
+                         client.json.call_args_list[1].kwargs['query'])
+        for experimental, expected_reads in [(False, 1), (True, 2)]:
+            client.reset_mock()
+            client.json.side_effect = [{'data': []}, SourceUnavailableError('absent', http_status=404)]
+            registry = running_jobs(client, '', session_id='root', experimental=experimental)
+            self.assertEqual(frozenset(), registry.ids)
+            self.assertEqual(expected_reads, client.json.call_count)
+
+    def test_foreground_count_is_live_calls_not_tool_totals_and_background_is_independent(self):
+        completed = tool('ended', {'command': 'python ended.py'}, status='completed', call='ended')
+        active = tool('active', {'command': 'python active.py'}, call='active')
+        second = tool('second', {'command': 'python second.py'}, call='second')
+        for parts, count in [((completed, active), 1), ((active, second), 2)]:
+            observed = observe_tools(snapshot_with(*parts), 'u_next', now_ms=20_000, include_invocations=True)
+            self.assertEqual(2, observed.tool_count)
+            self.assertEqual(count, observed.running_invocation_count)
+            self.assertEqual(count, len(observed.running_invocations))
+            self.assertEqual(0, observed.background_invocation_count)
+        self.assertEqual((), without_live_activity(observed).running_invocations)
+
+    def test_multi_job_limits_keep_honest_total_stable_order_and_bounded_text(self):
+        jobs = tuple(BackgroundActivity(f'bg-{i:02}', 'root', 'shell', 1000 + i, 'a_next',
+                    invocation_input=(('command', f'python task{i}.py ' + 'x' * 3000),)) for i in range(12))
+        observed = observe_tools(snapshot_with(background=jobs), 'u_next', now_ms=20_000, include_invocations=True)
+        reordered = observe_tools(snapshot_with(background=tuple(reversed(jobs))), 'u_next',
+                                  now_ms=30_000, include_invocations=True)
+        self.assertEqual(12, observed.background_invocation_count)
+        self.assertEqual(5, len(observed.background_invocations))
+        self.assertEqual(observed.background_invocations, reordered.background_invocations)
+        self.assertLessEqual(sum(len(detail.text) for detail in observed.background_invocations), MAX_INPUT_TEXT)
+        self.assertTrue(all('budget' in detail.qualification for detail in observed.background_invocations))
+
+    def test_registry_reads_are_one_per_session_capture_not_per_job_or_duration_tick(self):
+        for count in (0, 1, 2, 5, 20):
+            items = [{'id': 'a_next', 'type': 'assistant', 'time': {'created': 1000}, 'content': [
+                {'id': f'p-{i}', 'callID': f'call-{i}', 'name': 'shell', 'state': {'input': {
+                    'background': True, 'command': f'python task{i}.py'}, 'metadata': {'shellID': f'job-{i}'}}}
+                for i in range(count)]}]
+            reader = Mock(return_value=frozenset(f'job-{i}' for i in range(count)))
+            jobs, _ = background_activities(items, session_id='root', running_jobs=reader)
+            self.assertEqual(count, len(jobs))
+            self.assertEqual(int(count > 0), reader.call_count)
+        # A returned call lacking a background flag must not become a live job
+        # solely because the registry is unavailable.
+        items[0]['content'][0]['state']['input'] = {}
+        items[0]['content'][0]['state']['status'] = 'completed'
+        jobs, _ = background_activities([dict(items[0], content=items[0]['content'][:1])],
+                                      session_id='root', running_jobs=lambda: None)
+        self.assertEqual((), jobs)
+
     def test_safe_command_preserves_quotes_newlines_options_and_never_output(self):
         command = 'git grep "hello world"\nWrite-Output \'<script>throw 1</script>\''
         value = tool(inputs={"command": command, "workdir": "C:/source", "background": True, "timeout": 1200})
@@ -176,6 +337,54 @@ class InvocationTests(unittest.TestCase):
         self.assertIn("child-only", observed.running_invocation.text)
         unrelated = observe_tools(snapshot, "u_next", now_ms=30_000, include_invocations=True)
         self.assertIsNone(unrelated.running_invocation)
+
+    def test_returned_child_background_shell_remains_scoped_to_its_owning_prompt(self):
+        snapshot = make_snapshot(running=True)
+        job = BackgroundActivity('child-bg', 'child', 'shell', 1240, 'ca', tool_call_id='child-call',
+                                 invocation_input=(('command', 'python child.py'),))
+        snapshot = replace(snapshot, background=(job,))
+
+        owning = observe_tools(snapshot, 'u_sub', now_ms=30_000, include_invocations=True)
+        unrelated = observe_tools(snapshot, 'u_next', now_ms=30_000, include_invocations=True)
+
+        self.assertEqual(1, owning.background_invocation_count)
+        self.assertIn('python child.py', owning.background_invocations[0].text)
+        self.assertEqual((), unrelated.background_invocations)
+
+    def test_wrong_source_generation_never_discloses_canonical_or_registry_text(self):
+        original = tool(inputs={'command': 'ORIGINAL-MARKER'}, status='completed')
+        original = replace(original, provenance=replace(original.provenance, source_generation='retired'))
+        job = BackgroundActivity('bg', 'root', 'shell', 1000, 'a_next', tool_call_id='call',
+                                 invocation_input=(('command', 'REGISTRY-MARKER'),))
+
+        observed = observe_tools(snapshot_with(original, background=(job,)), 'u_next', now_ms=20_000,
+                                 include_invocations=True)
+
+        self.assertEqual('', observed.background_invocations[0].text)
+        self.assertIn('identity', observed.background_invocations[0].qualification)
+        self.assertNotIn('MARKER', json.dumps(asdict(observed)))
+
+    def test_five_foreground_and_background_jobs_fit_100_card_event_and_replay_caps(self):
+        frame = summary_watch()
+        detail = invocation(tool(inputs={'command': 'python task.py ' + 'x' * 650 + ' --token synthetic-private'}), budget=819)
+        details = tuple(replace(detail, identity=f'job-{i}') for i in range(5))
+        card = frame.active_cards[0]
+        row = card.rows[0]
+        tool_observation = replace(row.tool, running_invocation=details[0], background_invocation=None,
+            running_invocations=details, background_invocations=details, running_invocation_count=20,
+            background_invocation_count=20, background_kinds=('shell',) * 20)
+        card = replace(card, rows=(replace(row, tool=tool_observation),))
+        frame = replace(frame, active_cards=tuple(replace(card, session_id=f's{i}') for i in range(100)))
+        hub = EventHub('multi-invocation-budget')
+
+        for tick in range(8):
+            payload = project_live(replace(frame, now_ms=frame.now_ms + tick * 1000)).to_json()
+            encoded = json.dumps(payload).encode()
+            self.assertLess(len(encoded), MAX_EVENT_BYTES)
+            self.assertNotIn(b'synthetic-private', encoded)
+            hub.publish('live', payload)
+
+        self.assertLessEqual(hub.bytes, MAX_REPLAY_BYTES)
 
     def test_dto_retained_unverified_terminal_and_100_card_replay_budget(self):
         frame = summary_watch()

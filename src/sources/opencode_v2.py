@@ -601,7 +601,8 @@ class OpenCodeV2Source:
         session_id = str(native.data["id"])
         self.metrics.add("message_pages", pages)
         background, notices = background_activities(
-            items, session_id=session_id, running_jobs=lambda: running_jobs(self._client(), native.directory))
+            items, session_id=session_id, running_jobs=lambda: running_jobs(self._client(), native.directory,
+                session_id=session_id, experimental=self._connectivity.version == '2.2.7'))
         bundles, shape = normalize_message_items(items, session=native.data)
         if rejected_routes:
             self._diagnostics["message_route_rejections"][session_id] = "+".join(rejected_routes)
