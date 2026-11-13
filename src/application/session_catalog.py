@@ -263,6 +263,8 @@ class SessionCatalog:
             for key in changed:
                 self.valid.pop(key, None)
                 self.failures.pop(key, None)
+                self.failure_counts.pop(key, None)
+                self.failure_reasons.pop(key, None)
                 self.attempted.pop(key, None)
             if changed:
                 self.generation += 1

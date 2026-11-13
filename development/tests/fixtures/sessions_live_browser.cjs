@@ -27,7 +27,7 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await until('document.querySelector("#context-help")?.textContent.includes("other-provider/gpt-test")');
-  assert.match(await evaluate('document.querySelector("#context-help").textContent'),/observed so far[\s\S]*github-copilot\/gpt-test[\s\S]*other-provider\/gpt-test/);
+  assert.match(await evaluate('document.querySelector("#context-help").textContent'),/github-copilot\/gpt-test[\s\S]*other-provider\/gpt-test[\s\S]*Observed so far/);
   await evaluate(`window.keptModel=${row}.cells[2].firstChild; window.scrollTo(0,100);
     const range=document.createRange();range.selectNodeContents(keptLink.lastChild);getSelection().removeAllRanges();getSelection().addRange(range);
     window.selectedText=getSelection().toString();window.oldScroll=scrollY;`);
@@ -36,7 +36,7 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   assert.equal(await evaluate('keptModel.isConnected && keptRow.cells[2].firstChild===keptModel'),true);
   assert.equal(await evaluate('getSelection().toString()===selectedText && Math.abs(scrollY-oldScroll)<2'),true);
   assert.equal(await evaluate('document.querySelector("#context-help").matches(":popover-open")'),true);
-  assert.doesNotMatch(await evaluate('document.querySelector("#context-help").textContent'),/observed so far/);
+  assert.doesNotMatch(await evaluate('document.querySelector("#context-help").textContent'),/Observed so far/);
   const ended=await evaluate(`[...${row}.cells].slice(3).map(cell=>cell.textContent)`);
   await until(`current.catalog.busy === false`);
   await evaluate('current.catalog.load()');

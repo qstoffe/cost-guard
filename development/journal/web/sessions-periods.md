@@ -103,12 +103,25 @@ passed. The final focused scope/effort/catalog run passed all 50 tests.
 Package validation passed with zero failures and seven existing advisory warnings;
 no budget was raised and no structural baseline changed.
 
-Final Full-suite and delivery-check results are recorded in the completion/PR.
+Final Full passed all **190 groups**, jobs 2, **303.3 s**. The final pinned-window
+regression also passed (seven period tests), and mutable-default coverage passed
+again after invalidation bookkeeping was finalized (seven effort tests).
+The hidden live-update probe passed cold hydration, evolving CTX/model metrics,
+focused/selected row identity, mouse/focus/touch help, outage recovery and 18
+Classic/Web × width/zoom layouts. Its first attempt exposed an older fixture's
+obsolete model-help order/casing assertion; that expectation was corrected, not
+the product's established source-qualified help.
+Deep CI pager/navigation fixtures now explicitly select All time for their
+historical synthetic population and expect 25-row offsets; their hosted-only
+entrypoint is not spoofed locally. PR checks retain their own actual results.
+
+Final delivery-check results are recorded in the completion/PR.
 Evidence: `scratch:/full-tests.log`, `scratch:/resumed-full-tests.log`,
 `scratch:/resumed-test_session_detail_liveness.py.log`,
 `scratch:/resumed-test_web_runtime.py.log`, `scratch:/resumed-targeted-tests.log`,
 `scratch:/sessions-periods.json`, `scratch:/sessions-navigation.json`,
-`scratch:/live-sessions.log`, `scratch:/resumed-validation.log`.
+`scratch:/sessions-live-browser.json`, `scratch:/live-sessions.log`,
+`scratch:/resumed-validation.log`, `scratch:/resumed-final-validation.log`.
 The targeted-tests log records the earlier failed HTTP attempt, not the later pass.
 No paid model calls, physical desktop, macOS desktop or screen-reader audio proof
 is claimed. Real-source cold sort completion and natural-arrival latency remain
