@@ -2,6 +2,37 @@
 
 **Highest-priority, explicitly owner-approved Ready to Develop (2026-11-12).** Permanent identity **000692**. Priority **000001** — **above every other Ready item**. This request responds to a **verified failed delivery boundary** in completed FR000687: the user upgraded/restarted Cost Guard and still sees **many of the SAME November 12, 2026 local sessions** labelled **`Claude Sonnet (version unverified)`**, plus **new Claude Agent model-test sessions** also labelled **`version unverified`**. Both prior historical and newly generated affected records must be investigated and corrected against the **actual installed local OpenCode source**.
 
+## Owner clarification and verified reactivation — FR000693, 2026-11-13
+
+The owner authorizes **read-only inspection/export of all relevant saved OpenCode
+session records**, including sessions created by other agents, and relevant
+SQLite, provider plugin records and native Claude SDK transcripts, where normal
+installed access permits. These saved records are legitimate Cost Guard product
+input. **This does not authorize reading other implementation workers' scratch,
+stashes, private workflow checkpoints or live processes.** Native SDK transcript
+and reply/checkpoint references are source evidence, not permission to enter
+another worker's private Checkpoint/Resume workspace. Native `ask`/`deny`,
+credentials, identities and read-only/privacy boundaries remain effective.
+
+The owner requests deep, sustained troubleshooting **up to 48 hours of real work**
+before declaring the technical problem insoluble where the environment reasonably
+supports it. Use supported Checkpoint/Resume and a private exact-case evidence
+ledger across sessions as needed. This is not idle waiting, a requirement to
+generate paid model tokens, or permission to bypass native denial. Report actual
+avenues and effort honestly; do not claim work that was not performed.
+
+Reactivation is authorized by FR000693 after [Toolkit PR #406](https://github.com/qstoffe/opencode-toolkit/pull/406)
+merged the reviewed rule and a fresh ordinary worker received the corrected
+installed command. [Verification and scope](../../../journal/recorded-model-help.md#fr000693--verified-rule-loading-and-held-task-reactivation-2026-11-13)
+and [the superseded original hold](PRIOR-HOLD.md) retain the evidence. This is
+**reactivation, not a model-identity fix or verification of any historical case**.
+The original binary acceptance below is unchanged: all exact affected November 12
+and owned native test sessions must be individually diagnosed, correctly resolved
+and verified after genuine cold/warm Cost Guard restart, or this same FR returns
+On Hold with the first demonstrated specific remaining technical/access blocker.
+No cosmetic/P2-only closure, synthetic PASS, replacement Suggestion or delegate
+waiver of that affected-records gate is authorized.
+
 **THIS REQUEST HAS EXACTLY TWO PERMITTED FINAL DISPOSITIONS:**
 
 - **A — COMPLETE / PASS:** Identify, causally diagnose, repair and **individually reverify ALL currently affected exact real sessions** from the local **2026-11-12 (Europe/Stockholm)** date window and the recent FR000687 native model tests. After cold Cost Guard restart and opening Web → Sessions, every target record that had the alias defect shows a **correct source-supported concrete Claude release**, e.g. **`Claude Sonnet 5.5`**, or a genuinely different correctly evidenced executed model, and any supported token usage is priced with the right model. The target rows no longer read `(version unverified)` because the underlying identification was repaired, **not because the UI string was hidden or guessed**. The fix persists through warm/cold cache, restart and future similar Claude Agent requests. Publish exact sanitized per-case before/after evidence; then and only then mark the FR Complete.
