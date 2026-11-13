@@ -17,7 +17,7 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 from .model_identity import encode_model, decode_model
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-19-execution-unverified"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-20-effort-help"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
@@ -79,6 +79,7 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
         "source_instance": entry.source_instance,
         "account_ref": _flat_fields(entry.account_ref) if entry.account_ref else None,
         "logical_prompt_id": entry.logical_prompt_id,
+        "selected_effort": entry.selected_effort,
     }
 
 
@@ -103,6 +104,7 @@ def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
         source_instance=data.get("source_instance"),
         account_ref=AccountRef(**data["account_ref"]) if data.get("account_ref") else None,
         logical_prompt_id=data.get("logical_prompt_id"),
+        selected_effort=data.get("selected_effort"),
     )
 
 

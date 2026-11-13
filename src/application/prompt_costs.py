@@ -2,9 +2,11 @@
 from decimal import Decimal
 
 from src.numbers import ccost_amount
+from src.domain.effort import bounded_evidence
 from .contracts import record
 from .model_help import request_model_help
 from .reference_cost import issue_records, unavailable_help
+from .effort_help import evidence_record, evidence_help
 
 MAX_PARTS = 24
 
@@ -24,6 +26,8 @@ def grouped_parts(parts):
             sum((item.categories[index] for item in items), Decimal(0)) for index in range(4))
         result.append(record(role=role, provider_id=provider, model_id=model_id, variant=variant,
             model=first.model, effort=first.effort, price_tier=tier,
+            effort_evidence=tuple(evidence_record(value) for value in bounded_evidence(
+                value for item in items for value in item.effort_evidence)),
             selected_models=tuple(sorted({model for item in items for model in item.selected_models})),
             catalog_estimate=any(item.catalog_estimate for item in items),
             qualify_model=len(identities[first.model or model_id]) > 1,
@@ -61,17 +65,20 @@ def detail_tokens(values):
     if detail is None:
         return {}
     detail = dict(detail.fields)
-    sections, models, calls, main_models = [], [], [], []
+    sections, models, calls, main_models, efforts = [], [], [], [], []
     for part in detail["parts"]:
         part = dict(part.fields)
         owner = "Main prompt" if part["role"] == "main" else "Subagents"
         identity_help = request_model_help(part['provider_id'], part['selected_models'] or (part['model_id'],),
             catalog_model=part['model_id'] if part.get('catalog_estimate') else None)
         identity, _, note = identity_help.partition('\n')
+        evidence = [dict(value.fields) for value in part.get("effort_evidence", ())]
+        effort = evidence_help(evidence, explicit=part["effort"]) if evidence else part["effort"]
+        if effort and effort != "N/A":
+            identity += " · " + effort
         if part['role'] == 'main':
-            main_models.append('Main model: ' + identity_help)
-        if part["effort"] and part["effort"] != "N/A":
-            identity += " · " + part["effort"]
+            main_models.append('Main model: ' + identity + ('\n' + note if note else ''))
+            efforts.append(evidence_help(evidence, value_cell=True, explicit=part["effort"]) if evidence else effort)
         heading = owner + " — " + identity
         call_heading = heading + (" · " + part["price_tier"] if part["price_tier"] else "")
         if part["role"] == "subagents" and part["agent_count"]:
@@ -134,4 +141,9 @@ def detail_tokens(values):
     return {"cost_detail_help": "\n\n".join(sections),
             "model_detail_help": model_help,
             "main_model_help": '\n\n'.join(dict.fromkeys(main_models)) or 'Main model identity unrecorded',
+            "effort_help": '\n\n'.join(dict.fromkeys(efforts)) or values.get("watch_effort") or "N/A",
+            "effort_tooltip": '\n'.join(dict.fromkeys(
+                evidence_help([dict(value.fields) for value in dict(part.fields).get("effort_evidence", ())],
+                    explicit=dict(part.fields)["effort"]) for part in detail["parts"]
+                if dict(part.fields)["role"] == "main")) or values.get("watch_effort") or "N/A",
             "calls_help": "\n".join(calls)}

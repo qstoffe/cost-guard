@@ -44,6 +44,9 @@ class HistoricalWire:
             return {'data': self.sessions, 'cursor': {}}
         if path == '/api/session/active':
             return {'data': {}}
+        if path in ('/api/provider', '/api/model'):
+            self.calls[path] += 1
+            return {'location': {'directory': query['location[directory]']}, 'data': []}
         if path.endswith('/context') or path.endswith('/message'):
             self.calls['context' if path.endswith('/context') else 'messages'] += 1
             return {'data': self.messages[path.split('/')[3]], 'cursor': {}}

@@ -47,7 +47,9 @@ def encode(bundle, reference):
             tokens=[tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning],
             known=list(tokens.known_fields), reported=str(entry.reported_cost), instance=entry.source_instance,
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
-        if entry.model.resolution is not None:
+        if entry.selected_effort is not None:
+            facts[-1]['selected_effort'] = entry.selected_effort
+        if entry.model.resolution is not None or entry.model.effort_default is not None:
             facts[-1]['resolved_identity'] = encode_model(entry.model)
         if not identity_cache_current(None, ((entry.model.provider, entry.model.model),)):
             facts[-1]['model_identity_semantics'] = MODEL_IDENTITY_SEMANTICS
@@ -70,7 +72,8 @@ def decode(facts):
         entry = TraceEntry(fact['session'], fact['parent'], fact['message'], fact['part'],
             fact['completed'], fact['order'], decode_model(fact['resolved_identity']) if 'resolved_identity' in fact
             else ModelRef(*fact['model']), fact['variant'], tokens,
-            reported_cost=Decimal(fact['reported']), source_instance=fact['instance'])
+            reported_cost=Decimal(fact['reported']), source_instance=fact['instance'],
+            selected_effort=fact.get('selected_effort'))
         costs = None if fact['costs'] is None else tuple(Decimal(value) for value in fact['costs'])
         if costs is not None and (len(costs) != 4 or any(not value.is_finite() or value < 0 for value in costs)):
             raise ValueError('invalid_costs')

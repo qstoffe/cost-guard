@@ -273,7 +273,8 @@ const WatchView = (() => {
              else model.removeAttribute('aria-label');
               const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptCostHelp(prompt));
              const calls = metricValue(row, 6, String(prompt.calls), display(prompt, 'calls_help'));
-            const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
+            const effort = metricValue(row, 4, item.effort, display(prompt, 'effort_help'));
+            const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
               cost, calls, display(prompt, 'token_mix_percent'),
               display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));

@@ -65,6 +65,20 @@ Dates use `zoneinfo`; clean Windows Python may lack IANA data, so dependency-fre
 
 `analysis/effort.py` distinguishes explicit, request-proven/unresolved Default and unattributable effort. Only matching root requests resolve Default, never model/pricing maps or mutable session selection; V2 never stamps session effort onto history. Renderers share one label (no `Default -> X`); compaction uses its own explicit variant.
 
+FR000694 (v81.38) adds separate **tooltip-only** `domain/effort.py` evidence.
+`TraceEntry.selected_effort` joins only the exact same-session initiating event
+and recorded provider/model; explicit variants and unattributable summaries retain
+their existing semantics. `analysis/effort_defaults.py` resolves request evidence,
+then current location-qualified source estimates, then exact reviewed vendor routes.
+The 31-model mapping includes conditional/unknown entries, never price-tier inference.
+`sources/opencode_v2_effort.py` accepts bounded allowlisted options only for supported
+packages; `DesktopModelCatalog` shares its two location reads/30s and fingerprints
+only relevant options. `ModelRef.effort_default` is excluded from model equality,
+pricing and deduplication; dependency validation separately retains distinct scopes.
+Algorithm 20 rebuilds disposable tooltip evidence, including compact response/match
+projections. No native history mutation or tooltip-open acquisition occurs.
+See [evidence and limits](../../journal/default-effort-help.md).
+
 The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Running background work keeps the newest prompt active without usage; resumes stay on it. Incomplete inference stays uncached; older algorithm keys are invalidated.
 
 FR000630 adds canonical `execution_unverified`: a complete snapshot with a valid

@@ -19,13 +19,13 @@ const ComparisonsView = (() => {
       Number.isInteger(page.total) && page.groups.every(group => group.runs?.length >= 2 &&
         group.runs.every(run => /^[A-Za-z0-9_-]{1,200}$/.test(run.session_id) && run.match_run));
   }
-  function provenance(run) {
-    return run.contributors.map(item => `${item.model_help}\n${item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n\n') || 'No attributable request evidence.';
+  function provenance(run, valueCell = false) {
+    return run.contributors.map(item => `${item.model_help}\n${(valueCell ? item.effort_value_help : item.effort_help) || item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n\n') || 'No attributable request evidence.';
   }
   function help(run, column) {
     const state = `Run status: ${run.status}.`;
     if (column === 1) return `${d(run, 'precise_start')}\nFinal execution boundary: ${d(run, 'precise_end')}\n${state}`;
-    if (column === 2 || column === 3) return `${run.mixed ? 'Mixed model/effort work.\n' : ''}${provenance(run)}`;
+    if (column === 2 || column === 3) return `${run.mixed ? 'Mixed model/effort work.\n' : ''}${provenance(run, column === 3)}`;
     if (column === 4) return `First-prompt CCost: ${d(run, 'ccost')} (${run.cost_complete ? 'fully priced' : 'partial/unavailable'}). Not billing.\nMain: ${d(run, 'main_ccost')} · Linked children: ${d(run, 'subagent_ccost')}\nIncoming: ${d(run, 'incoming_context_ccost')} + Extra: ${d(run, 'extra_ccost')}\n${provenance(run)}\n${state}`;
     if (column === 5) return `${d(run, 'duration_ms')} · ${state}\n${columns[5][1]}\nUnfinished, failed and unknown-boundary runs never set time-gap records.`;
     if (column === 6) return `${d(run, 'context')} tokens.\n${columns[6][1]}\nValid only for this prompt’s completion; no later prompt is used as a replacement anchor.`;

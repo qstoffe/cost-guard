@@ -31,6 +31,7 @@ def trace_entries(
 ) -> tuple[TraceEntry, ...]:
     result: list[TraceEntry] = []
     owners = prompt_owners(snapshot)
+    selections = {(event.session_id, event.event_id): event.metadata for event in snapshot.events}
     for order, invocation in enumerate(snapshot.invocations):
         observe_work('analyzing', 1)
         reported = invocation.cost.amount if invocation.cost is not None else 0
@@ -57,8 +58,17 @@ def trace_entries(
             source_instance=invocation.provenance.source_instance,
             account_ref=invocation.account_ref,
             logical_prompt_id=owners.get((invocation.session_id, invocation.initiating_event_id)),
+            selected_effort=_selected_effort(invocation, selections),
         ))
     return tuple(sorted(result, key=lambda item: (item.completed_at_ms, item.sort_order)))
+
+
+def _selected_effort(invocation, selections):
+    selection = selections.get((invocation.session_id, invocation.initiating_event_id), {})
+    if (not invocation.summary and selection.get("model_id") == invocation.model.recorded_model
+            and selection.get("provider_id") == invocation.model.provider):
+        return selection.get("variant", "")
+    return None
 
 
 def _visible_prompt_events(snapshot: SessionSnapshot) -> list:

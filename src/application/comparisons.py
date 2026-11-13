@@ -8,6 +8,7 @@ from src.pricing.identities import unverified_alias
 from src.domain.model_identity import catalog_display_name
 from .contracts import record
 from .model_help import request_model_help
+from .effort_help import evidence_help
 
 
 def run(value):
@@ -17,12 +18,15 @@ def run(value):
         next_context_tokens token_mix_percent token_totals calls linked_agents errors'''.split()
     labels = {(item['provider'], item['model']): item.get('display_name') for item in value.model_identities}
     recorded = {(p, m, e): selected for p, m, e, selected in value.recorded_models}
+    efforts = {(p, m, e): values for p, m, e, values in value.effort_evidence}
     return record(**{name: getattr(value, name) for name in names}, match_run=True,
         model_label=catalog_display_name(value.provider, value.model_label) or unverified_alias(value.model, value.provider) or value.model,
         contributors=tuple(record(provider=p, model=m, model_label=labels.get((p, m)) or unverified_alias(m, p) or m,
                                   model_help=request_model_help(p, recorded.get((p, m, e), ()),
                                       catalog_model=m if labels.get((p, m)) else None),
-                                  effort=e, calls=n, ccost=c, complete=known)
+                                   effort=e, calls=n, ccost=c, complete=known,
+                                   effort_help=evidence_help(efforts.get((p, m, e), ()), explicit=e) or e,
+                                   effort_value_help=evidence_help(efforts.get((p, m, e), ()), value_cell=True, explicit=e) or e)
                            for p, m, e, n, c, known in value.contributors))
 
 

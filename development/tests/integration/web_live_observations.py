@@ -149,7 +149,7 @@ def failure_metadata(error, phase):
 
 
 @contextmanager
-def probe_lifecycle(host, streams, observations):
+def probe_lifecycle(host, streams, observations, *, retirement_seconds=0):
     primary = None
     try:
         yield
@@ -167,6 +167,14 @@ def probe_lifecycle(host, streams, observations):
                 action()
             except BaseException as error:
                 cleanup.append(error)
+        if retirement_seconds:
+            retiring = [thread for thread in threads() if thread.name.startswith("cost-guard-")]
+            started_retiring = time.monotonic()
+            deadline = started_retiring + retirement_seconds
+            for thread in retiring:
+                thread.join(timeout=max(0, deadline - time.monotonic()))
+            print(json.dumps(dict(retiring_workers_observed=len(retiring),
+                retirement_seconds=round(time.monotonic() - started_retiring, 3))))
         print(json.dumps(dict(phases=observations.snapshot(host), cleanup_failures=[
             failure_metadata(error, 'cleanup') for error in cleanup])), flush=True)
         if cleanup:

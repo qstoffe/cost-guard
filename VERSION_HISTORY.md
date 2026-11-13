@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.38 - 2026-11-13
+
+- Model/effort tooltips retain the selected `default` and append the best supported effective level, such as `default (medium)`. Exact request evidence takes precedence over current location-qualified model/provider/package estimates and reviewed vendor defaults; unsupported routes remain `default (unknown)`. Explicit efforts, visible cells, native history and accounting are unchanged.
+- Only dedicated Effort-value help in Full Watch, Session detail and Comparisons adds an asterisk and one source-sensitive explanation. Model/CCost/Calls, Mini, linked contributors and sampled AI Stats help remain terse. Versioned disposable evidence caches rebuild lazily; no paid replay or tooltip-open request is introduced.
+
 ## v81.37 - 2026-11-13
 
 - Full Watch lists up to five individually scoped running foreground/background invocations, retaining correct totals and unchanged tool-call accounting. Multiple background shells no longer lose all command details merely because there is more than one job. Duration ticks retain unaffected disclosure nodes, selection and focus.

@@ -73,6 +73,17 @@ cause or reproduction of the reported installation is claimed. See the
 
 ## Contextual help
 
+Model/effort help keeps a selected default as **`default (medium)`**, for example,
+without changing the visible Model/Effort cells. Each request/contributor uses its
+own evidence: recorded request first, current location-qualified OpenCode
+configuration/package estimate next, then reviewed official vendor defaults.
+Unsupported evidence says **`default (unknown)`**; explicit efforts stay unchanged.
+Only help directly on an **Effort value** in Full Watch, Session detail or
+Comparisons adds `*` and one short source-sensitive explanation. Documentation and
+current-configuration estimates are not proof of a historical run. Model, CCost,
+Calls, Mini and AI Stats podium help have no default footnote. Generic headers,
+reference price tiers and benchmark efforts are unchanged; opening help fetches nothing.
+
 Heading labels and useful metric labels/values explain metrics in Web and Mini
 Watch, without standalone **?** buttons or dotted underlines. Hover the actual text, not
 the surrounding padding, to see the help cursor immediately and explanation after **600 ms**. Only the

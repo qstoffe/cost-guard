@@ -65,7 +65,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(row.ccost, sum(item.known_ccost for item in row.cost_parts))
         for kind in ("active_cards", "history_cards"):
             prompt = wire[kind][0]["rows"][0]["prompt"]
-            self.assertIn("Main prompt — github-copilot/gpt-test · High", prompt["display"]["cost_detail_help"])
+            self.assertIn("Main prompt — github-copilot/gpt-test · default (high) / High",
+                          prompt["display"]["cost_detail_help"])
             self.assertIn("Subagents — github-copilot/claude-test · Low (1 agent)", prompt["display"]["cost_detail_help"])
             self.assertIn("• Cached input: $0.04", prompt["display_units"]["usd"]["cost_detail_help"])
             self.assertIn("github-copilot/claude-test", prompt["display"]["model_detail_help"])
