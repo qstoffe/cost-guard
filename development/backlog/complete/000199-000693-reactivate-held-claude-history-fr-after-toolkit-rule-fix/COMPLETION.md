@@ -21,13 +21,17 @@
 
 Cost Guard's administrative migration is published in [PR #297](https://github.com/qstoffe/cost-guard/pull/297).
 
-[FR000692](../../ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md)
+[FR000692](../../on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/FR.md)
 returns intact to Ready priority `000001`, with the required owner clarification
 on saved-history reads, worker-private exclusions and up-to-48-hours real effort.
 The complete prior hold is retained in
-[PRIOR-HOLD.md](../../ready-to-develop/000001-000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/PRIOR-HOLD.md),
+[PRIOR-HOLD.md](../../on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/attachments/PRIOR-HOLD.md),
 explicitly superseded only as an instruction-conflict hold. Its original binary
 all-exact-cases-fixed-and-reverified **or On Hold** gate is unchanged.
+
+Later implementation-worker disposition: the same FR is
+[On Hold again for a separately demonstrated native-profile normalization blocker](../../on-hold/000692-hard-gate-repair-exact-2026-11-12-claude-unverified-sessions/HOLD.md).
+The reactivation described above remains a historical administrative result.
 
 FR000693 has its own Complete bundle `000199` and ordinary progress `137→138`.
 **Decision Delegate authorized only a sequencing exception** to action 6:
