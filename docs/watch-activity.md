@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v80.207
+# Watch lifecycle and activity — v81.45
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -51,6 +51,28 @@ Ordinary tool groups include **all** calls, including failures and cancellations
 
 Skills retain confirmed custom load identities and directly attributed **failure-only** counts. Tool cancellations are not allocated to a recently loaded skill; skill counts need not sum to overall outcomes. Canonical failure-only data and CLI presentation remain unchanged.
 
+Failed red groups with recorded members are native disclosures. Expand, for example,
+**2 × read failed**, then **Failed call 1 — read** to see that physical call's
+sanitized recorded path, command/workdir or supported arguments. Identical inputs
+on different call IDs remain separate entries. Source start/physical identity
+controls ordering; corrected copies of one call never become extra failures.
+There are at most ten failed-call details per card, sharing the card-wide 4 KiB
+input budget with running details. Aggregate totals remain complete; a `+N
+additional failed calls not shown` note explains display/evidence omissions.
+
+Failure reasons use only exact recognized source codes/fixed messages for **File
+not found** or **Permission denied**; otherwise the detail says **Failure reason
+unavailable**. Arbitrary error prose, tool output, stack traces and environment
+blocks are never copied. Missing/withheld input says **Invocation details
+unavailable** with its cause. The existing allowlist/redaction boundary below
+also applies here. Opening details does not fetch or execute anything.
+
+Outcome groups and physical failed-call nodes retain the user's expansion, focus
+and selection through unrelated activity/reason revisions. An authoritative
+success/removal, lost verification or disconnect clears obsolete input even
+while selected. Final failures remain inspectable only during the existing
+terminal activity retention; there is no new history ledger or retention timer.
+
 ## Full Web running invocation details
 
 The longest active native tool keeps the existing ten-second threshold. Its
@@ -74,8 +96,9 @@ Screening cannot guarantee recognition of every private value. Treat even eligib
 paths/commands as private local information.
 Details remain in process memory and the authenticated loopback Live publication,
 not Cost Guard caches, diagnostics, logs or telemetry. Each detail is bounded to
-roughly 4 KiB of formatted input across each foreground/background list; concurrent
-entries share that budget. Huge arguments are omitted explicitly, not silently cut off.
+roughly 4 KiB of ASCII-escaped formatted input across the whole card's foreground,
+background and failed-call lists; concurrent entries share that budget. Huge
+arguments are omitted explicitly, not silently cut off.
 
 For recognized OpenCode shell/bash inputs, a supplied positive finite numeric
 timeout is labeled in **milliseconds**, for example `timeout: 120000 ms (2 min)`
@@ -104,10 +127,20 @@ Privacy-withheld input is never rescued via that conflicting registry command.
 Absent input, missing original links, unobservable registry and awaiting verified
 live source each get specific explanations alongside the known Running facts.
 
-Duration-only updates preserve expansion, detail nodes, selection and focus.
-Different physical calls, source generations and corrected call revisions reset
-only the affected entry; unrelated jobs stay expanded. Terminal/unverified prompts and unavailable/retained observations
-clear the live input; existing status/count lifecycle and CLI/Mini are unchanged.
+Duration ticks and revisions of a verified **same physical call** preserve the user's
+open/closed choice, detail nodes, selection and focus. Corrections replace safe
+text immediately, including redaction; a revision is not a new call. Stable
+per-call nodes survive 1→2→1 membership changes. New siblings start collapsed
+when a surviving call's parent is already expanded; wholly different membership
+resets the parent privacy boundary. Single-call content remains directly below
+Running without an extra visible heading (a focused or user-closed child control
+remains accessible).
+
+Different physical calls, prompt/source generations and lost verification clear
+obsolete input. Terminal/unverified prompts and unavailable/retained observations
+clear **running** detail immediately; final failed detail follows the separate
+brief terminal activity lifetime above. Existing timers, status/count lifecycle
+and CLI/Mini are unchanged.
 
 ## Width and colors
 
@@ -116,3 +149,8 @@ Tool totals and failures retain priority over category detail. Hidden tool calls
 CLI tool-call, Skills and running-status prefixes/text use the same `watchToolActivity` styling. Verified failure totals and per-skill failure indicators remain red. The legacy `watchSkillActivity` color setting is retained for configuration compatibility but no longer styles a separate row; customize `watchToolActivity` for normal CLI activity text.
 
 In full Web Watch, both foreground and background/subagent **Running:** status lines share the prompt/session `--watch-running` foreground (yellow in Classic; theme-aware Web light/dark), even when inputs are unavailable. This supersedes only the older background-line gold/brown choice: thresholds, cadence and job meaning are unchanged. Ordinary Tool Calls/Skills groups remain gold/brown; outcome subsets stay red. No background highlight is added.
+
+Tool Calls, Skills and Running retain left-aligned summary arrows. Their entire
+expanded content is indented with modest logical inline-start spacing; failed
+groups, individual calls and their input add successive levels. Wrapped selectable
+commands and long paths stay within narrow layouts, without nested scrollbars.

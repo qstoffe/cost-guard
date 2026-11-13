@@ -54,6 +54,7 @@ async function main() {
         return value.result.value;
        };
        const invocation = await require('./probe_watch_invocation.cjs')(evaluate, command, sessionId);
+       const failures = await require('./probe_watch_failures.cjs')(evaluate, command, sessionId);
       await evaluate(`document.querySelector('.watch-active details summary').focus({preventScroll:true})`);
       await command('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r'}, sessionId);
       await command('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13}, sessionId);
@@ -63,8 +64,8 @@ async function main() {
         ReportView.renderLive(document.getElementById('result'), INPUT, state);
         const style=n=>getComputedStyle(n), lines=[...card.tools.list.children];
         return {open:card.tools.node.open, focusStable:document.activeElement===focus,
-          summary:card.tools.summary.textContent, lines:lines.map(n=>n.textContent),
-          red:lines.slice(-2).map(n=>style(n.firstChild).color),
+           summary:card.tools.summary.textContent, lines:lines.map(n=>n.tagName==='DETAILS'?n.firstElementChild.textContent:n.textContent),
+           red:lines.slice(-2).map(n=>style(n.tagName==='DETAILS'?n.firstElementChild:n).color),
           ordinary:style(lines[0].firstChild).color, activity:style(card.activity).color,
           running:style(card.running).color, prompt:style(card.body.querySelector('.watch-running')).color,
           title:style(card.title).color, background:style(card.background).color,
@@ -96,7 +97,11 @@ async function main() {
       await command('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27}, sessionId);
       await command('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27}, sessionId);
       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
-      const screenshot = await command('Page.captureScreenshot', {format: 'png'}, sessionId);
+       await evaluate(`(() => {
+         const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+         const group=card.tools.rows.get(JSON.stringify(['grep','failed']));
+         group.node.open=true; for(const call of group.jobs.values()) call.node.open=true; })()`);
+       const screenshot = await command('Page.captureScreenshot', {format: 'png'}, sessionId);
       await fs.writeFile(path.join(output, theme + '-' + width + '.png'), Buffer.from(screenshot.data, 'base64'));
       const ended = await evaluate(`(() => {
         document.activeElement?.blur(); const row=INPUT.view.active_cards[0].rows[0];
@@ -107,7 +112,7 @@ async function main() {
         return {hidden:card.running.hidden, text:card.running.textContent, backgroundHidden:card.background.hidden,
           open:card.tools.node.open, lines:card.tools.list.children.length}; })()`);
       assert.deepEqual(ended, {hidden: true, text: '', backgroundHidden: true, open: true, lines: 9});
-       cases.push({theme, width, ...facts, invocation, helpAccessible: true, terminalCleared: true});
+        cases.push({theme, width, ...facts, invocation, failures, helpAccessible: true, terminalCleared: true});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'results.json'), JSON.stringify({browser: version.product, cases}, null, 2));

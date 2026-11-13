@@ -15,6 +15,18 @@ Optional notice history uses `cache/model_notices.py` for resource-error classif
 
 ## Public contract
 
+FR000701 refines invocation lifetime: revision changes update bounded safe text,
+not native disclosure openness. Browser per-call nodes survive single/multi
+membership changes; new siblings do not inherit expansion. Logical nested spacing
+indents activity without a second single-call gutter. `ToolFailure` carries ten
+source-owned physical failed-call inputs at most, with fixed safe reason vocabulary.
+One 4096-character ASCII-escaped input budget spans all three card lists, preserving
+the 100-card event/replay bound. Counts remain complete; hidden/unrecoverable members
+are explicit. Terminal failures follow existing activity grace; generation,
+retained-source and verification gates clear their inputs independently of running
+lifetime. No acquisition, accounting, persistence or CLI/Mini expansion changes.
+[Diagnosis and evidence](../../journal/web/watch-invocation.md#stable-disclosures-and-physical-failures--fr-000701).
+
 FR000697 adds `recent_finished.py`: at most five immutable, exact-root canonical
 terminal cards qualified by engine-start/actual finish, complete snapshot, source
 provenance and accepted root generation/revision. Partial observations retain old
@@ -86,15 +98,15 @@ DTO. FR000688 adds bounded per-job lists to `ToolObservation` while retaining si
 compatibility fields. `BackgroundActivity` carries source-proven original part/call
 identities and ephemeral scalar registry input; each eligible job requires its own
 exact session/assistant/native-job join. Kind/time/name never supplies identity.
-`invocation.py` is the common privacy/4096-character list budget boundary (five entries,
-honest total). Native input takes precedence; command-only mismatch shows original
+`invocation.py` is the common privacy boundary (five running entries per mode,
+honest total; FR000701's shared card budget above). Native input takes precedence; command-only mismatch shows original
 input alone with executed-form uncertainty, while ownership/ID conflicts clear all
 text. Unknown/aggregate jobs cannot borrow another command. Derived
 details are retained with capture results, not recomputed on duration ticks or persisted.
 Unverified/retained captures, catalog generations awaiting re-verification and terminal
 prompts clear live detail. Opaque source-generation/physical-call identity and call-input
 revision drive native disclosure reconciliation; body nodes remain stable on duration
-updates; multi-job changes replace/reset only their own entry. Missing/unverified
+and same-call revision updates; identity loss clears only affected entries. Missing/unverified
 details show contextual Running facts and cause-specific prose, not a generic dead end.
 Freeform screening remains bounded, not guaranteed secret detection.
 

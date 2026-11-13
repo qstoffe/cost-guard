@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.45 - 2026-11-14
+
+- Full Web Watch preserves the user's Running disclosure state through verified same-call revisions, timer updates and 1→2→1 job membership. Source corrections update safe text in place; genuinely different calls and lost verification clear old details without inheriting an unrelated expanded state.
+- Tool Calls, Skills and Running indent their expanded content. Red failed groups expand into separate physical-call details with sanitized recorded arguments and fixed safe failure reasons, or explicit unavailability. Ten failed details share a bounded card-wide input budget with running calls; totals, cancellation semantics, terminal retention, CLI/Mini and accounting remain unchanged.
+
 ## v81.44 - 2026-11-13
 
 - Recursive CCost retains distinct parallel sibling requests even when their model, tokens and completion time match. Physical recaptures and cross-tree fork clones remain deduplicated; root totals explicitly retain valid work outside prompt/compaction rows.

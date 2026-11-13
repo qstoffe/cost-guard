@@ -40,6 +40,14 @@ class ToolInvocation:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolFailure:
+    """One physical failed call; reason is fixed safe vocabulary, not native prose."""
+    tool_name: str
+    invocation: ToolInvocation
+    reason: str = "Failure reason unavailable"
+
+
+@dataclass(frozen=True, slots=True)
 class ToolObservation:
     tool_count: int = 0
     todo_completed: int = 0
@@ -59,6 +67,7 @@ class ToolObservation:
     background_invocations: tuple[ToolInvocation, ...] = ()
     running_invocation_count: int = 0
     background_invocation_count: int = 0
+    failed_invocations: tuple[ToolFailure, ...] = ()
 
     @property
     def cancelled_count(self) -> int:

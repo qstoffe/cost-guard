@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot, part
 from development.tests.fixtures.watch_summary import summary_watch
+from development.tests.fixtures.watch_tool_outcomes import revision_observations
 from src.application.live_projection import project_live
 from src.domain import BackgroundActivity
 from src.sources.opencode_v2_background import background_activities, running_jobs
@@ -31,6 +32,19 @@ def snapshot_with(*parts, background=()):
 
 
 class InvocationTests(unittest.TestCase):
+    def test_source_revisions_keep_physical_identity_and_elapsed_origin_in_all_running_modes(self):
+        for mode in ("foreground", "background"):
+            for count in (1, 2):
+                before, after = revision_observations(mode, count)
+                first = getattr(before, f"{'running' if mode == 'foreground' else mode}_invocations")
+                revised = getattr(after, f"{'running' if mode == 'foreground' else mode}_invocations")
+                self.assertEqual(count, len(first))
+                self.assertEqual([item.identity for item in first], [item.identity for item in revised])
+                self.assertEqual([1000 + i for i in range(count)], [item.started_at_ms for item in revised])
+                self.assertTrue(all(a.revision != b.revision and a.text != b.text for a, b in zip(first, revised)))
+                self.assertEqual(10_000, (after.running_ms - before.running_ms) if mode == "foreground"
+                                 else after.background_ms - before.background_ms)
+
     def test_two_background_shells_retain_separate_commands_and_identities(self):
         first = tool('one', {'command': 'python first.py', 'background': True}, status='completed', call='one')
         second = tool('two', {'command': 'python second.py', 'background': True}, status='completed', call='two')
@@ -338,6 +352,16 @@ class InvocationTests(unittest.TestCase):
         self.assertIn("child-only", observed.running_invocation.text)
         unrelated = observe_tools(snapshot, "u_next", now_ms=30_000, include_invocations=True)
         self.assertIsNone(unrelated.running_invocation)
+        failed_part = replace(child_tool, data={**child_tool.data,
+            "state": {**child_tool.data["state"], "status": "error", "error": {"code": "ENOENT"}}})
+        messages = tuple(replace(message, parts=(failed_part,)) if message.message_id == "ca" else message
+                         for message in snapshot.messages)
+        failed_snapshot = replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts))
+        failed = observe_tools(failed_snapshot, "u_sub", now_ms=30_000, include_invocations=True)
+        self.assertIn("child-only", failed.failed_invocations[0].invocation.text)
+        self.assertEqual("File not found", failed.failed_invocations[0].reason)
+        self.assertEqual((), observe_tools(failed_snapshot, "u_next", now_ms=30_000,
+                                         include_invocations=True).failed_invocations)
 
     def test_returned_child_background_shell_remains_scoped_to_its_owning_prompt(self):
         snapshot = make_snapshot(running=True)
@@ -367,13 +391,21 @@ class InvocationTests(unittest.TestCase):
 
     def test_five_foreground_and_background_jobs_fit_100_card_event_and_replay_caps(self):
         frame = summary_watch()
-        detail = invocation(tool(inputs={'command': 'python task.py ' + 'x' * 650 + ' --token synthetic-private'}), budget=819)
-        details = tuple(replace(detail, identity=f'job-{i}') for i in range(5))
+        inputs = {'command': 'python task.py ' + 'x' * 120 + ' --token synthetic-private'}
+        parts = tuple(tool(f'p-{i}', inputs, call=f'call-{i}',
+                      status='running' if i < 5 else 'completed' if i < 10 else 'error') for i in range(20))
+        jobs = tuple(BackgroundActivity(f'bg-{i}', 'root', 'shell', 1000, 'a_next',
+                     tool_call_id=f'call-{i}') for i in range(5, 10))
+        observed = observe_tools(snapshot_with(*parts, background=jobs), 'u_next', now_ms=30_000,
+                                 include_invocations=True)
+        self.assertEqual((5, 5, 10), (len(observed.running_invocations), len(observed.background_invocations),
+                                    len(observed.failed_invocations)))
+        self.assertLessEqual(sum(len(item.text) for item in (
+            *observed.running_invocations, *observed.background_invocations,
+            *(failure.invocation for failure in observed.failed_invocations))), MAX_INPUT_TEXT)
         card = frame.active_cards[0]
         row = card.rows[0]
-        tool_observation = replace(row.tool, running_invocation=details[0], background_invocation=None,
-            running_invocations=details, background_invocations=details, running_invocation_count=20,
-            background_invocation_count=20, background_kinds=('shell',) * 20)
+        tool_observation = replace(observed, background_kinds=('shell',) * 5)
         card = replace(card, rows=(replace(row, tool=tool_observation),))
         card = replace(card, session_cost=replace(card.session_cost,
             main_ccost=Decimal("4000"), subagent_ccost=Decimal("582.125")))

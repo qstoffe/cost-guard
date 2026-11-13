@@ -349,7 +349,7 @@ class WatchCards:
                         if row.in_progress and row.background_kinds else 0)
                 if state != "observed" or entry.verified_generation != entry.generation or capture.retained or row.execution_unverified:
                     tool = replace(tool, running_invocation=None, background_invocation=None,
-                                   running_invocations=(), background_invocations=())
+                                   running_invocations=(), background_invocations=(), failed_invocations=())
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,

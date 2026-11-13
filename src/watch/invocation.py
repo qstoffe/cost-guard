@@ -7,15 +7,17 @@ are redacted or withheld with cause-specific qualifications.
 import hashlib
 import json
 import math
+from collections.abc import Mapping
 from decimal import Decimal
 from dataclasses import replace
 
-from .models import ToolInvocation
+from .models import ToolFailure, ToolInvocation
 from .invocation_redaction import redact
 from .tool_contracts import tool_input
 
 MAX_INPUT_TEXT = 4096  # ASCII-escaped formatted text; wire escaping is bounded.
 MAX_INVOCATIONS = 5
+MAX_FAILED_INVOCATIONS = 10  # One shared card budget, not ten per tool group.
 _FIELDS = (
     "command", "code", "workdir", "cwd", "shell", "description", "background", "timeout",
     "pattern", "path", "include", "glob", "filePath", "offset", "limit",
@@ -106,7 +108,39 @@ def invocation(part, *, budget=MAX_INPUT_TEXT) -> ToolInvocation:
     return ToolInvocation(identity, revision, text, qualification, kind, part.created_at_ms)
 
 
-def background_invocations(snapshot, messages, parts):
+def failed_invocations(parts, origin, *, budget=MAX_INPUT_TEXT):
+    """Reuse the invocation filter, exporting only bounded, source-owned failures."""
+    selected = parts[:MAX_FAILED_INVOCATIONS]
+    details = []
+    for name, part in selected:
+        source = part.provenance
+        if (source.source_type, source.source_generation, source.source_instance) != (
+                origin.source_type, origin.source_generation, origin.source_instance):
+            continue
+        details.append(ToolFailure(name, invocation(part, budget=budget), _failure_reason(part)))
+    return tuple(details)
+
+
+def _failure_reason(part):
+    # Never copy arbitrary error/output/stack text. Exact recognized codes or
+    # whole fixed messages can qualify a short category; everything else is unknown.
+    state = part.data.get("state")
+    error = state.get("error") if isinstance(state, Mapping) else None
+    values = [error] if isinstance(error, str) else (
+        [error.get(key) for key in ("name", "type", "code")] if isinstance(error, Mapping) else [])
+    reasons = set()
+    for value in values:
+        if not isinstance(value, str) or len(value) > 80:
+            continue
+        value = value.strip().lower()
+        if value in {"enoent", "filenotfounderror", "file not found", "no such file or directory"}:
+            reasons.add("File not found")
+        elif value in {"eacces", "eperm", "permissionerror", "permission denied", "access denied"}:
+            reasons.add("Permission denied")
+    return next(iter(reasons)) if len(reasons) == 1 else "Failure reason unavailable"
+
+
+def background_invocations(snapshot, messages, parts, *, other_count=0):
     """Separate live jobs using prompt-qualified origins, never kind/time guesses."""
     owners = {(message.session_id, message.message_id) for message in messages}
     jobs = {}
@@ -119,7 +153,7 @@ def background_invocations(snapshot, messages, parts):
                 jobs[key] = replace(job, tool_call_id='', tool_part_id='', invocation_input=(),
                                     invocation_reason='Conflicting job origins; command withheld.')
     ordered = sorted(jobs.values(), key=lambda job: (job.started_at_ms, job.session_id, job.activity_id))
-    budget = MAX_INPUT_TEXT // max(1, min(len(ordered), MAX_INVOCATIONS))
+    budget = MAX_INPUT_TEXT // max(1, min(len(ordered), MAX_INVOCATIONS) + other_count)
     details = []
     origin = snapshot.root.provenance
     for job in ordered[:MAX_INVOCATIONS]:

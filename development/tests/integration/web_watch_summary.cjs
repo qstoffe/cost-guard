@@ -77,7 +77,7 @@ for (let i=0;i<4;i++) {
 activityTool.background_invocations[0].revision = 'corrected';
 activityTool.background_invocations[0].text = 'command:\npython corrected.py';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.equal(backgroundJobs[0].node.open, false);
+assert.equal(backgroundJobs[0].node.open, true, 'same physical job revisions preserve user expansion');
 assert.equal(backgroundJobs[1].node.open, true, 'unrelated job stays expanded');
 context.input.view.active_cards[0].state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);

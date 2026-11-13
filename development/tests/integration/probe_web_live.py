@@ -318,6 +318,15 @@ def main():
                         history_cards=len(view['history_cards']), history_state=view['history_state'],
                         first_rows_seconds=first_rows)
                     break
+                if args.tool_outcomes and not args.watch_cards and any(
+                        card['state'] == 'observed' and row.get('tool')
+                        for card in cards for row in card['rows']):
+                    # Activity-only inspection does not certify unrelated global
+                    # Earlier membership. --watch-cards keeps the full proof gate.
+                    card_evidence = dict(scope='observed_activity_only', active_cards=len(view['active_cards']),
+                        history_cards=len(view['history_cards']), history_state=view['history_state'],
+                        first_rows_seconds=first_rows)
+                    break
                 if first_rows is not None and view.get('history_state') == 'observed':
                     assert view['history_checked'] == view['history_total']
                     assert view['history_epoch'] > 0 and view['history_verified_at_ms'] is not None
@@ -393,8 +402,22 @@ def main():
                 for name, count in counts.items():
                     assert sum(item['count'] for item in outcomes if item['tool_name'] == name) <= count
                 assert all(item['tool_name'] in counts for item in outcomes)
+                failures = activity.get('failed_invocations', [])
+                assert len(failures) <= 10
+                assert len({item['identity'] for item in failures}) == len(failures)
+                for item in failures:
+                    assert set(item) == {'tool_name', 'reason', 'identity', 'revision', 'text',
+                                         'qualification', 'started_at_ms', 'display'}
+                    assert set(item['display']) == {'started_at_ms'}
+                    assert len(item['identity']) == len(item['revision']) == 64
+                    assert item['reason'] in {'File not found', 'Permission denied', 'Failure reason unavailable'}
+                    assert any(outcome['tool_name'] == item['tool_name'] and outcome['outcome'] == 'failed'
+                               for outcome in outcomes)
+                details = [*failures, *activity.get('running_invocations', []), *activity.get('background_invocations', [])]
+                assert sum(len(json.dumps(item['text'], ensure_ascii=True)) for item in details) <= 4096
             print(json.dumps(dict(tool_outcomes='ok' if activities else 'unobserved', cards_with_activity=len(activities),
                 failed=sum(item['failed_count'] for item in activities),
+                failed_details=sum(len(item.get('failed_invocations', [])) for item in activities),
                 cancelled=sum(item['cancelled_count'] for item in activities), model_calls_started_by_probe=0)))
         if args.tool_invocations:
             observations.stage = 'tool_invocations'

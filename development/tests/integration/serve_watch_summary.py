@@ -31,6 +31,13 @@ def main():
         day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
     resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'account-cards.js', 'watch.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(frame).to_json())) + ';').encode()
+    if '--tool-outcomes' in sys.argv:
+        from development.tests.fixtures.watch_tool_outcomes import revision_observations
+        from src.application.live_projection import card_row
+        sequences = {f'{mode}-{count}': [card_row(replace(frame.active_cards[0].rows[0], tool=tool), now).to_json()['tool']
+                     for tool in revision_observations(mode, count)]
+                     for mode in ('foreground', 'background') for count in (1, 2)}
+        resources['/data.js'] += ('const REVISIONS = ' + json.dumps(sequences) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
