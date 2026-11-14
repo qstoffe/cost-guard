@@ -186,3 +186,41 @@ remembered-point hit and no departure events. The production target's native gua
 was false at 600.3ms under the same sequence. This isolates the negative native
 hover observation from that button's help binding, not from all possible product
 layout/browser interactions, and does not establish physical-desktop prevalence.
+
+## Measured core acceptance and final scoped disposition
+
+On `2bbccb8`, [run 43549260080](https://github.com/qstoffe/cost-guard/actions/runs/43549260080)
+passed the **complete independent mouse portfolio** in **800 seconds** and touch
+portfolio separately. All twelve actual 61-second holds passed, 61 samples each
+and zero pointer movement. Eleven remained on their trigger; Full CCost's large
+panel legitimately covered the input point and supplied all 61 positive native
+panel-hover/hit samples. Old-base PiP RED passed; Full Watch RED is not claimed.
+Native narrow 125% four-theme/scheme captures, 0/1/3/5-row geometry, unchanged window
+size through SSE, old-document teardown/new-target reattachment, exact both-unit
+CCost/Total and Duration/accessibility/selection transitions all passed.
+All three native-platform checks passed. Common still failed its original mixed
+step; that historical run is not an aggregate PASS.
+
+Decision Delegate authorized **FR000704-only scope-limited completion excluding
+the demonstrated mixed Total-heading opening**, conditional on the independent
+core portfolio, now satisfied. Original mixed **FAIL** and unreached **NOT RUN**
+remain in artifacts and [Suggestion000684](../../backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md).
+No exception covers stationary/lifecycle/geometry/new Total, independent input,
+accounting or future tooltip requirements. The CI wrapper leaves the probe and
+FAIL artifact intact, recognizes only the measured case/configuration/trusted
+arrival/negative native guard/connected identity/no-departure evidence, requires
+same-run independent mouse/touch PASS, and limits nonblocking treatment to PR310
+and its own main delivery. Unexpected, absent or malformed evidence remains fatal.
+This is `KNOWN_GAP`, not a literal neutral Check or mixed-interaction PASS.
+
+For future source changes, Decision Delegate also approved explicit
+`RED_NOT_APPLICABLE` only when the verified base positively contains the recognized
+fixed watchdog; missing/unrecognized bases fail. This does not replace this FR's
+observed old-base PiP RED. Physical-OS, screen-reader and history limits above remain.
+
+The final local Full, including three fail-closed exclusion-gate tests, passed
+**196/196 files, 2,423 tests: 2,419 passed, four skipped, zero failures/errors** in
+154.2 seconds (`scratch:/full-tests-delivery.json`). Validator again passed with
+the same seven advisories. Original FR bytes were moved intact to completion
+ordinal 000210 after reading current Complete names; ordinary progress advances
+148→149, preserving the existing deferred maintenance assessment.

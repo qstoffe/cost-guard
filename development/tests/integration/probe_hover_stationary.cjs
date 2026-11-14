@@ -22,9 +22,12 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
   assert.match(process.env.COST_GUARD_BASELINE_REVISION || '',/^[a-f0-9]{40}$/);
   {
     const source=await fs.readFile(process.env.COST_GUARD_BASELINE_HELP,'utf8');
-    assert.ok(source.includes('panel.hidden || !panel.isConnected || now() >= hoverDeadline'),
-      'base must contain the old unconditional cutoff; never silently skip RED');
-    {
+    const old=source.includes('panel.hidden || !panel.isConnected || now() >= hoverDeadline');
+    const fixed=!old&&source.includes('const state = hoverState(pointerTarget);')&&
+      source.includes('else if (state === null && now() >= hoverDeadline)')&&
+      source.includes('if (state === false) exit(target);')&&source.includes('}, HOVER_CHECK);');
+    assert.ok(old||fixed,'Unrecognized baseline watchdog; RED applicability is unknown');
+    if(old) {
       await evaluate(mini,`(()=>{${source.replace("panel.id = 'context-help'","panel.id = 'baseline-help'")}
         const b=ContextHelp.button('Original 30-second cutoff','Baseline stationary reading',document);
         b.id='baseline-trigger';document.body.append(b);b.scrollIntoView({block:'center'});})()`);
@@ -39,6 +42,10 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
       await evaluate(mini,`document.getElementById('baseline-trigger').remove();document.getElementById('baseline-help').remove()`);
       checks.push('RED: default-base help closes actual PiP stationary hover after 30 seconds, while native :hover remains true');
       layouts.push({case:'baseline-red-pip',revision:process.env.COST_GUARD_BASELINE_REVISION});
+    } else {
+      checks.push('RED_NOT_APPLICABLE: verified base already contains the recognized fixed watchdog; no old-base RED claimed');
+      layouts.push({case:'baseline-red-not-applicable',revision:process.env.COST_GUARD_BASELINE_REVISION,
+        reason:'recognized fixed watchdog in verified base'});
     }
   }
   await evaluate(owner,`window.stationaryRefresh=setInterval(()=>{

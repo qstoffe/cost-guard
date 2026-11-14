@@ -127,3 +127,41 @@ Escape/outside dismissal, ARIA cleanup and bounded popovers, together with the
 lease. Investigate actual ownership/layout/browser/harness causation; remembered
 coordinates or a forced positive `:hover` must not substitute for safe presence.
 See [FR000703 evidence and Decision Delegate disposition](../../../journal/web/stable-refresh.md).
+
+## FR000704 measured isolation and scoped exclusion — 2026-11-14
+
+Chromium **141.0.7390.37**, actual headless Document PiP at native 125% browser zoom,
+reproduced the original Total-heading mixed-input **FAIL** on PR310. Trusted mouse
+entry/move reported positive native hover, then the unchanged production opening
+guard read **false after 600.3–600.4ms**. The target stayed identical and connected,
+the document focused, with no recorded departure. At 15 seconds native hover had
+become positive again; the closed popup did not reopen without new input.
+
+A matched unbound Total button was installed before the Duration sequence, retained
+through it and never attached to `ContextHelp`. Its trusted arrival also hovered
+true, then native hover was **false at 651.9ms**, with the same geometry, identity,
+focus and remembered-point hit, and no departure. Native results were observed
+before diagnostic geometry reads. This separates the observation from that button's
+help listener, not from every layout/browser interaction; it does not prove a
+Chromium defect, current physical pointer location or desktop prevalence.
+
+The independent fresh keyboard/mouse journey **passed** twelve 61-second native
+stationary holds across Mini and Full Watch, exact CCost/Total help and both units,
+Duration/focus/selection transitions, four theme/scheme combinations, narrow native
+125% bounds, 0/1/3/5 rows, stable native size and PiP close/reopen. Fresh touch
+Duration/Total access passed separately. The old-base **PiP-only RED** reproduced
+the 30-second cutoff. Full Watch's discovered clock/cell replacement was repaired,
+not excluded. These passes are not mixed-input proof.
+
+**Decision Delegate authorized FR000704-specific scope-limited completion**, conditional
+on those core results, which passed on `2bbccb8`. Only this measured mixed Total-heading
+opening is excluded; unreached mixed cases remain **NOT RUN**. The original probe,
+nonzero result and **FAIL artifact** stay intact. CI can treat only the exact guarded
+trace/configuration as nonblocking for PR310 and its own main delivery, after both
+independent core journeys pass. Missing/different evidence and all core failures
+remain fatal; there is no blanket `continue-on-error` or future-tooltip waiver.
+
+Future acceptance above remains unchanged. Evidence:
+[measured run](https://github.com/qstoffe/cost-guard/actions/runs/43549260080),
+[FR000704 journal](../../../journal/web/mini-tooltips.md). Physical Windows transitions,
+assistive technology and the owner's intermittent incident remain unverified.

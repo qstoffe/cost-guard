@@ -23,6 +23,9 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 FR000704: `assets/help.js` retains one open-only watchdog but no longer expires
 confirmed stationary hover; trusted coordinates only reveal contradictions.
+Full Watch keeps clock help and prompt cells connected through metric refresh.
+`integration/ci_mini_tooltips.py` separates native mouse/touch and original mixed
+journeys; `test_mini_ci.py` keeps the FR000704-only known-gap gate fail-closed.
 `application/mini_costs.py` prepares compact Mini-only provider/model/effort groups
 from canonical prompt parts and `analysis/session_cost.py`'s cached physical-request
 contributions. Prepared inputs do not duplicate the wire ledger. `display.py`
