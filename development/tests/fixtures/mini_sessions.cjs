@@ -7,6 +7,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
        prompt:{...structuredClone(base.rows[0].prompt),preview:'',event_id:id,at_ms:at,in_progress:running,
         completed_successfully:!running,completed_at_ms:running?null:at,
         display:{ccost:'49',clock:'12:34',start_date_time:'2026-10-25 02:30 +0200',
+          mini_start_date_time:'2026-10-25 02:30',mini_finished_date_time:'2026-10-25 02:30',
           finished_clock:'23:47',finished_date_time:'2026-10-25 02:30 +0100'}}}],
     session_summary:{...structuredClone(base.session_summary),context:{display:{watch_next_context_tokens:'900'}}}});
   const show = (active,history,state='observed',epoch=0) => {
@@ -19,11 +20,11 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(view.earlierToggle,undefined);assert.equal(view.historyBody,undefined);
   const headers=view.body.parentNode.querySelectorAll('th');
   assert.deepEqual(headers.map(n=>n.textContent),['Activity','Session','CCost','Total','Ctx']);
-  assert.match(helpText(headers[0].children[0]),/Start time for a running prompt; finish time for a completed prompt\/session\./);
+  assert.equal(helpText(headers[0].children[0]),'• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.');
   assert.equal(helpText(headers[1].children[0]),'The name of the session.');
-  assert.match(helpText(headers[2].children[0]),/represented prompt’s reference cost/);
+  assert.equal(helpText(headers[2].children[0]),"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
   assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');
-  assert.match(helpText(headers[4].children[0]),/last valid session-level estimate/);
+  assert.equal(helpText(headers[4].children[0]),'Estimated context for this session, in tokens.');
   for(const count of [0,1,3,4,5,6,10]) {
     const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
     assert.equal(rows().length,Math.max(5,count));
@@ -57,13 +58,13 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.ok(rows().every(row=>row.className===''),'successful cold history is neutral');
   assert.match(retained.attributes['aria-label'],/Completed/,'neutral history retains its outcome');
   assert.equal(retained.children[4].textContent,'900','historical context uses session summary, not stale prompt');
-  assert.equal(time.textContent,'23:47');assert.equal(helpText(time),'2026-10-25 02:30 +0100');
+  assert.equal(time.textContent,'23:47');assert.equal(helpText(time),'2026-10-25 02:30');
   const resumed=card('h4',300,true);show([resumed],history);
   assert.equal(view.promptRows.get('h4'),retained,'history promotes in the same keyed row');assert.equal(ids().at(-1),'h4');
    assert.equal(retained.children[4].textContent,'17');assert.equal(time.textContent,'▶ 12:34');
    assert.equal(time.children[0].attributes['aria-hidden'],'true');assert.equal(time.children[0].tabIndex,undefined);
    assert.deepEqual(time.children[0].events,{});assert.equal(time.tabIndex,0);
-  assert.equal(helpText(time),'2026-10-25 02:30 +0200');
+  assert.equal(helpText(time),'2026-10-25 02:30');
   const concurrent=Array.from({length:10},(_,i)=>{const value=card('h4',301+i,true);value.focal_id=value.rows[0].prompt.event_id='p'+i;
     value.rows[0].prompt.prompt_number=100+i;value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=String(i);return value;});
   show(concurrent,history);assert.equal(rows().length,5);assert.equal(view.promptRows.get('h4'),retained);
@@ -77,7 +78,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const panel=view.doc.body.children.at(-1);
     assert.equal(panel.children.length,3);
     assert.equal(panel.children[1].className,'context-help-running-duration');
-    assert.equal(panel.children[1].textContent,'Duration: 10m');
+    assert.equal(panel.children[1].textContent,'10m');
   }
   assert.equal(retained.className,'mini-running');
   const tied=structuredClone(concurrent.at(-1));tied.focal_id=tied.rows[0].prompt.event_id='z';tied.rows[0].prompt.prompt_number=200;
@@ -149,8 +150,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const target=rows()[0].children[3].children[0];
     assert.equal(target.className,'mini-cost-value help-value');assert.equal(target.tabIndex,0);
     assert.equal(target.attributes.title,undefined);assert.ok(target.events.focus&&target.events.pointerenter);
-     assert.match(rows()[0].totalCostHelp,total==='Loading…'
-       ? /Whole-session reference CCost/ : /CCost cannot be calculated.*N\/A does not mean zero/);
+      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: N/A\n\nDuration: N/A');
   }
   // Source-corrected whole-session subtotals never replace the representative cost.
   const partial=card('subtotal',500,true),summary=partial.session_summary;

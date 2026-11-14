@@ -21,6 +21,17 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000704: `assets/help.js` retains one open-only watchdog but no longer expires
+confirmed stationary hover; trusted coordinates only reveal contradictions.
+`application/mini_costs.py` prepares compact Mini-only provider/model/effort groups
+from canonical prompt parts and `analysis/session_cost.py`'s cached physical-request
+contributions. Prepared inputs do not duplicate the wire ledger. `display.py`
+owns scoped reset/Activity tokens; `mini.js` owns exact copy, Total help and
+exceeded-only Ctx. Full Watch keeps individual-agent detail. Coverage:
+`test_mini_tooltips.py`, shared help/Mini VM tests, payload-cap regression and
+`probe_web_help.cjs ... --mini-tooltips` for actual Chromium PiP/input/elapsed time.
+[Evidence and browser-observability limits](../../journal/web/mini-tooltips.md).
+
 FR000703: `application/session_catalog.py` owns display-only pending scalar
 retention, independently of fresh sort qualification. `assets/watch.js` shares
 context/session-summary retention and history-status precedence; `mini.js` keeps
@@ -137,8 +148,9 @@ applies to every Stats card. Coverage: token/Stats/recovery/resume tests, canoni
 podium/states/loading browser probes and read-only cold/warm installation probe.
 [Current evidence](../../journal/web/ai-stats.md#sampled-response-podium--fr000685).
 
-FR000683: `assets/help.js::watchHover` owns the open-only 1000ms exact-target check
-and thirty-second trusted-pointer idle lease, shared by Full Watch and Mini PiP.
+FR000683 introduced `assets/help.js::watchHover`'s open-only 1000ms exact-target
+check, shared by Full Watch and Mini PiP. FR000704 restricts the thirty-second
+fallback to inconclusive hover queries, not confirmed stationary reading.
 Opening tickets and owner/lifetime cleanup stay in the same controller. Coverage:
 `integration/web_help.cjs` virtual hover/clock and `probe_web_help.cjs --hover-watchdog`
 with `probe_help_watchdog.cjs` deliberately suppressing native exits in actual PiP.

@@ -34,8 +34,10 @@ generic headers, benchmark filters and native selections stay unchanged.
 active Watch or one already-discovered pinned session detail, without certifying
 Earlier history. Its exclusions and unobserved results are not tooltip PASS.
 
-FR000653 scoped update (v81.2): Mini Ctx help has separate Next and Δ paragraphs,
-then independent threshold/price guidance. `analysis/context.py` retains a complete
+FR000704 supersedes Mini's earlier Next/Δ help: only ready-current exceeded price
+guidance gets short value help and shared red `--error`; normal/approaching/pending
+values have no tooltip. Header and numeric/accessibility semantics remain.
+The canonical work from FR000653 remains: `analysis/context.py` retains a complete
 prompt-local pair independently of current history membership, with epoch/model/input
 guards; `reports/prompts.py` retains richer comparable adjacent anchors. Live exports
 the canonical short unavailable/provisional explanation, never browser subtraction.
@@ -128,23 +130,25 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
   hover evidence uses the existing 150ms transfer grace. Pending 600ms openings
   also revalidate target/hover; timer tickets reject obsolete callbacks. Unsupported
   hover queries are inconclusive, never perpetual permission to remain open.
-  A monotonic **30-second pointer-idle lease** bounds even falsely retained CSS hover.
-  Only trusted pointer entry/movement/down inside the label/panel renews it; no
-  stored coordinates, focus, selector poll, `refresh` or Live redraw can do so.
-  With no OS-wide cursor API, truly stationary reading may expire too: intentional
-  re-entry can reopen, and deliberate keyboard/pinned help has no hover lease.
+  FR000704 removes the unconditional inactivity cutoff: confirmed stationary
+  trigger/panel hover stays open through refresh. Trusted remembered coordinates
+  only reveal layout/occlusion contradictions; null hit tests are not departure.
+  A monotonic **30-second fallback** applies only to inconclusive hover queries,
+  renewed only by trusted pointer input. With no OS-wide cursor API, stale positive
+  CSS and no browser exit cannot be distinguished from genuine stationary reading.
+  Deliberate keyboard/pinned help has no hover lease.
   Close/Escape/actions, owner changes, replacement, hidden/pagehide and PiP teardown
   cancel exactly the owned watchdog; closed/focus/pinned states do no recurring work.
-  [Evidence and physical-OS limitation](../../journal/web/contextual-help.md#fr-000683-bounded-hover-watchdog-2026-11-12).
+  [Current evidence and physical-OS limitation](../../journal/web/mini-tooltips.md).
 - No links/buttons or focus trap inside tooltips. Interactive advanced help uses
   native `details/summary` or a suitable nonmodal disclosure. Critical status stays
   visible outside hover help.
 
 ## Whole-application audit inventory
 
-FR000665 scoped delta (v81.15): Mini Total is an intentional no-help value, including
-N/A and Loading. Only its heading explains the whole-session scope, in one sentence.
-CCost retains compact prompt details and the running Duration cue; Session combines
+FR000704 supersedes FR000665's no-help Total: both prompt CCost and Total now have
+compact provider/model/effort group help, each followed by its supported Duration.
+Only the genuinely running prompt's Duration value is yellow. Session still combines
 the full title and direct prompt number/25-grapheme preview. The existing server's
 prefix-free `account_ccost` token supplies Mini Total after the no-priced-work guard;
 global formatting, raw values and completeness stay unchanged.
@@ -169,10 +173,10 @@ without changing the rate signature. See [classification and evidence](../../jou
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
 | Watch: daily summary, account Today, primary/secondary quotas, exact reset | Global Today label, amount and prompt count remain plain semantic text. Account Today and native quota-summary help remain. Unknown Capacity/Monthly Capacity rows and their help targets are absent. Known values have distinct concise explanations plus native facts, without raw arithmetic/rounding. Ratio period Capacity and every numerical monthly equivalent use leading `~`; native amounts do not. Display-only first-letter normalization also applies to help/ARIA |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
-| Mini: table headings | Activity / Session / CCost / Total / Ctx; CCost keeps its prompt/pricing definition. Total says exactly: The entire session’s reference cost, including attributed linked subagents. Active-next versus historical-last-valid-next context remains distinct |
-| Mini: session title/cost and prompt/history status | Session help reveals the full title and direct `Prompt #N: excerpt` line (unknown number stays unavailable), using the existing bounded 25-grapheme preview. CCost alone retains prompt model/effort/duration/calls and linked/mixed/pricing/outcome help, including the yellow running Duration fragment and open-help updates. Total stays plain selectable text without help, tabindex, native title or prompt details. History uses its actual representative. No row-wide popup, unsafe HTML, detailed I/C/W/O or raw prompt retrieval |
+| Mini: table headings | Activity has two start/finish bullets; Session is unchanged; CCost names latest represented prompt plus attributed child calls; Total keeps its exact whole-session sentence; Ctx says estimated context in tokens |
+| Mini: session title/cost and prompt/history status | Session retains full title and direct `Prompt #N: excerpt` with existing 25-grapheme preview. Activity help is local start/known-finish `YYYY-MM-DD HH:mm`, without offset. CCost has Prompt #N, main and grouped child model/cost pairs, then Duration; only its live value is yellow. Total has whole-tree Session Model/child groups and supported session Duration (N/A without canonical interval), no Prompt heading. Both values retain selection and keyboard/hover/touch help. No row-wide popup, unsafe HTML, verbose Calls/Effort prose or raw prompt retrieval |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
-| Mini: subscriptions | Primary-window Capacity, then Next reset; applicable raw Capacity/current Remaining estimate help follows. Select canonical unit/provenance and reset tokens; no secondary or unrelated CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
+| Mini: subscriptions | Exactly primary Capacity and Next reset lines in the normal state; inferred amounts retain `~`, unknown is N/A. Mini reset uses duration, local HH:mm, then today/tomorrow/English weekday/date, without repeating Reset. No raw calculation or secondary Capacity prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: reference checkboxes and multi-sort | Four semantic label-only definitions preserve click/keyboard/Shift actions and accessible sort names. Relative Price List Cost has two compact paragraphs: reference ratio, then shared recent token mix rather than task performance. Internal `relative_cost`, tiers and sample semantics are unchanged |
 | Models: independent coding benchmark | Five sortable intrinsic header targets; Model value help identifies that configuration's actual Coding Client/version/source row; Relative Task Cost value help gives Harbor USD per attempted task including failures. Dynamic native Effort multiselect has keyboard/touch/outside/Escape dismissal. Missing versions/efforts are not inferred; no promotions or benchmark-driven New clock |
 | Models: price refresh and promotion help | Explicit price action and genuine fetch time precede the table. One highlighted postfix star follows the complete relative tier chain; the row's structured offer supplies multiline Price Promotion/model/discount/end/resume help. No numbered footer, native duplicate title or routine catalog/source caveat. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
@@ -200,8 +204,8 @@ coverage. Headless evidence does not prove physical OS pointer/window transition
 
 ## Server-owned detail boundary
 
-FR000641's raw calculation help remains for ratio Remaining, estimated Web pace and
-Mini's primary Capacity/current Remaining detail. FR000654 intentionally replaces only
+FR000641's raw calculation help remains for ratio Remaining and estimated Web pace;
+FR000704 removes it from Mini subscription help. FR000654 intentionally replaces only
 shared-card Capacity/Monthly Capacity help with one explanatory sentence and native facts;
 canonical unrounded Decimal calculations and estimate precision are unchanged.
 Provider-confirmed figures do not get a before-rounding claim.
@@ -226,3 +230,8 @@ concurrent/nested work, partial telemetry/pricing, tiers, corrections and bounde
 `probe_cost_groups.cjs` checks grouped backend wire data, conditional accessible model
 stars, Calls/header-only Mix, 241 virtual seconds of stable Full/Mini totals and Loading.
 Full Watch footer keeps Context/warning first and Total CCost second with unchanged math.
+
+Mini grouping happens before the rich export cap, using canonical unrounded parts.
+Whole-session groups reuse deduplicated requests and cached canonical valuations,
+including compaction and out-of-prompt root work. Only prepared unit-aware help is
+exported, not a redundant Mini raw ledger or the obsolete verbose Mini detail.

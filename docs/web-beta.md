@@ -104,14 +104,15 @@ button retains focus. Keyboard-focus help and deliberately pinned passive help a
 distinct; action activation dismisses its help immediately. Live updates never reopen
 dismissed help without a new interaction.
 
-While hover help is open, a small browser-only check runs about once per second so
-missed pointer-exit events cannot leave it stranded. Browsers cannot reliably reveal
-the pointer's position in another app and can retain a stale hover flag. Hover help
-therefore closes after **30 seconds without actual pointer interaction**, even if
-the mouse appears stationary over it. Leave and re-enter the label to read again, or
-use keyboard focus / tap passive help to keep it open without that hover limit.
-Live updates do not renew the limit. No check runs while help is closed or owned by
-keyboard focus or a deliberate pin; no server/report work is triggered.
+While hover help is open, a small browser-only check runs about once per second.
+Confirmed stationary hover over its trigger or popup has **no inactivity cutoff**,
+including through in-place Live updates. Browser-visible departure, a contradictory
+hit test after layout changes, removed targets, document exit and window lifetime
+still dismiss abandoned help. Only inconclusive hover queries have a 30-second
+fallback. If a browser retains false positive hover and sends no exit/lifecycle
+evidence, page JavaScript cannot distinguish OS departure from stationary reading.
+No check runs while help is closed or owned by keyboard focus or a deliberate pin;
+no server/report work is triggered.
 
 Known limitation: a reproduced Mini touch/keyboard-to-mouse sequence can fail to
 open Total-heading hover help because the browser reports no hover at the opening
@@ -155,11 +156,23 @@ even when main and all agents share one model. Unrecorded usage remains qualifie
 multi-model main-only work also retains help without a participation star.
 Missing child history, pending acquisition and executed requests with missing
 counters retain explicit partial/unavailable coverage, not invented zero spend.
-Mini uses shorter per-agent prompt help. Its Total value and Sessions/session-detail
-totals explain the whole root tree's main versus linked-request contributions,
-not merely the latest prompt. Both Credits and USD help is prepared by the server;
+Mini groups prompt costs by supported provider/model/effort, combining children and
+grandchildren that share a combination. Model and CCost lines are consecutive, with
+one blank line between groups and Duration at the bottom. Total uses Session Model
+groups for all root work, separately from Sub Agent groups across the entire tree,
+without a Prompt heading. A session duration unsupported by the cost observation is
+N/A, never the focal prompt's duration. Only a genuinely running prompt's Duration
+value is yellow. Sessions/session-detail totals retain their own richer help.
+Both Credits and USD help is prepared by the server;
 independently rounded lines can differ from the displayed total's rounded sum.
 **Token Mix %** has header help only, not another per-cell popup.
+
+Mini subscription help contains Capacity and Next reset only. Inferred capacity
+keeps `~`; reset schedules use the configured-local clock followed by today,
+tomorrow, an English weekday within seven elapsed days, or a date beyond that.
+Mini Activity value help is local `YYYY-MM-DD HH:mm` without an offset. Normal,
+approaching, pending and invalidated Ctx values have no popup; a current exceeded
+price threshold alone turns Ctx red and offers the short source-backed warning.
 
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
 have no full-text popup in either Watch table. Mini uses column-heading help, not

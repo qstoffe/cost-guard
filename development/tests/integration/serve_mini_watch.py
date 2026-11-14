@@ -94,7 +94,8 @@ def main():
             from src.web.dispatch import DataDispatcher
             # Real authenticated lease registry, but no source/provider or finite warming owner.
             host.dispatcher = DataDispatcher(jobs)
-        timer = Timer(420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
+        timer = Timer(900 if '--mini-tooltips' in sys.argv[2:] else
+                      420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)
         frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,

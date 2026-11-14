@@ -77,10 +77,10 @@ class RecursiveCostCoverageTests(unittest.TestCase):
             for unit in ("credits", "usd"):
                 display = {**prompt["display"], **prompt["display_units"][unit]}
                 help_text = display["cost_detail_help"]
-                mini = display["mini_cost_detail_help"]
                 for number in range(1, 6):
                     self.assertIn(f"Subagent {number} —", help_text)
-                    self.assertIn(f"Subagent {number} —", mini)
+                self.assertIn("Sub Agent 1:", display["mini_cost_help"])
+                self.assertNotIn("mini_cost_detail_help", display)
                 self.assertNotIn("ses_", help_text)
                 self.assertNotIn("Linked subagents participated", help_text)
             groups = prompt["cost_detail"]["parts"]

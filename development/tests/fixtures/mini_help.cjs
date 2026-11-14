@@ -13,7 +13,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   };
   const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[4];
   assert.equal(helpText(title), 'Example Session\nPrompt #21: Implement pagination for…');
-  assert.match(helpText(ctx), /^Next Ctx: 128k .*\n\nΔ Ctx: \+4k \(represented prompt change\)/);
+  assert.equal(row.contextHelp,'');assert.equal(ctx.tabIndex,-1);
   const visible = row.textContent;
   for (const [preview, expected] of [
     ['Short hint','Short hint'], ['1234567890123456789012345','1234567890123456789012345'],
@@ -45,36 +45,39 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   show([], [history]);
   assert.equal(view.promptRows.get('help-a'),row);
   assert.equal(ctx.textContent,'900k');
-  assert.match(helpText(ctx),/^Next Ctx: 900k .*\n\nΔ Ctx: \+12k \(historical prompt change; session estimate may be later\)/);
+  assert.equal(row.contextHelp,'');
   assert.equal(helpText(title),'Example Session\nPrompt #20: Historical hint');
   history.rows[0].live_context = null; show([], [history]);
-  assert.match(helpText(ctx),/Δ Ctx: N\/A/);
+  assert.equal(row.contextHelp,'');
   history.rows = []; show([], [history]);
   assert.equal(helpText(title),'Example Session\nPrompt number unavailable');
-  assert.match(helpText(ctx),/Next Ctx: 900k[\s\S]*Δ Ctx: N\/A/);
+  assert.equal(row.contextHelp,'');
   prompt.prompt_number = 21; prompt.preview = 'Original hint'; show();
   for (const delta of ['0','+4k','-12k','N/A','~source-token']) {
     item.live_context.display.watch_delta_context_tokens = delta; show();
-    assert.ok(helpText(ctx).includes('Δ Ctx: '+delta+' (represented prompt change)'));
+    assert.equal(row.contextHelp,'');
     assert.equal(ctx.textContent,'128k');
   }
   item.live_context = null; show();
-  assert.match(helpText(ctx),/^Next Ctx: N\/A[\s\S]*Δ Ctx: N\/A/);
+  assert.equal(row.contextHelp,'');
   item.live_context = {display:{watch_next_context_tokens:'0k',watch_delta_context_tokens:'0'}};
-  for (const [text, cost, state] of [
-    ['', '', 'ready'], ['[Approaching price threshold >200k]', '(2.4x more expensive)', 'ready'],
-    ['[Price threshold >200k exceeded]', '(2.4x more expensive)', 'ready'],
-    ['[Price threshold >200k exceeded]', '(Price comparison pending)', 'pending'],
-    ['[Price threshold >200k exceeded]', '(Price comparison refreshing)', 'refreshing'],
-    ['[Price threshold >200k exceeded]', '(Price comparison unavailable; retrying)', 'unavailable']]) {
-    base.session_summary.context.warning = {text,guidance_state:state,display:{warning_cost:cost}}; show();
-    const paragraphs = helpText(ctx).split('\n\n');
-    assert.equal(paragraphs[0],'Next Ctx: 0k (estimated next incoming context). Not remaining model capacity.');
-    assert.equal(paragraphs[1],'Δ Ctx: 0 (represented prompt change)');
-    assert.deepEqual(paragraphs.slice(2),[text.replace(/^\[|\]$/g,''),cost.replace(/^\(|\)$/g,'')].filter(Boolean).length ?
-      [[text.replace(/^\[|\]$/g,''),cost.replace(/^\(|\)$/g,'')].filter(Boolean).join('\n')] : []);
+  for (const [severity, state, contextState, multiplier] of [
+    ['none','ready','ready-current',null],['approaching','ready','ready-current','2.4'],
+    ['exceeded','ready','ready-current','2.4'],['exceeded','ready','ready-current',null],
+    ['exceeded','pending','ready-current',null],['exceeded','refreshing','ready-current','2.4'],
+    ['exceeded','unavailable','ready-current',null],['exceeded','ready','pending','2.4'],
+    ['exceeded','ready','invalidated','2.4']]) {
+    Object.assign(base.session_summary.context,{context_state:contextState,context_scope:'help',
+      watch_next_context_tokens:230000,warning:{severity,multiplier,
+      text:'[Price threshold >200k exceeded]',guidance_state:state,display:{warning_cost:'(2.4x more expensive)'}}}); show();
+    const exceeded=severity==='exceeded'&&state==='ready'&&contextState==='ready-current';
+    assert.equal(row.contextHelp,exceeded?'Price threshold >200k exceeded'+(multiplier?' · 2.4x more expensive':''):'');
+    assert.equal(ctx.tabIndex,exceeded?0:-1);
+    assert.equal(ctx.className.includes('mini-context-exceeded'),exceeded);
+    if(exceeded)assert.equal(helpText(ctx),row.contextHelp);
     assert.equal(ctx.dataset.guidance,state);
   }
+  base.session_summary.context={display:{watch_next_context_tokens:'900k'}};
   const other = structuredClone(base); other.session_id = 'help-b'; other.title = 'Other session';
   const next = structuredClone(base); next.focal_id = next.rows[0].prompt.event_id = 'prompt-22';
   next.title = 'Renamed session'; Object.assign(next.rows[0].prompt,{at_ms:prompt.at_ms+1,prompt_number:22,preview:'Replacement hint'});
@@ -83,10 +86,9 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   show([base,next,other],[history]);
   assert.equal(view.promptRows.get('help-a'),row);
   assert.equal(helpText(title),'Renamed session\nPrompt #22: Replacement hint');
-  assert.match(helpText(ctx),/^Next Ctx: 256k[\s\S]*Δ Ctx: -4k/);
-  assert.doesNotMatch(helpText(ctx),/threshold|Original/);
-  assert.match(helpText(view.promptRows.get('help-b').children[4]),/Next Ctx: 0k[\s\S]*exceeded/);
+  assert.equal(row.contextHelp,'');
+  assert.equal(view.promptRows.get('help-b').contextHelp,'');
   assert.equal(row.children.length,5); assert.equal(row.querySelectorAll('button').length,0);
-  assert.equal(title.tabIndex,0); assert.equal(ctx.tabIndex,0);
+  assert.equal(title.tabIndex,0); assert.equal(ctx.tabIndex,-1);
   input.view = saved; controller.update(input);
 };

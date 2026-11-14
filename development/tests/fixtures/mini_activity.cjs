@@ -9,7 +9,8 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
     Object.assign(value, {session_id:id, focal_id:id});
     Object.assign(value.rows[0].prompt, {event_id:id, at_ms:at - day, completed_at_ms:at,
       in_progress:false, execution_unverified:false, aborted:false, has_error:false, completed_successfully:true}, flags);
-    Object.assign(value.rows[0].prompt.display, {clock:'02:30', finished_clock:'02:30', start_date_time:local, finished_date_time:local});
+    Object.assign(value.rows[0].prompt.display, {clock:'02:30', finished_clock:'02:30', start_date_time:local, finished_date_time:local,
+      mini_start_date_time:local.slice(0,16),mini_finished_date_time:local.slice(0,16)});
     return value;
   };
   const show = (active, history = []) => {
@@ -26,7 +27,7 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
     [730 * day - 1, '1y ago'], [730 * day, '2y ago']]) {
     const value = card('boundary', now - age); show([value]);
     assert.equal(time('boundary'), expected, `elapsed ${age}ms`);
-    assert.equal(helpText(view.promptRows.get('boundary').children[0].children[0]), value.rows[0].prompt.display.finished_date_time);
+    assert.equal(helpText(view.promptRows.get('boundary').children[0].children[0]), value.rows[0].prompt.display.mini_finished_date_time);
     if (expected.includes('ago')) assert.match(time('boundary'), /^\d+[hdmy] ago$/);
   }
   // Same configured date wins even after 20 hours. Crossing midnight retains the
@@ -55,7 +56,7 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
     show(instants.map(([at, full], index) => card('dst' + index, Date.parse(at), {}, full)));
     instants.forEach(([,full], index) => {
       assert.equal(time('dst' + index), expected[index]);
-      assert.equal(helpText(view.promptRows.get('dst' + index).children[0].children[0]), full);
+      assert.equal(helpText(view.promptRows.get('dst' + index).children[0].children[0]), full.slice(0,16));
     });
   }
   zone('UTC'); clock.set(now);
@@ -86,7 +87,7 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
   const payload = JSON.stringify(input); assert.equal(time('tick'), '02:30'); assert.equal(timers.length, 1);
   helpText(target); clock.set(now); timers[0]();
   assert.equal(time('tick'), '12h ago'); assert.equal(view.promptRows.get('tick'), row);
-  assert.equal(row.children[0].children[0], target); assert.equal(helpText(target), '2026-11-09 12:00 +0000');
+  assert.equal(row.children[0].children[0], target); assert.equal(helpText(target), '2026-11-09 12:00');
   assert.equal(JSON.stringify(input), payload); assert.deepEqual([...controller.window.timers], timers);
   input.view = saved.view; clock.set(savedNow); zone(null); controller.update(input);
 };

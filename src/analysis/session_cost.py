@@ -12,12 +12,27 @@ from .cache import ANALYSIS_ALGORITHM_VERSION, dependency_signature
 from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
 from .coverage import snapshot_coverage_complete
+from .effort_defaults import request_effort
+from src.domain.effort import EffortEvidence
 from src.domain.reference_cost import bounded_issues
 from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, unverified_alias
 
 NAMESPACE = "session-ccost-v1"
 ALGORITHM = ANALYSIS_ALGORITHM_VERSION + "/root-tree-reference-1"
+
+
+@dataclass(frozen=True, slots=True)
+class SessionCostGroup:
+    agent: int
+    provider_id: str
+    model_id: str
+    selected_models: tuple[str, ...]
+    effort_evidence: tuple[EffortEvidence, ...]
+    known_ccost: Decimal
+    priced_requests: int
+    complete: bool
+    effort: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +47,7 @@ class SessionCost:
     valuation_revision: str = ""
     main_ccost: Decimal | None = None
     subagent_ccost: Decimal | None = None
+    groups: tuple[SessionCostGroup, ...] = ()
 
 
 def session_cost_source_key(snapshot):
@@ -82,7 +98,7 @@ def reconcile_session_cost(repository, snapshot, catalog):
     total, observed, priced = previous.known_ccost, previous.observed_requests, previous.priced_requests
     incomplete = sum(not value["complete"] for value in old.values())
     current, valued, main = {}, 0, Decimal(0)
-    issues = set()
+    issues, groups = set(), {}
     entries = unique_usage(trace_entries(snapshot))
     for entry in entries:
         invocation = snapshot.invocations[entry.sort_order]
@@ -111,6 +127,12 @@ def reconcile_session_cost(repository, snapshot, catalog):
             issues.add(catalog.reference_issue(entry.model, entry.tokens))
         if entry.session_id == snapshot.root.session_id:
             main += _known_amount(current[identity])
+        group_key = (int(entry.session_id != snapshot.root.session_id), entry.model.provider,
+               entry.model.model, entry.model.recorded_model, request_effort(entry))
+        group = groups.setdefault(group_key, [Decimal(0), 0, True])
+        group[0] += _known_amount(current[identity])
+        group[1] += current[identity]["amount"] is not None
+        group[2] = group[2] and current[identity]["complete"]
     for identity in old.keys() - current.keys():
         total -= _known_amount(old[identity])
         observed -= 1
@@ -129,4 +151,6 @@ def reconcile_session_cost(repository, snapshot, catalog):
         except (sqlite3.Error, OSError):
             available = False
     return SessionCost(coverage, snapshot_coverage_complete(snapshot, entries), available, len(entries), valued, written,
-        snapshot.source_revision, catalog.diagnostic_signature, main, total - main)
+        snapshot.source_revision, catalog.diagnostic_signature, main, total - main,
+        tuple(SessionCostGroup(agent, provider, model, (selected,), (effort,), amount, count, complete)
+              for (agent, provider, model, selected, effort), (amount, count, complete) in groups.items()))

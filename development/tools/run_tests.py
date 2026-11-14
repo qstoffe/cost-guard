@@ -56,6 +56,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_recursive_cost_coverage.py",
     "test_ccost_unavailable.py",
     "test_mini_watch.py",
+    "test_mini_tooltips.py",
     "test_session_context_continuity.py",
     "test_web_help.py",
     "test_watch_card_lifecycle.py",
