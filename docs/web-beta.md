@@ -976,14 +976,24 @@ Every observed prompt appears oldest to newest, with no 50-row cap or user-facin
 
 Since v81.33, request-model hover/focus/touch help shows the **recorded provider/model**
 (for example `claude-agent/sonnet`, not a friendly-name/bracket duplicate). Friendly
-cells retain their labels. A separately labelled **Catalog modelID** is a current
-catalog estimate, not proof of the historical executed release. Single-model help,
+cells retain their labels. A separately labelled **Catalog modelID** is a
+catalog-based estimate, not proof of the historical executed release. Single-model help,
 mixed/child and compaction groups, Mini prompt cost, Full Watch Model/Calls/CCost,
 Sessions list/detail, Comparisons and AI Stats model podiums share prepared provenance.
 Incomplete Sessions lists say observed so far. A saved selection without usage is
 not a contributing request: its help says **Usage unavailable; cost unknown**.
 The unchanged numeric empty observed subtotal is not known zero consumption.
-Historical Claude recovery and complete all-model native proof remain excluded;
+Since v81.56, Claude Agent moving selections first use the live catalog at the
+saved session's exact location. If that selection has no usable mapping (including
+a deleted directory's HTTP 404), the app uses its bundled, sanitized 13-entry
+OpenCode 2.3.0 snapshot observed at 2026-11-14 19:46:36 UTC. Its exact aliases show
+Claude Sonnet/Opus/Haiku 5.5 and Claude Fable 5.1; a successful live match always wins.
+The frozen name is a fallback estimate even for older requests, not a date-based
+claim about execution. No transcript access, runtime download or private backlog
+is needed. Unknown aliases stay version-unverified; pinned releases stay pinned,
+and reference CCost still needs a supported exact reference identity/rate and known
+usage. Mapping/source changes revalidate only alias-dependent cached conclusions.
+Exact historical Claude execution reconstruction and complete all-model native proof remain excluded;
 see [evidence and limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/recorded-model-help.md).
 
 **[UNVERIFIED]** distinguishes an unfinished assistant whose complete source observation has no native running drain or supported tool/child/background activity. It is not success, failure or proof that another OpenCode process stopped. Known calls/usage remain, but Duration and affected session-duration totals are **N/A**, without an invented finish time. Later authoritative activity or terminal evidence updates the same prompt.

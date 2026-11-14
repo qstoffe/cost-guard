@@ -22,11 +22,15 @@ def main():
     parser.add_argument('browser', type=Path)
     parser.add_argument('evidence', type=Path)
     parser.add_argument('--desktop-catalog', action='store_true')
+    parser.add_argument('--bundled-catalog', action='store_true')
     args = parser.parse_args()
     assert args.browser.is_file() and args.evidence.parent.is_dir()
     test = unittest.TestCase()
     try:
-        original = desktop_service(test) if args.desktop_catalog else service(test)
+        resolved = args.desktop_catalog or args.bundled_catalog
+        original = desktop_service(test) if resolved else service(test)
+        if args.bundled_catalog:
+            original.source.model = None
         result = dict(view=project(original.build(ReportRequest(ReportKind.COMPARISONS))).to_json())
     finally:
         test.doCleanups()
@@ -64,10 +68,12 @@ setTimeout(() => {
             match = re.search(r'<pre id="probe-result">(.*?)</pre>', completed.stdout, re.S)
             assert match, 'missing_dom_result'
             value = json.loads(html.unescape(match[1]))
-            label = 'Claude Sonnet 5.5' if args.desktop_catalog else LABEL
+            label = 'Claude Sonnet 5.5' if resolved else LABEL
             assert value['label'] == 'claude-agent/' + label and value['stable'], value
-            if args.desktop_catalog:
+            if resolved:
                 assert 'historic executed version unconfirmed' in value['help'] and 'claude-agent/sonnet' in value['help'], value
+                if args.bundled_catalog:
+                    assert 'catalog-based estimate' in value['help'] and 'bundled frozen snapshot' in value['help'], value
             else:
                 assert 'claude-agent/sonnet' in value['help'] and LABEL not in value['help'], value
             assert 'Claude Sonnet 4' not in value['label'] + value['help'], value

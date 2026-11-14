@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.56 - 2026-11-14
+
+- Claude Agent moving selections use the exact-location live OpenCode catalog first, then the packaged, sanitized 13-entry OpenCode 2.3.0 snapshot observed on 2026-11-14. Deleted historical directories no longer hide known catalog labels; unknown selections remain unresolved.
+- Shared report/Sessions/detail/Watch/Mini identities retain recorded selections and catalog-estimate provenance, never historical execution proof. Only alias-dependent caches refresh when the effective mapping/source changes; pinned releases, source history, unsupported prices and missing usage are unchanged.
+
 ## v81.55 - 2026-11-14
 
 - Mini Watch's verified Running row foreground takes precedence over cell-specific Ctx colors, keeping all five values yellow. Earlier and other non-running Ctx cells retain ordinary/red canonical threshold styling.

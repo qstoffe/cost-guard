@@ -105,6 +105,11 @@ class FakeV2Service:
                 if parsed.path == "/api/project":
                     self._json(owner.fixture["projects"])
                     return
+                if parsed.path in {"/api/model", "/api/provider"}:
+                    status = owner.fixture.get("desktop_catalog_status", {}).get(parsed.path)
+                    if status:
+                        self._json({"error": "catalog unavailable"}, status)
+                        return
                 if parsed.path in {"/api/model", "/api/provider"} and "desktop_catalogs" in owner.fixture:
                     directory = query.get("location[directory]", [""])[0]
                     catalog = owner.fixture["desktop_catalogs"].get(directory, [])
