@@ -1,4 +1,4 @@
-"""Watch-only tool/todo observations derived from already-hydrated canonical snapshots."""
+"""Tool/todo observations shared by Watch and historical detail, without source acquisition."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -149,10 +149,35 @@ def _physical_tools(messages: list[NormalizedMessage]) -> tuple[NormalizedPart, 
     return tuple(calls.values())
 
 
+def session_calls(snapshot):
+    """Physical full-history calls in deterministic source order, shared by detail projections."""
+    return tuple(sorted(_physical_tools(session_messages(snapshot)), key=_physical_order))
+
+
+def classified_name(part, origins_by_session):
+    name = _tool_name(part).strip() or "unknown"
+    if is_skill_tool(part.data):
+        origin = verified_skill_origin(origins_by_session.get(part.session_id, {}).get(skill_tool_id(part.data)))
+        return f"{origin} skill" if origin else "skill"
+    return name
+
+
+def tool_outcome(part):
+    """Same structured error/cancellation semantics for Watch and historical drilldown."""
+    state = _tool_state(part)
+    if _is_cancellation(state):
+        return "cancelled"
+    outcome = structured_outcome(part.data, executed_skill_script(part.data))
+    if outcome != "cancelled" and str(state.get("status") or "").lower() == "error":
+        return "error"
+    return outcome
+
+
 def observe_tools(
     snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
     skill_origins_by_session: Mapping[str, Mapping[str, str]] | None = None,
     include_invocations: bool = False,
+    session_wide: bool = False,
 ) -> ToolObservation:
     """Count physical calls and evidenced outcomes within the canonical prompt scope."""
     parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
@@ -164,24 +189,22 @@ def observe_tools(
     running_parts = []
     failed_parts = []
     order = 0
-    messages = _prompt_messages(snapshot, parents, is_compaction)
+    messages = session_messages(snapshot) if session_wide else _prompt_messages(snapshot, parents, is_compaction)
     skills: dict[str, tuple[int, int]] = {}
     skill_failures: dict[str, int] = {}
     origins_by_session = skill_origins_by_session or {}
     physical = _physical_tools(messages)
     for part in physical:
         start = _part_start(part)
-        if start <= 0:
+        if start <= 0 and not session_wide:
             continue
         tool_count += 1
-        name = _tool_name(part).strip() or "unknown"
+        name = classified_name(part, origins_by_session)
         skill_call = is_skill_tool(part.data)
         skill_id = skill_tool_id(part.data) if skill_call else ""
         origin = verified_skill_origin(
             origins_by_session.get(part.session_id, {}).get(skill_id)
         ) if skill_id else ""
-        if skill_call:
-            name = f"{origin} skill" if origin else "skill"
         counts[name] = counts.get(name, 0) + 1
         state = _tool_state(part)
         status = str(state.get("status") or "").lower()
@@ -189,9 +212,7 @@ def observe_tools(
         if skill and origin == "custom":
             skills[skill] = max(skills.get(skill, (0, 0)), (start, tool_count))
         script = executed_skill_script(part.data)
-        outcome = structured_outcome(part.data, script) if not _is_cancellation(state) else "cancelled"
-        if outcome != "cancelled" and status == "error":
-            outcome = "error"
+        outcome = tool_outcome(part)
         if outcome in {"error", "cancelled"}:
             key = (name, "failed" if outcome == "error" else "cancelled")
             outcomes[key] = outcomes.get(key, 0) + 1
@@ -243,3 +264,11 @@ def observe_tools(
     active = next((content for status, content in todos if status in {"in_progress", "in-progress"}), "")
     active = " ".join(active.replace("\t", " ").replace("\r", " ").replace("\n", " ").split())
     return ToolObservation(tool_count, completed, len(todos), active, **summary)
+
+
+def session_messages(snapshot):
+    """Whole root history plus only causally qualified recursive child windows."""
+    roots = [message for message in snapshot.messages
+             if message.session_id == snapshot.root.session_id and message.role is MessageRole.ASSISTANT]
+    children = ChildLinkIndex(snapshot)
+    return [*roots, *children.messages(children.scopes(roots))]

@@ -74,6 +74,15 @@ async function main() {
              personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify(evidence)); return;
           }
+           if (mode === '--detail-activity') {
+             const details = await require('../fixtures/session_activity_browser.cjs')({evaluate, until, fixture,
+               command:(method, params) => command(method, params, sessionId)});
+             checks.push(...details.checks); layouts.push(...details.layouts);
+             assert.deepEqual(errors, []);
+             evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+               personal_profile:false,desktop_effects:false};
+             console.log(JSON.stringify(evidence)); return;
+           }
            if (mode === '--detail-first-load') {
              const details = await require('../fixtures/session_loading_browser.cjs').firstLoad({evaluate,until,fixture});
              checks.push(...details.checks);

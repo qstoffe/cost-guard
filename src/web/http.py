@@ -461,6 +461,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                         value["mode"] not in ("snapshot", "live")):
                     raise ValueError()
                 result = {"token": owner.open(value["session_id"], value["mode"])}
+            elif action == "activity" and set(value) == {"action", "token", "revision", "offset"}:
+                if (not isinstance(value["token"], str) or not isinstance(value["revision"], str)
+                        or len(value["revision"]) > 64 or type(value["offset"]) is not int
+                        or not 0 <= value["offset"] <= 2**53):
+                    raise ValueError()
+                result = owner.activity_page(value["token"], value["revision"], value["offset"])
             elif action in ("page", "begin", "chunk", "freeze", "close", "retry") and isinstance(value.get("token"), str):
                 if action in ("freeze", "close", "retry") and set(value) == {"action", "token"}:
                     if action == "freeze":

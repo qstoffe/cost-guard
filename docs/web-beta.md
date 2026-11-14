@@ -903,6 +903,21 @@ the old host and requires relaunch; ordinary hot Web preferences remain applicab
 
 Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 
+Below the complete history, independent **Tool Calls** and **Skills** sections start
+collapsed. Tool Calls covers all recorded root work, compaction and causally linked
+recursive child work in the same pinned snapshot, counting each physical call once.
+The table's **Calls** still means model requests, not tool invocations. Red failed
+and cancelled groups expand into distinct calls, then bounded sanitized invocation
+arguments, recorded status/outcome and a fixed safe reason category, or **Failure
+reason unavailable**. Arbitrary output, file contents and raw exception text are
+never displayed. **Load more failed / cancelled calls** exposes another 25 records
+with a remaining count; aggregate counts are never limited to those first records.
+Partial recorded history, unverified skill origins and unavailable call evidence
+are explicit. Skills lists only confirmed custom skills, uniquely across prompts.
+Live updates preserve surviving native controls, focus and selection; changing
+sessions or invalidating the source clears private invocation text and open state.
+Expansion reads only already-acquired detached values, never executes a source tool.
+
 Most finite report tables show 50 rows/page from one immutable API result. Sessions instead reads the host-owned catalog without submitting finite report jobs, with **25 rows per page**. Its exact eight columns are **Last activity | Session name | Model | Effort | CCost | Prompts | Duration | CTX**. Last activity is **YYYY-MM-DD HH:mm**, using the configured display timezone/DST, never AM/PM; sorting retains raw timestamps. Names link to full, unfiltered detail. Confirmed current running work prefixes **[RUNNING]** and colors every row value yellow; stale/failed evidence cannot assert running. Only names expand/ellipsize. Previous/Next are disabled-aware buttons around a centered range/page label; narrow layouts place the label above them.
 
 **Today | 7 days | 30 days | This month | All time** above the grid selects the server population **before** expensive per-root history/metric work. Sessions defaults to Today, independently of AI Stats' 30 days. Membership uses the last source-backed activity of the entire root/child tree. Today/This month start at configured-zone local midnight/month start; 7/30 days are exact trailing 24-hour multiples. Finite periods exclude missing/invalid/future activity rather than dating it today. All time explicitly restores historical membership and its higher indexing cost. Switching resets the offset, retains sort intent and never displays old-period rows under the new selection. URLs carry `period`, sort/direction and older-page offset/epoch. Older pages pin their issued window; new first pages reconcile rollover and new activity.

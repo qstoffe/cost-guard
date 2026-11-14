@@ -140,6 +140,19 @@ def _failure_reason(part):
     return next(iter(reasons)) if len(reasons) == 1 else "Failure reason unavailable"
 
 
+def terminal_invocation(name, outcome, part, origin):
+    """Historical terminal detail uses exactly the Watch privacy boundary, without its card cap."""
+    source = part.provenance
+    if (source.source_type, source.source_generation, source.source_instance) != (
+            origin.source_type, origin.source_generation, origin.source_instance):
+        return None
+    detail = invocation(part)
+    return dict(tool_name=name, outcome=outcome,
+        reason=_failure_reason(part) if outcome == "failed" else "Recorded cancellation / interruption",
+        **{field: getattr(detail, field) for field in
+           ("identity", "revision", "text", "qualification", "started_at_ms")})
+
+
 def background_invocations(snapshot, messages, parts, *, other_count=0):
     """Separate live jobs using prompt-qualified origins, never kind/time guesses."""
     owners = {(message.session_id, message.message_id) for message in messages}

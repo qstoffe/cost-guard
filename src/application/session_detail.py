@@ -10,10 +10,10 @@ import time
 from uuid import uuid4
 
 from src.pricing.base import PricingUnavailableError
-from src.reports.session_history import SessionHistory
 from src.sources.errors import SourceError, SessionExportError
 
 from .projection import identity, project
+from .session_activity import ActivityHistory, activity_page, activity_summary
 
 
 class SessionDetails:
@@ -38,7 +38,7 @@ class SessionDetails:
                     del self.histories[victim]
             if len(self.leases) >= 32 or (session_id not in self.histories and len(self.histories) >= 16):
                 raise RuntimeError("detail_busy")
-            entry = self.histories.setdefault(session_id, dict(history=SessionHistory(), result=None,
+            entry = self.histories.setdefault(session_id, dict(history=ActivityHistory(), result=None, activity=None,
                 revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
                 row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
                 acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
@@ -136,6 +136,13 @@ class SessionDetails:
             reason = outcome.get('error')
             status = entry['acquisition']
             if reason:
+                if reason in {"source_identity_changed", "session_missing"}:
+                    entry["activity"] = None
+                    for lease in self.leases.values():
+                        if lease["session_id"] == key:
+                            for name in ("reading", "frozen"):
+                                if lease.get(name) is not None:
+                                    lease[name] = {**lease[name], "activity": None}
                 status['reason'] = reason
                 status['phase'] = 'failed' if outcome.get('terminal') or status['attempts'] >= 3 else 'retrying'
                 entry['due'] = self.clock() + 5 * status['attempts']
@@ -207,7 +214,18 @@ class SessionDetails:
     @staticmethod
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
-                                              "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit")}
+                                              "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit", "activity")}
+
+    def activity_page(self, token, revision, offset):
+        with self.lock:
+            lease = self.leases.get(token)
+            if lease is None:
+                raise KeyError("detail_expired")
+            capture = lease.get("reading") or lease["frozen"]
+            if capture is None or capture["revision"] != revision or capture["activity"] is None:
+                raise KeyError("detail_expired")
+            lease["touched"] = self.clock()
+            return dict(revision=revision, **activity_page(capture["activity"], offset))
 
     def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False):
         with self.lock:
@@ -249,6 +267,7 @@ class SessionDetails:
             row["last_observed_at_ms"] = capture["row_observations"].get(row["event_id"])
             row["retained"] = row["event_id"] in capture["omitted_ids"]
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
+            **(dict(activity=activity_summary(capture["activity"])) if not chunk else {}),
             offset=offset, total=len(rows), pending=False, mode=lease["mode"],
             **(dict(acquisition=acquisition) if acquisition['phase'] == 'failed' and lease['frozen'] is None else {}),
             export_available=bool(entry.get('export_identity')),
@@ -279,6 +298,7 @@ def acquire_detail(service, history, key, *, unavailable=False):
         return dict(history=history, report=report, state=state, changed=report is not previous,
             metadata=dict(timezone_id=service.timezone_id,
                 ccost_display_unit=service.config.get('ccostDisplayUnit', 'credits'),
+                activity=history.activity_for(source, report.prompt_blocks[0].rows),
                 observed_at_ms=service.now_ms, row_observations=history.row_observations,
                 omitted_ids=history.omitted_ids, export_identity=export_identity))
     except SourceError as error:
