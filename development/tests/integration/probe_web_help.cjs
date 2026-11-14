@@ -120,7 +120,7 @@ async function main() {
             return JSON.parse((await lines.next()).value);};
           if(replay==='mouse') {
             phase='real-stationary-hover';
-            await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
+            mini=await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
             await fixture('running');await until(owner,`liveValue.view.active_cards.length===2`);
             phase='rendered-cost-values';
             await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});

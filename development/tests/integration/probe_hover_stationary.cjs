@@ -147,4 +147,14 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
   await until(owner,'!!miniWatch.view && miniWatch.window.document!==retiredHelpDocument');
   assert.equal(await evaluate(owner,`retiredHelpDocument.getElementById('context-help')?.hidden`),true);
   checks.push('Actual PiP 0/1/3/5-row narrow native-125% matrix, stable native size through SSE, and close/reopen retires old help document');
+  const targets=await command('Target.getTargets');
+  for(const target of targets.targetInfos.filter(value=>value.type==='page')) {
+    const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
+    if(await evaluate(attached.sessionId,`!!document.querySelector('.mini-watch')`)) {
+      await command('Runtime.enable',{},attached.sessionId);
+      await command('Page.enable',{},attached.sessionId);
+      return attached.sessionId;
+    }
+  }
+  assert.fail('Reopened native PiP target must be attached before later input checks');
 };
