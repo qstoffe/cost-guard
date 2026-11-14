@@ -27,6 +27,7 @@ function lifecycle(context, input) {
   context.parent = new Node('div');
   context.state = {connection: 'Live connected.'};
   let frozenDuration;
+  const runningFrames = input.runningFrames || 1;
   for (const [index, view] of input.lifecycle.entries()) {
     context.example = {state: 'running', view};
     vm.runInContext('ReportView.renderLive(parent, example, state)', context);
@@ -34,21 +35,22 @@ function lifecycle(context, input) {
     const card = [...watch.cards.values()].find(card => card.value.session_id === input.stopped);
     assert.ok(card);
     const row = card.body.children[0];
-    if (!index) {
+    if (index < runningFrames) {
       assert.equal(row.className, 'watch-running');
       assert.match(row['aria-label'], /Running/);
+      if (index && input.runningFrames) assert.match(row['aria-label'], /subagent activity/);
     } else {
       assert.notEqual(row.className, 'watch-running');
       assert.ok(!row['aria-label'].includes('Running'));
-      if (index === 1) {
+      if (index === runningFrames) {
         assert.equal(card.running.hidden, true);
         assert.equal(card.background.hidden, true);
       } else assert.equal(card.activity.hidden, true);
       const duration = row.children[1].textContent;
-      if (index === 1) frozenDuration = duration;
+      if (index === runningFrames) frozenDuration = duration;
       else assert.equal(duration, frozenDuration);
-      assert.equal(watch.active.children.includes(card.root), index === 1);
-      assert.equal(watch.history.children.includes(card.root), index === 2);
+      assert.equal(watch.active.children.includes(card.root), index === runningFrames);
+      assert.equal(watch.history.children.includes(card.root), index > runningFrames);
     }
   }
   context.state = {connection: 'Live connected.'};

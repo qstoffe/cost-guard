@@ -17,7 +17,7 @@ from .models import SessionUsageRow
 from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 
-ALGORITHM = "session-summary-7"
+ALGORITHM = "session-summary-8"
 NAMESPACE = "session-summary"
 
 

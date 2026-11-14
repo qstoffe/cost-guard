@@ -447,7 +447,7 @@ const MiniWatch = (() => {
           row = this.sessionRow(); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
-        const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
+        const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
         const summaryContext = card.session_summary?.context;

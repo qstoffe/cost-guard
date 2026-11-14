@@ -17,7 +17,7 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 from .model_identity import encode_model, decode_model
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-21-recursive-coverage"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-22-owned-child-lifecycle"
 _CACHE_NAMESPACE = "derived-analysis"
 
 

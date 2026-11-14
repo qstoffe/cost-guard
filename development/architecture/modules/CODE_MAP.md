@@ -21,6 +21,21 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000708: `analysis/child_links.py` separates delegation launch windows from
+already-bound crossing/late child attempts; `child_activity.py` qualifies descendant
+activity independently of the parent outcome. `causal.py` keeps cancellation,
+failure and parent terminal time separate from tree RUNNING. Duration accepts
+unpriced/pre-response child terminal proof. Shared report/Live DTOs reach Full
+Watch, Mini/PiP, Sessions/detail and CLI; analysis/scalar algorithms are 22/8.
+Full Watch retains all focal prompts; Mini keeps its existing per-session choice.
+Plural invocation lists omit redundant legacy singular DTOs for multi-call cards,
+retaining the existing 100-card event/replay and text budgets. Coverage:
+`test_stopped_parent_children.py`, attribution/abort/terminal/duration/coverage,
+card/detail/catalog and invocation-budget suites; `serve_watch_summary.py
+--stopped-parent` + `probe_watch_tool_outcomes.cjs --stopped-parent` drive the
+native-source synthetic timeline through actual Full DOM/Document PiP.
+[Evidence and clarification](../../journal/stopped-parent-children.md).
+
 FR000707: `numbers.py` and application display/help producers format unavailable
 CCost amounts as selected-unit zero, leaving raw unknowns intact. `render.js::CostDisplay`
 owns bounded view-only same-scope observations; Watch/Mini, catalog/detail, account,

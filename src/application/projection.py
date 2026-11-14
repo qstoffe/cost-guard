@@ -63,7 +63,8 @@ def prompt(value, *, details=False):
         breakdown_known has_cost_breakdown main_estimated subagent_estimated has_additional_model
         abort_at_ms running_cost_warning ictx_price_threshold billed_cost completed_successfully execution_unverified
         next_context_warning_severity next_context_cost_multiplier background_kinds background_started_ms
-        background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort recorded_selections""")
+        background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort recorded_selections
+        subagent_active parent_outcome parent_terminal_time_ms""")
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),
                                       ("incoming_context_ccost_usage_missing", not value.incoming_context_ccost_known),
                                       ("extra_ccost_usage_missing", not value.extra_ccost_known),

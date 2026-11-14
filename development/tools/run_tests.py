@@ -127,6 +127,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_connectivity_reliability.py",
     "test_watch_startup_recovery.py",
     "test_opencode_aborts.py",
+    "test_stopped_parent_children.py",
     "test_watch_stop_reasons.py",
     "test_live_stop_reasons.py",
     "test_opencode_terminal.py",

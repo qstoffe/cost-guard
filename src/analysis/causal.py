@@ -16,7 +16,8 @@ from .billing import CostEstimator, ProviderScope, measure_prompt_billing
 from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
 from .prompt_index import PromptIndex, prompt_owners
-from .child_links import ChildLinkIndex, OPEN_END, part_time as _part_time, scoped_entries
+from .child_links import ChildLinkIndex, part_time as _part_time, scoped_entries
+from .child_activity import descendant_activity
 from .coverage import child_coverage, coverage_complete, unrepresented_usage
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
@@ -220,7 +221,7 @@ def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference, timel
 
 
 def _outstanding_background(
-    snapshot: SessionSnapshot, child_ids: set[str], *, superseded: bool,
+    snapshot: SessionSnapshot, messages: Sequence[NormalizedMessage], *, superseded: bool,
 ) -> tuple[BackgroundActivity, ...]:
     """Running background work the current prompt is still waiting on.
 
@@ -230,8 +231,9 @@ def _outstanding_background(
     """
     if superseded:
         return ()
-    sessions = {snapshot.root.session_id} | child_ids
-    return tuple(item for item in snapshot.background if item.running and item.session_id in sessions)
+    owners = {message.message_id for message in messages}
+    return tuple(item for item in snapshot.background if item.running and (
+        item.session_id == snapshot.root.session_id or item.owner_message_id in owners))
 
 
 def _is_aborted_message(message: NormalizedMessage) -> bool:
@@ -277,7 +279,6 @@ def _prompt_has_active_work(
     messages: Sequence[NormalizedMessage],
     *,
     continuation_superseded: bool,
-    live_child_ids: set[str],
 ) -> bool:
     if continuation_superseded:
         return False
@@ -289,7 +290,7 @@ def _prompt_has_active_work(
         part.created_at_ms, part.updated_at_ms, _part_time(part)[0]) > terminal_at)
         for message in messages for part in message.parts):
         return True
-    return any(session.session_id in live_child_ids and session.active is True for session in snapshot.sessions)
+    return False
 
 
 def _prompt_activity_end(
@@ -408,10 +409,10 @@ def build_prompt_record(
     compacting = timeline.compacting
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
     foreground_work = _prompt_has_active_work(
-        snapshot, (*attempt_messages, *child_messages), continuation_superseded=superseded,
-        live_child_ids={scope.session_id for scope in scopes if scope.end_ms == OPEN_END},
+        snapshot, attempt_messages, continuation_superseded=superseded,
     )
-    background = _outstanding_background(snapshot, child_ids, superseded=superseded)
+    child_active, child_unverified = descendant_activity(snapshot, timeline.children, scopes)
+    background = _outstanding_background(snapshot, child_messages, superseded=superseded)
 
     def running(active_work: bool) -> bool:
         return (not explicitly_aborted or bool(evidence and active_work)) and not bool(
@@ -420,23 +421,29 @@ def build_prompt_record(
             attempt_messages, now_ms=now_ms, continuation_superseded=superseded, active_work=active_work,
         )
 
-    in_progress = running(foreground_work or bool(background))
+    in_progress = child_active or running(foreground_work or bool(background))
     # A negative native observation is process-local, not a persisted end or
     # proof that another server is executing this unfinished request. Do not
     # turn that contradiction into either a live clock or a successful result.
-    unverified = bool(in_progress and snapshot.complete and snapshot.root.active is False
+    unverified = not child_active and (child_unverified or bool(in_progress and snapshot.complete and snapshot.root.active is False
         and not superseded and not foreground_work and not background and latest
         and latest.role is MessageRole.ASSISTANT and latest.completed_at_ms is None
-        and not latest.termination and not latest.error_name)
+        and not latest.termination and not latest.error_name))
     in_progress = in_progress and not unverified
     background_only = in_progress and not running(foreground_work)
     background_fields = dict(
         execution_unverified=unverified,
+        subagent_active=child_active,
+        parent_outcome=(evidence.outcome.value if evidence else "cancellation" if explicitly_aborted
+                        else "failure" if latest and latest.error_name else "success" if latest
+                        and latest.completed_at_ms is not None and latest.finish_reason not in {None, "tool-calls"} else ""),
+        parent_terminal_time_ms=(evidence.completed_at_ms if evidence else
+                                (latest.completed_at_ms or 0) if latest else 0),
         background_kinds=tuple(item.kind for item in background) if in_progress else (),
         background_started_ms=min((item.started_at_ms for item in background), default=0) if in_progress else 0,
         background_only=background_only,
         abort_reason=((evidence.abort_reason if evidence else "") or (latest.abort_reason if latest else ""))
-                     if explicitly_aborted and not in_progress else "",
+                     if explicitly_aborted else "",
         ended_after_tool_calls=bool(not in_progress and evidence and evidence.outcome is TerminalOutcome.SUCCESS
                                     and latest and latest.finish_reason == "tool-calls"),
     )
@@ -458,10 +465,10 @@ def build_prompt_record(
         entry.tokens.total > 0 or entry.reported_cost > 0 for entry in root_entries
     )
     evidence = evidence if not in_progress else None
-    successful_final = bool(evidence.outcome is TerminalOutcome.SUCCESS if evidence else
+    successful_final = not in_progress and not unverified and bool(evidence.outcome is TerminalOutcome.SUCCESS if evidence else
                             latest and latest.completed_at_ms is not None
                             and latest.finish_reason not in {None, "tool-calls"} and not latest.error_name)
-    terminal_error = bool(evidence.outcome is TerminalOutcome.FAILURE if evidence else latest and latest.error_name)
+    terminal_error = not in_progress and bool(evidence.outcome is TerminalOutcome.FAILURE if evidence else latest and latest.error_name)
     # Usage alone cannot override an explicit non-abort terminal failure.
     aborted = (explicitly_aborted and not in_progress) or (zero_usage_abort and not successful_final and not terminal_error)
     watch_error = not aborted and terminal_error
@@ -488,7 +495,7 @@ def build_prompt_record(
             prompt_number=ref.prompt_number, prompt_kind=ref.prompt_kind, prompt_text=ref.prompt_text,
             session_title=snapshot.root.title, main_model_id=main_model, main_provider_id=main_provider,
             main_variant=ref.variant, first_request_time_ms=0, last_request_time_ms=ref.prompt_time_ms,
-            terminal_time_ms=0 if unverified else abort_time or terminal_time or ref.prompt_time_ms, entries=(), root_entry_count=0,
+            terminal_time_ms=0 if unverified else terminal_time, entries=(), root_entry_count=0,
             cost=0, main_cost=0, subagent_cost=0, breakdown_known=True, has_cost_breakdown=False,
             main_estimated=False, subagent_estimated=False, fallback_requests=0,
             estimated_fallback_requests=0, unresolved_fallback_requests=0, input_tokens=0,
@@ -499,8 +506,8 @@ def build_prompt_record(
             last_root_entry=None, aborted=aborted, watch_error=watch_error, abort_time_ms=abort_time,
             in_progress=in_progress,
             completed_successfully=successful_final,
-            duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
-            execution_duration_ms=None if unverified else prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
+            duration_ms=max(0, terminal_time - ref.prompt_time_ms) if not in_progress and not unverified else 0,
+            execution_duration_ms=None if unverified else prompt_duration(ref, (*attempt_messages, *child_messages), latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
             linked_session_ids=tuple(sorted(child_ids)),
             **background_fields,
@@ -558,7 +565,7 @@ def build_prompt_record(
         output_tokens=output_total, cache_read_tokens=billed.cache_read_tokens,
         cache_write_tokens=billed.cache_write_tokens, input_context_tokens=meaningful_first.request_input_approx,
         total_token_volume=total_volume, model_costs=billed.model_costs, duration_ms=duration,
-        execution_duration_ms=None if unverified else prompt_duration(ref, attempt_messages, latest, entries, timeline.messages,
+        execution_duration_ms=None if unverified else prompt_duration(ref, (*attempt_messages, *child_messages), latest, entries, timeline.messages,
                                               in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,

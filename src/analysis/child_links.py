@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 import re
 
-from src.domain import MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
+from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .billing import ProviderScope, provider_matches
 from .models import TraceEntry
@@ -61,6 +61,9 @@ class ChildScope:
     start_ms: int
     end_ms: int
     background: bool = False
+    continuing_ids: tuple[str, ...] = ()
+    invocation_end_ms: int = OPEN_END
+    owner_id: str = ""
 
 
 def _candidate(part, message, sessions):
@@ -87,8 +90,14 @@ class ChildLinkIndex:
         self.messages_by_session = defaultdict(list)
         self.links_by_message = defaultdict(list)
         sessions = {session.session_id: session for session in snapshot.sessions}
+        turns = defaultdict(list)
+        for event in snapshot.events:
+            if event.kind in {EventKind.USER_PROMPT, EventKind.SUBTASK, EventKind.COMPACTION}:
+                turns[event.session_id].append(event)
         calls = {}
         for message in snapshot.messages:
+            if message.role is MessageRole.USER and message.termination is not None:
+                self.messages_by_session[message.session_id].append(message)
             if message.role is not MessageRole.ASSISTANT:
                 continue
             self.messages_by_session[message.session_id].append(message)
@@ -113,19 +122,56 @@ class ChildLinkIndex:
             # A later invocation of the same child is a new causal window, even
             # when an earlier background launch has no terminal timestamp.
             end = min((at for at in starts[scope.session_id] if at > scope.start_ms), default=OPEN_END)
-            self.links_by_message[mid].append(replace(scope, end_ms=min(end, scope.end_ms)))
+            owned_turns = sorted((item for item in turns[scope.session_id]
+                if scope.start_ms <= item.created_at_ms < min(end, scope.end_ms)),
+                key=lambda item: (item.created_at_ms, item.event_id))
+            if not owned_turns and scope.start_ms <= sessions[scope.session_id].created_at_ms < scope.end_ms:
+                # A freshly created child may enqueue its first user turn only
+                # after the asynchronous launch acknowledgement has returned.
+                owned_turns = sorted((item for item in turns[scope.session_id]
+                    if scope.start_ms <= item.created_at_ms < end),
+                    key=lambda item: (item.created_at_ms, item.event_id))[:1]
+            if owned_turns:
+                # Independent child prompts close the live ownership window too.
+                end = min(end, min((item.created_at_ms for item in turns[scope.session_id]
+                    if item.created_at_ms >= scope.end_ms and item.created_at_ms > owned_turns[0].created_at_ms),
+                    default=OPEN_END))
+            scope = replace(scope, end_ms=min(end, scope.end_ms), invocation_end_ms=end,
+                owner_id=owned_turns[0].event_id if owned_turns else "")
+            # A tool's return/abort ends its launch window, not an assistant
+            # already executing inside it. Bind that physical attempt before
+            # extending, so an unrelated later child request stays unallocated.
+            messages = self.messages_by_session.get(scope.session_id, ())
+            crossing = {message.parent_message_id for message in messages
+                if scope.start_ms <= message.created_at_ms < scope.end_ms
+                and message.parent_message_id
+                and (message.completed_at_ms is None or message.completed_at_ms > scope.end_ms
+                     or message.finish_reason == "tool-calls")}
+            if owned_turns:
+                owner = owned_turns[0].event_id
+                if not any(message.parent_message_id == owner and message.created_at_ms < scope.end_ms
+                           for message in messages):
+                    crossing.add(owner)  # Launch acknowledged before the first assistant.
+            continuing = tuple(message.message_id for message in messages
+                if (message.parent_message_id in crossing or
+                    message.role is MessageRole.USER and message.termination is not None
+                    and owned_turns and message.message_id == owned_turns[0].event_id)
+                and scope.start_ms <= message.created_at_ms < end)
+            self.links_by_message[mid].append(replace(scope, continuing_ids=continuing))
 
     def messages(self, scopes: Sequence[ChildScope]) -> list[NormalizedMessage]:
         result = {}
         for scope in scopes:
             for message in self.messages_by_session.get(scope.session_id, ()):
-                if (scope.start_ms <= message.created_at_ms < scope.end_ms
-                        and (message.completed_at_ms is None or message.completed_at_ms <= scope.end_ms)):
+                continuing = message.message_id in scope.continuing_ids
+                upper = scope.invocation_end_ms if continuing else scope.end_ms
+                if (scope.start_ms <= message.created_at_ms < upper
+                        and (continuing or message.completed_at_ms is None or message.completed_at_ms <= upper)):
                     key = (message.session_id, message.message_id)
                     parts = {part.part_id: part for part in result[key].parts} if key in result else {}
                     for part in message.parts:
                         start, end = part_time(part)
-                        if scope.start_ms <= start < scope.end_ms and (not end or end <= scope.end_ms):
+                        if scope.start_ms <= start < upper and (continuing or not end or end <= upper):
                             parts[part.part_id] = part
                     result[key] = replace(message, parts=tuple(parts.values()))
         return list(result.values())
@@ -142,7 +188,9 @@ class ChildLinkIndex:
                 if scope.start_ms < lower or scope.start_ms >= upper or scope.end_ms <= scope.start_ms or scope in found:
                     continue
                 found.add(scope)
-                pending.extend((child, scope.start_ms, scope.end_ms) for child in self.messages((scope,)))
+                pending.extend((child, scope.start_ms,
+                    scope.invocation_end_ms if child.message_id in scope.continuing_ids else scope.end_ms)
+                    for child in self.messages((scope,)))
         return tuple(sorted(found, key=lambda scope: (scope.start_ms, scope.session_id, scope.end_ms)))
 
 
@@ -158,7 +206,8 @@ def scoped_entries(snapshot: SessionSnapshot, entries: Sequence[TraceEntry], sco
             continue
         invocation = snapshot.invocations[entry.sort_order]
         if any(invocation.created_at_ms >= scope.start_ms
-               and scope.start_ms <= entry.completed_at_ms <= scope.end_ms
+                and (entry.message_id in scope.continuing_ids and invocation.created_at_ms < scope.invocation_end_ms
+                     or scope.start_ms <= entry.completed_at_ms <= scope.end_ms)
                for scope in by_session.get(entry.session_id, ())):
             identity = (entry.source_instance, entry.session_id, invocation.invocation_id)
             result[identity] = entry

@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.52 - 2026-11-14
+
+- A cancelled parent prompt remains RUNNING while a positively observed, causally linked child or nested descendant executes. Shared analysis preserves the parent's real outcome/reason/time separately and returns to Aborted/Error after the last owned activity ends, without relabeling child success as parent success.
+- Closed delegation launch windows retain their already-bound executing requests and late usage; child reuse, unrelated later turns, process-local uncertainty and authoritative terminal evidence remain distinct. Full Watch retains individual prompt cards; Mini/PiP keeps its existing per-session representative. Sessions and CLI use the same lifecycle.
+- Analysis/scalar summary caches rebuild lazily. Multi-call Web exports omit redundant legacy singular invocation detail already present in the plural lists, preserving the existing 100-card event/replay caps and input budget. No OpenCode interruption, restart, quota or billing changes.
+
 ## v81.51 - 2026-11-14
 
 - Unavailable reference CCost amounts display numeric zero in the selected Credits/USD unit throughout Web, Mini/PiP and CLI, including cost help, categories and initial AI Stats cost cards. Unrelated unknown metrics, native billing and quota estimates keep their existing meanings.

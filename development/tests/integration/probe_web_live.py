@@ -435,21 +435,8 @@ def main():
             while time.monotonic() < deadline:
                 state, _ = get('/api/live', cookie=cookie)
                 view = (state['values'].get('live') or {}).get('view') or {}
-                for card in view.get('active_cards', []):
-                    for row in card['rows']:
-                        activity = row.get('tool') or {}
-                        for key in ('running_invocation', 'background_invocation'):
-                            detail = activity.get(key)
-                            if detail is None:
-                                continue
-                            assert card['state'] == 'observed' and row['prompt']['in_progress']
-                            assert not row['prompt']['execution_unverified']
-                            assert set(detail) == {'identity', 'revision', 'text', 'qualification'}
-                            assert len(detail['identity']) == len(detail['revision']) == 64
-                            assert len(json.dumps(detail)) < 10_000
-                            assert isinstance(detail['qualification'], str)
-                            assert detail['text'] or detail['qualification'], 'input or factual absence reason'
-                            observed += 1
+                from development.tests.integration.invocation_observations import observe_invocations
+                observed = observe_invocations(view)
                 if observed:
                     break
                 time.sleep(1)
