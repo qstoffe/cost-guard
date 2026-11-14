@@ -1,5 +1,18 @@
 // Real elapsed time and native CDP pointer input; no clock/selector emulation.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises');
+function stationaryScenarios(mini,owner,event) {
+  const scenarios=[
+    [mini,'.mini-accounts .help-value'],[mini,'.mini-activity'],
+    [mini,'td:nth-child(3) .mini-cost-value'],[mini,'td:nth-child(4) .mini-cost-value'],
+    [mini,'.mini-context-exceeded'],[mini,'.mini-summary'],
+    [owner,'.watch-subscription .metric-value > .help-value'],
+    [owner,'.watch-active tbody td:first-child .help-value'],
+    [owner,'.watch-active tbody td:nth-child(6) .help-value'],
+    [owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
+    [owner,'.watch-active .watch-session-summary > div:first-child .help-value'],
+    [owner,'.watch-active th:nth-child(6) button']];
+  return event==='workflow_dispatch'?scenarios:[scenarios[0],scenarios[6]];
+}
 module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,fixture})=>{
   const mouse=(id,x,y)=>command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},id);
   const open=async(id,selector)=>{
@@ -58,16 +71,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     a.primary.quota.quota_display.used.account_percent=a.primary.quota.quota_display.used.percent;
     current.watch.update(liveValue);miniWatch.update(liveValue);
   },3000)`);
-  const scenarios=[
-    [mini,'.mini-accounts .help-value'],[mini,'.mini-activity'],
-    [mini,'td:nth-child(3) .mini-cost-value'],[mini,'td:nth-child(4) .mini-cost-value'],
-    [mini,'.mini-context-exceeded'],[mini,'.mini-summary'],
-    [owner,'.watch-subscription .metric-value > .help-value'],
-    [owner,'.watch-active tbody td:first-child .help-value'],
-    [owner,'.watch-active tbody td:nth-child(6) .help-value'],
-    [owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
-    [owner,'.watch-active .watch-session-summary > div:first-child .help-value'],
-    [owner,'.watch-active th:nth-child(6) button']];
+  const scenarios=stationaryScenarios(mini,owner,process.env.GITHUB_EVENT_NAME);
   try {
     for(const [index,[id,selector]] of scenarios.entries()) {
       const point=await open(id,selector);
@@ -114,7 +118,8 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     await evaluate(owner,'clearInterval(stationaryRefresh)');
     const holds=layouts.filter(value=>value.case==='stationary-61s');
     console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
-      outcome:holds.length===12?'PASS':'PARTIAL',holds:holds.map(value=>({
+       outcome:holds.length===scenarios.length?'PASS':'PARTIAL',expected:scenarios.length,
+       selection:scenarios.length===12?'full':'representative',holds:holds.map(value=>({
         document:value.document,selector:value.selector,elapsed:Math.round(value.elapsed),
         samples:value.samples.length,pointerEvents:value.events,
         triggerSamples:value.samples.filter(sample=>sample.triggerHovered).length,
@@ -134,7 +139,9 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     const image=await command('Page.captureScreenshot',{format:'png'},mini);
     await fs.writeFile(output.replace(/\.json$/,`-${theme}-${scheme}.png`),Buffer.from(image.data,'base64'));
   }
-  checks.push('GREEN: twelve actual 61-second stationary native hovers across PiP and Full Watch, with 3-second in-place refresh and real normal exits');
+  checks.push(`GREEN: ${scenarios.length} actual 61-second stationary native hovers across PiP and Full Watch, with 3-second in-place refresh and real normal exits`);
+  checks.push(scenarios.length===12?'Full stationary matrix executed':
+    'NOT RUN: ten additional stationary target holds; available on manual Full');
   await mouse(mini,1,1);
   const size=await evaluate(owner,'[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
   for(const count of [0,1,3,5]) {
@@ -165,3 +172,4 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
   }
   assert.fail('Reopened native PiP target must be attached before later input checks');
 };
+module.exports.stationaryScenarios=stationaryScenarios;
