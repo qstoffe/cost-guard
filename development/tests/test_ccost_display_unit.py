@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class CCostDisplayUnitTests(unittest.TestCase):
     def test_usd_goldens_preserve_exact_raw_values_and_unknowns(self):
-        cases = [(None, "N/A"), ("0", "$0.00"), ("0.000001", "$0.00"),
+        cases = [(None, "$0.00"), ("0", "$0.00"), ("0.000001", "$0.00"),
                  ("0.5", "$0.01"), ("1", "$0.01"), ("395", "$3.95"),
                  ("10742", "$107.42"), ("-395", "$-3.95"), ("-0.01", "$0.00"),
                  ("123456789012345678901234567890", "$1234567890123456789012345678.90")]
@@ -44,7 +44,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
         partial = with_display(record(ccost=Decimal("395"), unresolved_cost=True),
                                ccost_display_unit="usd").to_json()
         self.assertEqual("$3.95", partial["display"]["ccost"])
-        self.assertEqual("N/A", ccost_amount(Decimal(0), unresolved=True, unit="usd"))
+        self.assertEqual("$0.00", ccost_amount(Decimal(0), unresolved=True, unit="usd"))
 
     def test_render_scope_is_nested_exception_safe_and_thread_local(self):
         with ccost_display("usd"):
@@ -167,7 +167,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
         WatchRenderer({"ccostDisplayUnit": "usd"}, stream=stream, interactive=False).render(
             WatchProjection("Watch", "V2", (), now_ms=2000))
         self.assertIn("Watch: $0.00", stream.getvalue())
-        self.assertEqual("N/A", ccost_amount(None, unit="usd"))
+        self.assertEqual("$0.00", ccost_amount(None, unit="usd"))
         self.assertEqual("0", ccost_amount(Decimal(0)))
 
 

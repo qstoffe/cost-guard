@@ -286,7 +286,7 @@ class ReportTokenMixTests(unittest.TestCase):
 class TokenMixPresentationTests(unittest.TestCase):
     def test_compact_row_no_bar_and_labelled_categories(self):
         mix = token_mix((TokenUsage(input=9, cache_read=85, cache_write=1, output=5),))
-        expected = "Token Mix % · 12 prompts · Input: 9%   Cached input: 85%   Cache write: 1%   Output: 5%"
+        expected = "Token Mix % · 12 prompts · Input: 9% (0)   Cached input: 85% (0)   Cache write: 1% (0)   Output: 5% (0)"
         self.assertEqual(expected, token_mix_line("12 prompts", mix))
         self.assertNotIn("█", expected)
 

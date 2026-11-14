@@ -45,13 +45,13 @@ def _capacity_amount(value: Decimal, *, rounding: str) -> str:
 
 
 def ccost_amount(value: Decimal | None, *, unresolved: bool = False, unit: str | None = None) -> str:
-    """Plain reference amount; unresolved zero stays unavailable, not invented free work.
+    """Plain reference amount, with a display-only zero for unavailable valuation.
 
     Completeness belongs to canonical facts, never a prefix on a numeric value.
     Native quotas, rates and billing use their independent presentation rules.
     """
-    if value is None or (unresolved and value == 0):
-        return "N/A"
+    if value is None:
+        value = Decimal(0)
     if (unit or ccost_unit()) == "usd":
         with localcontext() as context:
             context.prec = max(context.prec, len(value.as_tuple().digits) + 4, value.adjusted() + 5)
@@ -90,7 +90,7 @@ def reference_rate(value: Decimal | None) -> str:
 
 def ccost_range(cached: Decimal | None, fresh: Decimal | None) -> str:
     if cached is None and fresh is None:
-        return "N/A"
+        return ccost_amount(None)
     if cached is None or fresh is None or cached == fresh:
         return ccost_amount(fresh if cached is None else cached)
     low, high = sorted((cached, fresh))

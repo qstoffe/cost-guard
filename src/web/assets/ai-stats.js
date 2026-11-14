@@ -1,6 +1,6 @@
 'use strict';
 // AI Stats = BEST EFFORT / NEVER Unavailable, for every present and future card.
-// Sparse/partial/estimated ready observations show fun values; Loading and real
+// Sparse/partial/estimated ready observations show fun values; non-cost Loading and real
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
@@ -23,6 +23,7 @@ const AIStatsView = (() => {
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
   const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
+  const costMetrics = new Set(['hourly-rate', 'total-cost', 'average-cost', 'expensive-session']);
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-3-responses' &&
@@ -148,16 +149,33 @@ const AIStatsView = (() => {
       this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
     }
     update(state) {
-      // AI Stats: pending means exactly Loading in every card, including queued,
-      // deferred, failed and interrupted attempts. A genuine blocker is page-level,
-      // never a card label. Ready values are atomic and last-good retained.
+      // FR707 supersedes Loading in CCost amount positions only. Other cards
+      // preserve their Loading contract; operational failure remains page-level.
       const e = ReportView.element;
+      if (state.result?.source) this.sourceIdentity = JSON.stringify([
+        state.result.source.identity, state.result.source.generation, state.result.view.timezone_id]);
+      const identity = state.statsIdentity ?? this.sourceIdentity;
+      const day = ReportView.timestamp(Date.now(), state.result?.view.timezone_id).slice(0, 10);
+      const scope = JSON.stringify([identity, state.period,
+        state.period === 'all' ? null : state.period === 'month' ? day.slice(0, 7) : day]);
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
       const ready = state.result?.view?.ai_stats_work?.scopes?.[state.period]?.ready === true;
       const row = ready && valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
       if (!row) {
         const message = 'Loading…';
-        for (const item of this.cards.values()) {
+        for (const [key, item] of this.cards) {
+          if (costMetrics.has(key)) {
+            const zero = {display:{value:'0 CCost',calendar_rate:'0 CCost/h',workday_rate:'0 CCost/h',active_rate:'0 CCost/h'},
+              display_units:{usd:{value:'$0.00',calendar_rate:'$0.00/h',workday_rate:'$0.00/h',active_rate:'$0.00/h'}}};
+            const metric = item.costScope === scope && item.metric ? item.metric : zero;
+            if (item.rates.size) {
+              for (const [id, node] of item.rates) ReportView.text(node, () => ReportView.display(metric, id));
+            } else ReportView.text(item.value, () => ReportView.display(metric, 'value'));
+            if (item.costScope !== scope) { ReportView.text(item.detail, ''); ReportView.text(item.trait, ''); item.metric = null; }
+            if (item.pending || !item.card.firstChild) item.card.replaceChildren(...item.nodes);
+            item.pending = null; item.card.removeAttribute('role'); item.card.removeAttribute('aria-live');
+            continue;
+          }
           if (item.pending !== message) {
             item.card.replaceChildren(message); item.pending = message;
             item.card.setAttribute('role', 'status'); item.card.setAttribute('aria-live', 'off');
@@ -167,8 +185,16 @@ const AIStatsView = (() => {
         return;
       }
       // Reveal each complete card in this synchronous commit; retain nodes on quiet refresh.
-      for (const metric of row.metrics) {
+      this.costs ||= new ReportView.CostDisplay();
+      for (let metric of row.metrics) {
+        if (costMetrics.has(metric.metric)) {
+          metric = this.costs.select(metric, [state.result.source?.identity, state.result.source?.generation,
+            row.period, row.start_ms, metric.metric,
+            metric.metric === 'expensive-session' ? metric.session_id : null], 'value', !metric.reasons?.length, metric.value,
+            ['value', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help']);
+        }
         const card = this.cards.get(metric.metric);
+        if (costMetrics.has(metric.metric)) card.costScope = scope;
         card.metric = metric;
         if (card.podium.length) {
           if (metric.podium.length) {

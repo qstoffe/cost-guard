@@ -19,11 +19,27 @@ module.exports = (vm, context, seed, helpText) => {
       vm.runInContext(`ReportView.setUnit('credits');todayAccounts.update(todayCase);
         todayWatch.update({state:'running',view:todayCase});`, context);
       roots.forEach((root, index) => {
-        assert.match(root.textContent, new RegExp('CCost Today: ' + amount));
+        assert.match(root.textContent, new RegExp('CCost Today: ' + (amount === '—' ? '0' : amount)));
         const card = root.querySelectorAll('h4')[0].parentNode;
         assert.match(helpText(card.children[1].children[0]), new RegExp('Current local day: ' + amount));
         assert.equal(card.querySelectorAll('h4')[0].querySelectorAll('a')[0], targets[index]);
       });
     }
   }
+  vm.runInContext("ReportView.setTimezone('UTC')", context);
+  context.todayCase.now_ms = Date.UTC(2026,10,14,12);
+  const item = context.todayCase.accounts.accounts[0];
+  const scope = item.ccost_scopes.find(scope => scope.name === 'today');
+  for (const [amount, complete, expected] of [['125',false,'125'],[null,false,'125'],['0',false,'125'],['0',true,'0']]) {
+    scope.cost={known_ccost:amount,complete,display:{account_ccost:amount ?? '0'}};
+    vm.runInContext('todayAccounts.update(todayCase)',context);
+    assert.match(context.todayAccounts.grid.textContent,new RegExp('CCost Today: '+expected));
+  }
+  scope.cost={known_ccost:'125',complete:true,display:{account_ccost:'125'}};
+  vm.runInContext('todayAccounts.update(todayCase)',context);
+  context.todayCase.now_ms += 86400000;
+  scope.cost=null;
+  vm.runInContext('todayAccounts.update(todayCase)',context);
+  assert.match(context.todayAccounts.grid.textContent,/CCost Today: 0/,'new configured day cannot inherit yesterday');
+  vm.runInContext('ReportView.setTimezone(null)',context);
 };

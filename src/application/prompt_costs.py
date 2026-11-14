@@ -116,7 +116,7 @@ def detail_tokens(values):
         if part['role'] == 'subagents':
             main_models.append(models[-1])
         calls.append(f"{call_heading}: {part['calls']}" + ('\n' + note if note else ''))
-        subtotal_text = ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"]) if part["priced_requests"] else "N/A"
+        subtotal_text = ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"])
         lines = [heading] + ([note] if note else [])
         if part["role"] == "subagents":
             count = str(part["prompt_count"]) if part["prompts_complete"] else (
@@ -125,8 +125,8 @@ def detail_tokens(values):
             lines.append("• Number of prompts: " + count)
         if not part["priced_requests"]:
             sections.append("\n".join(lines) + "\n" + unavailable_help(part.get("ccost_unavailable", ())) + "\n"
-                + "\n".join(f"• {label}: N/A" for label in ("Input", "Cached input", "Cache write", "Output"))
-                + "\nSubtotal: N/A")
+                + "\n".join(f"• {label}: {ccost_amount(None)}" for label in ("Input", "Cached input", "Cache write", "Output"))
+                + "\nSubtotal: " + subtotal_text)
             continue
         for label, amount in zip(("Input", "Cached input", "Cache write", "Output"), part["categories"]):
             lines.append(f"• {label}: {ccost_amount(None if amount is None else Decimal(amount))}")
@@ -166,7 +166,8 @@ def detail_tokens(values):
                 agent["state"], "Request usage unavailable; model/effort unknown.")
         note = f"Subagent {agent['agent']} — {state}"
         models.append(note)
-        sections.append(note + "\nCCost: " + ("0 (no recorded execution)" if agent["state"] == "not-executed" else "N/A"))
+        sections.append(note + "\nCCost: " + ccost_amount(None) +
+                        (" (no recorded execution)" if agent["state"] == "not-executed" else ""))
     if detail.get("omitted_agents"):
         note = f"{detail['omitted_agents']} additional linked agents without request evidence not shown."
         models.append(note)

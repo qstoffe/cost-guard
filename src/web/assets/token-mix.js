@@ -160,6 +160,14 @@ const TokenMixView = (() => {
     }
     update(result) {
       if (this.result === result) return;
+      this.costs ||= new ReportView.CostDisplay();
+      const period = result.view.token_mix_period;
+      const scope = [result.source?.identity, result.source?.generation, period?.period,
+        period?.period === 'all' ? null : period?.start_ms];
+      const select = (mix, id) => this.costs.select(mix, [...scope, id], 'total_cost', mix?.cost_complete === true);
+      result = {...result, view: {...result.view, token_mix: select(result.view.token_mix, 'total'),
+        model_token_mix: result.view.model_token_mix.map(row => ({...row, mix: select(row.mix, ['model', row.model])})),
+        publisher_token_mix: result.view.publisher_token_mix.map(row => ({...row, mix: select(row.mix, ['publisher', row.publisher])}))}};
       this.result = result;
       ReportView.text(this.title, () => `Total Token Mix % · ${display(this.result.view.token_mix, tokenKey)} tokens`);
       ContextHelp.refresh(this.title);

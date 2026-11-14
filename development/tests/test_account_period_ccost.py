@@ -225,7 +225,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertTrue(all(dict(row.ccost_scopes)["today"] is None for row in ambiguous))
 
     def test_account_formatter_rounds_known_subtotal_without_changing_global_markers(self):
-        for value, expected in ((None, "—"), (ComparisonCost(), "0"), (ComparisonCost(D(0), 1, 0), "—"),
+        for value, expected in ((None, "0"), (ComparisonCost(), "0"), (ComparisonCost(D(0), 1, 0), "0"),
                                 (ComparisonCost(D("37.2"), 2, 1), "38"),
                                 (ComparisonCost(D("0.15"), 2, 1), "0.2"),
                                 (ComparisonCost(D("0.01"), 2, 1), "<0.1"),
@@ -235,7 +235,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertEqual("38", comparison_cost_text(ComparisonCost(D("37.2"), 2, 1)))
         unpriced = project((subscription(),), (request("unknown", NOW, model="unpriced"),),
                            observed_start_ms=MONTH)[0]
-        self.assertIn("CCost today: —", account_ccost_lines(unpriced))
+        self.assertIn("CCost today: 0", account_ccost_lines(unpriced))
 
     def test_partial_subtotal_is_plain_in_report_watch_and_compact_fallbacks(self):
         value = ComparisonCost(D("37.2"), 2, 1)

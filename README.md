@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.50, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.51, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -241,7 +241,7 @@ Passing a session ID prints one snapshot and exits, even with active work; use `
 | Column | Meaning |
 | --- | --- |
 | `Prompt` | Local time, prompt number and preview. Separate `Model:` and `[ABORTED]` timeline rows provide history context. `/compact` is shown as its own event. |
-| `CCost` | Reference token valuation of the prompt/event, independent of billing; numeric subtotals are plain, unavailable values N/A. |
+| `CCost` | Reference token valuation, not billing. Plain known subtotals; unavailable amounts display selected-unit zero, without claiming free work. |
 | `Calls` | Completed causal model requests belonging to the prompt/event. |
 | `Duration` | Prompt/compaction execution wall-clock time, using the same compact format and rounding as Watch. |
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
@@ -292,7 +292,7 @@ Watch's first view never waits for quotas. An account-only scheduler refreshes h
 
 [Watch activity](docs/watch-activity.md): yellow `Skills (N)` lists confirmed exact IDs, newest first; red `[N tool call failures]` requires direct evidence, never load recency. Native errors and recognized Toolkit error contracts count once; cancellations and exit codes alone do not. Narrow rows preserve total/failures and whole skill IDs with `+N more`; the metric table keeps fixed geometry.
 
-Session `Σ` sums its displayed prompt/event CCost before rounding, preserving unavailable `N/A`. Numeric subtotals have no uncertainty prefix. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
+Session `Σ` sums canonical prompt/event CCost before rounding. Unknown amounts display zero; already qualified same-scope costs survive incomplete refresh. Numeric subtotals have no uncertainty prefix. Native non-billable compactions display zero. Rounded row strings need not sum to the subtotal.
 
 `Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `CCost · Watch: <run> · Total today: <day>` retains run usage across eviction, disappearance, resync and moves (zero when empty; plain known subtotal when partly priced). Today combines available local-day history with deduplicated requests observed and retained by this Watch. Requests deleted before observation cannot be reconstructed; restart uses available history, not a ledger. From local midnight until 03:00, `Total today` reads `Total YYYY-MM-DD`, even while idle. Row `Σ` can differ: startup mid-prompt may show row/Σ `78` but run `59`.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.50 (2026-11-14):** Numeric CCost in Web/CLI tables, totals and cost help has no uncertainty question-mark prefix, in Credits or USD. Known token-volume subtotals also render plainly. Missing valuation, canonical completeness and quota Capacity/Remaining indicators retain their independent semantics. [Behavior and evidence](development/journal/web/numeric-table-values.md).
+**v81.51 (2026-11-14):** Unavailable CCost amounts display `0` or `$0.00` throughout Web/CLI, Mini/PiP and cost help. Qualified same-scope costs survive incomplete refresh; new identities start independently. Display zero never proves free usage: canonical valuation, completeness, billing and quota Capacity/Remaining remain independent. [Behavior and evidence](development/journal/web/ccost-zero.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

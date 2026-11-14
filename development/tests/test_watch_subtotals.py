@@ -193,7 +193,7 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             self.assertEqual(Decimal(59), sum(projection.token_mix.costs))
 
     def test_zero_partial_and_native_compaction_keep_truthful_presentation(self):
-        for costs, unresolved, expected in (((0,), False, "Σ 0"), ((0,), True, "Σ N/A"),
+        for costs, unresolved, expected in (((0,), False, "Σ 0"), ((0,), True, "Σ 0"),
                                              ((0, 7), True, "Σ 7")):
             with self.subTest(costs=costs, unresolved=unresolved), watch_for(start=0) as (watch, _, _):
                 rows = tuple(replace(prompt(i + 1, 100 + i), ccost=Decimal(cost),
@@ -208,8 +208,8 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             self.assert_row_scope(projection)
             table, headers = table_for(projection)
             self.assertEqual("Σ 0", headers["Session A"])
-            self.assertEqual("", table[1][2])
-            self.assertEqual("Σ N/A", table_for(replace(projection, session_subtotals={}))[1]["Session A"],
+            self.assertEqual("0", table[1][2])
+            self.assertEqual("Σ 0", table_for(replace(projection, session_subtotals={}))[1]["Session A"],
                              "missing projected cost must not invent a known zero")
 
     def test_subtotal_amount_and_unresolved_state_affect_visible_signature(self):

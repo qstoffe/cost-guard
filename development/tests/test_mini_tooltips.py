@@ -88,7 +88,7 @@ class MiniTooltipTests(unittest.TestCase):
         text = self.help_text(dto["display"])
         self.assertIn("CCost: 1.0 Credits", text)
         self.assertIn("— default (high)", text)
-        self.assertIn("CCost: N/A", text)
+        self.assertIn("CCost: 0 Credits", text)
         self.assertIn("CCost: 0.5 Credits", text)
         self.assertNotIn("\n\nMain Model CCost", text, "group lines must be consecutive")
 

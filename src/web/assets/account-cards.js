@@ -128,7 +128,7 @@ const AccountCards = (() => {
       const cost = el('p', undefined, 'metric-value');
       cost.append(ContextHelp.value(el('span', () => {
         const today = item().ccost_scopes.find(scope => scope.name === 'today');
-        return `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`;
+        return `CCost Today: ${display(today?.cost, 'account_ccost')}`;
       }), () => 'This account’s reference cost in your configured local day.' + (item().today_note ? '\n' + item().today_note : '')));
       const primary = el('div', undefined, 'watch-primary-details');
       quotaDetails(primary, () => item().primary);
@@ -227,13 +227,19 @@ const AccountCards = (() => {
       }
     }
     update(view) {
+      this.costs ||= new ReportView.CostDisplay();
       const failed = view.quota_stale || view.quota_recovering_count > 0;
       // Missing publication is pending, not an observed empty population. A
       // failed empty read must not erase the last usable common observation.
       if (view.accounts && (view.accounts.accounts.length || !failed)) {
         const wanted = [], keep = new Set();
-        for (const item of view.accounts.accounts) {
+        for (let item of view.accounts.accounts) {
           const key = JSON.stringify([item.observation.provider_id, item.observation.id]); keep.add(key);
+          const day = ReportView.timestamp(view.now_ms ?? view.accounts.now_ms).slice(0, 10);
+          item = {...item, ccost_scopes: item.ccost_scopes.map(scope => ({...scope,
+            cost: this.costs.select(scope.cost, /^\d{4}-\d{2}-\d{2}$/.test(day) ? [view.source_label, key, scope.name,
+              scope.name === 'today' ? day : scope.name === 'this month' ? day.slice(0, 7) :
+                [item.primary, ...item.secondary].map(value => value.quota.reset_at_ms)] : null, 'known_ccost')}))};
           if (!this.cards.has(key)) this.cards.set(key, new Subscription());
           const card = this.cards.get(key); card.update(item, view.quota_stale); wanted.push(card.root);
         }

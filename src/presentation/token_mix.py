@@ -19,8 +19,8 @@ def mix_cost_text(mix: TokenMix, value: Decimal) -> str:
 
 
 def total_cost_text(mix: TokenMix) -> str:
-    if mix.costs is None or (mix.request_count and not mix.priced_requests):
-        return "N/A"
+    if mix.costs is None:
+        return ccost_amount(None)
     return mix_cost_text(mix, sum(mix.costs, Decimal(0)))
 
 
@@ -29,9 +29,7 @@ def _share_parts(mix: TokenMix) -> list[tuple[str, str | None]]:
     shares = (("--",) * 4 if any(share is None for share in mix.shares)
               else balanced_share_percents(mix.totals))
     for index, share in enumerate(shares):
-        cost = None
-        if mix.costs is not None:
-            cost = "N/A" if mix.request_count and not mix.priced_requests else mix_cost_text(mix, mix.costs[index])
+        cost = ccost_amount(None) if mix.costs is None else mix_cost_text(mix, mix.costs[index])
         parts.append((share, cost))
     return parts
 
@@ -92,16 +90,15 @@ def token_mix_lines(scope: str, mix: TokenMix, *, width: int | None = None) -> l
 def comparison_cost_text(cost: ComparisonCost) -> str:
     if not cost.observed_requests:
         return ccost_amount(Decimal(0))
-    if not cost.priced_requests:
-        return "N/A"
     return ccost_amount(cost.known_ccost)
 
 
 def watch_total_lines(mix: TokenMix, today: ComparisonCost, today_label: str = "Today", *,
-                      width: int | None = None, pending: bool = False) -> list[str]:
+                      width: int | None = None, pending: bool = False,
+                      run_text: str | None = None, daily_text: str | None = None) -> list[str]:
     """Retained run total and deletion-resilient current-day CCost; one line when it fits."""
-    run = ccost_amount(Decimal(0)) if not mix.request_count else total_cost_text(mix)
-    daily = "Pending" if pending else comparison_cost_text(today)
+    run = run_text if run_text is not None else ccost_amount(Decimal(0)) if not mix.request_count else total_cost_text(mix)
+    daily = daily_text if daily_text is not None else comparison_cost_text(today)
     label = "Total today" if today_label == "Today" else "Total " + today_label
     return [f"CCost · Watch: {run} · {label}: {daily}"]
 

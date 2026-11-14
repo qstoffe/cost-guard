@@ -140,7 +140,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(rows().length,5);assert.doesNotMatch(view.body.textContent,/checking for changes/);
   show([],[]);assert.equal(rows().length,0);assert.equal(view.body.children[0].children[0].colSpan,5);
   show([],history.slice(0,2));assert.equal(rows().length,2,'no duplicate/fake data rows');
-  for(const [amount,total] of [['N/A','562'],['49','Loading…'],['?49','562'],['0','0']]) {
+  for(const [amount,total] of [['0','562'],['49','0'],['49','562'],['0','0']]) {
     const value=card('only-'+amount,10);value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=amount;
     value.session_summary.cost=total==='Loading…'?null:{display:{account_ccost:total}};value.session_summary.state='loading';show([],[value]);
     assert.equal(rows()[0].children[2].textContent,amount);
@@ -150,7 +150,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const target=rows()[0].children[3].children[0];
     assert.equal(target.className,'mini-cost-value help-value');assert.equal(target.tabIndex,0);
     assert.equal(target.attributes.title,undefined);assert.ok(target.events.focus&&target.events.pointerenter);
-      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: N/A\n\nDuration: N/A');
+      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: 0\n\nDuration: N/A');
   }
   // Source-corrected whole-session subtotals never replace the representative cost.
   const partial=card('subtotal',500,true),summary=partial.session_summary;
@@ -172,10 +172,10 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(JSON.stringify(partial),canonical,'display never rewrites canonical cost/completeness');
   vm.runInContext('ReportView.setUnit("credits")',context);
   for(const [cost,state,expected] of [
-    [{display:{account_ccost:'563'},observed_requests:3,priced_requests:2},'refreshing','563'],
-    [{display:{account_ccost:'—'},observed_requests:3,priced_requests:0},'observed','N/A'],
-    [{display:{account_ccost:'0'},observed_requests:0,priced_requests:0},'observed','0'],
-    [null,'unavailable','N/A'],[null,'loading','Loading…']]) {
+    [{known_ccost:'563',display:{account_ccost:'563'},observed_requests:3,priced_requests:2},'refreshing','563'],
+    [{known_ccost:'0',complete:false,display:{account_ccost:'0'},observed_requests:3,priced_requests:0},'observed','563'],
+    [{known_ccost:'0',complete:true,display:{account_ccost:'0'},observed_requests:0,priced_requests:0},'observed','0'],
+    [null,'unavailable','0'],[null,'loading','0']]) {
     summary.cost=cost;summary.state=state;show([partial],[]);
     assert.equal(rows()[0].children[3].textContent,expected);
   }

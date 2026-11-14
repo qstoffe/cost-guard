@@ -12,7 +12,7 @@ from typing import Mapping, TextIO
 from src.version import DISPLAY_VERSION, PRODUCT_NAME
 from src.numbers import ccost_amount, ccost_display, ccost_unit
 from src.analysis.timezones import format_local_timestamp, resolve_timezone
-from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
+from src.watch.models import ToolObservation, WatchProjection, WatchRow
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, wrap_prose
 from .terminal import terminal_content_width
@@ -183,11 +183,6 @@ def _empty_row(text: str) -> tuple[str, ...]:
     return ("  " + text, "", "", "", "", "")
 
 
-def _session_subtotal_text(subtotal: WatchSessionSubtotal | None) -> str:
-    """Format the projected row subtotal, including unresolved provenance."""
-    return "Σ " + ("N/A" if subtotal is None else ccost_amount(subtotal.ccost, unresolved=subtotal.unresolved_cost))
-
-
 def _warning_explanation(session_id: str, warning: str, rows: tuple[WatchRow, ...]) -> tuple[str, PriceWarningSeverity]:
     """Displayed explanation (with multiplier or Next Ictx CCost range) and severity."""
     warning_row = next((item for item in reversed(rows) if item.session_id == session_id and item.next_context_warning), None)
@@ -246,6 +241,27 @@ class WatchRenderer:
         self._initializing = False
         self._quota_notice = QuotaMigrationNotice()
         self._quota_notice_visible = False
+        self._cost_values = {}
+
+    def _cost_text(self, scope, value, *, complete):
+        """Retain display observations only; canonical Watch facts stay untouched."""
+        if value is not None and (value > 0 or value == 0 and complete):
+            self._cost_values[scope] = value
+            if len(self._cost_values) > 5000:
+                del self._cost_values[next(iter(self._cost_values))]
+        return ccost_amount(self._cost_values.get(scope, value))
+
+    def _account_cost_text(self, projection, account):
+        day = datetime.fromtimestamp(projection.now_ms / 1000, timezone.utc).astimezone(
+            resolve_timezone(self.timezone_id)).date()
+
+        def text(name, value):
+            window = (day if name == "today" else (day.year, day.month) if name == "this month" else
+                tuple((quota.reset_at_ms, quota.duration_seconds, quota.scope, quota.model_id)
+                      for quota in account.account.quotas if quota.label == name))
+            return self._cost_text((projection.source_label, account.account.key, name, window),
+                None if value is None else value.known_ccost, complete=value is not None and value.complete)
+        return text
 
     def _content_width(self, *, minimum: int = 40) -> int:
         """Configured test width, otherwise the live terminal's content width."""
@@ -377,7 +393,9 @@ class WatchRenderer:
                            enumerate(_active_warning_rows(projection), start=1)}
         for row_index, row in enumerate(projection.rows):
             if row.session_id != previous_session:
-                subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
+                value = projection.session_subtotals.get(row.session_id)
+                subtotal = "Σ " + self._cost_text((projection.source_label, row.session_id),
+                    None if value is None else value.ccost, complete=value is not None and not value.unresolved_cost)
                 headers.append(len(rows))
                 rows.append((self._session_header(row, running=row.session_id in running_sessions, today=today),
                              "", subtotal, "", "", ""))
@@ -393,7 +411,8 @@ class WatchRenderer:
             rows.append((
                 self._row_label(row),
                 model_cell,
-                "" if native_compaction_without_billing else ccost_amount(prompt.ccost, unresolved=prompt.unresolved_cost),
+                self._cost_text((projection.source_label, row.session_id, prompt.event_id),
+                    prompt.ccost, complete=not prompt.unresolved_cost),
                 "" if native_compaction_without_billing else prompt.calls,
                 "" if native_compaction_without_billing and not prompt.in_progress else _duration(self._duration_for(row, projection.now_ms)),
                 _context_cell(row, role, warning_number),
@@ -465,8 +484,17 @@ class WatchRenderer:
         mix = projection.token_mix
         for line in token_mix_lines(prompt_scope(mix.sample_size), mix, width=width):
             self._write(line)
+        run = projection.run_total
+        run_amount = None if run.costs is None else sum(run.costs, Decimal(0))
+        day = datetime.fromtimestamp((projection.now_ms or self.started_at_ms) / 1000, timezone.utc).astimezone(
+            resolve_timezone(self.timezone_id)).date()
         for line in watch_total_lines(projection.run_total, projection.today_total, projection.today_label,
                                       pending=projection.today_pending,
+                                      run_text=self._cost_text((projection.source_label, "run"), run_amount,
+                                          complete=run.cost_complete),
+                                      daily_text=self._cost_text((projection.source_label, "day", day),
+                                          projection.today_total.known_ccost,
+                                          complete=not projection.today_pending and projection.today_total.complete),
                                       width=width):
             self._write(line)
         quota = projection.quota
@@ -481,6 +509,7 @@ class WatchRenderer:
         # vertical fallback, not everyone else's.
         label_width = max((len(account.label) for account in quota.accounts if compact_label_fits(
             account, self.timezone_id, width=width, now_ms=projection.now_ms, primary_label_width=primary_width,
+            cost_text=self._account_cost_text(projection, account),
             recovering=account.account.key in projection.quota_recovering_accounts)), default=0)
         previous_vertical = False
         first = True
@@ -488,6 +517,7 @@ class WatchRenderer:
             lines, is_vertical = capacity_block(
                 account, self.styler, self.timezone_id, width=width, now_ms=projection.now_ms, watch=True,
                 account_label_width=label_width, primary_label_width=primary_width,
+                cost_text=self._account_cost_text(projection, account),
                 recovering=account.account.key in projection.quota_recovering_accounts)
             if not first and (previous_vertical or is_vertical):
                 self._write()

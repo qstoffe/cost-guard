@@ -302,7 +302,8 @@ async function main() {
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
    catalog.update({...catalogData,total:26,view:{session_usage:cold}});
    assert.equal(catalog.body.children.length, 25);
-   assert.ok(catalog.body.children.every(row => row.children.slice(2).every(cell => cell.textContent === 'Loading…')));
+    assert.ok(catalog.body.children.every(row => row.children.slice(2).every((cell,index) =>
+      cell.textContent === (index === 2 ? '0' : 'Loading…'))));
    assert.equal(catalog.previous.tag, 'button'); assert.equal(catalog.previous.disabled,true); assert.equal(catalog.next.disabled,false);
    catalog.next.events.click(); assert.match(context.location.hash, /offset=25/);
    const known = {...cold[0],indexed:true,has_summary:true,metric_state:'ready',running:true,prompt_count:0,model:'N/A',display:{ccost:'0.00',duration_ms:'0s'}};
@@ -422,7 +423,8 @@ async function main() {
     assert.equal(liveRow.children[2].textContent,'Loading…');
     assert.equal(liveRow.children[5].textContent,'0','known zero count remains independent of pending model');
     catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
-   assert.ok(catalog.body.children[0].children.slice(2).every(cell=>cell.textContent==='Unavailable'));
+    assert.ok(catalog.body.children[0].children.slice(2).every((cell,index)=>
+      cell.textContent===(index===2?'0':'Unavailable')));
    assert.equal(catalog.body.children[0].className,'');
     await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
     const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';

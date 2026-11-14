@@ -2,7 +2,7 @@
 from src.domain.reference_cost import ReferenceCostIssue, bounded_issues
 from .contracts import record
 
-FALLBACK = "CCost cannot be calculated from the available model pricing and usage information. N/A does not mean zero cost."
+FALLBACK = "CCost cannot be calculated from the available model pricing and usage information. Display zero is not proof of zero cost."
 
 
 def issue_records(issues):
@@ -27,7 +27,7 @@ def unavailable_help(issues):
         else:
             line = "Available model pricing and usage information cannot establish all contributing costs."
         lines.append(line)
-    return ("CCost can't be calculated: " + " ".join(dict.fromkeys(lines)) + " N/A does not mean zero cost.") if lines else FALLBACK
+    return ("CCost can't be calculated: " + " ".join(dict.fromkeys(lines)) + " Display zero is not proof of zero cost.") if lines else FALLBACK
 
 
 def cost_help_tokens(values):
@@ -35,4 +35,6 @@ def cost_help_tokens(values):
     if issues is None:
         comparison = values.get("comparison_cost")
         issues = dict(comparison.fields).get("ccost_unavailable", ()) if comparison else None
-    return {} if issues is None else {"ccost_unavailable_help": unavailable_help(issues)}
+    # Empty reason sets need no repeated boilerplate on every fully priced row.
+    # Consumers still have a generic explanation for genuinely missing amounts.
+    return {} if not issues else {"ccost_unavailable_help": unavailable_help(issues)}

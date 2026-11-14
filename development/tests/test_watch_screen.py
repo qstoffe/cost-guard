@@ -111,7 +111,7 @@ class WatchScreenTests(unittest.TestCase):
         renderer.render(initial)
         self.assertEqual("", self.delta(lambda: renderer.render(replace(initial, now_ms=10))))
         output = self.delta(lambda: renderer.render(replace(initial, today_pending=False)))
-        self.assertIn("CCost", output)
+        self.assertEqual("", output, "pending and qualified zero have the same amount presentation")
         self.assertNotIn("\x1b[H", output, "history completion patches the quota/totals row")
 
     def test_equal_source_resync_is_not_a_visible_change_but_real_data_is(self):

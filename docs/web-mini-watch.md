@@ -47,7 +47,7 @@ There is no Earlier Sessions button, separate history section or Duration column
    existing bounded preview: up to 25 visible
    characters, without splitting combining marks or emoji, and one ellipsis only when
    shortened. Missing/non-prompt previews add nothing; no full prompt text is fetched.
-- **CCost:** the representative prompt's own reference cost, retaining partial **?**
+- **CCost:** the representative prompt's own plain numeric reference cost
   and its prompt-specific help with model, effort, **Duration**, calls and relevant
   linked/mixed/pricing/outcome details. Only a genuinely running represented prompt’s
   complete **Duration: time** line is yellow, and it continues updating while open.
@@ -58,8 +58,9 @@ There is no Earlier Sessions button, separate history section or Duration column
   plain selectable text with **no tooltip**. Its heading help says only: “The entire
   session’s reference cost, including attributed linked subagents.” Known priced
   subtotals omit the partial **?** here only; missing pricing is not filled in.
-  Credits/USD, real zero, **N/A** for wholly unpriced work and pending **Loading…**
-  remain distinct. Neither amount substitutes for the other; both are reference
+  Missing initial/unpriced amounts display **0** or **$0.00**, never N/A or Loading.
+  Qualified same-scope costs survive incomplete refresh; new identities start independently.
+  Display zero does not prove free work. Neither amount substitutes for the other; both are reference
   costs, not verified billing. Full Watch and canonical completeness are unchanged.
 - **Ctx:** the last valid **session-level next-request context**, not
    stale historical prompt context or a sum. Value help includes **Next Ctx**, matching
@@ -202,7 +203,7 @@ widths. No passive Live/SSE publication, timer or quota change resizes the windo
 **CCost Today** is the same global configured-local-day reference cost and distinct
 initiating-prompt count as full Watch, including pre-Watch activity. It is not a sum of
 Mini rows or account periods. This readout is non-clickable and has no tooltip. Known
-priced subtotals remain plain; wholly unpriced usage is N/A, acquired empty usage zero.
+priced subtotals remain plain; unavailable amounts display selected-unit zero without changing unknown valuation.
 At configured-local midnight the old day clears even disconnected, using server DST-aware
 day boundaries rather than browser time. Corrections replace values, never accumulate.
 

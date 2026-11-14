@@ -37,7 +37,79 @@ const ReportView = (() => {
       money: display(quota, 'used_money'), account_percent: display(quota, 'used_fraction'),
       fraction: watch?.used_fraction, percent: watch?.used_percent, exhausted: watch?.exhausted, note: ''};
   }
-  const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
+  const costKeys = new Set(['ccost', 'known_ccost', 'account_ccost', 'daily_ccost', 'total_ccost',
+    'run_ccost', 'main_ccost', 'subagent_ccost', 'total_main_ccost', 'total_subagent_ccost',
+    'incoming_context_ccost', 'extra_ccost', 'next_context_cached_ccost', 'next_context_fresh_ccost',
+    'watch_next_context_cached_ccost', 'watch_next_context_fresh_ccost']);
+  const display = (row, key) => {
+    const value = row?.display_units?.[unit]?.[key] ?? row?.display?.[key];
+    return costKeys.has(key) && (value == null || ['', 'N/A', 'Not Applicable', '—', '-', 'Loading…', 'Unavailable'].includes(value)) ?
+      unit === 'usd' ? '$0.00' : '0' : value ?? 'N/A';
+  };
+  class CostDisplay {
+    constructor() { this.values = new Map(); }
+    select(row, scope, key = 'ccost', complete = row?.complete === true || row?.unresolved_cost === false, raw = row?.[key], extra = []) {
+      if (scope == null) return row;
+      const original = row;
+      row = this.observe(row, scope, key, complete, raw, name => extra.includes(name) || costKeys.has(name) ||
+        /^mix_.*_cost(?:_help)?$/.test(name) ||
+        ['costs', 'total_cost', 'cost_detail_help', 'session_cost_help', 'mini_cost_models', 'mini_cost_amounts'].includes(name));
+      // A priced aggregate is not evidence that each component is priceable.
+      // Independently qualified amounts survive a partial replacement too.
+      for (const name of costKeys) {
+        if (name === key || !Object.hasOwn(original || {}, name)) continue;
+        const available = original[name + '_known'] !== false && !original[name + '_usage_missing'];
+        const covered = available && complete && !original[name.replace('_ccost', '_estimated')];
+        row = this.observe(row, scope, ['component', name], covered, available ? original[name] : null,
+          token => token === name, original);
+      }
+      if (key === 'total_cost') {
+        for (const [index, name] of ['input', 'cache', 'write', 'output'].entries()) {
+          row = this.observe(row, scope, ['category', name], complete, original?.costs?.[index],
+            token => token === 'mix_' + name + '_cost' || token === 'mix_' + name + '_cost_help', original);
+        }
+      }
+      if (original?.display?.mini_cost_ready) {
+        const models = original.display.mini_cost_models;
+        const amounts = {credits: [], usd: []};
+        original.display.mini_cost_ready.forEach((ready, index) => {
+          const source = {display: {amount: original.display.mini_cost_amounts[index]},
+            display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+              [unit, {amount: original.display_units?.[unit]?.mini_cost_amounts?.[index] ??
+                original.display.mini_cost_amounts[index]}]))};
+          const identity = ['mini', models[index][0].startsWith('Sub Agent'), models[index][1]];
+          // Unknown model/effort is not a stable group identity.
+          const shown = models[index][1] === 'N/A — N/A' ? source :
+            this.observe(source, scope, identity, false, null, name => name === 'amount', source, ready);
+          for (const unit of ['credits', 'usd']) amounts[unit].push(shown.display_units[unit].amount);
+        });
+        row = {...row, display: {...row.display, mini_cost_models: models},
+          display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+            [unit, {...row.display_units?.[unit], mini_cost_amounts: amounts[unit]}]))};
+      }
+      return row;
+    }
+    observe(row, scope, key, complete, raw, includes, source = row, ready) {
+      const identity = JSON.stringify([scope, key]);
+      const numeric = typeof raw !== 'boolean' && raw != null && /^[+-]?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(String(raw));
+      const order = numeric ? compare(raw, '0') : -1;
+      const qualified = ready ?? (numeric && (order > 0 || order === 0 && complete));
+      const extract = tokens => Object.fromEntries(Object.entries(tokens || {}).filter(([name]) => includes(name)));
+      if (qualified) {
+        const units = Object.fromEntries(['credits', 'usd'].map(unit =>
+          [unit, extract({...source.display, ...source.display_units?.[unit]})]));
+        this.values.delete(identity);
+        this.values.set(identity, {display: extract(source.display), units});
+        // View-owned display observations only, never another persistent ledger.
+        if (this.values.size > 5000) this.values.delete(this.values.keys().next().value);
+      }
+      const old = this.values.get(identity);
+      if (!old) return row;
+      return {...row, display: {...row?.display, ...old.display},
+        display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+          [unit, {...row?.display_units?.[unit], ...old.units[unit]}]))};
+    }
+  }
   function estimateValue(target, row, key) {
     const help = () => { const text = display(row(), key() + '_help'); return text === 'N/A' ? '' : text; };
     ContextHelp.value(target, help);
@@ -114,9 +186,10 @@ const ReportView = (() => {
     (row?.cost_estimated && key === 'ccost' ? ' (estimated)' : '');
   function costHelp(row, key = 'ccost') {
     if (['total_ccost', 'known_ccost'].includes(key) && display(row, 'session_cost_help') !== 'N/A') return display(row, 'session_cost_help');
-    if (!row || display(row, key) !== 'N/A') return '';
-    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. N/A does not mean zero cost.';
-    return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. N/A does not mean zero cost.';
+    if (!row) return '';
+    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. Display zero is not proof of zero cost.';
+    if (row[key] != null && !row.unresolved_cost && row.complete !== false) return '';
+    return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. Display zero is not proof of zero cost.';
   }
   function costValue(row, key = 'ccost') {
     const node = element('span', () => ccost(row, key));
@@ -586,7 +659,7 @@ const ReportView = (() => {
         obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
       for (const scope of account.ccost_scopes) {
         const line = element('p', undefined, 'metric-value');
-        line.append(ContextHelp.value(element('span', () => `CCost ${scope.name}: ${scope.cost == null ? '—' : display(scope.cost, 'account_ccost')}`),
+        line.append(ContextHelp.value(element('span', () => `CCost ${scope.name}: ${display(scope.cost, 'account_ccost')}`),
           `This account’s reference cost for ${scope.name}.`)); card.append(line);
       }
       if ((!compact && detailed && !watch) || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
@@ -728,5 +801,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay};
 })();

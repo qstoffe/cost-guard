@@ -229,7 +229,10 @@ const SessionDetail = (() => {
     }
     update(data) {
       ReportView.defaultUnit();
-      const block = data.result.view.prompt_blocks[0];
+      this.costs ||= new ReportView.CostDisplay();
+      const source = [data.result.source?.identity, data.result.source?.generation, this.id];
+      const block = this.costs.select(data.result.view.prompt_blocks[0], source, 'total_ccost',
+        data.result.view.prompt_blocks[0].comparison_cost_complete === true);
       this.pendingRender = false;
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
@@ -244,6 +247,7 @@ const SessionDetail = (() => {
       }
       const initialLength = this.body.children.length, append = [];
       block.rows.forEach((value, index) => {
+        value = this.costs.select(value, [...source, value.id]);
         const row = old.get(value.id) || el('tr'); row.dataset.id = value.id;
         row.className = value.in_progress ? 'session-running' : value.has_error || value.aborted ? 'error' : '';
         const signature = JSON.stringify(value);
