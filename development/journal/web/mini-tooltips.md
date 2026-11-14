@@ -139,3 +139,12 @@ a matched unbound Total-heading control tests document-level hover independently
 that target's help handler. Neither diagnostic certifies physical input or a browser
 defect. Old-base RED is now required explicitly with its base revision, not silently
 skipped; that RED case is PiP-only, while GREEN covers PiP and Full Watch.
+
+Revision `f401228` obtained the required actual old-base PiP **RED** and passed the
+independent touch Duration/Total portfolio (both units, four theme/scheme combinations).
+Mouse then failed in its probe setup: PiP does not have an independent `ContextHelp`
+script global; its controller is owned by the opener. The probe now dismisses through
+that existing owner, without changing product code. Original mixed Total-heading
+**hover** still failed. The unbound control completed and observed native hover false,
+but verbose event notices were truncated, so no complete guard/control causal claim
+was made. Compact typed guard/arrival/departure summaries replace those notices.

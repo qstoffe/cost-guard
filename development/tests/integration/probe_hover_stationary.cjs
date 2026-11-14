@@ -4,7 +4,10 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
   const mouse=(id,x,y)=>command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},id);
   const open=async(id,selector)=>{
     await command('Page.bringToFront',{},id);
-    await evaluate(id,`document.activeElement?.blur();ContextHelp.dismiss(document.body)`);
+    await evaluate(id,`document.activeElement?.blur()`);
+    // Mini uses the opener's controller, not a second script global in PiP.
+    await evaluate(owner,id===mini?`ContextHelp.dismiss(miniWatch.window.document.body)`:
+      `ContextHelp.dismiss(document.body)`);
     await mouse(id,1,1);
     const point=await evaluate(id,`(()=>{const n=document.querySelector(${JSON.stringify(selector)});
       if(!n)throw new Error('Missing stationary target: '+${JSON.stringify(selector)});
@@ -73,6 +76,9 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
       assert.equal(state.events,0,'no pointer input while reading');
       assert.ok(state.samples.length>=55);
       assert.ok(state.samples.every(value=>value.open&&value.hovered&&value.connected),JSON.stringify({selector,...state}));
+      console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
+        case:index+1,document:id===mini?'pip':'full-watch',selector,
+        elapsed:Math.round(state.elapsed),samples:state.samples.length,pointerEvents:state.events,outcome:'PASS'}));
       layouts.push({case:'stationary-61s',document:id===mini?'pip':'full-watch',selector,...state});
       if(id===mini) {
         const image=await command('Page.captureScreenshot',{format:'png'},mini);

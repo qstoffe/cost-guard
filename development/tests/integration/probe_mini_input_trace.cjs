@@ -23,7 +23,7 @@ module.exports=async ({evaluate,control=false})=>{
       if(e.pointerType==='mouse'&&target.contains(e.target)&&
           ['pointerenter','pointermove'].includes(e.type))arrival={at:performance.now(),x:e.clientX,y:e.clientY};
       record(e.type,{trusted:e.isTrusted,mouse:e.pointerType==='mouse',
-        onTarget:target.contains(e.target),related:!!e.relatedTarget});
+        onTarget:target.contains(e.target),related:!!e.relatedTarget,hovered:native.call(target,':hover')});
     };
     const types=['pointerenter','pointermove','pointerleave','pointerout','pointerdown','focus','blur'];
     for(const type of types)target.ownerDocument.addEventListener(type,event,true);
@@ -32,7 +32,8 @@ module.exports=async ({evaluate,control=false})=>{
     window.durationInputTrace={target,events,read(){
       // Native selector is observed before any diagnostic layout/hit-test read.
       const hovered=native.call(target,':hover'),panel=target.ownerDocument.getElementById('context-help');
-      const result={hovered,events:events.slice(),same:cell.firstChild===target,connected:target.isConnected,
+      const result={hovered,elapsed:arrival?performance.now()-arrival.at:null,
+        events:events.slice(),same:cell.firstChild===target,connected:target.isConnected,
         focus:target.ownerDocument.hasFocus(),active:target.ownerDocument.activeElement===target,
         open:!!panel?.matches(':popover-open')};
       if(arrival){const r=target.getBoundingClientRect();

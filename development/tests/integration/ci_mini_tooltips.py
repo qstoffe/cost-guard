@@ -13,6 +13,20 @@ sys.path.insert(0, str(ROOT))
 from development.tools.ci_web_beta import hosted_only, notice, save
 
 
+def observation_summary(value):
+    result = {key: item for key, item in value.items() if key != "events"}
+    events = value.get("events", [])
+    result["event_count"] = len(events)
+    result["guards"] = [event for event in events if event.get("guard")][-4:]
+    result["arrivals"] = [event for event in events if event.get("onTarget") and
+        event.get("mouse") and event["kind"] in ("pointerenter", "pointermove")][-4:]
+    result["departures_after_arrival"] = [event for event in events if
+        event.get("elapsed") is not None and
+        ((event.get("onTarget") and event["kind"] in ("pointerleave", "pointerout")) or
+         event["kind"] == "blur")][-4:]
+    return result
+
+
 def probe(state):
     state["stage"] = "checkout-git-identity"
     identity = subprocess.run([*GIT, "rev-parse", "--show-toplevel"],
@@ -49,11 +63,19 @@ def probe(state):
             browser, str(output), "--mini-tooltips", journey], cwd=ROOT, env=env,
             timeout=960 if journey == "mouse" else 180)
         detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
+        diagnostic = detail.get("diagnostic")
+        if diagnostic and diagnostic.get("observation"):
+            diagnostic["observation"] = observation_summary(diagnostic["observation"])
+        # Keep each structured observation below Checks' 4096-byte notice cap,
+        # separate from the already-known list of completed probe descriptions.
+        for check in detail.get("checks", []):
+            if isinstance(check, dict) and check.get("observation"):
+                notice("mini-input-control", dict(journey=journey, case=check["case"],
+                    observation=observation_summary(check["observation"])))
         notice("mini-tooltips", dict(outcome=detail.get("outcome", "FAIL"), journey=journey,
             reason="Independent native journey" if journey in ("mouse", "touch") else "Retained mixed-input diagnostic",
-            evidence=output.name, diagnostic=detail.get("diagnostic"),
-            checks=[check if isinstance(check, str) else
-                {key: check[key] for key in ("case", "observation") if key in check}
+            evidence=output.name, diagnostic=diagnostic,
+            checks=[check if isinstance(check, str) else check["case"]
                 for check in detail.get("checks", [])]))
         failed = failed or result.returncode != 0
     return int(failed)
