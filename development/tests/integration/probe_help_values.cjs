@@ -39,7 +39,7 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await until(mini,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const compact=await evaluate(mini,`document.querySelector('#context-help').textContent`);
     assert.match(compact,new RegExp('^Prompt #\\d+\\nMain Model: fixture/main-model — High\\nMain Model CCost: '+total+
-      '\\n\\nSub Agent 1: fixture/child-model — Low\\nSub Agent 1 CCost: '+(unit==='credits'?'8.0 Credits':'\\$0.08')+
+      '\\n\\nSub Agent 1: fixture/child-model — Low\\nSub Agent 1 CCost: '+(unit==='credits'?'8 Credits':'\\$0.08')+
       '\\n\\nDuration: '));
     assert.doesNotMatch(compact,/• Input:|• Cached input:|• Cache write:/,'Mini uses compact help, not the full category essay');
     for(const [id,selector] of [[owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
