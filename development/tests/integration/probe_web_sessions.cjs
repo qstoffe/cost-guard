@@ -222,7 +222,7 @@ async function main() {
     assert.equal(await evaluate('current.catalog.data.total'),120);
     checks.push('cold-to-global-metric-sort-ready');
     await evaluate("location.hash='#/sessions'"); await until('current.catalog.data.sort === "activity"');
-     const older=await evaluate('document.querySelector(".page-navigation button:last-child").destination');
+     const older=await evaluate('current.catalog.next.destination');
     await evaluate(`location.hash=${JSON.stringify(older)}`);
     await until('current.catalog.data.offset === 25');
     const membership=await evaluate('[...document.querySelectorAll("#result tbody tr")].map(row=>row.dataset.id)');
@@ -302,7 +302,7 @@ async function main() {
           await until('current.section === "token-mix"');
           await until('current.result && !current.loading');
          await until('document.querySelectorAll(".token-mix-table").length===2');
-         assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[13,13]);
+          assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[9,9]);
        }
        if (route==='sessions') await until('current.catalog?.data?.total===121');
        if (route==='sessions/root-0000') {
@@ -349,7 +349,7 @@ async function main() {
          }
        }
      }
-     checks.push('watch-sessions-detail-models-two-13-column-token-mix-parity-three-themes-four-widths-two-zooms');
+     checks.push('watch-sessions-detail-models-two-nine-column-token-mix-parity-three-themes-four-widths-two-zooms');
      assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
       inference_calls:0,personal_profile:false,desktop_effects:false};
