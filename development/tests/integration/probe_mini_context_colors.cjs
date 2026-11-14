@@ -8,7 +8,7 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
       c.focal_id=r.prompt.event_id=phase==='new'?'next-prompt':'color-prompt';
       Object.assign(r.prompt,{in_progress:['running','new','unverified'].includes(phase),
         execution_unverified:phase==='unverified',completed_successfully:phase==='finished'||phase==='earlier',
-        aborted:phase==='error',has_error:phase==='error',completed_at_ms:v.now_ms-1000});
+        aborted:phase==='aborted',has_error:phase==='error',completed_at_ms:v.now_ms-1000});
       Object.assign(ctx,{context_scope:'color-source',context_epoch:'color-epoch',context_state:state,
         watch_next_context_tokens:state==='ready-current'?230000:null,
         display:{watch_next_context_tokens:state==='ready-current'?'230k':'N/A'},
@@ -36,7 +36,7 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
     await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'${theme}'})))()`);
     await publish('running');await evaluate(`window.colorRow=miniWatch.view.promptRows.get('color-session')`);
     const initial=await read(),headers=initial.headers;
-    for(const phase of ['running','finished','earlier','new','unverified','error']) {
+    for(const phase of ['running','finished','earlier','new','unverified','aborted','error']) {
       for(const [severity,guidance,state,eligible] of [
         ['none','ready','ready-current',false],['approaching','ready','ready-current',false],
         ['exceeded','ready','ready-current',true],['exceeded','pending','ready-current',false],
@@ -44,9 +44,10 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
         ['exceeded','ready','pending',false],['exceeded','ready','invalidated',false]]) {
         await publish(phase,severity,guidance,state);
         const value=await read(),running=phase==='running'||phase==='new';
-        const other=running?value.running:phase==='finished'?value.success:phase==='error'?value.error:value.normal;
+        const colored=running||['finished','aborted','error'].includes(phase);
+        const other=running?value.running:phase==='finished'?value.success:['aborted','error'].includes(phase)?value.error:value.normal;
         assert.equal(value.same,true);assert.equal(value.values.length,5);
-        value.values.forEach((colors,index)=>assert.ok(colors.every(c=>c===(index===4&&!running?(eligible?value.error:value.normal):other)),
+        value.values.forEach((colors,index)=>assert.ok(colors.every(c=>c===(index===4&&!colored?(eligible?value.error:value.normal):other)),
           `${theme}/${scheme}/${phase}/${severity}/${guidance}/${state}: cell ${index} ${JSON.stringify(value)}`));
         assert.equal(value.exceeded,eligible);assert.equal(value.help,eligible?help:'');assert.equal(value.tab,eligible?0:-1);
         assert.equal(value.cls==='mini-running',running);assert.deepEqual(value.headers,headers);
@@ -56,6 +57,15 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
         await evaluate('miniWatch.render();miniWatch.syncTheme()');
         assert.deepEqual((await read()).values,value.values,'refresh does not retain obsolete foreground');
       }
+      if(['finished','aborted','error'].includes(phase)) {
+        for(const severity of ['none','exceeded']) {
+          await publish(phase,severity);await publish('earlier',severity);
+          const prior=await read();
+          assert.equal(prior.same,true);assert.equal(prior.cls,'');
+          prior.values.forEach((colors,index)=>assert.ok(colors.every(color=>
+            color===(index===4&&severity==='exceeded'?prior.error:prior.normal))));
+        }
+      }
     }
     await publish('running','none','ready','invalidated');
     await publish('new','none','pending','pending');
@@ -63,7 +73,7 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
     assert.ok(unknown.values.flat().every(color=>color===unknown.running),'unseeded pending Ctx is yellow too');
     assert.equal(unknown.help,'');assert.equal(unknown.tab,-1);
     // Same warning remains accessible through native keyboard, hover and touch in both categories.
-    for(const phase of ['running','earlier']) {
+    for(const phase of ['running','finished','aborted','error','earlier']) {
       await publish(phase,'exceeded');const before=await read();
       const panel=`miniWatch.view.doc.getElementById('context-help')`;
       await command('Page.bringToFront',{},pip);
@@ -89,5 +99,5 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
     layouts.push({case:`context-precedence-${theme}-${scheme}`,sample:await read()});
   }
   await evaluate('miniWatch.update=colorUpdate;miniWatch.update(liveValue);delete window.colorPublish;delete window.colorBase;delete window.colorRow;delete window.colorUpdate');
-  checks.push('192 native PiP publication cases: all five cell/descendant computed foregrounds; normal/approaching/exceeded/pending/refreshing/unavailable/invalidated context, Running/finished/Earlier/new Running/unverified/error; Classic/Web light/dark; immutable source, keyed identity, help semantics, refresh, header isolation and keyboard/hover/touch warning help');
+  checks.push('224 native PiP publication cases plus terminal-to-Earlier transitions: all five cell/descendant computed foregrounds; normal/approaching/exceeded/pending/refreshing/unavailable/invalidated context, Running/finished/Earlier/new Running/unverified/aborted/error; Classic/Web light/dark; immutable source, keyed identity, help semantics, refresh, header isolation and keyboard/hover/touch warning help');
 };

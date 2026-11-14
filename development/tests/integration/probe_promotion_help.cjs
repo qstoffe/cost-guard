@@ -42,11 +42,10 @@ module.exports = async ({command,run,ready,owner,checks,layouts,trace=false,isol
       if(descriptor)Object.defineProperty(target,'matches',descriptor);else delete target.matches;
     }};
   })()`);
-  const expected='GitHub Copilot · USD / 1M tokens\nBase context tier:\nInput $8 · Cached input $8\nCache write $8 · Output $8\n' +
-    'Input context >200000 tokens:\nInput $16 · Cached input $16\nCache write $16 · Output $16\n' +
-    'Input context ≥1000000 tokens:\nInput $32 · Cached input $32\nCache write $32 · Output $32\n' +
-    'Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11\n\n' +
-    'Token Mix · 1 completed priced prompts\nInput 20% · Cached input 60%\nCache write 10% · Output 10%';
+  const expected='GitHub Copilot · USD / 1M tokens\nBase context tier:\nInput: $8\nCached input: $8\nCache write: $8\nOutput: $8\n\n' +
+    'Input context >200K tokens:\nInput: $16\nCached input: $16\nCache write: $16\nOutput: $16\n\n' +
+    'Input context ≥1M tokens:\nInput: $32\nCached input: $32\nCache write: $32\nOutput: $32\n\n' +
+    'Price Promotion\n50% of original price (50% off)\nTemporary GitHub Copilot promotional pricing\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11';
   const opened=async()=>{
     await ready(`document.querySelector('#context-help')?.matches(':popover-open')`);
     assert.equal(await run(`document.querySelector('#context-help').textContent`),expected);
@@ -69,9 +68,13 @@ module.exports = async ({command,run,ready,owner,checks,layouts,trace=false,isol
     const readLayout=async()=>{
       const layout=await run(`(()=>{const n=output.querySelector('${selector}'),p=document.querySelector('#context-help'),r=p.getBoundingClientRect();
         return {text:n.textContent,whiteSpace:getComputedStyle(p).whiteSpace,color:getComputedStyle(n).color,
+          promotionColor:getComputedStyle(p.querySelector('.context-help-warning')).color,
+          ratesColor:getComputedStyle(p.firstChild).color,normalColor:getComputedStyle(p).color,
           bounded:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight};})()`);
       assert.match(layout.text,/8\.0x → 16\.0x \(>200K\) → 32\.0x \(≥1M\) \*$/);
-      assert.equal(layout.whiteSpace,'pre-line');assert.equal(layout.bounded,true);return layout;
+      assert.equal(layout.whiteSpace,'pre-line');assert.equal(layout.bounded,true);
+      assert.equal(layout.promotionColor,layout.color);assert.equal(layout.ratesColor,layout.normalColor);
+      assert.notEqual(layout.promotionColor,layout.ratesColor);return layout;
     };
     let layout;
     if(input!=='touch') {
@@ -118,6 +121,27 @@ module.exports = async ({command,run,ready,owner,checks,layouts,trace=false,isol
     await run(`document.activeElement?.blur()`);layouts.push({route:isolate?'promotion-isolation':'promotion-help',
       input,theme,width,...(isolate?{phase,hover:!failures.some(f=>f.phase===phase)}:{}),...layout});
   }
+  // General structured text is never HTML, and refresh preserves selectable leaves.
+  const structured=await run(`(()=>{
+    const target=document.createElement('span');target.textContent='Safe help';document.body.append(target);
+    let content=ContextHelp.warningParagraph('Published <b>rates</b>', 'Price Promotion\\n<img src=x onerror=alert(1)>');
+    ContextHelp.value(target,()=>content);target.focus();
+    const panel=document.getElementById('context-help'),before=panel.firstChild,warning=panel.lastChild;
+    const selection=getSelection(),range=document.createRange();range.selectNodeContents(warning);
+    selection.removeAllRanges();selection.addRange(range);
+    const selected=selection.toString(),safe=!panel.querySelector('img,b,script')&&panel.textContent.includes('<img src=x');
+    content=ContextHelp.warningParagraph('Published <b>rates</b>', 'Price Promotion\\n<img src=x onerror=alert(1)>');
+    ContextHelp.refresh(target);
+    const retained=panel.firstChild===before&&panel.lastChild===warning&&selection.toString()===selected;
+    selection.removeAllRanges();content='Plain help';ContextHelp.refresh(target);
+    const plain=panel.textContent==='Plain help'&&!panel.querySelector('span');
+    content=ContextHelp.runningDuration('Before ', '12s', ' after');ContextHelp.refresh(target);
+    const duration=panel.textContent==='Before 12s after'&&!!panel.querySelector('.context-help-running-duration');
+    content=ContextHelp.warningParagraph('Rates', 'Price Promotion');ContextHelp.refresh(target);
+    const restored=!!panel.querySelector('.context-help-warning')&&!panel.querySelector('.context-help-running-duration');
+    ContextHelp.dismiss(target);target.remove();return {safe,retained,plain,duration,restored};
+  })()`);
+  assert.deepEqual(structured,{safe:true,retained:true,plain:true,duration:true,restored:true});
   assert.deepEqual(failures,[],'fixed-viewport diagnostic hover failures');
   checks.push(isolate?'Diagnostic only: fixed Classic 1920, two pre-touch hover cycles and one post-touch cycle':
     `Canonical promotion (${input}): exact multiline model/discount/dates, one postfix after tiers, named input/dismissal and bounded help in nine theme/width cases`);

@@ -51,12 +51,17 @@ for (const heading of headings.slice(0, 2)) {
 }
 const more = all(output,'div').find(n=>n.className==='more-benchmarks'), external = all(more, 'a');
 assert.equal(more.className, 'more-benchmarks');
-assert.deepEqual(more.children.map(n => n.tag), ['h2', 'a', 'p']);
-assert.equal(external.length, 1);
+assert.deepEqual(more.children.map(n => n.tag), ['h2', 'ul']);
+assert.deepEqual(more.children[1].children.map(n => n.tag), ['li', 'li']);
+assert.equal(external.length, 2);
 assert.equal(external[0].href, 'https://artificialanalysis.ai/agents/coding-agents/');
 assert.equal(external[0].target, '_blank'); assert.equal(external[0].rel, 'noopener noreferrer');
 assert.match(external[0].textContent, /Artificial Analysis.*Coding Agent Index/);
-assert.match(more.children[2].textContent, /average USD cost per task/);
+assert.equal(external[0].textContent, 'Artificial Analysis — Coding Agent Index');
+assert.equal(external[1].textContent, 'Slopalytics — Cost per task / Cost vs intelligence');
+assert.equal(external[1].href, 'https://slopalytics.com/');
+assert.equal(external[1].target, '_blank'); assert.equal(external[1].rel, 'noopener noreferrer');
+assert.ok(!output.textContent.includes('✦ New Models:'));
 assert.equal(button('Refresh price list').attrs['data-model-control'], 'refresh');
 assert.equal(all(output, 'div').filter(n => n.className === 'model-price-controls').length, 2);
 for (const toolbar of all(output, 'div').filter(n => n.className === 'model-price-controls')) {
@@ -71,11 +76,11 @@ assert.ok(!output.textContent.includes('More information'));
 assert.equal(all(output, 'details').length, 1);
 const explanations = all(output, 'th').slice(0, 4).map(th => helpText(th.children[0]));
 assert.equal(new Set(explanations).size, 4);
-assert.match(explanations[0], /developer\/manufacturer.*not your subscription/);
-assert.match(explanations[1], /published catalog/);
-assert.match(explanations[3], /published\/verified.*N\/A/);
-assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.');
-assert.equal(explanations[2].split('\n\n').length, 3);
+assert.equal(explanations[0], 'The model’s developer/manufacturer.');
+assert.equal(explanations[1], 'The model identity in the published catalog.');
+assert.equal(explanations[3], 'The published/verified model release date.');
+assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%.');
+assert.equal(explanations[2].split('\n\n').length, 2);
 assert.ok(rows().every(r => helpText(r.children[2].children[0]).startsWith('GitHub Copilot · USD / 1M tokens')));
 assert.equal(all(output, 'a')[0].href, 'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing');
 let refreshes = 0; state.refreshPrices = () => refreshes++;
@@ -96,25 +101,24 @@ assert.ok(!output.textContent.includes('GitHub USD/M'));
 check(1, false);
 const old = rows().find(row => row.children[1].textContent === 'GPT-5.1');
 assert.ok(!old.className.includes('superseded'));
-assert.equal(old.children[2].textContent, fallback ? ' *' : '8.0x → 16.0x (>200K) → 32.0x (≥1M) *');
+assert.equal(old.children[2].textContent, fallback ? 'N/A → N/A (>200K) → N/A (≥1M) *' : '8.0x → 16.0x (>200K) → 32.0x (≥1M) *');
 assert.ok(!output.textContent.includes('*1 Fixture promotional terms'));
 const priceHelp = helpText(old.children[2].children[0]);
-assert.ok(priceHelp.includes('Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11'));
-assert.ok(priceHelp.includes('Input context >200000 tokens:\nInput $16 · Cached input $16\nCache write $16 · Output $16'));
-assert.ok(priceHelp.endsWith(fallback ? 'Token Mix unavailable · no completed priceable sample' :
-  'Token Mix · 1 completed priced prompts\nInput 20% · Cached input 60%\nCache write 10% · Output 10%'));
+assert.ok(priceHelp.includes('\n\nPrice Promotion\n50% of original price (50% off)\nTemporary GitHub Copilot promotional pricing\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11'));
+assert.ok(priceHelp.includes('Input context >200K tokens:\nInput: $16\nCached input: $16\nCache write: $16\nOutput: $16'));
+assert.ok(!priceHelp.includes('Token Mix'));
 assert.equal(old.children[2].children[0].attrs.title, undefined);
 assert.ok(!output.textContent.includes('8.040000'));
 assert.ok(explanations[2].length < 400, 'technical derivation must not fill the header tooltip');
 const originalModels = view.model_comparison;
 view.model_comparison = view.model_comparison.map(r => r.model === 'GPT-5.1' ? {...r,
-  price_help:'GitHub Copilot · USD / 1M tokens\nInput $0.0000000001 · Cached input N/A\nCache write N/A · Output $7',
+   price_help:'GitHub Copilot · USD / 1M tokens\nInput: $0.0000000001\nCached input: N/A\nCache write: N/A\nOutput: $7',
   promotion:{...r.promotion,description:'Updated exact-source promotion'}} : r);
 draw();
 const revisedHelp=helpText(rows().find(r=>r.children[1].textContent==='GPT-5.1').children[2].children[0]);
-assert.ok(revisedHelp.includes('Input $0.0000000001') && revisedHelp.includes('Updated exact-source promotion'));
+assert.ok(revisedHelp.includes('Input: $0.0000000001') && revisedHelp.includes('Updated exact-source promotion'));
 assert.ok(!revisedHelp.includes('50% off standard'));
-assert.equal(revisedHelp.split('\n\n')[1],priceHelp.split('\n\n')[1],'shared mix stays bound to same report');
+assert.ok(!revisedHelp.includes('Token Mix'));
 view.model_comparison=originalModels;draw();
 
 // Four filter states use table-local conservative flags exported by Python.
@@ -208,6 +212,11 @@ assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['2.0x', '
 assert.equal(benchmarkRows().length, 4);
 assert.ok(benchmarkRows().every(r => r.children[0].textContent === 'Anthropic' && r.children[1].textContent === 'Claude Opus 5.5'));
 assert.ok(helpText(benchmarkRows()[0].children[1].children[0]).startsWith('Coding Client: Claude Code'));
+assert.equal(helpText(benchmarkRows()[0].children[1].children[0]).split('\n').length, 2);
+assert.match(helpText(benchmarkRows()[0].children[1].children[0]), /^Coding Client: [^\n]+\nSource date: [^\n]+$/);
+assert.equal(helpText(state.benchmark.headers[0][1]), 'The matched GitHub catalog’s model developer/manufacturer.');
+assert.equal(helpText(state.benchmark.headers[1][1]), 'The matched GitHub model. The name reveals this configuration’s coding client.');
+assert.equal(helpText(state.benchmark.headers[2][1]), 'The tested reasoning effort.');
 assert.ok(helpText(benchmarkRows()[0].children[3].children[0]).includes('USD/Task: $2 per attempted task'));
 assert.ok(benchmarkRows().every(r => !r.className?.includes('promotion')));
 const referenceOrder = names(), referenceSort = JSON.stringify(state.models);

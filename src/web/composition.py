@@ -15,7 +15,7 @@ from .report_control import ManagedReport
 
 def application(request, *, read_admission=None, history_checkpoint=None):
     # Reuse existing account/model wiring, not CLI source wake or dispatch.
-    from src.bootstrap import _account_providers, _model_availability_source
+    from src.bootstrap import _model_availability_source
 
     root = Path(__file__).resolve().parents[2]
     config = load_configuration(root).values
@@ -40,11 +40,9 @@ def application(request, *, read_admission=None, history_checkpoint=None):
         # Strict fetch precedes acquisition. A failed request cannot publish a new
         # report/date, and this isolated job never refreshes Live's subscriptions.
         catalog = provider.refresh_catalog() if refresh_prices else None
-        accounts = (_account_providers(config, selection.selected) if request.kind is ReportKind.NORMAL
-                    and not refresh_prices and not isinstance(request, ManagedReport) else ())
         service = ReportService(selection=selection,
             pricing_provider=provider,
-            account_provider=accounts[0] if accounts else None, account_providers=accounts,
+            account_provider=None, account_providers=(),
             model_availability_source=_model_availability_source(selection),
             cache_repository=cache, config=config, now_ms=now, progress=progress,
             cache_token_mix_history=True)
@@ -62,7 +60,7 @@ def application(request, *, read_admission=None, history_checkpoint=None):
         return service
 
     observation = getattr(request, 'observation_ms', 0)
-    return ReportApplication(factory, clock=(lambda: observation) if observation else None)
+    return ReportApplication(factory, clock=(lambda: observation) if observation else None, models_only=True)
 
 
 def dispatch_dependencies(root):

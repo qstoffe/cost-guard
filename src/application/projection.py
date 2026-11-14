@@ -183,7 +183,7 @@ def model_rows(items, selectable=None):
     for index, item in enumerate(items):
         base = fields(item, "publisher model relative_cost price_summary price_help release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
-            "model description through resumes") if item.promotion else None), ("evidence", fields(item.evidence,
+            "model description through resumes price_comparison") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
             ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
             ("superseded_selectable", (item.publisher, item.model) in selected_faded), ("relative_levels", tuple(
@@ -210,6 +210,8 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         model_comparison=model_rows(report.model_comparison), model_comparison_sample_size=report.model_comparison_sample_size,
         model_comparison_mix=report.model_comparison_mix,
         model_catalog=record(rows=model_rows(catalog.rows, set(catalog.selectable)),
+            comparison_basis="fixed-statistical-average",
+            reference_token_weights=("0.02", "0.96", "0.01", "0.01"),
             promotion_notes=catalog.promotion_notes,
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,

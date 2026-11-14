@@ -175,8 +175,11 @@ Mini Activity value help is local `YYYY-MM-DD HH:mm` without an offset. Normal,
 approaching, pending and invalidated Ctx values have no popup; a current exceeded
 price threshold offers the short source-backed warning. Verified Running rows keep
 all five cell values yellow, including Ctx with that warning or a pending value.
-Only non-running Ctx uses ordinary text or red for an eligible exceeded threshold;
-the warning's meaning and keyboard/hover/touch access are unchanged.
+Verified Completed rows keep all five values green; Aborted/Error rows keep them
+red, regardless of Ctx warning or unavailable state. Earlier rows remove the status
+foreground in the same keyed row, restoring ordinary Ctx or eligible exceeded-red.
+Execution-unverified/unknown rows retain their neutral classification. The warning's
+meaning and keyboard/hover/touch access are unchanged.
 
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
 have no full-text popup in either Watch table. Mini uses column-heading help, not
@@ -402,10 +405,13 @@ Two independent checkboxes reset on every fresh page load:
   versions **within that candidate set**. Variants, preview/unstable and ambiguous
   names remain distinct. Turn it off to show older versions at normal text contrast.
 
-The Web receives one frozen full-catalog snapshot with selectable membership and the
-same global latest-100-completed-priceable-prompt sample. Its cheapest positive
+The Web receives one frozen full-catalog snapshot with selectable membership and a
+fixed statistical average: **Input 2%, Cached input 96%, Cache write 1%, Output 1%**.
+These are reference comparison weights, not measured user usage. Its cheapest positive
 comparable full-catalog base remains 1.0x in every filter state. Unknown ratios remain
-unknown and visible, not zero. Toggling never reprices or reacquires history/accounts.
+unknown and visible, not zero. Ratios are available even with zero priceable prompts.
+The Models-only request never lists, hydrates or samples prompt history or account periods.
+Toggling never reprices or reacquires history/accounts.
 CLI candidate selection, ranking, denominators and Watch valuation are unchanged.
 
 Default sorting is **Relative Price List Cost ↓**. Every header toggles its single sort;
@@ -465,25 +471,26 @@ Independent due benchmark polling is not a forced price-list side effect.
 
 There is no **More information** disclosure or concept-card block. Header text alone
 reveals short Publisher/Model/Release-date definitions and a compact reference-ratio
-explanation. The calculation still uses one shared up-to-100 completed priceable
-prompt token mix across all models/tiers; arrows retain published context-tier
-thresholds. Without a qualifying sample, hidden 2/96/1/1 ranks prices but observed
-ratios remain blank. Credits and reference USD (`100 credits = $1.00`) are
+explanation. All model/tier ratios use the fixed 2/96/1/1 statistical weights above;
+arrows retain published context-tier thresholds. These ratios are reference prices,
+not controlled task performance, actual bills or observed history.
+Credits and reference USD (`100 credits = $1.00`) are
 display units on a Copilot AI-credit-equivalent reference basis, not native quota or billing.
 Sorting arrows, click/keyboard/Shift actions and accessible names remain separate.
 Active promotions retain their highlight and one unnumbered postfix star after the
 complete Relative Price List Cost tier chain. Hover, keyboard focus or touch opens multiline
 help showing exact published **USD / 1M tokens**, labeled **Input, Cached input, Cache write,
-Output**, with real context-tier boundaries and unavailable markers for unpublished rates.
-Promotion description and end/resume dates remain alongside the price information.
-After a blank line, every value shows the same server-prepared pooled **Token Mix** and
-actual eligible prompt count used for its ratios, not the separate Token Mix report.
-Percentages sum to 100%; no eligible sample gives unavailable help, never the hidden
-sorting fallback. No hover fetch, history rescan or browser repricing is involved.
-The header retains its two short price/performance paragraphs, followed by two
-sentences defining Token Mix and its latest **up to 100 completed, priceable prompts**.
-There are no numbered promotion footnotes below the table. **New Models** notices sit
-above it, with the two filters grouped at the right (wrapping on mobile).
+Output**, each on its own line. Tiers have a blank separator and exact compact K/M
+context boundaries; unpublished rates stay N/A. A separate **Price Promotion**
+paragraph uses the same orange as the cell/marker, including source-supported
+description and end/resume dates. Verified current/standard weighted rates can show
+**70% of original price (30% off)**; different tier percentages are labeled by tier.
+Unsupported percentages are omitted, never guessed. Rates remain normal-colored.
+Value help contains no Token Mix copy; only the header explains the fixed weights.
+No hover fetch, history rescan, raw HTML injection or browser repricing is involved.
+There are no numbered promotion footnotes or standalone **New Models** notice above
+the table. Existing model-name and release-date highlights retain their original
+eligibility/expiry. The two filters remain grouped at the right (wrapping on mobile).
 Routine source/catalog-verification caveats are not displayed. **Accounts** retains full supported quota,
 billing, subscription and attribution details and its canonical acquisition behavior.
 
@@ -571,12 +578,11 @@ global footer is removed; guarantees remain in relevant optional report help.
 
 ### More Coding Benchmarks
 
-Below both Models tables, **More Coding Benchmarks** links to the official
-[Artificial Analysis Coding Agent Index](https://artificialanalysis.ai/agents/coding-agents/).
-Its cost-versus-performance chart compares coding-agent configurations and effort
-settings independently. Its composite score is not Harbor's Solved percentage.
-This is an external link only: no Artificial Analysis data, requests or credentials
-are integrated into Cost Guard.
+Below both Models tables, **More Coding Benchmarks** contains two plain links:
+- [Artificial Analysis — Coding Agent Index](https://artificialanalysis.ai/agents/coding-agents/)
+- [Slopalytics — Cost per task / Cost vs intelligence](https://slopalytics.com/)
+
+Both open safely in new tabs. No external benchmark data is imported or embedded.
 
 ### Web date and time display
 
@@ -835,7 +841,7 @@ acquisition or client-side valuation. [Verification and limits](https://github.c
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
 | Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; one-prompt cards, five historical sessions and independent daily/account observations |
-| Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
+| Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Fixed statistical 2/96/1/1 reference ratios even without historical prompts; unknown rates retained. No prompt sampling, account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Today-first eight-column catalog including Effort/CTX, 25 sessions/page, period-scoped server sorting and stable older-page windows; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
@@ -877,9 +883,9 @@ successful source observation—not visits, timers, cache writes or failed attem
 The initial selected route wins before speculative heavy warming. Thereafter the
 host opportunistically warms Normal Models, Token Mix, default 30-day AI Stats and
 the first ten-group Comparisons page. It does not eagerly scan every AI Stats period
-or every session detail/page. Models' actual qualified sample controls cadence:
-under 100 completed priceable prompts targets 15 minutes foreground / 45 inactive;
-100 or more has an hourly floor. AI Stats targets 15/30 minutes; Token Mix and
+or every session detail/page. History-free Models uses the existing no-sample cadence:
+15 minutes foreground / 45 inactive, without fabricating a prompt count.
+AI Stats targets 15/30 minutes; Token Mix and
 Comparisons 5/20. Due times are staggered and can be postponed by foreground/Live
 pressure, not promised at an exact second. Successful completion schedules the next
 cadence; neither old observation age nor midnight causes immediate recomputation loops.

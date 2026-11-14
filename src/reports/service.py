@@ -716,6 +716,26 @@ class ReportService:
                 from .shared_evidence import flush
                 flush(self)
 
+    def build_model_price_list(self, request: ReportRequest) -> ReportProjection:
+        """Web Models needs catalog/availability only, never prompt or quota history."""
+        catalog = self._load_catalog()
+        self.progress(WorkProgress("Checking available OpenCode models", "availability", stage="availability"))
+        selected, warnings = (catalog, ()) if request.kind is ReportKind.ALL_MODELS else selectable_catalog(
+            catalog, availability_source=self.model_availability_source)
+        self.progress(WorkProgress("Preparing model catalog", "projection", stage="models"))
+        web_catalog = web_model_catalog((), catalog, selected, now_ms=self.now_ms,
+            cache_repository=self.cache_repository, progress=lambda done, total: self.progress(
+                WorkProgress("Comparing model prices", "projection", done, total, stage="models")))
+        selectable = set(web_catalog.selectable)
+        rows = tuple(row for row in web_catalog.rows if (row.publisher, row.model) in selectable)
+        return ReportProjection(
+            request.kind, "Cost Guard", self.selection.selected.upper(),
+            tuple(self.selection.warnings) + warnings,
+            model_comparison=rows, model_catalog=web_catalog,
+            pricing_retrieved_at_ms=catalog.retrieved_at_ms,
+            model_comparison_promotion_notes=web_catalog.promotion_notes,
+        )
+
     def report_source_revisions(self) -> tuple[tuple[str, str], ...]:
         """Per-root evidence, not a claim of one cross-root/provider transaction."""
         return tuple(sorted(self._acquisition.revisions.items()))

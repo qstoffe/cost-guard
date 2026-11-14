@@ -46,8 +46,12 @@ body { padding: .5rem; max-width: none; }
 .mini-error { color: var(--error); }
 .mini-context { color: var(--ink); }
 .mini-context-exceeded { color: var(--error); }
-/* Verified Running wins over cell-level context warnings without removing help. */
-.mini-prompt-table .mini-running > td { color: var(--watch-running); }
+/* Verified row status wins over Ctx warnings, including every text descendant. */
+.mini-prompt-table .mini-running { --mini-row-color: var(--watch-running); }
+.mini-prompt-table .mini-success { --mini-row-color: var(--watch-success); }
+.mini-prompt-table .mini-error { --mini-row-color: var(--error); }
+.mini-prompt-table :is(.mini-running, .mini-success, .mini-error) > td,
+.mini-prompt-table :is(.mini-running, .mini-success, .mini-error) > td * { color: var(--mini-row-color); }
 .mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem;
   flex: 0 0 auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .mini-accounts li { min-height: 2.65rem; padding-bottom: .4rem; }

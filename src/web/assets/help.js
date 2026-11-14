@@ -1,8 +1,13 @@
 'use strict';
-// One noninteractive text surface per document; only live Duration has a safe span.
+// One noninteractive text surface per document; structured content is text-only.
 const ContextHelp = (() => {
   const entries = new WeakMap(), documents = new WeakMap();
   const durations = new WeakSet();
+  const warnings = new WeakSet();
+  function warningParagraph(before, warning) {
+    const value = {before: String(before) + '\n\n', warning: String(warning)};
+    warnings.add(value); return value;
+  }
   function runningDuration(before, duration, after) {
     const value = {before, duration, after}; durations.add(value); return value;
   }
@@ -92,11 +97,18 @@ const ContextHelp = (() => {
       if (target && target !== active && !target.contains(active)) return;
       const content = entries.get(active).content;
       const value = typeof content === 'function' ? content() : content;
-      if (durations.has(value)) {
-        if (!fragments) {
+      if (warnings.has(value)) {
+        if (fragments?.kind !== 'warning') {
+          const before = doc.createElement('span'), warning = doc.createElement('span');
+          warning.className = 'context-help-warning';
+          panel.replaceChildren(before, warning); fragments = [before, warning]; fragments.kind = 'warning';
+        }
+        [value.before, value.warning].forEach((text, index) => fragmentText(fragments[index], text));
+      } else if (durations.has(value)) {
+        if (fragments?.kind !== 'duration') {
           const before = doc.createTextNode(''), duration = doc.createElement('span'), after = doc.createTextNode('');
           duration.className = 'context-help-running-duration';
-          panel.replaceChildren(before, duration, after); fragments = [before, duration, after];
+          panel.replaceChildren(before, duration, after); fragments = [before, duration, after]; fragments.kind = 'duration';
         }
         [value.before, value.duration, value.after].forEach((text, index) => {
           fragmentText(fragments[index], text);
@@ -264,5 +276,5 @@ const ContextHelp = (() => {
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
   function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
-  return {attach, button, heading, value, refresh, dismiss, runningDuration, HOVER_DELAY};
+  return {attach, button, heading, value, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
 })();
