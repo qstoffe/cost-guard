@@ -13,7 +13,7 @@ from src.cache import CacheDatabase, CacheRepository
 from src.pricing.base import PricingUnavailableError
 from src.pricing.github_copilot import (CACHE_KEY, CACHE_NAMESPACE, DOCS_API_BODY,
     PRICING_ARTICLE_PATH, GitHubCopilotPricingProvider)
-from src.reports import ReportRequest
+from src.reports import ReportRequest, ReportService
 from src.sources.selection import SourceSelection
 from src.web.composition import application
 from src.web.jobs import ModelsPriceRefresh, ReportJobs
@@ -91,7 +91,7 @@ class PriceRefreshTests(unittest.TestCase):
         self.assertFalse(verified.reference_stale)
         self.assertEqual(original.analysis_signature, verified.analysis_signature)
 
-    def test_isolated_refresh_rebuilds_prices_ratios_and_sample_valuation_without_accounts_or_watch_repricing(self):
+    def test_isolated_refresh_rebuilds_fixed_prices_without_history_accounts_or_watch_repricing(self):
         pinned_watch = self.provider.get_catalog()
         source = FakeSource()
         selection = SourceSelection(source, 'v1', (), source.probe())
@@ -106,21 +106,23 @@ class PriceRefreshTests(unittest.TestCase):
                 patch('src.bootstrap._account_providers') as accounts, \
                 patch('src.bootstrap._model_availability_source', return_value=None):
             selector.return_value.select.return_value = selection
-            first = application(ModelsPriceRefresh()).execute(ModelsPriceRefresh()).to_json()
-            self.now += 1000
-            self.fetch.return_value = pricing_document(10)
+            with patch.object(ReportService, 'session_catalog', side_effect=AssertionError('no price-list history')):
+                first = application(ModelsPriceRefresh()).execute(ModelsPriceRefresh()).to_json()
+                self.now += 1000
+                self.fetch.return_value = pricing_document(10)
 
-            refreshed = application(ModelsPriceRefresh()).execute(ModelsPriceRefresh()).to_json()
+                refreshed = application(ModelsPriceRefresh()).execute(ModelsPriceRefresh()).to_json()
 
         self.assertIsNone(first['error'])
         self.assertIsNone(refreshed['error'])
         accounts.assert_not_called()
         before, after = first['view'], refreshed['view']
-        self.assertGreater(after['model_comparison_sample_size'], 0)
+        self.assertEqual(0, after['model_comparison_sample_size'])
+        self.assertIsNone(after['model_comparison_mix'])
         old = next(row for row in before['model_catalog']['rows'] if row['model'] == 'GPT-Test')
         new = next(row for row in after['model_catalog']['rows'] if row['model'] == 'GPT-Test')
         self.assertGreater(Decimal(new['relative_cost']), Decimal(old['relative_cost']))
-        self.assertNotEqual(before['token_mix']['costs'], after['token_mix']['costs'])
+        self.assertEqual(before['token_mix'], after['token_mix'], 'no synthetic or revalued user telemetry')
         self.assertEqual(self.now, after['pricing_retrieved_at_ms'])
         self.assertEqual(Decimal(1), pinned_watch.resolve('gpt-test').per_million_input)
         self.assertEqual(pinned_watch.retrieved_at_ms, self.provider.get_catalog().retrieved_at_ms)

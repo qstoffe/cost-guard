@@ -122,6 +122,8 @@ module.exports = async ({command,run,ready,owner,checks,layouts,trace=false,isol
       input,theme,width,...(isolate?{phase,hover:!failures.some(f=>f.phase===phase)}:{}),...layout});
   }
   // General structured text is never HTML, and refresh preserves selectable leaves.
+  for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',
+    {type,key:'Tab',code:'Tab',windowsVirtualKeyCode:9},owner);
   const structured=await run(`(()=>{
     const target=document.createElement('span');target.textContent='Safe help';document.body.append(target);
     let content=ContextHelp.warningParagraph('Published <b>rates</b>', 'Price Promotion\\n<img src=x onerror=alert(1)>');
