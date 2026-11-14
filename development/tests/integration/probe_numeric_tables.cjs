@@ -128,7 +128,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         display_units:{usd:{value:'$1.25',calendar_rate:'$1.25/h',workday_rate:'$1.25/h',active_rate:'$1.25/h'}}}));
       numericStatsState={period:'today',result:{source:{identity:'stats-${unit}',generation:'v2'},view:{
         kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-3-responses',ai_stats_work:{scopes:{today:{ready:true}}},
-        ai_stats:[{period:'today',start_ms:1000,metrics}]}};
+        ai_stats:[{period:'today',start_ms:1000,metrics}]}}};
       numericStats.update(numericStatsState);
     })()`);
     for(const [raw,complete,expected] of [['0',false,125],['100',true,100],['0',true,0]]) {
