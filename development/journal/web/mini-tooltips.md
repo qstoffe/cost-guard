@@ -51,7 +51,10 @@ was the intentional Mini unknown Capacity `?` → `N/A` fixture, then repaired a
 `test_mini_watch.py` passed. A subsequent clean Full invocation ended early after
 eight passing groups without a summary/report (exit 1), so is incomplete, not PASS.
 Package validation passed with seven unchanged advisory warnings and no cap changes.
-Final suite and actual browser results remain pending.
+After realistic whole-session groups exposed a second payload overflow, unit-shared
+prepared model labels repaired it without changing the cap or fixture. The final
+local Full completed **195/195 PASS**, zero failures, 163.1 seconds. The complete
+per-file report is retained in worker scratch; actual browser acceptance is separate.
 
 Read-only installed V2 accounts passed (three cards, one refresh owner, advancing
 publication; no inference). The combined Watch probe **FAILED** its 90-second
@@ -100,3 +103,9 @@ first failure cause remain unavailable. Existing authenticated check/run reads
 work. Decision Delegate authorized stage-specific allowlisted Checks diagnostics
 on the same PR as an adequate alternative; no credentials/access route changed,
 log endpoint retry, manual workflow dispatch or browser acceptance waiver.
+The next diagnostic run classified Git diff exit 129 but did not establish its
+cause. A read-only identity diagnostic then confirmed `git_dubious_ownership`
+(exit 128) in the disposable container checkout. Under the existing scoped Delegate
+decision, those read-only Git commands now use `-c safe.directory=<exact ROOT>`;
+there is no global/wildcard trust change or protection bypass. All three native
+platform checks passed on these revisions; scoped browser acceptance remains pending.

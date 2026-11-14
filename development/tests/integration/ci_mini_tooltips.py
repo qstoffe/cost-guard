@@ -6,18 +6,21 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
+# Hosted diagnostics confirmed container/checkout ownership differs. Trust only
+# this exact disposable checkout for these read-only commands, never globally.
+GIT = ["git", "-c", f"safe.directory={ROOT}"]
 sys.path.insert(0, str(ROOT))
 from development.tools.ci_web_beta import hosted_only, notice, save
 
 
 def probe(state):
     state["stage"] = "checkout-git-identity"
-    identity = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+    identity = subprocess.run([*GIT, "rev-parse", "--show-toplevel"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
     if Path(identity).resolve() != ROOT:
         raise ValueError("checkout_identity_mismatch")
     state["stage"] = "affected-source-git-diff"
-    changed = subprocess.run(["git", "diff", "--name-only", "HEAD^", "HEAD", "--",
+    changed = subprocess.run([*GIT, "diff", "--name-only", "HEAD^", "HEAD", "--",
         "src/web/assets/help.js", "src/web/assets/mini.js", "src/application/mini_costs.py"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout
     if not changed.strip():
@@ -30,7 +33,7 @@ def probe(state):
     output = ROOT / "ci-results/mini-tooltips.json"
     baseline = ROOT / "ci-results/baseline-help.js"
     state["stage"] = "baseline-git-show"
-    original = subprocess.run(["git", "show", "HEAD^:src/web/assets/help.js"],
+    original = subprocess.run([*GIT, "show", "HEAD^:src/web/assets/help.js"],
         cwd=ROOT, capture_output=True, check=True, timeout=10).stdout
     state["stage"] = "baseline-write"
     baseline.write_bytes(original)
