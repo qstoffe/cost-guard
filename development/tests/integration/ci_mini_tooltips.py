@@ -1,4 +1,4 @@
-"""Affected-source PR check with a separate bounded real-time PiP budget."""
+"""Affected-source mouse/touch checks; exhaustive and mixed/control on manual Full."""
 import json
 import os
 from pathlib import Path
@@ -88,10 +88,11 @@ def probe(state, journey):
     state["stage"] = "affected-source-git-diff"
     changed = subprocess.run([*GIT, "diff", "--name-only", "HEAD^", "HEAD", "--",
         "src/web/assets/help.js", "src/web/assets/mini.js", "src/web/assets/watch.js",
-        "src/application/mini_costs.py"],
+        "src/application/mini_costs.py", "development/tests/integration/probe_hover_stationary.cjs",
+        "development/tests/integration/probe_web_help.cjs", "development/tests/integration/ci_mini_tooltips.py"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout
-    if not changed.strip():
-        save("mini-tooltips", dict(outcome="NOT RUN", reason="tooltip owners unchanged"))
+    if not changed.strip() and os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
+        save("mini-tooltips-" + journey, dict(outcome="NOT RUN", journey=journey, reason="tooltip owners unchanged"))
         return 0
     state["stage"] = "image-browser-binding"
     from playwright.sync_api import sync_playwright

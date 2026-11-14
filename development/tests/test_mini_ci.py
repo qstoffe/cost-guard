@@ -1,11 +1,72 @@
 """The task-scoped mixed-input exclusion fails closed outside measured evidence."""
 from copy import deepcopy
+import json
+import shutil
+import subprocess
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
+from development.tests.integration import ci_mini_tooltips
 from development.tests.integration.ci_mini_tooltips import accepted_mixed_gap, fr704_delivery
 
 
 class MiniCiTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js required for actual stationary selector")
+    def test_stationary_selection_keeps_both_documents_and_manual_full_matrix(self):
+        script = """
+const {stationaryScenarios}=require('./development/tests/integration/probe_hover_stationary.cjs');
+console.log(JSON.stringify(['pull_request','push','workflow_dispatch',null].map(
+  event=>stationaryScenarios('pip','watch',event))));
+"""
+
+        result = subprocess.run(["node", "-e", script], cwd=ci_mini_tooltips.ROOT,
+            capture_output=True, text=True, check=True, timeout=10)
+
+        pull, push, full, unknown = json.loads(result.stdout)
+        expected = [["pip", ".mini-accounts .help-value"],
+                    ["watch", ".watch-subscription .metric-value > .help-value"]]
+        self.assertEqual(expected, pull)
+        self.assertEqual(expected, push)
+        self.assertEqual(expected, unknown)
+        self.assertEqual(12, len(full))
+        self.assertEqual(12, len({tuple(row) for row in full}))
+        self.assertTrue(all(row in full for row in expected))
+        self.assertEqual({"pip", "watch"}, {row[0] for row in full})
+
+    def test_unchanged_ordinary_work_skips_but_manual_full_reaches_browser_setup(self):
+        for event in ("pull_request", "push", "workflow_dispatch"):
+            with self.subTest(event=event), \
+                    patch.dict("os.environ", {"GITHUB_EVENT_NAME": event}), \
+                    patch.object(ci_mini_tooltips.subprocess, "run", side_effect=[
+                        SimpleNamespace(stdout=str(ci_mini_tooltips.ROOT)), SimpleNamespace(stdout="")]), \
+                    patch.object(ci_mini_tooltips, "save") as save, \
+                    patch.dict("sys.modules", {"playwright.sync_api": None}):
+                state = {}
+
+                if event == "workflow_dispatch":
+                    with self.assertRaises(ModuleNotFoundError):
+                        ci_mini_tooltips.probe(state, "mouse")
+                else:
+                    self.assertEqual(0, ci_mini_tooltips.probe(state, "mouse"))
+
+                if event == "workflow_dispatch":
+                    self.assertEqual("image-browser-binding", state["stage"])
+                    save.assert_not_called()
+                else:
+                    self.assertEqual("NOT RUN", save.call_args.args[1]["outcome"])
+                    self.assertEqual("mini-tooltips-mouse", save.call_args.args[0])
+
+    def test_workflow_keeps_core_journeys_and_limits_diagnostics_to_manual_full(self):
+        workflow = (ci_mini_tooltips.ROOT / ".github/workflows/web-beta.yml").read_text()
+        steps = workflow.split("      - name: ")
+        for journey in ("mouse", "touch", "mixed", "control"):
+            step = next(step for step in steps if
+                        "run: python development/tests/integration/ci_mini_tooltips.py " + journey in step)
+            condition = next(line.strip() for line in step.splitlines() if line.strip().startswith("if:"))
+            self.assertIn("!cancelled()", condition)
+            self.assertEqual(journey in ("mixed", "control"), "workflow_dispatch" in condition)
+
     def evidence(self):
         observation = dict(method="hover", theme="classic", scheme="light", unit="credits",
             same=True, connected=True, focus=True, active=False, open=False, hit=True, hovered=True,
