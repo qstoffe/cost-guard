@@ -102,8 +102,8 @@ class ValidationTests(unittest.TestCase):
     def test_documentation_images_use_existing_binary_cap_not_text_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "development/architecture/governance/policies").mkdir(parents=True)
-            shutil.copyfile(ROOT / "development/architecture/governance/policies/file-budgets.json", root / "development/architecture/governance/policies/file-budgets.json")
+            (root / "development/tests/policies").mkdir(parents=True)
+            shutil.copyfile(ROOT / "development/tests/policies/file-budgets.json", root / "development/tests/policies/file-budgets.json")
             image = root / "docs/images/example.png"
             image.parent.mkdir(parents=True)
             self.assertEqual("universalFile", validate_package.file_kind(root, image))

@@ -15,7 +15,7 @@ MAX_GUESSED_MS = 4 * HOUR_MS
 GENERIC_TOKEN_COST = Decimal('.000003')
 # AI Stats = BEST EFFORT / NEVER Unavailable. Sparse, partial and estimated
 # observations show fun values; Loading and genuine operational errors differ.
-# Standing contract: development/architecture/modules/reports.md#ai-stats--best-effort--never-unavailable
+# Standing contract: see development/README.md for the Reports module contract.
 POLICY = 'fun-3-responses'
 
 

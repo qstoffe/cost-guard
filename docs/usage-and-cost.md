@@ -135,7 +135,7 @@ account attribution after sign-out; foreign references and explicitly billed
 Claude Agent traffic are excluded from Pro compatibility. The original request
 provider, model and tokens do not change. Native `1% used` and a reference `$0.06`
 can coexist: neither proves the other, and neither establishes actual Pro billing.
-The [verification journal](../development/journal/claude-agent-ccost.md) distinguishes
+The [verification journal](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/claude-agent-ccost.md) distinguishes
 synthetic/read-only evidence from the excluded all-model live execution proof.
 
 Native reset plus duration defines a rolling accounting interval only while its reset is usable. A fresh provider-confirmed `not started`/empty window without a reset shows **0** current-period CCost, independently of historical requests or history loading. It never borrows a trailing lookback. Contradictory inactive/reset/usage evidence, stale observations, missing boundaries and expired windows remain unavailable until current evidence arrives. An active interval can legitimately have nonzero CCost while its native usage rounds to 0%; the percentage is never a cost conversion. Each five-hour, weekly or model-specific window is resolved independently. Delayed Web history is indexed evidence, rebound to the current account/window rather than copying an older period's costs.

@@ -74,7 +74,7 @@ Earlier Sessions. A healthy host HTTP connection does not prove a healthy source
 Record the exact missing/wrong field and a minimal sanitized supported record shape;
 do not share a private installation database or credentials. No specific plugin
 cause or reproduction of the reported installation is claimed. See the
-[audit evidence and limits](../development/journal/web/v1-compatibility.md).
+[audit evidence and limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/v1-compatibility.md).
 
 ## Contextual help
 
@@ -117,7 +117,7 @@ no server/report work is triggered.
 Known limitation: a reproduced Mini touch/keyboard-to-mouse sequence can fail to
 open Total-heading hover help because the browser reports no hover at the opening
 check. Keyboard/tap help remains an alternative. Physical desktop prevalence is
-unverified; [the follow-up and evidence](../development/backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
+unverified; [the follow-up and evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
 are tracked separately from the orphan-prevention fix.
 
 Full Watch’s **CCost** value help separates first-request incoming-context cost
@@ -205,7 +205,7 @@ A normal page URL/bookmark works only in an already-authorized browser while tha
 host/port/session remains valid. Pasting the plain URL into a fresh browser still
 requires authorization. There is no webpage Copy button, new browser API or macOS
 copy-menu action. Physical Windows menu/clipboard acceptance is separately qualified
-in the [verification notes](../development/journal/web/browser-links.md).
+in the [verification notes](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/browser-links.md).
 
 v80.139 recognizes persisted failed/interrupted runs that ended before producing an
 assistant response, including resumed work followed by a system notice. The server
@@ -738,7 +738,7 @@ foreground and **twenty minutes** inactive, staggered behind Live/foreground dem
 Retained DOM/focus, real observation
 times remain internal; populated reports have no passive as-of/refresh strip. Complete no-matches, excluded
 inputs, changing/partial coverage, loading and unavailable results remain distinct.
-[Verification and limitations](../development/journal/web/comparisons.md).
+[Verification and limitations](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/comparisons.md).
 
 **Settings → CCost display** switches Python-prepared reference
 amounts in place, without report jobs or provider refresh. Native money, quotas,
@@ -748,7 +748,7 @@ including reload/new tabs. No URL, browser storage or preference cookie is writt
 
 v80.107 keeps healthy authenticated streams open without periodic rotation. Connected
 status is now visually quiet; only actionable states show a notice, with expandable
-host/source timestamps. See [real-source soak and fault evidence](../development/architecture/governance/verification/web-live-stability.md).
+host/source timestamps. See [real-source soak and fault evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-live-stability.md).
 
 v80.106 fixes real-installation Normal results that exceeded the unchanged 8 MiB
 limit because they carried unused month-wide causal request identities. Normal now
@@ -761,20 +761,20 @@ Classic defaults to dark; Web follows system light/dark. Both use local fonts, v
 keyboard focus, sticky headings and narrow-table scrolling; reduced motion disables
 transitions. “Reading this report” contains definitions, not rows/totals. Accounts uses
 only the live Watch subscription cards described below. Models follows the hierarchy above.
-See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
-and [visual evidence/limits](../development/architecture/governance/verification/web-design.md).
+See the [synthetic before/after gallery](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-design/index.html)
+and [visual evidence/limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-design.md).
 
 The Web shares CLI-owned numeric display primitives through server-provided display
 tokens while retaining exact raw values for sorting. CCost, USD, quotas/Pace,
 multiplier tiers and durations no longer expose incidental Decimal precision;
 CLI all-model native reference rates intentionally retain every meaningful digit;
 the retired Web native-rate column is not restored.
-See the [display parity baseline](../development/architecture/governance/verification/web-display-parity.md)
+See the [display parity baseline](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-display-parity.md)
 for per-view mapping, role/notice semantics and explicit page-specific remaining work.
 
 ## Hosted revalidation
 
-The **Cost Guard Web revalidation** Actions workflow tests Web on standard Windows x64 and macOS Apple Silicon/Intel runners, with manual dispatch and relevant PR/main triggers. See the [historical coverage matrix, cost boundaries and remaining manual checklist](../development/architecture/governance/verification/web-beta-ci.md). CI-only Python/Node/Chromium tooling adds no product dependency. Native API execution is not physical desktop/Finder/Gatekeeper or accessibility acceptance. Promotion does not turn those unverified checks into PASS.
+The **Cost Guard Web revalidation** Actions workflow tests Web on standard Windows x64 and macOS Apple Silicon/Intel runners, with manual dispatch and relevant PR/main triggers. See the [historical coverage matrix, cost boundaries and remaining manual checklist](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-beta-ci.md). CI-only Python/Node/Chromium tooling adds no product dependency. Native API execution is not physical desktop/Finder/Gatekeeper or accessibility acceptance. Promotion does not turn those unverified checks into PASS.
 
 Run `python cost-guard-web.py --foreground` using already installed Python 3.11+. It binds **127.0.0.1 only**, on an OS-assigned port. There is no LAN/proxy mode, install step, frontend build or automatic browser launch in this explicit developer mode. Leave the console open. Ctrl+C or a detected runtime-source change stops only this host and its owned finite reports; it does not stop OpenCode. Foreground instances are intentionally separate from managed launcher discovery.
 
@@ -820,7 +820,7 @@ quota freshness. Local midnight clears yesterday's scope; zero before new eligib
 is normal. Fresh daily values and explanations still update if native quotas fail.
 Missing history/account attribution or wholly unpriced usage stays unknown, not a fake
 zero; partial pricing shows only the known subtotal. Global Today may include usage
-that cannot be assigned to an account. [Midnight evidence and limits](../development/journal/web/account-today.md).
+that cannot be assigned to an account. [Midnight evidence and limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/account-today.md).
 
 The existing single authenticated Live stream updates Accounts even if Watch has never
 opened. Switching routes uses the latest retained common observation immediately;
@@ -830,7 +830,7 @@ Observed empty, unavailable/partial and retained stale observations stay distinc
 Stable account identities and bound metric/help nodes retain focus, selection and
 scroll through ordinary updates. Real account removal/reordering is still applied.
 Credits/USD, Used/Remaining and themes apply to visible and retained cards without
-acquisition or client-side valuation. [Verification and limits](../development/journal/web/accounts-live.md).
+acquisition or client-side valuation. [Verification and limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/accounts-live.md).
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
@@ -966,7 +966,7 @@ Detail's **Ictx** is only the prompt's first-request incoming context, never a d
 
 Visible Sessions reads about every five seconds, or every second during pending navigation. Page 1 follows arrivals; older pages retain qualified epoch membership/order even as new roots arrive. Expired positions permit one bounded, silent reopen to the latest first page with sort intent preserved; successful recovery leaves no warning or live-region announcement and requires no browser reload. If membership/order changes, incompatible focused/selected old rows retire before the URL and pager identify the new page; matching rows keep their DOM and focus. Background refresh/age alone never hides usable rows.
 
-Source-generation changes include routine running activity and do **not** exhaust a rebase allowance. Changed source/revision/dependency keys still lose qualification individually. Pending navigation fails visibly after a terminal source error, three failed scalar attempts or **45 seconds without forward coverage when no bounded summary read is active**; a local HTTP request retains its 15-second response bound. An active summary read retains the source's own transport/cancellation limits, not a fabricated completion count. Failures keep the requested heading, reason and **Retry / Cancel** in the loading position; the old order remains recoverable behind it, not silently reapplied above an offscreen error. Redundant route notifications cannot clear the pending/error state. Retry starts a fresh navigation attempt but reuses valid indexed keys; only explicit Cancel restores the last successful page. Progressing work has no total computation deadline. Activity/name acquisition covers requested 25-row pages only; hidden/cancelled interest demotes that lease's indexing. No cross-root atomic snapshot is claimed. The [navigation investigation](../development/journal/web/sessions-navigation.md#three-tier-progress-and-apparent-rollback-fr000669) records the reproduced installed-source cause and verification limits.
+Source-generation changes include routine running activity and do **not** exhaust a rebase allowance. Changed source/revision/dependency keys still lose qualification individually. Pending navigation fails visibly after a terminal source error, three failed scalar attempts or **45 seconds without forward coverage when no bounded summary read is active**; a local HTTP request retains its 15-second response bound. An active summary read retains the source's own transport/cancellation limits, not a fabricated completion count. Failures keep the requested heading, reason and **Retry / Cancel** in the loading position; the old order remains recoverable behind it, not silently reapplied above an offscreen error. Redundant route notifications cannot clear the pending/error state. Retry starts a fresh navigation attempt but reuses valid indexed keys; only explicit Cancel restores the last successful page. Progressing work has no total computation deadline. Activity/name acquisition covers requested 25-row pages only; hidden/cancelled interest demotes that lease's indexing. No cross-root atomic snapshot is claimed. The [navigation investigation](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/sessions-navigation.md#three-tier-progress-and-apparent-rollback-fr000669) records the reproduced installed-source cause and verification limits.
 
 ## Complete live session history
 
@@ -984,7 +984,7 @@ Incomplete Sessions lists say observed so far. A saved selection without usage i
 not a contributing request: its help says **Usage unavailable; cost unknown**.
 The unchanged numeric empty observed subtotal is not known zero consumption.
 Historical Claude recovery and complete all-model native proof remain excluded;
-see [evidence and limits](../development/journal/recorded-model-help.md).
+see [evidence and limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/recorded-model-help.md).
 
 **[UNVERIFIED]** distinguishes an unfinished assistant whose complete source observation has no native running drain or supported tool/child/background activity. It is not success, failure or proof that another OpenCode process stopped. Known calls/usage remain, but Duration and affected session-duration totals are **N/A**, without an invented finish time. Later authoritative activity or terminal evidence updates the same prompt.
 
@@ -1017,7 +1017,7 @@ Catalog indexing admits at most four roots per slice and no further root after t
 
 Admission remains 16 observed detail trees/32 handles; catalog has 32 five-minute handles and at most eight epochs each. Busy/expired handles fail explicitly. Leaving detail closes its handle; host restart discards retained history. No model calls, source writes, new dependency, frontend build or account login is introduced.
 
-Focused catalog/detail/liveness/real-HTTP VM tests, hidden Chromium synthetic theme/viewport/zoom probes, and `probe_web_live.py --sessions --detail` cover complementary boundaries. The [detail liveness investigation](../development/journal/web/session-loading.md#finite-source-acquisition-fr000674) separates reproduced code causes from the unidentified owner's incident; the [Sessions findings](../development/journal/web/sessions-live.md) retain catalog evidence. Physical/macOS/spoken assistive behavior is not inferred from VM assertions. Other finite reports retain frozen DOM, controls and failure semantics.
+Focused catalog/detail/liveness/real-HTTP VM tests, hidden Chromium synthetic theme/viewport/zoom probes, and `probe_web_live.py --sessions --detail` cover complementary boundaries. The [detail liveness investigation](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/session-loading.md#finite-source-acquisition-fr000674) separates reproduced code causes from the unidentified owner's incident; the [Sessions findings](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/sessions-live.md) retain catalog evidence. Physical/macOS/spoken assistive behavior is not inferred from VM assertions. Other finite reports retain frozen DOM, controls and failure semantics.
 
 ## Global Watch and reconnect
 
@@ -1025,7 +1025,7 @@ The common shell distinguishes starting, connected, **SOURCE UNAVAILABLE** (HTTP
 
 One authenticated `/api/live` watchdog runs at ten-second intervals after the preceding check completes; every ordinary request has a five-second deadline. Thus a reachable tab normally detects abrupt loss within fifteen seconds (browser/OS suspension can delay timers). `pageshow` and visible-tab resume revalidate; only stale checks (at least fifteen seconds) or interrupted streams first mark retained data as reconnecting. Healthy HTTP cannot restore a broken stream to connected. Same-instance EventSource retry preserves cookies, replay/resync and retained values. Authenticated API response identity is pinned per page; a replacement host is never silently accepted even if another tab renewed its cookie. No identity, token or report is persisted in browser storage, and no port/network scan or sensitive unauthenticated endpoint is added.
 
-[Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
+[Built-in browser, deterministic and real-source verification](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
 Watch gives each prompt/session card a subtle rounded frame. **Earlier Sessions** starts collapsed: five eligible
 distinct sessions selected by newest supported prompt finish, then displayed oldest finished first,
@@ -1065,7 +1065,7 @@ with finished sessions. Five real visible rows never acquire a sixth loading row
 even when collecting more history remains useful. A completed population with only
 zero to four eligible rows stays completed through ordinary rechecks; only a
 genuinely new source/population without prior observation may load initially.
-[App-wide retention inventory and verification](../development/journal/web/stable-refresh.md).
+[App-wide retention inventory and verification](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/stable-refresh.md).
 
 Once membership is certified, supported names, finish times, model/effort and context
 appear without waiting for the independent whole-session **Total CCost** or shared
@@ -1075,7 +1075,7 @@ retrying. Enrichment updates the same Full/Mini winners and preserves their orig
 proof epoch/time. Existing qualified values remain visible during ordinary refresh.
 No cheap metadata-only global-winner certificate is assumed or speculative name list
 presented as final history. [Controlled and real-source evidence, tradeoffs and
-limits](../development/journal/web/foreground-recovery.md) distinguish correctness
+limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/foreground-recovery.md) distinguish correctness
 from cold, retained-cache, warm and promotion timings.
 
 Session title alone links to that canonical Sessions route. The footer keeps whole-session
@@ -1497,7 +1497,7 @@ small-icon metrics; the hidden owner follows the popup's physical cursor monitor
 This changes neither the Python process default nor machine display settings.
 Actual notification-area appearance, full 150% menu visual acceptance, other
 physical scales/themes and mixed-monitor interaction remain unverified; see
-[checks and limitations](../development/journal/web/branding.md).
+[checks and limitations](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/branding.md).
 
 Double-click `windows/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console shows one **Starting CostGuard web...** label and updates only its spinner cell while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. No PowerShell progress panel or successful stage transcript is drawn. Redirected/noninteractive output is one plain startup line; failure feedback remains actionable after animation stops. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.
 
@@ -1505,7 +1505,7 @@ The console exits naturally after **validated host readiness and a successful OS
 
 This is a **no-build status-console handoff**, not a new host worker/supervisor or frozen application. Python discovery uses a shared pre-Python PowerShell resolver: installed-only `py`/`pymanager -0p` listings, PATH executables, PEP 514 user/machine registrations in 32/64-bit views, then bounded standard per-user/system install directories. Store `python.exe` aliases are not executed; no install/select command is sent to a manager. Isolated probes validate actual version/platform/executable and required standard-library imports, with a two-second per-process and approximately twenty-second overall discovery budget. Unusable candidates do not mask a later eligible runtime. Lock/restart/readiness deadlines, authentication and host ownership are unchanged. No invented percentage, autostart, early unauthenticated page or second acquisition engine is added. Native Windows cold/warm launcher checks and integrated-browser evidence are distinct from physical Explorer or first-paint proof.
 
-**Cache/build/repair:** Windows generates no executable artifact or helper cache. Current source and source-change shutdown still apply. Do not delete runtime state, user configuration or analysis caches to repair startup. Direct PowerShell invocation uses the same status path. Failures retain actionable text/native feedback and private allowlisted logs; a visible interactive fallback may wait for Enter if native feedback is unavailable. Historical hidden-handoff measurements in [windows-handoff.md](../development/architecture/governance/verification/windows-handoff.md) describe the superseded design, not v80.118 behavior.
+**Cache/build/repair:** Windows generates no executable artifact or helper cache. Current source and source-change shutdown still apply. Do not delete runtime state, user configuration or analysis caches to repair startup. Direct PowerShell invocation uses the same status path. Failures retain actionable text/native feedback and private allowlisted logs; a visible interactive fallback may wait for Enter if native feedback is unavailable. Historical hidden-handoff measurements in [windows-handoff.md](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/windows-handoff.md) describe the superseded design, not v80.118 behavior.
 
 The browser's static branded startup view survives slow authorization; initial report acquisition has indeterminate activity and real job phase/count notices. HTTP-shell readiness never implies source/account readiness. Failed authorization asks for tray Open Cost Guard/relaunch; unavailable reports offer Refresh and preserve stale evidence. With JavaScript blocked the static page still explains reload/fresh-link recovery. Timings and automated/native/visual limitations are recorded in the completed startup FR; actual Explorer mouse interaction and macOS desktop behavior are not inferred from tests.
 
@@ -1561,7 +1561,7 @@ From v80.153, an authorized browser has a **rolling seven-day inactivity window 
 
 The server renews the same protected cookie on the first successful API reply after each hour, not every poll. Its **seven-day-plus-one-hour storage lifetime** prevents hourly coalescing from deleting the browser cookie before a full seven days since the last valid activity. This storage margin grants **no extra authorization**: at seven inactive days the server rejects even a retained cookie, and the page shows the existing **AUTHENTICATION EXPIRED** recovery guidance. Failed/anonymous requests, public assets and passive SSE validation never extend inactivity. An SSE response cannot refresh cookie headers after opening; ordinary Live sync handles that. If a concurrent initial handoff supersedes an old stream's bearer, Live revalidates the current browser cookie before reopening or reporting genuine expiry. Session elapsed time includes host sleep; system-clock corrections can affect wall-clock inactivity, as they can browser cookie age.
 
-Host restart, deliberate Exit/source shutdown, seven inactive days or browser/private-mode cookie clearing require a fresh trusted link. Old-host, expired and replayed bootstrap credentials stay invalid. Bearers remain only in host memory and the browser-managed HttpOnly cookie, never Web Storage, application files, URLs after bootstrap erasure, logs or diagnostics. The [verification notes](../development/journal/web/browser-sessions.md) distinguish simulated time/browser-cookie checks from real elapsed multi-day use.
+Host restart, deliberate Exit/source shutdown, seven inactive days or browser/private-mode cookie clearing require a fresh trusted link. Old-host, expired and replayed bootstrap credentials stay invalid. Bearers remain only in host memory and the browser-managed HttpOnly cookie, never Web Storage, application files, URLs after bootstrap erasure, logs or diagnostics. The [verification notes](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/browser-sessions.md) distinguish simulated time/browser-cookie checks from real elapsed multi-day use.
 
 Sensitive reads require the cookie. All POST requests require exact Origin and JSON content type; authenticated POSTs additionally require `X-CG-CSRF`. Every request checks the exact Host and assigned port, rejects foreign Origin/Fetch-Site, ambiguous framing and unsafe targets. No CORS access is granted. Packaged assets are fixed, local and symlink/junction-checked, not a general file server. Responses are no-store, deny frames/service workers and third-party runtime assets, and use restrictive CSP. Report text is inserted with `textContent`, never HTML. Access/error request logging is disabled; failures expose allowlisted codes, never source exception messages.
 
@@ -1584,7 +1584,7 @@ Existing Diagnostics now reads only this checkout's private Web lifecycle codes 
 
 For `source_changed`, finish updating and relaunch manually. For source unavailable, keep OpenCode available and inspect existing source Diagnostics; never install optional packages to repair Web. For browser failure, use native Open; for startup/native failure, retain failure evidence and use `windows/Legacy/` or `macos/Legacy/`. HTTP shell readiness never proves complete account/history acquisition.
 
-The historical synthetic parity and bounded integration inventory is [Beta stabilization evidence](../development/architecture/governance/verification/web-beta-stabilization.md); the hosted matrix above adds subsequent real Mac/API/browser evidence without rewriting that history. Physical UI/suspend proof remains unavailable. Offline first-run refers to **shell/launcher startup with installed Python and in-box OS APIs**, not guaranteed fresh pricing/accounts without network. No compiler is needed on Windows; in-box macOS app compilation/reuse/regeneration passed historical hosted probes, but Finder acceptance remains unverified. v81 promotes Web; it does not retire Legacy or turn historical evidence into current acceptance.
+The historical synthetic parity and bounded integration inventory is [Beta stabilization evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-beta-stabilization.md); the hosted matrix above adds subsequent real Mac/API/browser evidence without rewriting that history. Physical UI/suspend proof remains unavailable. Offline first-run refers to **shell/launcher startup with installed Python and in-box OS APIs**, not guaranteed fresh pricing/accounts without network. No compiler is needed on Windows; in-box macOS app compilation/reuse/regeneration passed historical hosted probes, but Finder acceptance remains unverified. v81 promotes Web; it does not retire Legacy or turn historical evidence into current acceptance.
 
 ## Allowlisted routes
 

@@ -249,4 +249,4 @@ The shared CG favicon remains; browser/OS owns frame/security/return/close/taskb
 Owned headless Edge tests exercise actual Document PiP, themes/fonts, native zoom/DPR,
 screenshots, help, Fit and scrolling. They do **not** prove physical Windows frames,
 manual OS dragging, monitor transitions, macOS or screen-reader behavior. Current evidence
-and explicit limits: [Mini Watch journal](../development/journal/web/mini-watch.md).
+and explicit limits: [Mini Watch journal](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/mini-watch.md).

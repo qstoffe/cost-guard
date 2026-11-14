@@ -133,7 +133,7 @@ def probe(state, journey):
         reason="Independent native journey" if journey in ("mouse", "touch") else "Retained mixed-input diagnostic",
         disposition=("KNOWN_GAP — test FAIL, scoped exclusion accepted; remaining mixed cases NOT RUN"
             if accepted else None),
-        suggestion=("https://github.com/qstoffe/cost-guard/blob/main/development/backlog/suggestions/"
+        suggestion=("https://github.com/qstoffe/cost-guard-backlog/blob/main/development/backlog/suggestions/"
             "000684-mini-help-mixed-input-hover-opening/SUGGESTION.md" if accepted else None),
         evidence=output.name, diagnostic=diagnostic,
         checks=[check if isinstance(check, str) else check["case"]
