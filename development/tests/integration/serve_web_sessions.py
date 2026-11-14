@@ -146,6 +146,23 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command in ("activity-source", "activity-update", "activity-correction"):
+                from development.tests.fixtures.session_activity import activity_snapshot
+                snapshot = activity_snapshot(60 if command == "activity-source" else 61)
+                if command == "activity-correction":
+                    messages = tuple(replace(message, parts=tuple(replace(part, data={
+                        **part.data, "state": {**part.data["state"], "input": {"filePath": "src/corrected.py"},
+                                             "error": "EACCES"}})
+                        if part.data.get("callID") == "physical-0000" else part for part in message.parts))
+                        for message in snapshot.messages)
+                    snapshot = replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts))
+                source.snapshots["root"] = replace(snapshot, source_revision=command,
+                    root=replace(snapshot.root, active=command != "activity-correction",
+                                 updated_at_ms=service.now_ms))
+                source.skill_origins_for_session = lambda _: {"auto-github-api": "custom"}
+                with host.live.details.lock:
+                    if "root" in host.live.details.histories:
+                        host.live.details.histories["root"]["due"] = 0
             elif command in ("models-source", "models-update"):
                 from development.tests.fixtures.sessions_models import models_source
                 models_source(source, updated=command == "models-update")

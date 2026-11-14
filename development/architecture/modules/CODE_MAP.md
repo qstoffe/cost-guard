@@ -21,6 +21,18 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000710: `application/session_activity.py` owns full-session safe activity over
+`SessionHistory`'s existing canonical snapshot, cached by snapshot identity.
+`watch/tools.py` shares physical deduplication, recursive causal windows, names,
+outcomes and confirmed skill semantics; `invocation.py` shares the privacy boundary
+without applying Watch's per-card cap to historical detail. `session_detail.py`
+captures activity with the same pinned revision and exposes detached 25-call pages
+via the existing authenticated detail endpoint. `watch.js::HistoryActivity` shares
+Watch's native disclosure/diff presenter; `session.js` loads user-requested windows
+without rerendering surviving controls. Coverage: `test_session_activity.py`,
+detail/Watch suites and `probe_web_sessions.cjs --detail-activity`; count-only real
+`probe_web_live.py --detail`. [Evidence](../../journal/web/session-activity.md).
+
 FR000709: `watch/models.py`/`cards.py` separate pending detail availability from
 authoritative membership and export an opaque stable source scope;
 `application/live_projection.py` clears non-observed detail before publication.

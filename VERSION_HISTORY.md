@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.54 - 2026-11-14
+
+- Session Detail adds independent, initially collapsed Tool Calls and Skills sections over the full recorded root history and causally linked descendants, not only visible prompt rows or the latest Watch card. Model Calls retains its existing meaning.
+- Red failed/cancelled groups reuse Watch's stable native disclosure presenter and safe invocation/redaction policy. Distinct physical calls remain inspectable through 25-call Load more pages; cancellation, unknown reasons, partial history and unavailable detail remain explicit.
+- Activity shares the detail lane's already-acquired canonical snapshot, cache and pinned history revision. Ordinary refresh preserves surviving disclosure nodes, focus and selection; source invalidation and session navigation clear private invocation content. No inference, raw-output view or read-on-expand source command.
+
 ## v81.53 - 2026-11-14
 
 - Full Watch separates temporary detail unavailability from authoritative removal. Same-source Running and failed-call native controls retain user-open/user-closed choices through pending projections, while old private input is immediately cleared.

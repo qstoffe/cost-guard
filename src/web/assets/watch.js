@@ -206,7 +206,7 @@ const WatchView = (() => {
     for (const key of target.rows.keys()) if (!keep.has(key)) target.rows.delete(key);
     reconcile(target.list, wanted);
   }
-  function drawTools(target, summary, groups, outcomes, failures, unidentified, state) {
+  function drawTools(target, summary, groups, outcomes, failures, unidentified, state, paged = false, tail = []) {
     fragments(target.summary, summary);
     target.rows ||= new Map();
     const wanted = [], keep = new Set();
@@ -221,7 +221,8 @@ const WatchView = (() => {
     }
     for (const item of outcomes) {
       const key = JSON.stringify([item.tool_name, item.outcome]);
-      const members = item.outcome === 'failed' ? failures.filter(call => call.tool_name === item.tool_name) : [];
+      const members = failures.filter(call => call.tool_name === item.tool_name &&
+        (call.outcome || 'failed') === item.outcome);
       const group = row(key, () => {
         const value = disclosure(); value.jobs = new Map(); value.note = el('p', undefined, 'detail');
         value.summary.className = 'watch-activity-error'; return value;
@@ -233,8 +234,10 @@ const WatchView = (() => {
         const call = group.jobs.get(detail.identity) || invocationDisclosure();
         call.node.className = 'watch-failed-call';
         group.jobs.set(detail.identity, call);
-        drawInvocation(call, `Failed call ${index + 1} — ${item.tool_name}`, detail,
-          detail.reason || 'Failure reason unavailable');
+        drawInvocation(call, `${item.outcome === 'cancelled' ? 'Cancelled' : 'Failed'} call ${index + 1} — ${item.tool_name}`, detail,
+          [detail.outcome ? `Recorded outcome: ${detail.outcome}; source status: ${detail.recorded_status || 'unavailable'}.` : '',
+            detail.owner ? `${detail.owner} ${detail.agent_id}; prompt ${detail.prompt_number != null ? '#' + detail.prompt_number : detail.prompt_id || 'unavailable'}.` : '',
+            detail.reason || 'Failure reason unavailable'].filter(Boolean).join(' '));
         calls.push(call.node);
       });
       for (const [id, call] of group.jobs) if (!identities.has(id)) {
@@ -243,12 +246,13 @@ const WatchView = (() => {
       }
       const omitted = Math.max(0, item.count - members.length);
       text(group.note, state === 'pending' ? 'Individual failure details temporarily unavailable.' :
-        omitted ? `+${omitted} additional ${item.outcome} calls not shown; individual evidence unavailable or display limit reached.` : '');
+        omitted ? paged ? `${omitted} additional ${item.outcome} calls not in this page. Use Load more when available; unavailable evidence is counted below.` :
+          `+${omitted} additional ${item.outcome} calls not shown; individual evidence unavailable or display limit reached.` : '');
       if (group.note.textContent) calls.push(group.note);
       reconcile(group.list, calls);
       // Once established, the aggregate owns its arrow independently of detail
       // availability. Never offer invented call records for a new count-only group.
-      group.established ||= members.length > 0;
+      group.established ||= members.length > 0 || paged && item.count > 0;
       group.node.hidden = !group.established;
       group.plain ||= el('div', undefined, 'watch-activity-error');
       text(group.plain, group.summary.textContent);
@@ -265,7 +269,44 @@ const WatchView = (() => {
       value.node.open = false; value.node.remove(); value.plain?.remove(); target.rows.delete(key);
     }
     if (!wanted.length) wanted.push(row('empty', () => ({node: el('div', 'No tool calls')})).node);
-    reconcile(target.list, wanted);
+    reconcile(target.list, [...wanted, ...tail]);
+  }
+  class HistoryActivity {
+    constructor(loadMore) {
+      this.root = el('div', undefined, 'watch-activity session-activity');
+      this.tools = disclosure(); this.skills = disclosure();
+      this.note = el('p', undefined, 'detail');
+      this.more = el('button', 'Load more failed / cancelled calls'); this.more.type = 'button';
+      this.more.addEventListener('click', loadMore);
+      ContextHelp.attach(this.tools.summary, 'All recorded session tool calls, not model requests. Red outcomes are a subset, not extra calls.');
+      ContextHelp.attach(this.skills.summary, 'Confirmed custom skill loads only. Missing historical proof is not inferred.');
+      this.root.append(this.tools.node, this.skills.node);
+      this.update(null);
+    }
+    update(value) {
+      if (this.scope !== value?.scope) {
+        this.tools.node.open = false; this.skills.node.open = false;
+        drawTools(this.tools, [], [], [], [], 0, 'invalidated');
+      }
+      this.scope = value?.scope;
+      this.root.hidden = !value;
+      const groups = value?.counts || [], skills = value?.skills || [];
+      const total = groups.reduce((sum, pair) => sum + pair[1], 0);
+      const summary = [[`Tool Calls · ${total} tool calls`, '']];
+      if (value?.failed_or_cancelled_count) summary.push([` · ${value.failed_or_cancelled_count} failed / cancelled`, 'watch-activity-error']);
+      if (value && !value.complete) summary.push([' · partial recorded history', '']);
+      const remaining = Math.max(0, (value?.total || 0) - (value?.failures?.length || 0));
+      this.more.hidden = !remaining; this.more.disabled = false;
+      text(this.more, `Load more failed / cancelled calls (${remaining} remaining)`);
+      text(this.note, value?.unavailable ? `${value.unavailable} calls have unavailable source-qualified invocation details.` : '');
+      this.note.hidden = !this.note.textContent;
+      drawTools(this.tools, summary, groups, value?.outcomes || [], value?.failures || [], 0,
+        value ? 'observed' : 'invalidated', true, [this.more, this.note]);
+      const parts = skill => [[skill.skill_id, ''], ...(skill.failed_count ?
+        [[` (${skill.failed_count} failed)`, 'watch-activity-error']] : [])];
+      drawDisclosure(this.skills, [[`Skills · ${skills.length} confirmed custom skills${value?.skills_partial ? ' · other skill origins unknown' : ''}`, '']],
+        skills.map(parts), 'No confirmed custom skills');
+    }
   }
   function daily(parent, value, state) {
     if (!parent.children.length) parent.append(el('strong', 'CCost Today'), el('span', '', 'metric-value'), el('span'));
@@ -569,5 +610,5 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, historyNotice, finishedCards, retainContext, retainSummary, costProjection};
+  return {View, ContextLine, HistoryActivity, historyNotice, finishedCards, retainContext, retainSummary, costProjection};
 })();

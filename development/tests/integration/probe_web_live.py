@@ -586,13 +586,25 @@ def main():
                 raise RuntimeError('probe_detail_page_contract')
             detail(dict(action='freeze', token=token))
             frozen = detail(dict(action='page', token=token, offset=0))
+            pinned = detail(dict(action='begin', token=token, offset=0))
+            activity = pinned['activity']
+            assert activity is not None
+            assert sum(item['count'] for item in activity['outcomes']) == activity['failed_or_cancelled_count']
+            assert activity['total'] + activity['unavailable'] == activity['failed_or_cancelled_count']
+            if activity['total'] > 25:
+                more = detail(dict(action='activity', token=token, revision=pinned['revision'], offset=25))
+                assert more['revision'] == pinned['revision'] and len(more['failures']) <= 25
+                assert not ({call['identity'] for call in activity['failures']} &
+                            {call['identity'] for call in more['failures']})
             time.sleep(1)
             if detail(dict(action='page', token=token, offset=0)) != frozen:
                 raise RuntimeError('probe_detail_freeze_changed')
             detail(dict(action='close', token=token))
             print(json.dumps(dict(detail='ok', available_rows=page['total'],
                 page_rows=len(page['result']['view']['prompt_blocks'][0]['rows']),
-                first_latest_access=True, frozen_consistent=True, account_owners=len(owners))))
+                first_latest_access=True, frozen_consistent=True, account_owners=len(owners),
+                activity_reconciled=True, activity_complete=activity['complete'],
+                terminal_calls=activity['failed_or_cancelled_count'], safe_detail_total=activity['total'])))
         if args.reports or args.models:
             observations.stage = 'reports'
             # Do not emit session IDs, account details, report content or bootstrap values.

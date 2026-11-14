@@ -53,6 +53,12 @@ const SessionDetail = (() => {
       this.loader.status.setAttribute('aria-live', 'polite');
       this.progress = {percent: 0, stage: 'Opening session…', stageLabel: 'Opening session…'};
       this.context = new WatchView.ContextLine();
+      this.activityLimit = 25;
+      this.activity = new WatchView.HistoryActivity(() => {
+        if (this.busy) return;
+        this.activityLimit += 25; this.activity.more.disabled = true;
+        this.poll();
+      });
       const scroll = el('div', undefined, 'sessions-table-pan');
       this.scroll = scroll;
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
@@ -61,7 +67,7 @@ const SessionDetail = (() => {
       columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.retry, this.loader.root, scroll);
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.retry, this.loader.root, scroll, this.activity.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
     }
@@ -74,6 +80,8 @@ const SessionDetail = (() => {
     detach() {
       this.exporter?.close();
       this.attached = false; this.generation++; clearTimeout(this.timer);
+      this.activity.update(null); this.activityLimit = 25;
+      if (this.data) this.data.activity = null;
       this.scroll.setAttribute('aria-busy', 'false'); this.loader.root.hidden = true;
       const token = this.token; this.token = null;
       if (token) this.api('/api/detail', {action: 'close', token}).catch(() => {});
@@ -125,8 +133,15 @@ const SessionDetail = (() => {
           return;
         }
         this.sourceStatus(data);
-        if (this.data?.revision === data.revision) { if (this.pendingRender) this.update(this.data); return; }
-        const initial = data.result.view?.prompt_blocks?.[0]?.rows;
+        if (this.data?.activity?.scope && data.activity?.scope !== this.data.activity.scope) {
+          this.activity.update(null); this.activityLimit = 25; this.data.activity = null;
+        }
+        if (this.data?.revision === data.revision && (this.data.activity?.failures?.length || 0) >=
+            Math.min(this.activityLimit, data.activity?.total || 0)) {
+          if (this.pendingRender) this.update(this.data); return;
+        }
+        const initial = this.data?.revision === data.revision ?
+          this.data.result.view.prompt_blocks[0].rows : data.result.view?.prompt_blocks?.[0]?.rows;
         if (!data.revision || data.offset !== 0 || !Number.isSafeInteger(data.total) || data.total < 0 ||
             !Array.isArray(initial) || initial.length > data.total) throw new Error('inconsistent_history');
         const rows = [...initial], ids = new Set();
@@ -153,6 +168,21 @@ const SessionDetail = (() => {
         }
         if (!this.attached || generation !== this.generation) return;
         data.result.view.prompt_blocks[0].rows = rows;
+        const failureIds = new Set((data.activity?.failures || []).map(call => call.identity));
+        while (data.activity && data.activity.failures.length < Math.min(this.activityLimit, data.activity.total)) {
+          const offset = data.activity.failures.length;
+          const page = await this.api('/api/detail', {action: 'activity', token: this.token,
+            revision: data.revision, offset});
+          if (!this.attached || generation !== this.generation) return;
+          if (page.revision !== data.revision || page.offset !== offset || page.total !== data.activity.total ||
+              !Array.isArray(page.failures) || !page.failures.length ||
+              offset + page.failures.length > page.total) throw new Error('inconsistent_activity');
+          for (const call of page.failures) {
+            if (!call.identity || failureIds.has(call.identity)) throw new Error('inconsistent_activity');
+            failureIds.add(call.identity);
+          }
+          data.activity.failures.push(...page.failures);
+        }
         this.loading('Preparing session…');
         this.update(data);
         this.sourceStatus(data);
@@ -161,9 +191,12 @@ const SessionDetail = (() => {
         this.status.textContent = this.data ? '' : `Session unavailable (${error.message}).`;
         this.status.hidden = !this.status.textContent;
         this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
-        if (error.message === 'detail_expired') { this.token = null; this.exporter?.close(); }
+        if (error.message === 'detail_expired') {
+          this.token = null; this.exporter?.close(); this.activity.update(null);
+          if (this.data) this.data.activity = null;
+        }
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
-      } finally { this.busy = false; }
+      } finally { this.busy = false; this.activity.more.disabled = false; }
     }
     sourceStatus(data) {
       this.freshness();
@@ -171,6 +204,9 @@ const SessionDetail = (() => {
       this.waiting = !data.result && acquisition?.phase !== 'failed';
       this.retry.hidden = !acquisition?.retry_available;
       if (acquisition?.phase === 'failed') {
+        if (['source_identity_changed', 'session_missing'].includes(acquisition.reason)) {
+          this.activity.update(null); if (this.data) this.data.activity = null;
+        }
         const reasons = {
           detail_no_progress: 'No forward progress was observed during source acquisition.',
           detail_not_admitted: 'The session acquisition worker did not start. Check the source connection.',
@@ -236,6 +272,7 @@ const SessionDetail = (() => {
       this.pendingRender = false;
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
+      this.activity.update(data.activity);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(block.rows.map(row => row.id));
       const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);

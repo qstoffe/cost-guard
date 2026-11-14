@@ -244,6 +244,14 @@ class SessionDetailTests(unittest.TestCase):
             self.assertEqual(page["total"], 100)
             self.assertEqual(page["offset"], 50)
             self.assertEqual(post({"action": "freeze", "token": token})[0], 200)
+            _, pinned, _ = post({"action": "begin", "token": token, "offset": 0})
+            status, activity, _ = post({"action": "activity", "token": token,
+                                       "revision": pinned["revision"], "offset": 0})
+            self.assertEqual((200, 0, []), (status, activity["total"], activity["failures"]))
+            self.assertEqual(post({"action": "activity", "token": token,
+                                   "revision": "stale", "offset": 0})[0], 410)
+            self.assertEqual(post({"action": "activity", "token": token,
+                                   "revision": pinned["revision"], "offset": True})[0], 400)
             self.assertEqual(post({"action": "page", "token": token, "offset": True})[0], 400)
             self.assertEqual(post({"action": "page", "token": "expired"})[0], 410)
             self.assertEqual(post({"action": "close", "token": token})[0], 200)
