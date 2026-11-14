@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from development.tests.integration.historical_report_observations import measured_report
 from src.reports import ReportKind, ReportRequest
 from src.web.jobs import ReportJobs
+from src.web.report_control import ManagedReport
 
 
 def isolated_report(sender, request):
@@ -27,6 +28,7 @@ def main():
     parser.add_argument('--cold-and-warm', action='store_true')
     parser.add_argument('--budget-seconds', type=int, default=600)
     parser.add_argument('--period', action='append', choices=('today', '7-days', '30-days', 'month', 'all'))
+    parser.add_argument('--managed', action='store_true', help='Use the production Web partial-history/quantum path.')
     args = parser.parse_args()
     if not 1 <= args.budget_seconds <= 1800:
         parser.error('budget-seconds must be between 1 and 1800')
@@ -40,16 +42,17 @@ def main():
                 if attempt:
                     if 'finished_at' in jobs._jobs[key]:
                         jobs._jobs[key]['finished_at'] -= 61
-                key = observe(jobs, attempt, args.budget_seconds, scope)
+                key = observe(jobs, attempt, args.budget_seconds, scope, args.managed)
     finally:
         jobs.close()
         if temporary:
             temporary.cleanup()
 
 
-def observe(jobs, attempt, budget, scope='all'):
+def observe(jobs, attempt, budget, scope='all', managed=False):
     started = time.monotonic()
-    key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope=scope))
+    request_type = ManagedReport if managed else ReportRequest
+    key = jobs.submit(request_type(ReportKind.TOKEN_MIX, token_mix_scope=scope))
     while time.monotonic() - started < budget:
         jobs.tick()
         value = jobs.snapshot(key)
@@ -62,6 +65,7 @@ def observe(jobs, attempt, budget, scope='all'):
                 publisher_rows=len(view.get('publisher_token_mix', [])),
                 source_status=result.get('source', {}).get('status'),
                 nonzero_tokens=int((view.get('token_mix') or {}).get('known_total_tokens', 0)) > 0,
+                omitted_roots=result.get('source', {}).get('omitted_roots'),
                 period_bounds=view.get('token_mix_period'), progress=value.get('progress'))), flush=True)
             assert value['status'] == 'complete' and not value['error'] and not result.get('error')
             assert view['token_mix_period']['period'] == scope

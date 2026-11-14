@@ -73,8 +73,42 @@ source coverage stays separate from the concise heading.
   deadline overdue, not by claiming a fresh five-minute wall-clock wait.
   Physical OS input and screen-reader output were not measured.
 
-Full-suite, validator and real-installation results are recorded below once their
-active runs finish. An initial Full invocation hit the shell's 120-second outer
-timeout; a subsequent run exposed the corrected Watch payload regression above
-and a version-test race from editing metadata while that file was running.
-Neither initial run is recorded as a full PASS.
+Final local Full: **197 groups, 2,428 tests, zero failures**, 160.6 seconds; four
+native macOS zsh/PTY checks are skipped on Windows, not locally certified. Final
+validator: zero failures, seven existing advisory prose/design warnings. GitHub
+common plus native Windows, macOS ARM and macOS Intel jobs passed on the initial
+implementation commit. Final-HEAD checks are read again before merge.
+
+An initial Full invocation hit the shell's 120-second outer timeout; a subsequent
+run exposed the corrected Watch payload regression above and a version-test race
+from editing metadata while that file was running. Neither initial run is counted
+as a full PASS; the final complete run follows both repairs.
+
+The initial strict/unmanaged installation probe encountered a retryable
+`connection_timeout` at 178.15 seconds after hydrating 2,600 roots. It returned no
+report, so no values or period correctness are inferred from that attempt. The
+follow-up used the production managed Web partial-history/quantum path, retained
+existing durable evidence and reported actual omitted-root/source status. No
+OpenCode source mutation, paid inference or shared-service restart was involved.
+
+### Real installation: managed Web reports
+
+The completed read-only probe ran all five scopes through `ManagedReport` with
+a 600-second per-report budget. Every job returned `complete`, no job/result
+error, and nonzero known tokens:
+
+| Scope | Seconds | Model rows | Publisher rows | Source status | Omitted roots |
+| --- | ---: | ---: | ---: | --- | ---: |
+| All time | 36.262 | 17 | 3 | partial | 1 |
+| Today | 18.065 | 2 | 1 | acquired | 0 |
+| 7 days | 17.958 | 10 | 3 | acquired | 0 |
+| 30 days | 20.327 | 13 | 3 | acquired | 0 |
+| This month | 19.732 | 12 | 3 | acquired | 0 |
+
+All time's single omitted root remains **partial source coverage**, not proof
+of complete private history. Its bounds came from shown dated requests. Today
+and This month started at configured-local midnight; rolling bounds differed
+by exactly 7/30 days in milliseconds, with Stockholm's DST offset reflected.
+These production-path observations complement the deterministic independent
+population oracles; they are not a manual reconciliation of every private
+native request. Only sanitized aggregates are published here.
