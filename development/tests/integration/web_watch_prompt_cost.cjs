@@ -22,8 +22,8 @@ for (const name of ['render', 'account-cards', 'watch']) vm.runInContext(fs.read
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
 assert.equal(cards.length, 2);
-const credits = ['1250', '12', '100', '0', 'N/A', '2', '0', '<0.1', '<0.1', '12', '12', '0', 'N/A', '', '0', '<0.1'];
-const usd = ['$12.50', '$0.12', '$1.00', '$0.00', 'N/A', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', 'N/A', '', '$0.00', '$0.00'];
+const credits = ['1250', '12', '100', '0', '0', '2', '0', '<0.1', '<0.1', '12', '12', '0', '0', '0', '0', '<0.1'];
+const usd = ['$12.50', '$0.12', '$1.00', '$0.00', '$0.00', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', '$0.00', '$0.00', '$0.00', '$0.00'];
 const canonical = JSON.stringify(input);
 for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', credits]]) {
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);
@@ -45,9 +45,9 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
       if (!expected[index]) { assert.ok(!target.className?.includes('help-value')); continue; }
       const help = helpText(target);
       assert.ok(help.startsWith(`Incoming Context CCost (I): ${d.incoming_context_ccost}\nExtra CCost (E): ${d.extra_ccost}\n`), JSON.stringify({index,unit,help,d}));
-      assert.match(help, /first attributed request[\s\S]*Output, later requests and linked subagents[\s\S]*unavailable, not zero/);
+      assert.match(help, /first attributed request[\s\S]*Output, later requests and linked subagents[\s\S]*not proof of zero cost/);
       assert.ok(help.endsWith(d.cost_detail_help), 'entire prepared rich breakdown survives unchanged');
-      assert.match(help, /Main prompt — fixture\/main · High[\s\S]*Subagent 1 — fixture\/child-a · Low[\s\S]*Number of prompts: 1[\s\S]*Subagent 2 — fixture\/child-b · Medium[\s\S]*incomplete boundaries[\s\S]*Cached input: N\/A[\s\S]*Partial pricing[\s\S]*Total CCost:/);
+      assert.match(help, /Main prompt — fixture\/main · High[\s\S]*Subagent 1 — fixture\/child-a · Low[\s\S]*Number of prompts: 1[\s\S]*Subagent 2 — fixture\/child-b · Medium[\s\S]*incomplete boundaries[\s\S]*Cached input: (?:0|\$0.00)[\s\S]*Partial pricing[\s\S]*Total CCost:/);
       assert.equal((help.match(/Total CCost:/g) || []).length, 1);
       assert.ok(target.events.focus && target.events.click && target.events.pointerenter);
       if (expected[index] === 'N/A') assert.match(help, /CCost cannot be calculated/);

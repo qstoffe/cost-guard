@@ -47,6 +47,33 @@ jobs:
       - name: Rendered browser smoke (once)
         if: ${{ !cancelled() }}
         run: python development/tools/ci_web_beta.py browser --scope common
+      - name: Numeric CCost Full and Document PiP regression
+        if: ${{ !cancelled() }}
+        env:
+          COST_GUARD_CI_BROWSER: '1'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from playwright.sync_api import sync_playwright
+          output = Path("ci-results/numeric-tables.json").resolve()
+          output.parent.mkdir(parents=True, exist_ok=True)
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.executable_path
+          environment = {**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable}
+          result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
+                                   browser, str(output), "--numeric-tables"],
+                                  env=environment, timeout=210, check=False)
+          evidence = json.loads(output.read_text(encoding="utf-8"))
+          summary = {key: evidence.get(key) for key in ("outcome", "browser", "checks", "errors", "limitations", "reason")}
+          print("::notice title=Numeric CCost PiP::" + json.dumps(summary).replace("%", "%25"))
+          result.check_returncode()
+          if evidence.get("outcome") != "PASS":
+              raise SystemExit("numeric CCost evidence did not pass")
+          PY
       # Ordinary affected-source coverage keeps one real 61s hold per document.
       # Manual Full retains all twelve holds and the mixed/control diagnostics.
       - name: Mini keyboard and mouse stationary regression (representative; Full on manual dispatch)

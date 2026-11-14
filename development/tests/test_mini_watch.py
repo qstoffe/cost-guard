@@ -69,7 +69,7 @@ class MiniWatchTests(unittest.TestCase):
                 ("562", 3, 3, True, ("562", "$5.62"), ("562", "$5.62")),
                 ("0", 0, 0, True, ("0", "$0.00"), ("0", "$0.00")),
                 ("0", 1, 1, True, ("0", "$0.00"), ("0", "$0.00")),
-                ("0", 1, 0, False, ("—", "—"), ("N/A", "N/A"))):
+                ("0", 1, 0, False, ("0", "$0.00"), ("0", "$0.00"))):
             cost = SessionCost(ComparisonCost(D(amount), observed, priced), complete, True)
             card = replace(self.cards[0], session_cost=cost, session_cost_state="observed")
 
@@ -205,7 +205,7 @@ class MiniWatchTests(unittest.TestCase):
         card = replace(self.cards[0], rows=(WatchRow("same-session", "Concurrent", row),))
         partial = running_prompts((card,), "observed")
         wire = project_live(replace(self.frame, running=partial)).to_json()["running"]
-        self.assertEqual("N/A", wire["display"]["ccost"])
+        self.assertEqual("0", wire["display"]["ccost"])
         self.assertTrue(wire["cost_estimated"])
         zero = running_prompts((), "observed")
         self.assertEqual((0, D(0), None, True, False),

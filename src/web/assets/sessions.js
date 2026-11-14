@@ -336,11 +336,13 @@ const SessionsCatalog = (() => {
       }
     }
     rows(values) {
+      this.costs ||= new ReportView.CostDisplay();
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(values.map(row => row.session_id));
       const keepOrder = protectedNode(this.body);
       for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id) && !protectedNode(row)) row.remove();
       values.forEach((value, index) => {
+        value = this.costs.select(value, [this.data?.source?.identity, this.data?.source?.generation, value.session_id]);
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
         row.value = value;
         if (!row.name) {
@@ -380,10 +382,10 @@ const SessionsCatalog = (() => {
         row.metrics.forEach((node, index) => {
           const key = ['model', 'effort', 'ccost', 'prompts', 'duration', 'ctx'][index];
           const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
-          const missing = (!value.has_summary && !value.indexed && state !== 'retained') ||
+          const missing = key !== 'ccost' && ((!value.has_summary && !value.indexed && state !== 'retained') ||
             (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A')) ||
             (key === 'effort' && state === 'pending' && (!value.effort || value.effort === 'N/A')) ||
-            (key === 'ctx' && state === 'pending' && value.context_tokens == null);
+            (key === 'ctx' && state === 'pending' && value.context_tokens == null));
           ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
           node.className = 'help-value' + (missing || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
           if (key === 'ctx' && state === 'retained') node.setAttribute('aria-label', `Retained context: ${node.textContent}`);

@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000707: `numbers.py` and application display/help producers format unavailable
+CCost amounts as selected-unit zero, leaving raw unknowns intact. `render.js::CostDisplay`
+owns bounded view-only same-scope observations; Watch/Mini, catalog/detail, account,
+Token Mix, Stats and Comparisons supply their semantic identities. CLI Watch owns
+its amount observations, including account/day/window boundaries; one-shot reports
+remain stateless. No new valuation/cache/source owner. Coverage: numeric-table,
+display, prompt/Mini, account/day, report and Web suites; the existing CI Chromium
+container runs `probe_web_help.cjs ... --numeric-tables` through actual Document PiP.
+[Audit/evidence and limits](../../journal/web/ccost-zero.md).
+
 FR000706: `numbers.py` owns prefix-free numeric CCost while preserving unknown/
 unresolved-zero rules; `display.py` owns plain known token-volume subtotals.
 Application amount/history/Comparisons and CLI Token Mix producers no longer

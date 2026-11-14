@@ -70,7 +70,7 @@ class WatchDailyTests(unittest.TestCase):
             ('empty', replace(daily, total=replace(daily.total, known_ccost=D(0),
                 observed_requests=0, priced_requests=0), prompt_count=0), '0', '$0.00'),
             ('unpriced', replace(daily, total=replace(daily.total, known_ccost=D(0),
-                priced_requests=0)), 'N/A', 'N/A'),
+                priced_requests=0)), '0', '$0.00'),
         )
         for name, usage, credits, usd in cases:
             for unit, expected in (('credits', credits), ('usd', usd)):

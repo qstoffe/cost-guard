@@ -215,7 +215,7 @@ class TokenMixCacheTests(unittest.TestCase):
 
         self.assertEqual('9007199254740994', dto['exact_total_tokens'])
         self.assertEqual('9007199254740993', dto['exact_totals'][0])
-        self.assertEqual('N/A', dto['display']['mix_total_cost'])
+        self.assertEqual('900719925475', dto['display']['mix_total_cost'])
         self.assertNotIn('%%', dto['display']['mix_input_share'])
 
     def test_host_coalesces_concurrent_and_recent_checks_without_relabeling_observation(self):

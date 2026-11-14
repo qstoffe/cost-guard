@@ -21,7 +21,7 @@ module.exports = function liveStatus(vm, context, clock) {
   value.view.accounts = {accounts:[account]};
   context.quietValue = value;
   vm.runInContext('globalThis.quietView = new WatchView.View({connection:"Live connected."}); quietView.update(quietValue)', context);
-  const view = context.quietView, rendered = [...view.cards.values()].find(c => c.value === card);
+  const view = context.quietView, rendered = [...view.cards.values()].find(c => c.value.session_id === card.session_id);
   const quota = view.accountCards.grid.children[0], daily = view.daily.children[1];
   card.state = 'partial'; card.session_summary.state = 'partial';
   value.view.daily_state = 'partial'; account.observation.availability = 'partial';

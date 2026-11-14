@@ -123,10 +123,11 @@ are tracked separately from the orphan-prevention fix.
 Full Watch’s **CCost** value help separates first-request incoming-context cost
 from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
 shares, not prices. **Model** names the main model even when other linked models
-contribute to totals. **N/A** means unavailable, not zero; numeric CCost remains
-plain even with partial pricing/data. CCost is a reference cost, not your bill or native quota.
+contribute to totals. Numeric CCost remains plain even with partial pricing/data.
+Unavailable CCost amounts display selected-unit zero, not proof of free usage.
+Unrelated unavailable metrics keep **N/A**. CCost is not your bill or native quota.
 
-When an actual reference **CCost N/A** is shown, hover/focus/tap that text for the
+When reference CCost is unavailable, its numeric fallback can still explain the
 supported reason. An acquired, verified catalog can establish that a recognized
 model (including Claude Sonnet 4) has no listed reference price in the available
 GitHub Copilot list. An uncertain identity, missing required rate/tier, missing
@@ -137,9 +138,9 @@ not fix model selection, invent rates or reprice historical work.
 Full Watch, Mini, Sessions list/detail and other reference-cost cells reuse the
 same help. Mini's prompt and parenthesized session amounts are separate targets,
 retaining useful prompt details. Reasons update with the displayed snapshot and
-unit changes. Positive partial subtotals, true zero and genuinely pending Loading
-remain unchanged. An N/A daily amount can explain itself; ordinary positive partial
-daily amounts gain no new help or warning.
+unit changes. Positive partial subtotals remain available. Initial/unpriced amounts
+show zero; qualified same-scope values survive incomplete refresh until a supported
+replacement arrives, including genuine zero. Daily amounts gain no new warning.
 
 Hover/focus the **CCost value** in either Watch table for Input, Cached input,
 Cache write, Output and Subtotal, grouped into **Main prompt** and individual
@@ -149,7 +150,7 @@ Multiple own-request model/effort/tier groups retain an agent total; descendants
 are separate contributors, never included twice. A **Number of prompts** bullet
 counts distinct canonical child prompts, not agents or requests. Missing boundaries
 show N/A or an observed lower bound. Categories are reference-cost contributions,
-not token percentages. Unknown categories remain N/A and omitted groups retain their
+not token percentages. Unknown category amounts display zero and omitted groups retain their
 known cost/call coverage. **Calls** uses the same groups for physical model requests,
 not tools. Hover, focus or tap **Model** for recorded linked-agent models and effort,
 even when main and all agents share one model. Unrecorded usage remains qualified;
@@ -655,16 +656,16 @@ Working Time counts overlapping robot activity once. Night Owl follows the
 22:00–06:00 shift; Coding Streak celebrates consecutive active calendar dates.
 Session records, busiest dates and parallel parties keep their familiar places.
 
-A cold visit or pending new period shows the normal twelve card shells. Each pending
-card contains only plain **Loading…**, with no title, emoji, value or joke. Complete
-card contents appear together only after authoritative scope readiness. Already loaded,
+A cold visit or pending new period shows the normal twelve card shells. The four
+CCost cards show selected-unit zero (or retained qualified same-scope costs); other
+pending cards contain only **Loading…**. Ready contents appear after authoritative scope readiness. Already loaded,
 ready same-period cards stay visible
 during refresh and interrupted updates; period changes reuse only the matching
 period's result. A genuinely empty period gets cheerful zero-style figures (and
 **No workdays** where appropriate), but failed acquisition without a valid result
 shows a truthful, actionable page-level notice **outside** the cards. All twelve
-unready card interiors still contain exactly **Loading…**, never paused/counting
-labels or synthetic zero values. Host-owned recovery keeps checking automatically;
+unready noncost card interiors still contain exactly **Loading…**, never paused/counting
+labels or synthetic usage values. CCost display zero is not acquisition success. Host-owned recovery keeps checking automatically;
 persistent blockers remain visible rather than silently hiding behind Loading.
 Incomplete refresh
 slices do not replace an already accepted same-period result. There is no
@@ -835,7 +836,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Today-first eight-column catalog including Effort/CTX, 25 sessions/page, period-scoped server sorting and stable older-page windows; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Twelve cards including token traffic/rates plus an optional matched-input fact; five periods, Loading-only pending shells and retained ready refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Twelve cards plus an optional matched-input fact; five periods, numeric zero/retained CCost and Loading-only noncost pending shells; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
 | Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
 | Historical Token Mix | `/#/token-mix` | All time by default; Today / 7 days / 30 days / This month / All time above the heading. Server-scoped summary and two nine-column model/publisher tables show Prompts/Calls/Tokens, four token percentages and Total CCost. Each percentage value has exact category CCost help in the current unit, including partial/unavailable truth. Every column sorts by exact source values; full names remain readable through horizontal panning. Host-owned ~5/20-minute visible/inactive checks remain. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
@@ -941,7 +942,7 @@ Last activity descending is the default. All eight server comparators use canoni
 
 Slow sort/page navigation temporarily replaces only the grid and pager with one centered **0–100%** bar. **Sorting sessions by CCost** (or the requested column / **Loading Sessions page N**) stays above it; **Indexed X of N sessions** or **Prepared X of N sessions** stays immediately below, followed by a separate current-work line and **Cancel**. The host reports actual cache-check, summary-read, projection, queued or retry-wait boundaries, never timer-inferred source detail. Fixed nodes and reserved text slots keep these regions stable; screen readers announce meaningful phases/failures rather than every count/stage tick. An uncached last page uses its actual size, not the 25-row maximum. Warm matching responses apply without a loading layout swap. Progress is measured, not clock-filled; genuine lost coverage explicitly revalidates while preserving unchanged keys. **100%** means the requested page was actually applied. Cancel's own hover/focus/touch help explains whether it restores the previous period, sort and page or just the previous page. Cancellation immediately restores that retained DOM, URL, focus and scroll, ignoring late replies while preserving shared cache/index work. No global report cancellation is added.
 
-Initially pending summary cells show **Loading…**, not unknown/zero. An acquired zero stays zero and canonical unknown stays N/A. Failed acquisition shows **Unavailable** or silently keeps last valid values; bounded retries do not restart known values or add retained-evidence help. The most recently viewed page gets seven admissions per background fairness turn, still at most four roots per slice with a two-second admission budget. Unchanged validated summaries are reused. Slow individual source reads retain their transport limits, so this is priority, not an instant-readiness guarantee.
+Initially pending noncost summary cells show **Loading…**. CCost displays selected-unit zero or retained qualified same-session values; canonical unknowns and raw sort keys remain unchanged. Failed noncost acquisition shows **Unavailable** or keeps last valid values. The most recently viewed page gets seven admissions per fairness turn, still at most four roots per slice with a two-second budget. Unchanged validated summaries are reused; source reads retain their transport limits.
 
 Detail's **Ictx** is only the prompt's first-request incoming context, never a delta/next-context arrow; Watch and CLI retain their richer context displays. Prompt previews yield before metric columns, grow on roomy screens and retain complete text in help. One horizontal region handles genuine minimum-width overflow; the document owns vertical scrolling. First loading uses the shared centered, determinate report visual, not a warning box. Source-owned phase milestones and known stage fractions advance **0–70%** during acquisition; exact **X of Y** validated history rows advance **70–95%** during transfer. Opaque source operations hold the last proven watermark, never advance by elapsed time or poll count. Complete, applied rows alone finish at **100%**, without a forced delay. Stable progress/status nodes announce stage changes rather than every count. Complete retained history stays usable during background checks; explicit initial source errors replace loading rather than looping forever.
 
@@ -1031,7 +1032,7 @@ genuinely new source/population without prior observation may load initially.
 
 Once membership is certified, supported names, finish times, model/effort and context
 appear without waiting for the independent whole-session **Total CCost** or shared
-numeric price-comparison sample. Missing cost says **Loading…**, not zero; the known
+numeric price-comparison sample. Missing initial cost displays selected-unit zero; the known
 context and threshold warning remain usable while price comparison is pending or
 retrying. Enrichment updates the same Full/Mini winners and preserves their original
 proof epoch/time. Existing qualified values remain visible during ordinary refresh.
@@ -1073,14 +1074,14 @@ I + E reconciles to the total when known; separately rounded Credits/USD values
 need not visually sum. All three use the selected Web unit and shared formatting.
 Numeric totals have no uncertainty prefix. Zero totals display just `0` or `$0.00`; a tiny positive
 amount may round to USD zero without proving either component is zero. The value
-tooltip always keeps independently unavailable components as `N/A`, including when
-the total displays zero. No browser subtraction or forced-zero override is used.
+tooltip shows zero for independently unavailable amounts with no prior qualified
+observation. Raw unknown flags remain intact; no browser subtraction or valuation is used.
 Report-owned evidence flags require first-request input/cache-read/
 cache-write counters for I, and every attributed request's four token categories for E.
 Full Watch can therefore withhold an unsupported component even when the existing CLI
 diagnostic uses normalized placeholders; raw costs and CLI behavior are unchanged.
-Wholly unavailable totals stay `N/A`; sparse non-billed compaction
-cells stay empty. Accepted captures/SSE update the same prompt's total and paired help without
+Wholly unavailable totals and sparse non-billed compaction amounts display zero.
+Accepted captures/SSE update the same prompt's total and paired help without
 browser valuation, polling or extra history scans. Mini Watch remains total-only.
 That same Full Watch CCost value tooltip retains main prompt and distinct causally linked
 subagents, split by actual model/recorded effort, with Input, Cached input, Cache write
@@ -1178,7 +1179,7 @@ only. The acquired integer displays **N prompts**. Full and Mini Watch show the 
 known-priced daily subtotal without partial-cost markers or passive pricing/token/prompt
 completeness notices; missing prices/tokens can mean it understates the full amount.
 Underlying completeness and unassigned cost/tokens remain intact. Acquired empty usage
-is zero; wholly unpriced usage is **N/A**; neither is loading or source failure.
+and wholly unpriced usage both display zero; only the former proves acquired zero usage.
 Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
@@ -1360,8 +1361,8 @@ unrounded values in the disposable `session-ccost-v1` SQLite namespace. Unchange
 requests are not revalued; corrections/deletions and catalog/algorithm/source changes
 reconcile or invalidate. Complete source checkpoints survive Earlier-slot eviction,
 browser reload and host restart. No prompt content is stored in this namespace.
-An unknown initial session total shows **Loading…** in Full and Mini Watch, never
-a fabricated zero or elapsed-time delay warning. A complete source/valuation-matched
+An unknown initial session total shows **0** or **$0.00** in Full and Mini Watch,
+without changing canonical unknowns or adding an elapsed-time warning. A complete source/valuation-matched
 total stays stable through unchanged captures, disclosure, reconnect and Earlier
 eviction/re-entry. No per-root periodic snapshot or reconciliation is scheduled for
 unchanged evidence. One shared background pricing-identity check uses the existing

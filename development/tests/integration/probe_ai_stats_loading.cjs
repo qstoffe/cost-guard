@@ -6,8 +6,7 @@ module.exports = async ({evaluate,checks}) => {
     const view=new AIStatsView.View(()=>{}), original=structuredClone(current.result);
     const state={period:'30-days',result:null};view.update(state);view.attach(parent);
     const cards=[...parent.querySelectorAll('.ai-stat')];
-    const pending=()=>cards.length===12 && cards.every(c=>c.textContent==='Loading…' && c.childNodes.length===1 &&
-      c.children.length===0 && c.getAttribute('role')==='status' && c.getAttribute('aria-live')==='off');
+    const pending=()=>${require('../fixtures/stats_pending.cjs')('.ai-stat','parent')};
     const cold=pending(), before=cards.map(c=>({width:c.getBoundingClientRect().width,height:c.getBoundingClientRect().height}));
     const partial=structuredClone(original);partial.view.ai_stats_work.scopes['30-days'].ready=false;
     state.result=partial;view.update(state);const sliced=pending();
@@ -41,5 +40,5 @@ module.exports = async ({evaluate,checks}) => {
    assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
     'AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
-  checks.push('twelve stable shells: plain Loading-only cold/partial/period switch; no repeated poll mutations; atomic ready; truthful terminal failure; token unit independence; six ordered Overview cards');
+   checks.push('twelve stable shells: numeric zero/retained CCost and Loading-only noncost cards during cold/partial/period switch; quiet polls, ready commit, truthful failure, token unit independence');
 };

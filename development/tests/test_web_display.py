@@ -128,14 +128,14 @@ class WebDisplayTests(unittest.TestCase):
         self.assertEqual({"credits": {"ccost": "395"}, "usd": {"ccost": "$3.95"}}, dto["display_units"])
         for value in (None, Decimal(0)):
             unknown = with_display(record(ccost=value, unresolved_cost=True)).to_json()
-            self.assertEqual("N/A", unknown["display"]["ccost"])
-            self.assertNotIn("display_units", unknown)
+            self.assertEqual("0", unknown["display"]["ccost"])
+            self.assertEqual("$0.00", unknown["display_units"]["usd"]["ccost"])
         sparse = with_display(record(ccost=Decimal(0), calls=0, is_compaction=True)).to_json()
-        self.assertEqual("", sparse["display"]["ccost"])
-        self.assertNotIn("display_units", sparse)
+        self.assertEqual("0", sparse["display"]["ccost"])
+        self.assertEqual("$0.00", sparse["display_units"]["usd"]["ccost"])
 
     def test_ccost_money_and_duration_goldens_keep_exact_raw_values(self):
-        cases = [(None, "N/A"), ("0", "0"), ("0.00000000001", "<0.1"),
+        cases = [(None, "0"), ("0", "0"), ("0.00000000001", "<0.1"),
                  ("0.1234567890123456789", "0.2"), ("1.000000000001", "2"), ("-0.12", "-0.1")]
         for raw, expected in cases:
             value = None if raw is None else Decimal(raw)
@@ -147,7 +147,7 @@ class WebDisplayTests(unittest.TestCase):
                 self.assertEqual(money(value), dto["display"]["billed_cost"])
                 self.assertEqual("1m", dto["display"]["duration_ms"])
                 self.assertEqual(duration_text(59_500), dto["display"]["duration_ms"])
-        for value, unresolved, expected in (("0", True, "N/A"), ("0.12", True, "0.2"), ("0.12", False, "0.2")):
+        for value, unresolved, expected in (("0", True, "0"), ("0.12", True, "0.2"), ("0.12", False, "0.2")):
             dto = with_display(record(ccost=Decimal(value), unresolved_cost=unresolved)).to_json()
             self.assertEqual(expected, dto["display"]["ccost"])
 
@@ -221,10 +221,10 @@ class WebDisplayTests(unittest.TestCase):
             accounts=(record(known_ccost=Decimal(0), observed_requests=2, priced_requests=0, complete=False),),
             unaccounted_usage=Decimal("-1.23456789"))).to_json()
         self.assertEqual({"run_ccost": "1", "duration_ms": "2"}, dto["by_model"])
-        self.assertEqual("", dto["rows"][0]["display"]["ccost"])
+        self.assertEqual("0", dto["rows"][0]["display"]["ccost"])
         self.assertEqual("", dto["rows"][0]["display"]["calls"])
-        self.assertEqual("—", dto["accounts"][0]["display"]["account_ccost"])
-        self.assertEqual("N/A", dto["accounts"][0]["display"]["known_ccost"])
+        self.assertEqual("0", dto["accounts"][0]["display"]["account_ccost"])
+        self.assertEqual("0", dto["accounts"][0]["display"]["known_ccost"])
         self.assertEqual("-2", dto["display"]["unaccounted_usage"])
 
     def test_watch_uses_latest_progress_model_and_observation_duration_not_snapshot_duration(self):

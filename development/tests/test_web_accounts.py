@@ -36,7 +36,7 @@ class AccountsViewTests(unittest.TestCase):
         self.assertEqual("29/day · no workdays left", pace_text(report.accounts_quotas.accounts[0].pace[0]))
         self.assertEqual("29", first["pace"][0]["display"]["per_day"])
         self.assertNotIn("PRIVATE", json.dumps(dto))
-        self.assertEqual("—", accounts[3]["ccost_scopes"][0]["cost"]["display"]["account_ccost"])
+        self.assertEqual("0", accounts[3]["ccost_scopes"][0]["cost"]["display"]["account_ccost"])
 
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_rendered_cards_known_unknown_zero_unlimited_and_sanitized_errors(self):

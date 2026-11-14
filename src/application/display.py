@@ -31,20 +31,18 @@ def decimal(value):
 def amount_tokens(values):
     tokens = {}
     if "day_start_ms" in values and "prompt_count_complete" in values:
-        # Preserve Today's independent no-priced-work availability guard.
         total = dict(values["total"].fields)
-        tokens["daily_ccost"] = ("N/A" if total["observed_requests"] and not total["priced_requests"]
-                                 else ccost_amount(decimal(total["known_ccost"])))
+        tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]))
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
                 "next_context_cached_ccost", "next_context_fresh_ccost",
                 "watch_next_context_cached_ccost", "watch_next_context_fresh_ccost"):
         if key not in values:
             continue
-        # Only full-Watch cards export these report-owned availability flags.
-        # Preserve canonical values and legacy CLI/other-report presentation.
+        # Report-owned availability flags remain canonical; only the amount
+        # token uses zero while its required component evidence is missing.
         if key in ("incoming_context_ccost", "extra_ccost") and values.get(key + "_known") is False:
-            tokens[key] = "N/A"
+            tokens[key] = ccost_amount(None)
             continue
         unresolved = False
         if key == "ccost":
@@ -98,16 +96,13 @@ def amount_tokens(values):
         fraction = decimal(values["remaining_fraction"])
         tokens["remaining_fraction"] = "N/A" if fraction is None else f"{fraction * 100:.0f}%"
     if "known_ccost" in values:
-        tokens["account_ccost"] = ("—" if values.get("observed_requests") and not values.get("priced_requests")
-                                   else ccost_amount(decimal(values["known_ccost"])))
+        tokens["account_ccost"] = ccost_amount(decimal(values["known_ccost"]))
     if "rate" in values and "cost_complete" in values:
         tokens["known_ccost"] = ccost_amount(decimal(values["known_ccost"]), unresolved=not values["cost_complete"])
         rate = decimal(values["rate"])
-        tokens["rate"] = "N/A" if rate is None else ccost_amount(rate) + ("/h" if ccost_unit() == "usd" else " CCost/h")
+        tokens["rate"] = ccost_amount(rate) + ("/h" if ccost_unit() == "usd" else " CCost/h")
     if "run_ccost" in values:
-        mix = dict(values["run_total"].fields)
-        tokens["run_ccost"] = ("N/A" if values["run_ccost"] is None or (mix["request_count"] and not mix["priced_requests"])
-            else ccost_amount(decimal(values["run_ccost"])))
+        tokens["run_ccost"] = ccost_amount(decimal(values["run_ccost"]))
     return tokens
 
 
@@ -242,14 +237,13 @@ def metric_tokens(values, timezone_id, now_ms=None, *, times=None):
     if values.get("in_progress") and values.get("token_mix_percent") is None:
         tokens["token_mix_percent"] = "running - consider ABORT" if values.get("running_cost_warning") else "running"
     if values.get("is_compaction") and values.get("calls") == 0 and decimal(values.get("ccost")) == 0:
-        tokens.update({key: "" for key in ("ccost", "calls", "incoming_context_ccost", "extra_ccost", "token_mix_percent")})
+        tokens.update({key: "" for key in ("calls", "token_mix_percent")})
     if "totals" in values and "shares" in values:
         tokens["totals"] = "/".join("--" if item is None else compact_tokens(item) for item in values["totals"])
         tokens["percentages"] = ("/".join(balanced_share_percents(values["totals"]))
             if all(item is not None for item in values["shares"]) and sum(values["totals"]) else "--/--/--/--")
         costs = values.get("costs")
-        tokens["costs"] = "N/A" if costs is None or (values["request_count"] and not values["priced_requests"]) else "/".join(
-            ccost_amount(decimal(item)) for item in costs)
+        tokens["costs"] = "/".join(ccost_amount(decimal(item)) for item in (costs or (None,) * 4))
     return tokens
 
 
@@ -323,21 +317,23 @@ def history_tokens(values, timezone_id, *, times=None):
     if "totals" in values and "shares" in values:
         shares = balanced_share_percents(values["totals"]) if all(item is not None for item in values["shares"]) else ("--",) * 4
         costs = values.get("costs")
-        priced = costs is not None and not (values["request_count"] and not values["priced_requests"])
+        priced = costs is not None
         for index, (name, label) in enumerate(TOKEN_CATEGORIES):
-            cost = "N/A" if not priced else ccost_amount(decimal(costs[index]))
-            tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
+            cost = ccost_amount(decimal(costs[index]) if priced else None)
+            tokens[name] = shares[index] + f" ({cost})"
             tokens["mix_" + name + "_share"] = "N/A" if shares[index] == "--" else shares[index]
             tokens["mix_" + name + "_cost"] = cost
             if values.get('category_cost_help'):
                 amount = decimal(costs[index]) if priced else None
-                exact = 'N/A' if amount is None else format(amount / 100 if ccost_unit() == 'usd' else amount, 'f')
+                exact = ccost_amount(None) if amount is None else format(amount / 100 if ccost_unit() == 'usd' else amount, 'f')
+                if amount is None and ccost_unit() == 'usd':
+                    exact = exact.removeprefix('$')
                 tokens["mix_" + name + "_cost_help"] = (
                     f"{label} CCost: {exact} {'USD' if ccost_unit() == 'usd' else 'Credits'}."
                     + (" Reference valuation, not billing." if values["cost_complete"] else
                        " Partial reference valuation; missing pricing or usage is not zero.")
                 )
-        tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
+        tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),

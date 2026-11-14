@@ -280,7 +280,7 @@ class BalancedShareTests(unittest.TestCase):
         for _ in range(500):
             values = tuple(random.randrange(0, 10**12) for _ in range(4))
             mix = token_mix((TokenUsage(*values),))
-            shares = [Decimal(cell.split(": ")[1][:-1]) for cell in mix_cells(mix)]
+            shares = [Decimal(cell.split(": ")[1].split("%")[0]) for cell in mix_cells(mix)]
             self.assertEqual(Decimal(100), sum(shares))
             for exact, rounded in zip(mix.shares, shares):
                 self.assertLess(abs(exact - rounded), Decimal("0.1"))

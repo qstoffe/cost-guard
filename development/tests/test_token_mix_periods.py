@@ -79,7 +79,7 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertEqual(0, month.token_mix.request_count)
         self.assertTrue(any('Request time unavailable' in warning for warning in month.source_warnings))
         help_text = project(all_time).to_json()['token_mix']['display_units']
-        self.assertIn('N/A', help_text['usd']['mix_input_cost_help'])
+        self.assertIn('Input CCost: 0 USD', help_text['usd']['mix_input_cost_help'])
         self.assertIn('not zero', help_text['credits']['mix_input_cost_help'])
 
     def test_period_changes_reuse_warm_root_evidence_without_hydration_or_repricing(self):

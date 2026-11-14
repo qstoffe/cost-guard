@@ -73,9 +73,16 @@ async function tokenMix(context, frames, helpText) {
   const mix = () => row.children[7].textContent;
   const cost = () => row.children[5].textContent;
   const costText = prompt => prompt.display.ccost;
+  const observedComponents = new Map();
   const checkCostHelp = prompt => {
     const target = row.children[5].children[0], help = helpText(target), d = prompt.display;
-    assert.ok(help.startsWith(`Incoming Context CCost (I): ${d.incoming_context_ccost}\nExtra CCost (E): ${d.extra_ccost}\n`));
+    const amount = key => {
+      const known = prompt[key] != null && prompt[key + '_known'] !== false && !prompt[key + '_usage_missing'];
+      if (known && (Number(prompt[key]) > 0 || Number(prompt[key]) === 0 && !prompt.unresolved_cost))
+        observedComponents.set(key, d[key]);
+      return observedComponents.get(key) ?? d[key];
+    };
+    assert.ok(help.startsWith(`Incoming Context CCost (I): ${amount('incoming_context_ccost')}\nExtra CCost (E): ${amount('extra_ccost')}\n`));
     assert.ok(help.includes(d.cost_detail_help), 'rich cost detail follows the accepted split');
     return help;
   };

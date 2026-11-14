@@ -172,7 +172,7 @@ function setup() {
   }
   input.view.daily_usage = {...daily,display:{daily_ccost:'N/A'},display_units:{},
     total:{...daily.total,known_ccost:'0',priced_requests:0,complete:false}};
-  parity(); assert.equal(view.dailyText.textContent,'CCost Today N/A · 37 prompts');
+  parity(); assert.equal(view.dailyText.textContent,'CCost Today 0 · 37 prompts');
   assert.equal(view.dailyNote.textContent,'');
   for (const changes of [{}, {total:{...daily.total,priced_requests:99,complete:false,
       display:{known_ccost:'?34'},display_units:{usd:{known_ccost:'?$0.34'}}},mix:{...daily.mix,cost_complete:false}},
@@ -369,7 +369,7 @@ function setup() {
   controller.update(input); assert.match(view.body.textContent,/No earlier sessions/,'valid empty evicts retained rows');
   input.view = {...input.view,active_cards:originals,daily_usage:{...daily,day_end_ms:now+1}};
   controller.update(input); assert.equal(view.daily.textContent,beforeDaily);
-  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today · Loading…','no yesterday total after configured midnight, even disconnected');
+  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today $0.00','no yesterday total after configured midnight, even disconnected');
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+3}; controller.update(input);
   view.summary.fire('click'); assert.equal(test.returned(), 1); assert.equal(test.focused(), 1);
   assert.equal(child.closed, false, 'return selects existing tab without closing Mini');
@@ -460,8 +460,8 @@ function setup() {
   initial.update({state:'recovering',view:null});
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
   const initialOpening = initial.toggle(); initialTest.opened(win()); await initialOpening;
-  assert.equal(initial.view.daily.textContent, 'CCost Today · Loading…');
-  assert.equal(initial.view.daily.textContent, 'CCost Today · Loading…');
+  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
+  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
   initial.close();
   now += 599999; assert.equal(initial.observations.delayed(now),false);
   now++; assert.equal(initial.observations.delayed(now),true);

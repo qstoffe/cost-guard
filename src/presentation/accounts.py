@@ -36,9 +36,7 @@ def quota_label(label: str) -> str:
 
 def account_ccost_text(value: ComparisonCost | None) -> str:
     """Show the known account subtotal; global partial markers stay intact."""
-    if value is None or (value.observed_requests and not value.priced_requests):
-        return "—"
-    return ccost_amount(value.known_ccost)
+    return ccost_amount(None if value is None else value.known_ccost)
 
 
 def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
@@ -171,7 +169,7 @@ def blocked_explained(snapshot: AccountSnapshot, *, now_ms: int) -> bool:
 
 def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_ms: int,
                            compact: bool = False, recovering: bool = False, watch: bool = False,
-                           primary_label_width: int = 0, aligned: bool = False) -> tuple[StyledText, ...]:
+                            primary_label_width: int = 0, aligned: bool = False, cost_text=None) -> tuple[StyledText, ...]:
     """``aligned`` pads every compact quota label like the primary one (continuation lines)."""
     snapshot = account.account
     if snapshot.observations.get("parser_reason") == "software_failure":
@@ -189,7 +187,7 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         width = (primary_label_width or label_width) if index == 0 or aligned else (0 if compact else label_width)
         components = quota_parts(component, timezone_id, now_ms=now_ms, compact=compact, label_width=width,
                                  watch=watch, omit_reset=merge, account_blocked=account_blocked,
-                                 ccost=_quota_ccost(account, component) if watch or component.duration_seconds else None)
+                                  ccost=_quota_ccost(account, component, cost_text) if watch or component.duration_seconds else None)
         if merge and components:
             components = (*components[:-1], StyledText(components[-1].parts + ((" · Remaining: " + pace_text(pace), None),)))
             merged_pace.add(pace)
@@ -219,19 +217,20 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         parts.append(StyledText(((snapshot.availability.upper(), "costQuotaWarning"),)))
     if watch and not snapshot.quotas and "today" in dict(account.ccost_scopes):
         value = dict(account.ccost_scopes)["today"]
-        parts.append(StyledText((("CCost today: " + account_ccost_text(value), None),)))
+        text = cost_text("today", value) if cost_text else account_ccost_text(value)
+        parts.append(StyledText((("CCost today: " + text, None),)))
     if watch and account.ccost_account_unknown:
         parts.append(StyledText((("CCost: account unknown", None),)))
     return tuple(parts)
 
 
-def _quota_ccost(account: AccountProjection, component: QuotaComponent) -> str | None:
+def _quota_ccost(account: AccountProjection, component: QuotaComponent, cost_text=None) -> str | None:
     name = component.label if component.duration_seconds else "today"
     scopes = dict(account.ccost_scopes)
     if name not in scopes:
         return None
     value = scopes[name]
-    return account_ccost_text(value)
+    return cost_text(name, value) if cost_text else account_ccost_text(value)
 
 
 def account_ccost_lines(account: AccountProjection) -> tuple[str, ...]:
@@ -296,14 +295,14 @@ def capacity_block(account: AccountProjection, styler: AnsiStyler, timezone_id: 
                    force_vertical: bool = False, include_label: bool = True,
                    now_ms: int | None = None, account_label_width: int = 0,
                    recovering: bool = False, watch: bool = False,
-                   primary_label_width: int = 0) -> tuple[list[str], bool]:
+                    primary_label_width: int = 0, cost_text=None) -> tuple[list[str], bool]:
     """Lines plus whether the block is separated vertically (verbose or warned)."""
     now_ms = time.time_ns() // 1_000_000 if now_ms is None else now_ms
     prefix = account.label.ljust(account_label_width) + "   "
     lines = None
     if not force_vertical:
         options = dict(now_ms=now_ms, compact=True, recovering=recovering, watch=watch,
-                       primary_label_width=primary_label_width)
+                        primary_label_width=primary_label_width, cost_text=cost_text)
         components = account_capacity_parts(account, timezone_id, **options)
         plain = prefix + " | ".join(str(item) for item in components)
         if len(plain) <= width:
@@ -314,7 +313,7 @@ def capacity_block(account: AccountProjection, styler: AnsiStyler, timezone_id: 
     vertical = lines is None or bool(account.account.warnings)
     if lines is None:
         components = account_capacity_parts(account, timezone_id, now_ms=now_ms, recovering=recovering,
-                                            watch=watch, primary_label_width=primary_label_width)
+                                             watch=watch, primary_label_width=primary_label_width, cost_text=cost_text)
         lines = textwrap.wrap(account.label, width=max(10, width)) if include_label else []
         for component in components:
             if len(str(component)) <= width - 2:
@@ -333,8 +332,8 @@ def capacity_lines(account: AccountProjection, styler: AnsiStyler, timezone_id: 
 
 
 def compact_label_fits(account: AccountProjection, timezone_id: str, *, width: int, now_ms: int,
-                       primary_label_width: int, recovering: bool = False) -> bool:
+                        primary_label_width: int, recovering: bool = False, cost_text=None) -> bool:
     """Whether the account keeps its label beside compact quotas (single or split row)."""
     components = account_capacity_parts(account, timezone_id, now_ms=now_ms, compact=True, watch=True,
-                                        primary_label_width=primary_label_width, recovering=recovering)
+                                         primary_label_width=primary_label_width, recovering=recovering, cost_text=cost_text)
     return bool(components) and len(account.label) + 3 + len(str(components[0])) <= width

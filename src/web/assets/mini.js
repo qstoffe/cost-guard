@@ -51,8 +51,9 @@ const MiniWatch = (() => {
       return {...card, session_summary: summary};
     }
     update(publication, now) {
-      const view = publication?.view;
-      if (!view || publication.state !== 'running') return;
+      if (!publication?.view || publication.state !== 'running') return;
+      this.costs ||= new ReportView.CostDisplay();
+      const view = WatchView.costProjection(publication.view, this.costs, publication.source_generation);
       const previous = this.view;
       const prompts = view.cards_state === 'observed';
       const oldCards = new Map((previous?.active_cards || []).map(card =>
@@ -384,10 +385,7 @@ const MiniWatch = (() => {
     }
     drawCost(row, card, prompt) {
       const summary = card.session_summary, cost = summary?.cost;
-      // Reuse the server's unit-correct, prefix-free known subtotal; guard its
-      // no-priced-work dash here so Mini retains its established N/A semantics.
-      const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'account_ccost') :
-        summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
+      const total = ReportView.display(cost, 'account_ccost');
       const amount = ReportView.display(prompt, 'ccost');
       ReportView.text(row.children[2].children[0], amount);
       ReportView.text(row.children[3].children[0], total);
@@ -399,10 +397,10 @@ const MiniWatch = (() => {
       const amounts = ReportView.display(value, 'mini_cost_amounts');
       if (!Array.isArray(models) || !Array.isArray(amounts)) {
         const label = session ? 'Session Model 1' : 'Main Model';
-        return `${label}: N/A — N/A\n${label} CCost: N/A`;
+        return `${label}: N/A — N/A\n${label} CCost: ${ReportView.display(null, 'ccost')}`;
       }
       return models.map(([label, model], index) =>
-        `${label}: ${model}\n${label} CCost: ${amounts[index] ?? 'N/A'}`).join('\n\n');
+        `${label}: ${model}\n${label} CCost: ${amounts[index] ?? ReportView.display(null, 'ccost')}`).join('\n\n');
     }
     promptDetails(item, highlight) {
       const prompt = item?.prompt;
@@ -427,12 +425,9 @@ const MiniWatch = (() => {
     }
     drawDaily(view) {
       const value = view?.daily_usage, state = view?.daily_state;
-      let label = 'CCost Today · Loading…';
-      if (!value && state === 'unavailable') label = 'CCost Today · Unavailable';
       this.dailyValue = value;
-      const cost = value && ReportView.display(value, 'daily_ccost');
-      ReportView.text(this.dailyLead, value ? 'CCost Today ' : label);
-      ReportView.text(this.dailyAmount, value ? cost : '');
+      ReportView.text(this.dailyLead, 'CCost Today ');
+      ReportView.text(this.dailyAmount, () => ReportView.display(value, 'daily_ccost'));
       ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
       ReportView.text(this.dailyNote, '');
       this.daily.className = 'mini-daily';

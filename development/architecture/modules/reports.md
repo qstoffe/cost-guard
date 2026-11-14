@@ -219,11 +219,12 @@ fun facts. Sparse observations, missing prices/counters, old roots, partial cove
 and approximated intervals must never produce Unavailable/N/A, quality badges or
 hidden values. One sensible timed response can race. Invalid individual denominators
 are excluded, not used to poison another model or period. Do not fabricate activity.
-**AI Stats: pending means exactly Loading in every card, including queued, deferred,
-failed and interrupted attempts. A genuine blocker is page-level, never a card label.
-Ready values are atomic and last-good retained.** This FR000689 standing rule
-supersedes the earlier paused-shell exception. Cold errors are visible outside the
-cards; healthy recovery clears the attempt's error, never substitutes false zeros.
+**AI Stats: pending noncost cards contain exactly Loading, including queued, deferred,
+failed and interrupted attempts. FR000707 supersedes FR000689 only for reference-cost
+amounts: the four cost cards show selected-unit zero or retained qualified same-scope
+values, without claiming acquired zero usage.** A genuine blocker remains page-level.
+Ready values are atomic and last-good retained. Cold errors remain outside the cards;
+healthy recovery clears the attempt's error, never fabricates canonical observations.
 Python and JS policy comments, `test_ai_stats_tokens.py`, recovery tests and
 `probe_ai_stats_{states,podium,loading}.cjs` link/enforce this permanent contract.
 

@@ -108,7 +108,7 @@ class PromptCostDetailTests(unittest.TestCase):
         displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertTrue(waiting.unresolved_cost)
         self.assertIn("Subagent 1 — Request usage unavailable; model/effort unknown", displayed["model_detail_help"])
-        self.assertIn("CCost: N/A", displayed["cost_detail_help"])
+        self.assertIn("CCost: 0", displayed["cost_detail_help"])
         self.assertIn("Partial cost coverage", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
         self.assertIn("Subagent 1 — github-copilot/gpt-test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
@@ -125,7 +125,7 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertTrue(row.unresolved_cost)
         self.assertEqual((None,) * 4, row.cost_parts[0].categories)
         self.assertEqual(0, row.cost_parts[1].priced_requests)
-        self.assertNotIn("• Output: 0", help_text)
+        self.assertIn("• Output: 0", help_text)
         self.assertIn("Some category amounts are unavailable; subtotal includes known priced usage.", help_text)
         self.assertIn("Reference price data cannot currently be checked", help_text)
         self.assertNotIn("has no listed reference price", help_text)
@@ -223,7 +223,7 @@ class PromptCostDetailTests(unittest.TestCase):
         displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertIn("another-provider/gpt-test", displayed["model_detail_help"])
         self.assertIn("— another-provider/gpt-test", displayed["cost_detail_help"])
-        self.assertIn("• Input: N/A", displayed["cost_detail_help"])
+        self.assertIn("• Input: 0", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
         empty = self.wire(replace(row, calls=0, ccost=D(0), cost_parts=(), linked_agent_count=0))
         self.assertEqual("", empty["active_cards"][0]["rows"][0]["prompt"]["display"]["calls_help"])

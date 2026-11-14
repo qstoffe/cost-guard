@@ -42,6 +42,30 @@ const WatchView = (() => {
       cards.set(card.session_id, card);
     return [...cards.values()].sort(compare).slice(-5);
   }
+  function costProjection(view, costs, source) {
+    // Source retry can temporarily omit the generation, not change the host's
+    // selected source. An actual source switch terminates this Live host.
+    if (source && source !== 'unknown') costs.sourceGeneration = source;
+    source = [view.source_label, costs.sourceGeneration];
+    costs.contextScopes ||= new Map();
+    const card = value => {
+      const root = JSON.stringify([source, value.session_id]);
+      const context = value.session_summary?.context?.context_scope;
+      if (context) costs.contextScopes.set(root, context);
+      if (costs.contextScopes.size > 5000) costs.contextScopes.delete(costs.contextScopes.keys().next().value);
+      const scope = [source, context || costs.contextScopes.get(root), value.session_id];
+      const summary = value.session_summary;
+      return {...value, rows: value.rows.map(row => ({...row,
+        prompt: costs.select(row.prompt, [...scope, row.prompt.event_id])})),
+        session_summary: summary ? {...summary, cost: costs.select(summary.cost, scope, 'known_ccost')} : summary};
+    };
+    const daily = view.daily_usage, total = daily?.total;
+    return {...view, active_cards: (view.active_cards || []).map(card),
+      history_cards: (view.history_cards || []).map(card),
+      recent_finished_cards: (view.recent_finished_cards || []).map(card),
+      daily_usage: daily ? costs.select(daily, [source, daily.day_start_ms, daily.day_end_ms],
+        'daily_ccost', total?.complete === true, total?.known_ccost) : null};
+  }
   function protectedNode(node) {
     const selection = window.getSelection?.();
     return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
@@ -219,7 +243,7 @@ const WatchView = (() => {
   }
   function daily(parent, value, state) {
     if (!parent.children.length) parent.append(el('strong', 'CCost Today'), el('span', '', 'metric-value'), el('span'));
-    text(parent.children[1], value ? () => display(value, 'daily_ccost') : state === 'unavailable' ? 'Unavailable' : '—');
+    text(parent.children[1], () => display(value, 'daily_ccost'));
     text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
   }
   function promptCostHelp(prompt) {
@@ -227,7 +251,7 @@ const WatchView = (() => {
     const split = `Incoming Context CCost (I): ${display(prompt, 'incoming_context_ccost')}\n` +
       `Extra CCost (E): ${display(prompt, 'extra_ccost')}\n\n` +
       'I — Incoming context on the first attributed request.\nE — Output, later requests and linked subagents.\n' +
-      'N/A means unavailable, not zero.';
+      'Display zero for unavailable valuation is not proof of zero cost.';
     return [split, ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')]
       .filter(value => value && value !== 'N/A').join('\n\n');
   }
@@ -421,10 +445,8 @@ const WatchView = (() => {
       value = retainSummary(value, this.summaryValue);
       this.summaryValue = value;
       drawContext(this, value?.context);
-      text(this.costLabel, () => value?.cost ?
-        value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
-        value?.state === 'unavailable' ? 'N/A' : 'Loading…');
-      text(this.costStatus, !value?.cost && value?.state === 'unavailable' ? ' (unavailable)' : '');
+      text(this.costLabel, () => display(value?.cost, 'known_ccost'));
+      text(this.costStatus, '');
       ContextHelp.refresh(this.costHelp);
     }
     drawActivity(tool, verified, activityVerified = verified) {
@@ -472,7 +494,8 @@ const WatchView = (() => {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
     }
     update(result) {
-      const view = result.view, active = view.active_cards || [];
+      this.costs ||= new ReportView.CostDisplay();
+      const view = costProjection(result.view, this.costs, result.source_generation), active = view.active_cards || [];
       const history = finishedCards(view);
       this.earlier.dataset.hasHistory = String(history.length > 0);
       // A healthy host/stream retrying its source is not a disconnected stream.
@@ -515,5 +538,5 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, historyNotice, finishedCards, retainContext, retainSummary};
+  return {View, ContextLine, historyNotice, finishedCards, retainContext, retainSummary, costProjection};
 })();

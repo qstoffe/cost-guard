@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.51 - 2026-11-14
+
+- Unavailable reference CCost amounts display numeric zero in the selected Credits/USD unit throughout Web, Mini/PiP and CLI, including cost help, categories and initial AI Stats cost cards. Unrelated unknown metrics, native billing and quota estimates keep their existing meanings.
+- View-owned observations retain qualified same-scope amounts through incomplete refreshes; supported corrections may decrease to real zero. New prompt, source, period, account or model-group identities cannot borrow unrelated amounts. Canonical nulls, exact valuation, coverage, sorting and persistence are unchanged.
+
 ## v81.50 - 2026-11-14
 
 - Numeric CCost reads plainly across Web/CLI report, Watch, Mini/PiP, Sessions, Comparisons and Token Mix tables, totals and breakdown help in both Credits and USD. Known token-volume subtotals also omit the uncertainty prefix.
