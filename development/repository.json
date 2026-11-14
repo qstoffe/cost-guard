@@ -5,7 +5,6 @@
     "trigger": "functional",
     "baseline": "v80.71",
     "metadataPaths": ["src/version.py"],
-    "workflowPaths": ["development/backlog/maintenance-state.json"],
     "presentation": {
       "historyFormat": "date",
       "historyMaxBytes": 32768,
@@ -15,5 +14,6 @@
         {"path": "README.md", "kind": "readme-version", "heading": "## Current version"}
       ]
     }
-  }
+  },
+  "backlogRepository": "https://github.com/qstoffe/cost-guard-backlog"
 }

@@ -4,6 +4,10 @@
 
 Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs and quotas locally, with real-time Watch.
 
+Development: [source tests and tooling](development/README.md);
+[private architecture, backlog and journal](https://github.com/qstoffe/cost-guard-backlog).
+Private development access is not required to build, test or run Cost Guard.
+
 [Synthetic CLI text](development/tests/fixtures/token-categories/120.txt): Watch, Normal, history and detail—not Web screenshots.
 
 ## At a glance
@@ -124,7 +128,7 @@ Normal: model comparisons/account quotas. [Synthetic 160-column CLI text](develo
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
 - Configured OpenAI/Anthropic API accounts are distinct from **Claude Code subscriptions**, discovered through the optional installed `claude` CLI. Cost Guard never reads/copies Claude credentials or attributes current login to history.
-- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. Successful retrieval does not guarantee current upstream values. Diagnostics separates retrieval, value changes and Watch publication with bounded observations. See [Claude integration and limitations](development/architecture/modules/claude-code.md).
+- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. Successful retrieval does not guarantee current upstream values. Diagnostics separates retrieval, value changes and Watch publication with bounded observations. See [Claude integration and limitations](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/claude-code.md).
 - OpenRouter/DeepSeek accounts reuse configured OpenCode API keys through maintained read-only HTTPS endpoints. MiniMax Token Plan uses its dedicated subscription integration; generic API keys do not establish subscription entitlement.
 - No third-party Python packages are required.
 
@@ -380,9 +384,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.55 (2026-11-14):** Mini Watch keeps all five Running cell values yellow, including Ctx. Non-running Ctx retains its ordinary/red threshold policy, and exceeded-warning help remains accessible. [Behavior and evidence](development/journal/web/mini-watch.md#running-ctx-color-precedence-fr000711).
+**v81.55 (2026-11-14):** Mini Watch keeps all five Running cell values yellow, including Ctx. Non-running Ctx retains its ordinary/red threshold policy, and exceeded-warning help remains accessible. [Behavior and evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/mini-watch.md#running-ctx-color-precedence-fr000711).
 
-Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
+Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
 Versions identify code, not tags, ZIPs or GitHub Releases. Packaged Releases remain paused; resuming them requires an explicit policy decision, never a version-number trigger.
 
@@ -392,7 +396,7 @@ Development workflow and Feature Request guidelines: [development/README.md](dev
 
 Installed OpenCode Toolkit skills own `/repo-backlog` workflow. Verify the working tree, not ZIPs; development-only changes require no product tests, validator or versioning.
 
-[Code/test map and inventory review](development/architecture/modules/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
+[Code/test map and inventory review](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 
 ```text
 python development/tools/run_tests.py --suite quick

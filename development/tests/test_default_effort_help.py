@@ -69,9 +69,8 @@ class DefaultEffortHelpTests(unittest.TestCase):
         self.assertEqual("", DEFAULTS["microsoft"]["mai-code-1.1-flash"])
         self.assertEqual("", DEFAULTS["openai"]["gpt-6-astra"])
         self.assertEqual("", DEFAULTS["anthropic"]["claude-opus-4-8-fast"])
-        attachment = next(Path(__file__).parents[1].glob(
-            "backlog/*/*-000694-*/MODEL-DEFAULT-EFFORT-RESEARCH.json"))
-        research = json.loads(attachment.read_text(encoding="utf-8"))
+        fixture = Path(__file__).parent / "fixtures/default-effort/reviewed-models.json"
+        research = json.loads(fixture.read_text(encoding="utf-8"))
         self.assertEqual(31, len(research["rows"]))
         self.assertEqual(6, len({row["publisher"] for row in research["rows"]}))
         for row in research["rows"]:
