@@ -105,11 +105,14 @@ assert.match(helpText(earlier.root.querySelectorAll('th')[0].children[0]), /incl
 const saved = card.body.children[0];
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.body.children[0], saved, 'unchanged refresh retains row and valid metrics');
-const savedTargets = [3,5,6].map(index => saved.children[index].children[0]);
+const savedTargets = [0,3,4,5,6].map(index => saved.children[index].children[0]);
+const savedCells = [...saved.children];
 context.input.view.active_cards[0].rows[0].watch_duration_ms++;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.deepEqual([3,5,6].map(index => saved.children[index].children[0]), savedTargets,
+assert.ok([0,3,4,5,6].every((index, at) => saved.children[index].children[0] === savedTargets[at]),
   'advancing prompt publications retain value-help target identity');
+assert.ok(savedCells.every((cell, index) => saved.children[index] === cell),
+  'refresh does not detach stationary help targets through new cells');
 context.input.view.active_cards[0].rows[0].prompt.in_progress = false;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.title.className, '', 'terminal title stops looking running');

@@ -27,7 +27,7 @@ const ContextHelp = (() => {
     panel.id = 'context-help'; panel.className = 'context-help'; panel.hidden = true;
     panel.setAttribute('role', 'tooltip'); panel.setAttribute('popover', 'manual');
     let active = null, blocked = null, timer, opening, pending = null, origin = null, keyboard = true, fragments = null;
-    let watchdog, hoverDeadline = 0;
+    let watchdog, hoverDeadline = 0, pointer = null;
     const now = () => win.performance?.now() ?? Date.now();
     const cancel = () => { win.clearTimeout(timer); timer = undefined; };
     const cancelOpening = () => { win.clearTimeout(opening); opening = undefined; pending = null; };
@@ -37,9 +37,21 @@ const ContextHelp = (() => {
       entries.get(target).pointerTarget.ownerDocument === doc && entries.get(target).pointerTarget.isConnected &&
       doc.visibilityState !== 'hidden' && !win.closed;
     function pointerInteraction(event) {
-      // CSS hover and the last coordinates may survive an OS-window exit. Only
-      // actual input renews the lease; refresh/focus/polling cannot certify presence.
-      if (event?.isTrusted && event.pointerType !== 'touch') hoverDeadline = now() + HOVER_IDLE;
+      if (!event?.isTrusted || event.pointerType === 'touch') return;
+      hoverDeadline = now() + HOVER_IDLE;
+      pointer = Number.isFinite(event.clientX) && Number.isFinite(event.clientY) ?
+        {x: event.clientX, y: event.clientY} : null;
+    }
+    function hoverState(pointerTarget) {
+      const trigger = hovered(pointerTarget), surface = hovered(panel);
+      // A remembered point is not a current OS cursor position. Use hit testing
+      // only to detect layout/occlusion contradictions, never to override a
+      // genuine negative hover state or invent presence from stale coordinates.
+      if (trigger === false && surface === false) return false;
+      if (trigger !== true && surface !== true) return null;
+      const hit = pointer && doc.elementFromPoint?.(pointer.x, pointer.y);
+      if (hit && !pointerTarget.contains(hit) && !panel.contains(hit)) return false;
+      return true;
     }
     function watchHover() {
       if (origin !== 'hover') { cancelWatchdog(); return; }
@@ -50,10 +62,15 @@ const ContextHelp = (() => {
         watchdog = undefined;
         if (active !== target || origin !== 'hover') return;
         if (!valid(target) || entries.get(target).pointerTarget !== pointerTarget ||
-            panel.hidden || !panel.isConnected || now() >= hoverDeadline) { close(); return; }
-        if (hovered(pointerTarget) === false && hovered(panel) === false) exit(target);
+            panel.hidden || !panel.isConnected) { close(); return; }
+        const state = hoverState(pointerTarget);
+        // Stationary native hover is not abandonment. Only an inconclusive
+        // browser query uses the bounded fallback. Stale positive CSS + no OS
+        // exit is fundamentally indistinguishable from real stationary reading.
+        if (state === false) exit(target);
+        else if (state === null && now() >= hoverDeadline) { close(); return; }
         watchHover();
-      }, Math.min(HOVER_CHECK, Math.max(0, hoverDeadline - now())));
+      }, HOVER_CHECK);
       watchdog = ticket;
     }
     function position() {
@@ -236,6 +253,7 @@ const ContextHelp = (() => {
     attach(action, content, passive, label); return label;
   }
   function value(target, content) {
+    if (entries.has(target)) return attach(target, content, true);
     target.className = (target.className || '') + ' help-value'; target.tabIndex = 0;
     target.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {

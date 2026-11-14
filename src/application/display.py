@@ -3,7 +3,7 @@
 Only already-exported fields are inspected; no source/provider access, valuation,
 ranking or arbitrary object introspection. CLI and Web consume shared primitives.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
@@ -21,6 +21,7 @@ from .ai_stats import stat_tokens
 from .comparisons import display_tokens as comparison_tokens
 from .reference_cost import cost_help_tokens
 from .model_help import session_model_tokens
+from .mini_costs import mini_cost_tokens
 
 
 def decimal(value):
@@ -130,25 +131,31 @@ def watch_reset(quota, timezone_id, now_ms):
     return web_quota_reset(dict(quota.fields), timezone_id, now_ms)
 
 
-def web_quota_reset(values, timezone_id, now_ms):
+def web_quota_reset(values, timezone_id, now_ms, *, mini=False):
     """Web-only countdown and local calendar context from one authoritative clock."""
     deadline = values.get("reset_at_ms")
     if values.get("window_active") is False and deadline is None:
         return "Window not started"
     if isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0:
-        return "Reset unknown"
+        return "N/A" if mini else "Reset unknown"
     try:
         if not math.isfinite(deadline):
-            return "Reset unknown"
+            return "N/A" if mini else "Reset unknown"
         zone = resolve_timezone(timezone_id)
         target = datetime.fromtimestamp(deadline / 1000, timezone.utc).astimezone(zone)
         current = datetime.fromtimestamp(now_ms / 1000, timezone.utc).astimezone(zone)
     except (OverflowError, OSError, ValueError):
-        return "Reset unknown"
+        return "N/A" if mini else "Reset unknown"
     remaining = deadline - now_ms
     if remaining <= 0:
         return "Reset expired"
     clock = target.strftime("%H:%M")
+    if mini:
+        day = (target.strftime("%Y-%m-%d") if remaining > 604_800_000 else
+               "today" if target.date() == current.date() else
+               "tomorrow" if target.date() == current.date() + timedelta(days=1) else
+               ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()])
+        return f"in {duration_text(remaining)} · {clock} {day}"
     if remaining > 604_800_000:
         return f"Reset at {clock}, {target:%Y-%m-%d}"
     day = ("today" if target.date() == current.date() else
@@ -176,6 +183,7 @@ def metric_time_tokens(values, timezone_id, now_ms):
         tokens["web_reset"] = web_quota_reset(values, timezone_id, now_ms)
     if "used_percent" in values and "quota" in values and now_ms is not None:
         tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
+        tokens["mini_reset"] = web_quota_reset(dict(values["quota"].fields), timezone_id, now_ms, mini=True)
     if "duration_seconds" in values:
         tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
     return tokens
@@ -269,10 +277,12 @@ def history_time_tokens(values, timezone_id):
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
         tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")
         tokens["start_date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M %z")
+        tokens["mini_start_date_time"] = tokens["date_time"]
     if "completed_at_ms" in values:
         finished = values["completed_at_ms"]
         tokens["finished_clock"] = "—" if finished is None else format_local_timestamp(finished, timezone_id, "%H:%M")
         tokens["finished_date_time"] = "Unknown finish time" if finished is None else format_local_timestamp(finished, timezone_id, "%Y-%m-%d %H:%M %z")
+        tokens["mini_finished_date_time"] = "Unknown finish time" if finished is None else format_local_timestamp(finished, timezone_id, "%Y-%m-%d %H:%M")
     if values.get("aborted") and values.get("abort_at_ms"):
         tokens["abort_clock"] = format_local_timestamp(values["abort_at_ms"], timezone_id, "%H:%M")
     return tokens
@@ -363,6 +373,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(history_tokens(values, timezone_id, times=history_times))
             alternate.update(quota_ccost_tokens(values, now_ms, reference))
             alternate.update(detail_tokens(values))
+            alternate.update(mini_cost_tokens(values))
             alternate.update(stat_tokens(values))
             alternate.update(comparison_tokens(values, timezone_id))
         variants[unit] = alternate
@@ -373,13 +384,17 @@ def _with_display(value, timezone_id, now_ms):
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     # Large cost help is already present in the selected display. Unit maps are
     # overlays in every consumer; don't duplicate the selected copy per card.
-    cost_help = {"cost_detail_help", "mini_cost_detail_help", "session_cost_help"}
+    cost_help = {"cost_detail_help", "session_cost_help", "mini_cost_amounts"}
     unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing
                             and not (key in cost_help and items[key] == tokens[key])})
                              for unit, items in variants.items()}) if differing else None
     # Opaque keyed maps and canonical quota reference values need no display recursion.
     opaque = {"by_model", "by_day_utc", "current_context_sources", "ccost_reference", "cost_detail"}
-    fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
+    # Mini grouping is presentation input, not another canonical wire ledger.
+    # Export the prepared help once per unit; preserve Full Watch's source parts.
+    prepared_only = {"mini_cost_groups", "mini_missing_agents", "mini_session_cost"}
+    fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms))
+                   for key, item in value.fields if key not in prepared_only)
     role_tokens = roles(values)
     quota_variants = (("quota_display", quota_displays(values)),) if "remaining_fraction" in values else ()
     return ObjectValue(fields + quota_variants + ((("display", record(**tokens)),) if tokens else ()) +

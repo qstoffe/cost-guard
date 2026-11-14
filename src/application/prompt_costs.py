@@ -7,6 +7,7 @@ from .contracts import record
 from .model_help import request_model_help
 from .reference_cost import issue_records, unavailable_help
 from .effort_help import evidence_record, evidence_help
+from .mini_costs import mini_groups
 
 MAX_PARTS = 24
 
@@ -79,12 +80,22 @@ def cost_detail(row):
         linked_agent_count=row.linked_agent_count)
 
 
+def mini_cost_detail(row):
+    missing = sum(agent.state != "not-executed" and not any(
+        part.agent == index + 1 for part in row.cost_parts)
+        for index, agent in enumerate(row.agent_coverage))
+    if not row.agent_coverage:
+        missing = max(0, row.linked_agent_count - len({part.session_id for part in row.cost_parts if part.agent}))
+    return (("mini_cost_groups", mini_groups(row.cost_parts, complete=not row.unresolved_cost)),
+            ("mini_missing_agents", missing))
+
+
 def detail_tokens(values):
     detail = values.get("cost_detail")
     if detail is None:
         return {}
     detail = dict(detail.fields)
-    sections, models, calls, main_models, efforts, compact = [], [], [], [], [], []
+    sections, models, calls, main_models, efforts = [], [], [], [], []
     for part in detail["parts"]:
         part = dict(part.fields)
         owner = "Main prompt" if part["role"] == "main" else f"Subagent {part['agent']}"
@@ -106,7 +117,6 @@ def detail_tokens(values):
             main_models.append(models[-1])
         calls.append(f"{call_heading}: {part['calls']}" + ('\n' + note if note else ''))
         subtotal_text = ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"]) if part["priced_requests"] else "N/A"
-        compact.append(f"{heading}\nCalls: {part['calls']} · CCost: {subtotal_text}")
         lines = [heading] + ([note] if note else [])
         if part["role"] == "subagents":
             count = str(part["prompt_count"]) if part["prompts_complete"] else (
@@ -138,8 +148,6 @@ def detail_tokens(values):
             unresolved=not detail["omitted_complete"]))
         models.append(note + f" ({detail['model_count']} distinct models overall)")
         calls.append(note + f": {detail.get('omitted_calls', 0)} calls")
-        compact.append(note + "\nKnown subtotal: " + ccost_amount(Decimal(detail["omitted_ccost"]),
-            unresolved=not detail["omitted_complete"]))
     linked = detail["linked_agent_count"]
     if not detail['parts'] and values.get('recorded_selections'):
         selection = '\n'.join('Recorded selection: ' + value for value in values['recorded_selections'])
@@ -159,33 +167,26 @@ def detail_tokens(values):
         note = f"Subagent {agent['agent']} — {state}"
         models.append(note)
         sections.append(note + "\nCCost: " + ("0 (no recorded execution)" if agent["state"] == "not-executed" else "N/A"))
-        compact.append(sections[-1])
     if detail.get("omitted_agents"):
         note = f"{detail['omitted_agents']} additional linked agents without request evidence not shown."
         models.append(note)
         sections.append(note)
-        compact.append(note)
     # Legacy/custom rows may carry only a count. Never invent private identities.
     if detail.get("agents_without_usage") and not detail.get("missing_agents"):
         note = f"{detail['agents_without_usage']} additional linked agents — request usage unavailable; cost unknown."
         models.append(note)
         sections.append(note)
-        compact.append(note)
     model_help = "\n\n".join(models)
     if sections:
         total = values.get("ccost")
         sections.append("Total CCost: " + ccost_amount(None if total is None else Decimal(total),
              unresolved=values.get("unresolved_cost", False)) + "\nAmounts are independently rounded.")
-        compact.append("Total CCost: " + ccost_amount(None if total is None else Decimal(total),
-            unresolved=values.get("unresolved_cost", False)))
         if values.get("unresolved_cost"):
             sections.append("Partial cost coverage — known priced subtotal only; unavailable usage is not zero.")
-            compact.append("Partial cost coverage — unavailable usage is not zero.")
     if calls:
         calls.append(("Total Calls: " if detail["calls_complete"] else "Observed Calls (incomplete request evidence): ")
             + str(detail["observed_calls"]))
     return {"cost_detail_help": "\n\n".join(sections),
-            "mini_cost_detail_help": "\n\n".join(compact),
             "model_detail_help": model_help,
             "main_model_help": '\n\n'.join(dict.fromkeys(main_models)) or 'Main model identity unrecorded',
             "effort_help": '\n\n'.join(dict.fromkeys(efforts)) or values.get("watch_effort") or "N/A",

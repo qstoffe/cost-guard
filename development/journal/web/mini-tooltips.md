@@ -1,0 +1,226 @@
+# Mini tooltip scope and stationary hover — FR 000704
+
+## Cause and owners
+
+The previous shared watchdog closed at `now() >= hoverDeadline` even when native
+trigger/panel hover stayed positive. The 30-second trusted-input lease therefore
+treated stationary reading as abandonment. `assets/help.js` retains its one
+open-only timer and transfer grace, but only inconclusive selector queries expire.
+Stored trusted coordinates can reveal layout/occlusion contradictions; they are
+not a current OS-pointer API. Negative native hover, events, removal and document
+lifetime still close help. Stale positive CSS with no browser event remains
+observationally indistinguishable from genuine stationary reading.
+
+Mini copy belongs to `assets/mini.js`; prepared local reset/Activity tokens belong
+to `application/display.py`. Full Watch/Accounts copy is not redesigned.
+`application/mini_costs.py` groups unrounded canonical contributions before normal
+unit formatting. Prompt groups consume the unbounded canonical prompt parts before
+the existing rich-detail export cap. `analysis/session_cost.py` collects whole-tree
+groups from the very same deduplicated entries and cached per-request valuations
+used for the canonical total: no second pricing pass or focal-prompt summation.
+Root compaction/out-of-prompt work is retained. Individual source-agent identities
+remain in canonical parts; Full Watch's independent grouped detail is preserved.
+Request effort evidence separates Mini combinations without changing accounting.
+Presentation-only grouping inputs are consumed before wire export; obsolete verbose
+Mini detail was removed rather than increasing the 2 MiB event/replay cap. The
+100-card foreground/background-job regression passes with that cap unchanged,
+including realistic whole-session groups. Model/effort labels are shared across
+units; only already-formatted amounts have a unit overlay. Browser code merely
+joins those prepared pairs, never totals or prices requests.
+
+The cost observation has no authoritative session execution interval. Total
+therefore shows **Duration: N/A**, explicitly permitted by the FR, rather than
+borrowing the latest prompt duration or treating session metadata as execution.
+Partial/unpriceable contributions keep `?`/N/A; no balancing model is invented.
+Mini Ctx consumes only ready-current canonical context with exceeded severity and
+ready price guidance; pending/invalidated/approaching values immediately lose red
+styling and help while retaining their independently qualified number.
+
+## Verification status
+
+Deterministic shared event/virtual-clock tests cover 120-second stationary
+trigger/popup reading, 30-second inconclusive fallback, negative hover, layout
+contradictions, null hit tests, transfer, focus/pin, tickets, ARIA and teardown.
+Focused canonical recursive fixtures reconcile prompt 509 versus session 672
+Credits, including nested/same-model descendants and out-of-prompt work.
+Both-unit grouping, effort/provider/version separation, sum-before-rounding,
+partial/unavailable states and local DST/calendar boundaries have focused tests.
+
+Local Full initially completed 194/195 passing files; the sole remaining mismatch
+was the intentional Mini unknown Capacity `?` → `N/A` fixture, then repaired and
+`test_mini_watch.py` passed. A subsequent clean Full invocation ended early after
+eight passing groups without a summary/report (exit 1), so is incomplete, not PASS.
+Package validation passed with seven unchanged advisory warnings and no cap changes.
+After realistic whole-session groups exposed a second payload overflow, unit-shared
+prepared model labels repaired it without changing the cap or fixture. The final
+local Full completed **195/195 PASS**, zero failures, 163.1 seconds. The complete
+per-file report is retained in worker scratch; actual browser acceptance is separate.
+
+Read-only installed V2 accounts passed (three cards, one refresh owner, advancing
+publication; no inference). The combined Watch probe **FAILED** its 90-second
+`probe_watch_cards_timeout`: global Earlier certification remained loading,
+392/3223 checked. SourceGuard was unchanged, HTTP/captures advanced and owned
+cleanup left no threads/processes/failures. Earlier convergence is **UNVERIFIED**;
+that invocation's session-cost stage is **NOT RUN**.
+
+Decision Delegate directed one bounded explicit-current-root accounting probe
+instead of extending global discovery. It passed: 36 physical requests across
+root/one child, complete coverage, total 193.41220000 = main 63.95060000 + child
+129.46160000 Credits, independent population/Decimal/ownership/report and controlled
+Full/Mini parity, cold 36 versus warm zero valuations, zero model calls. This is
+one authorized root, not observed native Earlier publication or rendered interaction.
+Decision Delegate accepted this plus account/source observations as sufficient
+local installation evidence and authorized a **minor task-scoped verification
+exception**: no further global Earlier-convergence run for this delivery. This
+does not waive accounting or browser acceptance, prove eventual convergence, rule
+out a separate history-performance issue or certify the owner's intermittent symptom.
+
+The integrated pane renders a synthetic Mini View in a normal document, not PiP.
+Its native hover call failed `UnknownVizError`; no pointer input or stationary
+hover proof was obtained. No integrated native PiP was opened because its external
+window effects could not be established. The refused external browser installation
+inventory was not retried or bypassed.
+
+Decision Delegate directed the existing public PR CI route (no local access grant,
+acceptance waiver, installation or manual dispatch). A focused affected-source
+check uses the image's full Chromium, the existing authenticated fixture/probes,
+unchanged production clocks and a separate 960-second process budget. It first
+verifies a separate native PiP target and real input, then the base-version RED
+cutoff and twelve 61-second GREEN holds through in-place updates. Native browser
+125% zoom, narrow theme captures, silent-exit/lifecycle and revised Mini value
+probes supplement those holds. The ordinary smoke retains its 180-second budget.
+
+Physical Windows PiP→browser chrome/other-application transitions, screen readers
+and the owner's intermittent incident are **NOT RUN / not proved**. No OS hook,
+paid inference, new source scan on hover, shared OpenCode stop or release ZIP.
+
+## opencode-toolkit: ÅTKOMSTFEL – GITHUB / HTTP401
+
+The first PR common run passed Quick (56 groups, 694 tests), package validation and
+ordinary rendered Chromium smoke. The scoped Mini step failed before emitting a
+stage result. Raw Actions job-log retrieval returned HTTP 401; those logs and the
+first failure cause remain unavailable. Existing authenticated check/run reads
+work. Decision Delegate authorized stage-specific allowlisted Checks diagnostics
+on the same PR as an adequate alternative; no credentials/access route changed,
+log endpoint retry, manual workflow dispatch or browser acceptance waiver.
+The next diagnostic run classified Git diff exit 129 but did not establish its
+cause. A read-only identity diagnostic then confirmed `git_dubious_ownership`
+(exit 128) in the disposable container checkout. Under the existing scoped Delegate
+decision, those read-only Git commands now use `-c safe.directory=<exact ROOT>`;
+there is no global/wildcard trust change or protection bypass. All three native
+platform checks passed on these revisions; scoped browser acceptance remains pending.
+
+Actual hosted Document PiP opened successfully at native 125% browser zoom. Native
+silent-exit watchdog/ARIA, lifecycle/action inputs and both-unit Full/Mini cost
+values passed before later Mini context-fixture checks. Two test-only expectations
+were corrected against existing source behavior: integral `8 Credits` precision
+(not `8.0`) and FR000703's retained `300k` during same-source pending context
+(still no warning/help). An offline production-projected VM replay independently
+confirmed `112k, 117k, N/A, 112k, 300k, 300k, 300k`.
+
+One macOS ARM smoke attempt on PR head `8d74d118fb31b48f82c9705108d6a4f5fa8c0a5f`
+(actual checkout `0fba17d830e04027308dafa1357a04fe9171e649`) failed the existing
+launcher-return assertion at the restart boundary. No exact cause was established;
+an empty filtered lifecycle-error list was not treated as proof. Decision Delegate
+authorized one targeted unchanged job rerun after verifying the PR/revision.
+Job 132288202184 then **passed** on the same head. Retain both attempts:
+**initial native failure, unchanged rerun passed; cause unresolved**. No launcher
+safety checks, identity guards, assertions or timeouts were changed or waived.
+
+The next revision (`0cff8b5`) passed the actual context sequence and all three native
+platform jobs. Its original mixed Duration portfolio **FAILED** at the Total-heading
+opening wait; remaining Duration/stationary cases were **NOT RUN**. The line alone
+does not identify the method or establish a negative selector at the 600ms guard.
+Decision Delegate authorized independent fresh keyboard/mouse and touch journeys,
+not a browser-acceptance waiver. The mouse journey now performs the twelve long holds
+before any touch; mixed input remains a separate strict failing check. A native
+selector pass-through trace preserves guard results before layout diagnostics, and
+a matched unbound Total-heading control tests document-level hover independently of
+that target's help handler. Neither diagnostic certifies physical input or a browser
+defect. Old-base RED is now required explicitly with its base revision, not silently
+skipped; that RED case is PiP-only, while GREEN covers PiP and Full Watch.
+
+Revision `f401228` obtained the required actual old-base PiP **RED** and passed the
+independent touch Duration/Total portfolio (both units, four theme/scheme combinations).
+Mouse then failed in its probe setup: PiP does not have an independent `ContextHelp`
+script global; its controller is owned by the opener. The probe now dismisses through
+that existing owner, without changing product code. Original mixed Total-heading
+**hover** still failed. The unbound control completed and observed native hover false,
+but verbose event notices were truncated, so no complete guard/control causal claim
+was made. Compact typed guard/arrival/departure summaries replace those notices.
+
+Revision `bf16da6` passed six actual Mini 61-second holds (subscription, Activity,
+CCost, Total, exceeded Ctx, generic action) and the Full subscription hold, each
+with 61 positive open/hover/connected samples and zero pointer movement. Full's
+Started hold then **FAILED**; later holds/layouts were **NOT RUN**. Source inspection
+found Started recreated and all prompt cells replaced on changed row signatures.
+A strengthened deterministic clock/cell-identity regression failed before the
+narrow fix and passed afterward. Full now reuses its clock target and updates cells
+in place; shared safety and Full copy are unchanged. Native confirmation is pending.
+Decision Delegate confirmed that repair is within this FR, without a waiver.
+
+The mixed trace independently observed trusted positive-hover arrival, then
+**native hover false at the unchanged guard after 600.3ms**, same connected target,
+focused document and no departure event. At 15s hover was positive again but help
+remained closed. This supports the known opening-gap shape, not a watchdog failure
+or proof of a Chromium defect. Control notices were absent after ten earlier step
+notices; journeys now have separate steps and one aggregate stationary summary so
+the complete control result can be read. No mixed-input exclusion is authorized yet.
+
+After the stable-cell repair, local Full again passed **195/195 files** in 163.1s
+(`scratch:/full-tests-stable-cells.json`); the validator passed with the same seven
+advisories. The repaired focused Watch quota and daily groups also passed. Native
+stationary confirmation remains a separate requirement, not inferred from those tests.
+
+On `a220347`, the repaired Full Started target passed 61 real seconds, after the six
+Mini and Full subscription holds passed again. The next Full CCost hold kept its
+panel **open and target connected for all 61 samples**, but the probe failed its
+trigger-only native-hover assertion. That did not observe popup hover, although
+the FR expressly permits reading the popup. The corrected probe records native
+trigger **and** panel hover before hit testing and requires the stationary input
+point to hit that same hovered surface; no selector or input is forced.
+
+The matched unbound control is now fully observed: trusted mouse arrival hovered
+true, then false at 651.9ms, with identical connected button, document focus,
+remembered-point hit and no departure events. The production target's native guard
+was false at 600.3ms under the same sequence. This isolates the negative native
+hover observation from that button's help binding, not from all possible product
+layout/browser interactions, and does not establish physical-desktop prevalence.
+
+## Measured core acceptance and final scoped disposition
+
+On `2bbccb8`, [run 43549260080](https://github.com/qstoffe/cost-guard/actions/runs/43549260080)
+passed the **complete independent mouse portfolio** in **800 seconds** and touch
+portfolio separately. All twelve actual 61-second holds passed, 61 samples each
+and zero pointer movement. Eleven remained on their trigger; Full CCost's large
+panel legitimately covered the input point and supplied all 61 positive native
+panel-hover/hit samples. Old-base PiP RED passed; Full Watch RED is not claimed.
+Native narrow 125% four-theme/scheme captures, 0/1/3/5-row geometry, unchanged window
+size through SSE, old-document teardown/new-target reattachment, exact both-unit
+CCost/Total and Duration/accessibility/selection transitions all passed.
+All three native-platform checks passed. Common still failed its original mixed
+step; that historical run is not an aggregate PASS.
+
+Decision Delegate authorized **FR000704-only scope-limited completion excluding
+the demonstrated mixed Total-heading opening**, conditional on the independent
+core portfolio, now satisfied. Original mixed **FAIL** and unreached **NOT RUN**
+remain in artifacts and [Suggestion000684](../../backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md).
+No exception covers stationary/lifecycle/geometry/new Total, independent input,
+accounting or future tooltip requirements. The CI wrapper leaves the probe and
+FAIL artifact intact, recognizes only the measured case/configuration/trusted
+arrival/negative native guard/connected identity/no-departure evidence, requires
+same-run independent mouse/touch PASS, and limits nonblocking treatment to PR310
+and its own main delivery. Unexpected, absent or malformed evidence remains fatal.
+This is `KNOWN_GAP`, not a literal neutral Check or mixed-interaction PASS.
+
+For future source changes, Decision Delegate also approved explicit
+`RED_NOT_APPLICABLE` only when the verified base positively contains the recognized
+fixed watchdog; missing/unrecognized bases fail. This does not replace this FR's
+observed old-base PiP RED. Physical-OS, screen-reader and history limits above remain.
+
+The final local Full, including three fail-closed exclusion-gate tests, passed
+**196/196 files, 2,423 tests: 2,419 passed, four skipped, zero failures/errors** in
+154.2 seconds (`scratch:/full-tests-delivery.json`). Validator again passed with
+the same seven advisories. Original FR bytes were moved intact to completion
+ordinal 000210 after reading current Complete names; ordinary progress advances
+148→149, preserving the existing deferred maintenance assessment.

@@ -20,16 +20,16 @@ module.exports = function(controller, view, input, helpText) {
     const early=structuredClone(pending);early.state=state;
     show([early,card('B','new',null,'pending')]);controller.render();
     assert.equal(cell('A').textContent,'230k');assert.equal(cell('B').textContent,'N/A');
-    assert.match(helpText(cell('A')),/previous same-session estimate; current prompt pending refresh/);
-    assert.match(helpText(cell('A')),/Δ Ctx: N\/A/);
+    assert.equal(view.promptRows.get('A').contextHelp,'');
+    assert.equal(cell('A').tabIndex,-1);
   }
   show([pending],{history_scope:'unrelated history owner',history_epoch:72});
   assert.equal(cell('A').textContent,'230k','history proof lifetime is not context identity');
   view.drawSessions(null);controller.render();assert.equal(cell('A').textContent,'230k','DOM row is not context owner');
   show([card('A','p2',235000)]);assert.equal(cell('A').textContent,'235k');
-  assert.doesNotMatch(helpText(cell('A')),/previous same-session/);
+  assert.equal(view.promptRows.get('A').contextHelp,'');
   show([card('A','p3',null,'pending')]);assert.equal(cell('A').textContent,'235k');
-  show([card('A','p3',235000)]);assert.doesNotMatch(helpText(cell('A')),/previous same-session/);
+  show([card('A','p3',235000)]);assert.equal(view.promptRows.get('A').contextHelp,'');
   show([card('A','p4',null,'pending')]);assert.equal(cell('A').textContent,'235k');
   show([card('A','p4',null,'invalidated')]);assert.equal(cell('A').textContent,'N/A');
   show([pending]);assert.equal(cell('A').textContent,'N/A','explicit invalidation cannot revive');

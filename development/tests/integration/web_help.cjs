@@ -136,19 +136,20 @@ assert.equal(first.getAttribute('aria-describedby'),'existing-status','watchdog 
 help.refresh(first);main.tick(5000);assert.equal(panel.hidden,true,'refresh cannot resurrect an expired hover');
 first.fire('pointerenter');main.tick(300);first.hover=false;main.tick(300);
 assert.equal(panel.hidden,true,'silent exit during opening is revalidated');assert.equal(main.timerCount(),0);
-// A stale CSS flag is bounded even through Live refresh, focus and synthetic input.
+// A confirmed stationary hover survives refresh without an input-idle cutoff.
 first.fire('pointerenter');main.tick(600);
 first.focus();assert.equal(main.timerCount(),1,'pointer-owned focus does not claim keyboard ownership');
-for(let i=0;i<29;i++) {
+for(let i=0;i<120;i++) {
   help.attach(first,()=>value,true);help.refresh(main.body);main.fire('pointermove',{target:first,isTrusted:false});main.tick(1000);
-  assert.equal(panel.hidden,false,'stationary reading gets a full thirty-second lease');
+  assert.equal(panel.hidden,false,'stationary reading survives beyond 30/60/90 seconds');
   assert.equal(main.timerCount(),1,'Live redraw and synthetic motion cannot accumulate watchdogs');
 }
-main.tick(400);assert.equal(panel.hidden,true,'stale hover cannot survive the thirty-second idle cap');
+main.fire('pointerout',{relatedTarget:null});main.tick(150);
+assert.equal(panel.hidden,true,'a browser exit still retires even stale positive hover');
 assert.equal(main.timerCount(),0);first.blur();
 const matches=first.matches;first.matches=selector=>selector===':hover'?undefined:matches.call(first,selector);
 first.fire('pointerenter');main.tick(600);assert.equal(panel.hidden,false,'inconclusive hover still allows bounded help');
-main.tick(29400);assert.equal(panel.hidden,true,'unsupported hover querying cannot retain help indefinitely');
+main.tick(30000);assert.equal(panel.hidden,true,'unsupported hover querying cannot retain help indefinitely');
 assert.equal(main.timerCount(),0);first.matches=matches;
 // Actual pointer presence renews; polling/CSS/focus did not. Panel transfer counts too.
 first.fire('pointerenter');main.tick(600);
@@ -156,8 +157,14 @@ for(let i=0;i<4;i++){main.tick(10000);main.fire('pointermove',{target:first});}
 assert.equal(panel.hidden,false,'genuine input keeps long reading usable');
 first.fire('pointerleave');main.tick(100);panel.fire('pointerenter');main.tick(2000);
 assert.equal(panel.hidden,false,'panel presence survives watchdog and trigger-panel gap');
-main.tick(27000);assert.equal(panel.hidden,false);main.tick(1000);
-assert.equal(panel.hidden,true,'panel CSS hover alone also has a finite lease');assert.equal(main.timerCount(),0);panel.hover=false;
+main.tick(90000);assert.equal(panel.hidden,false,'intentional stationary popup reading has no idle cutoff');
+panel.hover=false;main.tick(1150);assert.equal(panel.hidden,true);assert.equal(main.timerCount(),0);
+// Native CSS may remain positive after layout moves away from the remembered
+// input point. A real hit-test contradiction is actionable, null is not.
+main.elementFromPoint=()=>null;first.fire('pointerenter',{clientX:25,clientY:25});main.tick(600);
+main.tick(60000);assert.equal(panel.hidden,false,'null hit test is inconclusive, not departure');
+main.elementFromPoint=()=>main.body;main.tick(1150);assert.equal(panel.hidden,true,'revealed occlusion retires help');
+delete main.elementFromPoint;
 // Exact label, not its surrounding action, owns the revalidation.
 label.fire('pointerenter');main.tick(600);label.hover=false;sort.hover=true;main.tick(1150);
 assert.equal(panel.hidden,true,'enclosing button hover is not label hover evidence');

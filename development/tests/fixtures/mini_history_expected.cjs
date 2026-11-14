@@ -10,7 +10,7 @@ module.exports = function expectedMiniRows(view) {
       !prompt.aborted && !prompt.has_error && !prompt.completed_successfully),
     at:active ? prompt.at_ms : prompt.completed_at_ms,
     clock:(active ? prompt.display?.clock : prompt.display?.finished_clock) || '—',
-    help:(active ? prompt.display?.start_date_time : prompt.display?.finished_date_time) ||
+    help:(active ? prompt.display?.mini_start_date_time : prompt.display?.mini_finished_date_time) ||
       (active ? 'Unknown start time' : 'Unknown finish time')
   });
   for(const card of view.active_cards || []) for(const {prompt} of card.rows || []) {

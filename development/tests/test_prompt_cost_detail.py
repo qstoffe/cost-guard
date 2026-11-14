@@ -58,10 +58,13 @@ class PromptCostDetailTests(unittest.TestCase):
 
         # Reference Credits are 100x USD; cache writes fall back to input price.
         self.assertEqual(1, row.linked_agent_count)
-        self.assertEqual(("root", "child"), tuple(item.session_id for item in row.cost_parts))
-        self.assertEqual((D(20), D(4), D(60), D(400)), row.cost_parts[0].categories)
-        self.assertEqual((D(20), D(4), D(60), D(240)), row.cost_parts[1].categories)
-        self.assertEqual(("high", "low"), tuple(item.variant for item in row.cost_parts))
+        self.assertEqual(("root", "root", "child"), tuple(item.session_id for item in row.cost_parts))
+        root = tuple(item for item in row.cost_parts if item.session_id == "root")
+        self.assertNotEqual(root[0].effort_evidence, root[1].effort_evidence)
+        self.assertEqual((D(20), D(4), D(60), D(400)),
+            tuple(sum(item.categories[index] for item in root) for index in range(4)))
+        self.assertEqual((D(20), D(4), D(60), D(240)), row.cost_parts[2].categories)
+        self.assertEqual(("high", "high", "low"), tuple(item.variant for item in row.cost_parts))
         self.assertEqual(row.ccost, sum(item.known_ccost for item in row.cost_parts))
         for kind in ("active_cards", "history_cards"):
             prompt = wire[kind][0]["rows"][0]["prompt"]

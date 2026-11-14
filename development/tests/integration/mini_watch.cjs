@@ -101,12 +101,13 @@ function setup() {
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
     assert.equal(headers[4].textContent, 'Ctx');
-    assert.match(helpText(headers[4].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
+    assert.equal(helpText(headers[4].children[0]), 'Estimated context for this session, in tokens.');
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
    assert.equal(view.earlierToggle,undefined,'obsolete disclosure removed');
-   assert.equal(view.fitButton.textContent,'↕');assert.equal(view.fitButton.attributes['aria-label'],'Fit Mini Watch height');
-   assert.match(helpText(view.fitButton),/five-row session viewport and subscriptions\. Width stays unchanged/);
+    assert.equal(view.fitButton.textContent,'↕');assert.equal(view.fitButton.attributes['aria-label'],'Fit Mini Watch Height');
+    assert.equal(helpText(view.fitButton),'Fit Mini Watch Height');
+    assert.equal(helpText(view.summary),'Return to Watch in the Existing Parent Tab');
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   assert.match(view.body.children[0].children[0].textContent, /^▶ /);
@@ -126,7 +127,8 @@ function setup() {
     guidanceWarning.multiplier=state==='ready'?'2.4':null;
     guidanceWarning.display.warning_cost='('+wording+')';controller.update(input);
     assert.equal(view.body.children[0].children[4].dataset.guidance,state);
-    assert.ok(helpText(view.body.children[0].children[4]).includes(wording));
+    assert.equal(view.body.children[0].contextHelp,state==='ready'
+      ? guidanceWarning.text.replace(/^\[|\]$/g,'')+' · 2.4x more expensive' : '');
     assert.equal(view.body.children[0].children[4].textContent,originalContext.display.watch_next_context_tokens);
   }
   Object.assign(guidanceWarning,originalWarning);controller.update(input);
@@ -220,11 +222,8 @@ function setup() {
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
   for (const [index, line] of [...view.accounts.children].entries()) {
     const primary = input.view.accounts.accounts[index].primary;
-    const extra = [primary.quota.display.ccost_remaining_help && `Remaining: ${primary.quota.display.remaining_amount}`,
-      primary.quota.display.quota_help_status].filter(Boolean);
-    if (!['available','partial'].includes(input.view.accounts.accounts[index].observation.availability) || input.view.quota_stale)
-      extra.push('Quota observation is stale or unavailable.');
-    assert.equal(line.helpText, [`Capacity: ${primary.quota.display.capacity_amount}\nNext reset: ${primary.display.watch_reset}`, ...extra].join('\n'));
+    const capacity = primary.quota.display.capacity_amount;
+    assert.equal(line.helpText, `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${primary.display.mini_reset}`);
     assert.doesNotMatch(line.helpText, /Unrounded|Guesstimate|estimate|Observed same-window|Provider-reported fraction|÷/);
   }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
@@ -238,14 +237,14 @@ function setup() {
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
   const scopedDisplay = scopedPrimary.display;
-  for (const [capacity, usd, reset] of [['3066 Credits', '$30.66', 'Reset in 1h, 12:00 today'],
-      ['~3066 Credits', '~$30.66', 'Reset in 23h, 10:00 Saturday'], ['?', '?', 'Reset unknown']]) {
+  for (const [capacity, usd, reset, expected] of [['3066 Credits', '$30.66', 'in 1h · 12:00 today'],
+      ['~3066 Credits', '~$30.66', 'in 23h · 10:00 tomorrow'], ['?', '?', 'N/A', 'N/A']]) {
     scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,capacity_amount:capacity},
       display_units:{credits:{capacity_amount:capacity},usd:{capacity_amount:usd}}};
-    scopedPrimary.display = {...scopedDisplay,watch_reset:reset};
+    scopedPrimary.display = {...scopedDisplay,mini_reset:reset};
     for (const unit of ['credits','usd']) {
       vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
-      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${unit === 'usd' ? usd : capacity}\nNext reset: ${reset}`);
+      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${expected || (unit === 'usd' ? usd : capacity)}\nNext reset: ${reset}`);
     }
   }
   scopedPrimary.quota = scopedQuota; scopedPrimary.display = scopedDisplay;

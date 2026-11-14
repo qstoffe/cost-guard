@@ -385,8 +385,8 @@ const WatchView = (() => {
             const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
             label.append(el('span', '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''), 'watch-prompt-number'), preview);
             if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
-            const started = el('span', display(prompt, historical ? 'finished_clock' : 'clock'));
-            if (!historical || prompt.completed_at_ms != null) ContextHelp.value(started, display(prompt, historical ? 'finished_date_time' : 'date_time'));
+            const started = metricValue(row, 0, display(prompt, historical ? 'finished_clock' : 'clock'),
+              !historical || prompt.completed_at_ms != null ? display(prompt, historical ? 'finished_date_time' : 'date_time') : '');
              const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
              if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
              else model.removeAttribute('aria-label');
@@ -396,7 +396,14 @@ const WatchView = (() => {
             const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
               cost, calls, display(prompt, 'token_mix_percent'),
               display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
-            row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
+            cells.forEach((value, index) => {
+              const cell = row.children[index] || el('td');
+              const child = typeof value === 'object' ? value : cell.children[0] || el('span');
+              if (typeof value !== 'object') text(child, value);
+              // Keep stable help targets connected through unrelated metric updates.
+              if (cell.children[0] !== child) cell.replaceChildren(child);
+              if (cell.parentNode !== row) row.append(cell);
+            });
             row.signature = signature;
           }
           return row;

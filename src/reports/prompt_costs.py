@@ -9,7 +9,7 @@ from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost
 from src.domain.reference_cost import ReferenceCostIssue
 from src.domain.effort import EffortEvidence
-from src.analysis.effort_defaults import effort_evidence
+from src.analysis.effort_defaults import effort_evidence, request_effort
 from src.pricing.catalog import PricingCatalog
 
 
@@ -63,10 +63,11 @@ def prompt_cost_parts(record: PromptRecord | CompactionRecord, catalog: PricingC
         session = record.session_id if isinstance(record, CompactionRecord) or index < record.root_entry_count else entry.session_id
         if session not in agents:
             agents[session] = len(agents)
-        key = (session, entry.model.provider, entry.model.model, entry.variant, _price_tier(entry, catalog), entry.model.recorded_model)
+        key = (session, entry.model.provider, entry.model.model, entry.variant, _price_tier(entry, catalog),
+               entry.model.recorded_model, request_effort(entry))
         groups.setdefault(key, []).append(entry)
     result = []
-    for (session, provider, model_id, variant, tier, _recorded), entries in groups.items():
+    for (session, provider, model_id, variant, tier, _recorded, _effort), entries in groups.items():
         total = comparison_cost(entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         amounts = [Decimal(0)] * 4
         known = [True] * 4

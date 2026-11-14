@@ -4,16 +4,19 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
+   assert.ok(scope === undefined || ['--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
-   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--help-audit',
-      ...(['--raw-models','--effort-defaults'].includes(scope)?[scope,replay]:scope==='--watch-shells'?['--watch-shells']:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
+   const python=process.env.COST_GUARD_TEST_PYTHON;
+   const server = spawn(python || 'py', [...(python?[]:['-3']), 'development/tests/integration/serve_mini_watch.py', config, '--help-audit',
+       ...(['--raw-models','--effort-defaults'].includes(scope)?[scope,replay]:
+         ['--watch-shells','--mini-tooltips'].includes(scope)?[scope]:[])], {windowsHide:true,stdio:['pipe','pipe','pipe']});
   let serverErrors = '';
   server.stderr.on('data', chunk => {serverErrors = (serverErrors + chunk.toString()).slice(-12000);});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
-   const child = spawn(browser, ['--headless=new','--screen-info={1920x1080}','--no-first-run','--no-default-browser-check','--disable-extensions',
+    const child = spawn(browser, ['--headless=new',...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+     '--screen-info={1920x1080}','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
@@ -44,15 +47,22 @@ async function main() {
     await command('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:key==='Escape'?27:9},id);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:key==='Escape'?27:9},id);
   };
-  const checks=[],layouts=[]; let evidence={outcome:'FAIL'};
-   const deadline=setTimeout(()=>{child.kill();server.kill();},170000);
+  const checks=[],layouts=[]; let evidence={outcome:'FAIL'},phase='launch-fixture';
+   const deadline=setTimeout(()=>{child.kill();server.kill();},scope==='--mini-tooltips'?900000:170000);
   try {
     const launch=JSON.parse((await lines.next()).value); // Never log bootstrap credentials.
     const version=await command('Browser.getVersion');
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId:owner}=await command('Target.attachToTarget',{targetId,flatten:true});
     await command('Page.enable',{},owner);await command('Runtime.enable',{},owner);
-    await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
+     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
+     if(scope==='--mini-tooltips') {
+       phase='native-browser-zoom';
+       await command('Page.navigate',{url:'chrome://settings/appearance'},owner);
+       await until(owner,`typeof chrome.settingsPrivate?.setDefaultZoom==='function'`);
+       await evaluate(owner,`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(1.25,resolve))`);
+       assert.equal(await evaluate(owner,`new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))`),1.25);
+     }
     await command('Page.navigate',{url:launch.url},owner);
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===${scope==='--effort-defaults'?5:2}`);
     await evaluate(owner,`location.hash='#/watch'`);
@@ -92,6 +102,7 @@ async function main() {
            'Headless DOM, input and AX evidence; not physical desktop or assistive-technology acceptance.']};
        console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
      }
+    phase='open-document-pip';
     await evaluate(owner,`miniWatch.toggle()`,true);
     assert.equal(await evaluate(owner,`!!miniWatch.window`),true);
     const targets=await command('Target.getTargets');
@@ -103,6 +114,47 @@ async function main() {
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
        await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+        if(scope==='--mini-tooltips') {
+          assert.ok(['mouse','touch','mixed','control'].includes(replay));
+          const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');
+            return JSON.parse((await lines.next()).value);};
+          if(replay==='mouse') {
+            phase='real-stationary-hover';
+            mini=await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
+            await fixture('running');await until(owner,`liveValue.view.active_cards.length===2`);
+            phase='rendered-cost-values';
+            await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+          }
+          if(replay==='mouse'||replay==='touch') {
+            phase='rendered-duration-'+replay;
+            await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,input:replay,
+              evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
+            assert.deepEqual(errors,[]);
+            evidence={outcome:'PASS',browser:version.product,journey:replay,checks,layouts,errors,
+              limitations:['Fresh independent native modality journey; not mixed-input or physical desktop proof.']};
+            return;
+          }
+          phase='native-hover-watchdog';
+          await require('./probe_help_watchdog.cjs')({command,evaluate,until,owner,mini,checks});
+          phase='native-help-lifecycle';
+          await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+          phase='rendered-cost-values';
+          await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+          phase='rendered-mini-help';
+          await require('./probe_mini_help.cjs')({command,pip:mini,checks,
+            evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text),
+            fixture});
+          await fixture('running');
+          await until(owner,`liveValue.view.active_cards.length===2`);
+          phase='rendered-duration';
+           await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,
+             trace:true,control:replay==='control',
+             evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
+         evidence={outcome:replay==='control'?'DIAGNOSTIC':'PASS',browser:version.product,journey:replay,checks,layouts,errors,
+           limitations:['Actual headless Chromium Document PiP with synthetic source-qualified DTOs.',
+             'Physical Windows/chrome/other-application input NOT RUN; stale positive CSS without any browser exit is unobservable.']};
+         assert.deepEqual(errors,[]);return;
+       }
        if(scope==='--control-focus') {
          const focus=await require('./probe_control_focus.cjs')({command,evaluate,until,owner,mini,checks,layouts});
          assert.deepEqual(errors,[]);
@@ -137,7 +189,7 @@ async function main() {
         evidence={outcome:'PASS',browser:version.product,scope,checks,layouts,errors,
           limitations:['Synthetic Live data through shipped HTTP/CSP/SSE and actual Document PiP.',
             'Native CDP pointer exits deliberately intercepted before controller handlers; not physical Windows pointer/chrome/other-app proof.',
-            'Physical OS event delivery UNVERIFIED. The thirty-second stale-CSS lease is covered by the deterministic virtual clock.']};
+             'Physical OS event delivery UNVERIFIED; stationary positive hover has no inactivity cutoff.']};
         return;
       }
       await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
@@ -234,14 +286,14 @@ async function main() {
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
     const retainedHelp=await focus(mini,'.mini-prompts tr[data-id="root"] td:nth-child(3) .mini-cost-value');
-    assert.match(retainedHelp,/Prompt #[\s\S]*Main prompt[\s\S]*Subagent 1[\s\S]*Subagent 2[\s\S]*Total CCost: 33/);
+     assert.match(retainedHelp,/Prompt #[\s\S]*Main Model:[\s\S]*Sub Agent 1:[\s\S]*Duration:/);
     assert.doesNotMatch(retainedHelp,/Source evidence:/);
     assert.match(await focus(mini,'.mini-prompts tr[data-id="root"] .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+: Keep completed literally/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:nth-child(2) button');
      assert.equal(heading,'The name of the session.');
      const totalHeading=await focus(mini,'.mini-prompts > table th:nth-child(3) button');
-     assert.match(totalHeading,/represented prompt’s reference cost, not provider billing/i);
+      assert.equal(totalHeading,"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update=helpMiniUpdate;delete window.helpMiniUpdate;delete window.helpMiniEpoch;miniWatch.update(liveValue)`);
@@ -275,7 +327,15 @@ async function main() {
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope === '--watch-only' ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : scope === '--live-status' ? ['Live surfaces and cached-report routes only; synthetic Sessions catalog/detail are not configured in this host.'] : [])]};
   } catch (error) {
-    evidence={outcome:'FAIL',reason:error.message,checks,layouts};
+    const sites=[...(error.stack || '').matchAll(/(probe_[a-z_]+\.cjs:\d+:\d+)/g)].map(match=>match[1]);
+    const site=sites.find(value=>!value.startsWith('probe_web_help.cjs:')) || sites[0];
+    const scalar=value=>typeof value==='boolean'||typeof value==='number'?value:undefined;
+    const diagnostic={phase,site,code:error.code==='ERR_ASSERTION'?'assertion_failed':
+      error.message.startsWith('Condition not reached:')?'condition_not_reached':
+      error.message.startsWith('CDP timeout:')?'cdp_timeout':'browser_probe_error',
+      actual:scalar(error.actual),expected:scalar(error.expected),
+      probeCase:error.probeCase,observation:error.observation};
+    evidence={outcome:'FAIL',reason:error.message,diagnostic,checks,layouts};
     throw error;
   } finally {
     clearTimeout(deadline);

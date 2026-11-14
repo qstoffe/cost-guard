@@ -5,7 +5,8 @@ from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 from .watch_accounts import watch_account
-from .prompt_costs import cost_detail
+from .prompt_costs import cost_detail, mini_cost_detail
+from .mini_costs import mini_groups
 from .reference_cost import issue_records
 from src.analysis.timezones import local_date_range, resolve_timezone
 
@@ -19,7 +20,8 @@ def card_row(row, now_ms, invocation_verified=True):
         calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
         ("comparison_cost", comparison(row.prompt.comparison_cost)),
-        ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt))))
+        ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt)),
+        *mini_cost_detail(row.prompt)))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
         watch_duration_ms=row.prompt.duration_ms,
@@ -63,6 +65,10 @@ def card(value, now_ms):
                 observed_requests=cost.total.observed_requests, priced_requests=cost.total.priced_requests,
                 ccost_unavailable=issue_records(cost.total.unavailable),
                 complete=cost.total.complete and cost.source_complete,
+                mini_session_cost=True, mini_cost_groups=mini_groups(cost.groups, complete=cost.source_complete),
+                # This cost observation has no authoritative session execution
+                # interval. Never substitute the focal prompt's elapsed time.
+                duration_ms=None,
                 **({"main_ccost": cost.main_ccost, "subagent_ccost": cost.subagent_ccost}
                     if cost.main_ccost is not None else {})),
             state=value.session_cost_state, cache_available=None if cost is None else cost.cache_available))

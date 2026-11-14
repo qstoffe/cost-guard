@@ -61,13 +61,15 @@ class WebDisplayTests(unittest.TestCase):
                     wraps=display.format_local_timestamp) as stamp:
                 dto = with_display(value, 'Europe/Stockholm', ccost_display_unit=unit).to_json()
 
-            self.assertEqual(7, stamp.call_count)
+            self.assertEqual(8, stamp.call_count)
             self.assertEqual({'ccost':amount, 'observed_at_ms':'2026-10-25 02:30',
                 'now_ms':'2026-10-25 02:30', 'clock':'02:30', 'date_time':'2026-10-25 02:30',
                 'start_date_time':'2026-10-25 02:30 +0200',
-                'finished_clock':'02:30', 'finished_date_time':'2026-10-25 02:30 +0100'}, dto['display'])
+                'mini_start_date_time':'2026-10-25 02:30',
+                'finished_clock':'02:30', 'finished_date_time':'2026-10-25 02:30 +0100',
+                'mini_finished_date_time':'2026-10-25 02:30'}, dto['display'])
             self.assertEqual(['ccost', 'observed_at_ms', 'now_ms', 'clock', 'date_time', 'start_date_time',
-                'finished_clock', 'finished_date_time'], list(dto['display']))
+                'mini_start_date_time', 'finished_clock', 'finished_date_time', 'mini_finished_date_time'], list(dto['display']))
             self.assertEqual({'credits':{'ccost':'?395'}, 'usd':{'ccost':'?$3.95'}}, dto['display_units'])
             self.assertEqual((start, finish), (dto['at_ms'], dto['completed_at_ms']))
 
