@@ -37,7 +37,8 @@ def model_report(*, all_models=False, fallback=False, availability="verified", i
     sample = () if fallback else (SimpleNamespace(input_tokens=20, cache_read_tokens=60,
         cache_write_tokens=10, output_tokens=10),)
     rows = model_comparison_rows(sample, catalog)
-    offer = ModelPromotion('GPT-5.1', '50% off standard GitHub Copilot rates', '2026-11-10', '2026-11-11')
+    offer = ModelPromotion('GPT-5.1', '50% off standard GitHub Copilot rates', '2026-11-10', '2026-11-11',
+                           '50% of original price (50% off)')
     items = tuple(ModelComparisonProjection(row.publisher, row.model_name, row.relative_to_lowest,
         price_summary(catalog, row.model_name), row.release_date,
         promotional=row.model_name == "GPT-5.1", promotion_marker=1 if row.model_name == "GPT-5.1" else None,

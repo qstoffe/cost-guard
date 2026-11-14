@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
+from decimal import Decimal
 
 from src.analysis.comparisons import model_comparison_rows
+from src.pricing.promotions import promotion_price_ratios
 from .models import ModelCatalogProjection, ModelComparisonProjection
 from .semantics import active_model_promotion, active_promotion_notes, model_is_recent, recent_model_notice_details
 
@@ -80,16 +83,16 @@ def selectable_catalog(
 
 
 def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository, progress=None):
-    """Freeze both scopes using one sample and full-catalog denominator; no new I/O."""
+    """Freeze both scopes using fixed reference weights and the full denominator."""
     markers, notes = active_promotion_notes(catalog, now_ms)
-    candidates = model_comparison_rows(usage, catalog, include_uncomparable=True)
+    candidates = model_comparison_rows((), catalog, include_uncomparable=True, fixed_reference=True)
     rows = []
     for index, row in enumerate(candidates):
         rows.append(ModelComparisonProjection(
             row.publisher, row.model_name, row.relative_to_lowest, price_summary(catalog, row.model_name),
             row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
             markers.get(row.model_name), row.relative_levels, row.evidence,
-            active_model_promotion(catalog.resolve_reference(row.model_name), now_ms),
+            web_model_promotion(catalog.resolve_reference(row.model_name), now_ms),
             price_help(catalog, row.model_name),
         ))
         if progress is not None:
@@ -136,11 +139,48 @@ def price_help(catalog: PricingCatalog, model_name: str) -> str:
     def rate(value):
         return 'N/A' if value is None else '$' + reference_rate(value)
     for index, tier in enumerate(tiers):
+        if index:
+            lines.append('')
         bound = lower_bound(tier, tiers[index - 1] if index else None)
         if bound:
-            lines.append(f'Input context {bound[0]}{bound[1]} tokens:')
+            lines.append(f'Input context {bound[0]}{compact_boundary(bound[1])} tokens:')
         elif len(tiers) > 1:
-            lines.append(f'Base context tier (≤{tier.max_input_tokens} tokens):' if tier.max_input_tokens else 'Base context tier:')
-        lines.append(f'Input {rate(tier.per_million_input)} · Cached input {rate(tier.per_million_cache_read)}')
-        lines.append(f'Cache write {rate(tier.per_million_cache_write)} · Output {rate(tier.per_million_output)}')
+            lines.append(f'Base context tier (≤{compact_boundary(tier.max_input_tokens)} tokens):' if tier.max_input_tokens else 'Base context tier:')
+        lines.extend((f'Input: {rate(tier.per_million_input)}', f'Cached input: {rate(tier.per_million_cache_read)}',
+                      f'Cache write: {rate(tier.per_million_cache_write)}', f'Output: {rate(tier.per_million_output)}'))
     return '\n'.join(lines)
+
+
+def compact_boundary(tokens: int) -> str:
+    """Exact compact quantity, never round a pricing boundary."""
+    for divisor, suffix in ((1_000_000, 'M'), (1_000, 'K')):
+        if tokens >= divisor:
+            value = format(Decimal(tokens) / divisor, 'f')
+            if '.' in value:
+                value = value.rstrip('0').rstrip('.')
+            return value + suffix
+    return str(tokens)
+
+
+def web_model_promotion(model, now_ms):
+    offer = active_model_promotion(model, now_ms)
+    if offer is None:
+        return None
+    ratios = promotion_price_ratios(model)
+    lines = []
+    def percent(value):
+        text = format(value.quantize(Decimal('0.01')), 'f')
+        return text.rstrip('0').rstrip('.')
+    tiers = ordered_tiers(model)
+    for index, ratio in enumerate(ratios):
+        if ratio is None:
+            continue
+        label = ''
+        if len(ratios) > 1 and len(set(ratios)) > 1:
+            bound = lower_bound(tiers[index], tiers[index - 1] if index else None)
+            label = (f'Input context {bound[0]}{compact_boundary(bound[1])} tokens: ' if bound else
+                     'Base context tier: ')
+        lines.append(f'{label}{percent(ratio * 100)}% of original price ({percent((1 - ratio) * 100)}% off)')
+    if len(set(ratios)) == 1:
+        lines = lines[:1]
+    return replace(offer, price_comparison='\n'.join(lines))

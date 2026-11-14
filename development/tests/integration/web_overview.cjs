@@ -26,14 +26,14 @@ const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].
 const click = title => all(output, 'button').find(n => n.textContent.startsWith(title)).events.click({});
 draw();
 const relativeHelp = helpText(all(output, 'th')[2].children[0]);
-assert.ok(relativeHelp.includes('same recent token mix'));
+assert.ok(relativeHelp.includes('fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%'));
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative Price List Cost ↓', 'Release date ↕']);
 assert.equal(all(output, 'h3').length, 0, 'definitions belong to heading help, not cards');
 assert.equal(output.children[0].children[0].textContent, 'GitHub Reference Pricing(GitHub Copilot · View source)');
 assert.equal(output.children[0].children[1].className, 'model-tools', 'notices/filters precede table');
-assert.equal(output.children[0].children[3].className, 'overview-models');
+assert.equal(output.children[0].children[2].className, 'overview-models');
 assert.equal(all(output, 'details').length, 0, 'no Models explanations disclosure');
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);
@@ -47,7 +47,7 @@ assert.ok(!warnings.includes('CCost account attribution unknown.'));
 assert.ok(!warnings.includes('Attribution incomplete'));
 const relatives = all(output, 'tbody')[0].children.map(row => row.children[2].textContent);
 if (fallback) {
-  assert.deepEqual(relatives, ['', '', '', ' *', '']);
+  assert.deepEqual(relatives, ['N/A', 'N/A', 'N/A → N/A (>1M)', 'N/A → N/A (>200K) *', 'N/A']);
   assert.ok(relativeHelp.includes('not task performance'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '8.0x → 16.0x (>200K) *', '1.0x']);

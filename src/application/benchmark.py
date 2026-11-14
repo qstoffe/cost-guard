@@ -45,7 +45,7 @@ def benchmark_view(snapshot, reference_rows=(), *, now_ms, timezone_id='UTC'):
             relative_text=f'{relative:.1f}x' if relative is not None else 'N/A', usd_text=usd,
             solved_text=f'{row.solved:.1f}%',
             task_help=f'Terminal-Bench 4.0 · Harbor Hub\nUSD/Task: {usd} per attempted task (failures included)',
-            configuration_help=f'Coding Client: {row.client}\nClient version: {row.client_version or "not published"}.\n\nSource date: {row.date}.\n\nOfficial row: {row.id}.'))
+            configuration_help=f'Coding Client: {row.client}\nSource date: {row.date}'))
     efforts = sorted({row.effort or '' for row in snapshot.rows})
     return dict(fetched_at_ms=snapshot.fetched_at_ms,
         fetched_text=format_local_timestamp(snapshot.fetched_at_ms, timezone_id), efforts=efforts, rows=result)

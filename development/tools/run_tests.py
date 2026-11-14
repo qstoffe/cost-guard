@@ -115,6 +115,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_report_sampling.py",
     "test_report_sample_acquisition.py",
     "test_workload_mix.py",
+    "test_fixed_reference_prices.py",
     "test_report_duration.py",
     "test_session_snapshot.py",
     "test_v2_normalization.py",

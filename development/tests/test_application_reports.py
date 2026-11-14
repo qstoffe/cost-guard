@@ -69,6 +69,19 @@ class ApplicationReportTests(unittest.TestCase):
         self.assertTrue(exported["view"]["model_comparison"])
         self.assertLess(len(json.dumps(exported)), 8 * 1024 * 1024)
 
+    def test_models_only_application_routes_catalog_without_prompt_or_account_acquisition(self):
+        with patch.object(ReportService, "session_catalog", side_effect=AssertionError("no prompt history")), \
+                patch.object(ReportService, "_accounts_quotas", side_effect=AssertionError("no account history")):
+            result = ReportApplication(self.factory, clock=lambda: 4000, models_only=True).execute(ReportRequest())
+        exported = result.to_json()
+        self.assertIsNone(result.error)
+        self.assertEqual([], exported["source"]["revisions"])
+        self.assertEqual("fixed_reference_prices_no_prompt_history", exported["scope"]["history_policy"])
+        self.assertEqual(0, exported["view"]["model_comparison_sample_size"])
+        self.assertIsNone(exported["view"]["model_comparison_mix"])
+        self.assertTrue(exported["view"]["model_catalog"]["rows"])
+        self.assertIsNone(exported["view"]["accounts_quotas"])
+
     def test_normal_progress_owns_repeated_history_and_finishes_real_units(self):
         for batched in (False, True):
             with self.subTest(batched=batched), tempfile.TemporaryDirectory() as root:

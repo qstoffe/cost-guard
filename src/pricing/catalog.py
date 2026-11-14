@@ -18,6 +18,7 @@ from .reference_diagnostics import reference_issue
 _COPILOT_PREFIX = re.compile(r"^github-copilot/")
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _UNRESOLVED = object()
+FIXED_REFERENCE_MIX = (Decimal("0.02"), Decimal("0.96"), Decimal("0.01"), Decimal("0.01"))
 
 
 @lru_cache(maxsize=8192)
@@ -293,6 +294,13 @@ def token_mix_tier_price(
     """One tier under the shared I/C/W/O mix; never derive tier factors."""
     if mix[4] <= 0:
         return None
+    return weighted_tier_price(mix[:4], tier)
+
+
+def weighted_tier_price(
+    mix: tuple[Decimal, Decimal, Decimal, Decimal], tier: PricingTier | None,
+) -> Decimal | None:
+    """Unrounded reference rate; fractions do not imply an observed sample."""
     if tier is None or tier.per_million_input is None or tier.per_million_cache_read is None or tier.per_million_output is None:
         return None
     write_rate = tier.per_million_cache_write if tier.per_million_cache_write is not None else tier.per_million_input

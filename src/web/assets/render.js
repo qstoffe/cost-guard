@@ -393,10 +393,10 @@ const ReportView = (() => {
     draw();
   }
   function modelHeadingHelp(view) {
-    return ['The model’s developer/manufacturer, not your subscription or account.',
-      'The model identity in the published catalog.\n\nOpenCode availability is not verified subscription entitlement.',
-      'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.',
-      'The published/verified model release date; N/A means unavailable.'];
+    return ['The model’s developer/manufacturer.',
+      'The model identity in the published catalog.',
+      'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%.',
+      'The published/verified model release date.'];
   }
   function modelHeading(title, source, href) {
     const heading = element('h2', undefined, 'model-section-heading');
@@ -415,7 +415,7 @@ const ReportView = (() => {
     const choice = state.models;
     root.append(modelHeading('GitHub Reference Pricing', 'GitHub Copilot',
       'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing'));
-    const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
+    const tools = element('div', undefined, 'model-tools');
     const prices = element('div', undefined, 'model-price-controls'), refresh = element('button', 'Refresh price list');
     refresh.setAttribute('data-model-control', 'refresh');
     const fetched = element('span', 'Last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
@@ -437,7 +437,7 @@ const ReportView = (() => {
     }
     checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\n\nIf availability cannot be checked, show the full catalog.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
-    tools.append(prices, filters); root.append(tools, notices);
+    tools.append(prices, filters); root.append(tools);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
@@ -486,9 +486,8 @@ const ReportView = (() => {
         dateKey(row.release_date)][index];
     }
     const rows = new Map();
-    let noticeSignature = '';
     function draw() {
-      const levels = models.flatMap(row => view.model_comparison_sample_size ? display(row, 'relative_cost').split(' → ') : []);
+      const levels = models.flatMap(row => display(row, 'relative_cost').split(' → '));
       grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
       grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
       const candidates = models.filter(row => choice.all || row.selectable !== false);
@@ -510,13 +509,13 @@ const ReportView = (() => {
       const wanted = [];
       for (const model of shown) {
       const identity = JSON.stringify([model.publisher, model.model]);
-      const signature = JSON.stringify([model, view.model_comparison_sample_size, display(view, 'model_comparison_mix_help')]);
+       const signature = JSON.stringify(model);
       let entry = rows.get(identity);
       if (!entry || entry.signature !== signature) {
       const row = element('tr', undefined, (model.display_roles || []).filter(role => role !== 'superseded').join(' '));
       row.setAttribute('role', 'row');
       for (const value of [model.publisher || 'N/A', element('span', model.model, model.recent ? 'new' : ''),
-        modelRelative(model, view.model_comparison_sample_size, display(view, 'model_comparison_mix_help')), element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
+        modelRelative(model), element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
         const cell = element('td'); cell.setAttribute('role', 'cell');
         cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
       }
@@ -528,13 +527,6 @@ const ReportView = (() => {
       for (const row of [...body.children]) if (!keep.has(row)) row.remove();
       wanted.forEach((row, index) => { if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null); });
       for (const [identity, entry] of rows) if (!keep.has(entry.row)) rows.delete(identity);
-      const visible = new Set(shown.map(row => row.model));
-      const recent = catalog?.recent_notices.filter(note => visible.has(note.model)) || [];
-      const notice = recent.length ? '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; ') :
-        !catalog && shown.some(row => row.recent) ? view.recent_model_notice || '' : '';
-      if (notice !== noticeSignature) {
-        notices.replaceChildren(); if (notice) notices.append(element('p', notice, 'new')); noticeSignature = notice;
-      }
       text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
     grid.append(head, body); scroll.append(grid); root.append(scroll);
@@ -542,12 +534,15 @@ const ReportView = (() => {
     if (typeof BenchmarkView !== 'undefined') {
       state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(root);
     }
-    const more = element('div', undefined, 'more-benchmarks'), comparison = element('a',
-      'Artificial Analysis – Coding Agent Index (performance vs cost)');
-    comparison.href = 'https://artificialanalysis.ai/agents/coding-agents/';
-    comparison.target = '_blank'; comparison.rel = 'noopener noreferrer';
-    more.append(element('h2', 'More Coding Benchmarks'), comparison, element('p',
-      'Compare coding agents and effort settings by benchmark performance versus average USD cost per task.'));
+    const more = element('div', undefined, 'more-benchmarks'), links = element('ul');
+    for (const [label, href] of [
+      ['Artificial Analysis — Coding Agent Index', 'https://artificialanalysis.ai/agents/coding-agents/'],
+      ['Slopalytics — Cost per task / Cost vs intelligence', 'https://slopalytics.com/']]) {
+      const item = element('li'), link = element('a', label);
+      link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      item.append(link); links.append(item);
+    }
+    more.append(element('h2', 'More Coding Benchmarks'), links);
     const availability = element('p', undefined, 'warning');
     root.append(availability, more);
     state.modelView = {
@@ -562,9 +557,9 @@ const ReportView = (() => {
     };
     state.modelView.update(view); state.modelView.attach(parent);
   }
-  function modelRelative(row, sampled, mixHelp) {
+  function modelRelative(row) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
-    const [base, ...tiers] = sampled ? display(row, 'relative_cost').split(' → ') : [''];
+    const [base, ...tiers] = display(row, 'relative_cost').split(' → ');
     cell.append(element('span', base, 'model-ratio'));
     const levels = element('span', undefined, 'model-tiers');
     for (const tier of tiers) {
@@ -578,11 +573,13 @@ const ReportView = (() => {
     if (row.promotional) {
       cell.append(element('span', ' *', 'model-marker'));
       const offer = row.promotion;
-      if (offer) prices += '\n' + ['Price Promotion', offer.model, offer.description,
+      if (offer) prices = ContextHelp.warningParagraph(prices, ['Price Promotion', offer.price_comparison,
+        'Temporary GitHub Copilot promotional pricing',
+        offer.description !== 'Temporary GitHub Copilot promotional pricing' && offer.description,
         offer.through && 'Promotion ends: ' + offer.through,
-        offer.resumes && 'Standard prices resume: ' + offer.resumes].filter(Boolean).join('\n');
+        offer.resumes && 'Standard prices resume: ' + offer.resumes].filter(Boolean).join('\n'));
     }
-    ContextHelp.value(cell, prices + '\n\n' + (mixHelp || 'Token Mix unavailable · no completed priceable sample'));
+    ContextHelp.value(cell, prices);
     return cell;
   }
   function accountQuota(card, quota, compact = false) {

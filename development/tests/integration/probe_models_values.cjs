@@ -23,10 +23,10 @@ async function probeModelsValues({command, evaluate, until, id, fixture}) {
   };
   const referenceValue = '.overview-model-table tbody tr:first-child .model-relative';
   const referenceHelp = await show(referenceValue);
-  assert.match(referenceHelp,/^GitHub Copilot · USD \/ 1M tokens\nInput \$1 · Cached input \$0.1\nCache write N\/A · Output \$4\n\nToken Mix · \d+ completed priced prompts\nInput .*Cached input .*\nCache write .*Output /);
+  assert.equal(referenceHelp,'GitHub Copilot · USD / 1M tokens\nInput: $1\nCached input: $0.1\nCache write: N/A\nOutput: $4');
   assert.equal(await evaluate(id,`[...document.querySelectorAll('.overview-model-table .model-relative')].every(n=>n.tabIndex===0 && n.parentElement!==n && !n.parentElement.hasAttribute('tabindex'))`),true);
   const modelHelp = await show('.benchmark-table tbody tr:first-child td:nth-child(2) span');
-  assert.match(modelHelp,/^Coding Client: (Claude Code|Other client)\nClient version:/);
+  assert.match(modelHelp,/^Coding Client: (Claude Code|Other client)\nSource date: [^\n]+$/);
   const taskHelp = await show('.benchmark-table tbody tr:first-child td:nth-child(4) span');
   assert.match(taskHelp,/Terminal-Bench 4.0 · Harbor Hub\nUSD\/Task: \$\d+ per attempted task \(failures included\)/);
   await evaluate(id,`(()=>{const n=document.querySelector('#context-help'),r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);})()`);

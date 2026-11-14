@@ -39,15 +39,15 @@ class ModelsTests(unittest.TestCase):
 
         text = price_help(catalog, 'Precise')
 
-        self.assertEqual('GitHub Copilot · USD / 1M tokens\nBase context tier (≤200000 tokens):\n'
-            'Input $0.000000000123456789 · Cached input $0\nCache write N/A · Output $15.1234567890123456789\n'
-            'Input context >200000 tokens:\nInput $3.75 · Cached input $0\n'
-            'Cache write $0.00000001 · Output $15.1234567890123456789', text)
+        self.assertEqual('GitHub Copilot · USD / 1M tokens\nBase context tier (≤200K tokens):\n'
+            'Input: $0.000000000123456789\nCached input: $0\nCache write: N/A\nOutput: $15.1234567890123456789\n\n'
+            'Input context >200K tokens:\nInput: $3.75\nCached input: $0\n'
+            'Cache write: $0.00000001\nOutput: $15.1234567890123456789', text)
         single = PricingCatalog((replace(model, tiers=(tier,)),))
         self.assertNotIn('context', price_help(single, 'Precise'))
         self.assertIn('Published rates unavailable', price_help(catalog, 'Missing'))
         changed = PricingCatalog((replace(model, tiers=(replace(tier, per_million_input=Decimal('7')),)),))
-        self.assertIn('Input $7', price_help(changed, 'Precise'))
+        self.assertIn('Input: $7', price_help(changed, 'Precise'))
         self.assertEqual(text, price_help(catalog, 'Precise'), 'frozen prior snapshot is unchanged')
 
     def test_missing_mix_never_presents_an_unestablished_distribution_as_observed_usage(self):
@@ -88,7 +88,7 @@ class ModelsTests(unittest.TestCase):
         self.assertIn('released 2026-11-01', frozen.recent_notices[0][1])
         dto = project(replace(model_report(), model_comparison=frozen.rows)).to_json()
         self.assertEqual({'model': 'New model', 'description': '50% off standard GitHub Copilot rates',
-            'through': '2026-11-01', 'resumes': '2026-11-02'}, dto['model_comparison'][0]['promotion'])
+            'through': '2026-11-01', 'resumes': '2026-11-02', 'price_comparison': ''}, dto['model_comparison'][0]['promotion'])
         expired = web_model_catalog((), catalog, catalog, now_ms=now + 86400000, cache_repository=None)
         self.assertIsNone(expired.rows[0].promotion)
         self.assertFalse(expired.rows[0].promotional)

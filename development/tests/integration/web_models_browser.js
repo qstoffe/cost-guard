@@ -23,7 +23,7 @@
       check(rows().length === view.model_catalog.rows.length, 'all priced rows, all versions, no paging');
       const old = rows().find(row => row.cells[1].textContent === 'GPT-5.1');
       check(!old.classList.contains('superseded') && old.querySelector('.promotion'), 'old stable full contrast with promotion');
-       check(old.cells[2].textContent === (view.model_comparison_sample_size ? '8.0x → 16.0x (>200K) → 32.0x (≥1M) *' : ' *'), 'canonical tiers and one postfix star');
+       check(old.cells[2].textContent === '8.0x → 16.0x (>200K) → 32.0x (≥1M) *', 'fixed canonical tiers even without historical prompts and one postfix star');
        check(!output.querySelector('details:not(.effort-picker)') && !output.textContent.includes('More information'), 'Models explanation cards removed');
        const refresh = output.querySelector('[data-model-control="refresh"]');
          check(refresh.textContent === 'Refresh price list' && refresh.nextSibling.textContent.startsWith('Last fetched:'), 'button precedes true fetch timestamp');
@@ -56,7 +56,7 @@
        const benchmark = output.querySelector('.benchmark-table');
        check(output.querySelectorAll('h2').length === 3 && benchmark.tHead.rows[0].cells.length === 5, 'two independent tables plus More Coding Benchmarks');
         const more = output.querySelector('.more-benchmarks'), external = more.querySelector('a'), appearance = getComputedStyle(more);
-       check(more.className === 'more-benchmarks' && more.querySelectorAll('a').length === 1 && !more.querySelector('table,button,input'), 'final link-only section');
+       check(more.className === 'more-benchmarks' && more.querySelectorAll('ul > li > a').length === 2 && !more.querySelector('table,button,input,p'), 'final two-bullet link-only section');
        check(appearance.borderTopWidth === '0px' && appearance.backgroundColor === 'rgba(0, 0, 0, 0)' && appearance.paddingTop === '0px', 'unboxed comparison link');
        check(external.href === 'https://artificialanalysis.ai/agents/coding-agents/' && external.target === '_blank' && external.rel === 'noopener noreferrer', 'safe official comparison destination');
        external.focus(); check(document.activeElement === external, 'keyboard-accessible external link');

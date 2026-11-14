@@ -44,8 +44,10 @@ class ReportApplication:
     callbacks receive only stage/count DTOs, never arbitrary progress text.
     """
 
-    def __init__(self, factory: ServiceFactory, *, clock: Callable[[], int] | None = None):
+    def __init__(self, factory: ServiceFactory, *, clock: Callable[[], int] | None = None,
+                 models_only: bool = False):
         self._factory = factory
+        self._models_only = models_only
         self._clock = clock or (lambda: time_ns() // 1_000_000)
         self._instance_id = str(uuid4())
         self._lock = Lock()
@@ -87,8 +89,10 @@ class ReportApplication:
             scope = ObjectValue(scope.fields + (
                 ("timezone_id", service.timezone_id), ("duration_metric", "report_execution"),
                 ("history_policy", {
-                    ReportKind.NORMAL: "recent_priceable_samples_and_independent_account_periods",
-                    ReportKind.ALL_MODELS: "recent_priceable_samples",
+                    ReportKind.NORMAL: ("fixed_reference_prices_no_prompt_history" if self._models_only else
+                                        "recent_priceable_samples_and_independent_account_periods"),
+                    ReportKind.ALL_MODELS: ("fixed_reference_prices_no_prompt_history" if self._models_only else
+                                            "recent_priceable_samples"),
                     ReportKind.SESSIONS: "requested_root_list",
                     ReportKind.SESSION: "complete_root_tree",
                     ReportKind.DATE: "local_range",
@@ -107,8 +111,12 @@ class ReportApplication:
                     return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
-            report = (service.build_token_mix_history(lambda label, _percent: observe(label), scope=request.token_mix_scope)
-                       if request.kind is ReportKind.TOKEN_MIX else service.build(request, include_model_catalog=True))
+            if self._models_only and request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}:
+                report = service.build_model_price_list(request)
+            elif request.kind is ReportKind.TOKEN_MIX:
+                report = service.build_token_mix_history(lambda label, _percent: observe(label), scope=request.token_mix_scope)
+            else:
+                report = service.build(request, include_model_catalog=True)
             observe(WorkProgress("Preparing report", "finalizing", 0, 2, stage="finalizing"))
             revisions = tuple(record(session_id=root, revision=identity(revision))
                               for root, revision in service.report_source_revisions())

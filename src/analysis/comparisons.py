@@ -5,7 +5,9 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Iterable
 
-from src.pricing.catalog import PricingCatalog, normalized_average_token_mix, token_mix_tier_price
+from src.pricing.catalog import (
+    FIXED_REFERENCE_MIX, PricingCatalog, normalized_average_token_mix, token_mix_tier_price, weighted_tier_price,
+)
 from src.pricing.tiers import lower_bound, ordered_tiers
 
 from .models import MixEvidence, PromptRecord
@@ -14,7 +16,7 @@ from src.pricing.publishers import model_publisher
 from .effort import EffortSelection, interpret_effort
 
 # Sorting only: never exposed as observed usage or a Relative CCost sample.
-_DEFAULT_SORT_MIX = (Decimal("0.02"), Decimal("0.96"), Decimal("0.01"), Decimal("0.01"), 1)
+_DEFAULT_SORT_MIX = (*FIXED_REFERENCE_MIX, 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,14 +40,18 @@ class ModelComparisonRow:
 
 
 def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog, *,
-                          include_uncomparable: bool = False) -> tuple[ModelComparisonRow, ...]:
+                          include_uncomparable: bool = False,
+                          fixed_reference: bool = False) -> tuple[ModelComparisonRow, ...]:
     """Every comparable model/tier under one pooled global workload mix.
 
     Reports pass each sampled prompt's priceable usage; the caller owns sample
     eligibility, this applies the mix and the cheapest comparable base price.
+    Web's explicit fixed_reference mode never enumerates records or creates a
+    sample; its reference fractions are independent of all observed telemetry.
     """
-    mix = normalized_average_token_mix(tuple(records))
+    mix = normalized_average_token_mix(()) if fixed_reference else normalized_average_token_mix(tuple(records))
     sampled = mix[4] > 0
+    comparable = sampled or fixed_reference
     sorting_mix = mix if sampled else _DEFAULT_SORT_MIX
     rows: list[ModelComparisonRow] = []
     scores: list[tuple[Decimal | None, ...]] = []
@@ -53,16 +59,17 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
     for model in catalog.ccost_models:
         native = catalog.resolve_reference(model.model.model)
         tiers = ordered_tiers(model)
-        units = tuple(token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
+        units = tuple(weighted_tier_price(FIXED_REFERENCE_MIX, tier) if fixed_reference else
+                      token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
         unit = units[0]
-        if sampled and unit is None and not include_uncomparable:
+        if comparable and unit is None and not include_uncomparable:
             continue  # Preserve the observed-mix comparable-model selection.
         # Normalize the shared observed mix to one million tokens.  The absolute
         # number is diagnostic only; relative ordering is the important contract.
         rows.append(ModelComparisonRow(
             model_name=model.model.display_name or model.model.model,
             publisher=model_publisher(native) or "Unknown / unverified",
-            estimated_ccost=unit if sampled else None,
+            estimated_ccost=unit if comparable else None,
             relative_to_lowest=None,
             release_date=model.metadata.get("release_date"),
             promotional=str(model.metadata.get("promotion_active", "false")).lower() == "true",
@@ -77,7 +84,7 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
     projected = []
     for row, units, thresholds in zip(rows, scores, bounds):
         levels = tuple(RelativePriceLevel(
-            value / lowest if sampled and lowest > 0 and value is not None else None,
+            value / lowest if comparable and lowest > 0 and value is not None else None,
             bound[1] if bound else None, bound[0] if bound else None,
         ) for value, bound in zip(units, thresholds))
         projected.append(replace(row, relative_to_lowest=levels[0].relative_cost, relative_levels=levels))

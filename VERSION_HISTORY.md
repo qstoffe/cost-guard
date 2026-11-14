@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.57 - 2026-11-14
+
+- Mini Watch's Completed and Aborted/Error rows apply their green/red foreground to all five cells and descendants, preserving Running yellow and restoring Ctx-only threshold styling when the same row becomes Earlier. Warning help and canonical source data are unchanged.
+- Web Models reference ratios always use the fixed statistical Input 2%, Cached input 96%, Cache write 1%, Output 1% mix and full-catalog denominator, even with no historical prompts. Its dedicated price-list path acquires no prompt or account history; CLI comparisons, real Token Mix, Watch and billing keep their own evidence.
+- Reference help separates four published component rates per tier from an orange, source-supported promotion paragraph, with exact compact context boundaries and current-price-as-percentage-of-original when substantiated. Shorter header/benchmark cell help, no standalone New Models notice, preserved model/date highlights and two safe external coding-benchmark links.
+
 ## v81.56 - 2026-11-14
 
 - Claude Agent moving selections use the exact-location live OpenCode catalog first, then the packaged, sanitized 13-entry OpenCode 2.3.0 snapshot observed on 2026-11-14. Deleted historical directories no longer hide known catalog labels; unknown selections remain unresolved.

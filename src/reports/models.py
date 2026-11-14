@@ -199,6 +199,7 @@ class ModelPromotion:
     description: str
     through: str
     resumes: str
+    price_comparison: str = ''
 
 
 @dataclass(frozen=True, slots=True)

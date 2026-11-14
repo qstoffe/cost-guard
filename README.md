@@ -18,11 +18,11 @@ Private development access is not required to build, test or run Cost Guard.
 - Track context growth and causal usage, including subagents.
 - Monitor account/subscription quotas across supported providers.
 - Inspect available historical OpenCode sessions and prompts.
-- Compare available AI models using your observed workload mix.
+- Compare Web reference model prices using a fixed statistical token mix; CLI comparisons retain observed workload.
 
 ## Quick start
 
-Use **current `main`** (v81.56, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.57, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.56 (2026-11-14):** Claude Agent model labels use the exact-location live OpenCode catalog first, then a bundled frozen catalog when historical locations are unavailable. These are catalog-based estimates, not proof of historical execution; recorded selections and unsupported-price/usage uncertainty remain intact.
+**v81.57 (2026-11-14):** Mini Watch terminal rows color all five values consistently. Web Models uses fixed 2/96/1/1 reference weights without prompt sampling, with clearer tier/promotion help and two external coding-benchmark links. Actual history, Token Mix, Watch and billing are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -6,7 +6,7 @@ const BenchmarkView = (() => {
   const keys = ['publisher', 'model', 'effort', 'relative_cost', 'solved'];
   const helps = ['The matched GitHub catalog’s model developer/manufacturer.',
     'The matched GitHub model. The name reveals this configuration’s coding client.',
-    'The tested reasoning effort. Missing effort is not guessed.',
+    'The tested reasoning effort.',
     'Cost per attempt relative to the cheapest comparable benchmark run (1.0x).',
      'Percentage of benchmark attempts solved successfully.'];
   function effortRank(value) {
