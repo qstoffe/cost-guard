@@ -68,13 +68,16 @@ async function main() {
           boxed:document.querySelectorAll('.token-mix-section').length && [...document.querySelectorAll('.token-mix-section')].some(s=>getComputedStyle(s).borderTopWidth!=='0px'),
           prose:/Snapshot|Reading this report|Sample and price coverage|Token category order|\\?/.test(document.getElementById('result').textContent),
           tooltipTargets:document.querySelectorAll('.token-mix-table th .help-label').length}; })()`);
-      assert.equal(layout.tables,2); assert.deepEqual(layout.rows,[65,65]); assert.deepEqual(layout.columns,[13,13]);
+      assert.equal(layout.tables,2); assert.deepEqual(layout.rows,[65,65]); assert.deepEqual(layout.columns,[9,9]);
       assert.deepEqual(layout.vertical,[false,false]); assert.equal(layout.nowrap,true); assert.equal(layout.boxed,false);
-      assert.equal(layout.prose,false); assert.equal(layout.tooltipTargets,26);
+      assert.equal(layout.prose,false); assert.equal(layout.tooltipTargets,17);
+      const arrows=await evaluate(`[...document.querySelectorAll('.token-mix-table th')].filter(th=>th.getAttribute('aria-sort')!=='none').map(th=>({
+        glyphs:(th.textContent.match(/[↑↓]/g)||[]).length,after:getComputedStyle(th.querySelector('button'),'::after').content}))`);
+      assert.ok(arrows.every(arrow=>arrow.glyphs===1 && arrow.after==='none'),JSON.stringify(arrows));
       if(width===360) assert.deepEqual(layout.horizontal,[true,true]);
       layouts.push({theme,width,...layout});
     }
-    checks.push('three themes, three widths, 65 uncapped single-line rows, 13 columns, horizontal-only panning, text help');
+    checks.push('three themes, four widths, 65 uncapped single-line rows, 9 columns, horizontal-only panning, one sort arrow');
     await evaluate(`ReportView.setUnit('credits',current.tokenMix.root)`);
     const publishers=await evaluate(`document.querySelectorAll('tbody')[1].textContent`);
     const total=await evaluate(`current.tokenMix.title.textContent`);
@@ -92,26 +95,28 @@ async function main() {
     const metric=(row,col)=> {
       if(col===1||col===2) return fraction(col===1?row.prompts:row.calls);
       if(col===3) return fraction(row.mix.known_total_tokens);
-      if(col===12) return row.mix.priced_requests?fraction(row.mix.total_cost):null;
-      const index=Math.floor((col-4)/2);
-      if(col%2) return row.mix.priced_requests?fraction(row.mix.costs?.[index]):null;
+      if(col===8) return row.mix.priced_requests?fraction(row.mix.total_cost):null;
+      const index=col-4;
       return row.mix.shares[index]==null?null:[BigInt(row.mix.exact_totals[index]),BigInt(row.mix.exact_total_tokens)];
     };
     for (const [table,key] of [[0,'model'],[1,'publisher']]) {
       const source=table?await evaluate(`current.result.view.publisher_token_mix`):rows;
       const other=await evaluate(`document.querySelectorAll('tbody')[${1-table}].textContent`);
-      for(let col=0;col<13;col++) for(const direction of [1,-1]) {
+      for(let col=0;col<9;col++) for(const direction of [1,-1]) {
         await evaluate(`document.querySelectorAll('.token-mix-table')[${table}].tHead.rows[0].cells[${col}].querySelector('button').click()`);
         const actual=await evaluate(`[...document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows].map(row=>row.cells[0].textContent)`);
         const expected=[...source].sort((a,b)=>(col===0?a[key].localeCompare(b[key])*direction:compare(metric(a,col),metric(b,col),direction))||
           b.calls-a.calls||a[key].localeCompare(b[key],undefined,{numeric:true})).map(row=>row[key]);
         assert.deepEqual(actual,expected,'exact '+key+' column '+col+' direction '+direction);
+        assert.equal(await evaluate(`(()=>{const t=document.querySelectorAll('.token-mix-table')[${table}],th=t.tHead.rows[0].cells[${col}];
+          return (t.textContent.match(/[↑↓]/g)||[]).length===1 && th.getAttribute('aria-sort')==='${direction===1?'ascending':'descending'}' &&
+            getComputedStyle(th.querySelector('button'),'::after').content==='none';})()`),true);
         assert.equal(await evaluate(`document.querySelectorAll('tbody')[${1-table}].textContent`),other);
         assert.equal(await evaluate(`current.tokenMix.title.textContent`),total);
       }
     }
-    checks.push('all 26 headings sort both directions by exact independent expectations; unknown last, other table/total untouched');
-    await evaluate(`document.querySelector('.token-mix-table th button').focus()`);
+    checks.push('all 18 headings sort both directions by exact independent expectations; unknown last, other table/total untouched');
+    await evaluate(`document.querySelectorAll('.token-mix-table th button')[1].focus()`);
     await until(`document.getElementById('context-help')?.hidden===false`);
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
@@ -147,6 +152,7 @@ async function main() {
       retained.y===retained.expectedY && retained.changed,'quiet coherent replacement '+JSON.stringify(retained));
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
     await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_periods.cjs')({evaluate,until,command,tab,checks});
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',checks,layouts,cadence_ms:startedAt-loadedAt,
       limitations:['Synthetic browser history; real installation performance is measured by the separate read-only process probe.','No physical OS input or screen-reader proof.']};

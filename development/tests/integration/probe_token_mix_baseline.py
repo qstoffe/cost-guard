@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cold-and-warm', action='store_true')
     parser.add_argument('--budget-seconds', type=int, default=600)
+    parser.add_argument('--period', action='append', choices=('today', '7-days', '30-days', 'month', 'all'))
     args = parser.parse_args()
     if not 1 <= args.budget_seconds <= 1800:
         parser.error('budget-seconds must be between 1 and 1800')
@@ -34,34 +35,36 @@ def main():
         os.environ['COST_GUARD_PROBE_CACHE'] = temporary.name
     jobs = ReportJobs(target=isolated_report if temporary else measured_report)
     try:
-        for attempt in range(2 if temporary else 1):
-            if attempt:
-                if 'finished_at' in jobs._jobs[key]:
-                    jobs._jobs[key]['finished_at'] -= 61
-            key = observe(jobs, attempt, args.budget_seconds)
+        for scope in args.period or ['all']:
+            for attempt in range(2 if temporary else 1):
+                if attempt:
+                    if 'finished_at' in jobs._jobs[key]:
+                        jobs._jobs[key]['finished_at'] -= 61
+                key = observe(jobs, attempt, args.budget_seconds, scope)
     finally:
         jobs.close()
         if temporary:
             temporary.cleanup()
 
 
-def observe(jobs, attempt, budget):
+def observe(jobs, attempt, budget, scope='all'):
     started = time.monotonic()
-    key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
+    key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope=scope))
     while time.monotonic() - started < budget:
         jobs.tick()
         value = jobs.snapshot(key)
         if value['status'] not in {'queued', 'running'}:
             result = value.get('result') or {}
             view = result.get('view') or {}
-            print(json.dumps(dict(attempt=attempt, seconds=round(time.monotonic() - started, 3),
+            print(json.dumps(dict(attempt=attempt, period=scope, seconds=round(time.monotonic() - started, 3),
                 status=value['status'], error=value['error'], result_error=result.get('error'),
                 model_rows=len(view.get('model_token_mix', [])),
                 publisher_rows=len(view.get('publisher_token_mix', [])),
                 source_status=result.get('source', {}).get('status'),
                 nonzero_tokens=int((view.get('token_mix') or {}).get('known_total_tokens', 0)) > 0,
-                progress=value.get('progress'))))
+                period_bounds=view.get('token_mix_period'), progress=value.get('progress'))), flush=True)
             assert value['status'] == 'complete' and not value['error'] and not result.get('error')
+            assert view['token_mix_period']['period'] == scope
             return key
         time.sleep(.05)
     raise RuntimeError('probe_deadline')

@@ -54,7 +54,8 @@ class ReportApplication:
 
     def execute(self, request: ReportRequest, *, progress: ProgressSink | None = None) -> ReportResult:
         scope = record(kind=request.kind, session_id=request.session_id, date_text=request.date_text,
-                       session_limit=request.session_limit, stats_scope=request.stats_scope)
+                       session_limit=request.session_limit, stats_scope=request.stats_scope,
+                       token_mix_scope=request.token_mix_scope)
         now = int(self._clock())
         unknown = record(status="not_acquired", observed_at_ms=None, revisions=(), atomicity="per_root_snapshot")
         if not self._lock.acquire(blocking=False):
@@ -106,7 +107,7 @@ class ReportApplication:
                     return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
-            report = (service.build_token_mix_history(lambda label, _percent: observe(label))
+            report = (service.build_token_mix_history(lambda label, _percent: observe(label), scope=request.token_mix_scope)
                        if request.kind is ReportKind.TOKEN_MIX else service.build(request, include_model_catalog=True))
             observe(WorkProgress("Preparing report", "finalizing", 0, 2, stage="finalizing"))
             revisions = tuple(record(session_id=root, revision=identity(revision))
@@ -190,6 +191,8 @@ class ReportApplication:
         if not isinstance(request.kind, ReportKind):
             return "invalid_request"
         if request.stats_scope not in ('today', '7-days', '30-days', 'month', 'all'):
+            return 'invalid_request'
+        if request.token_mix_scope not in ('today', '7-days', '30-days', 'month', 'all'):
             return 'invalid_request'
         if type(request.comparison_offset) is not int or request.comparison_offset < 0 or request.comparison_offset % 10:
             return 'invalid_request'

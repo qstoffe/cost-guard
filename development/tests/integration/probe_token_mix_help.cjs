@@ -16,11 +16,12 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       ['2026-10-25T00:30Z', '2026-10-25 02:30'], ['2026-10-25T01:30Z', '2026-10-25 02:30'],
       ['2026-12-31T23:30Z', '2027-01-01 00:30']]) {
       await evaluate(`current.tokenMix.update({...originalMix, observed_at_ms:Date.parse('${instant}'),
-        view:{...originalMix.view,timezone_id:'Europe/Stockholm'}})`);
+        view:{...originalMix.view,timezone_id:'Europe/Stockholm',token_mix_period:{
+          period:'all',start_ms:Date.parse('${instant}'),end_ms:Date.parse('${instant}')}}})`);
       const text = await focus();
-      assert.ok(text.includes(`Observed ${expected}.`), text);
-      assert.match(text, /\n\nPartial pricing:.*Missing cost is not zero/);
-      assert.match(text, /Token telemetry is incomplete/);
+      assert.ok(text.includes(`${expected}:00.000 GMT`), text);
+      assert.match(text, /known recorded tokens for the selected period/);
+      assert.doesNotMatch(text, /Observed|CLI|Partial pricing|CCost|Deleted|telemetry/);
       assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`), /Partial|\?|Incomplete token telemetry/);
       assert.equal(await evaluate(`current.tokenMix.root.querySelectorAll('.partial').length`), 0);
       assert.equal(await evaluate(`ReportView.timestamp(Date.parse('${instant}'),'UTC')`), instant.replace('T',' ').replace('Z',''));
@@ -58,14 +59,14 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   const point = await evaluate(`(()=>{const r=current.tokenMix.title.getBoundingClientRect();return {x:r.left+12,y:r.top+r.height/2}})()`);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},tab);
   await until(`${help}.matches(':popover-open')`);
-  assert.match(await evaluate(`${help}.textContent`),/Partial pricing:/);
+  assert.match(await evaluate(`${help}.textContent`),/recorded tokens for the selected period/);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},tab);
   await until(`!${help}.matches(':popover-open')`);
   await command('Emulation.setTouchEmulationEnabled',{enabled:true},tab);
   for (const type of ['touchStart','touchEnd']) await command('Input.dispatchTouchEvent',{
     type,touchPoints:type==='touchStart'?[{...point,id:1,radiusX:1,radiusY:1,force:1}]:[]},tab);
   await until(`${help}.matches(':popover-open')`);
-  assert.match(await evaluate(`${help}.textContent`),/Partial pricing:/);
+  assert.match(await evaluate(`${help}.textContent`),/recorded tokens for the selected period/);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
   await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
   await evaluate(`current.tokenMix.title.blur()`);
@@ -83,6 +84,6 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     surfaces.push({section,helpTargets:texts.length});
   }
   checks.push({renderedRouteDateSearch:surfaces,locale:'en-US',browserTimezone:'America/New_York'});
-  checks.push('Token Mix title actual focus/hover/touch, dynamic complete/partial/unpriced/empty help; no visible partial styling/text; unchanged canonical facts');
+  checks.push('Token Mix exact-period title actual focus/hover/touch, complete/partial/unpriced/empty help; no old heading boilerplate; unchanged canonical facts');
   checks.push('en-US/sv-SE × New York/Tokyo browser zones; configured Stockholm/UTC, spring/fall DST/year boundary across title, Sessions cells, host status and AI Stats interval');
 };

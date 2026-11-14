@@ -7,24 +7,27 @@ const TokenMixView = (() => {
     'Input tokens written to the cache.', 'Output tokens, including reasoning once.'];
   const e = (...args) => ReportView.element(...args);
   const tokenKey = 'mix_total_tokens';
+  const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
   // This surface alone shows known subtotals quietly; canonical/CLI tokens stay intact.
   const display = (mix, key) => ReportView.display(mix, key).replace(/^Partial /, '');
   function titleHelp(result) {
-    const mix = result.view.token_mix;
-    let text = `${mix.known_total_tokens ?? 'No known'} recorded tokens in the same available shown history as the CLI. Deleted history is not reconstructed.\nObserved ${ReportView.timestamp(result.observed_at_ms, result.view.timezone_id)}.`;
-    if (mix.request_count && !mix.cost_complete)
-      text += '\n\nPartial pricing: Some recorded requests have no usable model price, so displayed CCost includes only known priced requests. Missing cost is not zero.';
-    if (mix.request_count && mix.exact_total_tokens == null)
-      text += '\n\nToken telemetry is incomplete; only known recorded tokens are shown. A complete total and shares are unavailable.';
-    return text;
+    const {token_mix: mix, token_mix_period: period, timezone_id: zone} = result.view;
+    const quantity = mix.known_total_tokens == null ? 'No known' : BigInt(mix.known_total_tokens).toLocaleString('en-US');
+    const boundary = value => {
+      if (!Number.isSafeInteger(value)) return 'Date unavailable';
+      const offset = new Intl.DateTimeFormat('en-US', {timeZone: zone, timeZoneName: 'longOffset'})
+        .formatToParts(value).find(part => part.type === 'timeZoneName').value;
+      return `${ReportView.timestamp(value, zone)}:${new Date(value).toISOString().slice(17, 23)} ${offset}`;
+    };
+    return `${quantity} ${mix.exact_total_tokens == null ? 'known ' : ''}recorded tokens for the selected period\n` +
+      `${boundary(period?.start_ms)} – ${boundary(period?.end_ms)} (${zone})`;
   }
   function numeric(row, column) {
     if (column === 1) return row.prompts;
     if (column === 2) return row.calls;
     if (column === 3) return row.mix.known_total_tokens;
-    if (column === 12) return row.mix.priced_requests || !row.mix.request_count ? row.mix.total_cost : null;
-    const index = Math.floor((column - 4) / 2);
-    if (column % 2) return row.mix.priced_requests || !row.mix.request_count ? row.mix.costs?.[index] : null;
+    if (column === 8) return row.mix.priced_requests || !row.mix.request_count ? row.mix.total_cost : null;
+    const index = column - 4;
     // Cross multiplication preserves shares even beyond Decimal/IEEE-754 precision.
     return row.mix.shares?.[index] == null ? null :
       [BigInt(row.mix.exact_totals[index]), BigInt(row.mix.exact_total_tokens)];
@@ -43,7 +46,7 @@ const TokenMixView = (() => {
   }
   class Table {
     constructor(key) {
-      this.key = key; this.sort = {column: 12, direction: -1}; this.nodes = new Map();
+      this.key = key; this.sort = {column: 8, direction: -1}; this.nodes = new Map();
       this.root = e('section', undefined, 'token-mix-section');
       const title = `Token Mix % by ${key}`;
       this.root.append(e('h3', title));
@@ -53,16 +56,16 @@ const TokenMixView = (() => {
       const caption = e('caption', title, 'sr-only'); table.append(caption);
       const head = e('thead'), tr = e('tr');
       const columns = [key === 'model' ? 'Model' : 'Publisher', 'Prompts', 'Calls', 'Tokens',
-        ...names.flatMap(name => [name + ' %', name + ' CCost']), 'Total CCost'];
-      const help = [key === 'model' ? 'Canonical historical model display name.' : 'Model manufacturer, not an account provider.',
+        ...names.map(name => name + ' %'), 'Total CCost'];
+      const help = [key === 'model' ? null : 'Model manufacturer, not an account provider.',
         'Distinct contributing user prompts. Mixed-model prompts can appear in several rows; counts are not additive.',
         'Attributed model requests in available shown history.',
          'Known Input, Cached input, Cache write and Output token volume. Missing telemetry is not zero.',
-        ...definitions.flatMap(text => [text + ' Share of tokens, not cost.', text + ' Per-request reference valuation, not share of cost.']),
+        ...definitions.map(text => text + ' Share of tokens, not cost.'),
         'Sum of known category reference valuations at each request’s actual model and price tier; not billing.'];
       this.headers = columns.map((label, column) => {
         const th = e('th'), button = e('button', label); th.scope = 'col'; button.type = 'button';
-        ContextHelp.heading(button, help[column] + '\nActivate to sort; activate again to reverse. Unknown values stay last.');
+        if (help[column]) ContextHelp.heading(button, help[column]);
         const arrow = e('span', '', 'sort-arrow'); arrow.setAttribute('aria-hidden', 'true'); button.append(arrow);
         button.addEventListener('click', () => {
           this.sort = {column, direction: this.sort.column === column ? -this.sort.direction : 1}; this.draw();
@@ -90,24 +93,26 @@ const TokenMixView = (() => {
         let node = this.nodes.get(key);
         if (!node) {
           node = {root: e('tr'), cells: [], help: new Set()};
-          for (let col = 0; col < 13; col++) {
+          for (let col = 0; col < 9; col++) {
             const td = e('td'), span = e('span'); td.append(span); node.root.append(td); node.cells.push(span);
           }
           this.nodes.set(key, node);
         }
         node.row = row;
         node.cells.forEach((span, col) => {
-          const key = col === 3 ? tokenKey : col === 12 ? 'mix_total_cost' :
-            col >= 4 ? 'mix_' + categories[Math.floor((col - 4) / 2)] + (col % 2 ? '_cost' : '_share') : null;
+          const key = col === 3 ? tokenKey : col === 8 ? 'mix_total_cost' :
+            col >= 4 ? 'mix_' + categories[col - 4] + '_share' : null;
           ReportView.text(span, () => col === 0 ? node.row[this.key] : col === 1 ? node.row.prompts :
             col === 2 ? node.row.calls : display(node.row.mix, key));
           const tokenHelp = col === 3 && (row.mix.exact_total_tokens == null ||
             ReportView.display(row.mix, tokenKey) !== row.mix.known_total_tokens);
-          const partialCost = (col >= 4 && col % 2 || col === 12) && !row.mix.cost_complete;
-          if ((tokenHelp || partialCost) && !node.help.has(col)) {
+          const category = col >= 4 && col < 8;
+          const partialCost = col === 8 && !row.mix.cost_complete;
+          if ((tokenHelp || category || partialCost) && !node.help.has(col)) {
             node.help.add(col);
             ContextHelp.value(span, () => col === 3 ?
-              `${node.row.mix.known_total_tokens ?? 'No known'} recorded tokens.${node.row.mix.exact_total_tokens == null ? ' Partial telemetry; a complete total and shares are unavailable.' : ''}` :
+              `${node.row.mix.known_total_tokens ?? 'No known'} recorded tokens.${node.row.mix.exact_total_tokens == null ? ' Partial telemetry; a complete total and shares are unavailable.' : ''}` : category ?
+              ReportView.display(node.row.mix, 'mix_' + categories[col - 4] + '_cost_help') :
               ReportView.costHelp(node.row.mix, key) || costHelp(node.row.mix));
           }
           ContextHelp.refresh(span);
@@ -119,8 +124,15 @@ const TokenMixView = (() => {
     }
   }
   class View {
-    constructor() {
+    constructor(select = () => {}) {
       this.root = e('div', undefined, 'token-mix-view');
+      this.selector = e('div', undefined, 'ai-stats-periods');
+      this.selector.setAttribute('role', 'group'); this.selector.setAttribute('aria-label', 'Token Mix period');
+      this.buttons = periods.map(([id, label]) => {
+        const button = e('button', label); button.type = 'button';
+        button.addEventListener('click', () => select(id)); this.selector.append(button); return {id, button};
+      });
+      this.content = e('div');
       this.title = e('h2');
       ContextHelp.value(this.title, () => this.result ? titleHelp(this.result) : '');
       this.summary = e('div', undefined, 'token-mix-summary');
@@ -140,7 +152,12 @@ const TokenMixView = (() => {
       });
       this.status = e('p', '', 'token-mix-status'); this.status.setAttribute('role', 'status');
       this.models = new Table('model'); this.publishers = new Table('publisher');
-      this.root.append(this.title, this.summary, this.status, this.models.root, this.publishers.root);
+      this.content.append(this.title, this.summary, this.status, this.models.root, this.publishers.root);
+      this.root.append(this.selector, this.content);
+    }
+    selection(period, ready) {
+      this.buttons.forEach(({id, button}) => button.setAttribute('aria-pressed', String(id === period)));
+      this.content.hidden = !ready;
     }
     update(result) {
       if (this.result === result) return;
@@ -149,7 +166,9 @@ const TokenMixView = (() => {
       ContextHelp.refresh(this.title);
       this.metrics.forEach(value => ReportView.syncUnits(value));
       const view = result.view;
-      this.status.textContent = view.model_token_mix.length ? '' : 'No available historical usage.';
+      this.status.textContent = [view.model_token_mix.length ? '' : 'No available historical usage.',
+        result.source.status === 'partial' ? 'Source coverage could not be fully verified.' : '',
+        ...((view.source_warnings || []).filter(text => text.startsWith('Request time unavailable')))].filter(Boolean).join(' ');
       this.status.hidden = !this.status.textContent;
       this.models.update(view.model_token_mix); this.publishers.update(view.publisher_token_mix);
     }
@@ -157,6 +176,11 @@ const TokenMixView = (() => {
   }
   function valid(result) {
     const view = result?.view;
+    const period = view?.token_mix_period;
+    if (period != null && (!periods.some(([id]) => id === period.period) ||
+        ![period.start_ms, period.end_ms].every(value => value === null || Number.isSafeInteger(value)) ||
+        (period.period !== 'all' && (period.start_ms === null || period.end_ms === null)) ||
+        (period.start_ms !== null && period.end_ms !== null && period.start_ms > period.end_ms))) return false;
     const integer = value => typeof value === 'string' && /^\d+$/.test(value);
     const decimal = value => typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value);
     const count = value => Number.isSafeInteger(value) && value >= 0;

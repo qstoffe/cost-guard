@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.49 - 2026-11-14
+
+- Web Token Mix adds Today / 7 days / 30 days / This month / All time, defaulting independently to All time. Canonical deduplicated request times select all summary/model/publisher values; revision-verified cached facts preserve original category valuation without unchanged-history hydration or repricing.
+- Both grids have nine sortable columns. Percentage-value help carries exact category CCost in Credits/USD with truthful partial/unavailable semantics; the Model header loses redundant help, metric help omits sorting tutorials and the active column has one arrow.
+- Heading help contains exact recorded tokens and source-backed configured-local date-time bounds only. Three-page period controls share Sessions' compact spacing; slow superseded period attempts cannot publish over the current selection. CLI historical output and other pages' defaults are unchanged.
+
 ## v81.48 - 2026-11-14
 
 - Shared hover help preserves confirmed stationary trigger/popup reading without an input-idle cutoff. The single open-only watchdog retains browser-hover, hit-test contradiction, identity, visibility and lifetime cleanup; only inconclusive hover queries use a bounded fallback.

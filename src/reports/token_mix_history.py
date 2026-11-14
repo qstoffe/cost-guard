@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable
 
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import unique_usage
+from src.analysis.ai_stats import windows
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity, unverified_alias
@@ -32,7 +33,7 @@ def _model_key(model: ModelRef) -> str:
     return reference_identity(model.model) or (model.model or "").lower()
 
 
-def build_token_mix_history(service: ReportService, progress: HistoryProgress) -> ReportProjection:
+def build_token_mix_history(service: ReportService, progress: HistoryProgress, *, scope=None) -> ReportProjection:
     progress(WorkProgress("Loading pricing catalog", "pricing"), None)
     reference = service._load_comparison_catalog()
     progress(WorkProgress("Listing OpenCode sessions", "catalog"), None)
@@ -48,10 +49,10 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
         for prompt in bundle.prompts:
             for entry in prompt.entries:
                 prompt_of.setdefault(entry, (prompt.session_id, prompt.prompt_id))
-    return history_projection(service, reference, entries, prompt_of, progress)
+    return history_projection(service, reference, entries, prompt_of, progress, scope=scope)
 
 
-def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None):
+def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None):
     """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
     valuation = valuation or reference.reference_category_valuation
     progress(WorkProgress("Checking available OpenCode models", "availability"), None)
@@ -73,8 +74,20 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         software_fault = False
     progress(WorkProgress("Pricing token categories", "finalizing"), None)
     usage = unique_usage(entries)
+    period = {}
+    undated = 0
+    if scope is not None:
+        start = dict(windows(service.timezone_id, service.now_ms))[scope]
+        undated = sum(entry.completed_at_ms <= 0 for entry in usage)
+        # Deduplicate physical requests BEFORE scope membership. Child calls use
+        # their own canonical event time, not their parent's prompt start.
+        usage = [entry for entry in usage if (start is None or
+            entry.completed_at_ms >= start) and entry.completed_at_ms <= service.now_ms]
+        period = dict(period=scope, start_ms=start, end_ms=service.now_ms)
     groups = model_token_mixes(usage, prompt_of, valuation, model_key=_model_key)
     warnings = tuple(service.selection.warnings)
+    if undated:
+        warnings += (f"Request time unavailable for {undated} recorded calls; undated usage is included only in All time.",)
     # All-history scope: any V1 gap may make the result incomplete.
     notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
     if available is None:
@@ -111,8 +124,12 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
                  "so row prompt counts are not additive. Unknown / unverified is not an account provider.")
     total = priced_token_mix(((entry.model, entry.tokens) for entry in shown_usage),
                              valuation,
-                             sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))
+                              sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))
+    if scope == 'all':
+        stamps = [entry.completed_at_ms for entry in shown_usage if entry.completed_at_ms > 0]
+        period.update(start_ms=min(stamps) if stamps else None, end_ms=max(stamps) if stamps else None)
     return ReportProjection(
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,
         notes=tuple(notes), model_token_mix=tuple(rows), publisher_token_mix=tuple(publishers), token_mix=total,
+        token_mix_period=period,
     )

@@ -79,6 +79,16 @@ function selectStats(state, period) {
   if (!state.result && !document.hidden) acquire(state);
   scheduleCachedReport();
 }
+function selectTokenMix(state, period) {
+  if (state.period === period) return;
+  // Retire only this browser attempt, not shared host work or another tab's demand.
+  state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
+  state.period = period; state.request = {kind: 'token-mix', token_mix_scope: period};
+  state.result = null; state.withheld = false; state.dataRevision = null;
+  state.failed = false; state.message = ''; state.attempted = false;
+  ReportLoading.reset(state); demand?.update();
+  show(state); firstReport(state); scheduleCachedReport();
+}
 const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
   () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
@@ -213,6 +223,19 @@ function show(state) {
     state.stats.update(state); state.stats.attach(output);
     return;
   }
+  if (state.section === 'token-mix') {
+    ReportView.defaultUnit();
+    state.tokenMix ||= new TokenMixView.View(period => selectTokenMix(state, period));
+    const ready = !!state.result && !state.withheld;
+    state.tokenMix.selection(state.period || 'all', ready);
+    if (ready) state.tokenMix.update(state.result);
+    state.tokenMix.attach(output);
+    if (!ready) {
+      state.mixLoading ||= ReportView.element('div');
+      state.tokenMix.root.append(state.mixLoading); ReportLoading.show(state.mixLoading, state);
+    } else state.mixLoading?.remove();
+    return;
+  }
   if (state.section === 'comparisons') {
     refresh.textContent = 'Retry Comparisons'; refresh.hidden = !state.failed;
     notice.textContent = '';
@@ -258,11 +281,7 @@ function show(state) {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
       output.replaceChildren();
     }
-  } else if (state.result && state.section === 'token-mix' && !state.withheld) {
-    ReportView.defaultUnit();
-    state.tokenMix ||= new TokenMixView.View();
-    state.tokenMix.update(state.result); state.tokenMix.attach(output);
-  } else if (state.result) {
+   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
     // discards scroll, focus and selection during ordinary health checks.
     const retained = snapshotRender?.state === state &&
@@ -431,7 +450,8 @@ async function acquire(state, background = false, prices = false) {
           await attempt.backoff(error); await admit(); continue;
         }
         if (hostState.terminal) break;
-          if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_invalid_result');
+           if (state.section === 'token-mix' && (!TokenMixView.valid(job.result) ||
+               job.result.view.token_mix_period?.period !== state.period)) throw new Error('report_invalid_result');
           if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_invalid_result');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
           if (state.section === 'comparisons') state.pageNavigation = false;
@@ -557,6 +577,10 @@ function navigate() {
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
     current.request = {kind: 'ai-stats', stats_scope: current.period};
+  }
+  if (current.section === 'token-mix') {
+    current.period ||= current.request?.token_mix_scope || 'all';
+    current.request = {kind: 'token-mix', token_mix_scope: current.period};
   }
   if (route.section === 'models') {
     const models = current;

@@ -244,7 +244,7 @@ section > label input { min-width: 0; }
   width: 100%; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal;
 }
 .token-mix-table th button { width: auto; }
-.token-mix-table th button::after { content: none; }
+.token-mix-table th[aria-sort] button::after { content: none; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; font-size: .85rem; }
 caption { text-align: left; padding: .9rem 1rem; font-weight: 650; background: var(--surface); }
 th, td { padding: .7rem .85rem; text-align: right; vertical-align: top; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -277,6 +277,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 [data-section="sessions"] .toolbar, [data-section="sessions"] #notice,
 [data-section="sessions"] #scope-controls, [data-section="sessions"] .report-search { display: none; }
 [data-section="sessions"] main { padding-top: .65rem; }
+[data-section="ai-stats"] main, [data-section="token-mix"] main { padding-top: .65rem; }
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
 .session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(6, max-content); }

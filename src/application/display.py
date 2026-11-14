@@ -326,12 +326,20 @@ def history_tokens(values, timezone_id, *, times=None):
         costs = values.get("costs")
         priced = costs is not None and not (values["request_count"] and not values["priced_requests"])
         prefix = "" if values["cost_complete"] else "?"
-        for index, (name, _label) in enumerate(TOKEN_CATEGORIES):
+        for index, (name, label) in enumerate(TOKEN_CATEGORIES):
             cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
             tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
             tokens["mix_" + name + "_share"] = "N/A" if shares[index] == "--" else shares[index]
             tokens["mix_" + name + "_cost"] = ("N/A" if not priced else
                 ("" if values["cost_complete"] else "Partial ") + ccost_amount(decimal(costs[index])))
+            if values.get('category_cost_help'):
+                amount = decimal(costs[index]) if priced else None
+                exact = 'N/A' if amount is None else format(amount / 100 if ccost_unit() == 'usd' else amount, 'f')
+                tokens["mix_" + name + "_cost_help"] = (
+                    f"{label} CCost: {exact} {'USD' if ccost_unit() == 'usd' else 'Credits'}."
+                    + (" Reference valuation, not billing." if values["cost_complete"] else
+                       " Partial reference valuation; missing pricing or usage is not zero.")
+                )
         tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
         tokens["mix_total_cost"] = tokens["total_cost"].replace("?", "Partial ", 1)
         known_volume = values.get("known_total_tokens")

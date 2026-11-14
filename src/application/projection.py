@@ -8,6 +8,7 @@ import json
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
 from src.analysis.ai_stats import POLICY as STATS_POLICY
+from src.reports.models import ReportKind
 
 from .contracts import ObjectValue, record
 from .display import with_display
@@ -40,7 +41,7 @@ def comparison(value):
     )
 
 
-def token_mix(value):
+def token_mix(value, *, category_help=False):
     return record(
         totals=value.totals, percentages=value.percentages, shares=value.shares,
         sample_size=value.sample_size, request_count=value.request_count,
@@ -50,6 +51,7 @@ def token_mix(value):
         exact_total_tokens=None if value.total_tokens is None else str(value.total_tokens),
         known_total_tokens=None if value.known_total_tokens is None else Decimal(value.known_total_tokens),
         total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
+        **({'category_cost_help': True} if category_help else {}),
     )
 
 
@@ -232,9 +234,10 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,
         recent_model_notice_highlight_spans=report.recent_model_notice_highlight_spans,
-        token_mix=token_mix(report.token_mix),
-        model_token_mix=tuple(record(model=item.model, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
+        token_mix=token_mix(report.token_mix, category_help=report.kind is ReportKind.TOKEN_MIX),
+        token_mix_period=record(**report.token_mix_period) if report.token_mix_period else None,
+        model_token_mix=tuple(record(model=item.model, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix, category_help=True))
             for item in report.model_token_mix),
-        publisher_token_mix=tuple(record(publisher=item.publisher, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
+        publisher_token_mix=tuple(record(publisher=item.publisher, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix, category_help=True))
             for item in report.publisher_token_mix),
     ), timezone_id, ccost_display_unit=ccost_display_unit)

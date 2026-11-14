@@ -36,12 +36,12 @@ for (const [kind, result] of Object.entries(input)) {
     assert.ok(all(output, 'a').some(link => link.href === '#/sessions/root-0000'));
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, result.view.prompt_blocks[0].display.total_ccost);
   } else {
-     const metrics = ['Prompts', 'Calls', 'Tokens', 'Input %', 'Input CCost', 'Cached input %',
-       'Cached input CCost', 'Cache write %', 'Cache write CCost', 'Output %', 'Output CCost', 'Total CCost ↓'];
+     const metrics = ['Prompts', 'Calls', 'Tokens', 'Input %', 'Cached input %',
+       'Cache write %', 'Output %', 'Total CCost ↓'];
      assert.deepEqual(all(output, 'th').map(node => node.textContent), ['Model', ...metrics, 'Publisher', ...metrics]);
      const mix = result.view.model_token_mix[0].mix;
      assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
-        ['total_tokens', ...['input', 'cache', 'write', 'output'].flatMap(key => [key + '_share', key + '_cost']), 'total_cost'].map(key => mix.display['mix_' + key]));
+        ['total_tokens', ...['input', 'cache', 'write', 'output'].map(key => key + '_share'), 'total_cost'].map(key => mix.display['mix_' + key]));
      assert.ok(output.textContent.indexOf('Total Token Mix') < output.textContent.indexOf('Token Mix % by model'));
      assert.ok(output.textContent.indexOf('Token Mix % by model') < output.textContent.indexOf('Token Mix % by publisher'));
      assert.doesNotMatch(output.textContent, /Snapshot|Reading this report|Sample and price coverage|Token category order|\?/);
@@ -51,7 +51,7 @@ for (const [kind, result] of Object.entries(input)) {
       const publisher = result.view.publisher_token_mix[0];
       assert.equal(all(output, 'tbody')[1].children[0].children[0].textContent, publisher.publisher);
       assert.deepEqual(all(output, 'tbody')[1].children[0].children.slice(3).map(cell => cell.textContent),
-          ['total_tokens', ...['input', 'cache', 'write', 'output'].flatMap(key => [key + '_share', key + '_cost']), 'total_cost'].map(key => publisher.mix.display['mix_' + key]));
+          ['total_tokens', ...['input', 'cache', 'write', 'output'].map(key => key + '_share'), 'total_cost'].map(key => publisher.mix.display['mix_' + key]));
     }
   }
   const credits = output.textContent, tables = all(output, 'table'), rows = all(output, 'tr');
@@ -65,7 +65,7 @@ for (const [kind, result] of Object.entries(input)) {
   } else {
     const mix = result.view.model_token_mix[0].mix;
     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
-       ['total_tokens', ...['input', 'cache', 'write', 'output'].flatMap(key => [key + '_share', key + '_cost']), 'total_cost'].map(key => mix.display_units?.usd?.['mix_' + key] ?? mix.display['mix_' + key]));
+       ['total_tokens', ...['input', 'cache', 'write', 'output'].map(key => key + '_share'), 'total_cost'].map(key => mix.display_units?.usd?.['mix_' + key] ?? mix.display['mix_' + key]));
   }
   vm.runInContext('ReportView.setUnit("credits", output)', context);
   assert.equal(output.textContent, credits, 'reversible without jobs, repricing or replacing DOM');
@@ -114,6 +114,7 @@ for (const mutate of [
   value => { value.view.model_token_mix[0].mix.exact_totals[0] = 'not an integer'; },
   value => { value.view.token_mix.costs = ['0']; },
   value => { delete value.view.token_mix.display.mix_total_cost; },
+  value => { value.view.token_mix_period={period:'today',start_ms:2,end_ms:1}; },
   value => { delete value.source; }
 ]) {
   context.result = JSON.parse(JSON.stringify(input['token-mix'])); mutate(context.result);
@@ -131,13 +132,15 @@ partial.view.token_mix = partialMix(partial.view.token_mix);
 for (const key of ['model_token_mix', 'publisher_token_mix'])
   partial.view[key] = partial.view[key].map(row => ({...row, mix: partialMix(row.mix)}));
 partial.view.timezone_id = 'Europe/Stockholm'; partial.observed_at_ms = Date.parse('2026-03-29T01:30Z');
+partial.view.token_mix_period = {period:'today',start_ms:Date.parse('2026-03-28T23:00Z'),end_ms:partial.observed_at_ms};
 context.result = partial;
 vm.runInContext('globalThis.mixView = new TokenMixView.View(); mixView.update(result); mixView.attach(output)', context);
 const title = all(output, 'h2')[0];
 assert.doesNotMatch(output.textContent, /Partial|\?|Incomplete token telemetry/);
 assert.ok(output.textContent.includes('842K'));
 assert.equal(context.mixView.status.hidden, true);
-assert.match(helpText(title), /Observed 2026-03-29 03:30\.\n\nPartial pricing:.*Missing cost is not zero\.\n\nToken telemetry is incomplete/);
+assert.match(helpText(title), /842,000 known recorded tokens for the selected period\n2026-03-29 00:00:00.000 GMT\+01:00 – 2026-03-29 03:30:00.000 GMT\+02:00/);
+assert.doesNotMatch(helpText(title), /CLI|Observed|Partial pricing|CCost|Deleted/);
 vm.runInContext('ReportView.setUnit("usd", output)', context);
 assert.ok(output.textContent.includes('$0.12')); assert.doesNotMatch(output.textContent, /Partial|\?/);
 assert.equal(partial.view.token_mix.display.mix_total_tokens, 'Partial 842K', 'not a canonical token rewrite');
