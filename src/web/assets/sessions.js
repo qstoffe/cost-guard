@@ -302,7 +302,7 @@ const SessionsCatalog = (() => {
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
-        ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ' ↕'));
+        ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ''));
       }
       // Lifecycle status must not remain falsely running while a title is selected.
       // A recovered epoch cannot keep protected old rows under a new page label.

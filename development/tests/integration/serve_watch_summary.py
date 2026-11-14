@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import sys
 import time
+import tempfile
 from threading import Thread, Timer
 from urllib.parse import parse_qs, urlsplit
 
@@ -57,6 +58,9 @@ def main():
         resources['/data.js'] += ('const REVISIONS = ' + json.dumps(sequences) + ';').encode()
         from development.tests.fixtures.watch_tool_outcomes import disclosure_publications
         resources['/data.js'] += ('const DISCLOSURES = ' + json.dumps(disclosure_publications()) + ';').encode()
+        from development.tests.fixtures.watch_stability import refresh_publications
+        with tempfile.TemporaryDirectory() as directory:
+            resources['/data.js'] += ('const FRESH_REFRESH = ' + json.dumps(refresh_publications(directory)) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

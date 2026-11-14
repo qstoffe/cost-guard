@@ -1,7 +1,7 @@
 """Bounded isolated Web capture work, with immutable per-session publications."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from queue import SimpleQueue
 from threading import Event
 import time
@@ -12,6 +12,19 @@ from src.sources.errors import SourceError
 from .skill_registry import active_skill_origins
 from .tools import observe_tools, RUNNING_VISIBLE_AFTER_MS
 from .source_reads import SourceReads
+
+
+def current_tool_details(snapshot, capture, row, now_ms, origins):
+    aggregate = observe_tools(snapshot, row.event_id, is_compaction=False,
+        now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS, skill_origins_by_session=origins, include_invocations=True)
+    if not capture.retained:
+        return aggregate
+    fresh = observe_tools(capture.cost_snapshot, row.event_id, is_compaction=False,
+        now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS, skill_origins_by_session=origins, include_invocations=True)
+    return replace(aggregate, **{name: getattr(fresh, name) for name in (
+        'running_invocation', 'background_invocation', 'running_invocations',
+        'background_invocations', 'failed_invocations', 'running_tool', 'running_ms',
+        'running_invocation_count', 'background_invocation_count', 'background_kinds', 'background_ms')})
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,9 +158,8 @@ class CardWorkers:
                 capture, item = capture_rows(service, root, previous, focal_ids, **options)
                 snapshot = item.snapshot
                 origins = active_skill_origins(service.source, snapshot, capture)
-                tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
-                    is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
-                    skill_origins_by_session=origins, include_invocations=True)) for row in capture.rows)
+                tools = tuple((row.event_id, current_tool_details(snapshot, capture, row, now_ms, origins))
+                    for row in capture.rows)
                 self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
         except (SourceError, PricingUnavailableError) as error:
             self._publish(root, generation, "unavailable", error, now_ms)
@@ -195,9 +207,8 @@ class CardWorkers:
                             **options)
                         snapshot = item.snapshot
                         origins = active_skill_origins(service.source, snapshot, capture)
-                        tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
-                            is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
-                            skill_origins_by_session=origins, include_invocations=True)) for row in capture.rows)
+                        tools = tuple((row.event_id, current_tool_details(snapshot, capture, row, now_ms, origins))
+                            for row in capture.rows)
                         self._publish(root, generation, 'rows', (capture, tools, snapshot), now_ms)
                     except (SourceError, PricingUnavailableError) as error:
                         if self.readers is not None:

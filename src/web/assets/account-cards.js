@@ -266,5 +266,65 @@ const AccountCards = (() => {
       this.align();
     }
   }
-  return {View};
+  // Shared compact subscription presenter; owns neither acquisition nor PiP.
+  class CompactView {
+    constructor(doc = document) {
+      this.doc = doc;
+      this.el = (tag, value, name) => {
+        const node = doc.createElement(tag);
+        if (value !== undefined) node.textContent = value;
+        if (name) node.className = name;
+        return node;
+      };
+      this.root = this.el('ul', undefined, 'mini-accounts');
+      this.root.tabIndex = 0;
+      this.root.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
+      this.lines = new Map();
+    }
+    update(view) {
+      const text = ReportView.text, display = ReportView.display;
+      const accounts = view?.accounts?.accounts, wanted = [];
+      for (const item of accounts || []) {
+        const obs = item.observation, primary = item.primary;
+        const key = JSON.stringify([obs.provider_id, obs.id]);
+        let line = this.lines.get(key);
+        if (!line) {
+          line = this.el('li');
+          const label = this.el('div'); label.append(this.el('span'));
+          ContextHelp.value(label.children[0], () => line.helpText || '');
+          line.append(label, this.el('progress')); this.lines.set(key, line);
+        }
+        const warning = primary.restricted ? ' · provider restriction' : '';
+        const notes = [obs.has_warning && 'Provider warning',
+          ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
+        const note = notes.filter(Boolean).join(' · ');
+        ReportView.bind(line, () => {
+          const quota = ReportView.quotaView(primary.quota, primary);
+          const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
+          const capacity = display(primary.quota, 'capacity_amount');
+          line.helpText = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${display(primary, 'mini_reset')}`;
+          text(line.children[0].children[0], `${obs.label} · ${used} (${display(primary.quota, 'ccost_' + quota.mode)})${warning}${note ? ' · ' + note : ''}`);
+          ContextHelp.refresh(line);
+          line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
+          const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;
+          bar.max = 1; bar.value = quota.fraction ?? 0;
+          bar.className = quota.exhausted && !bar.hidden ? 'mini-exhausted' : '';
+          bar.setAttribute('aria-label', obs.label + ' · ' + primary.quota.label + ' ' + quota.mode);
+          bar.setAttribute('aria-valuetext', used + warning + (quota.exhausted ? ' · exhausted' : ''));
+        });
+        wanted.push(line);
+      }
+      if (!wanted.length) {
+        this.empty ||= this.el('li');
+        text(this.empty, accounts ? 'No configured subscriptions' : 'Acquiring subscriptions…'); wanted.push(this.empty);
+      }
+      const keep = new Set(wanted);
+      for (const node of [...this.root.children]) if (!keep.has(node)) node.remove();
+      wanted.forEach((node, index) => {
+        if (this.root.children[index] !== node) this.root.insertBefore(node, this.root.children[index] || null);
+      });
+      for (const [key, line] of this.lines) if (!keep.has(line)) this.lines.delete(key);
+    }
+  }
+  return {View, CompactView};
 })();

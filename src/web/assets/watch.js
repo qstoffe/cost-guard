@@ -313,14 +313,21 @@ const WatchView = (() => {
     text(parent.children[1], () => display(value, 'daily_ccost'));
     text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
   }
-  function promptCostHelp(prompt) {
-    if (!display(prompt, 'ccost')) return '';
-    const split = `Incoming Context CCost (I): ${display(prompt, 'incoming_context_ccost')}\n` +
-      `Extra CCost (E): ${display(prompt, 'extra_ccost')}\n\n` +
-      'I — Incoming context on the first attributed request.\nE — Output, later requests and linked subagents.\n' +
-      'Display zero for unavailable valuation is not proof of zero cost.';
-    return [split, ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')]
-      .filter(value => value && value !== 'N/A').join('\n\n');
+  function costGroups(value, session = false) {
+    const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
+    if (!Array.isArray(models) || !Array.isArray(amounts)) {
+      const label = session ? 'Session Model 1' : 'Main Model';
+      return `${label}: N/A — N/A\n${label} CCost: ${display(null, 'ccost')}`;
+    }
+    return models.map(([label, model], index) =>
+      `${label}: ${model}\n${label} CCost: ${amounts[index] ?? display(null, 'ccost')}`).join('\n\n');
+  }
+  function promptDetails(item, highlight) {
+    const prompt = item?.prompt;
+    const start = (prompt?.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`) +
+      '\n' + costGroups(prompt) + '\n\nDuration: ';
+    const duration = display(item, 'watch_duration_ms');
+    return highlight && duration !== 'N/A' ? ContextHelp.runningDuration(start, duration, '') : start + duration;
   }
   function promptRole(prompt) {
     return !prompt ? '' : prompt.in_progress ? 'running' : prompt.aborted || prompt.has_error ? 'error' :
@@ -328,15 +335,15 @@ const WatchView = (() => {
   }
   const columns = [
     ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
-    ['Duration', 'Time spent on this prompt.\nStops advancing when work ends or updates are unavailable.'],
+    ['Duration', 'Time spent on this prompt.'],
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
     ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.'],
     ['Effort', 'How much reasoning the model was asked to do.'],
-    ['CCost', 'Estimated reference cost of this prompt, not your bill.\nHover, focus or tap the value for Incoming/Extra CCost and model/subagent details.'],
+    ['CCost', 'Reference cost of this prompt, including attributed linked subagent calls.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
-    ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.\n\nN/A or running — No reliable breakdown yet. Requires recorded usage with all four categories.'],
+    ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],
-    ['Δ Ctx', 'How much context changed since the preceding known context.\nA negative value means it shrank; this is not the total size.']
+    ['Δ Ctx', 'For a running prompt, current session Context minus this prompt’s incoming context.\nA negative value means it shrank; this is not the total size.']
   ];
   function columnHeader(name, explanation) {
     const th = el('th'); th.scope = 'col';
@@ -457,12 +464,12 @@ const WatchView = (() => {
       text(this.message, sourceNotice || hasRows ? '' : value.state === 'unavailable' ? 'Prompt source unavailable.' :
         retryDelayed ? 'Prompt updates delayed; check source availability.' : '');
       this.message.hidden = !this.message.textContent;
-      if (!protectedNode(this.body)) {
+      {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
         reconcile(this.body, value.rows.map(item => {
           const prompt = item.prompt, row = old.get(prompt.event_id) || el('tr');
           row.dataset.id = prompt.event_id;
-          const signature = JSON.stringify([item, historical]);
+          const signature = JSON.stringify([item, historical, value.state, value.session_summary?.context]);
           if (row.signature !== signature) {
             const focal = !historical && prompt.event_id === value.focal_id;
             const role = focal ? promptRole(prompt) : '';
@@ -471,22 +478,25 @@ const WatchView = (() => {
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
-            const label = el('span', undefined, 'watch-prompt-label');
-            const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
-            label.append(el('span', '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''), 'watch-prompt-number'), preview);
+            const label = row.children[2]?.children[0] || el('span', undefined, 'watch-prompt-label');
+            if (!label.children.length) label.append(el('span', '', 'watch-prompt-number'),
+              el('span', '', 'watch-prompt-preview'));
+            invocationText(label.children[0], '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''));
+            invocationText(label.children[1], prompt.preview || '');
             if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
             else if (prompt.subagent_active) ContextHelp.value(label, `Running: causally linked subagent activity. Parent attempt: ${prompt.parent_outcome || 'ongoing'}${prompt.abort_reason ? ' · ' + prompt.abort_reason : ''}.`);
             const started = metricValue(row, 0, display(prompt, historical ? 'finished_clock' : 'clock'),
               !historical || prompt.completed_at_ms != null ? display(prompt, historical ? 'finished_date_time' : 'date_time') : '');
-             const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
-             if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
-             else model.removeAttribute('aria-label');
-              const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptCostHelp(prompt));
-             const calls = metricValue(row, 6, String(prompt.calls), display(prompt, 'calls_help'));
+            const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
+            if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
+            else model.removeAttribute('aria-label');
+            const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptDetails(item, false));
+            const calls = metricValue(row, 6, String(prompt.calls), prompt.watch_calls_help);
             const effort = metricValue(row, 4, item.effort, display(prompt, 'effort_help'));
             const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
-              cost, calls, display(prompt, 'token_mix_percent'),
-              display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
+              cost, calls, this.tokenMix(item, value),
+              display(prompt, 'incoming_context_tokens'), prompt.in_progress &&
+                item.live_context?.watch_delta_context_tokens == null ? 'Loading…' : display(item.live_context, 'watch_delta_context_tokens')];
             cells.forEach((value, index) => {
               const cell = row.children[index] || el('td');
               const child = typeof value === 'object' ? value : cell.children[0] || el('span');
@@ -503,11 +513,29 @@ const WatchView = (() => {
       this.activity.hidden = historical || !value.focal_id;
       if (!historical) {
         const row = value.rows.find(row => row.prompt.event_id === value.focal_id);
-        this.drawActivity(row?.tool, !sourceNotice && value.state === 'observed' &&
+        const detailsVerified = value.invocation_verified === true || value.invocation_verified == null && value.state === 'observed';
+        this.drawActivity(row?.tool, !sourceNotice && detailsVerified &&
           row?.prompt.in_progress && !row.prompt.execution_unverified,
-          !sourceNotice && value.state === 'observed' && row && !row.prompt.execution_unverified);
+          !sourceNotice && detailsVerified && row && !row.prompt.execution_unverified);
       }
       this.drawSummary(value.session_summary);
+    }
+    tokenMix(item, card) {
+      const prompt = item.prompt, context = card.session_summary?.context;
+      const scope = JSON.stringify([card.activity_scope, card.session_id, prompt.event_id,
+        context?.context_scope, context?.context_epoch, context?.context_provider, context?.context_model]);
+      this.mixes ||= new Map();
+      // Complete corrected evidence withdraws an old value; only a benign
+      // same-scope reacquisition may reuse an already qualified percentage.
+      const invalid = card.state === 'unavailable' || context?.context_state === 'invalidated' ||
+        prompt.execution_unverified;
+      const known = Array.isArray(prompt.token_mix_percent) && prompt.token_mix_percent.length === 4;
+      if (invalid) this.mixes.delete(scope);
+      else if (known) this.mixes.set(scope, display(prompt, 'token_mix_percent'));
+      else if (card.state === 'observed') this.mixes.delete(scope);
+      const value = !invalid && (known ? display(prompt, 'token_mix_percent') : this.mixes.get(scope));
+      for (const key of this.mixes.keys()) if (key !== scope) this.mixes.delete(key);
+      return value || (prompt.in_progress ? 'Loading…' : display(prompt, 'token_mix_percent'));
     }
     drawSummary(value) {
       value = retainSummary(value, this.summaryValue);
@@ -548,26 +576,27 @@ const WatchView = (() => {
     constructor(state) {
       this.state = state;
       this.root = el('div', undefined, 'watch-view');
-      this.earlier = el('details', undefined, 'watch-earlier');
-      this.earlier.append(el('summary', 'Earlier Sessions'));
-      this.history = el('div', undefined, 'watch-history'); this.earlier.append(this.history);
       this.active = el('div', undefined, 'watch-active');
       this.empty = el('p'); this.empty.setAttribute('role', 'status');
-      this.accountCards = new AccountCards.View();
+      this.accountCards = new AccountCards.CompactView();
       this.accounts = this.accountCards.root; this.cards = new Map();
       this.daily = el('section', undefined, 'watch-daily');
       this.daily.setAttribute('aria-label', 'CCost Today');
-      this.root.append(this.earlier, this.empty, this.active, this.daily, this.accounts);
+      this.band = el('div', undefined, 'watch-daily-band'); this.band.append(this.daily);
+      this.root.append(this.band, this.empty, this.active, this.accounts);
     }
     attach(parent) {
       ReportView.syncUnits(this.root);
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
+      const controls = this.state.miniControls || document.getElementById?.('mini-watch-controls');
+      if (controls && controls.parentNode !== this.band) this.band.append(controls);
     }
     update(result) {
       this.costs ||= new ReportView.CostDisplay();
-      const view = costProjection(result.view, this.costs, result.source_generation), active = view.active_cards || [];
-      const history = finishedCards(view);
-      this.earlier.dataset.hasHistory = String(history.length > 0);
+      const view = costProjection(result.view, this.costs, result.source_generation);
+      const active = (view.active_cards || []).map(card => ({...card,
+        rows: card.rows.filter(row => row.prompt.in_progress && !row.prompt.execution_unverified)}))
+        .filter(card => card.rows.length);
       // A healthy host/stream retrying its source is not a disconnected stream.
       // Host health owns actionable failures; never duplicate them as table prose
       // or falsely announce a connection loss during ordinary source retry.
@@ -577,23 +606,16 @@ const WatchView = (() => {
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = result.state === 'running' && this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
         !active.some(card => card.rows.some(row => row.prompt.in_progress));
-      const unverified = active.some(card => card.rows.some(row => row.prompt.execution_unverified));
+      const unverified = view.active_cards?.some(card => card.rows.some(row => row.prompt.execution_unverified));
       text(this.empty, view.cards_state === 'unavailable' && !active.length ? 'Some prompt sources are unavailable.' : unverified ? 'Some prompt execution is unverified' : noRunning ? 'No running prompts' : '');
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
-      for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
+      for (const [parent, values, historical] of [[this.active, active, false]]) {
         const wanted = values.map(value => {
           const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history']); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || !connected); return card.root;
         });
-        if (historical) {
-          const notice = historyNotice(view, wanted.length > 0);
-          if (notice) {
-            this.historyNotice ||= el('p'); this.historyNotice.setAttribute('role', 'status');
-            text(this.historyNotice, notice); wanted.push(this.historyNotice);
-          }
-        }
         reconcile(parent, wanted);
       }
       for (const [key, card] of this.cards) if (!keep.has(key)) {
@@ -610,5 +632,6 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, HistoryActivity, historyNotice, finishedCards, retainContext, retainSummary, costProjection};
+  return {View, ContextLine, HistoryActivity, historyNotice, finishedCards, retainContext, retainSummary,
+    costProjection, costGroups, promptDetails};
 })();

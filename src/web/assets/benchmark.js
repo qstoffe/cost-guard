@@ -142,7 +142,7 @@ const BenchmarkView = (() => {
       this.headers.forEach(([th, button, label], column) => {
         const active = column === index, order = direction === 1 ? 'ascending' : 'descending';
         th.setAttribute('aria-sort', active ? order : 'none');
-        label.textContent = names[column] + (active ? direction === 1 ? ' ↑' : ' ↓' : ' ↕');
+        label.textContent = names[column] + (active ? direction === 1 ? ' ↑' : ' ↓' : '');
         button.setAttribute('aria-label', names[column] + (active ? ', ' + order : ', not sorted') + '. Activate to sort.');
       });
       const compare = (a, b, key, dir) => {

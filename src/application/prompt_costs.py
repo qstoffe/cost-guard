@@ -12,6 +12,29 @@ from .mini_costs import mini_groups
 MAX_PARTS = 24
 
 
+def watch_calls(row):
+    """Physical request groups, independent of role, price tier and valuation."""
+    groups = {}
+    for part in row.cost_parts:
+        key = (part.provider_id or "Unknown provider", part.model_id or "Unknown model", part.effort or "Unknown")
+        groups.setdefault(key, []).append(part)
+    lines = []
+    for (provider, model, effort), parts in list(groups.items())[:MAX_PARTS]:
+        evidence = tuple(evidence_record(value) for value in bounded_evidence(
+            value for part in parts for value in part.effort_evidence))
+        effort = evidence_help([dict(value.fields) for value in evidence],
+            value_cell=True, explicit=effort) if evidence else effort
+        count = sum(part.calls for part in parts)
+        lines.append(f"{provider}/{model} ({effort.replace(chr(10), ' ')}): {count} calls")
+    if len(groups) > MAX_PARTS:
+        lines.append("Additional request groups omitted; partial details.")
+    observed = sum(part.calls for part in row.cost_parts)
+    missing = any(agent.state not in {"usage-observed", "not-executed"} for agent in row.agent_coverage)
+    if observed != row.calls or missing or row.linked_agent_count and not row.cost_parts:
+        lines.append("Unknown/unattributed requests: partial model/effort evidence.")
+    return "\n".join(lines) or "Model/effort request details unavailable."
+
+
 def grouped_parts(parts):
     """Sum unrounded source-owned parts before bounding the exported groups."""
     groups = {}

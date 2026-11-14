@@ -35,12 +35,13 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
        assert.equal(item.decorative,'true');assert.equal(item.focusable,-1);
       const expected=item===row&&cls?value[cls.replace('mini-','')]:value.normal;
        assert.equal(item.color,expected);
-       item.values.forEach((color,index)=>assert.equal(color,index===4&&!(item===row&&cls==='mini-running')?
-         (item.exceeded?value.error:value.normal):expected,
-         'Running colors all five cells; non-running Ctx retains its independent policy'));
+        item.values.forEach((color,index)=>assert.equal(color,index===4&&!(item===row&&cls)?
+          (item.exceeded?value.error:value.normal):expected,
+          'Verified running/success/error colors all five cells; neutral history Ctx keeps its independent policy'));
     }
     assert.ok(value.fullHistory.every(cls=>cls===''),'Full Watch history stays neutral');
-    if(cls==='mini-running'||cls==='mini-success')assert.deepEqual(value.fullActive,[cls.replace('mini-','watch-')]);
+     assert.deepEqual(value.fullActive,cls==='mini-running'?['watch-running']:[],
+       'Full Watch renders positively running prompts only');
     return value;
   };
   for(const [theme,color] of [['classic','light'],['classic','dark'],['web','light'],['web','dark']]) {

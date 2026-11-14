@@ -150,7 +150,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const target=rows()[0].children[3].children[0];
     assert.equal(target.className,'mini-cost-value help-value');assert.equal(target.tabIndex,0);
     assert.equal(target.attributes.title,undefined);assert.ok(target.events.focus&&target.events.pointerenter);
-      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: 0\n\nDuration: N/A');
+      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: 0\n\nDuration: Loading…');
   }
   // Source-corrected whole-session subtotals never replace the representative cost.
   const partial=card('subtotal',500,true),summary=partial.session_summary;
@@ -179,9 +179,10 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     summary.cost=cost;summary.state=state;show([partial],[]);
     assert.equal(rows()[0].children[3].textContent,expected);
   }
-  // Full Watch keeps its independent per-prompt rows and certified five history cards.
+  // Full Watch is running-only; Mini's five historical rows remain independent.
   show(saved.active_cards,history);context.fullInput=input;context.fullParent=view.el('div');context.fullState={connection:'Live connected.'};
   vm.runInContext('ReportView.renderLive(fullParent,fullInput,fullState)',context);
-  assert.equal(context.fullState.watch.history.children.length,5);
+  assert.equal(context.fullState.watch.history,undefined);
+  assert.equal(view.promptRows.size,5);
   input.view=saved;controller.update(input);
 };

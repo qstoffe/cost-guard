@@ -137,9 +137,13 @@ module.exports = async (evaluate, command, session) => {
   await command('Input.dispatchMouseEvent', {type:'mousePressed',...position,button:'left',clickCount:1}, session);
   await command('Input.dispatchMouseEvent', {type:'mouseReleased',...position,button:'left',clickCount:1}, session);
   assert.equal(await evaluate(`[...state.watch.cards.values()].find(c=>c.value.session_id==='root').running.open`), true);
+  const touchPosition=await evaluate(`(()=>{
+    const n=[...state.watch.cards.values()].find(c=>c.value.session_id==='root').runningDetail.summary;
+    n.scrollIntoView();const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await command('Emulation.setTouchEmulationEnabled', {enabled:true}, session);
-  await command('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[position]}, session);
+  await command('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[touchPosition]}, session);
   await command('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]}, session);
+  await command('Runtime.evaluate',{expression:'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',awaitPromise:true},session);
   assert.equal(await evaluate(`[...state.watch.cards.values()].find(c=>c.value.session_id==='root').running.open`), false);
   await command('Emulation.setTouchEmulationEnabled', {enabled:false}, session);
   assert.equal(await evaluate(`(() => {

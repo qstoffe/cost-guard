@@ -5,7 +5,7 @@ function stationaryScenarios(mini,owner,event) {
     [mini,'.mini-accounts .help-value'],[mini,'.mini-activity'],
     [mini,'td:nth-child(3) .mini-cost-value'],[mini,'td:nth-child(4) .mini-cost-value'],
     [mini,'.mini-context-exceeded'],[mini,'.mini-summary'],
-    [owner,'.watch-subscription .metric-value > .help-value'],
+    [owner,'.watch-view .mini-accounts .help-value'],
     [owner,'.watch-active tbody td:first-child .help-value'],
     [owner,'.watch-active tbody td:nth-child(6) .help-value'],
     [owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
@@ -150,7 +150,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     const state=await evaluate(owner,`(()=>{const w=miniWatch.window,v=miniWatch.view;return {
       rows:v.promptRows.size,columns:v.body.parentNode.tHead.rows[0].cells.length,
       overflow:v.doc.documentElement.scrollWidth>w.innerWidth+1,
-      size:[w.outerWidth,w.outerHeight],accounts:v.lines.size};})()`);
+      size:[w.outerWidth,w.outerHeight],accounts:v.compactAccounts.lines.size};})()`);
     assert.deepEqual(state.size,size,'Live does not resize native PiP');
     assert.equal(state.overflow,false);assert.equal(state.columns,5);assert.equal(state.accounts,6);
     layouts.push({case:'native-density-125-percent',...state});

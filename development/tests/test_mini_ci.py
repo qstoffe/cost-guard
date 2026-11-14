@@ -25,7 +25,7 @@ console.log(JSON.stringify(['pull_request','push','workflow_dispatch',null].map(
 
         pull, push, full, unknown = json.loads(result.stdout)
         expected = [["pip", ".mini-accounts .help-value"],
-                    ["watch", ".watch-subscription .metric-value > .help-value"]]
+                    ["watch", ".watch-view .mini-accounts .help-value"]]
         self.assertEqual(expected, pull)
         self.assertEqual(expected, push)
         self.assertEqual(expected, unknown)

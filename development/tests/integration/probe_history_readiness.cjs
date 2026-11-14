@@ -10,13 +10,14 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
     if (await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId)) pip=attached.sessionId;
   }
   assert.ok(pip);
-  await evaluate(`document.querySelector('.watch-earlier').open=true`);
+  assert.equal(await evaluate(`document.querySelector('.watch-earlier')`),null);
   const ax = async session => (await command('Accessibility.getFullAXTree',{},session)).nodes
     .filter(node=>!node.ignored).map(node=>node.name?.value||'').join('\n');
   const loading = async () => {
     assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
     assert.equal(await evaluate(`[...miniWatch.view.promptRows.keys()].filter(id=>id.startsWith('proof-')).length`),0);
-    for (const session of [sessionId,pip]) {
+    assert.doesNotMatch(await ax(sessionId),/Loading earlier sessions|Latest sample/);
+    for (const session of [pip]) {
       const names = await ax(session); assert.match(names,/Loading earlier sessions…/);
       assert.doesNotMatch(names,/checked|4\/12/);
       assert.doesNotMatch(names,/Latest sample/);
@@ -25,18 +26,19 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
   await loading();
   const size = await evaluate('({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight})');
   await fixture('proof-observed'); await until(`miniWatch.view.promptRows.has('proof-4')`);
-  assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),5);
+  assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(r=>r.dataset.id).filter(id=>id?.startsWith('proof-'))`),['proof-1','proof-2','proof-3','proof-4']);
-  for (const session of [sessionId,pip]) assert.match(await ax(session),/Latest sample 4/);
+  assert.doesNotMatch(await ax(sessionId),/Latest sample/);
+  assert.match(await ax(pip),/Latest sample 4/);
   const miniNames=await ax(pip); assert.match(miniNames,/Activity/); assert.doesNotMatch(miniNames,/Latest sample 0/);
   for (const state of ['refreshing','unavailable']) {
     await fixture('proof-'+state); await until(`liveValue.view.history_state==='${state}'`);
-    assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),5);
+    assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
     for (const session of [sessionId,pip]) assert.doesNotMatch(await ax(session),/Previously verified sessions|Loading earlier sessions|checking for changes|Unable to verify latest sessions/);
   }
   assert.deepEqual(await evaluate('({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight})'),size,
     'background proof publications never resize the popup');
   await fixture('proof-switch'); await until(`liveValue.view.history_scope==='other-source'`); await loading();
   await close();
-  checks.push('Actual Full/Mini DOM and accessibility: initial loading without counters, Full five/Mini four fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
+  checks.push('Actual Watch/Mini DOM and accessibility: no Web history, Mini loading without counters/four fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
 };

@@ -22,7 +22,7 @@ Private development access is not required to build, test or run Cost Guard.
 
 ## Quick start
 
-Use **current `main`** (v81.57, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.58, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.57 (2026-11-14):** Mini Watch terminal rows color all five values consistently. Web Models uses fixed 2/96/1/1 reference weights without prompt sampling, with clearer tier/promotion help and two external coding-benchmark links. Actual history, Token Mix, Watch and billing are unchanged.
+**v81.58 (2026-11-14):** Web Watch focuses on running prompts, with a top daily/Mini-toggle band and shared compact subscriptions. Live token mix, context delta and verified tool details remain coherent through refresh; Mini Total help shows whole-session execution duration. Unsorted Web headers no longer show neutral arrows. Sessions history, native accounting and Mini's independent history/sizing remain unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

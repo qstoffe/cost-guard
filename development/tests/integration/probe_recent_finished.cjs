@@ -7,8 +7,7 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   const pending = async () => {
     assert.equal(await evaluate(`liveValue.view.history_state`),'loading');
     assert.equal(await evaluate(`liveValue.view.history_epoch`),0);
-    assert.equal(await evaluate(`document.querySelector('.watch-history').textContent.includes('Loading earlier sessions…')`),
-      await evaluate(`!document.querySelector('.watch-history article')`));
+    assert.equal(await evaluate(`document.querySelector('.watch-history')`),null);
   };
   await pending();
   let dimensions = await evaluate(`[miniWatch.window.outerWidth,miniWatch.window.outerHeight]`);
@@ -16,7 +15,7 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   for(let index=5000;index<5020;index++) {
     const began=performance.now(),result=await fixture(`recent-finish-${index}-1`);
     const published=performance.now();
-    await until(`miniWatch.view.promptRows.has('root-${index}') && document.querySelector('.watch-history article[data-session="root-${index}"]')`);
+    await until(`miniWatch.view.promptRows.has('root-${index}')`);
     await evaluate(`new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))`);
     const painted=performance.now();
     latency.push({source_to_publication_ack_ms:published-began,publication_ack_to_both_painted_ms:painted-published,total_ms:painted-began});
@@ -35,7 +34,8 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   await until(`!document.querySelector('.watch-view')`);
   assert.equal(await evaluate(`miniWatch.view.promptRows.has('root-5019')`),true);
   await evaluate(`location.hash='#/watch'`);
-  await until(`!!document.querySelector('.watch-history article[data-session="root-5019"]')`);
+  await until(`!!document.querySelector('.watch-view')`);
+  assert.equal(await evaluate(`document.querySelector('.watch-history')`),null);
   await evaluate(`miniWatch.window.dispatchEvent(new Event('blur'));miniWatch.render()`);
   assert.equal(await evaluate(`miniWatch.view.promptRows.size`),5);
   // Same-instance HTTP resync supplies the identical detached recent population.
@@ -66,15 +66,13 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   assert.equal(await evaluate(`miniWatch.view.promptRows.size`),5);
   await fixture('recent-finish-5019-2');
   await until(`miniWatch.view.promptRows.get('root-5019')?.getAttribute('aria-label')?.includes('Prompt 2')`);
-  await evaluate(`window.recentFull=document.querySelector('.watch-history article[data-session="root-5019"]');
-    window.recentMini=miniWatch.view.promptRows.get('root-5019');
-    document.querySelector('.watch-earlier').open=true;
-    recentFull.querySelector('h3 a').focus({preventScroll:true});window.recentFocus=document.activeElement;`);
+  await evaluate(`window.recentMini=miniWatch.view.promptRows.get('root-5019');
+    recentMini.cells[1].querySelector('.help-value').focus({preventScroll:true});
+    window.recentFocus=miniWatch.view.doc.activeElement;`);
   await fixture('recent-converge');
   await until(`liveValue.view.history_state==='observed' && liveValue.view.recent_finished_cards.length===0`);
-  assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),5);
-  assert.equal(await evaluate(`recentFull===document.querySelector('.watch-history article[data-session="root-5019"]') && recentMini===miniWatch.view.promptRows.get('root-5019') && document.activeElement===recentFocus`),true);
-  assert.equal(await evaluate(`document.querySelector('.watch-history').textContent.includes('Loading earlier sessions')`),false);
+  assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
+  assert.equal(await evaluate(`recentMini===miniWatch.view.promptRows.get('root-5019') && miniWatch.view.doc.activeElement===recentFocus`),true);
   assert.deepEqual(await evaluate(`[miniWatch.window.outerWidth,miniWatch.window.outerHeight]`),dimensions);
   await close();await open();
   assert.equal(await evaluate(`miniWatch.view.promptRows.size`),5);
@@ -84,6 +82,6 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   }));
   evidence.recentFinished={samples:latency.length,stages:summary(stages),transport_and_paint:summary(latency),
     clockQualification:'Synthetic source duration 300ms; wall-clock stage/transport/paint measurements are separate, not private incident latency.'};
-  checks.push('5,000 cold roots: 20 never-running source-confirmed prompts in Full/PiP before historical proof; five-slot cap, repeated session, keyed convergence/focus, early/late reopen, route away/back, blur, headless owner minimization, offline/resync, theme/unit change, no passive resize');
+  checks.push('5,000 cold roots: 20 never-running source-confirmed prompts in Mini before historical proof, no Web history; five-slot cap, repeated session, keyed convergence/focus, early/late reopen, route away/back, blur, headless owner minimization, offline/resync, theme/unit change, no passive resize');
   await close();
 };

@@ -85,7 +85,14 @@ class V1WebWatchTests(unittest.TestCase):
                                 self.assertEqual(scenario.now - 10_000, web_row.prompt.duration_ms)
                             else:
                                 self.assertEqual(cli_row.prompt.duration_ms, web_row.prompt.duration_ms)
-                            self.assertEqual(cli_row.prompt, replace(web_row.prompt, duration_ms=cli_row.prompt.duration_ms))
+                            self.assertEqual(cli_row.prompt, replace(web_row.prompt,
+                                duration_ms=cli_row.prompt.duration_ms,
+                                watch_delta_context_tokens=cli_row.prompt.watch_delta_context_tokens))
+                            if web_row.prompt.in_progress:
+                                context = card.session_context
+                                if context.owner_id == web_row.prompt.event_id and context.tokens is not None and web_row.prompt.incoming_context_tokens is not None:
+                                    self.assertEqual(context.tokens - web_row.prompt.incoming_context_tokens,
+                                        web_row.prompt.watch_delta_context_tokens)
                             # Rich bounded invocation help is deliberately Web-only;
                             # shared counts/outcomes/running timing remain identical.
                             if cli_row.tool is None:

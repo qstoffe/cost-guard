@@ -309,8 +309,8 @@ const MiniWatch = (() => {
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Session activity');
       this.body = this.table(this.prompts);
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5);
-      this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
-      this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
+      this.compactAccounts = new AccountCards.CompactView(doc);
+      this.accounts = this.compactAccounts.root;
       this.fitSize = mount === doc.body ? new FitSize(this) : null;
       this.root.append(top, this.health, this.prompts, this.accounts); mount.replaceChildren(this.root);
       if (mount === doc.body) doc.defaultView.addEventListener('resize', () => boundTable(this, this.root));
@@ -370,7 +370,9 @@ const MiniWatch = (() => {
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
       row.costHelp = this.promptDetails(item, highlight);
       const cost = card.session_summary?.cost;
-      row.totalCostHelp = this.costGroups(cost, true) + '\n\nDuration: ' + ReportView.display(cost, 'duration_ms');
+      const duration = card.session_summary?.duration_ms;
+      row.totalCostHelp = this.costGroups(cost, true) + '\n\nDuration: ' +
+        (Number.isFinite(duration) ? ReportView.display(card.session_summary, 'duration_ms') : 'Loading…');
       const source = card.session_summary?.context, warning = source?.warning;
       const exceeded = warning?.severity === 'exceeded' && source.context_state === 'ready-current' &&
         Number.isFinite(source.watch_next_context_tokens) && warning.guidance_state === 'ready';
@@ -393,21 +395,10 @@ const MiniWatch = (() => {
       row.children[3].children[0].setAttribute('aria-label', `Whole-session reference CCost: ${total}`);
     }
     costGroups(value, session = false) {
-      const models = ReportView.display(value, 'mini_cost_models');
-      const amounts = ReportView.display(value, 'mini_cost_amounts');
-      if (!Array.isArray(models) || !Array.isArray(amounts)) {
-        const label = session ? 'Session Model 1' : 'Main Model';
-        return `${label}: N/A — N/A\n${label} CCost: ${ReportView.display(null, 'ccost')}`;
-      }
-      return models.map(([label, model], index) =>
-        `${label}: ${model}\n${label} CCost: ${amounts[index] ?? ReportView.display(null, 'ccost')}`).join('\n\n');
+      return WatchView.costGroups(value, session);
     }
     promptDetails(item, highlight) {
-      const prompt = item?.prompt;
-      const start = (prompt?.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`) +
-        '\n' + this.costGroups(prompt) + '\n\nDuration: ';
-      const duration = ReportView.display(item, 'watch_duration_ms');
-      return highlight && duration !== 'N/A' ? ContextHelp.runningDuration(start, duration, '') : start + duration;
+      return WatchView.promptDetails(item, highlight);
     }
     update(publication, health, overdue, observations, now) {
       const view = observations.snapshot(now);
@@ -481,44 +472,7 @@ const MiniWatch = (() => {
       if (this.body.rows) boundTable(this, this.root);
     }
     drawAccounts(view) {
-      const text = ReportView.text, display = ReportView.display;
-      const accounts = view?.accounts?.accounts;
-      const wanted = [];
-      for (const item of accounts || []) {
-        const obs = item.observation, primary = item.primary;
-        const key = JSON.stringify([obs.provider_id, obs.id]);
-        let line = this.lines.get(key);
-        if (!line) {
-          line = this.el('li');
-          const label = this.el('div'); label.append(this.el('span'));
-          ContextHelp.value(label.children[0], () => line.helpText || '');
-          line.append(label, this.el('progress')); this.lines.set(key, line);
-        }
-        const quota = ReportView.quotaView(primary.quota, primary);
-        const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
-        const amount = display(primary.quota, 'ccost_' + quota.mode);
-        const warning = primary.restricted ? ' · provider restriction' : '';
-        const period = ` (${amount})`;
-        const capacity = display(primary.quota, 'capacity_amount');
-        line.helpText = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${display(primary, 'mini_reset')}`;
-        const notes = [obs.has_warning && 'Provider warning',
-          ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
-        const note = notes.filter(Boolean).join(' · ');
-        text(line.children[0].children[0], `${obs.label} · ${used}${period}${warning}${note ? ' · ' + note : ''}`);
-        ContextHelp.refresh(line);
-        line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
-        const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;
-        bar.max = 1; bar.value = quota.fraction ?? 0;
-        bar.className = quota.exhausted && !bar.hidden ? 'mini-exhausted' : '';
-        bar.setAttribute('aria-label', obs.label + ' · ' + primary.quota.label + ' ' + quota.mode); bar.setAttribute('aria-valuetext', used + warning + (quota.exhausted ? ' · exhausted' : ''));
-        wanted.push(line);
-      }
-      if (!wanted.length) {
-        if (!this.empty) this.empty = this.doc.createElement('li');
-        text(this.empty, accounts ? 'No configured subscriptions' : 'Acquiring subscriptions…'); wanted.push(this.empty);
-      }
-      const keep = new Set(wanted); reconcile(this.accounts, wanted);
-      for (const [key, line] of this.lines) if (!keep.has(line)) this.lines.delete(key);
+      this.compactAccounts.update(view);
     }
   }
   class Controller {
@@ -531,7 +485,7 @@ const MiniWatch = (() => {
       this.appearance = owner.matchMedia('(prefers-color-scheme: dark)');
       this.themeChanged = () => this.syncTheme(); this.themeProperties = [];
       this.reason = unavailable(owner);
-      this.measure = this.reason ? null : measureFactory();
+      this.measure = measureFactory();
       this.measure?.loaded?.then(() => this.sync());
       button.addEventListener('click', () => this.toggle());
       owner.addEventListener('pagehide', () => { this.ended = true; this.close(); this.measure?.close(); });
@@ -692,6 +646,9 @@ const MiniWatch = (() => {
       const now = Date.now();
       this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
     }
+    defaultContentWidth() {
+      return this.measure?.ready ? this.measure.defaultContentWidth?.() : null;
+    }
   }
   // Styles are loaded before enabling the opener button; no await or forbidden
   // post-open resize is needed in the activation handler. Shadow isolation leaves
@@ -713,6 +670,10 @@ const MiniWatch = (() => {
         link.addEventListener('error', () => resolve(false), {once:true}); shadow.append(link);
       }))).then(values => { this.ready = values.every(Boolean); });
     }
+    defaultContentWidth() {
+      return Math.max(headerWidth(this.view, true),
+        tableWidth(this.view) + scrollbarWidth(this.view)) + 8;
+    }
     read(controller) {
       const owner = this.owner, view = this.view, now = Date.now();
       view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
@@ -727,9 +688,8 @@ const MiniWatch = (() => {
       // A stable, measured table scrollbar gutter prevents extra rows from stealing
       // header space. Eight CSS pixels cover focus/rounding, not a fixed window target.
       // Remember keeps its first request and browser-owned bounds, without this reserve.
-      const gutter = controller.size === 'remember-last' ? 0 : scrollbarWidth(view);
       const requested = controller.size === 'remember-last' ? 650 - frameWidth :
-        Math.ceil((Math.max(headerWidth(view, true), tableWidth(view) + gutter) + horizontal + 8) * scale);
+        Math.ceil((this.defaultContentWidth() + horizontal) * scale);
       const width = Math.max(1, Math.min(requested, owner.screen?.availWidth > 0 ? owner.screen.availWidth - frameWidth : requested));
       const contentWidth = width / scale - horizontal;
       const height = Math.ceil((contentHeight(view, contentWidth) + padding + 6) * scale);

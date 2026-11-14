@@ -1,6 +1,39 @@
 // Full rendered DOM over Python-produced, synthetic source-shaped publications.
 const assert = require('node:assert/strict');
 module.exports = async evaluate => {
+  const refresh = await evaluate(`(() => {
+    const saved=structuredClone(INPUT), render=()=>ReportView.renderLive(document.getElementById('result'),INPUT,state);
+    INPUT.view=structuredClone(FRESH_REFRESH[0]);render();
+    const card=[...state.watch.cards.values()][0], job=[...card.runningDetail.jobs.values()][0];
+    const background=[...card.backgroundDetail.jobs.values()][0];
+    const group=card.tools.rows.get(JSON.stringify(['read','failed'])),failure=[...group.jobs.values()][0];
+    card.running.open=job.node.open=true;
+    card.background.open=background.node.open=card.tools.node.open=group.node.open=failure.node.open=true;
+    const backgroundText=background.input.textContent,failureText=failure.input.textContent;
+    const selection=getSelection();selection.selectAllChildren(job.input);
+    // A single call intentionally hides its redundant inner summary while open.
+    const focusTarget=card.runningDetail.summary;focusTarget.focus({preventScroll:true});
+    if(document.activeElement!==focusTarget) throw new Error('Running disclosure did not receive initial focus');
+    const anchor=selection.anchorNode, text=job.input.textContent;
+    let stable=true, elapsed=card.value.rows[0].tool.running_ms;const checks=[];
+    for(const frame of FRESH_REFRESH.slice(1)) {
+      INPUT.view=structuredClone(frame);render();
+      const check={text:job.input.textContent===text,open:job.node.open,parent:card.running.open,
+        focus:document.activeElement===focusTarget,selection:selection.anchorNode===anchor,
+        identity:card.runningDetail.jobs.get(job.identity)===job,
+        background:background.input.textContent===backgroundText && background.node.open && card.background.open &&
+          card.backgroundDetail.jobs.get(background.identity)===background,
+        failure:failure.input.textContent===failureText && failure.node.open && group.node.open &&
+          group.jobs.get(failure.identity)===failure,
+        clock:card.value.rows[0].tool.running_ms>elapsed};
+      checks.push(check);stable &&= Object.values(check).every(Boolean);
+      elapsed=card.value.rows[0].tool.running_ms;
+    }
+    selection.removeAllRanges();focusTarget.blur();
+    Object.assign(INPUT,saved);render();return {stable,text,checks};
+  })()`);
+  assert.equal(refresh.stable,true,JSON.stringify(refresh.checks));
+  assert.match(refresh.text,/python safe.py/);
   const facts = await evaluate(`(() => {
     const saved=structuredClone(INPUT), render=()=>ReportView.renderLive(document.getElementById('result'), INPUT, state);
     INPUT.view=structuredClone(DISCLOSURES[0]); render();

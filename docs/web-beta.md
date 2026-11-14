@@ -120,8 +120,8 @@ check. Keyboard/tap help remains an alternative. Physical desktop prevalence is
 unverified; [the follow-up and evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
 are tracked separately from the orphan-prevention fix.
 
-Full Watch’s **CCost** value help separates first-request incoming-context cost
-from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
+Full Watch’s **CCost** value help shares Mini's prompt model/effort/cost/Duration
+structure. **Token Mix %** explains I/C/W/O token
 shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. Numeric CCost remains plain even with partial pricing/data.
 Unavailable CCost amounts display selected-unit zero, not proof of free usage.
@@ -142,17 +142,12 @@ unit changes. Positive partial subtotals remain available. Initial/unpriced amou
 show zero; qualified same-scope values survive incomplete refresh until a supported
 replacement arrives, including genuine zero. Daily amounts gain no new warning.
 
-Hover/focus the **CCost value** in either Watch table for Input, Cached input,
-Cache write, Output and Subtotal, grouped into **Main prompt** and individual
-**Subagent N** entries, including nested agents. Each agent retains its own
-provider/model, effort, Calls and subtotal even when siblings share a model.
-Multiple own-request model/effort/tier groups retain an agent total; descendants
-are separate contributors, never included twice. A **Number of prompts** bullet
-counts distinct canonical child prompts, not agents or requests. Missing boundaries
-show N/A or an observed lower bound. Categories are reference-cost contributions,
-not token percentages. Unknown category amounts display zero and omitted groups retain their
-known cost/call coverage. **Calls** uses the same groups for physical model requests,
-not tools. Hover, focus or tap **Model** for recorded linked-agent models and effort,
+Hover/focus/tap the **CCost value** in Watch or Mini for supported Main Model/Sub Agent
+model, effort and reference-cost groups, followed by prompt Duration. Recursive
+children sharing a combination are combined without double counting. Missing usage
+and bounded/partial coverage remain qualified. **Calls** value help combines physical
+requests by provider/model/effort across main and linked-agent roles, with no prices,
+tiers or redundant total. Hover, focus or tap **Model** for recorded linked-agent models and effort,
 even when main and all agents share one model. Unrecorded usage remains qualified;
 multi-model main-only work also retains help without a participation star.
 Missing child history, pending acquisition and executed requests with missing
@@ -161,8 +156,11 @@ Mini groups prompt costs by supported provider/model/effort, combining children 
 grandchildren that share a combination. Model and CCost lines are consecutive, with
 one blank line between groups and Duration at the bottom. Total uses Session Model
 groups for all root work, separately from Sub Agent groups across the entire tree,
-without a Prompt heading. A session duration unsupported by the cost observation is
-N/A, never the focal prompt's duration. Only a genuinely running prompt's Duration
+without a Prompt heading. Total's Duration comes independently from the same
+overlap/dedup-aware whole-session prompt/compaction execution intervals as Sessions.
+It reuses acquired evidence through ticks/reopen, updates on new qualified activity
+and clears on source/authority loss. Missing duration shows Loading, never the
+focal prompt's age or an invented cost duration. Only a genuinely running prompt's Duration
 value is yellow. Sessions/session-detail totals retain their own richer help.
 Both Credits and USD help is prepared by the server;
 independently rounded lines can differ from the displayed total's rounded sum.
@@ -807,7 +805,7 @@ Sessions is the historical navigation entry point. The former `/#/reports` page 
 
 ### Live Accounts
 
-`/#/accounts` shows only the **same subscription-card grid as the bottom of Full Watch**:
+`/#/accounts` retains the **full subscription-card grid**, unlike Watch's compact list:
 account title, CCost Today, native primary percentage and period CCost, Capacity, bar,
 reset/remaining pace, secondary quotas and truthful provider/freshness warnings. It has
 no report title, Refresh/Cancel, snapshot/search, billing panel or observation disclosure.
@@ -815,7 +813,7 @@ Shared navigation and actionable authentication/source/host notices remain avail
 Native amounts and attribution live in the existing focus/tap/600ms-hover help, not a
 second report. CLI and Diagnostics keep their detailed account layouts.
 
-Known provider account headings on both Accounts and Full Watch open the provider's
+Known provider account headings on Accounts open the provider's
 usage/settings or billing page in a new tab. A small outline chain icon before the name
 is part of that same link, not a second button. Hover underlines the heading text; keyboard
 focus is visible. The provider uses your browser's signed-in account/workspace, not Cost
@@ -840,7 +838,7 @@ acquisition or client-side valuation. [Verification and limits](https://github.c
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
-| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; one-prompt cards, five historical sessions and independent daily/account observations |
+| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; running-only prompt cards, top daily/Mini band and compact subscriptions; history remains in Sessions/Mini |
 | Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Fixed statistical 2/96/1/1 reference ratios even without historical prompts; unknown rates retained. No prompt sampling, account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Today-first eight-column catalog including Effort/CTX, 25 sessions/page, period-scoped server sorting and stable older-page windows; available archived roots included |
@@ -1043,21 +1041,21 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 [Built-in browser, deterministic and real-source verification](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/historical-verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
-Watch gives each prompt/session card a subtle rounded frame. **Earlier Sessions** starts collapsed: five eligible
-distinct sessions selected by newest supported prompt finish, then displayed oldest finished first,
-newest finished last, one exact latest-finished prompt each with deterministic ID ties. Unknown-ended
-history fills spare slots before known finishes, ordered by stable identity; it never displaces a known finish. It updates
-while collapsed, without an age/startup cutoff, excluding active/recent sessions before
-limiting. Expanded history is unframed in normal page flow, with one theme-aware divider
-before running cards and no nested vertical scrolling or height cap. Collapsed/empty
-history has no divider. The active list has no cap/filter/pager; concurrent prompts
-get separate cards, oldest focal first, with one row even during terminal grace.
+Web Watch has a top **CCost Today / prompts** band with the one **Mini Watch: On/Off**
+control right aligned (wrapping on narrow screens), followed by positively running
+prompt cards and compact subscription summaries. It has no Earlier Sessions section,
+historical cards or terminal-grace rows. Finished/aborted/failed prompts leave this
+page under authoritative lifecycle; Sessions retains full history. Uncertain
+execution is reported honestly, not relabelled running. The active list has no
+cap/filter/pager; concurrent prompts get separate subtly framed cards, oldest focal first.
+Mini independently fills its five session slots with supported history; removing
+Web's presentation does not disable source retention, recent finishes or Mini demand.
 
 Global Earlier membership is published only after revision-matched complete evidence covers
 every potentially displacing root. Separately, a bounded recent lane admits exact root
 prompts whose source-confirmed success/error/abort finish is on or after the Live
 engine's start, including prompts completed entirely between polls and pre-existing
-prompts that finish afterward. These verified cards appear in both Watch and Mini
+prompts that finish afterward. These verified finished cards remain available to Mini
 without an acquisition-status node among usable cards. **Loading earlier sessions…**
 is reserved for a genuinely cold section; internal global proof may continue silently.
 Catalog timestamps and event hints only prioritize inspection, never certify completion.
@@ -1087,7 +1085,7 @@ Once membership is certified, supported names, finish times, model/effort and co
 appear without waiting for the independent whole-session **Total CCost** or shared
 numeric price-comparison sample. Missing initial cost displays selected-unit zero; the known
 context and threshold warning remain usable while price comparison is pending or
-retrying. Enrichment updates the same Full/Mini winners and preserves their original
+retrying. Enrichment updates the same Mini winners and preserves their original
 proof epoch/time. Existing qualified values remain visible during ordinary refresh.
 No cheap metadata-only global-winner certificate is assumed or speculative name list
 presented as final history. [Controlled and real-source evidence, tradeoffs and
@@ -1108,64 +1106,47 @@ qualified completed data, and their refresh cadence is not a live retry caption.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost, Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
 the footer's Context remains the estimated next incoming context.
-Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
-**Finished**; Duration stays column 2. Both clocks show configured-timezone `HH:mm`,
-with full local date/time on hover/accessible focus; Finished includes the UTC offset
-for repeated DST hours. Unknown supported endings show **—**, never start plus duration
-or observation time. Prompt starts with
+Running keeps **Started**, start-ascending order and configured-timezone `HH:mm`,
+with full local date/time on hover/accessible focus. Prompt starts with
 its canonical session-local `#N`, never a visible-row index. Only preview text ellipsizes;
 the number stays visible, with no per-row preview question mark or full-text popup,
 and lifecycle state remains accessible on the row. Every header explains its metric
 on hover, keyboard focus or touch/click; Escape or leaving focus dismisses the explanation.
-Both prompt tables show **only total CCost** in the single **CCost** column.
-Hover, keyboard-focus or tap the exact value for **Incoming Context CCost (I)** and
-**Extra CCost (E)** before the existing rich model/subagent detail. I values the initial incoming context on the
-first attributed request; E covers the remaining canonical usage, including output,
-later requests and linked-child contributions. These are the CLI session report's
-existing diagnostics, not billing, quota usage or Token Mix's Input category. Raw
-I + E reconciles to the total when known; separately rounded Credits/USD values
-need not visually sum. All three use the selected Web unit and shared formatting.
-Numeric totals have no uncertainty prefix. Zero totals display just `0` or `$0.00`; a tiny positive
-amount may round to USD zero without proving either component is zero. The value
-tooltip shows zero for independently unavailable amounts with no prior qualified
-observation. Raw unknown flags remain intact; no browser subtraction or valuation is used.
-Report-owned evidence flags require first-request input/cache-read/
-cache-write counters for I, and every attributed request's four token categories for E.
-Full Watch can therefore withhold an unsupported component even when the existing CLI
-diagnostic uses normalized placeholders; raw costs and CLI behavior are unchanged.
-Wholly unavailable totals and sparse non-billed compaction amounts display zero.
-Accepted captures/SSE update the same prompt's total and paired help without
-browser valuation, polling or extra history scans. Mini Watch remains total-only.
-That same Full Watch CCost value tooltip retains main prompt and distinct causally linked
-subagents, split by actual model/recorded effort, with Input, Cached input, Cache write
-and Output reference costs, subtotals and full prompt total. These are charged token
-categories, not the first-request I + E decomposition. Credits/USD use canonical
-unrounded request prices; rounded lines need not visibly sum. Unknown categories are
-omitted, partial pricing qualified and long detail bounded with an honest omitted subtotal.
+Watch's **CCost** column remains prompt-local; its value help now uses the shared
+Mini model/effort/cost groups and prompt Duration described above, not Incoming/Extra
+cost decomposition. Numeric totals, canonical unrounded prices and selected-unit
+zero fallback are unchanged; unknown flags and incomplete coverage remain explicit.
+The Duration header help is exactly **Time spent on this prompt.**
+For a comparable running prompt, **Δ Ctx = the matching footer's raw Next Context −
+that prompt's raw Ictx**, preserving signed negative/zero/positive values before
+compact formatting. Missing operands show **Loading…**. The join follows the same
+prompt/source/model/epoch through refresh and never crosses compaction, context
+invalidation or handoff to a different prompt. Historical/CLI deltas remain unchanged;
+a smaller temporary dispatch is not itself proof that the entire context shrank.
 Token Mix % is raw observed **Input / Cached input / Cache write / Output** token volume,
 not cost shares; reasoning is folded into Output. It uses canonical prompt-attributed
 physical requests, including child/model contributions, and CLI prompt rounding.
 Accepted captures update the cumulative mix at the existing cadence/SSE publication,
-not client ticks or intra-call streaming. Zero/partial/missing telemetry is `N/A` or
-`running`, never invented zero percentages. CLI reports and Web Watch use the same
+not client ticks or intra-call streaming. Missing initial running telemetry shows
+**Loading…**, never `running`. A qualified same-prompt/source/context-scope mix stays
+visible through benign pending refresh; newer evidence replaces it atomically.
+Corrections/withdrawal, changed source/identity/epoch or invalidation clear it.
+No invented zero percentages are used. CLI reports and Web Watch use the same
 coverage rule: every attributed call must report all four categories and their pooled
 total must be positive. Missing fields make the denominator unknown, not a known-token
-subset percentage. Completed rows show `N/A`; active rows without a supported share
-show `running`. The FR 000558 completed-partial parity exception is closed by FR 000564.
+subset percentage. Completed rows remain available in Sessions/Mini rather than Web Watch.
 A trailing **\*** on Model means positively linked subagents participated, even with
 the same model; a model switch alone gets no star. Conditional model help names actual
-models/efforts, and Calls help gives a supported main/subagent split. Ordinary cells
+models/efforts, and Calls help combines matching provider/model/effort request groups. Ordinary cells
 have no generic popup. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
 Tables use theme-aware body/header surfaces and edges inside each session's frame.
 
-Running focal rows and linked titles are yellow. Confirmed successful focal rows
-and their titles share the same semantic success green during existing terminal grace;
-Earlier titles return to neutral heading ink. Unknown outcomes never imply success,
-and resumed/concurrent prompts keep each card's own focal state.
-An **Unverified** focal remains visible for refresh, without yellow running ink,
-a success checkmark or an advancing Duration. The running summary stays uncertain
+Running focal rows and linked titles are yellow. Web removes terminal rows; Mini
+retains its existing success/error/grace/history presentation. Unknown outcomes never
+imply success, and resumed/concurrent prompts keep each card's own focal state.
+An **Unverified** focal is not shown as positively running. The running summary stays uncertain
 instead of asserting that nothing is executing. Missing/partial native status alone
 cannot establish this state; a later unavailable refresh does not prove a restart.
 Normal activity is gold/brown, failures independently red,
@@ -1202,9 +1183,11 @@ same-call revisions retain the user's expansion/selection while safely updating
 content. Per-call nodes survive 1→2→1 job transitions; newly added siblings do not
 inherit an unrelated expanded state. Different physical calls and lost live evidence
 clear stale input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
-During explicitly pending same-source projections, the existing controls and their
-open/closed choices survive, but private input is cleared immediately and replaced
-by a temporary-unavailability note. Recovery updates the same surviving call nodes.
+Independently verified current-call evidence is not downgraded merely because unrelated
+historical accounting is partial. Benign refresh preserves sanitized safe input,
+open/closed choices, focus, selection and advancing clocks in the same physical-call nodes.
+Genuinely unverified pending projections still clear private input immediately and
+show a temporary-unavailability note. Recovery updates surviving call nodes.
 Fresh authoritative membership, revoked execution and source/prompt switches discard
 invalid child identities; this is not a last-good command cache.
 The compact **N failed / cancelled** count includes only evidenced, distinct tool
@@ -1231,7 +1214,7 @@ Calls, Skills and Running content is indented using logical inline-start spacing
 with deeper levels for individual failures and no narrow-screen overflow.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
-**CCost Today**, four pixels above subscriptions, shows current-local-day reference cost,
+**CCost Today**, in the top Watch band, shows current-local-day reference cost and
 initiating prompts. Daily Token Mix categories are not shown here; per-prompt cells
 and the dedicated Token Mix page retain them unchanged.
 It includes pre-Watch history, running requests and unassigned-account usage, not just
@@ -1246,8 +1229,7 @@ Source changes/minute fallback update retained history and publish cost/count/mi
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
-CCost Today label/value and prompt count each have scoped text help;
-there is no far-right question-mark cue or oversized summary hitbox.
+CCost Today label/value and prompt count have no tooltip or oversized summary hitbox.
 
 Retryable source-read failures retain observations quietly in Full Watch's tables,
 footers and daily area; meaningful freshness remains in the unchanged global
@@ -1263,8 +1245,15 @@ non-retryable/authentication failures have no grace. Daily failures request a re
 on the existing single history lane after five seconds rather than waiting a minute.
 Browser reconnect/offline/host-stop notices remain separate from source acquisition.
 
-Subscription cards align centered title bands, **CCost Today**, native primary usage
-and bars; body values stay left aligned. Full Watch divides a 448-pixel budget by
+Watch subscriptions use the same compact account label, selected Used/Remaining
+percentage, same-period CCost, native bar and exact Capacity/Next reset help as Mini.
+The left-aligned list can shrink with the viewport and is capped by the shared
+default Mini content-width measurement, never a resized PiP window's current width.
+It does not open PiP or own a second quota polling loop.
+
+Full subscription cards remain on **Accounts**, with centered title bands,
+**CCost Today**, native primary usage and bars; body values stay left aligned.
+Accounts divides a 448-pixel budget by
 effective display/page/pinch scale, leaving a rounding margin below the requested
 450-screen-pixel ceiling. Cards wrap without smaller text and narrow with the viewport.
 Headless Chrome raster checks cover the correction; native owner-desktop physical
@@ -1296,9 +1285,8 @@ comparison slot only beside a nonmonthly quota at that level. Missing quota tail
 empty grid cells, not phantom labels/bars/accessibility nodes. Wrapped rows align independently;
 lone/single-column cards stay compact. Known↔unknown changes update permanent text/help
 targets without replacing bars; period and membership changes recompute the slots.
-Watch and Accounts use the same full-size card contract, including
-ordered text, controls, help, warnings, percentages, reset and accessibility; future
-deliberate divergence requires explicit owner approval. Mini stays separately compact.
+Accounts retains its full-size card contract; Watch and Mini share the compact
+presenter, not Accounts' detailed capacity/pace layout.
 The bar is followed by a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. These two pace amounts divide this quota's unrounded
@@ -1327,13 +1315,13 @@ provider-promised allocation. Numeric ratio-derived Capacity shows a leading **~
 directly before the amount; verified directly comparable native allowances do not.
 Unknown/missing figures never get a marker. Provenance follows each quota across units
 and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
-changes CCost, not native units. Accounts shares Full Watch's identity-matched
-period costs and reference figures; Mini keeps one compact primary line with
+changes CCost, not native units. Accounts and Watch use identity-matched
+period costs and reference figures; Watch/Mini keep one compact primary line with
 **Capacity: value** then **Next reset: value** in its subscription-text help,
 followed only by useful numeric Remaining and concise exceptional statuses.
 Both facts belong only to the visible primary window, with canonical local reset/countdown,
 **Window not started** or honest unknowns. No secondary-quota or unrelated CCost prose
-is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts use
+is repeated there; warnings remain visible on the compact line. Accounts uses
 separate intrinsic help on Usage, period Capacity and Monthly Capacity. Usage explains
 the selected native Used/Remaining percentage, quantities, reset and restrictions—never
 reference Capacity mathematics. Period Capacity help formats the original raw
@@ -1364,7 +1352,7 @@ Unit switches and Live updates refresh the same
 bound help without fetching. Source-confirmed allowances, observed period Used, Today,
 prompt/session costs, native percentages/bars, billing and CLI formatting are unchanged.
 
-Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
+Accounts' slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire
 usage summary and fill red; any exhausted window adds a muted red tint to only the
 subscription header. Other windows, CCost and the card body remain unchanged.
@@ -1387,13 +1375,15 @@ estimated/approximate evidence and N/A for missing first-request evidence. Help 
 on hover, focus or touch/click; only the prompt preview ellipsizes, with horizontal pan
 for narrow tables.
 
-**Δ Ctx** uses the prompt's supported next estimate minus a comparable prior
+Historical/CLI **Δ Ctx** uses the prompt's supported next estimate minus a comparable prior
 session/compaction anchor, or its own evidenced incoming context. A first prompt is
 not a zero-baseline prompt: 100,000 incoming → 112,000 next means **+12k**, and exact
 zero means **0**. Running tool loops update from the latest supported root request.
 Complete retained historical pairs survive leaving current active history; this does
 not restore present continuation or warnings. Missing input/categories, incompatible
 models/rewrites and unexplained shrinks remain **N/A**, never fabricated zero.
+Running Web Watch instead uses its matching qualified footer minus raw prompt Ictx,
+including supported signed shrink; unsupported comparisons show Loading.
 
 Two lines directly below each table, before active activity, read
 **Context: 123k** then **Total CCost: 4582**, each with a space after its colon. Context is the canonical

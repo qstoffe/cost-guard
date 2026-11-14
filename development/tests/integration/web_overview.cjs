@@ -29,7 +29,7 @@ const relativeHelp = helpText(all(output, 'th')[2].children[0]);
 assert.ok(relativeHelp.includes('fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%'));
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
-assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative Price List Cost ↓', 'Release date ↕']);
+assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative Price List Cost ↓', 'Release date']);
 assert.equal(all(output, 'h3').length, 0, 'definitions belong to heading help, not cards');
 assert.equal(output.children[0].children[0].textContent, 'GitHub Reference Pricing(GitHub Copilot · View source)');
 assert.equal(output.children[0].children[1].className, 'model-tools', 'notices/filters precede table');
