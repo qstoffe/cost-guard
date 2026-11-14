@@ -18,6 +18,13 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000703 leaves canonical scalar acquisition/cache semantics unchanged.
+`application/session_catalog.py` retains only same-root pending display fields;
+current revision/context/effort qualification still gates fresh exact sort keys.
+Complete unknowns, zero, provenance changes, removal and rejected late results stay
+distinct. Browser retention never supplies accounting/export evidence.
+[App-wide inventory, tests and installation limits](../../journal/web/stable-refresh.md).
+
 FR000700: prompt detail preserves individual linked sessions, including nested
 agents, rather than collapsing same-model siblings. Application prepares bounded
 Full/compact Mini help in both units; session rows and root summaries expose main

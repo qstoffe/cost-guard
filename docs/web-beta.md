@@ -893,7 +893,7 @@ Most finite report tables show 50 rows/page from one immutable API result. Sessi
 
 **CTX** is estimated next incoming context in tokens for the root session, using the same canonical current-continuation estimator as Full Watch's session guidance and Mini's historical session Ctx. Active sessions use the latest supported root request/tool continuation (or an explicitly labeled provisional text estimate); completed and archived sessions use their still-valid current-epoch anchor, including later compaction. A prompt-local Full Watch value can intentionally differ. CTX is never a sum, a historical maximum or model capacity. Header help works with hover, keyboard focus and touch; the same button sorts the **whole selected period** by unrounded counts, with deterministic session-ID ties and supported unknowns last in both directions.
 
-`172k` is server-formatted; proven zero is `0`. `Loading…` means acquisition is pending, and `N/A` means no supported current anchor or incomplete source evidence (value help explains it). Retained same-revision values are muted and labeled in help/accessibility; a changed revision clears the old context until current evidence arrives. Source identity, tree revision, context epochs and scalar algorithm version qualify cached values. Partial acquisition cannot finalize a CTX sort as an unknown: bounded failures expose Retry/Cancel. Activity/Name and paging acquire only viewed rows; metric-sort interest acquires missing scalar keys only for eligible roots in that lease's period, with the existing four-root/two-second admission slice. Concurrent leases share a bounded union; an independent All time lease or host warming can separately require other roots. Old disposable scalar summaries rebuild lazily; unrelated caches remain reusable.
+`172k` is server-formatted; proven zero is `0`. `Loading…` means the field has no usable first observation; a complete authoritative unsupported result is `N/A`. Once known, same-session context stays visible across ordinary revision changes, partial acquisition and retries until a qualified replacement arrives. Retained values are muted and qualified in help/accessibility, not treated as fresh sort keys. Actual source/provenance changes, removal and authoritative invalidation still clear inappropriate values. Source identity, tree revision, context epochs and scalar algorithm version qualify cached values. Partial acquisition cannot finalize a CTX sort as an unknown: bounded failures expose Retry/Cancel. Activity/Name and paging acquire only viewed rows; metric-sort interest acquires missing scalar keys only for eligible roots in that lease's period, with the existing four-root/two-second admission slice. Concurrent leases share a bounded union; an independent All time lease or host warming can separately require other roots. Old disposable scalar summaries rebuild lazily; unrelated caches remain reusable.
 
 Sessions, Models and both 13-column Token Mix tables share Watch's compact surface-tone headers, full cell dividers and one thin rounded frame. Numeric values retain their readable minima; deliberate horizontal panning never creates an inner vertical scroller. Model filters/promotions/multisort and Token Mix's complete one-line names, independent column sorts and five-minute acquisition stay unchanged.
 
@@ -903,7 +903,7 @@ original proof expires after 15 seconds and source outages suppress the marker. 
 canonical terminal observation clears it independently of summary/pricing delays.
 Model, CCost, Prompts and Duration hydrate through the existing bounded index and active
 five-second browser cadence. Known values remain visible with retained/partial qualifications;
-only actual pending acquisition shows **Loading…**, not a definitive failure or unsupported
+only never-observed pending fields show **Loading…**, not a definitive failure or unsupported
 duration/model. The last measured execution duration is not extrapolated during idle gaps.
 Keyed cells, links and help targets remain connected during metric changes; selection/focus
 can defer reordering, but do not freeze live values.
@@ -987,12 +987,13 @@ every potentially displacing root. Separately, a bounded recent lane admits exac
 prompts whose source-confirmed success/error/abort finish is on or after the Live
 engine's start, including prompts completed entirely between polls and pre-existing
 prompts that finish afterward. These verified cards appear in both Watch and Mini
-alongside **Loading earlier sessions…** while the older population remains unverified.
+without an acquisition-status node among usable cards. **Loading earlier sessions…**
+is reserved for a genuinely cold section; internal global proof may continue silently.
 Catalog timestamps and event hints only prioritize inspection, never certify completion.
 Candidates survive terminal-grace expiry and ordinary refresh; canonical finish order,
 one representative per session and the existing five-slot protection apply. Final
 global proof atomically supersedes the overlay without restarting the visible cards.
-One source-scoped proof epoch carries the five/three population atomically; ordinary
+One source-scoped proof epoch carries qualified historical membership atomically; ordinary
 refresh retains qualified previously verified cards silently, with no appended footer,
 checked-root counter or accessible refresh announcement. Verified empty history stays
 **No earlier sessions** during revalidation. Computational duration never
@@ -1003,6 +1004,13 @@ recoverable failures retry without a manual Retry. Removal/resumption invalidate
 affected entries. Metadata is only an admission hint, not a finish-time proof; a
 continuously changing source may remain meaningfully unverified until coherent
 coverage is possible. Active prompts, verified post-start finishes, Today and subscriptions do not wait for history.
+
+Mini's unified session table uses running sessions first and fills remaining slots
+with finished sessions. Five real visible rows never acquire a sixth loading row,
+even when collecting more history remains useful. A completed population with only
+zero to four eligible rows stays completed through ordinary rechecks; only a
+genuinely new source/population without prior observation may load initially.
+[App-wide retention inventory and verification](../development/journal/web/stable-refresh.md).
 
 Once membership is certified, supported names, finish times, model/effort and context
 appear without waiting for the independent whole-session **Total CCost** or shared

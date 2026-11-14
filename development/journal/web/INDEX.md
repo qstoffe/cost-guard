@@ -63,6 +63,10 @@ Status: current
 - [Sessions CTX](sessions-context.md): canonical current-session context scalar,
   seven-key global sorting, epoch/cache invalidation, shared navigation/help and
   explicit synthetic versus bounded real-V2 coverage.
+- [App-wide stable refresh](stable-refresh.md): qualified field retention, Sessions
+  context churn, Mini five-row capacity and Full Earlier status precedence; complete
+  pending-surface inventory, deterministic/rendered/installation evidence and
+  explicitly separated verification failures and scoped exceptions.
 - [Shared live Accounts](accounts-live.md): one Watch/Accounts renderer and feed,
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 - [Subscription/Mini display polish](subscription-mini-polish.md): numeric capacity

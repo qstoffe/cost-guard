@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
+   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -57,6 +57,22 @@ async function main() {
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===${scope==='--effort-defaults'?5:2}`);
     await evaluate(owner,`location.hash='#/watch'`);
       await until(owner,`current?.watch?.cards.size>0`);
+      if(scope==='--promotion-help'||scope==='--promotion-isolation') {
+        try {
+          await require('./probe_promotion_help.cjs')({command,owner,checks,layouts,trace:true,
+            isolate:scope==='--promotion-isolation',stableTouch:['stable-touch','touch'].includes(replay),
+            input:['mouse','touch'].includes(replay)?replay:'mixed',
+            run:expression=>evaluate(owner,expression),ready:expression=>until(owner,expression)});
+        } finally {
+          await evaluate(owner,`connectionStatus('Authentication expired. Use a fresh launcher link.',{kind:'authorization_required',terminal:true,writable:false})`);
+          assert.equal(await evaluate(owner,`!document.getElementById('host-state').hidden && document.getElementById('host-state').textContent.includes('Authentication expired')`),true);
+          layouts.push({route:'terminal-authorization',actionable:true});
+        }
+        assert.deepEqual(errors,[]);
+        evidence={outcome:'PASS',browser:version.product,scope,checks,layouts,errors,
+          limitations:['Canonical synthetic Models fixture; headless native mixed input, not physical desktop proof.']};
+        return;
+      }
       if(scope==='--watch-shells') {
         await require('./probe_watch_jobs.cjs')({command,evaluate,until,owner,checks,layouts,output});
         assert.deepEqual(errors,[]);

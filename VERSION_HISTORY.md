@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.47 - 2026-11-14
+
+- Sessions keeps known same-session context/model/effort through ordinary revision changes and incomplete pending observations. Qualified new values replace directly, including zero; retained display fields cannot qualify a fresh global sort. Source changes, removal, authoritative unknowns and late-result rejection remain distinct.
+- Full Watch Earlier content no longer acquires loading status among retained cards during recent-finished overlays or history rechecks. Mini separates useful history demand from visible placeholder eligibility: five real rows cannot gain a sixth loading row, and completed smaller/empty populations remain stable.
+- Full/Mini share guarded context/session-total presentation retention. Automatic benchmark and CLI Watch refresh no longer adds operational Refreshing prose; genuine initial acquisition, explicit actions and actionable errors remain. The app-wide surface inventory and complementary regression/browser/installation evidence are recorded in the stable-refresh journal.
+
 ## v81.46 - 2026-11-14
 
 - Session exports suggest the observed session title plus `.json` in both Save As and browser downloads. Unsafe filename characters are removed, valid Unicode/spaces are preserved, long names are bounded and unusable/reserved titles fall back to the selected session ID. Trusted-click activation and strict ID-based transport validation remain unchanged.
