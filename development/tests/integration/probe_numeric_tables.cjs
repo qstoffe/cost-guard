@@ -106,7 +106,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         numericDetail.update({revision:'${unit}-${mode}',state:'observed',result:{observed_at_ms:Date.now(),
           source:{identity:'fixture-${mode}',generation:'v2'},
           view:liveValue.probe_ccost_unavailable['${mode}'].probe_detail}})`);
-      const cells=await evaluate(owner,`['.sessions-catalog tbody td:nth-child(5)',
+      const cells=await evaluate(owner,`['.sessions-catalog tbody td:nth-child(4)',
         '.session-detail tbody td:nth-child(4)','.session-detail tfoot td:nth-child(4)']
         .map(selector=>document.querySelector(selector).textContent)`);
       for(const text of cells) {
