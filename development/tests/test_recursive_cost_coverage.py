@@ -79,7 +79,7 @@ class RecursiveCostCoverageTests(unittest.TestCase):
                 help_text = display["cost_detail_help"]
                 for number in range(1, 6):
                     self.assertIn(f"Subagent {number} —", help_text)
-                self.assertIn("Sub Agent 1:", display["mini_cost_help"])
+                self.assertIn("Sub Agent 1", [label for label, _model in display["mini_cost_models"]])
                 self.assertNotIn("mini_cost_detail_help", display)
                 self.assertNotIn("ses_", help_text)
                 self.assertNotIn("Linked subagents participated", help_text)

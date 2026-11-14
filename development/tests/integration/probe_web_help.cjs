@@ -47,7 +47,7 @@ async function main() {
     await command('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:key==='Escape'?27:9},id);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:key==='Escape'?27:9},id);
   };
-  const checks=[],layouts=[]; let evidence={outcome:'FAIL'};
+  const checks=[],layouts=[]; let evidence={outcome:'FAIL'},phase='launch-fixture';
    const deadline=setTimeout(()=>{child.kill();server.kill();},scope==='--mini-tooltips'?900000:170000);
   try {
     const launch=JSON.parse((await lines.next()).value); // Never log bootstrap credentials.
@@ -57,6 +57,7 @@ async function main() {
     await command('Page.enable',{},owner);await command('Runtime.enable',{},owner);
      await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
      if(scope==='--mini-tooltips') {
+       phase='native-browser-zoom';
        await command('Page.navigate',{url:'chrome://settings/appearance'},owner);
        await until(owner,`typeof chrome.settingsPrivate?.setDefaultZoom==='function'`);
        await evaluate(owner,`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(1.25,resolve))`);
@@ -101,6 +102,7 @@ async function main() {
            'Headless DOM, input and AX evidence; not physical desktop or assistive-technology acceptance.']};
        console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
      }
+    phase='open-document-pip';
     await evaluate(owner,`miniWatch.toggle()`,true);
     assert.equal(await evaluate(owner,`!!miniWatch.window`),true);
     const targets=await command('Target.getTargets');
@@ -115,15 +117,22 @@ async function main() {
         if(scope==='--mini-tooltips') {
           const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');
             return JSON.parse((await lines.next()).value);};
+          phase='native-hover-watchdog';
           await require('./probe_help_watchdog.cjs')({command,evaluate,until,owner,mini,checks});
+          phase='native-help-lifecycle';
           await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+          phase='rendered-cost-values';
+          await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+          phase='rendered-mini-help';
           await require('./probe_mini_help.cjs')({command,pip:mini,checks,
             evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text),
             fixture});
           await fixture('running');
           await until(owner,`liveValue.view.active_cards.length===2`);
+          phase='rendered-duration';
           await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,
             evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
+          phase='real-stationary-hover';
           await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output});
          evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
            limitations:['Actual headless Chromium Document PiP with synthetic source-qualified DTOs.',
@@ -302,7 +311,13 @@ async function main() {
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope === '--watch-only' ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : scope === '--live-status' ? ['Live surfaces and cached-report routes only; synthetic Sessions catalog/detail are not configured in this host.'] : [])]};
   } catch (error) {
-    evidence={outcome:'FAIL',reason:error.message,checks,layouts};
+    const site=error.stack?.match(/(probe_[a-z_]+\.cjs:\d+:\d+)/)?.[1];
+    const scalar=value=>typeof value==='boolean'||typeof value==='number'?value:undefined;
+    const diagnostic={phase,site,code:error.code==='ERR_ASSERTION'?'assertion_failed':
+      error.message.startsWith('Condition not reached:')?'condition_not_reached':
+      error.message.startsWith('CDP timeout:')?'cdp_timeout':'browser_probe_error',
+      actual:scalar(error.actual),expected:scalar(error.expected)};
+    evidence={outcome:'FAIL',reason:error.message,diagnostic,checks,layouts};
     throw error;
   } finally {
     clearTimeout(deadline);

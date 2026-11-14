@@ -10,8 +10,9 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks}) => {
     c.state='observed';c.session_id='duration-synthetic';c.focal_id=r.prompt.event_id='duration-prompt';
     Object.assign(r.prompt,{in_progress:true,execution_unverified:false,has_error:false,aborted:false});
     r.display_units={};r.display.watch_duration_ms='11s';r.model='<img src=x onerror=alert(1)>';
-     r.prompt.display.mini_cost_help='Main Model: <img src=x onerror=alert(1)> — high\\nMain Model CCost: 1 Credits';
-     for(const values of Object.values(r.prompt.display_units || {}))values.mini_cost_help=r.prompt.display.mini_cost_help;
+     r.prompt.display.mini_cost_models=[['Main Model','<img src=x onerror=alert(1)> — high']];
+     r.prompt.display.mini_cost_amounts=['1 Credits'];
+     for(const values of Object.values(r.prompt.display_units || {}))values.mini_cost_amounts=['1 Credits'];
     c.session_summary.cost={known_ccost:'562',complete:false,observed_requests:3,priced_requests:2,
       display:{known_ccost:'?562',account_ccost:'562'},display_units:{
         credits:{known_ccost:'?562',account_ccost:'562'},usd:{known_ccost:'?$5.62',account_ccost:'$5.62'}}};

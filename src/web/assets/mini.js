@@ -369,9 +369,7 @@ const MiniWatch = (() => {
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
       row.costHelp = this.promptDetails(item, highlight);
       const cost = card.session_summary?.cost;
-      row.totalCostHelp = (ReportView.display(cost, 'mini_cost_help') === 'N/A' ?
-        'Session Model 1: N/A — N/A\nSession Model 1 CCost: N/A' :
-        ReportView.display(cost, 'mini_cost_help')) + '\n\nDuration: ' + ReportView.display(cost, 'duration_ms');
+      row.totalCostHelp = this.costGroups(cost, true) + '\n\nDuration: ' + ReportView.display(cost, 'duration_ms');
       const source = card.session_summary?.context, warning = source?.warning;
       const exceeded = warning?.severity === 'exceeded' && source.context_state === 'ready-current' &&
         Number.isFinite(source.watch_next_context_tokens) && warning.guidance_state === 'ready';
@@ -396,11 +394,20 @@ const MiniWatch = (() => {
       row.children[2].children[0].setAttribute('aria-label', `Prompt reference CCost: ${amount}`);
       row.children[3].children[0].setAttribute('aria-label', `Whole-session reference CCost: ${total}`);
     }
+    costGroups(value, session = false) {
+      const models = ReportView.display(value, 'mini_cost_models');
+      const amounts = ReportView.display(value, 'mini_cost_amounts');
+      if (!Array.isArray(models) || !Array.isArray(amounts)) {
+        const label = session ? 'Session Model 1' : 'Main Model';
+        return `${label}: N/A — N/A\n${label} CCost: N/A`;
+      }
+      return models.map(([label, model], index) =>
+        `${label}: ${model}\n${label} CCost: ${amounts[index] ?? 'N/A'}`).join('\n\n');
+    }
     promptDetails(item, highlight) {
       const prompt = item?.prompt;
-      const groups = ReportView.display(prompt, 'mini_cost_help');
       const start = (prompt?.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`) +
-        '\n' + (groups === 'N/A' ? 'Main Model: N/A — N/A\nMain Model CCost: N/A' : groups) + '\n\nDuration: ';
+        '\n' + this.costGroups(prompt) + '\n\nDuration: ';
       const duration = ReportView.display(item, 'watch_duration_ms');
       return highlight && duration !== 'N/A' ? ContextHelp.runningDuration(start, duration, '') : start + duration;
     }

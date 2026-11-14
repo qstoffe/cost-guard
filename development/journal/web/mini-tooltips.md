@@ -43,8 +43,32 @@ Credits, including nested/same-model descendants and out-of-prompt work.
 Both-unit grouping, effort/provider/version separation, sum-before-rounding,
 partial/unavailable states and local DST/calendar boundaries have focused tests.
 
-Local full-suite, validation, read-only installation and actual browser results
-will be recorded here after execution; this is not a PASS claim for pending work.
+Local Full initially completed 194/195 passing files; the sole remaining mismatch
+was the intentional Mini unknown Capacity `?` → `N/A` fixture, then repaired and
+`test_mini_watch.py` passed. A subsequent clean Full invocation ended early after
+eight passing groups without a summary/report (exit 1), so is incomplete, not PASS.
+Package validation passed with seven unchanged advisory warnings and no cap changes.
+Final suite and actual browser results remain pending.
+
+Read-only installed V2 accounts passed (three cards, one refresh owner, advancing
+publication; no inference). The combined Watch probe **FAILED** its 90-second
+`probe_watch_cards_timeout`: global Earlier certification remained loading,
+392/3223 checked. SourceGuard was unchanged, HTTP/captures advanced and owned
+cleanup left no threads/processes/failures. Earlier convergence is **UNVERIFIED**;
+that invocation's session-cost stage is **NOT RUN**.
+
+Decision Delegate directed one bounded explicit-current-root accounting probe
+instead of extending global discovery. It passed: 36 physical requests across
+root/one child, complete coverage, total 193.41220000 = main 63.95060000 + child
+129.46160000 Credits, independent population/Decimal/ownership/report and controlled
+Full/Mini parity, cold 36 versus warm zero valuations, zero model calls. This is
+one authorized root, not observed native Earlier publication or rendered interaction.
+Decision Delegate accepted this plus account/source observations as sufficient
+local installation evidence and authorized a **minor task-scoped verification
+exception**: no further global Earlier-convergence run for this delivery. This
+does not waive accounting or browser acceptance, prove eventual convergence, rule
+out a separate history-performance issue or certify the owner's intermittent symptom.
+
 The integrated pane renders a synthetic Mini View in a normal document, not PiP.
 Its native hover call failed `UnknownVizError`; no pointer input or stationary
 hover proof was obtained. No integrated native PiP was opened because its external

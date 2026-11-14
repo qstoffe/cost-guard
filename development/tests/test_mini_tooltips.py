@@ -22,6 +22,10 @@ from src.watch.models import WatchCard, WatchProjection, WatchRow
 
 
 class MiniTooltipTests(unittest.TestCase):
+    def help_text(self, display):
+        return "\n\n".join(f"{label}: {model}\n{label} CCost: {amount}"
+            for (label, model), amount in zip(display["mini_cost_models"], display["mini_cost_amounts"]))
+
     def test_recursive_prompt_and_whole_session_groups_use_all_unrounded_requests_once(self):
         with recursive_source() as (source, _server):
             snapshot = source.load_session_snapshot("ses_current")
@@ -56,12 +60,14 @@ class MiniTooltipTests(unittest.TestCase):
             self.assertNotIn("mini_missing_agents", value)
             self.assertNotIn("mini_session_cost", value)
             for unit in ("credits", "usd"):
-                text = {**value["display"], **value.get("display_units", {}).get(unit, {})}["mini_cost_help"]
+                overlay = value.get("display_units", {}).get(unit, {})
+                self.assertNotIn("mini_cost_models", overlay, "unit-invariant labels must be shared")
+                text = self.help_text({**value["display"], **overlay})
                 self.assertNotRegex(text, r"Calls:|Effort:|Linked subagents|Total CCost|ses_")
                 self.assertIn("Sub Agent 1:", text)
                 self.assertIn("CCost: ", text)
                 self.assertIn(" Credits" if unit == "credits" else "$", text)
-        self.assertIn("Session Model 1:", total["display"]["mini_cost_help"])
+        self.assertIn("Session Model 1:", self.help_text(total["display"]))
         self.assertIsNone(total["duration_ms"], "cost capture has no canonical session duration")
 
     def test_sum_before_rounding_preserves_effort_provider_version_and_partial_unknown(self):
@@ -79,7 +85,7 @@ class MiniTooltipTests(unittest.TestCase):
             group["model"] == "provider/model-v1" and group["effort"] == "high")
         self.assertEqual("0.98", shared["known_ccost"])
         self.assertEqual(5, len(groups))
-        text = dto["display"]["mini_cost_help"]
+        text = self.help_text(dto["display"])
         self.assertIn("CCost: 1.0 Credits", text)
         self.assertIn("— default (high)", text)
         self.assertIn("CCost: N/A", text)

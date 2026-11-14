@@ -384,7 +384,7 @@ def _with_display(value, timezone_id, now_ms):
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     # Large cost help is already present in the selected display. Unit maps are
     # overlays in every consumer; don't duplicate the selected copy per card.
-    cost_help = {"cost_detail_help", "session_cost_help", "mini_cost_help"}
+    cost_help = {"cost_detail_help", "session_cost_help", "mini_cost_amounts"}
     unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing
                             and not (key in cost_help and items[key] == tokens[key])})
                              for unit, items in variants.items()}) if differing else None

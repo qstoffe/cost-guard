@@ -33,7 +33,7 @@ def mini_cost_tokens(values):
     session = values.get("mini_session_cost", False)
     main_count = sum(not part["subagent"] for part in groups)
     counters = {False: 0, True: 0}
-    sections = []
+    models, amounts = [], []
     for part in groups:
         child = part["subagent"]
         counters[child] += 1
@@ -44,11 +44,16 @@ def mini_cost_tokens(values):
                 if part["priced_requests"] else "N/A")
         if cost != "N/A" and ccost_unit() == "credits":
             cost += " Credits"
-        sections.append(f"{label}: {part['model']} — {part['effort']}\n{label} CCost: {cost}")
+        models.append((label, f"{part['model']} — {part['effort']}"))
+        amounts.append(cost)
     if not main_count:
         label = "Session Model 1" if session else "Main Model"
-        sections.insert(0, f"{label}: N/A — N/A\n{label} CCost: N/A")
+        models.insert(0, (label, "N/A — N/A"))
+        amounts.insert(0, "N/A")
     for index in range(values.get("mini_missing_agents", 0)):
         label = "Sub Agent " + str(counters[True] + index + 1)
-        sections.append(f"{label}: N/A — N/A\n{label} CCost: N/A")
-    return {"mini_cost_help": "\n\n".join(sections)}
+        models.append((label, "N/A — N/A"))
+        amounts.append("N/A")
+    # Share model/effort text between units. The browser only joins prepared
+    # labels and formatted amounts; it never groups, values or rounds requests.
+    return {"mini_cost_models": tuple(models), "mini_cost_amounts": tuple(amounts)}
