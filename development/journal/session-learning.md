@@ -147,3 +147,76 @@ architecture changes for this development-only delivery. No runtime responsibili
 interface or flow changed. Applicable document/state and Git publication checks
 are recorded in the PR; no historical-task PASS, measured improvement or completed
 causal review is claimed.
+
+## Milestone 150 — 2026-11-14
+
+Cost Guard assessment base: `a309c93895c4f4f829d096e416ac56bad3518811`.
+Outcome: **INCONCLUSIVE; milestone 150 explicitly DEFERRED by the Decision Delegate**.
+This report publishes a bounded evidence gap, not a completed assessment,
+NO_SUGGESTION or a clean-history finding.
+
+### Bounded discovery and anonymous review
+
+The installed analyzer's version-1 discovery facts report a broad scan of one
+catalog page and eight sequential export probes for the originating repository,
+not the implementation clone. Observed catalog dates span **2026-11-14 to
+2026-11-14**. There were zero cached observations, one eligible source, zero
+context-unknown observations and two source rejections. Eligibility uses verified
+request-local context accounting and distinct failed physical calls; these are
+selection criteria, not confirmed incidents or avoidable failures.
+
+The one selected source's retained projection was **INCONCLUSIVE**: shortened
+authority/instruction text, truncated windows and missing recovery/outcome evidence
+prevented a reliable causal review. Its outcome label and successful export
+transport establish neither test PASS nor Git delivery. Independent incidents,
+avoidable interventions, historical results and cost impact remain unknown.
+
+Coverage is partial. This stateless run had no authorized persistent index,
+resumed no older cursor and returned no next cursor. Cross-run deduplication and
+older coverage are therefore not established; this is not an exhaustive or stable
+repository-history snapshot. No private index was created or requested.
+
+The existing exclusive 100-MiB per-export bound, exact-directory identity checks,
+sequential owned-spool disposal and 24,000-character semantic-context limit
+remained in force. Raw exports were not archived. Abrupt process-death disposal
+was not tested. No other session's scratch, processes, stashes, private plugin
+storage or Checkpoint Memory was inspected.
+
+### Distinct alternative and limits
+
+A contract-only check of the same runtime CLI and its advertised live OpenAPI
+schema verified supported single-message retrieval and cursor-paged message
+listing. No additional catalog, export or private-message request followed the
+scan. Those APIs require an exact source identity, which the stateless returned
+projection did not expose as an addressable locator. The original remaining
+acquisition allowance could not be established after investigation; it was not
+reset. This is **uncertain remaining budget**, not a proven timeout or missing API.
+
+Inspection of the installed fitter confirms that it already ranks causal slices
+and explicitly shortens material. The historical first-event fallback described
+above is not established as today's cause. The exact cause of the current
+evidence loss and the installed application/source versions remain unestablished.
+No current external planning status or new actionable mitigation is claimed, and
+no duplicate Suggestion is created from this incomplete observation.
+
+### Decision, progress and verification boundary
+
+The Decision Delegate explicitly authorized deferral and no further history
+requests for this occurrence. The prerequisite is a supported exact-source locator
+and demonstrable remaining acquisition budget sufficient to obtain a usable
+authority → attempt → failure → recovery/outcome sequence within unchanged
+privacy, identity, size, time and context bounds. The discovered message APIs
+provide a plausible future route, not completed proof or an immediate retry.
+
+Only `deferred.session-learning` advances **100 → 150**. Completed learning stays
+**0**, ordinary count **150**, completed Architecture/Test Health/Performance
+**150/150/120**, and `lastOrdinaryId` **fr/000705** remain unchanged. The queue's
+proposed completion snapshot is not applied. Earlier inconclusive reports remain
+historical and intact; no unrelated Ready task is held.
+
+The authorized delta is confined to this journal and maintenance state. Product
+suites, live probes, packaging and version changes are not required or run for
+these development-only files. Architecture needs no update because runtime
+responsibilities, interfaces and flows are unchanged. JSON/accounting, scoped
+diff, manual publication-privacy and actual Git merge checks belong in the PR;
+none establish a completed historical assessment or measured improvement.
