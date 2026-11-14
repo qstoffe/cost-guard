@@ -19,7 +19,7 @@ from src.analysis.billing import billing_request_fingerprint
 from src.analysis.causal import trace_entries
 from src.analysis.session_cost import reconcile_session_cost
 from src.sources.opencode_v2_model_identity import DesktopModelCatalog
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 class ClaudeAliasIdentityTests(unittest.TestCase):
@@ -119,7 +119,9 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
         pinned = resolver.resolve(ModelRef('claude-agent', 'claude-sonnet-4'), '/one')
 
         self.assertEqual(('claude-sonnet-5-5', 'Sonnet 5.5'), (first.model, first.display_name))
-        self.assertEqual('sonnet', missing.model)
+        self.assertEqual('claude-sonnet-5-5', missing.model)
+        self.assertEqual('bundled-catalog-estimate', missing.resolution.kind)
+        self.assertEqual('/two', missing.resolution.scope)
         self.assertEqual(ModelRef('custom', 'sonnet'), other)
         self.assertEqual(ModelRef('claude-agent', 'claude-sonnet-4'), pinned)
         self.assertEqual(4, client.json.call_count)
@@ -178,7 +180,8 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
         self.assertEqual(2, new.checked_requests)
         self.assertEqual(old.total.known_ccost + D('.2'), new.total.known_ccost)
 
-    def test_missing_exact_catalog_match_recovers_without_changing_raw_history(self):
+    @patch('src.sources.opencode_v2_model_identity.load_snapshot', return_value=({}, None))
+    def test_missing_exact_catalog_match_recovers_without_changing_raw_history(self, _snapshot):
         original = desktop_service(self, (snapshot(),))
         original.source.model = None
         before = original.build(ReportRequest(ReportKind.SESSIONS, session_limit=None))

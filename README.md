@@ -22,7 +22,7 @@ Private development access is not required to build, test or run Cost Guard.
 
 ## Quick start
 
-Use **current `main`** (v81.55, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.56, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.55 (2026-11-14):** Mini Watch keeps all five Running cell values yellow, including Ctx. Non-running Ctx retains its ordinary/red threshold policy, and exceeded-warning help remains accessible. [Behavior and evidence](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/journal/web/mini-watch.md#running-ctx-color-precedence-fr000711).
+**v81.56 (2026-11-14):** Claude Agent model labels use the exact-location live OpenCode catalog first, then a bundled frozen catalog when historical locations are unavailable. These are catalog-based estimates, not proof of historical execution; recorded selections and unsupported-price/usage uncertainty remain intact.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

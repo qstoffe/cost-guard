@@ -12,7 +12,7 @@ def desktop_catalog_candidate(value: str, provider: str) -> bool:
     """Opaque Agent selections may use the catalog; recorded releases stay fixed.
 
     This does not assign a family/version or price to an unknown selection.
-    Only an exact location/provider/selection catalog observation can resolve it.
+    Only an exact provider/selection live or bundled catalog observation can resolve it.
     """
     return provider == 'claude-agent' and not re.match(r'^claude-.+-\d', value or '', re.I)
 
@@ -40,10 +40,12 @@ class ModelResolution:
     scope: str
     signature: str
     kind: str = "desktop-catalog-estimate"
+    observed_at: str | None = None
 
 
-CATALOG_ESTIMATE_HELP = ("Model and reference cost based on current OpenCode catalog; "
-                         "historic executed version unconfirmed.")
+CATALOG_ESTIMATE_HELP = ("Model and reference cost are a catalog-based estimate: "
+                          "exact-location live OpenCode catalog first, bundled frozen snapshot otherwise; "
+                          "historic executed version unconfirmed.")
 
 
 def catalog_display_name(provider, label):

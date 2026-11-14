@@ -6,6 +6,7 @@ import threading
 import time
 
 from src.domain.model_identity import ModelResolution, desktop_catalog_candidate
+from .claude_agent_catalog import SNAPSHOT_PATH, load_snapshot
 from .errors import SourceError
 from .opencode_v2_effort import observation
 
@@ -21,8 +22,10 @@ class DesktopModelCatalog:
     invoke the CLI. Only relevant provider+alias mapping content is fingerprinted.
     """
 
-    def __init__(self, client, *, clock=time.monotonic):
+    def __init__(self, client, *, clock=time.monotonic, snapshot_path=SNAPSHOT_PATH):
         self.client, self.clock = client, clock
+        self.snapshot_path = snapshot_path
+        self._snapshot_observation = None
         self._observations = {}
         self._lock = threading.RLock()
 
@@ -61,13 +64,29 @@ class DesktopModelCatalog:
             self._observations[directory] = (now, (models, defaults))
             return models, defaults
 
-    def lookup(self, directory, selected):
+    def _mapping(self, directory, selected):
         value = self._models(directory)[0].get(selected)
+        kind, metadata = "desktop-catalog-estimate", None
+        if value is None:
+            with self._lock:
+                now = self.clock()
+                cached = self._snapshot_observation
+                if cached is None or now - cached[0] >= 30:
+                    cached = self._snapshot_observation = (now, load_snapshot(self.snapshot_path))
+                models, metadata = cached[1]
+                value = models.get(selected)
+            if value is not None:
+                kind = "bundled-catalog-estimate"
+            else:
+                metadata = None
         safe = value if value and _text(value[1]) else (value[0], None) if value else None
-        # Qualify short SDK names since resolver v2. Invalidate only dependent
-        # mutable projections, including previously unresolved/short-name costs.
-        signature = hashlib.sha256(json.dumps([2, safe], ensure_ascii=False).encode()).hexdigest()
-        return safe, signature
+        # Source changes also invalidate identical labels: inference is not execution.
+        signature = hashlib.sha256(json.dumps([3, kind, metadata, safe],
+            ensure_ascii=False).encode()).hexdigest()
+        return safe, signature, kind, metadata[0] if metadata else None
+
+    def lookup(self, directory, selected):
+        return self._mapping(directory, selected)[:2]
 
     def resolve(self, model, directory):
         if model is None or not directory:
@@ -80,8 +99,8 @@ class DesktopModelCatalog:
         selected = model.recorded_model
         if not desktop_catalog_candidate(selected, model.provider):
             return model  # An explicit historical release never depends on today's catalog.
-        value, signature = self.lookup(directory, selected)
-        identity = ModelResolution(selected, directory, signature)
+        value, signature, kind, observed_at = self._mapping(directory, selected)
+        identity = ModelResolution(selected, directory, signature, kind, observed_at)
         if value is None:
             return replace(model, resolution=identity)
         label, upstream = value
@@ -104,7 +123,7 @@ class DesktopModelCatalog:
             if resolution is None and desktop_catalog_candidate(model.model, model.provider):
                 return False  # A prior unresolved projection has no location observation.
             if resolution is not None and (model.provider != "claude-agent"
-                    or resolution.kind != "desktop-catalog-estimate"
+                    or resolution.kind not in {"desktop-catalog-estimate", "bundled-catalog-estimate"}
                     or self.lookup(resolution.scope, resolution.selected_model)[1] != resolution.signature):
                 return False
         return True

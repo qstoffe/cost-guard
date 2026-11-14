@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "source": "opencode-v2-live-model-catalog",
+  "providerID": "claude-agent",
+  "observedAtUtc": "2026-11-14T19:46:36Z",
+  "opencodeVersion": "2.3.0",
+  "models": [
+    {
+      "id": "opus",
+      "name": "Opus 5.5",
+      "modelID": "opus",
+      "status": "active"
+    },
+    {
+      "id": "sonnet",
+      "name": "Sonnet 5.5",
+      "modelID": "claude-sonnet-5-5",
+      "status": "active"
+    },
+    {
+      "id": "claude-fable-5-2",
+      "name": "Fable 5.2",
+      "modelID": "claude-fable-5-2",
+      "status": "active"
+    },
+    {
+      "id": "haiku",
+      "name": "Haiku 5.5",
+      "modelID": "haiku",
+      "status": "active"
+    },
+    {
+      "id": "fable",
+      "name": "Fable 5.1",
+      "modelID": "fable",
+      "status": "active"
+    },
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "name": "Haiku 4.5",
+      "modelID": "claude-haiku-4-5-20251001",
+      "status": "active"
+    },
+    {
+      "id": "claude-sonnet-5",
+      "name": "Sonnet 5",
+      "modelID": "claude-sonnet-5",
+      "status": "active"
+    },
+    {
+      "id": "claude-opus-5",
+      "name": "Opus 5",
+      "modelID": "claude-opus-5",
+      "status": "active"
+    },
+    {
+      "id": "claude-fable-5",
+      "name": "Fable 5",
+      "modelID": "claude-fable-5",
+      "status": "active"
+    },
+    {
+      "id": "claude-opus-4-8",
+      "name": "Opus 4.8",
+      "modelID": "claude-opus-4-8",
+      "status": "active"
+    },
+    {
+      "id": "claude-opus-4-7",
+      "name": "Opus 4.7",
+      "modelID": "claude-opus-4-7",
+      "status": "active"
+    },
+    {
+      "id": "claude-opus-4-6",
+      "name": "Opus 4.6",
+      "modelID": "claude-opus-4-6",
+      "status": "active"
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "name": "Sonnet 4.6",
+      "modelID": "claude-sonnet-4-6",
+      "status": "active"
+    }
+  ]
+}

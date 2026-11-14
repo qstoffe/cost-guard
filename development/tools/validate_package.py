@@ -50,6 +50,7 @@ REQUIRED_FILES = {
     "src/sources/opencode_v2.py",
     "src/sources/opencode_v2_wire.py",
     "src/sources/opencode_v2_transport.py",
+    "src/sources/claude-agent-catalog.json",
     "src/sources/selection.py",
     "src/accounts/base.py",
     "src/accounts/openai_subscription.py",
