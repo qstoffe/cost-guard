@@ -38,7 +38,7 @@ const MiniWatch = (() => {
   // Independent clocks prevent healthy prompt ticks from hiding a stuck Daily lane.
   class Observations {
     constructor() {
-      this.started = Date.now(); this.clocks = new Map(); this.view = null; this.contexts = new Map();
+      this.started = Date.now(); this.clocks = new Map(); this.view = null; this.summaries = new Map();
     }
     observed(key, token, now) {
       const old = this.clocks.get(key)?.token;
@@ -46,19 +46,9 @@ const MiniWatch = (() => {
       if (token != null && fresh) this.clocks.set(key, {token, at: now});
     }
     context(card) {
-      const summary = card.session_summary, current = summary?.context;
-      const old = this.contexts.get(card.session_id);
-      const changed = current?.context_scope && old &&
-        (current.context_scope !== old.context_scope || current.context_epoch !== old.context_epoch ||
-         current.context_provider && old.context_provider && current.context_provider !== old.context_provider ||
-         current.context_model && old.context_model && current.context_model !== old.context_model);
-      if (changed || current?.context_state === 'invalidated') this.contexts.delete(card.session_id);
-      let value = current;
-      if (Number.isFinite(current?.watch_next_context_tokens) && current?.context_state !== 'invalidated')
-        this.contexts.set(card.session_id, current);
-      else if (!changed && current?.context_state !== 'invalidated' && this.contexts.has(card.session_id))
-        value = {...old, context_state: 'pending', warning: current?.warning};
-      return value === current ? card : {...card, session_summary: {...summary, context: value}};
+      const summary = WatchView.retainSummary(card.session_summary, this.summaries.get(card.session_id));
+      this.summaries.set(card.session_id, summary);
+      return {...card, session_summary: summary};
     }
     update(publication, now) {
       const view = publication?.view;
@@ -114,8 +104,8 @@ const MiniWatch = (() => {
           previous?.daily_usage?.day_end_ms > now ? previous.daily_usage : null,
         accounts: accounts ? {...view.accounts, accounts} : previous?.accounts};
       if (prompts && view.history_state === 'observed') {
-        const present = new Set([...cards, ...(view.history_cards || [])].map(card => card.session_id));
-        for (const key of this.contexts.keys()) if (!present.has(key)) this.contexts.delete(key);
+        const present = new Set([...cards, ...(view.history_cards || []), ...(view.recent_finished_cards || [])].map(card => card.session_id));
+        for (const key of this.summaries.keys()) if (!present.has(key)) this.summaries.delete(key);
       }
     }
     snapshot(now) {
@@ -486,7 +476,9 @@ const MiniWatch = (() => {
         text(row.children[4], context); wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;
-      const notice = needsHistory && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
+      // Background demand may remain useful even with five filled slots. It
+      // cannot authorize a sixth physical/accessible acquisition-status row.
+      const notice = wanted.length < 5 && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
         WatchView.historyNotice(view, values.some(value => value.historical)) : '';
       text(this.emptyPrompts.children[0].children[0], notice || (view?.cards_state === 'observed' ? 'No sessions' : 'Loading…'));
       this.emptyPrompts.setAttribute('role', 'status');

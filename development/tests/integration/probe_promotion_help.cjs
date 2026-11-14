@@ -6,7 +6,11 @@ module.exports = async ({command,run,ready,owner,checks,layouts}) => {
     current.models={all:false,latest:false,sorts:[{index:2,direction:-1}]};show(current)`);
   const selector='.model-relative.promotion';
   await ready(`!!output.querySelector('${selector}')`);
-  const expected='Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11';
+  const expected='GitHub Copilot · USD / 1M tokens\nBase context tier:\nInput $8 · Cached input $8\nCache write $8 · Output $8\n' +
+    'Input context >200000 tokens:\nInput $16 · Cached input $16\nCache write $16 · Output $16\n' +
+    'Input context ≥1000000 tokens:\nInput $32 · Cached input $32\nCache write $32 · Output $32\n' +
+    'Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11\n\n' +
+    'Token Mix · 1 completed priced prompts\nInput 20% · Cached input 60%\nCache write 10% · Output 10%';
   const opened=async()=>{
     await ready(`document.querySelector('#context-help')?.matches(':popover-open')`);
     assert.equal(await run(`document.querySelector('#context-help').textContent`),expected);

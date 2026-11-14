@@ -724,9 +724,9 @@ class SessionCatalogTests(unittest.TestCase):
         self.source.snapshots['root-0119'] = replace(snapshot, source_revision='compacted')
         self.observe()
         stale = self.catalog.page(sort='activity')['view']['session_usage'][0]
-        self.assertIsNone(stale['context_tokens'])
-        self.assertEqual(stale['metric_states']['ctx'], 'pending')
-        self.assertTrue(all(tokens.get('context_tokens', stale['display']['context_tokens']) == 'N/A'
+        self.assertEqual(stale['context_tokens'], 172_001)
+        self.assertEqual(stale['metric_states']['ctx'], 'retained')
+        self.assertTrue(all(tokens.get('context_tokens', stale['display']['context_tokens']) == '172k'
                             for tokens in stale['display_units'].values()))
         self.assertTrue(self.catalog.page(sort='ctx')['pending_sort'])
 

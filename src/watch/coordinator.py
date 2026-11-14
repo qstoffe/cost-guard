@@ -549,7 +549,7 @@ class WatchCoordinator:
         status = "Watching" if seconds_until_check is None else self._steady_status(active, seconds_until_check)
         return self._projection(now_ms=now_ms, status=status, status_active=active > 0)
 
-    def activity_projection(self, status: str = "Refreshing...") -> WatchProjection:
+    def activity_projection(self, status: str = "Watching") -> WatchProjection:
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
         return self._projection(now_ms=now_ms, status=status, status_active=True)
@@ -641,7 +641,6 @@ class WatchCoordinator:
         # Compare with what is actually on screen: wakes may already have
         # advanced _last_projection (for example with new account results).
         previous_projection = self._rendered_projection or cycle.projection
-        renderer.render_status(self.activity_projection("Refreshing..."))
         try:
             cycle = self.acquire_cycle(force_resync=resync, hinted_session_ids=hints)
         except SourceError as exc:

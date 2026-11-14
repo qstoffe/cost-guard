@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
+   assert.ok(scope === undefined || ['--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -65,7 +65,9 @@ async function main() {
             'Headless native browser input, not physical desktop or the owner incident.']};
         console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
       }
-     if(scope==='--quiet-refresh' || scope==='--sessions-quiet-refresh') {
+     if(scope==='--quiet-refresh' || scope==='--stable-refresh' || scope==='--sessions-quiet-refresh') {
+       if(scope==='--stable-refresh')
+         await require('./probe_stable_refresh.cjs')({command,evaluate,until,owner,checks,layouts});
        await require('./probe_quiet_refresh.cjs')({command,evaluate,until,owner,checks,layouts,
          sessionsOnly:scope==='--sessions-quiet-refresh'});
        assert.deepEqual(errors,[]);
