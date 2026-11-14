@@ -68,7 +68,7 @@ jobs:
                                    browser, str(output), "--numeric-tables"],
                                   env=environment, timeout=210, check=False)
           evidence = json.loads(output.read_text(encoding="utf-8"))
-          summary = {key: evidence.get(key) for key in ("outcome", "browser", "checks", "errors", "limitations", "reason")}
+          summary = {key: evidence.get(key) for key in ("outcome", "browser", "checks", "errors", "limitations", "reason", "diagnostic", "layouts")}
           print("::notice title=Numeric CCost PiP::" + json.dumps(summary).replace("%", "%25"))
           result.check_returncode()
           if evidence.get("outcome") != "PASS":

@@ -21,8 +21,8 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         const text=await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`);
         // The whole-session fixture includes one supported zero-cost compaction.
         // Mini intentionally uses its priced subtotal, not prompt unknownness.
-        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0');
-        else if(mode==='zero') assert.equal(text,unit==='usd'?'$0.00':'0');
+        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
+        else if(mode==='zero') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
         else {
           assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
           assert.doesNotMatch(text,/\?|Partial /);
@@ -48,12 +48,20 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       document.activeElement?.blur();miniWatch.window.document.activeElement?.blur();
       ReportView.setUnit('${unit}',document.body);ReportView.setUnit('${unit}',miniWatch.view.root);
       window.zeroPending={...liveValue,view:structuredClone(liveValue.probe_ccost_unavailable.absent)};
+      zeroPending.source_observed_at_ms=zeroPending.view.now_ms=
+        Math.max(Date.now(),(miniWatch.publication?.view?.now_ms ?? 0)+1);
+      zeroPending.view.history_cards=[];zeroPending.view.recent_finished_cards=[];
       for(const c of zeroPending.view.active_cards) {
         c.session_id='zero-retention-${unit}';
         c.session_summary.context={...c.session_summary.context,context_scope:'zero-source-${unit}'};
+        c.rows[0].prompt.in_progress=true;c.rows[0].prompt.completed_successfully=false;
       }
       current.watch.update(zeroPending);miniWatch.update(zeroPending);
     })()`);
+    const retainedPrompt=`tr[data-id="zero-retention-${unit}"] td:nth-child(3) .mini-cost-value`;
+    assert.equal(await evaluate(owner,`miniWatch.publication===zeroPending`),true,`${unit} publication accepted`);
+    assert.equal(await evaluate(mini,`!!document.querySelector(${JSON.stringify(retainedPrompt)})`),true,
+      `${unit} intended running prompt exists`);
     for(const [raw,complete,expected] of [[null,false,0],['125',false,125],['0',false,125],
       [null,false,125],['100',true,100],['0',true,0]]) {
       await evaluate(owner,`(() => {
@@ -65,8 +73,9 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         current.watch.update(p);miniWatch.update(p);
       })()`);
       const wanted=unit==='usd'?'$'+(expected/100).toFixed(2):String(expected);
-      for(const [id,selector] of [[owner,full],[mini,prompt]]) {
-        assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`),wanted);
+      for(const [id,selector] of [[owner,full],[mini,retainedPrompt]]) {
+        assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`),wanted,
+          `${unit} retention raw=${raw} complete=${complete} ${selector}`);
         if(id===mini) assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).getAttribute('aria-label')`),
           'Prompt reference CCost: '+wanted);
       }
@@ -77,7 +86,8 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       r.display_units={credits:{ccost:'0'},usd:{ccost:'$0.00'}};
       p.view.active_cards[0].focal_id=r.event_id;current.watch.update(p);miniWatch.update(p);
     })()`);
-    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),unit==='usd'?'$0.00':'0');
+    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(retainedPrompt)}).textContent`),unit==='usd'?'$0.00':'0',
+      `${unit} new prompt isolation`);
   }
   checks.push('Unknown → positive partial → observed unresolved zero/retry retains → lower correction → verified zero; new prompt isolation and Mini accessible cost label in both units');
   await evaluate(owner,`miniWatch.close();window.numericSessions=new SessionsCatalog.View(()=>Promise.resolve());
@@ -95,7 +105,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         '.session-detail tbody td:nth-child(4)','.session-detail tfoot td:nth-child(4)']
         .map(selector=>document.querySelector(selector).textContent)`);
       for(const text of cells) {
-        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0');
+        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} Sessions/detail/footer`);
         else assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
         assert.doesNotMatch(text,/\?|Partial /);
       }

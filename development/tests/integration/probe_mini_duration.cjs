@@ -5,13 +5,16 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
     await command('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27},pip); };
   const panel = `miniWatch.view.doc.getElementById('context-help')`;
   await evaluate(`window.durationPublication=structuredClone(liveValue);
+    durationPublication.source_observed_at_ms=durationPublication.view.now_ms=
+      Math.max(Date.now(),(miniWatch.publication?.view?.now_ms ?? 0)+1);
     {const v=durationPublication.view,c=v.active_cards[0],r=c.rows[0];
     v.active_cards=[c];v.history_cards=[];v.history_state='observed';v.history_epoch=1;
     c.state='observed';c.session_id='duration-synthetic';c.focal_id=r.prompt.event_id='duration-prompt';
     Object.assign(r.prompt,{in_progress:true,execution_unverified:false,has_error:false,aborted:false});
     r.display_units={};r.display.watch_duration_ms='11s';r.model='<img src=x onerror=alert(1)>';
      r.prompt.display.mini_cost_models=[['Main Model','<img src=x onerror=alert(1)> — high']];
-     r.prompt.display.mini_cost_amounts=['1 Credits'];
+      r.prompt.display.mini_cost_amounts=['1 Credits'];
+      r.prompt.display.mini_cost_ready=[true];
      for(const values of Object.values(r.prompt.display_units || {}))values.mini_cost_amounts=['1 Credits'];
     c.session_summary.cost={known_ccost:'562',complete:false,observed_requests:3,priced_requests:2,
       display:{known_ccost:'?562',account_ccost:'562'},display_units:{
@@ -152,11 +155,12 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
   // Corrected evidence and source availability update the same plain Total, even
   // when the native window is narrow. The CCost value remains independently priced.
   await evaluate('miniWatch.window.resizeTo(280,550)',true);
+  await evaluate(`ReportView.setUnit('credits')`);
   for(const [state,cost,expected] of [
-    ['refreshing',{display:{account_ccost:'563'},observed_requests:3,priced_requests:2},'563'],
-    ['observed',{display:{account_ccost:'—'},observed_requests:3,priced_requests:0},'N/A'],
-    ['observed',{display:{account_ccost:'0'},observed_requests:0,priced_requests:0},'0'],
-    ['unavailable',null,'N/A'],['loading',null,'Loading…']]) {
+    ['refreshing',{known_ccost:'563',complete:false,display:{account_ccost:'563'},observed_requests:3,priced_requests:2},'563'],
+    ['observed',{known_ccost:null,complete:false,display:{account_ccost:'—'},observed_requests:3,priced_requests:0},'563'],
+    ['observed',{known_ccost:'0',complete:true,display:{account_ccost:'0'},observed_requests:0,priced_requests:0},'0'],
+    ['unavailable',null,'0'],['loading',null,'0']]) {
     await evaluate(`{const s=durationPublication.view.active_cards[0].session_summary;
       s.state=${JSON.stringify(state)};s.cost=${JSON.stringify(cost)};miniWatch.update(durationPublication);}`);
     assert.equal(await evaluate('durationRow.cells[3].textContent'),expected);

@@ -55,6 +55,19 @@ same-scope transitions/accessible values plus Stats DOM cases. Its actual job
 outcome and JSON artifact are required delivery evidence, not inferred from the
 local tests above. Ordinary browser and Mini mouse/touch checks remain enabled.
 
+The first PR browser run failed, not PASS: numeric transitions replayed an older
+fixture timestamp after a USD publication, so Mini correctly rejected it; the
+duration fixture replaced two model groups with one but retained two readiness
+entries. Fixtures now use accepted monotonic publication timestamps, assert the
+intended running row, and keep readiness aligned. The duration tail now checks
+canonical positive → incomplete retry retention → verified zero, not superseded
+N/A/Loading amounts. Production stale-publication and currency guards are unchanged.
+The current-parent Delegate independently identified the timestamp cause; no
+acceptance exception was requested or granted. A fresh local Full passed all 198
+groups in 154.0 seconds; browser rerun results remain required. GitHub job-log
+retrieval returned HTTP 401; available check annotations supplied the failure
+evidence, without an alternate authentication route.
+
 ## Verification-route decision and limits
 
 Local integrated browsing was disconnected and the installed Python had no
