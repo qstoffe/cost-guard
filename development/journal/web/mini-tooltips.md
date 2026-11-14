@@ -171,3 +171,18 @@ After the stable-cell repair, local Full again passed **195/195 files** in 163.1
 (`scratch:/full-tests-stable-cells.json`); the validator passed with the same seven
 advisories. The repaired focused Watch quota and daily groups also passed. Native
 stationary confirmation remains a separate requirement, not inferred from those tests.
+
+On `a220347`, the repaired Full Started target passed 61 real seconds, after the six
+Mini and Full subscription holds passed again. The next Full CCost hold kept its
+panel **open and target connected for all 61 samples**, but the probe failed its
+trigger-only native-hover assertion. That did not observe popup hover, although
+the FR expressly permits reading the popup. The corrected probe records native
+trigger **and** panel hover before hit testing and requires the stationary input
+point to hit that same hovered surface; no selector or input is forced.
+
+The matched unbound control is now fully observed: trusted mouse arrival hovered
+true, then false at 651.9ms, with identical connected button, document focus,
+remembered-point hit and no departure events. The production target's native guard
+was false at 600.3ms under the same sequence. This isolates the negative native
+hover observation from that button's help binding, not from all possible product
+layout/browser interactions, and does not establish physical-desktop prevalence.

@@ -15,6 +15,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
       return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
     await mouse(id,point.x,point.y);
     await until(id,`document.getElementById('context-help')?.matches(':popover-open')`);
+    return point;
   };
   // Reproduce the old hard cutoff separately in the actual PiP document.
   assert.ok(process.env.COST_GUARD_BASELINE_HELP,'required explicit old-base RED source');
@@ -62,20 +63,26 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     [owner,'.watch-active th:nth-child(6) button']];
   try {
     for(const [index,[id,selector]] of scenarios.entries()) {
-      await open(id,selector);
+      const point=await open(id,selector);
       await evaluate(id,`window.stationary={started:performance.now(),events:0,samples:[],target:document.querySelector(${JSON.stringify(selector)})};
         window.stationaryInput=()=>stationary.events++;
         document.addEventListener('pointermove',stationaryInput,true);
-        window.stationarySample=setInterval(()=>stationary.samples.push({
-          elapsed:performance.now()-stationary.started,open:document.getElementById('context-help').matches(':popover-open'),
-          hovered:stationary.target.matches(':hover'),connected:stationary.target.isConnected}),1000)`);
+        window.stationarySample=setInterval(()=>{
+          const panel=document.getElementById('context-help'),target=stationary.target;
+          const triggerHovered=target.matches(':hover'),panelHovered=panel.matches(':hover');
+          const hit=document.elementFromPoint(${point.x},${point.y});
+          stationary.samples.push({elapsed:performance.now()-stationary.started,
+            open:panel.matches(':popover-open'),triggerHovered,panelHovered,connected:target.isConnected,
+            hit:target.contains(hit)?'trigger':panel.contains(hit)?'panel':'other'});
+        },1000)`);
       await new Promise(resolve=>setTimeout(resolve,61000));
       const state=await evaluate(id,`clearInterval(stationarySample);document.removeEventListener('pointermove',stationaryInput,true);
         ({elapsed:performance.now()-stationary.started,events:stationary.events,samples:stationary.samples})`);
       assert.ok(state.elapsed>=60000);
       assert.equal(state.events,0,'no pointer input while reading');
       assert.ok(state.samples.length>=55);
-      const failed=state.samples.find(value=>!value.open||!value.hovered||!value.connected);
+      const failed=state.samples.find(value=>!value.open||!value.connected||
+        !(value.triggerHovered&&value.hit==='trigger'||value.panelHovered&&value.hit==='panel'));
       if(failed) {
         const error=new Error('Stationary native hover sample failed');
         error.probeCase='stationary-'+(index+1);
@@ -83,7 +90,8 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
           elapsed:Math.round(state.elapsed),pointerEvents:state.events,samples:state.samples.length,
           firstFailure:failed,last:state.samples.at(-1),
           closed:state.samples.filter(value=>!value.open).length,
-          unhovered:state.samples.filter(value=>!value.hovered).length,
+          unhovered:state.samples.filter(value=>!value.triggerHovered&&!value.panelHovered).length,
+          otherHit:state.samples.filter(value=>value.hit==='other').length,
           disconnected:state.samples.filter(value=>!value.connected).length};
         throw error;
       }
@@ -101,7 +109,9 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
       outcome:holds.length===12?'PASS':'PARTIAL',holds:holds.map(value=>({
         document:value.document,selector:value.selector,elapsed:Math.round(value.elapsed),
-        samples:value.samples.length,pointerEvents:value.events}))}));
+        samples:value.samples.length,pointerEvents:value.events,
+        triggerSamples:value.samples.filter(sample=>sample.triggerHovered).length,
+        panelSamples:value.samples.filter(sample=>sample.panelHovered).length}))}));
   }
   for(const theme of ['classic','web'])for(const scheme of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},owner);
