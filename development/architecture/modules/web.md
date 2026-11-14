@@ -49,37 +49,50 @@ Native focus/order, keyboard-only refresh recovery, active-route/toggle/pressed
 styles and all acquisition/security boundaries remain. No timers, blur-on-click,
 new source work or persisted browser state. [Evidence/limits](../../journal/web/models-isolation.md).
 
-### Architecture 120 source map
+<a id="architecture-120-source-map"></a>
 
-Static trace checked on `3f994921849ae2cf6f87245c6f3a010353fcbd08`, 2026-11-10;
+### Architecture 150 source map
+
+Static trace checked on `a874c664cc67d8b08be40debc7821b9317eef5ab`, 2026-11-14;
 not a rerun of the historical platform/browser results below. Runtime ownership
-is unchanged. [Whole-repository coverage and alternatives](../governance/verification/architecture-120-20261110.md).
+is unchanged. The old milestone-120 anchor remains a navigation alias, not a claim
+that its historical evidence was rerun.
+[Whole-repository coverage and alternatives](../governance/verification/architecture-150-20261114.md).
 
 ```mermaid
 flowchart TD
-    tab["Sessions View: intent / generation / Cancel / Retry"] -->|authenticated demand / page lookup| http["HTTP: validate, no history acquisition"]
-    http -->|lease / detached page| catalog["SessionCatalog: membership, scalar validity, pinned order"]
+    tab["Sessions View: period / sort / generation / Cancel / Retry"] -->|authenticated demand / page lookup| http["HTTP: validate, no history acquisition"]
+    http -->|period-qualified lease / detached page| catalog["SessionCatalog: membership, fresh scalar validity, pinned window / order"]
     live["One Live owner: authoritative observation"] -->|catalog / revisions / prompt proof| catalog
     catalog -->|needed keys; one isolated lane| worker["WebWatchCoordinator catalog worker"]
     worker --> summary["Reports session_summary: canonical analysis / disposable cache"]
     summary -->|revision / provenance qualified scalar or typed failure| catalog
-    catalog -->|exact global keys ready / pending / retained / failed| http
+    catalog -->|eight scoped sorts; retained display is not fresh key proof| http
     http -->|observed counts and work stage, not estimated progress| tab
     tab -->|Cancel: retire request, restore prior view| previous["Previous navigation; shared index survives"]
     tab -->|expired epoch: one reopen| latest["Latest first page; preserve sort intent"]
     live -->|allowlisted generation only after healthy frame| publication["Immutable Live publication / instance-bound SSE"]
     publication --> connection["LiveConnection: sequence gaps / reconnect / identity stop"]
     connection --> notice["App: V1 notice only while connected and verified"]
+    mix["Token Mix View: period / browser attempt"] -->|validated period-qualified request| finite["Dispatcher / Jobs: demand, freshness / owned child"]
+    finite --> facts["Reports token_mix_cache: revision-qualified compact facts / valuations"]
+    facts --> projection["token_mix_history: deduplicate, then request-time membership / shared valuation"]
+    projection -->|allowlisted result or typed failure; dispatcher owns retry| finite
+    finite -->|accepted period / attempt only| mix
 ```
 
 Public contracts: `application/session_catalog.py::page` supplies exact server order,
 coverage and current/retained/unavailable states; `assets/sessions.js` never computes
-canonical sort keys. `application/live.py::_publish_frame` and `assets/live.js`
+canonical sort keys. Same-source last-good context/model/effort may remain visible
+while `_key_current` refuses a newly requested sort. A source identity change
+invalidates the retained values. `application/live.py::_publish_frame` and `assets/live.js`
 qualify source generation; neither the notice nor HTTP readiness selects a source.
 Dependencies stay HTTP → application/Watch → reports → source/analysis/cache,
 with concrete wiring confined to Web composition. Representative test source:
-`test_web_session_catalog.py`, `test_web_live.py`, `test_v1_web_watch.py` and
-`test_web_runtime.py`. These were read, not executed for this documentation-only assessment.
+Milestone-150 test source reads: full `test_stable_refresh.py` and
+`test_token_mix_periods.py`, plus cleanup cases in `test_web_runtime.py` and recovery
+cases in `test_watch_source_recovery.py`. Catalog/Live/V1 tests from milestone 120
+remain historical evidence, not newly executed coverage.
 
 FR000670: `application/live.py` publishes only `v1|v2|unknown` from the active
 coordinator's established selection, qualified by a healthy observed frame.
@@ -280,7 +293,7 @@ styles and every acquisition/refresh/filter contract above unchanged. The focuse
 `probe_models_toolbar.cjs` real-DOM matrix is called by `probe_models_refresh.cjs`;
 the pricing journal separates rendered layout evidence from real-source checks.
 
-`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders seven-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards silently, preserving genuine restrictions/auth failures. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders eight-column, period-qualified live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 FR000667 extends the catalog below from six to **seven columns/comparators**, adding
 CTX after Duration. `reports/session_summary.py::context_fields` reuses analysis
@@ -894,7 +907,7 @@ Native entries: `windows/Cost-Guard-Web.cmd`, `src/web/windows_launch.ps1`, `mac
 
 `development/tests/test_macos_web.py` / `development/tests/test_macos_app.py` cover typed callbacks/faults, main-thread/tracking timers, preflight/readiness/cleanup, asynchronous actions and cache/quoting/rebuild failures without AppKit/UI. Approval-only `development/tests/integration/probe_macos_web.py` was not run here. Finder/Gatekeeper/clone/ZIP/executable-bit/no-Terminal/browser/tracking/source-change/orphan/CPU-architecture checks remain pending as documented in `docs/web-beta.md`.
 
-`test_web_session_catalog.py` covers full-catalog six-key order, cold readiness/invalidation, persistent scalar reuse/corruption, archived membership, live versus frozen epochs, bounded/fair warming and blocked-index/detail isolation. `test_web_session_detail.py` / `integration/web_session.cjs` retain legacy first/middle/latest API coverage and add complete client history, revision-pinned rich chunks, whole-session totals, keyed selection and navigation/lease races. `integration/probe_web_sessions.cjs` uses a fresh hidden Chromium and actual HTTP/assets over synthetic 120-root/1,001-prompt evidence; `probe_web_live.py --sessions` separately observes the real V2 source. Historical --detail/--reports results remain API evidence, not current UI acceptance. Actual timings, cold coverage and physical/macOS/assistive limits: [Sessions findings](../../journal/web/sessions-live.md).
+`test_web_session_catalog.py` retains catalog ordering, cold readiness/invalidation, persistent scalar reuse/corruption, archived membership, live versus frozen epochs, bounded/fair warming and blocked-index/detail isolation. Current eight-key, period-qualified routes also include `test_session_catalog_periods.py`; display retention versus fresh-key qualification is in `test_stable_refresh.py`. These routes are not fresh execution results. `test_web_session_detail.py` / `integration/web_session.cjs` retain legacy first/middle/latest API coverage and add complete client history, revision-pinned rich chunks, whole-session totals, keyed selection and navigation/lease races. `integration/probe_web_sessions.cjs` uses a fresh hidden Chromium and actual HTTP/assets over synthetic 120-root/1,001-prompt evidence; `probe_web_live.py --sessions` separately observes the real V2 source. Historical --detail/--reports results remain API evidence, not current UI acceptance. Actual timings, cold coverage and physical/macOS/assistive limits: [Sessions findings](../../journal/web/sessions-live.md).
 
 Remaining report presentation shares `display.history_tokens` for configured prompt clocks,
 Next Ictx guidance and CLI historical mix category cells. `projection.token_mix` exports the

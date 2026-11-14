@@ -1,6 +1,33 @@
 # Architecture assessments
 
-## Current assessment — milestone 120
+## Current assessment — milestone 150
+
+Source and checked revision: `a874c664cc67d8b08be40debc7821b9317eef5ab`, 2026-11-14.
+
+**Completed two-level static assessment: global runtime NO_CHANGE and independently
+justified local runtime NO_CHANGE.** The [report](../architecture/governance/verification/architecture-150-20261114.md)
+records all-module metadata coverage, representative source/test reads, normal and
+failure/recovery ownership, simpler alternatives and remaining uncertainty.
+
+Keep display retention separate from source validity: a retained Sessions context,
+model or effort is not a newly qualified sort key. Period controls share calendar
+boundaries, not populations: Sessions uses tree activity; Token Mix uses deduplicated
+request time. Session model/effort and Mini cost groupings consume different facts,
+so merging them into a universal contributor engine would obscure their contracts.
+The finite dispatcher, process cleanup, shared Live and browser attempt lifetimes
+remain distinct; no causal evidence justified replacing their coordination.
+
+Updated the overview/module flow and stale Sessions column/test-route summaries;
+no product, test, tool, release or version change. The report preserves concrete
+navigation risks without treating large routines or two sibling-test imports as
+proof of a runtime defect. Static checks are not product/runtime PASS.
+
+Only Architecture **120 → 150** advances on merge. Ordinary count **150**, last
+ordinary identity `fr/000705`, Test Health **135**, Performance **120**, Session
+Learning **0** and its existing milestone-100 deferral remain unchanged. No new
+exception or deferral; no FR move or second selected task.
+
+## Prior assessment — milestone 120 (historical)
 
 Source and checked revision: `3f994921849ae2cf6f87245c6f3a010353fcbd08`, 2026-11-10.
 

@@ -1,13 +1,13 @@
 # Cost Guard architecture
 
-Source revision: 3f994921849ae2cf6f87245c6f3a010353fcbd08
-Checked revision: 3f994921849ae2cf6f87245c6f3a010353fcbd08
-Last checked: 2026-11-10
+Source revision: a874c664cc67d8b08be40debc7821b9317eef5ab
+Checked revision: a874c664cc67d8b08be40debc7821b9317eef5ab
+Last checked: 2026-11-14
 Status: current
 
 ## Scope and authority
 
-Milestone-120 two-level static assessment and source map, not an exhaustive correctness audit. The [assessment](governance/verification/architecture-120-20261110.md) records whole-repository inventory, representative normal/failure/recovery traces, local coverage and independently justified global/local runtime NO_CHANGE. The [journal](../journal/architecture.md) retains earlier assessments as historical evidence. Module pages retain their own scoped evidence; their earlier runtime/platform results are not rerun here.
+Milestone-150 two-level static assessment and source map, not an exhaustive correctness audit. The [assessment](governance/verification/architecture-150-20261114.md) records whole-repository inventory, representative normal/failure/recovery traces, local coverage and independently justified global/local runtime NO_CHANGE. The [journal](../journal/architecture.md) retains earlier assessments as historical evidence. Module pages retain their own scoped evidence; their earlier runtime/platform results are not rerun here.
 
 Toolkit owns workflow/mirrored `development/README.md`; `development/repository.json` holds release facts; `development/applied-contract.json` records identity (revision 6). History is evidence, not instructions. Development-only work activates no product checks/budgets/version work. Shipped source retains functional release rules. Main is supported; packaged Releases remain paused.
 
@@ -26,7 +26,7 @@ flowchart TD
     cli["CLI: validated config / bootstrap"] --> reports["Reports: scope, acquisition, projections"]
     cli --> live["Watch / Live: cadence, observations, recovery"]
     web["Web host: HTTP, lifecycle / security"] --> demand["Dispatcher: demand, due times, retained publications"]
-    browser["Browser: routes, tables, one SSE connection / tab"] -->|authenticated route interest / lookup| demand
+    browser["Browser: routes, tables, one SSE connection / tab"] -->|authenticated period-qualified interest / lookup| demand
     demand -->|effective priority / admission| jobs["Jobs: executing, parked and retiring owned children"]
     jobs -->|spawn / resume grant| finite["Finite process: application / private report service"]
     web -->|one publisher, not per tab| live
@@ -65,9 +65,9 @@ Arrows group calls, control and consumption, not literal Python imports or one l
 | Independent background lanes | `src/watch/web_coordinator.py` owns four card workers, separate single-worker account-history, detail-supervisor and scalar Sessions-index lanes, plus session-cost reconciliation. `watch/detail_capture.py` supervises one killable child injected by Web composition, with measured no-progress retirement and attempt/source-epoch-qualified publication. Fresh resources isolate blocking work and cancellation; late daily results are checked against the current day. HTTP/pages never tick acquisition. |
 | Source consistency | `src/sources/selection.py` chooses one healthy generation; histories never merge. V1 pins a read-only transaction; V2 brackets complete tree hydration with catalog revisions and bounded fresh attempts. Wire/schema adaptation stays below canonical snapshots. Loopback GET, SSE and cancellation have distinct resource lifetimes. |
 | Accounts / prices | Attempt/account identity and deadlines reject late quota observations while retaining occupied lanes. Account refresh is independent of source cadence. Normal price-cache fallback differs from explicit strict upstream refresh; optional release metadata has separate freshness. Quotas/capacity, reference CCost and billed cost are not interchangeable. |
-| Derived history / cache | Reports own acquisition populations and canonical projections. Cache is reconstructible acceleration, never OpenCode authority or observed history. `src/reports/session_history.py` retains observations; `src/application/session_detail.py` owns revision-pinned rich chunks. `session_catalog.py` owns period-eligible membership, scalar-key coverage and exact scoped sorts, not page-only guesses. |
+| Derived history / cache | Reports own acquisition populations and canonical projections. Cache is reconstructible acceleration, never OpenCode authority or observed history. `src/reports/session_history.py` retains observations; `src/application/session_detail.py` owns revision-pinned rich chunks. `session_catalog.py` owns period-eligible membership, scalar-key coverage and eight exact scoped sorts; retained display-only fields do not qualify pending sort keys. Token Mix applies request-time periods after canonical deduplication, reusing revision-qualified facts/valuations rather than another accounting engine. |
 | Browser / native launchers | `src/web/security.py` / `http.py` enforce loopback/Host/Origin/method/body/session/CSRF. `lifecycle.py` owns instance arbitration/exact-process restart proof. Browser sequence/gap recovery consumes immutable publications. Native pumps, one-use handoff and host close have separate owners. Windows inspection is not macOS/Finder/Gatekeeper proof. |
-| Sessions navigation / optional benchmark | Sessions HTTP records period-qualified leases and reads detached 25-row pages; one Live-owned scalar lane qualifies the complete selected population's sort keys. Today is independent of AI Stats. Browser Cancel retires navigation, not shared work. The independent benchmark lane reuses `ReportJobs`, with its own aggregate cache, freshness and bounded acquisition timeout; it cannot supply prices or history. See the [module flow](modules/web.md#architecture-120-source-map). |
+| Sessions navigation / optional benchmark | Sessions HTTP records period-qualified leases and reads detached 25-row pages; one Live-owned scalar lane qualifies the complete selected population's sort keys. Today is independent of AI Stats. Browser Cancel retires navigation, not shared work. The independent benchmark lane reuses `ReportJobs`, with its own aggregate cache, freshness and bounded acquisition timeout; it cannot supply prices or history. See the [module flow](modules/web.md#architecture-150-source-map). |
 
 ## Semantic and dependency contracts
 
@@ -94,7 +94,7 @@ Start with [CODE_MAP.md](modules/CODE_MAP.md) for exact entrypoints, platform wr
 
 ## Validation, review and delivery flow
 
-Test Health 120 scoped verification update on `dacef69cd72f6a37343798902df474fc8afe4714` (2026-11-10): ordinary rendered smoke remains; the deep pager/layout/navigation/zoom/stall portfolio joins explicit manual Full only. Unchanged runtime claims keep their metadata above. Contract revision 6 and `development/repository.json` retain authority. No new gate, scheduler, paid inference or self-review. Failed required checks remain unfinished; uncertain merge needs reconciliation, not replay.
+Static CI routing checked at the source revision above: ordinary rendered smoke and separate Mini mouse/touch/mixed/control checks are in `web-beta.yml`; deep pager/layout/navigation/zoom/stall coverage remains explicit manual Full. This is workflow inspection, not execution or a change to any gate. Contract revision 6 and `development/repository.json` retain authority. No new scheduler, paid inference or self-review. Failed required checks remain unfinished; uncertain merge needs reconciliation, not replay.
 
 ```mermaid
 flowchart TD
@@ -134,6 +134,6 @@ flowchart TD
 | Development-only | Development/docs changes | No product gates/version work | `development/README.md`; installed maintenance method | Verify changed tooling/facts; no invented product PASS |
 | Product verification | Shipped-source changes | Applicable tests/security/release facts | `development/tools/run_tests.py`, `development/tools/validate_package.py`; `development/repository.json` | Repair required failures; focused development checks remain available |
 | Installation / inference | Relevant local evidence | Conditional read-only probes; inference default-denied | CODE_MAP probes; `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` reserved | Never stop shared OpenCode; disclose gaps |
-| Common CI | Cumulative product/test/tool/workflow PR/push paths; public only | Quick + validator + rendered Chromium smoke; manual Full additionally runs deep pager/layout/navigation/zoom/stall checks | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py::common_suite`; `development/tests/integration/ci_browser_web.py` | Exact selected report required; omitted deep checks NOT RUN; failed/incomplete is not PASS; no workstation spoofing |
+| Common CI | Cumulative product/test/tool/workflow PR/push paths; public only | Quick + validator + rendered Chromium smoke + separate Mini mouse/touch/mixed/control checks; manual Full additionally runs deep pager/layout/navigation/zoom/stall checks | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py::common_suite`; `development/tests/integration/ci_browser_web.py`, `ci_mini_tooltips.py` | Exact selected report required; omitted deep checks NOT RUN; failed/incomplete is not PASS; no workstation spoofing |
 | Native CI | Platform-sensitive entry/config/host/security/jobs/Live/launcher and native test/tool paths; manual dispatch | Conditional Windows/macOS ARM/Intel profile + native smoke, unchanged mechanisms | `.github/workflows/native-web.yml`; `development/tools/ci_web_beta.py`; `development/tests/integration/ci_native_web.py` | No private paid fallback; retain deadlines, phases and missing/failed truth; isolated assets/calculations do not trigger |
 | PR / merge / handoff | Authorized delivery, then confirmed default read-back | Normal checks/protections; native finish/cleanup attempt | Installed `/repo-backlog`; actual GitHub state | No force, replay, cleanup success gate or second task |
