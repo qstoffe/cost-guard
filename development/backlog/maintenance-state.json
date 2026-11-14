@@ -9,8 +9,8 @@
   },
   "deferred": {
     "session-learning": {
-      "milestone": 100,
-      "reason": "Decision Delegate authorized deferral: all eight supported projections remained INCONCLUSIVE after truncation/context fitting, without usable causal sequences. Existing Toolkit FR000463 covers this limitation; no further private retrieval or duplicate proposal. Prerequisite: supported authority/attempt/response/recovery/outcome sequences within existing privacy, identity, sample, size, time and context limits. Completed learning remains 0; this assessment is deferred, not completed/PASS."
+      "milestone": 150,
+      "reason": "Decision Delegate authorized deferral: the bounded scan selected one qualifying source, but its retained causal evidence remained INCONCLUSIVE. Supported message APIs were verified without follow-up private retrieval; the selected source lacked an addressable locator and remaining original acquisition budget was uncertain, not a proven timeout. Prerequisite: a supported exact-source locator and demonstrable remaining acquisition budget for a usable authority/attempt/failure/recovery/outcome sequence within unchanged privacy and acquisition limits. Completed learning remains 0; this assessment is deferred, not completed/PASS. No immediate history retry or duplicate proposal."
     }
   },
   "lastOrdinaryId": "fr/000705"
