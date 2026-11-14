@@ -148,3 +148,26 @@ that existing owner, without changing product code. Original mixed Total-heading
 **hover** still failed. The unbound control completed and observed native hover false,
 but verbose event notices were truncated, so no complete guard/control causal claim
 was made. Compact typed guard/arrival/departure summaries replace those notices.
+
+Revision `bf16da6` passed six actual Mini 61-second holds (subscription, Activity,
+CCost, Total, exceeded Ctx, generic action) and the Full subscription hold, each
+with 61 positive open/hover/connected samples and zero pointer movement. Full's
+Started hold then **FAILED**; later holds/layouts were **NOT RUN**. Source inspection
+found Started recreated and all prompt cells replaced on changed row signatures.
+A strengthened deterministic clock/cell-identity regression failed before the
+narrow fix and passed afterward. Full now reuses its clock target and updates cells
+in place; shared safety and Full copy are unchanged. Native confirmation is pending.
+Decision Delegate confirmed that repair is within this FR, without a waiver.
+
+The mixed trace independently observed trusted positive-hover arrival, then
+**native hover false at the unchanged guard after 600.3ms**, same connected target,
+focused document and no departure event. At 15s hover was positive again but help
+remained closed. This supports the known opening-gap shape, not a watchdog failure
+or proof of a Chromium defect. Control notices were absent after ten earlier step
+notices; journeys now have separate steps and one aggregate stationary summary so
+the complete control result can be read. No mixed-input exclusion is authorized yet.
+
+After the stable-cell repair, local Full again passed **195/195 files** in 163.1s
+(`scratch:/full-tests-stable-cells.json`); the validator passed with the same seven
+advisories. The repaired focused Watch quota and daily groups also passed. Native
+stationary confirmation remains a separate requirement, not inferred from those tests.

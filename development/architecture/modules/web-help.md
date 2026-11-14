@@ -140,6 +140,9 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
   Close/Escape/actions, owner changes, replacement, hidden/pagehide and PiP teardown
   cancel exactly the owned watchdog; closed/focus/pinned states do no recurring work.
   [Current evidence and physical-OS limitation](../../journal/web/mini-tooltips.md).
+- Full Watch's prompt rows retain their cells and Started/Finished help span
+  through metric refresh. Same-prompt updates must not briefly detach a hovered
+  target; true prompt removal and unavailable clock-help transitions remain distinct.
 - No links/buttons or focus trap inside tooltips. Interactive advanced help uses
   native `details/summary` or a suitable nonmodal disclosure. Critical status stays
   visible outside hover help.

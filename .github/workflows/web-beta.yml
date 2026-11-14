@@ -47,9 +47,18 @@ jobs:
       - name: Rendered browser smoke (once)
         if: ${{ !cancelled() }}
         run: python development/tools/ci_web_beta.py browser --scope common
-      - name: Affected Mini and shared hover regression (real elapsed time)
+      - name: Mini keyboard and mouse stationary regression (real elapsed time)
         if: ${{ !cancelled() }}
-        run: python development/tests/integration/ci_mini_tooltips.py
+        run: python development/tests/integration/ci_mini_tooltips.py mouse
+      - name: Mini independent touch regression
+        if: ${{ !cancelled() }}
+        run: python development/tests/integration/ci_mini_tooltips.py touch
+      - name: Mini original mixed-input regression
+        if: ${{ !cancelled() }}
+        run: python development/tests/integration/ci_mini_tooltips.py mixed
+      - name: Mini unbound native-input diagnostic control
+        if: ${{ !cancelled() }}
+        run: python development/tests/integration/ci_mini_tooltips.py control
       - name: Scoped coverage summary
         if: always()
         env:

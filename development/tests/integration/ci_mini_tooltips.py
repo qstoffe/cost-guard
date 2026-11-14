@@ -27,7 +27,7 @@ def observation_summary(value):
     return result
 
 
-def probe(state):
+def probe(state, journey):
     state["stage"] = "checkout-git-identity"
     identity = subprocess.run([*GIT, "rev-parse", "--show-toplevel"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
@@ -35,7 +35,8 @@ def probe(state):
         raise ValueError("checkout_identity_mismatch")
     state["stage"] = "affected-source-git-diff"
     changed = subprocess.run([*GIT, "diff", "--name-only", "HEAD^", "HEAD", "--",
-        "src/web/assets/help.js", "src/web/assets/mini.js", "src/application/mini_costs.py"],
+        "src/web/assets/help.js", "src/web/assets/mini.js", "src/web/assets/watch.js",
+        "src/application/mini_costs.py"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout
     if not changed.strip():
         save("mini-tooltips", dict(outcome="NOT RUN", reason="tooltip owners unchanged"))
@@ -55,37 +56,35 @@ def probe(state):
     env = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable,
         COST_GUARD_CI_BROWSER="1", COST_GUARD_BASELINE_HELP=str(baseline),
         COST_GUARD_BASELINE_REVISION=revision)
-    failed = False
-    for journey in ("mouse", "touch", "mixed", "control"):
-        output = ROOT / f"ci-results/mini-tooltips-{journey}.json"
-        state["stage"] = "native-pip-" + journey
-        result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
-            browser, str(output), "--mini-tooltips", journey], cwd=ROOT, env=env,
-            timeout=960 if journey == "mouse" else 180)
-        detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
-        diagnostic = detail.get("diagnostic")
-        if diagnostic and diagnostic.get("observation"):
-            diagnostic["observation"] = observation_summary(diagnostic["observation"])
-        # Keep each structured observation below Checks' 4096-byte notice cap,
-        # separate from the already-known list of completed probe descriptions.
-        for check in detail.get("checks", []):
-            if isinstance(check, dict) and check.get("observation"):
-                notice("mini-input-control", dict(journey=journey, case=check["case"],
-                    observation=observation_summary(check["observation"])))
-        notice("mini-tooltips", dict(outcome=detail.get("outcome", "FAIL"), journey=journey,
-            reason="Independent native journey" if journey in ("mouse", "touch") else "Retained mixed-input diagnostic",
-            evidence=output.name, diagnostic=diagnostic,
-            checks=[check if isinstance(check, str) else check["case"]
-                for check in detail.get("checks", [])]))
-        failed = failed or result.returncode != 0
-    return int(failed)
+    output = ROOT / f"ci-results/mini-tooltips-{journey}.json"
+    state["stage"] = "native-pip-" + journey
+    result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
+        browser, str(output), "--mini-tooltips", journey], cwd=ROOT, env=env,
+        timeout=960 if journey == "mouse" else 180)
+    detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
+    diagnostic = detail.get("diagnostic")
+    if diagnostic and diagnostic.get("observation"):
+        diagnostic["observation"] = observation_summary(diagnostic["observation"])
+    # Separate observations from descriptions to keep each Checks notice bounded.
+    for check in detail.get("checks", []):
+        if isinstance(check, dict) and check.get("observation"):
+            notice("mini-input-control", dict(journey=journey, case=check["case"],
+                observation=observation_summary(check["observation"])))
+    notice("mini-tooltips", dict(outcome=detail.get("outcome", "FAIL"), journey=journey,
+        reason="Independent native journey" if journey in ("mouse", "touch") else "Retained mixed-input diagnostic",
+        evidence=output.name, diagnostic=diagnostic,
+        checks=[check if isinstance(check, str) else check["case"]
+            for check in detail.get("checks", [])]))
+    return result.returncode
 
 
 def main():
     hosted_only()
     state = {"stage": "start"}
     try:
-        return probe(state)
+        if len(sys.argv) != 2 or sys.argv[1] not in ("mouse", "touch", "mixed", "control"):
+            raise ValueError("explicit_native_journey_required")
+        return probe(state, sys.argv[1])
     except Exception as error:
         # Only these owned local Git/browser-fixture processes run here. Expose
         # bounded stage failures through Checks without requiring raw CI logs.

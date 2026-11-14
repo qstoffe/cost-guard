@@ -75,10 +75,18 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
       assert.ok(state.elapsed>=60000);
       assert.equal(state.events,0,'no pointer input while reading');
       assert.ok(state.samples.length>=55);
-      assert.ok(state.samples.every(value=>value.open&&value.hovered&&value.connected),JSON.stringify({selector,...state}));
-      console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
-        case:index+1,document:id===mini?'pip':'full-watch',selector,
-        elapsed:Math.round(state.elapsed),samples:state.samples.length,pointerEvents:state.events,outcome:'PASS'}));
+      const failed=state.samples.find(value=>!value.open||!value.hovered||!value.connected);
+      if(failed) {
+        const error=new Error('Stationary native hover sample failed');
+        error.probeCase='stationary-'+(index+1);
+        error.observation={case:index+1,document:id===mini?'pip':'full-watch',selector,
+          elapsed:Math.round(state.elapsed),pointerEvents:state.events,samples:state.samples.length,
+          firstFailure:failed,last:state.samples.at(-1),
+          closed:state.samples.filter(value=>!value.open).length,
+          unhovered:state.samples.filter(value=>!value.hovered).length,
+          disconnected:state.samples.filter(value=>!value.connected).length};
+        throw error;
+      }
       layouts.push({case:'stationary-61s',document:id===mini?'pip':'full-watch',selector,...state});
       if(id===mini) {
         const image=await command('Page.captureScreenshot',{format:'png'},mini);
@@ -87,7 +95,14 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
       }
       await mouse(id,1,1);await until(id,`document.getElementById('context-help').hidden`);
     }
-  } finally {await evaluate(owner,'clearInterval(stationaryRefresh)');}
+  } finally {
+    await evaluate(owner,'clearInterval(stationaryRefresh)');
+    const holds=layouts.filter(value=>value.case==='stationary-61s');
+    console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
+      outcome:holds.length===12?'PASS':'PARTIAL',holds:holds.map(value=>({
+        document:value.document,selector:value.selector,elapsed:Math.round(value.elapsed),
+        samples:value.samples.length,pointerEvents:value.events}))}));
+  }
   for(const theme of ['classic','web'])for(const scheme of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},owner);
     await evaluate(owner,`(async()=>applySettings(await api('/api/settings/theme',{theme:'${theme}'})))()`);

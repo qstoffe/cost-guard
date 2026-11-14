@@ -3,6 +3,7 @@
 ## v81.48 - 2026-11-14
 
 - Shared hover help preserves confirmed stationary trigger/popup reading without an input-idle cutoff. The single open-only watchdog retains browser-hover, hit-test contradiction, identity, visibility and lifetime cleanup; only inconclusive hover queries use a bounded fallback.
+- Full Watch retains prompt cells and clock-help targets through metric refresh instead of detaching a stationary reader's target.
 - Mini subscriptions have two-line Capacity/Next reset help with local today/tomorrow/weekday/date tokens. Action/header help is concise; Activity help omits the UTC offset, and Ctx has red value help only for a current, source-qualified exceeded warning.
 - Mini prompt and whole-session cost help groups canonical unrounded contributions by provider/model/effort, including recursive children and root work outside prompt rows. Full Watch keeps its individual-agent detail. Unavailable/partial values remain honest; session duration is N/A where the cost observation supplies no execution interval.
 
