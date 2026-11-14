@@ -1,5 +1,14 @@
 # FR 000692 — P0 BLOCKER: Fix the EXACT 2026-11-12 Claude "version unverified" sessions on the owner's PC, or move THIS FR to On Hold
 
+## Current status — owner-authorized return to Ready (2026-11-14)
+
+**READY TO DEVELOP — priority 000001, permanent FR000692.** The owner expressly returns this **same** FR to Ready and will **not** start the Cost Guard backlog until the OpenCode Toolkit work and owner-controlled installation/activation are finished. Toolkit [FR000478](https://github.com/qstoffe/opencode-toolkit/pull/418) merged its active-config permission repair, but its completion explicitly reported **owner-installed real SDK metadata read/glob NOT RUN**. The latest [HOLD.md](HOLD.md) and older "CURRENT STATUS" / 2026-11-13 release wording below are historical snapshots, not today's queue stage.
+
+**Critical execution prerequisite, not a claim of PASS:** Before relying on local SDK transcript access, confirm that the new Toolkit/profile is actually loaded on the owner's machine and that the intended **native, authorized read and exact historical SDK metadata glob** genuinely work. Respect all native deny, ACL, privacy and scope boundaries. If this prerequisite still fails, investigate the precise native/OS reason and return this same full FR to On Hold with truthful evidence; do not bypass it, fabricate a source match or ship a partial product repair. The owner's new release supersedes the prior *timing* requirement to verify access before moving the backlog document, **not** the requirement to verify before relying on it.
+
+The earlier blocker was Toolkit's profile permission attestation; no independent second pre-implementation blocker has been demonstrated. Implementing Cost Guard's persistent source-qualified Claude reply-model lookup, all exact historical records, supported pricing, UI/cache and cold/warm restart verification is **still this FR's unfinished product work**. Keep the existing all-exact-cases **Complete or On Hold** acceptance unchanged. Retain the earlier recovery branch, private evidence and all historical attachments. This document move neither starts a worker nor updates Cost Guard runtime or maintenance accounting.
+
+
 ## Owner release from On Hold to Ready — 2026-11-13 (CURRENT STATUS)
 
 **READY TO DEVELOP — queue priority 000001, permanent FR000692.**
