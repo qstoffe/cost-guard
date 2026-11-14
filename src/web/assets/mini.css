@@ -52,18 +52,6 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table .mini-error { --mini-row-color: var(--error); }
 .mini-prompt-table :is(.mini-running, .mini-success, .mini-error) > td,
 .mini-prompt-table :is(.mini-running, .mini-success, .mini-error) > td * { color: var(--mini-row-color); }
-.mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem;
-  flex: 0 0 auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
-.mini-accounts li { min-height: 2.65rem; padding-bottom: .4rem; }
-.mini-accounts progress { display: block; appearance: none; border: 0; border-radius: 1rem; overflow: hidden;
-  width: 100%; height: .65rem; margin-top: .2rem; color: var(--watch-quota-fill); accent-color: var(--watch-quota-fill); }
-.mini-accounts progress[hidden] { display: none; }
-.mini-accounts progress::-webkit-progress-bar { background: var(--surface); border-radius: 1rem; }
-.mini-accounts progress::-webkit-progress-value { background: currentColor; border-radius: 1rem; }
-.mini-accounts progress::-moz-progress-bar { background: currentColor; border-radius: 1rem; }
-.mini-accounts progress.mini-exhausted { color: var(--error); accent-color: var(--error); }
-.mini-warning { color: var(--warn); }
-.mini-accounts li.mini-exhausted { color: var(--error); }
 .mini-prompt-table :focus-visible { outline-offset: -3px; }
 .mini-measuring { position: fixed; left: 0; top: 0; visibility: hidden; height: auto; }
 .mini-table-measuring { position: fixed; visibility: hidden; width: max-content; }

@@ -50,7 +50,7 @@ async function main() {
     const close=()=>evaluate('miniWatch.close()');
     const read=()=>evaluate(`(()=>{const w=miniWatch.window,v=miniWatch.view,d=w.document,p=v.prompts,rect=n=>n.getBoundingClientRect();return {
       outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],request:probeRequests.at(-1),desired:v.fitHeight(),
-      rows:v.promptRows.size,accounts:v.lines.size,header:(${require('./probe_mini_width.cjs').inspect.toString()})(v),
+      rows:v.promptRows.size,accounts:v.compactAccounts.lines.size,header:(${require('./probe_mini_width.cjs').inspect.toString()})(v),
       documentOverflow:d.documentElement.scrollWidth>w.innerWidth+1,documentVertical:d.documentElement.scrollHeight>w.innerHeight+1,
       table:{height:p.clientHeight,scroll:p.scrollHeight,horizontal:p.scrollWidth>p.clientWidth+1,vertical:p.scrollHeight>p.clientHeight+1,
         header:rect(v.body.parentNode.tHead).height,rowHeights:[...v.body.rows].filter(r=>r.dataset.id).map(r=>rect(r).height)},
@@ -61,6 +61,21 @@ async function main() {
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+    if(scope==='dashboard-only'||scope==='all') {
+      await require('./probe_watch_dashboard.cjs')({evaluate,until,command,sessionId,open,close,checks:evidence.checks});
+      if(scope==='dashboard-only') {evidence.outcome='PASS';return;}
+    }
+    if(/^duration-(mixed|mouse|touch)-only$/.test(scope)) {
+      await open();
+      await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),
+        ownerSession:sessionId,checks:evidence.checks,input:scope.split('-')[1],trace:true});
+      evidence.outcome='PASS';return;
+    }
+    if(scope==='duration-keyboard-only') {
+      await open();
+      await require('./probe_mini_total_keyboard.cjs')({evaluate,until,command,pip:await pipSession(),checks:evidence.checks});
+      evidence.outcome='PASS';return;
+    }
     if(scope==='context-colors-only'||scope==='all') {
       await open();await require('./probe_mini_context_colors.cjs')({evaluate,command,sessionId,pip:await pipSession(),layouts:evidence.layouts,checks:evidence.checks});
       await close();
@@ -114,7 +129,7 @@ async function main() {
     assert.equal(await evaluate('miniWatch.view.promptRows.size'),5);
     await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
      await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
-     await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});
+     if(scope!=='layout-only')await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});
     await close();await require('./probe_history_readiness.cjs')({fixture,evaluate,until,command,sessionId,open,close,checks:evidence.checks});
     }
     await fixture('density-10-1');await until('liveValue.view.active_cards.length===10');

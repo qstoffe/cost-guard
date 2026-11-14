@@ -43,7 +43,7 @@
       const long = rows().find(row => row.cells[1].textContent.startsWith('Precision-'));
       check(long.cells[1].textContent.length > 100, 'long name remains complete');
       header(1).click();
-       check(header(1).textContent === 'Model ↑' && header(2).textContent === 'Relative Price List Cost ↕', 'ordinary click replaces sort');
+       check(header(1).textContent === 'Model ↑' && header(2).textContent === 'Relative Price List Cost', 'ordinary click replaces sort');
       header(0).dispatchEvent(new MouseEvent('click', {shiftKey: true}));
       header(3).dispatchEvent(new KeyboardEvent('keydown', {key: ' ', shiftKey: true, cancelable: true}));
       check(header(0).textContent === 'Publisher ↑ 2' && header(3).textContent === 'Release date ↑ 3', 'Shift mouse and keyboard additive keys');

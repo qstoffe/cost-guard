@@ -31,7 +31,7 @@ module.exports = (vm, context, seed) => {
     globalThis.linkWatch = new WatchView.View({connection:'Live connected.'});
     linkWatch.update({state:'running',view:linkCase});
     globalThis.linkLegacy = ReportView.element('main'); ReportView.overviewAccounts(linkLegacy, linkCase.accounts);`, context);
-  for (const root of [context.linkAccounts.grid, context.linkWatch.accounts, context.linkLegacy]) {
+  for (const root of [context.linkAccounts.grid, context.linkLegacy]) {
     const headings = root.querySelectorAll('h4');
     assert.equal(headings.length, cases.length);
     headings.forEach((heading, index) => {
@@ -80,5 +80,6 @@ module.exports = (vm, context, seed) => {
   context.linkObservation.provider_id = 'unknown';
   vm.runInContext('ReportView.syncUnits(linkHeading)', context);
   assert.equal(context.linkHeading.querySelectorAll('a').length, 0);
-  assert.equal(context.linkWatch.accounts.querySelectorAll('h4')[8].textContent, label);
+  assert.equal(context.linkWatch.accounts.querySelectorAll('h4').length, 0, 'Watch uses the Mini-style list, not linked cards');
+  assert.ok(context.linkWatch.accounts.textContent.includes(label), 'compact source labels remain literal text');
 };

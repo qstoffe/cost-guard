@@ -309,10 +309,10 @@ const ReportView = (() => {
     const grid = element('table');
     grid.append(element('caption', title));
     const head = element('thead'), header = element('tr');
-    const headers = [];
+    const headers = [], headerLabels = [];
     columns.forEach((column, index) => {
       const th = element('th'), button = element('button', column); th.scope = 'col';
-      ContextHelp.heading(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.');
+      headerLabels.push(ContextHelp.heading(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.'));
       button.addEventListener('click', () => {
         const old = state.sorts[key];
         if (old?.index === index && old.direction === -1) delete state.sorts[key];
@@ -346,7 +346,12 @@ const ReportView = (() => {
       const queries = [state.search, state.filters[key]].filter(Boolean).map(q => q.toLocaleLowerCase());
       const shown = rows.filter(row => queries.every(q => cells(row).map(text).join(' ').toLocaleLowerCase().includes(q)));
       const sort = state.sorts[key];
-      headers.forEach((th, index) => th.setAttribute('aria-sort', sort?.index === index ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'));
+      headers.forEach((th, index) => {
+        const active = sort?.index === index, order = sort?.direction === 1 ? 'ascending' : 'descending';
+        th.setAttribute('aria-sort', active ? order : 'none');
+        headerLabels[index].textContent = columns[index] + (active ? sort.direction === 1 ? ' ↑' : ' ↓' : '');
+        th.children[0].setAttribute('aria-label', columns[index] + (active ? ', ' + order : ', not sorted') + '. Activate to sort.');
+      });
       if (sort) shown.sort((a, b) => {
         const x = values(a)[sort.index], y = values(b)[sort.index];
         if (x == null || y == null) return x == null ? y == null ? 0 : 1 : -1;
@@ -503,7 +508,7 @@ const ReportView = (() => {
       headers.forEach(([cell, button, label], index) => {
         const priority = choice.sorts.findIndex(sort => sort.index === index), sort = choice.sorts[priority];
         cell.setAttribute('aria-sort', priority === 0 ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
-        text(label, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
+        text(label, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ''));
         button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
       });
       const wanted = [];

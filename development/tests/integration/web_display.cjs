@@ -31,7 +31,7 @@ assert.ok(!output.textContent.includes('0.000000123456789/0/0/2'), 'retired nati
 assert.ok(!output.textContent.includes('Promo notice'));
 assert.ok(!output.textContent.includes('New notice'), 'standalone New Models notice is absent');
 assert.ok(!output.textContent.includes('Tail note'));
-assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative Price List Cost ↓', 'Release date ↕']);
+assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative Price List Cost ↓', 'Release date']);
 assert.ok(all(output, 'span').some(n => n.className?.split(' ').includes('promotion') && n.textContent.includes('0.1x')));
 assert.ok(all(output, 'span').some(n => n.className === 'new' && n.textContent.includes('M')));
 // Equal display strings cannot decide ordering; raw decimal strings still do.

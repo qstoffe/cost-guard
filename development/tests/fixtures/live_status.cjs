@@ -13,7 +13,7 @@ module.exports = function liveStatus(vm, context, clock) {
   const start = clock(), value = structuredClone(context.input);
   value.state = 'running'; value.source_observed_at_ms = 100;
   Object.assign(value.view, {cards_state:'observed', daily_state:'observed', quota_stale:false, quota_recovering_count:0});
-  value.view.active_cards = [structuredClone(context.input.view.history_cards[0])];
+  value.view.active_cards = [structuredClone(context.input.view.active_cards[0])];
   const card = value.view.active_cards[0]; card.session_id = 'quiet-card'; card.state = 'observed'; card.observed_at_ms = 100;
   value.view.daily_usage = {observed_at_ms:100, total:{complete:true, observed_requests:1, priced_requests:1, display:{known_ccost:'42'}}, prompt_count:7};
   const account = structuredClone(context.input.view.accounts.accounts[0]);
@@ -22,10 +22,11 @@ module.exports = function liveStatus(vm, context, clock) {
   context.quietValue = value;
   vm.runInContext('globalThis.quietView = new WatchView.View({connection:"Live connected."}); quietView.update(quietValue)', context);
   const view = context.quietView, rendered = [...view.cards.values()].find(c => c.value.session_id === card.session_id);
-  const quota = view.accountCards.grid.children[0], daily = view.daily.children[1];
+  vm.runInContext('globalThis.quietAccounts = new AccountCards.View(); quietAccounts.update(quietValue.view)', context);
+  const quota = context.quietAccounts.grid.children[0], daily = view.daily.children[1];
   card.state = 'partial'; card.session_summary.state = 'partial';
   value.view.daily_state = 'partial'; account.observation.availability = 'partial';
-  const update = ms => { clock(start + ms); vm.runInContext('quietView.update(quietValue)', context); };
+  const update = ms => { clock(start + ms); vm.runInContext('quietView.update(quietValue); quietAccounts.update(quietValue.view)', context); };
   update(0);
   for (const ms of [1000, 5000, 10000, 30000, 59999]) {
     value.view.now_ms++; value.source_observed_at_ms++;

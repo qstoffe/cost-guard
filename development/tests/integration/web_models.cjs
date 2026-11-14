@@ -162,7 +162,7 @@ assert.equal(all(output, 'th')[1].attrs['aria-sort'], 'none');
 click('Relative Price List Cost', {shiftKey: true});
 assert.deepEqual(names(), ['Z lower tier', 'A higher tier', 'No tier', 'Higher base', 'Unknown']);
 check(0, true); assert.equal(button('Relative Price List Cost').textContent, 'Relative Price List Cost ↑ 1');
-click('Model'); assert.equal(button('Relative Price List Cost').textContent, 'Relative Price List Cost ↕');
+click('Model'); assert.equal(button('Relative Price List Cost').textContent, 'Relative Price List Cost');
 click('Publisher', {shiftKey: true});
 assert.equal(button('Publisher').textContent, 'Publisher ↑ 2');
 let prevented = false;
@@ -172,7 +172,7 @@ button('Release date').events.keydown({key: ' ', shiftKey: true, preventDefault(
 assert.equal(button('Release date').textContent, 'Release date ↓ 3');
 click('Publisher');
 assert.equal(button('Publisher').textContent, 'Publisher ↓');
-assert.equal(button('Model').textContent, 'Model ↕');
+assert.equal(button('Model').textContent, 'Model');
 assert.equal(all(output, 'th')[0].attrs['aria-sort'], 'descending');
 
 // Valid dates are chronological, invalid rollover and missing stay last both ways.
@@ -206,7 +206,7 @@ state.benchmark.data={...benchmark,refreshing:true,fetched_text:'new factual obs
 assert.deepEqual(benchmarkRows(),stableBenchmarkRows,'status/date-only draw retains benchmark rows');
 state.benchmark.data=benchmark;state.benchmark.draw();
 assert.deepEqual([...state.benchmark.headers].map(([th]) => th.textContent),
-  ['Publisher ↕', 'Model ↕', 'Effort ↕', 'Relative Task Cost ↕', 'Solved ↓']);
+  ['Publisher', 'Model', 'Effort', 'Relative Task Cost', 'Solved ↓']);
 assert.equal(state.benchmark.headers[4][0].attrs['aria-sort'], 'descending');
 assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['2.0x', '3.0x', '1.0x', '4.0x'], 'equal solved scores use stable client/effort identity ties');
 assert.equal(benchmarkRows().length, 4);

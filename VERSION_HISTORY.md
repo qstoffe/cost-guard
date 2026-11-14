@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v81.58 - 2026-11-14
+
+- Web Watch shows positively running prompts only, with CCost Today/prompts and the one existing Mini toggle at the top, then shared compact subscriptions capped to Mini's default content width. Sessions and Mini retain their independent history; Accounts retains full quota cards.
+- Watch prompt CCost help shares Mini's model/effort/cost/Duration structure; Calls combines physical requests by provider/model/effort. Token Mix starts with Loading and retains qualified same-scope percentages through pending refresh. Running context delta is the signed raw matching footer Next minus prompt Ictx, without changing historical/CLI arithmetic.
+- Independently verified current tool inputs survive unrelated historical omissions, preserving safe disclosure text, open state, focus and selection while clocks advance. Actual authority loss, changed identities and redaction corrections still clear/update immediately. Mini Total help uses canonical whole-session accumulated execution intervals, not prompt age.
+- Unsorted sortable Web headers omit neutral arrows; active directions, keyboard/multisort behavior and Mini's Fit Height control remain unchanged.
+
 ## v81.57 - 2026-11-14
 
 - Mini Watch's Completed and Aborted/Error rows apply their green/red foreground to all five cells and descendants, preserving Running yellow and restoring Ctx-only threshold styling when the same row becomes Earlier. Warning help and canonical source data are unchanged.

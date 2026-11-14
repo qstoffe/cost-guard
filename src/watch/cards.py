@@ -11,7 +11,9 @@ from .card_workers import CardRequest
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError
 from src.reports.session_history import retain_unverified_row, unverified_refresh
 from src.reports.watch_context import retain_session_context
+from src.reports.watch_capture import running_context_rows
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
+from src.analysis.duration import accumulated_duration
 
 
 @dataclass(slots=True)
@@ -37,6 +39,7 @@ class CardSession:
     retry_on_tick: bool = False
     last_context: object = None
     inspect_recent: bool = False
+    invocation_generation: int = 0
 
 
 class WatchCards:
@@ -171,13 +174,21 @@ class WatchCards:
                 snapshot if capture.authoritative else None)
             if context is not None:
                 entry.last_context = context
-            capture = replace(capture, context=context)
+            if (not capture.authoritative and entry.capture is not None
+                    and revision_matches and entry.verified_generation == entry.generation):
+                capture = replace(capture, duration_intervals=entry.capture.duration_intervals)
+            capture = replace(capture, context=context,
+                rows=running_context_rows(capture.rows, context, capture.context_comparable_ids))
             entry.capture, entry.tools, entry.snapshot = replace(capture, cost_snapshot=None), dict(tools), snapshot
+            # Tools are sanitized from the fresh snapshot, independently of the
+            # union used for historical accounting. Missing old history is not a
+            # reason to hide a currently verified physical call's safe input.
+            entry.invocation_generation = entry.generation if capture.authoritative and revision_matches else 0
             entry.latest_ms = capture.latest_ms
             representative = capture.history_row
             entry.finished_ms = (representative.completed_at_ms or 0) if representative else 0
             entry.state = "partial" if capture.retained else "observed"
-            if not capture.retained:
+            if capture.authoritative and revision_matches:
                 entry.source_status.clear()
             if capture.authoritative and revision_matches:
                 entry.verified_generation = entry.generation
@@ -321,6 +332,8 @@ class WatchCards:
                 "", (), state=state, session_context=retain_session_context(None, entry.last_context), session_cost=entry.cost.value,
                 session_cost_state=entry.cost.status)
         representative = representative or (focal if focal is not None else capture.history_row)
+        invocation_verified = (entry.invocation_generation == entry.generation
+            and entry.source_status.failed_at is None and state != 'unavailable')
         rows = (representative,) if representative is not None else ()
         projected = []
         for row in rows:
@@ -342,13 +355,15 @@ class WatchCards:
                     running_invocations=tuple(detail for detail in tool.running_invocations
                         if now_ms - detail.started_at_ms >= RUNNING_VISIBLE_AFTER_MS) if show_running else (),
                     running_invocation_count=tool.running_invocation_count if show_running else 0,
+                    # Canonical fresh lifecycle also includes linked child work,
+                    # which need not have a background-registry invocation.
                     background_kinds=row.background_kinds if row.in_progress else (),
                     background_invocation=tool.background_invocation if row.in_progress and len(row.background_kinds) == 1 else None,
                     background_invocations=tool.background_invocations if row.in_progress and row.background_kinds else (),
                     background_invocation_count=tool.background_invocation_count if row.in_progress and row.background_kinds else 0,
                     background_ms=max(0, now_ms - row.background_started_ms)
                         if row.in_progress and row.background_kinds else 0)
-                if state != "observed" or entry.verified_generation != entry.generation or capture.retained or row.execution_unverified:
+                if not invocation_verified or row.execution_unverified:
                     tool = replace(tool, running_invocation=None, background_invocation=None,
                         running_invocations=(), background_invocations=(), failed_invocations=(),
                         detail_state="invalidated" if state == "unavailable" or row.execution_unverified else "pending")
@@ -362,7 +377,12 @@ class WatchCards:
                 if focal is not None and state == 'observed' and not capture.retained
                 and entry.verified_generation == entry.generation else None),
             activity_scope=hashlib.sha256(repr((entry.root.provenance.source_type,
-                entry.root.provenance.source_generation, entry.root.provenance.source_instance)).encode()).hexdigest())
+                entry.root.provenance.source_generation, entry.root.provenance.source_instance)).encode()).hexdigest(),
+            invocation_verified=invocation_verified,
+            session_duration_ms=accumulated_duration((start,
+                max(duration or 0, now_ms - start) if running and (state == 'observed' or invocation_verified) else duration)
+                for start, duration, running in capture.duration_intervals)
+                if capture.duration_intervals and state != 'unavailable' else None)
 
     def project(self, now_ms):
         active = []

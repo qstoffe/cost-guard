@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v81.45
+# Watch lifecycle and activity — v81.58
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -137,18 +137,24 @@ Running without an extra visible heading (a focused or user-closed child control
 remains accessible).
 
 Different physical calls, prompt/source generations and lost verification clear
-obsolete input. Terminal/unverified prompts and unavailable/retained observations
+obsolete input. Terminal/unverified prompts and genuinely unverified observations
 clear **running** detail immediately; final failed detail follows the separate
 brief terminal activity lifetime above. Existing timers, status/count lifecycle
 and CLI/Mini are unchanged.
 
-Full Watch distinguishes pending detail projections from authoritative membership.
-During a same-source partial/retrying/reverification publication, existing native
-controls keep the user's open/closed choice; their old input and failure reason
-are cleared immediately, even under focus or text selection. Only bounded opaque
-UI identities survive until recovery or invalidation. A genuinely unavailable or
+Full Watch distinguishes current-call authority from unrelated retained historical
+accounting. A successful complete current read can verify sanitized running,
+background and failed details even while unrelated older history is partial.
+Benign same-physical-call updates preserve safe text, native open/closed choices,
+focus and selection while clocks advance. Genuine pending loss of invocation
+authority clears private input immediately, even under focus/selection; only bounded
+opaque UI identities survive until recovery or invalidation. A genuinely unavailable or
 execution-unverified source removes old call identities; real completion, removal
 and source/prompt switches cannot inherit them.
+
+Web Watch itself shows positively running prompts only: terminal cards leave
+immediately, rather than entering an Earlier section. Mini's independent history
+and the canonical CLI/history lifecycle described above remain unchanged.
 
 Once a red failure group has evidenced members, its nonzero aggregate keeps the
 same expansion arrow during omitted-detail updates, with an honest availability

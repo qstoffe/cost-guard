@@ -49,10 +49,12 @@ module.exports = async (evaluate, command, session) => {
     const current=group.jobs.values().next().value; current.node.open=true;
     const prompt=INPUT.view.active_cards[0].rows[0].prompt; prompt.in_progress=false;
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const terminal=group.node.open && current.node.open;
+    const terminal=!card.root.isConnected && !current.node.open && current.input.textContent==='';
     prompt.in_progress=true; state.connection='Disconnected';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const cleared=current.input.textContent==='' && group.jobs.size===0;
+    const replacement=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+    const cleared=current.input.textContent==='' && group.jobs.size===0 &&
+      [...replacement.tools.rows.values()].every(row=>!row.jobs?.size);
     state.connection='Live connected.'; ReportView.renderLive(document.getElementById('result'), INPUT, state);
     card.tools.node.open=false;
     return {stable,indentation,sourceOwned,noNetwork,removed,terminal,cleared,

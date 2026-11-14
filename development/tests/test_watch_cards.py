@@ -205,7 +205,8 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual('unavailable', cards.project(1005)[0][0].state)
         self.assertEqual(first.rows, cards.project(1005)[0][0].rows, 'retained running duration is not freshened')
         self.publish(cards, root, replace(capture, retained=True), now=1006)
-        self.assertEqual('unavailable', cards.project(1007)[0][0].state, 'retained publication is not recovery')
+        self.assertEqual('partial', cards.project(1007)[0][0].state,
+            'successful complete current read recovers source availability, not historical completeness')
         self.publish(cards, root, capture, now=1008)
         self.assertEqual('observed', cards.project(1009)[0][0].state)
         cards.accept(CardResult(root.session_id, entry.generation, 'unavailable', http_failure(401, phase='capture')), 1010)

@@ -5,7 +5,7 @@ from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 from .watch_accounts import watch_account
-from .prompt_costs import cost_detail, mini_cost_detail
+from .prompt_costs import cost_detail, mini_cost_detail, watch_calls
 from .mini_costs import mini_groups
 from .reference_cost import issue_records
 from src.analysis.timezones import local_date_range, resolve_timezone
@@ -25,7 +25,8 @@ def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
         ("comparison_cost", comparison(row.prompt.comparison_cost)),
         ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt)),
-        *mini_cost_detail(row.prompt)))
+         *mini_cost_detail(row.prompt)))
+    projected = ObjectValue(projected.fields + (("watch_calls_help", watch_calls(row.prompt)),))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
         watch_duration_ms=row.prompt.duration_ms,
@@ -60,14 +61,15 @@ def card(value, now_ms):
     cost = value.session_cost
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
         activity_scope=value.activity_scope,
-        rows=tuple(card_row(row, now_ms, value.state == "observed",
-            "observed" if value.state == "observed" else
+        invocation_verified=value.invocation_verified,
+        rows=tuple(card_row(row, now_ms, value.invocation_verified if value.invocation_verified is not None else value.state == "observed",
+            "observed" if value.invocation_verified or value.state == "observed" else
             "pending" if value.state in {"partial", "pending", "loading", "refreshing", "retrying", "retained"}
             else "invalidated") for row in value.rows), state=value.state,
         observed_at_ms=value.observed_at_ms,
         context_handoff=None if value.context_handoff is None else record(
             previous_id=value.context_handoff[0], previous_tokens=value.context_handoff[1]),
-        session_summary=record(context=None if context is None else record(
+        session_summary=record(duration_ms=value.session_duration_ms, context=None if context is None else record(
             watch_next_context_tokens=context.tokens,
             **{name: getattr(context, name) for name in ('context_state', 'context_scope', 'context_epoch',
                 'context_provider', 'context_model', 'context_anchor')},

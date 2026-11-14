@@ -33,31 +33,21 @@ function lifecycle(context, input) {
     vm.runInContext('ReportView.renderLive(parent, example, state)', context);
     const watch = context.state.watch;
     const card = [...watch.cards.values()].find(card => card.value.session_id === input.stopped);
-    assert.ok(card);
-    const row = card.body.children[0];
     if (index < runningFrames) {
+      assert.ok(card);
+      const row = card.body.children[0];
       assert.equal(row.className, 'watch-running');
       assert.match(row['aria-label'], /Running/);
       if (index && input.runningFrames) assert.match(row['aria-label'], /subagent activity/);
     } else {
-      assert.notEqual(row.className, 'watch-running');
-      assert.ok(!row['aria-label'].includes('Running'));
-      if (index === runningFrames) {
-        assert.equal(card.running.hidden, true);
-        assert.equal(card.background.hidden, true);
-      } else assert.equal(card.activity.hidden, true);
-      const duration = row.children[1].textContent;
-      if (index === runningFrames) frozenDuration = duration;
-      else assert.equal(duration, frozenDuration);
-      assert.equal(watch.active.children.includes(card.root), index === runningFrames);
-      assert.equal(watch.history.children.includes(card.root), index > runningFrames);
+      assert.equal(card,undefined,'ended prompts leave Web Watch immediately');
+      assert.equal(watch.history,undefined,'no replacement history subsection');
     }
   }
   context.state = {connection: 'Live connected.'};
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   const reloaded = [...context.state.watch.cards.values()].find(card => card.value.session_id === input.stopped);
-  assert.notEqual(reloaded.body.children[0].className, 'watch-running');
-  assert.equal(reloaded.body.children[0].children[1].textContent, frozenDuration);
+  assert.equal(reloaded,undefined,'reload does not restore a terminal grace/history card to Watch');
   console.log('web lifecycle passed');
 }
 async function tokenMix(context, frames, helpText) {
@@ -84,8 +74,8 @@ async function tokenMix(context, frames, helpText) {
         observedComponents.set(key, d[key]);
       return observedComponents.get(key) ?? d[key];
     };
-    assert.ok(help.startsWith(`Incoming Context CCost (I): ${amount('incoming_context_ccost')}\nExtra CCost (E): ${amount('extra_ccost')}\n`));
-    assert.ok(help.includes(d.cost_detail_help), 'rich cost detail follows the accepted split');
+    assert.match(help,/Main Model:[\s\S]*Duration:/);
+    assert.doesNotMatch(help,/Incoming Context CCost|Extra CCost|Total CCost/);
     return help;
   };
   assert.equal(mix(), '100/0/0/0');
@@ -94,7 +84,11 @@ async function tokenMix(context, frames, helpText) {
   for (let index=1; index<frames.length; index++) {
     snapshot = {instance_id:'mix', sequence:index, values:{live:frames[index]}};
     stream.emit(index, frames[index]);
-    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20','running','25/75/0/0','N/A'][index]);
+    if(index===frames.length-1) {
+      assert.equal(context.state.watch.cards.size,0,'terminal source update removes running card');
+      continue;
+    }
+    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20','Loading…','25/75/0/0'][index]);
     assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
     const acceptedCost = costText(frames[index].view.active_cards.at(-1).rows[0].prompt);
     assert.equal(cost(), acceptedCost);
@@ -106,30 +100,27 @@ async function tokenMix(context, frames, helpText) {
   }
   stream.onerror();
   assert.match(context.state.connection, /interrupted/);
-  assert.equal(mix(), 'N/A', 'disconnect retains last observation, not invented current usage');
+  assert.equal(context.state.watch.cards.size,0);
   stream.onopen(); await turns();
-  assert.equal(mix(), 'N/A');
+  assert.equal(context.state.watch.cards.size,0);
   // Lifecycle ink consumes the accepted focal prompt, not session-wide idleness.
   const success = JSON.parse(JSON.stringify(frames.at(-1)));
   const focal = success.view.active_cards.at(-1).rows[0].prompt;
   Object.assign(focal, {in_progress:false, aborted:false, has_error:false, completed_successfully:true});
   snapshot = {instance_id:'mix', sequence:frames.length, values:{live:success}};
   stream.emit(snapshot.sequence, success);
-  assert.equal(card.title.className, 'watch-success-title');
-  assert.equal(row.className, 'watch-success');
+  assert.equal(context.state.watch.cards.size,0);
   stream.emit(snapshot.sequence-1, frames[0]);
-  assert.equal(card.title.className, 'watch-success-title', 'older source revision cannot roll back completion ink');
+  assert.equal(context.state.watch.cards.size,0,'stale event cannot resurrect completion');
   for (const flags of [{completed_successfully:false}, {completed_successfully:true,aborted:true},
       {aborted:false,has_error:true}, {has_error:false,in_progress:true}]) {
     Object.assign(focal, flags); snapshot.sequence++;
     stream.emit(snapshot.sequence, success);
-    const expected = focal.in_progress ? 'watch-running-title' : '';
-    assert.equal(card.title.className, expected, 'unknown/error/abort never imply successful completion; resumption clears green');
-    assert.notEqual(row.className, 'watch-success');
+    assert.equal(context.state.watch.cards.size,focal.in_progress?1:0);
   }
   snapshot.sequence += 3;
   stream.emit(snapshot.sequence, frames[0]); await turns();
-  assert.equal(mix(), 'N/A', 'gap accepts HTTP snapshot, not unverified event body');
+  assert.equal(context.state.watch.cards.size,1,'gap accepts HTTP snapshot, not unverified event body');
   console.log('web token mix SSE passed');
 }
 async function main() {
@@ -198,7 +189,7 @@ async function main() {
   vm.runInContext(fs.readFileSync('src/web/assets/account-cards.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
-  assert.equal(context.state.watch.earlier.children[0].textContent, 'Earlier Sessions');
+  assert.equal(context.state.watch.earlier,undefined);
   assert.ok(!/Session Total|provisional/.test(context.parent.textContent));
   assert.ok(!/Run CCost|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
   assert.ok(context.parent.textContent.includes(input.view.active_cards[0].title));
@@ -237,10 +228,10 @@ async function main() {
   }
   assert.match(firstRow.children[0].textContent, /^\d\d:\d\d$/);
   assert.equal(firstRow.children[2].children[0].children[0].textContent, '#' + input.view.active_cards[0].rows[0].prompt.prompt_number);
-  assert.equal(firstRow.children[7].textContent, input.view.active_cards[0].rows[0].prompt.display.token_mix_percent);
+  assert.equal(firstRow.children[7].textContent, 'Loading…');
   assert.equal(firstRow.children[8].textContent, input.view.active_cards[0].rows[0].prompt.display.incoming_context_tokens);
   assert.equal(firstRow.children[9].textContent, input.view.active_cards[0].rows[0].live_context.display.watch_delta_context_tokens);
-  assert.equal(watch.earlier.open || false, false);
+  assert.equal(watch.earlier,undefined);
   const concurrent = JSON.parse(JSON.stringify(input));
   const completed = concurrent.view.active_cards[0];
   const completedPrompt = completed.rows.find(row => row.prompt.event_id === completed.focal_id).prompt;
@@ -253,12 +244,12 @@ async function main() {
   context.concurrentParent = new Node('div'); context.concurrentState = {connection:'Live connected.'};
   vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);
   const concurrentWatch = context.concurrentState.watch;
-  assert.equal(concurrentWatch.active.children[0].children[0].children[0].className, 'watch-success-title');
-  assert.equal(concurrentWatch.active.children[1].children[0].children[0].className, 'watch-running-title');
+  assert.equal(concurrentWatch.active.children.length,1);
+  assert.equal(concurrentWatch.active.children[0].children[0].children[0].className, 'watch-running-title');
   concurrent.view.active_cards = [running];
   concurrent.view.history_cards = [{...completed, focal_id:''}];
   vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);
-  assert.equal(concurrentWatch.history.children[0].children[0].children[0].className, '', 'Earlier title returns to historical presentation');
+  assert.equal(concurrentWatch.history,undefined,'history remains a Mini/Sessions concern');
   // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));
   const other = JSON.parse(JSON.stringify(input.view.active_cards[0]));
@@ -268,30 +259,28 @@ async function main() {
   multiple.view.active_cards.push(other);
   context.example = multiple;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(context.parent.querySelectorAll('table').length, 2);
+  assert.equal(context.parent.querySelectorAll('table').length, 1);
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
-  assert.ok(context.parent.querySelectorAll('tr').some(row => /Aborted · quota limit/.test(row['aria-label'])));
+  assert.ok(!context.parent.querySelectorAll('tr').some(row => /Aborted · quota limit/.test(row['aria-label'])));
   assert.equal(context.parent.querySelectorAll('input').length, 0);
-  assert.equal(context.parent.querySelectorAll('button').filter(node => node.className.includes('watch-column-help')).length, 20, 'ten column-help controls per card');
-  // A running update cannot destroy selected text; latest data applies on a later tick.
+  assert.equal(context.parent.querySelectorAll('button').filter(node => node.className.includes('watch-column-help')).length, 10, 'ten column-help controls per running card');
+  // A running update preserves the selected clock target without freezing metrics.
   selected = firstCell;
   multiple.view.active_cards[0].rows[0].prompt.preview = 'Latest running update';
   multiple.view.active_cards[0].rows[0].prompt.display.ccost = '123';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(firstRow.children[0], firstCell);
-  assert.ok(!firstCard.body.textContent.includes('Latest running update'));
+  assert.match(firstCard.body.textContent, /Latest running update/);
   selected = null;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.match(firstCard.body.textContent, /Latest running update/);
   firstCard.tools.node.open = true;
   firstCard.skills.node.open = true;
-  watch.earlier.open = true;
-  watch.history.scrollTop = 93;
   document.activeElement = firstCard.tools.summary;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(document.activeElement, firstCard.tools.summary);
   assert.equal(firstCard.tools.node.open, true); assert.equal(firstCard.skills.node.open, true);
-  assert.equal(watch.earlier.open, true); assert.equal(watch.history.scrollTop, 93);
+  assert.equal(watch.history,undefined);
   document.activeElement = null;
   require('../fixtures/watch_tool_outcomes.cjs')(firstCard, helpText, document, node => selected = node);
   for (const count of [0, 1, 5, 7]) {
@@ -303,7 +292,7 @@ async function main() {
     assert.match(firstCard.skills.summary.textContent, new RegExp(count + ' skills'));
     if (count === 7) { assert.match(firstCard.tools.summary.textContent, /3 × other/); assert.match(firstCard.skills.summary.textContent, /2 other/); }
   }
-  multiple.view.active_cards = Array.from({length: 100}, (_, n) => ({...other, session_id: 'session-' + n}));
+  multiple.view.active_cards = Array.from({length: 100}, (_, n) => ({...input.view.active_cards[0], session_id: 'session-' + n}));
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(watch.active.children.length, 100);
   const anchored = watch.active.children[0];
@@ -321,12 +310,12 @@ async function main() {
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(watch.active.children.length, 0);
   assert.match(watch.empty.textContent, /No running prompts/);
-  assert.equal(watch.history.textContent, 'No earlier sessions');
+  assert.equal(watch.history, undefined);
   multiple.view.history_state = 'unavailable';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(watch.history.textContent, multiple.view.history_epoch > 0 ? 'No earlier sessions' : 'Unable to load earlier sessions');
+  assert.equal(watch.history, undefined);
   assert.equal(watch.empty.textContent, 'No running prompts');
-  assert.equal(watch.earlier.open, true);
+  assert.equal(watch.earlier, undefined);
   console.log('web live passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

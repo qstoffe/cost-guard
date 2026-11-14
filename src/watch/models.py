@@ -148,6 +148,8 @@ class WatchCard:
     observed_at_ms: int | None = None
     context_handoff: tuple[str, int] | None = None
     activity_scope: str = ""
+    invocation_verified: bool | None = None
+    session_duration_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

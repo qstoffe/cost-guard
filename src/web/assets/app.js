@@ -92,6 +92,7 @@ function selectTokenMix(state, period) {
 const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
   () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
+miniWatch?.measure?.loaded?.then(() => { if (current?.section === 'watch') show(current); });
 function applySettings(value) {
   ReportView.setTimezone(value.timezone_id);
   const confirmed = WebSettings.apply(value, output);
@@ -276,7 +277,10 @@ function show(state) {
       state.accounts.update(liveValue?.view || {});
       state.accounts.attach(output);
     } else if (liveValue?.view) {
+      state.miniControls = miniWatch?.button.parentNode;
       ReportView.renderLive(output, liveValue, state);
+      const width = miniWatch?.defaultContentWidth();
+      if (width && state.watch) state.watch.accounts.style.maxWidth = width + 'px';
     } else {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
       output.replaceChildren();
@@ -622,7 +626,7 @@ async function connect() {
      if (state.data_dispatcher && typeof DataDemand !== 'undefined') {
        const writable = () => !!csrf && hostState.writable && !hostState.terminal;
        demand = new DataDemand.Controller(api, () => current && {...current,
-         history: current.section === 'watch' && current.watch?.earlier.open === true}, writable,
+         history: false}, writable,
          {history: state.history_demand === true});
        if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
          () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
@@ -697,9 +701,6 @@ document.addEventListener('visibilitychange', () => {
   }
   scheduleCachedReport();
 });
-document.addEventListener('toggle', event => {
-  if (event.target === current?.watch?.earlier) demand?.update();
-}, true);
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }
 });

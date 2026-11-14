@@ -22,10 +22,11 @@ module.exports=(vm,context,sample,helpText)=>{
       }
     });
     const raw=JSON.stringify(source);
-    vm.runInContext(`ReportView.setUnit('${unit}',capacityPage.root);
+    vm.runInContext(`ReportView.setQuotaMode('remaining');ReportView.setUnit('${unit}',capacityPage.root);
       ReportView.syncUnits(capacityWatch.root)`,context);draw();
     const card=context.capacityPage.grid.children[0];
-    assert.equal(context.capacityPage.root.textContent,context.capacityWatch.accounts.textContent);
+    assert.match(helpText(context.capacityWatch.accounts.children[0].children[0].children[0]),/^Capacity:[\s\S]*Next reset:/);
+    assert.equal(context.capacityWatch.accounts.querySelectorAll('h4').length,0);
     assert.equal(lines(card).length,2,'unknown primary keeps both semantic rows');
     const footer=card.children.find(n=>n.className==='watch-account-footer'),secondary=footer.children[0].children[0];
     assert.equal(lines(secondary).length,2,'unknown secondary keeps both semantic rows');

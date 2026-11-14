@@ -5,7 +5,7 @@ module.exports = (vm, context, seed, helpText) => {
   vm.runInContext(`globalThis.todayAccounts=new AccountCards.View();todayAccounts.update(todayCase);
     globalThis.todayWatch=new WatchView.View({connection:'Live connected.'});
     todayWatch.update({state:'running',view:todayCase});`, context);
-  const roots = [context.todayAccounts.grid, context.todayWatch.accounts];
+  const roots = [context.todayAccounts.grid];
   const targets = roots.map(root => root.querySelectorAll('h4')[0].querySelectorAll('a')[0]);
   for (const availability of ['stale', 'unavailable', 'available']) {
     for (const amount of ['0', '125', '—']) {
@@ -24,6 +24,7 @@ module.exports = (vm, context, seed, helpText) => {
         assert.match(helpText(card.children[1].children[0]), new RegExp('Current local day: ' + amount));
         assert.equal(card.querySelectorAll('h4')[0].querySelectorAll('a')[0], targets[index]);
       });
+      assert.doesNotMatch(context.todayWatch.accounts.textContent,/CCost Today:/,'Watch has one page-level daily band, not large account cards');
     }
   }
   vm.runInContext("ReportView.setTimezone('UTC')", context);

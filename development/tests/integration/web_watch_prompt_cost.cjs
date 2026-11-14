@@ -13,6 +13,7 @@ class Node {
   addEventListener(kind, handler) { this.events[kind] = handler; }
 }
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+for(const card of input.view.active_cards)for(const row of card.rows)row.prompt.in_progress=true;
 input.view.history_state = 'observed'; // This fixture supplies a complete fixed history.
 const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag),
   createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
@@ -21,7 +22,7 @@ const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const name of ['render', 'account-cards', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
-assert.equal(cards.length, 2);
+assert.equal(cards.length, 1, 'completed history has no second Watch table');
 const credits = ['1250', '12', '100', '0', '0', '2', '0', '<0.1', '<0.1', '12', '12', '0', '0', '0', '0', '<0.1'];
 const usd = ['$12.50', '$0.12', '$1.00', '$0.00', '$0.00', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', '$0.00', '$0.00', '$0.00', '$0.00'];
 const canonical = JSON.stringify(input);
@@ -36,7 +37,7 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
     assert.equal(button['aria-describedby'], 'context-help');
     assert.equal(button.title, undefined, 'no overlapping native title');
     assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
-    assert.match(explanation, /not your bill[\s\S]*value[\s\S]*Incoming\/Extra CCost[\s\S]*model\/subagent details/);
+    assert.equal(explanation,'Reference cost of this prompt, including attributed linked subagent calls.');
     assert.doesNotMatch(explanation, /displayed zero|N\/A|not zero|cannot be priced|Input token share/);
     for (const [index, row] of card.body.children.entries()) {
       assert.equal(row.children.length, 10);
@@ -44,11 +45,8 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
       const prompt = card.value.rows[index].prompt, d = {...prompt.display, ...prompt.display_units[unit]};
       if (!expected[index]) { assert.ok(!target.className?.includes('help-value')); continue; }
       const help = helpText(target);
-      assert.ok(help.startsWith(`Incoming Context CCost (I): ${d.incoming_context_ccost}\nExtra CCost (E): ${d.extra_ccost}\n`), JSON.stringify({index,unit,help,d}));
-      assert.match(help, /first attributed request[\s\S]*Output, later requests and linked subagents[\s\S]*not proof of zero cost/);
-      assert.ok(help.endsWith(d.cost_detail_help), 'entire prepared rich breakdown survives unchanged');
-      assert.match(help, /Main prompt — fixture\/main · High[\s\S]*Subagent 1 — fixture\/child-a · Low[\s\S]*Number of prompts: 1[\s\S]*Subagent 2 — fixture\/child-b · Medium[\s\S]*incomplete boundaries[\s\S]*Cached input: (?:0|\$0.00)[\s\S]*Partial pricing[\s\S]*Total CCost:/);
-      assert.equal((help.match(/Total CCost:/g) || []).length, 1);
+      assert.match(help,/Main Model:[\s\S]*fixture\/main[\s\S]*Sub Agent[\s\S]*fixture\/child-a[\s\S]*Sub Agent[\s\S]*fixture\/child-b[\s\S]*Duration:/);
+      assert.doesNotMatch(help,/Incoming Context CCost|Extra CCost|Total CCost|Number of prompts/);
       assert.ok(target.events.focus && target.events.click && target.events.pointerenter);
       if (expected[index] === 'N/A') assert.match(help, /CCost cannot be calculated/);
     }

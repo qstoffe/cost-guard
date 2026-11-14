@@ -14,7 +14,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await until(`miniWatch.view.promptRows.has('earlier-0')`);
   await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['—','Unknown finish time'],['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100']]);
+    ['—','Unknown finish time'],['23:47','2026-11-05 23:47'],['00:08','2026-11-06 00:08']]);
   assert.ok((await values()).every(row=>row.columns===5 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Activity','Session','CCost','Total','Ctx']);
@@ -22,13 +22,13 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await key('Tab'); await evaluate('activityTime.focus({preventScroll:true})');
   const help = `miniWatch.view.doc.getElementById('context-help')`;
   await until(`${help}?.matches(':popover-open')`);
-  assert.equal(await evaluate(`${help}.textContent`),'2026-11-05 23:47 +0100');
+  assert.equal(await evaluate(`${help}.textContent`),'2026-11-05 23:47');
   await evaluate(`activityNow=Date.parse('2026-10-25T02:00:00Z')`);
-  await fixture('history-dst'); await until(`miniWatch.view.promptRows.get('earlier-0').activityHelp==='2026-10-25 02:30 +0200'`);
+  await fixture('history-dst'); await until(`miniWatch.view.promptRows.get('earlier-0').activityHelp==='2026-10-25 02:30'`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['02:30','2026-10-25 02:30 +0200'],['02:30','2026-10-25 02:30 +0100'],['00:08','2026-11-06 00:08 +0100']]);
+    ['02:30','2026-10-25 02:30'],['02:30','2026-10-25 02:30'],['00:08','2026-11-06 00:08']]);
   assert.equal(await evaluate(`miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
-  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','focused help refreshes in place');
+  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30','focused help refreshes in place');
   await evaluate(`activityNow=Date.parse('2026-10-26T00:30:00Z')-1;miniWatch.render()`);
   assert.deepEqual((await values()).slice(0,2).map(row=>row.time),['23h ago','22h ago']);
   const before = await evaluate(`({rows:[...miniWatch.view.promptRows.keys()],outer:[miniWatch.window.outerWidth,miniWatch.window.outerHeight],streams:probeStreams})`);
@@ -45,8 +45,8 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   assert.equal(await evaluate(`JSON.stringify(miniWatch.publication.view)===activityPublication && miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
   assert.deepEqual(await evaluate(`({rows:[...miniWatch.view.promptRows.keys()],outer:[miniWatch.window.outerWidth,miniWatch.window.outerHeight],streams:probeStreams})`),before);
   assert.deepEqual(await evaluate(`({fetches:activityFetches,timers:activityTimers})`),{fetches:0,timers:0});
-  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
-  checks.push('Existing 5s PiP render crosses 24h without publication, row replacement, new render fetch/timer or native resize; focused exact-offset help stays correct');
+  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30');
+  checks.push('Existing 5s PiP render crosses 24h without publication, row replacement, new render fetch/timer or native resize; focused local help stays correct');
   for(const locale of ['en-US','sv-SE']) for(const timezoneId of ['America/New_York','Asia/Tokyo']) {
     // Locale is shared by the opener/PiP renderer; a second target override conflicts.
     await command('Emulation.setLocaleOverride',{locale},ownerSession);
@@ -55,10 +55,10 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     }
     await evaluate('miniWatch.render()');
     assert.deepEqual((await values()).slice(0,2).map(row=>[row.time,row.help]),[
-      ['1d ago','2026-10-25 02:30 +0200'],['23h ago','2026-10-25 02:30 +0100']]);
-    assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
+      ['1d ago','2026-10-25 02:30'],['23h ago','2026-10-25 02:30']]);
+    assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30');
   }
-  checks.push('Actual Document PiP configured-local activity/offset help is invariant under en-US/sv-SE and New York/Tokyo browser zones');
+  checks.push('Actual Document PiP configured-local activity help is invariant under en-US/sv-SE and New York/Tokyo browser zones');
   await key('Escape'); await evaluate('activityTime.blur()');
   await evaluate(`activityNow=Date.parse('2026-11-10T12:00:00Z');miniWatch.render()`);
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
@@ -66,13 +66,13 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
   assert.equal(await evaluate(`${help}.matches(':popover-open')`),false,'hover is delayed, not native title help');
   await until(`${help}.matches(':popover-open')`);
-  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200');
+  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30');
   await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
   await until(`!${help}.matches(':popover-open')`);
   for(const type of ['touchStart','touchEnd']) await input('Input.dispatchTouchEvent',{
     type,touchPoints:type==='touchStart'?[{...point,id:1,radiusX:1,radiusY:1,force:1}]:[]});
   await until(`${help}.matches(':popover-open')`);
-  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30 +0200','touch exposes equivalent full local date');
+  assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30','touch exposes equivalent full local date');
   await key('Escape'); await evaluate('activityTime.blur()');
   await fixture('history-ages'); await until(`miniWatch.view.promptRows.size===5 && miniWatch.view.promptRows.has('earlier-3')`);
   assert.deepEqual((await values()).map(row=>row.time),['3y ago','2y ago','3m ago','1d ago']);
