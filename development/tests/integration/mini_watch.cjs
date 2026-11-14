@@ -222,7 +222,8 @@ function setup() {
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
   for (const [index, line] of [...view.accounts.children].entries()) {
     const primary = input.view.accounts.accounts[index].primary;
-    assert.equal(line.helpText, `Capacity: ${primary.quota.display.capacity_amount}\nNext reset: ${primary.display.mini_reset}`);
+    const capacity = primary.quota.display.capacity_amount;
+    assert.equal(line.helpText, `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${primary.display.mini_reset}`);
     assert.doesNotMatch(line.helpText, /Unrounded|Guesstimate|estimate|Observed same-window|Provider-reported fraction|÷/);
   }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
@@ -236,14 +237,14 @@ function setup() {
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
   const scopedDisplay = scopedPrimary.display;
-  for (const [capacity, usd, reset] of [['3066 Credits', '$30.66', 'Reset in 1h, 12:00 today'],
-      ['~3066 Credits', '~$30.66', 'Reset in 23h, 10:00 Saturday'], ['?', '?', 'Reset unknown']]) {
+  for (const [capacity, usd, reset, expected] of [['3066 Credits', '$30.66', 'in 1h · 12:00 today'],
+      ['~3066 Credits', '~$30.66', 'in 23h · 10:00 tomorrow'], ['?', '?', 'N/A', 'N/A']]) {
     scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,capacity_amount:capacity},
       display_units:{credits:{capacity_amount:capacity},usd:{capacity_amount:usd}}};
     scopedPrimary.display = {...scopedDisplay,mini_reset:reset};
     for (const unit of ['credits','usd']) {
       vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
-      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${unit === 'usd' ? usd : capacity}\nNext reset: ${reset}`);
+      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${expected || (unit === 'usd' ? usd : capacity)}\nNext reset: ${reset}`);
     }
   }
   scopedPrimary.quota = scopedQuota; scopedPrimary.display = scopedDisplay;
