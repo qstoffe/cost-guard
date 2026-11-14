@@ -127,14 +127,15 @@ async function main() {
     await evaluate(id,`document.querySelector('[data-model-control="refresh"]').click()`);
     await until(id,`!current.loading`);
     const changed=await read(); assert.ok(changed.date>unchanged.date);
-    assert.notDeepEqual(changed.models,unchanged.models); assert.notDeepEqual(changed.sample.costs,unchanged.sample.costs);
-    assert.ok(changed.models.find(row=>row.model==='GPT-Test').price_help.includes('Input $10'));
+    assert.notDeepEqual(changed.models,unchanged.models); assert.deepEqual(changed.sample,unchanged.sample);
+    assert.ok(changed.models.find(row=>row.model==='GPT-Test').price_help.includes('Input: $10'));
     await evaluate(id,`[...document.querySelectorAll('.overview-model-table tbody tr')].find(row=>row.cells[1].textContent==='GPT-Test').querySelector('.model-relative').focus()`);
-    await until(id,`document.querySelector('#context-help')?.matches(':popover-open') && document.querySelector('#context-help').textContent.includes('Input $10')`);
-    assert.equal(await evaluate(id,`document.querySelector('#context-help').textContent.includes('Output $40\\n\\nToken Mix')`),true);
+    await until(id,`document.querySelector('#context-help')?.matches(':popover-open') && document.querySelector('#context-help').textContent.includes('Input: $10')`);
+    assert.equal(await evaluate(id,`document.querySelector('#context-help').textContent.endsWith('Output: $40') &&
+      !document.querySelector('#context-help').textContent.includes('Token Mix')`),true);
     assert.equal(await evaluate(id,`JSON.stringify(current.models)`),choice);
     assert.equal(await evaluate(id,`document.querySelector('.overview-model-table th:nth-child(2)').textContent.includes('↑ 2')`),true);
-    checks.push('Changed source rebuilds coherent Models rows, relative ratios and sample valuation; filters, multi-sort and USD retained');
+    checks.push('Changed source rebuilds coherent Models rows and fixed relative ratios without synthetic usage; filters, multi-sort and USD retained');
     for (const failure of ['offline','invalid']) {
       await mode(failure);
       await evaluate(id,`window.retainedTable=document.querySelector('.overview-model-table');document.querySelector('[data-model-control="refresh"]').click()`);

@@ -84,7 +84,7 @@ def models_refresh_report(root, sender, request):
         service.catalog = catalog
         return service
 
-    with patch('src.web.composition.application', return_value=ReportApplication(factory)):
+    with patch('src.web.composition.application', return_value=ReportApplication(factory, models_only=True)):
         run_report(sender, request)
 
 
