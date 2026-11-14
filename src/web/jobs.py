@@ -34,7 +34,7 @@ class ModelsPriceRefresh(ReportRequest):
 def parse_report(value):
     page_fields = {"session_page_size", "session_offset", "session_catalog_revision"}
     comparison_fields = {'comparison_offset', 'comparison_revision'}
-    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope"} | page_fields | comparison_fields):
+    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope", "token_mix_scope"} | page_fields | comparison_fields):
         raise ValueError("invalid_request")
     kind = ReportKind(value.get("kind"))
     comparison_offset = value.get('comparison_offset', 0)
@@ -46,6 +46,10 @@ def parse_report(value):
             or comparison_offset and comparison_revision is None):
         raise ValueError('invalid_request')
     stats_scope = value.get('stats_scope', '30-days')
+    token_mix_scope = value.get('token_mix_scope', 'all')
+    if ('token_mix_scope' in value and kind is not ReportKind.TOKEN_MIX
+            or token_mix_scope not in ('today', '7-days', '30-days', 'month', 'all')):
+        raise ValueError('invalid_request')
     if ('stats_scope' in value and kind is not ReportKind.AI_STATS
             or stats_scope not in ('today', '7-days', '30-days', 'month', 'all')):
         raise ValueError('invalid_request')
@@ -82,7 +86,8 @@ def parse_report(value):
             raise ValueError("invalid_request") from exc
     return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit,
                          session_page_size=size, session_offset=offset, session_catalog_revision=revision, stats_scope=stats_scope,
-                         comparison_offset=comparison_offset, comparison_revision=comparison_revision)
+                          comparison_offset=comparison_offset, comparison_revision=comparison_revision,
+                          token_mix_scope=token_mix_scope)
 
 
 class ProgressRelay:

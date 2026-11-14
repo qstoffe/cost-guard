@@ -18,6 +18,8 @@ const ReportRoutes = (() => {
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;
+    if (path === 'token-mix') request.token_mix_scope =
+      ['today','7-days','30-days','month','all'].includes(params.get('period')) ? params.get('period') : 'all';
     if (path === 'sessions') {
       const offset = params.get('offset') || '0', epoch = params.get('epoch');
       if (!/^(0|[1-9][0-9]{0,6})$/.test(offset) || Number(offset) > 1000000 ||

@@ -21,6 +21,17 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000705: `reports/token_mix_history.py` selects canonical request times after
+deduplication, reusing `token_mix_cache.py` facts/valuations and AI Stats windows.
+`ReportRequest.token_mix_scope` distinguishes finite jobs/publications; CLI calls
+without a scope preserve historical semantics. `assets/app.js` retires superseded
+browser attempts; `token-mix.js` owns five controls, nine columns and concise
+period/category help. `application/display.py` prepares exact unit-specific category
+help; shared CSS aligns period rows and suppresses only Token Mix's duplicate arrow.
+Coverage: `test_token_mix_periods.py`, existing cache/remaining/lifetime tests,
+`probe_token_mix.cjs` plus its period/help probes and read-only
+`probe_token_mix_baseline.py --period <id>`. [Evidence](../../journal/web/token-mix-periods.md).
+
 FR000704: `assets/help.js` retains one open-only watchdog but no longer expires
 confirmed stationary hover; trusted coordinates only reveal contradictions.
 Full Watch keeps clock help and prompt cells connected through metric refresh.

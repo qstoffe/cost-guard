@@ -92,6 +92,7 @@ class ReportRequest:
     stats_scope: str = '30-days'
     comparison_offset: int = 0
     comparison_revision: str | None = None
+    token_mix_scope: str = 'all'
 
 
 ProgressCallback = Callable[[str], None]
@@ -471,18 +472,18 @@ class ReportService:
         """Per-request scalar CCost valuation for process-local Watch totals."""
         return self._load_comparison_catalog().reference_valuation
 
-    def build_token_mix_history(self, progress: HistoryProgress | None = None) -> ReportProjection:
+    def build_token_mix_history(self, progress: HistoryProgress | None = None, *, scope=None) -> ReportProjection:
         """Deep available-history model comparison; never used by normal reports/Watch."""
         self.metrics.mode = "token-mix-history"
         if self.cache_token_mix_history:
             from .token_mix_cache import build_cached_token_mix
             try:
-                return build_cached_token_mix(self, progress or (lambda _label, _percent: None))
+                return build_cached_token_mix(self, progress or (lambda _label, _percent: None), scope=scope)
             finally:
                 if getattr(self, 'shared_web_evidence', False):
                     from .shared_evidence import flush
                     flush(self)
-        return build_token_mix_history(self, progress or (lambda _label, _percent: None))
+        return build_token_mix_history(self, progress or (lambda _label, _percent: None), scope=scope)
 
     def build_cost_per_hour(self) -> ReportProjection:
         """Explicit Web capture only; never called by Normal, Watch or CLI dispatch."""

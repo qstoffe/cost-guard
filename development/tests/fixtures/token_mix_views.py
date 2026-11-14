@@ -4,6 +4,7 @@ import time
 from uuid import uuid4
 
 from src.analysis.token_mix import priced_token_mix
+from src.analysis.ai_stats import windows
 from src.application.projection import project
 from src.domain import ModelRef, TokenUsage
 from src.reports.models import ModelTokenMixProjection, PublisherTokenMixProjection, ReportKind, ReportProjection
@@ -51,6 +52,10 @@ class TokenMixJobs:
         key = uuid4().hex
         report = token_mix_report(self.generation)
         observed = int(time.time() * 1000)
+        from dataclasses import replace
+        start = dict(windows('UTC', observed))[request.token_mix_scope]
+        report = replace(report, token_mix_period=dict(period=request.token_mix_scope,
+            start_ms=start if start is not None else observed - 90 * 86400000, end_ms=observed))
         result = dict(schema_version=1, instance_id='synthetic', sequence=self.generation,
             observed_at_ms=observed, source=dict(status='acquired', observed_at_ms=observed),
             view=project(report).to_json(), error=None)

@@ -8,7 +8,7 @@ const node = () => {
     setAttribute(key,value){this.attrs[key]=value;}, getAttribute(key){return this.attrs[key];}, removeAttribute(){}, addEventListener(){},
     matches(selector){return selector===':focus-visible' && this.keyboardVisible===true;},
     focus(){document.activeElement=this;},
-    replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}};
+    append(){}, remove(){}, replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}};
 };
 for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating','toolbar']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
@@ -46,7 +46,7 @@ for (const key of ['LiveStatus','timestamp','setTimezone']) context.ReportView[k
 for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.readFileSync('src/web/assets/'+file,'utf8'),context);
 // Presentation is independently tested in rendered probes; retain actual lifetime logic.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);
-  class View {update(){} attach(){}}
+  class View {constructor(){this.root=ReportView.element();} selection(){} update(){} attach(){}}
   const TokenMixView={valid:()=>true,View}, ComparisonsView={valid:()=>true,View};
   const AIStatsView={valid:()=>true,View,prioritize(){},observe(){return true;},remember(state,result){state.result=result;}};`,context);
 vm.runInContext(fs.readFileSync('src/web/assets/app.js','utf8'),context);
@@ -87,7 +87,7 @@ async function main(){
     assert.equal(admissions.length,count,'return never duplicates in-flight work');
     await hide(true);await go('watch');
     if(section==='comparisons')now+=150000; // Hidden timers may be throttled past the client budget.
-    const result={view:{kind:section==='models'?'normal':section,ai_stats:[{period:'30-days',start_ms:0,end_ms:now}],
+    const result={view:{kind:section==='models'?'normal':section,token_mix_period:{period:'all'},ai_stats:[{period:'30-days',start_ms:0,end_ms:now}],
       ai_stats_work:{scopes:{'30-days':{ready:true}}}},
       scope:{timezone_id:'UTC'},source:{status:'acquired',observed_at_ms:now},observed_at_ms:now};
     jobs.get(active).status='complete';jobs.get(active).result=result;
@@ -160,7 +160,7 @@ async function main(){
     assert.ok(recovering.active);assert.notEqual(recovering.active,failedJob);
   }
   const recoveredJob=recovering.active;
-  const recovered={view:{kind:'token-mix'},source:{status:'acquired',observed_at_ms:now}};
+  const recovered={view:{kind:'token-mix',token_mix_period:{period:'all'}},source:{status:'acquired',observed_at_ms:now}};
   jobs.get(recoveredJob).status='complete';jobs.get(recoveredJob).result=recovered;
   liveUpdate(null,{jobs:[{id:recoveredJob,status:'complete'}]});await settle();
   assert.equal(recovering.loading,false);assert.equal(recovering.failed,false);
@@ -240,7 +240,7 @@ async function main(){
       await hostTick();
     }
     assert.equal(ids.refresh.hidden,true,'no Retry button while recovering');
-    const retainedResult={view:{kind:section,ai_stats:[{period:'30-days'}],ai_stats_work:{scopes:{'30-days':{ready:true}}}},source:{status:'acquired',observed_at_ms:now}};
+    const retainedResult={view:{kind:section,token_mix_period:{period:'all'},ai_stats:[{period:'30-days'}],ai_stats_work:{scopes:{'30-days':{ready:true}}}},source:{status:'acquired',observed_at_ms:now}};
     managedResponse={id:'published',result_id:'published',result:retainedResult,refresh:'scheduled'};
     await hostTick();
     assert.equal(recovering.result,retainedResult);assert.equal(recovering.failed,false);

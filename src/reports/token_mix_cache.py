@@ -103,7 +103,7 @@ def observe(service, roots, versions):
         return {}
 
 
-def build_cached_token_mix(service, progress):
+def build_cached_token_mix(service, progress, *, scope=None):
     progress(WorkProgress('Loading pricing catalog', 'pricing'), None)
     reference = service._load_comparison_catalog()
     progress(WorkProgress('Checking history revisions', 'catalog'), None)
@@ -189,6 +189,6 @@ def build_cached_token_mix(service, progress):
                 prompts.setdefault(entry, prompt)
             costs[entry.model, entry.tokens] = parts
     report = history_projection(service, reference, entries, prompts, progress,
-        valuation=lambda model, tokens: costs[model, tokens])
+        valuation=lambda model, tokens: costs[model, tokens], scope=scope)
     return replace(report, source_warnings=(*report.source_warnings, *history_warnings(unavailable)),
                    history_omitted_roots=len(unavailable))

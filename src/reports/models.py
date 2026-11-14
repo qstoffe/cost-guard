@@ -305,3 +305,4 @@ class ReportProjection:
     comparisons: MatchesPage | None = None
     history_omitted_roots: int = 0
     model_comparison_mix: tuple[Decimal, Decimal, Decimal, Decimal] | None = None
+    token_mix_period: Mapping[str, object] = field(default_factory=dict)

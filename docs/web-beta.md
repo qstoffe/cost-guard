@@ -837,22 +837,26 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Twelve cards including token traffic/rates plus an optional matched-input fact; five periods, Loading-only pending shells and retained ready refresh; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
 | Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
-| Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Known subtotals are quiet; incomplete pricing/telemetry is explained in the total-title help. Unknown values remain N/A. |
+| Historical Token Mix | `/#/token-mix` | All time by default; Today / 7 days / 30 days / This month / All time above the heading. Server-scoped summary and two nine-column model/publisher tables show Prompts/Calls/Tokens, four token percentages and Total CCost. Each percentage value has exact category CCost help in the current unit, including partial/unavailable truth. Every column sorts by exact source values; full names remain readable through horizontal panning. Host-owned ~5/20-minute visible/inactive checks remain. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
-Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no finite-report toolbar or snapshot controls. Sessions has its own period selector; headings sort the complete selected server population, not the visible page. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
+Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, a period selector but no search, pager or nested vertical scrolling. Each active sort has one arrow and an accessible direction; header help defines metrics without sorting tutorials. Model has no header tooltip; Publisher retains its manufacturer-versus-provider definition. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no finite-report toolbar or snapshot controls. Sessions has its own period selector; headings sort the complete selected server population, not the visible page. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
 Token Mix targets **five-minute** foreground and **twenty-minute** inactive checks. The host, not hidden browser timers, owns due times. Compact revision/config/price-keyed facts can be shared with AI Stats and Comparisons without sharing their final totals. Changed roots are revalidated; removed roots disappear. Catalog metadata is not usage. Fork deduplication, publisher grouping and pricing tiers retain canonical Python semantics. No new account polling, inference or browser history ledger is introduced.
 
 During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failed background refresh retains the actual old observation silently; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; intrinsic partial costs/volumes retain their semantics. Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
 
 On Token Mix alone, displayed values have no repeated **Partial** or **?** qualifiers
-and no partial-only dimming. Hover, focus or tap the large **Total Token Mix** title
-for observed-token scope/time and, when relevant, a short **Partial pricing** paragraph:
-CCost includes only known priced requests; missing cost is not zero. Incomplete token
-telemetry is qualified there too. Complete/empty usage never claims missing-price
-costs. Real source/outage and empty-history states remain distinct. This presentation
-does not change CLI, Watch/Mini partial markers, raw coverage, counts or valuation.
+and no partial-only dimming. Heading help contains only exact recorded/known tokens
+and selected-period bounds in the configured timezone, including precise rolling
+instants and DST offsets. All time uses the first/last available shown request
+timestamps, or explicitly unavailable dates. Partial pricing/usage belongs in
+category-value and exceptional token/total-cost help, not heading boilerplate.
+Source/time gaps remain explicit outside the heading. Changing period hides the
+previous scope immediately while loading; normal same-period refresh keeps the
+accepted values. AI Stats retains 30 days and Sessions Today; all three period rows
+use the same compact top spacing. An explicit `/#/token-mix?period=7-days` selects
+that initial scope. CLI, Watch/Mini markers, raw coverage and valuation are unchanged.
 
 ### Host-owned freshness and background warming
 
@@ -908,7 +912,7 @@ Most finite report tables show 50 rows/page from one immutable API result. Sessi
 
 `172k` is server-formatted; proven zero is `0`. `Loading…` means the field has no usable first observation; a complete authoritative unsupported result is `N/A`. Once known, same-session context stays visible across ordinary revision changes, partial acquisition and retries until a qualified replacement arrives. Retained values are muted and qualified in help/accessibility, not treated as fresh sort keys. Actual source/provenance changes, removal and authoritative invalidation still clear inappropriate values. Source identity, tree revision, context epochs and scalar algorithm version qualify cached values. Partial acquisition cannot finalize a CTX sort as an unknown: bounded failures expose Retry/Cancel. Activity/Name and paging acquire only viewed rows; metric-sort interest acquires missing scalar keys only for eligible roots in that lease's period, with the existing four-root/two-second admission slice. Concurrent leases share a bounded union; an independent All time lease or host warming can separately require other roots. Old disposable scalar summaries rebuild lazily; unrelated caches remain reusable.
 
-Sessions, Models and both 13-column Token Mix tables share Watch's compact surface-tone headers, full cell dividers and one thin rounded frame. Numeric values retain their readable minima; deliberate horizontal panning never creates an inner vertical scroller. Model filters/promotions/multisort and Token Mix's complete one-line names, independent column sorts and five-minute acquisition stay unchanged.
+Sessions, Models and both nine-column Token Mix tables share Watch's compact surface-tone headers, full cell dividers and one thin rounded frame. Numeric values retain their readable minima; deliberate horizontal panning never creates an inner vertical scroller. Model filters/promotions/multisort and Token Mix's complete one-line names, independent column sorts and five-minute acquisition stay unchanged.
 
 Sessions can show **[RUNNING]** before scalar hydration when the shared Watch capture
 affirmatively observes execution. Candidates/timestamps alone never establish running;
