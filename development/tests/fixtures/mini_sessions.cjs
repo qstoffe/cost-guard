@@ -28,6 +28,10 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
     assert.equal(rows().length,Math.max(5,count));
     assert.deepEqual(ids(),[...history.slice(Math.min(5,count)).map(c=>c.session_id),...active.map(c=>c.session_id)]);
+    const expected=require('./mini_history_expected.cjs')(input.view);
+    assert.deepEqual(ids(),expected.map(row=>row.id));
+    if(count===1) assert.notDeepEqual(ids(),history.map(c=>c.session_id),
+      'the obsolete history-only oracle excludes a legitimate running representative');
     assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,count<5);
     for(const row of rows()) assert.equal(row.children[0].textContent,row.dataset.id.startsWith('a')?'▶ 12:34':'23:47');
   }
