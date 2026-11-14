@@ -14,9 +14,13 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     await until(id,`document.getElementById('context-help')?.matches(':popover-open')`);
   };
   // Reproduce the old hard cutoff separately in the actual PiP document.
-  if(process.env.COST_GUARD_BASELINE_HELP) {
+  assert.ok(process.env.COST_GUARD_BASELINE_HELP,'required explicit old-base RED source');
+  assert.match(process.env.COST_GUARD_BASELINE_REVISION || '',/^[a-f0-9]{40}$/);
+  {
     const source=await fs.readFile(process.env.COST_GUARD_BASELINE_HELP,'utf8');
-    if(source.includes('panel.hidden || !panel.isConnected || now() >= hoverDeadline')) {
+    assert.ok(source.includes('panel.hidden || !panel.isConnected || now() >= hoverDeadline'),
+      'base must contain the old unconditional cutoff; never silently skip RED');
+    {
       await evaluate(mini,`(()=>{${source.replace("panel.id = 'context-help'","panel.id = 'baseline-help'")}
         const b=ContextHelp.button('Original 30-second cutoff','Baseline stationary reading',document);
         b.id='baseline-trigger';document.body.append(b);b.scrollIntoView({block:'center'});})()`);
@@ -30,6 +34,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
         document.getElementById('baseline-trigger').matches(':hover')`),true,'RED: actual stationary hover hit the old lease');
       await evaluate(mini,`document.getElementById('baseline-trigger').remove();document.getElementById('baseline-help').remove()`);
       checks.push('RED: default-base help closes actual PiP stationary hover after 30 seconds, while native :hover remains true');
+      layouts.push({case:'baseline-red-pip',revision:process.env.COST_GUARD_BASELINE_REVISION});
     }
   }
   await evaluate(owner,`window.stationaryRefresh=setInterval(()=>{

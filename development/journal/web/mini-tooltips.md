@@ -126,3 +126,16 @@ authorized one targeted unchanged job rerun after verifying the PR/revision.
 Job 132288202184 then **passed** on the same head. Retain both attempts:
 **initial native failure, unchanged rerun passed; cause unresolved**. No launcher
 safety checks, identity guards, assertions or timeouts were changed or waived.
+
+The next revision (`0cff8b5`) passed the actual context sequence and all three native
+platform jobs. Its original mixed Duration portfolio **FAILED** at the Total-heading
+opening wait; remaining Duration/stationary cases were **NOT RUN**. The line alone
+does not identify the method or establish a negative selector at the 600ms guard.
+Decision Delegate authorized independent fresh keyboard/mouse and touch journeys,
+not a browser-acceptance waiver. The mouse journey now performs the twelve long holds
+before any touch; mixed input remains a separate strict failing check. A native
+selector pass-through trace preserves guard results before layout diagnostics, and
+a matched unbound Total-heading control tests document-level hover independently of
+that target's help handler. Neither diagnostic certifies physical input or a browser
+defect. Old-base RED is now required explicitly with its base revision, not silently
+skipped; that RED case is PiP-only, while GREEN covers PiP and Full Watch.

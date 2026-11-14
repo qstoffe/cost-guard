@@ -115,8 +115,25 @@ async function main() {
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
        await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
         if(scope==='--mini-tooltips') {
+          assert.ok(['mouse','touch','mixed','control'].includes(replay));
           const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');
             return JSON.parse((await lines.next()).value);};
+          if(replay==='mouse') {
+            phase='real-stationary-hover';
+            await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
+            await fixture('running');await until(owner,`liveValue.view.active_cards.length===2`);
+            phase='rendered-cost-values';
+            await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+          }
+          if(replay==='mouse'||replay==='touch') {
+            phase='rendered-duration-'+replay;
+            await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,input:replay,
+              evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
+            assert.deepEqual(errors,[]);
+            evidence={outcome:'PASS',browser:version.product,journey:replay,checks,layouts,errors,
+              limitations:['Fresh independent native modality journey; not mixed-input or physical desktop proof.']};
+            return;
+          }
           phase='native-hover-watchdog';
           await require('./probe_help_watchdog.cjs')({command,evaluate,until,owner,mini,checks});
           phase='native-help-lifecycle';
@@ -130,11 +147,10 @@ async function main() {
           await fixture('running');
           await until(owner,`liveValue.view.active_cards.length===2`);
           phase='rendered-duration';
-          await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,
-            evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
-          phase='real-stationary-hover';
-          await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
-         evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+           await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,
+             trace:true,control:replay==='control',
+             evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
+         evidence={outcome:replay==='control'?'DIAGNOSTIC':'PASS',browser:version.product,journey:replay,checks,layouts,errors,
            limitations:['Actual headless Chromium Document PiP with synthetic source-qualified DTOs.',
              'Physical Windows/chrome/other-application input NOT RUN; stale positive CSS without any browser exit is unobservable.']};
          assert.deepEqual(errors,[]);return;

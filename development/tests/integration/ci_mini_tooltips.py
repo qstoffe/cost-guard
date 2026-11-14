@@ -30,24 +30,33 @@ def probe(state):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
         browser = playwright.chromium.executable_path  # Full image-provided Chromium.
-    output = ROOT / "ci-results/mini-tooltips.json"
     baseline = ROOT / "ci-results/baseline-help.js"
+    revision = subprocess.run([*GIT, "rev-parse", "HEAD^"],
+        cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
     state["stage"] = "baseline-git-show"
     original = subprocess.run([*GIT, "show", "HEAD^:src/web/assets/help.js"],
         cwd=ROOT, capture_output=True, check=True, timeout=10).stdout
     state["stage"] = "baseline-write"
     baseline.write_bytes(original)
     env = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable,
-        COST_GUARD_CI_BROWSER="1", COST_GUARD_BASELINE_HELP=str(baseline))
-    state["stage"] = "native-pip-probe"
-    result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
-        browser, str(output), "--mini-tooltips"], cwd=ROOT, env=env, timeout=960)
-    detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
-    notice("mini-tooltips", dict(outcome="PASS" if result.returncode == 0 else "FAIL",
-        reason="Actual full-Chromium Document PiP, native input and elapsed-time regression",
-        evidence="mini-tooltips.json", diagnostic=detail.get("diagnostic"),
-        checks=[check if isinstance(check, str) else check.get("case") for check in detail.get("checks", [])]))
-    return result.returncode
+        COST_GUARD_CI_BROWSER="1", COST_GUARD_BASELINE_HELP=str(baseline),
+        COST_GUARD_BASELINE_REVISION=revision)
+    failed = False
+    for journey in ("mouse", "touch", "mixed", "control"):
+        output = ROOT / f"ci-results/mini-tooltips-{journey}.json"
+        state["stage"] = "native-pip-" + journey
+        result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
+            browser, str(output), "--mini-tooltips", journey], cwd=ROOT, env=env,
+            timeout=960 if journey == "mouse" else 180)
+        detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
+        notice("mini-tooltips", dict(outcome=detail.get("outcome", "FAIL"), journey=journey,
+            reason="Independent native journey" if journey in ("mouse", "touch") else "Retained mixed-input diagnostic",
+            evidence=output.name, diagnostic=detail.get("diagnostic"),
+            checks=[check if isinstance(check, str) else
+                {key: check[key] for key in ("case", "observation") if key in check}
+                for check in detail.get("checks", [])]))
+        failed = failed or result.returncode != 0
+    return int(failed)
 
 
 def main():
