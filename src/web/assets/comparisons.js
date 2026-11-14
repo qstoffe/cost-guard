@@ -6,7 +6,7 @@ const ComparisonsView = (() => {
     ['Started', 'Configured-local first-prompt start (24-hour clock), not the session’s last activity. Groups and rows instead sort by newest session-tree activity.'],
     ['Model', 'Provider-qualified main model selected for this first prompt. Mixed work is marked; help lists contributing request models.'],
     ['Effort', 'Request-bound effort for the first prompt. Unavailable evidence is not an invented default. Mixed variants/models are explicitly marked.'],
-    ['CCost', 'First-prompt reference token valuation including attributable children, not full-session cost or actual billing. ? means partial; N/A means unavailable.'],
+    ['CCost', 'First-prompt reference token valuation including attributable children, not full-session cost or actual billing. N/A means unavailable.'],
     ['Duration', 'First-prompt start through its supported final execution boundary, including causal tool/child/background work. Not session age or time to first token.'],
     ['Context', 'Approximate next incoming context in tokens immediately after this first prompt. Historical estimate, not remaining model capacity or current context after later prompts. N/A means unsupported.'],
     ['Token Mix', 'I/C/W/O percentages: uncached Input / Cached input / Cache write / Output (including reasoning). Usage composition, not cost distribution.'],

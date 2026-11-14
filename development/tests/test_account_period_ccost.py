@@ -232,7 +232,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
                                 (ComparisonCost(D("37.2"), 1, 1), "38")):
             with self.subTest(expected=expected):
                 self.assertEqual(expected, account_ccost_text(value))
-        self.assertEqual("?38", comparison_cost_text(ComparisonCost(D("37.2"), 2, 1)))
+        self.assertEqual("38", comparison_cost_text(ComparisonCost(D("37.2"), 2, 1)))
         unpriced = project((subscription(),), (request("unknown", NOW, model="unpriced"),),
                            observed_start_ms=MONTH)[0]
         self.assertIn("CCost today: —", account_ccost_lines(unpriced))

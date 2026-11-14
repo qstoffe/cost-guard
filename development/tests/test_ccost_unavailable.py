@@ -83,7 +83,8 @@ class CCostUnavailableTests(unittest.TestCase):
         help_text = self.wire(unpriced)["active_cards"][0]["rows"][0]["prompt"]["display"]["ccost_unavailable_help"]
 
         self.assertGreater(mixed.ccost, 0)
-        self.assertTrue(mixed_wire["display"]["ccost"].startswith("?"))
+        self.assertRegex(mixed_wire["display"]["ccost"], r"^[<\d]")
+        self.assertTrue(mixed_wire["unresolved_cost"])
         self.assertEqual((ReferenceCostIssue("model_absent", "Claude Sonnet 4"),), mixed.comparison_cost.unavailable)
         self.assertIn("Claude Opus 4", help_text)
         self.assertIn("Claude Sonnet 4", help_text)

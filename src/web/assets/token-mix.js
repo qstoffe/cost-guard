@@ -8,8 +8,7 @@ const TokenMixView = (() => {
   const e = (...args) => ReportView.element(...args);
   const tokenKey = 'mix_total_tokens';
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
-  // This surface alone shows known subtotals quietly; canonical/CLI tokens stay intact.
-  const display = (mix, key) => ReportView.display(mix, key).replace(/^Partial /, '');
+  const display = (mix, key) => ReportView.display(mix, key);
   function titleHelp(result) {
     const {token_mix: mix, token_mix_period: period, timezone_id: zone} = result.view;
     const quantity = mix.known_total_tokens == null ? 'No known' : BigInt(mix.known_total_tokens).toLocaleString('en-US');

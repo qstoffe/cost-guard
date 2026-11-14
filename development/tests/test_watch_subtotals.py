@@ -187,14 +187,14 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             self.assert_row_scope(projection)
             self.assertTrue(projection.rows[0].prompt.unresolved_cost)
             table, headers = table_for(projection)
-            self.assertEqual("?59", table[1][2])
-            self.assertEqual("Σ ?59", headers["Root"])
+            self.assertEqual("59", table[1][2])
+            self.assertEqual("Σ 59", headers["Root"])
             self.assertTrue(projection.token_mix.cost_complete)
             self.assertEqual(Decimal(59), sum(projection.token_mix.costs))
 
     def test_zero_partial_and_native_compaction_keep_truthful_presentation(self):
         for costs, unresolved, expected in (((0,), False, "Σ 0"), ((0,), True, "Σ N/A"),
-                                             ((0, 7), True, "Σ ?7")):
+                                             ((0, 7), True, "Σ 7")):
             with self.subTest(costs=costs, unresolved=unresolved), watch_for(start=0) as (watch, _, _):
                 rows = tuple(replace(prompt(i + 1, 100 + i), ccost=Decimal(cost),
                                      unresolved_cost=unresolved and i == 0) for i, cost in enumerate(costs))

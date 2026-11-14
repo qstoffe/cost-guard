@@ -89,7 +89,7 @@ class MiniTooltipTests(unittest.TestCase):
         self.assertIn("CCost: 1.0 Credits", text)
         self.assertIn("— default (high)", text)
         self.assertIn("CCost: N/A", text)
-        self.assertIn("CCost: ?0.5 Credits", text)
+        self.assertIn("CCost: 0.5 Credits", text)
         self.assertNotIn("\n\nMain Model CCost", text, "group lines must be consecutive")
 
     def test_mini_reset_uses_one_local_calendar_without_changing_full_watch(self):

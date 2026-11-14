@@ -129,7 +129,7 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertIn("Some category amounts are unavailable; subtotal includes known priced usage.", help_text)
         self.assertIn("Reference price data cannot currently be checked", help_text)
         self.assertNotIn("has no listed reference price", help_text)
-        self.assertIn("Total CCost: ?<0.1", help_text)
+        self.assertIn("Total CCost: <0.1", help_text)
 
     def test_tiers_and_live_corrections_reconcile_unrounded_not_displayed_shares(self):
         snapshot = make_uncompacted_snapshot(running=True)

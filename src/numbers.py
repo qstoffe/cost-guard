@@ -45,15 +45,19 @@ def _capacity_amount(value: Decimal, *, rounding: str) -> str:
 
 
 def ccost_amount(value: Decimal | None, *, unresolved: bool = False, unit: str | None = None) -> str:
-    """Reference amount only; native quotas, rates and billing never use this rule."""
+    """Plain reference amount; unresolved zero stays unavailable, not invented free work.
+
+    Completeness belongs to canonical facts, never a prefix on a numeric value.
+    Native quotas, rates and billing use their independent presentation rules.
+    """
     if value is None or (unresolved and value == 0):
         return "N/A"
     if (unit or ccost_unit()) == "usd":
         with localcontext() as context:
             context.prec = max(context.prec, len(value.as_tuple().digits) + 4, value.adjusted() + 5)
             dollars = (value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        return ("?" if unresolved else "") + f"${abs(dollars) if dollars == 0 else dollars:.2f}"
-    return ("?" if unresolved else "") + _capacity_amount(value, rounding=ROUND_CEILING)
+        return f"${abs(dollars) if dollars == 0 else dollars:.2f}"
+    return _capacity_amount(value, rounding=ROUND_CEILING)
 
 
 def consumed_capacity(value: Decimal) -> str:

@@ -123,8 +123,8 @@ are tracked separately from the orphan-prevention fix.
 Full Watch’s **CCost** value help separates first-request incoming-context cost
 from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
 shares, not prices. **Model** names the main model even when other linked models
-contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
-pricing/data. CCost is an estimated reference cost, not your bill or native quota.
+contribute to totals. **N/A** means unavailable, not zero; numeric CCost remains
+plain even with partial pricing/data. CCost is a reference cost, not your bill or native quota.
 
 When an actual reference **CCost N/A** is shown, hover/focus/tap that text for the
 supported reason. An acquired, verified catalog can establish that a recognized
@@ -713,7 +713,7 @@ next incoming tokens immediately after that prompt, not remaining model capacity
 or a future prompt's context. I/C/W/O describes token usage composition. Shared
 hover/focus/touch help explains actual bounds, contributors, cost splits and counts.
 Mixed models/variants have `*`; running/failed/aborted/unknown runs are labeled.
-`?` marks partial cost/counts; unsupported values stay N/A, not fabricated free work.
+Numeric cost/count subtotals render plainly; unsupported values stay N/A, not fabricated free work.
 
 Time gaps require reliably finished runs; cost gaps additionally require full token
 and price evidence. Same-model variation retains separate repetitions. Arithmetic
@@ -1071,7 +1071,7 @@ later requests and linked-child contributions. These are the CLI session report'
 existing diagnostics, not billing, quota usage or Token Mix's Input category. Raw
 I + E reconciles to the total when known; separately rounded Credits/USD values
 need not visually sum. All three use the selected Web unit and shared formatting.
-Partial totals retain `?`. Zero totals display just `0` or `$0.00`; a tiny positive
+Numeric totals have no uncertainty prefix. Zero totals display just `0` or `$0.00`; a tiny positive
 amount may round to USD zero without proving either component is zero. The value
 tooltip always keeps independently unavailable components as `N/A`, including when
 the total displays zero. No browser subtraction or forced-zero override is used.

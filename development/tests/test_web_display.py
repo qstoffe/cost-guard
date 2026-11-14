@@ -56,7 +56,7 @@ class WebDisplayTests(unittest.TestCase):
         finish = int(datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc).timestamp() * 1000)
         value = record(at_ms=start, completed_at_ms=finish, observed_at_ms=finish, now_ms=finish,
             ccost=Decimal(395), complete=False)
-        for unit, amount in (('credits', '?395'), ('usd', '?$3.95')):
+        for unit, amount in (('credits', '395'), ('usd', '$3.95')):
             with self.subTest(unit=unit), patch.object(display, 'format_local_timestamp',
                     wraps=display.format_local_timestamp) as stamp:
                 dto = with_display(value, 'Europe/Stockholm', ccost_display_unit=unit).to_json()
@@ -70,7 +70,7 @@ class WebDisplayTests(unittest.TestCase):
                 'mini_finished_date_time':'2026-10-25 02:30'}, dto['display'])
             self.assertEqual(['ccost', 'observed_at_ms', 'now_ms', 'clock', 'date_time', 'start_date_time',
                 'mini_start_date_time', 'finished_clock', 'finished_date_time', 'mini_finished_date_time'], list(dto['display']))
-            self.assertEqual({'credits':{'ccost':'?395'}, 'usd':{'ccost':'?$3.95'}}, dto['display_units'])
+            self.assertEqual({'credits':{'ccost':'395'}, 'usd':{'ccost':'$3.95'}}, dto['display_units'])
             self.assertEqual((start, finish), (dto['at_ms'], dto['completed_at_ms']))
 
     def test_dual_unit_reset_work_is_once_per_projection_and_never_reused_across_clock_ticks(self):
@@ -125,7 +125,7 @@ class WebDisplayTests(unittest.TestCase):
         dto = with_display(record(ccost=Decimal("395"), unresolved_cost=True,
             used=Decimal("395"), unit="AI credits", billed_cost=Decimal("395"),
             unaccounted_usage=Decimal("395"), relative_cost=Decimal("395"))).to_json()
-        self.assertEqual({"credits": {"ccost": "?395"}, "usd": {"ccost": "?$3.95"}}, dto["display_units"])
+        self.assertEqual({"credits": {"ccost": "395"}, "usd": {"ccost": "$3.95"}}, dto["display_units"])
         for value in (None, Decimal(0)):
             unknown = with_display(record(ccost=value, unresolved_cost=True)).to_json()
             self.assertEqual("N/A", unknown["display"]["ccost"])
@@ -147,7 +147,7 @@ class WebDisplayTests(unittest.TestCase):
                 self.assertEqual(money(value), dto["display"]["billed_cost"])
                 self.assertEqual("1m", dto["display"]["duration_ms"])
                 self.assertEqual(duration_text(59_500), dto["display"]["duration_ms"])
-        for value, unresolved, expected in (("0", True, "N/A"), ("0.12", True, "?0.2"), ("0.12", False, "0.2")):
+        for value, unresolved, expected in (("0", True, "N/A"), ("0.12", True, "0.2"), ("0.12", False, "0.2")):
             dto = with_display(record(ccost=Decimal(value), unresolved_cost=unresolved)).to_json()
             self.assertEqual(expected, dto["display"]["ccost"])
 
@@ -207,7 +207,7 @@ class WebDisplayTests(unittest.TestCase):
         dto = project_live(warning_watch_projection(prompt), "Europe/Stockholm").to_json()
         row = dto["rows"][0]["prompt"]
         self.assertEqual(["running", "estimated", "partial", "threshold"], row["display_roles"])
-        self.assertEqual("?12", row["display"]["ccost"])
+        self.assertEqual("12", row["display"]["ccost"])
         self.assertEqual("2s", row["display"]["duration_ms"])
         self.assertEqual("+4k → 120k", row["display"]["incoming_context_tokens"])
         self.assertEqual("--/--/--/--", dto["token_mix"]["display"]["percentages"])

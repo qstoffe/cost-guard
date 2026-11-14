@@ -94,7 +94,7 @@ class CategoryCostTests(unittest.TestCase):
         self.assertEqual((3, 2), (mix.request_count, mix.priced_requests))
         self.assertFalse(mix.cost_complete)
         self.assertEqual(comparison_cost(entries, PRICES.reference_valuation).known_ccost, sum(mix.costs))
-        self.assertIn("(?", token_mix_lines("3 prompts", mix)[0], "partial CCost is marked")
+        self.assertNotIn("?", token_mix_lines("3 prompts", mix)[0], "numeric partial CCost is plain")
 
     def test_adaptive_ccost_and_compact_token_volume(self):
         for value, text in (("127", "127"), ("18", "18"), ("0.6", "0.6"), ("0.95", "1.0"),

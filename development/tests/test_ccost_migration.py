@@ -159,7 +159,7 @@ class NumericSemanticsTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(expected, ccost_amount(D(raw)))
                 self.assertEqual(expected, consumed_capacity(D(raw)))
-        self.assertEqual("?438", ccost_amount(D("437.1"), unresolved=True))
+        self.assertEqual("438", ccost_amount(D("437.1"), unresolved=True))
         self.assertEqual("N/A", ccost_amount(D(0), unresolved=True))
         self.assertEqual("38–217", ccost_range(D("37.01"), D("216.4")))
 

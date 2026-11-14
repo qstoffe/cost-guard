@@ -43,7 +43,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
                 self.assertEqual(expected, dto["display"]["ccost"])
         partial = with_display(record(ccost=Decimal("395"), unresolved_cost=True),
                                ccost_display_unit="usd").to_json()
-        self.assertEqual("?$3.95", partial["display"]["ccost"])
+        self.assertEqual("$3.95", partial["display"]["ccost"])
         self.assertEqual("N/A", ccost_amount(Decimal(0), unresolved=True, unit="usd"))
 
     def test_render_scope_is_nested_exception_safe_and_thread_local(self):

@@ -14,8 +14,8 @@ MIX_TERM = "Token Mix %"
 
 
 def mix_cost_text(mix: TokenMix, value: Decimal) -> str:
-    """`?` marks known CCost that excludes unpriceable requests (partial)."""
-    return ("" if mix.cost_complete else "?") + ccost_amount(value)
+    """Render the known amount; pricing completeness remains in the mix facts."""
+    return ccost_amount(value)
 
 
 def total_cost_text(mix: TokenMix) -> str:
@@ -94,7 +94,7 @@ def comparison_cost_text(cost: ComparisonCost) -> str:
         return ccost_amount(Decimal(0))
     if not cost.priced_requests:
         return "N/A"
-    return ("" if cost.complete else "?") + ccost_amount(cost.known_ccost)
+    return ccost_amount(cost.known_ccost)
 
 
 def watch_total_lines(mix: TokenMix, today: ComparisonCost, today_label: str = "Today", *,

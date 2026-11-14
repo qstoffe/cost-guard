@@ -36,13 +36,13 @@ module.exports = async function({command,evaluate,until,owner,mini,checks,layout
     await apply(mode);
     const text=await focus(owner,full);assert.match(text,expected);assert.doesNotMatch(text,/has no listed/);
   }
-  await apply('mixed');
-  assert.match(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),/^\?/);
+   await apply('mixed');
+   assert.match(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),/^[<\d]/);
   await apply('zero');assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),'0');
   await apply('known');assert.notEqual(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),'N/A');
   await apply('prompt-only');
   assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(prompt)}).textContent`),'N/A');
-  assert.match(await evaluate(mini,`document.querySelector(${JSON.stringify(total)}).textContent`),/^\?/);
+   assert.match(await evaluate(mini,`document.querySelector(${JSON.stringify(total)}).textContent`),/^[<\d]/);
   assert.match(await focus(mini,prompt),/Claude Sonnet 4/);
   assert.doesNotMatch(await focus(mini,total),/has no listed/);
   await apply('session-only');

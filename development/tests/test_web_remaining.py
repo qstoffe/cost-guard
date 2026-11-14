@@ -25,9 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 class RemainingViewTests(unittest.TestCase):
     def test_volume_display_shares_partial_and_unknown_semantics(self):
         for usage, expected in ((TokenUsage(input=5_300_000), "5.3M"),
-                (TokenUsage(input=842_000, known_fields=("input",)), "?842K"),
+                (TokenUsage(input=842_000, known_fields=("input",)), "842K"),
                 (TokenUsage(known_fields=()), "N/A"),
-                (TokenUsage(known_fields=("input",)), "?0"), (TokenUsage(), "0")):
+                (TokenUsage(known_fields=("input",)), "0"), (TokenUsage(), "0")):
             native = token_mix((usage,))
             dto = with_display(project_mix(native)).to_json()
             self.assertEqual(expected, dto["display"]["total_tokens"])

@@ -80,7 +80,7 @@ class TokenCategoryNamesTests(unittest.TestCase):
         self.assertIsNone(dto["totals"][2])
         self.assertEqual([None] * 4, dto["shares"])
         self.assertEqual("100/200/--/100", dto["display"]["totals"])
-        self.assertEqual("?400", dto["display"]["total_tokens"])
+        self.assertEqual("400", dto["display"]["total_tokens"])
         self.assertTrue(dto["display"]["write"].startswith("--"))
         self.assertIn("Cache write: --", token_mix_lines("1 prompt", mix)[0])
 

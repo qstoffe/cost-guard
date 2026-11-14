@@ -119,6 +119,7 @@ def main():
     parser.add_argument('--benchmark', action='store_true', help='Observe the independent public Harbor lane via authenticated local HTTP.')
     parser.add_argument('--benchmark-cold', action='store_true', help='Ignore this probe host\'s cached benchmark in memory; keep the on-disk last-good file.')
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--numeric-tables", action="store_true", help="Check already-observed numeric cost tokens; count-only, no private history export.")
     parser.add_argument("--recent-finished", action="store_true",
         help="Observe the bounded recent projection without claiming a full real-history oracle or generating prompts.")
     parser.add_argument("--effort-tooltips", action="store_true", help="Check recorded default selection in active Watch help; no whole-history wait.")
@@ -274,7 +275,7 @@ def main():
             observations.stage = 'sessions'
             observe_sessions(get, cookie, host, owners[0])
         card_evidence = None
-        if args.watch_cards or args.tool_outcomes or args.context_deltas or args.recent_finished:
+        if args.watch_cards or args.tool_outcomes or args.context_deltas or args.recent_finished or args.numeric_tables:
             observations.stage = 'watch_cards'
             first_rows = None
             publications = []
@@ -288,6 +289,14 @@ def main():
                     assert not view.get('history_cards'), 'provisional history escaped the producer'
                 cards = [*view.get('active_cards', []), *view.get('history_cards', []),
                     *view.get('recent_finished_cards', [])]
+                if args.numeric_tables:
+                    from development.tests.integration.numeric_table_observations import observe_numeric_tables
+                    numeric = observe_numeric_tables(view)
+                    if any(card['rows'] for card in cards) and numeric['numeric_cost_tokens'] and len(publications) >= 12:
+                        card_evidence = dict(scope='observed_numeric_tables_only', **numeric,
+                            publications=len(set(seq for _, seq in publications)),
+                            history_state=view['history_state'], private_incident_reproduced=False)
+                        break
                 if any(card['rows'] for card in cards) and first_rows is None:
                     first_rows = round(time.monotonic() - started, 3)
                 if any('totals' in card or 'provisional' in card for card in cards):

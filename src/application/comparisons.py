@@ -47,11 +47,10 @@ def page(value):
 def display_tokens(values, zone):
     if values.get('match_run'):
         start, end = values['started_at_ms'], values['completed_at_ms']
-        prefix = '' if values['cost_complete'] else '?'
         return dict(started=format_local_timestamp(start, zone, '%Y-%m-%d %H:%M'),
             precise_start=format_local_timestamp(start, zone, '%Y-%m-%d %H:%M:%S %z'),
             precise_end='Unknown' if end is None else format_local_timestamp(end, zone, '%Y-%m-%d %H:%M:%S %z'),
-            ccost='N/A' if values['ccost'] is None else prefix + ccost_amount(Decimal(values['ccost'])),
+            ccost=ccost_amount(None if values['ccost'] is None else Decimal(values['ccost'])),
             context='N/A' if values['next_context_tokens'] is None else '~' + context_tokens(values['next_context_tokens']),
             totals='/'.join(str(item) for item in values['token_totals']))
     if values.get('match_fact'):

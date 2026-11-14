@@ -484,7 +484,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(unknown["metric_states"]["duration"], "ready")
         self.assertEqual(unknown["prompt_count"], 0)
         self.assertIsNone(unknown["duration_ms"])
-        self.assertIn("?", unknown["display"]["ccost"])
+        self.assertEqual("2", unknown["display"]["ccost"])
         source.snapshots["root-0000"] = replace(SyntheticMonthSource(1, 3, month_start_ms=1000)
             .snapshots["root-0000"], source_revision="finished")
         self.clock += 6

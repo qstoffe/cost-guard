@@ -291,7 +291,7 @@ assert.match(card.summary.children[1].textContent, /^Total CCost: N\/A.*unavaila
 summaryValue.cost = {...savedCost, priced_requests:0, complete:false}; summaryValue.state = 'partial';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.summary.children[1].textContent, 'Total CCost: N/A');
-assert.match(helpText(card.costHelp), /Partial pricing or source data/);
+assert.doesNotMatch(helpText(card.costHelp), /\? — Partial pricing or source data/);
 assert.doesNotMatch(helpText(card.costHelp), /Source evidence:/);
 summaryValue.cost = savedCost; summaryValue.state = 'observed';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);

@@ -168,7 +168,7 @@ class ReportRenderer:
             rows, styler=self.styler, target_width=self.table_width,
         ):
             self._write(line)
-        self._prose("CCost is whole-session reference token valuation, not billing; ? marks partial pricing.", prefix="* ")
+        self._prose("CCost is whole-session reference token valuation, not billing; unavailable values stay N/A.", prefix="* ")
         self._prose("# counts visible prompts; linked child work is included. Only currently available OpenCode data is shown.", prefix="* ")
         self._prose("Duration: accumulated execution wall-clock time, excluding idle gaps; overlaps count once. N/A means timing is incomplete.", prefix="* ")
         if any(item.multiple_models for item in report.session_usage):
@@ -329,7 +329,7 @@ class ReportRenderer:
             self._render_prompt_block(block, warning_number=warning_numbers.get(block.session_id),
                                       snapshot_running_metrics=report.kind is ReportKind.SESSION)
         for explanation in (
-            "CCost: reference token valuation including linked child work, not actual billing; ? marks partial pricing.",
+            "CCost: reference token valuation including linked child work, not actual billing; unavailable values stay N/A.",
             f"Calls: causal model requests. {MIX_TERM}: {TOKEN_CATEGORY_ORDER} token shares (Output includes reasoning).",
             "Duration: execution wall-clock time, not calendar elapsed time. Total unions selected prompt/compaction intervals, excluding idle gaps; N/A means timing is incomplete.",
             "~Ictx: approximate incoming context, or context change → next-input context along the session timeline.",
@@ -409,9 +409,9 @@ class ReportRenderer:
             self._render_history_mix_table("Publisher", [(item.publisher, item.prompts, item.calls, item.mix)
                                                          for item in report.publisher_token_mix])
         for explanation in (
-            f"Tokens: known {TOKEN_CATEGORY_ORDER} volume, including reasoning in Output; K/M/B are rounded display only. ? marks incomplete telemetry; N/A means no known categories.",
+            f"Tokens: known {TOKEN_CATEGORY_ORDER} volume, including reasoning in Output; K/M/B are rounded display only. N/A means no known categories.",
             f"{TOKEN_CATEGORY_ORDER}: Token Mix % of the model/publisher's token volume (Output includes reasoning) and its CCost.",
-            "CCost: reference token valuation priced per request, not actual billing; ? marks partial pricing.",
+            "CCost: reference token valuation priced per request, not actual billing; unavailable values stay N/A.",
             "Prompts: unique user prompts where the model contributed usage; one prompt can count on several rows.",
             "Calls: model requests attributed to the model, including tool-loop, subagent and compaction requests.",
         ):

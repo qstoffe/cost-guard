@@ -156,14 +156,14 @@ class WatchTodayCCostTests(unittest.TestCase):
     def test_unpriced_partial_and_zero_values_keep_existing_display_conventions(self):
         self.assertEqual("0", comparison_cost_text(ComparisonCost()))
         self.assertEqual("N/A", comparison_cost_text(ComparisonCost(Decimal(0), 1, 0)))
-        self.assertEqual("?2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
+        self.assertEqual("2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
         lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), width=120)
         self.assertEqual(
             ["CCost · Watch: 0 · Total today: 2458"], lines
         )
         night = watch_total_lines(TokenMix(), ComparisonCost(Decimal("1.1"), 2, 1), "2026-10-15")
         self.assertEqual(
-            ["CCost · Watch: 0 · Total 2026-10-15: ?2"],
+            ["CCost · Watch: 0 · Total 2026-10-15: 2"],
             night,
         )
 
