@@ -173,7 +173,10 @@ keeps `~`; reset schedules use the configured-local clock followed by today,
 tomorrow, an English weekday within seven elapsed days, or a date beyond that.
 Mini Activity value help is local `YYYY-MM-DD HH:mm` without an offset. Normal,
 approaching, pending and invalidated Ctx values have no popup; a current exceeded
-price threshold alone turns Ctx red and offers the short source-backed warning.
+price threshold offers the short source-backed warning. Verified Running rows keep
+all five cell values yellow, including Ctx with that warning or a pending value.
+Only non-running Ctx uses ordinary text or red for an eligible exceeded threshold;
+the warning's meaning and keyboard/hover/touch access are unchanged.
 
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
 have no full-text popup in either Watch table. Mini uses column-heading help, not

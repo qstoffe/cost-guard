@@ -126,10 +126,16 @@ these historical slots. Relative formatting changes neither membership nor ranki
 The selected rows are ordered by **Activity ascending**, oldest at the top, newest at
 the bottom, with deterministic identity ties and a conservative unknown-time fallback.
 Resumed sessions promote the same keyed row and move with their actual new start.
-Running is yellow. Successful endings are green and abort/errors red **only during
-the existing server-owned recent-terminal grace**. Historical rows use the theme's
-normal foreground, including on first opening; their accessible outcome text remains
-accurate after the highlight expires. Refresh/reopen does not restart that grace.
+Running is yellow across **all five cell values**, including normal, pending or
+exceeded-warning Ctx. The Ctx warning remains truthful and accessible; Running
+foreground takes priority, not a different severity. Successful endings are green
+and abort/errors red **only during the existing server-owned recent-terminal grace**.
+Historical rows use the theme's normal foreground, including on first opening.
+Non-running Ctx independently uses ordinary text, or red only for a current,
+source-qualified exceeded warning with ready price guidance; approaching, pending
+or invalidated guidance cannot make it red. Accessible outcome text remains accurate
+after the highlight expires. Refresh/reopen does not restart that grace or retain
+an obsolete Running foreground.
 Full Watch keeps its separate per-prompt cards and Earlier list.
 
 The shared server still certifies five eligible global historical winners **after excluding
