@@ -31,8 +31,7 @@ def decimal(value):
 def amount_tokens(values):
     tokens = {}
     if "day_start_ms" in values and "prompt_count_complete" in values:
-        # Web Today alone shows the known priced subtotal quietly. Keep the
-        # comparison's canonical facts and other scopes' partial tokens intact.
+        # Preserve Today's independent no-priced-work availability guard.
         total = dict(values["total"].fields)
         tokens["daily_ccost"] = ("N/A" if total["observed_requests"] and not total["priced_requests"]
                                  else ccost_amount(decimal(total["known_ccost"])))
@@ -108,7 +107,7 @@ def amount_tokens(values):
     if "run_ccost" in values:
         mix = dict(values["run_total"].fields)
         tokens["run_ccost"] = ("N/A" if values["run_ccost"] is None or (mix["request_count"] and not mix["priced_requests"])
-            else ("" if mix["cost_complete"] else "?") + ccost_amount(decimal(values["run_ccost"])))
+            else ccost_amount(decimal(values["run_ccost"])))
     return tokens
 
 
@@ -250,7 +249,7 @@ def metric_tokens(values, timezone_id, now_ms=None, *, times=None):
             if all(item is not None for item in values["shares"]) and sum(values["totals"]) else "--/--/--/--")
         costs = values.get("costs")
         tokens["costs"] = "N/A" if costs is None or (values["request_count"] and not values["priced_requests"]) else "/".join(
-            ("" if values["cost_complete"] else "?") + ccost_amount(decimal(item)) for item in costs)
+            ccost_amount(decimal(item)) for item in costs)
     return tokens
 
 
@@ -325,13 +324,11 @@ def history_tokens(values, timezone_id, *, times=None):
         shares = balanced_share_percents(values["totals"]) if all(item is not None for item in values["shares"]) else ("--",) * 4
         costs = values.get("costs")
         priced = costs is not None and not (values["request_count"] and not values["priced_requests"])
-        prefix = "" if values["cost_complete"] else "?"
         for index, (name, label) in enumerate(TOKEN_CATEGORIES):
-            cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
+            cost = "N/A" if not priced else ccost_amount(decimal(costs[index]))
             tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
             tokens["mix_" + name + "_share"] = "N/A" if shares[index] == "--" else shares[index]
-            tokens["mix_" + name + "_cost"] = ("N/A" if not priced else
-                ("" if values["cost_complete"] else "Partial ") + ccost_amount(decimal(costs[index])))
+            tokens["mix_" + name + "_cost"] = cost
             if values.get('category_cost_help'):
                 amount = decimal(costs[index]) if priced else None
                 exact = 'N/A' if amount is None else format(amount / 100 if ccost_unit() == 'usd' else amount, 'f')
@@ -340,12 +337,12 @@ def history_tokens(values, timezone_id, *, times=None):
                     + (" Reference valuation, not billing." if values["cost_complete"] else
                        " Partial reference valuation; missing pricing or usage is not zero.")
                 )
-        tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
-        tokens["mix_total_cost"] = tokens["total_cost"].replace("?", "Partial ", 1)
+        tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
+        tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),
                                              None if known_volume is None else int(known_volume))
-        tokens["mix_total_tokens"] = tokens["total_tokens"].replace("?", "Partial ", 1)
+        tokens["mix_total_tokens"] = tokens["total_tokens"]
     return tokens
 
 

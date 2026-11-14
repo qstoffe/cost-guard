@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
+   assert.ok(scope === undefined || ['--numeric-tables','--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -113,7 +113,14 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-       await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+     await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+       if(scope==='--numeric-tables') {
+         await require('./probe_numeric_tables.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+           limitations:['Synthetic canonical partial/unknown/zero source fixtures; actual headless Full/Mini PiP and Sessions/detail DOM, not a private incident or physical desktop.']};
+         return;
+       }
         if(scope==='--mini-tooltips') {
           assert.ok(['mouse','touch','mixed','control'].includes(replay));
           const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');

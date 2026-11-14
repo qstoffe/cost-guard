@@ -6,7 +6,7 @@ const SessionDetail = (() => {
     ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work.'],
     ['Model', 'The canonical main prompt model. Linked subagents may use other models.'],
     ['Effort', 'Reasoning effort requested for the main prompt.'],
-    ['CCost', 'Reference cost of this prompt, including linked work; not your bill. ? means partial pricing.'],
+    ['CCost', 'Reference cost of this prompt, including linked work; not your bill.'],
     ['Calls', 'Recorded model requests, including linked subagents. Not tool calls.'],
     ['Duration', 'Canonical execution time, excluding idle gaps. Retained observations do not advance.'],
     ['Ictx', 'Context on the first request of this prompt, not the next session context. N/A is unknown.'],

@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000706: `numbers.py` owns prefix-free numeric CCost while preserving unknown/
+unresolved-zero rules; `display.py` owns plain known token-volume subtotals.
+Application amount/history/Comparisons and CLI Token Mix producers no longer
+decorate numeric costs. Native quota/Capacity/Remaining estimates are unchanged.
+Coverage: `test_numeric_table_policy.py`, amount/Watch/Mini/report/remaining/quota
+regressions, `probe_web_help.cjs ... --numeric-tables`, Token Mix browser matrix
+and read-only `probe_web_live.py --numeric-tables`.
+[Audit and evidence](../../journal/web/numeric-table-values.md).
+
 FR000705: `reports/token_mix_history.py` selects canonical request times after
 deduplication, reusing `token_mix_cache.py` facts/valuations and AI Stats windows.
 `ReportRequest.token_mix_scope` distinguishes finite jobs/publications; CLI calls

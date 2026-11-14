@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.49, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.50, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -215,7 +215,7 @@ Publisher rows pool the same requests at original model/tier CCost. Unknown manu
 
 - `Prompts`: distinct contributing user prompts per model. Mixed-model prompts count on multiple rows; counts are not additive.
 - `Calls`: attributed model requests, including tool-loop, subagent and compaction work. Both counts indicate sample size.
-- `Tokens`: known I/C/W/O (Output includes reasoning); K/M/B display, exact Web sorting. `?` partial; `N/A` unknown.
+- `Tokens`: known I/C/W/O (Output includes reasoning); plain K/M/B subtotal display, exact Web sorting; `N/A` unknown.
 - Deleted or pruned history is not reconstructed; no private ledger exists. Rows never imply which account or subscription served a model.
 - If current model availability cannot be established, all historically used models are shown with a warning (fail open).
 
@@ -241,7 +241,7 @@ Passing a session ID prints one snapshot and exits, even with active work; use `
 | Column | Meaning |
 | --- | --- |
 | `Prompt` | Local time, prompt number and preview. Separate `Model:` and `[ABORTED]` timeline rows provide history context. `/compact` is shown as its own event. |
-| `CCost` | Reference token valuation of the prompt/event, independent of billing; `?` marks a partial subtotal. |
+| `CCost` | Reference token valuation of the prompt/event, independent of billing; numeric subtotals are plain, unavailable values N/A. |
 | `Calls` | Completed causal model requests belonging to the prompt/event. |
 | `Duration` | Prompt/compaction execution wall-clock time, using the same compact format and rounding as Watch. |
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
@@ -292,9 +292,9 @@ Watch's first view never waits for quotas. An account-only scheduler refreshes h
 
 [Watch activity](docs/watch-activity.md): yellow `Skills (N)` lists confirmed exact IDs, newest first; red `[N tool call failures]` requires direct evidence, never load recency. Native errors and recognized Toolkit error contracts count once; cancellations and exit codes alone do not. Narrow rows preserve total/failures and whole skill IDs with `+N more`; the metric table keeps fixed geometry.
 
-Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `?`/`N/A`. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
+Session `Σ` sums its displayed prompt/event CCost before rounding, preserving unavailable `N/A`. Numeric subtotals have no uncertainty prefix. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
 
-`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `CCost · Watch: <run> · Total today: <day>` retains run usage across eviction, disappearance, resync and moves (zero when empty; `?` when partly priced). Today combines available local-day history with deduplicated requests observed and retained by this Watch. Requests deleted before observation cannot be reconstructed; restart uses available history, not a ledger. From local midnight until 03:00, `Total today` reads `Total YYYY-MM-DD`, even while idle. Row `Σ` can differ: startup mid-prompt may show row/Σ `78` but run `59`.
+`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `CCost · Watch: <run> · Total today: <day>` retains run usage across eviction, disappearance, resync and moves (zero when empty; plain known subtotal when partly priced). Today combines available local-day history with deduplicated requests observed and retained by this Watch. Requests deleted before observation cannot be reconstructed; restart uses available history, not a ledger. From local midnight until 03:00, `Total today` reads `Total YYYY-MM-DD`, even while idle. Row `Σ` can differ: startup mid-prompt may show row/Σ `78` but run `59`.
 
 First daily accounting may show Pending; refreshes/failures retain the complete same-day value until atomic replacement, allowing corrections. Midnight starts a new scope. Bounded enrichment is quota-independent; Today needs no month scan. All running candidates remain discoverable; scoped Watch keeps global Today.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.49 (2026-11-14):** Web Token Mix defaults to All time with five server-aggregated periods. Both tables have nine sortable columns, with exact category CCost in percentage-value help and one active sort arrow. The heading help shows exact recorded tokens and real configured-local bounds; period-row spacing matches Sessions and AI Stats. Historical CLI output is unchanged. [Behavior and evidence](development/journal/web/token-mix-periods.md).
+**v81.50 (2026-11-14):** Numeric CCost in Web/CLI tables, totals and cost help has no uncertainty question-mark prefix, in Credits or USD. Known token-volume subtotals also render plainly. Missing valuation, canonical completeness and quota Capacity/Remaining indicators retain their independent semantics. [Behavior and evidence](development/journal/web/numeric-table-values.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

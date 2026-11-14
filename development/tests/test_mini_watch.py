@@ -53,9 +53,9 @@ class MiniWatchTests(unittest.TestCase):
         summaries = [card["session_summary"] for card in credits["active_cards"] + credits["history_cards"]]
         self.assertTrue(all(summary == summaries[0] for summary in summaries))
         self.assertEqual("4582.125", summaries[0]["cost"]["known_ccost"])
-        self.assertEqual("?4583", summaries[0]["cost"]["display"]["known_ccost"])
+        self.assertEqual("4583", summaries[0]["cost"]["display"]["known_ccost"])
         self.assertEqual("4583", summaries[0]["cost"]["display"]["account_ccost"])
-        self.assertEqual("?$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["known_ccost"])
+        self.assertEqual("$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["known_ccost"])
         self.assertEqual("$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["account_ccost"])
         self.assertEqual("refreshing", summaries[0]["state"])
         self.assertFalse(summaries[0]["cost"]["complete"])
@@ -65,7 +65,7 @@ class MiniWatchTests(unittest.TestCase):
 
     def test_quiet_subtotal_token_preserves_partial_unknown_and_zero_source_facts(self):
         for amount, observed, priced, complete, quiet, ordinary in (
-                ("562", 3, 2, False, ("562", "$5.62"), ("?562", "?$5.62")),
+                ("562", 3, 2, False, ("562", "$5.62"), ("562", "$5.62")),
                 ("562", 3, 3, True, ("562", "$5.62"), ("562", "$5.62")),
                 ("0", 0, 0, True, ("0", "$0.00"), ("0", "$0.00")),
                 ("0", 1, 1, True, ("0", "$0.00"), ("0", "$0.00")),

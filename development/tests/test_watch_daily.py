@@ -86,8 +86,8 @@ class WatchDailyTests(unittest.TestCase):
                     self.assertEqual(usage.mix.cost_complete, wire['mix']['cost_complete'])
                     self.assertEqual(usage.prompt_count_complete, wire['prompt_count_complete'])
                     if name == 'partial pricing':
-                        self.assertEqual('?' + expected, wire['total']['display']['known_ccost'])
-                        self.assertTrue(wire['mix']['display']['costs'].startswith('?'))
+                        self.assertEqual(expected, wire['total']['display']['known_ccost'])
+                        self.assertNotIn('?', wire['mix']['display']['costs'])
 
     def test_today_cleanup_retains_canonical_mix_and_independent_completeness_for_other_surfaces(self):
         frame = summary_watch()

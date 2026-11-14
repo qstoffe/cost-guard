@@ -227,7 +227,7 @@ const WatchView = (() => {
     const split = `Incoming Context CCost (I): ${display(prompt, 'incoming_context_ccost')}\n` +
       `Extra CCost (E): ${display(prompt, 'extra_ccost')}\n\n` +
       'I — Incoming context on the first attributed request.\nE — Output, later requests and linked subagents.\n' +
-      'N/A means unavailable, not zero. ? marks partial pricing or source data.';
+      'N/A means unavailable, not zero.';
     return [split, ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')]
       .filter(value => value && value !== 'N/A').join('\n\n');
   }
@@ -346,10 +346,9 @@ const WatchView = (() => {
       this.summary = el('div', undefined, 'watch-session-summary');
       const contextLine = contextParts(this);
       this.costLabel = el('span'); this.costStatus = el('span');
-      this.costHelp = ContextHelp.value(this.costLabel, () => (ReportView.costHelp(this.summaryValue?.cost ||
+      this.costHelp = ContextHelp.value(this.costLabel, () => ReportView.costHelp(this.summaryValue?.cost ||
         (this.summaryValue?.state === 'unavailable' ? {} : null), 'known_ccost') ||
-        'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.') +
-        (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : ''));
+        'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.');
       const costLine = el('div'); costLine.append(el('span', 'Total CCost: '), this.costHelp, this.costStatus);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);

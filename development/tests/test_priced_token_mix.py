@@ -73,7 +73,7 @@ class RequestPriceabilityTests(unittest.TestCase):
         self.assertEqual(100, sum(mix.percentages))
         self.assertNotIn("?", token_mix_lines("1 prompt", mix)[0])
         everything = priced_token_mix(((e.model, e.tokens) for e in entries), VALUATION)
-        self.assertIn("(?", token_mix_lines("1 prompt", everything)[0], "complete-scope CCost keeps `?`")
+        self.assertNotIn("?", token_mix_lines("1 prompt", everything)[0], "known subtotal is plain")
 
     def test_relative_mix_uses_only_priceable_requests(self):
         priced = entry(PRICED, TokenUsage(input=10, cache_read=90))
@@ -164,7 +164,7 @@ class WatchPricedMixTests(unittest.TestCase):
             WatchProjection("Watch", "V2", (), token_mix=mix, run_total=total, now_ms=4000))
         mix_line, total_line = stream.getvalue().splitlines()[:2]
         self.assertNotIn("?", mix_line)
-        self.assertTrue(total_line.startswith("CCost · Watch: ?"), total_line)
+        self.assertTrue(total_line.startswith("CCost · Watch: <0.1"), total_line)
 
     def test_run_boundary_and_refresh_dedup_apply_to_priced_mix(self):
         snapshot = with_models(make_snapshot(), {"i_child": UNPRICED})

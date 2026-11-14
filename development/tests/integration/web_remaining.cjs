@@ -92,9 +92,9 @@ sorted.view.model_token_mix = [
   ['larger', '9007199254740993', '9007199.3B'],
   ['unknown', null, 'N/A'],
   ['smaller', '9007199254740992', '9007199.3B'],
-  ['partial', '999999', '?1M']
+  ['partial', '999999', '1M']
 ].map(([model, raw, label]) => ({...base, model, mix: {...base.mix,
-   total_tokens: null, known_total_tokens: raw, display: {...base.mix.display, mix_total_tokens: label.replace('?', 'Partial ')}}}));
+   total_tokens: null, known_total_tokens: raw, display: {...base.mix.display, mix_total_tokens: label}}}));
 context.result = sorted;
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "token-mix"})', context);
 const header = all(output, 'th')[3].children[0];
@@ -122,12 +122,12 @@ for (const mutate of [
 }
 console.log('PASS complete payload validation rejects malformed overview or either table');
 
-// Token Mix alone suppresses noisy qualifiers; wire facts and CLI tokens remain unchanged.
+// Plain prepared numeric tokens retain their canonical incomplete source facts.
 const partial = JSON.parse(JSON.stringify(input['token-mix']));
 const partialMix = mix => ({...mix, cost_complete: false, priced_requests: 1, request_count: 3,
   exact_total_tokens: null, known_total_tokens: '842000',
-  display: {...mix.display, mix_total_tokens: 'Partial 842K', mix_input_cost: 'Partial 12.34'},
-  display_units: {usd: {mix_input_cost: 'Partial $0.12'}}});
+  display: {...mix.display, mix_total_tokens: '842K', mix_input_cost: '12.34'},
+  display_units: {usd: {mix_input_cost: '$0.12'}}});
 partial.view.token_mix = partialMix(partial.view.token_mix);
 for (const key of ['model_token_mix', 'publisher_token_mix'])
   partial.view[key] = partial.view[key].map(row => ({...row, mix: partialMix(row.mix)}));
@@ -143,7 +143,8 @@ assert.match(helpText(title), /842,000 known recorded tokens for the selected pe
 assert.doesNotMatch(helpText(title), /CLI|Observed|Partial pricing|CCost|Deleted/);
 vm.runInContext('ReportView.setUnit("usd", output)', context);
 assert.ok(output.textContent.includes('$0.12')); assert.doesNotMatch(output.textContent, /Partial|\?/);
-assert.equal(partial.view.token_mix.display.mix_total_tokens, 'Partial 842K', 'not a canonical token rewrite');
+assert.equal(partial.view.token_mix.cost_complete, false, 'presentation never changes completeness');
+assert.equal(partial.view.token_mix.exact_total_tokens, null, 'known subtotal is not a complete total');
 context.result = input['token-mix'];
 vm.runInContext('mixView.update(result)', context);
 assert.doesNotMatch(helpText(title), /Partial pricing:/, 'complete aggregate omits partial-pricing paragraph');

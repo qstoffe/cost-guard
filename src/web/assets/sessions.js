@@ -7,7 +7,7 @@ const SessionsCatalog = (() => {
     ['name', 'Session name', 'The session title. Open the name for its complete live prompt history.'],
     ['model', 'Model', 'One canonical model, or Multiple models when different models contributed.'],
     ['effort', 'Effort', 'Recorded selected effort across executed session-tree requests. Different selections show Multiple efforts; unknown attribution stays N/A.'],
-    ['ccost', 'CCost', 'Whole-session reference cost, not billing. ? means incomplete pricing. Sort uses unrounded complete cost; partial values stay last.'],
+    ['ccost', 'CCost', 'Whole-session reference cost, not billing. Sort uses unrounded complete cost; partial values stay last.'],
     ['prompts', 'Prompts', 'Canonical number of prompts in the entire session.'],
     ['duration', 'Duration', 'Canonical execution duration, excluding idle gaps. Sort uses milliseconds.'],
     ['ctx', 'CTX', 'Estimated session-level next incoming context in tokens, not remaining model capacity or a sum of prompts.']
