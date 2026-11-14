@@ -400,7 +400,7 @@ const WatchView = (() => {
             const focal = !historical && prompt.event_id === value.focal_id;
             const role = focal ? promptRole(prompt) : '';
             row.className = role ? `watch-${role}` : '';
-            const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
@@ -408,6 +408,7 @@ const WatchView = (() => {
             const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
             label.append(el('span', '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''), 'watch-prompt-number'), preview);
             if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
+            else if (prompt.subagent_active) ContextHelp.value(label, `Running: causally linked subagent activity. Parent attempt: ${prompt.parent_outcome || 'ongoing'}${prompt.abort_reason ? ' · ' + prompt.abort_reason : ''}.`);
             const started = metricValue(row, 0, display(prompt, historical ? 'finished_clock' : 'clock'),
               !historical || prompt.completed_at_ms != null ? display(prompt, historical ? 'finished_date_time' : 'date_time') : '');
              const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));

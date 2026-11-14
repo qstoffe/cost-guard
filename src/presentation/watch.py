@@ -325,6 +325,8 @@ class WatchRenderer:
         prefix = ""
         if prompt.execution_unverified:
             prefix = "[UNVERIFIED] "
+        elif prompt.subagent_active:
+            prefix = "[SUBAGENT RUNNING] "
         elif prompt.aborted:
             prefix = f"[ABORTED by {reason}] " if reason else "[ABORTED] "
         elif prompt.watch_error:

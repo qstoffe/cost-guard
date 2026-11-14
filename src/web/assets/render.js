@@ -701,7 +701,9 @@ const ReportView = (() => {
     const node = element('span', `${row.display?.clock || ''} ${row.prompt_number == null ? '' : '#' + row.prompt_number} ${[...new Set(text)].join(' ') || 'Prompt'}`.trim());
     const flags = [row.model_effort, row.is_compaction && 'Compaction',
       row.in_progress && (live ? 'Running · provisional' : 'Running at snapshot · provisional'), row.aborted && 'Aborted',
-      row.has_error && 'Error', row.background_only && 'Background activity',
+      row.has_error && 'Error', row.subagent_active && 'Subagent activity',
+      row.parent_outcome && row.subagent_active && `Parent attempt: ${row.parent_outcome}`,
+      row.background_only && 'Background activity',
       row.has_additional_model && 'Additional model contribution',
       row.completed_successfully && 'Completed', row.aborted && row.display?.abort_clock, row.abort_reason,
       row.ended_after_tool_calls && 'Ended after tool calls', row.running_cost_warning,

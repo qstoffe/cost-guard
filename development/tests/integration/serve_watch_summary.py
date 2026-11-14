@@ -21,7 +21,12 @@ from src.analysis.timezones import local_day_start_ms
 
 def main():
     assets = ROOT / 'src/web/assets'
-    if '--tool-outcomes' in sys.argv:
+    frames = None
+    if '--stopped-parent' in sys.argv:
+        from development.tests.fixtures.stopped_parent_watch import stopped_parent_frames
+        frames = stopped_parent_frames()
+        frame = summary_watch()
+    elif '--tool-outcomes' in sys.argv:
         from development.tests.fixtures.watch_tool_outcomes import outcome_watch
         frame = outcome_watch()
     else:
@@ -29,8 +34,11 @@ def main():
     now = int(time.time() * 1000)
     frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
         day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
-    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'account-cards.js', 'watch.js')}
+    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'mini.css', 'mini.js', 'help.js', 'render.js', 'account-cards.js', 'watch.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(frame).to_json())) + ';').encode()
+    if frames is not None:
+        resources['/data.js'] = ('const FRAMES = ' + json.dumps(frames) +
+            '; const INPUT = {state:"running", view:FRAMES[0]}; let syntheticNow=FRAMES[0].now_ms; Date.now=()=>syntheticNow;').encode()
     if '--tool-outcomes' in sys.argv:
         from development.tests.fixtures.watch_tool_outcomes import revision_observations
         from src.application.live_projection import card_row
@@ -57,10 +65,14 @@ def main():
             elif url.path == '/case.html':
                 theme = 'classic' if query.get('theme') == ['classic'] else 'web'
                 scheme = 'dark' if query.get('scheme') == ['dark'] else 'light'
+                mini = '''<button id="mini">Mini</button><p id="feedback"></p><script src="/mini.js"></script>
+                    <script>const mini = new MiniWatch.Controller(window, document.getElementById('mini'), document.getElementById('feedback'), ()=>{});
+                    mini.settings({miniWatchPlacement:'standard',miniWatchSize:'fit-on-open'},'synthetic');
+                    mini.health({kind:'connected',writable:true}); mini.update(INPUT);</script>''' if frames else ''
                 content = f'''<!doctype html><html lang="en" data-theme="{theme}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
                     <title>Synthetic Watch</title><link rel="stylesheet" href="/app.css?scheme={scheme}"><main><h1>Watch</h1><div id="result"></div></main>
                     <script src="/help.js"></script><script src="/render.js"></script><script src="/account-cards.js"></script><script src="/watch.js"></script><script src="/data.js"></script>
-                    <script>const state = {{connection:'Live connected.'}}; ReportView.renderLive(document.getElementById('result'), INPUT, state);</script></html>'''.encode()
+                    <script>const state = {{connection:'Live connected.'}}; ReportView.renderLive(document.getElementById('result'), INPUT, state);</script>{mini}</html>'''.encode()
             else:
                 content = resources.get(url.path)
                 if content is not None and url.path == '/app.css':

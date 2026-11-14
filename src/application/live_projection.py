@@ -17,7 +17,8 @@ def card_row(row, now_ms, invocation_verified=True):
     invocation_verified = invocation_verified and row.prompt.in_progress and not row.prompt.execution_unverified
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost incoming_context_ccost extra_ccost cost_estimated unresolved_cost
         incoming_context_ccost_known extra_ccost_known
-        calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
+        calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model
+        subagent_active parent_outcome parent_terminal_time_ms""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
         ("comparison_cost", comparison(row.prompt.comparison_cost)),
         ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt)),
@@ -34,10 +35,12 @@ def card_row(row, now_ms, invocation_verified=True):
                     "identity", "revision", "text", "qualification", "started_at_ms")})
                 for item in tool.failed_invocations) if activity_verified else (),
             running_tool=tool.running_tool, running_ms=tool.running_ms,
+            # Multi-call lists already carry the longest call; omit duplicate
+            # legacy singular details to keep 100-card lifecycle events bounded.
             running_invocation=(fields(tool.running_invocation, "identity revision text qualification")
-                if invocation_verified and tool.running_invocation and row.prompt.in_progress and not row.prompt.execution_unverified else None),
+                if invocation_verified and tool.running_invocation and len(tool.running_invocations) <= 1 else None),
             background_invocation=(fields(tool.background_invocation, "identity revision text qualification")
-                if invocation_verified and tool.background_invocation and row.prompt.in_progress and not row.prompt.execution_unverified else None),
+                if invocation_verified and tool.background_invocation and len(tool.background_invocations) <= 1 else None),
             running_invocations=tuple(fields(item, 'identity revision text qualification kind started_at_ms mode')
                 for item in tool.running_invocations) if invocation_verified else (),
             background_invocations=tuple(fields(item, 'identity revision text qualification kind started_at_ms mode')

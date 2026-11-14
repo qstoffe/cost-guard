@@ -124,6 +124,9 @@ class PromptRecord:
     watch_error: bool = False
     abort_time_ms: int = 0
     in_progress: bool = False
+    subagent_active: bool = False
+    parent_outcome: str = ""
+    parent_terminal_time_ms: int = 0
     execution_unverified: bool = False
     completed_successfully: bool = False
     # Outstanding background work keeping a running prompt active (kinds only).

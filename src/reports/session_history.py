@@ -92,6 +92,7 @@ _LIFECYCLE_FIELDS = (
     "in_progress", "execution_unverified", "aborted", "watch_error", "completed_successfully", "abort_reason",
     "abort_time_ms", "terminal_time_ms", "duration_ms", "execution_duration_ms",
     "background_kinds", "background_started_ms", "background_only", "ended_after_tool_calls",
+    "subagent_active", "parent_outcome", "parent_terminal_time_ms",
 )
 
 

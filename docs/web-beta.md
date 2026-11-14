@@ -970,6 +970,25 @@ see [evidence and limits](../development/journal/recorded-model-help.md).
 
 **[UNVERIFIED]** distinguishes an unfinished assistant whose complete source observation has no native running drain or supported tool/child/background activity. It is not success, failure or proof that another OpenCode process stopped. Known calls/usage remain, but Duration and affected session-duration totals are **N/A**, without an invented finish time. Later authoritative activity or terminal evidence updates the same prompt.
 
+Stopping a parent prompt does not end its causal tree while a verified linked
+subagent is still executing. Full Watch and Mini/PiP retain normal running ink
+and expose **Running (subagent activity)** to accessibility; prompt help keeps the
+parent attempt's cancellation/failure separate. Sessions/detail and CLI share the
+same lifecycle. The last authoritative child end restores the parent's actual
+Aborted/Error outcome, retains late usage once and uses the normal terminal grace.
+Native process-local inactivity without an owned end may instead be Unverified;
+an open invocation window or unrelated/reused child is not running proof.
+
+Full Watch intentionally keeps one card per eligible prompt, including concurrent
+prompts in one session. Mini keeps one representative per session: newest verified
+running non-compaction prompt, otherwise newest unverified prompt, then existing
+finished-selection rules. An older stopped prompt's remaining child activity and
+usage stay on that initiating prompt, never on a newer representative. Once a
+newer prompt finishes, the older still-running prompt can represent the session
+again. Existing elapsed duration is causal-tree wall time, not a claim that the
+stopped parent model is still inferring; billed/CCost and active-AI time remain
+independent.
+
 Stable keyed rows preserve document anchors, focus and text selection. Large new suffixes are built detached and batch-appended. Source omissions retain canonical evidence and frozen lifecycle/time until observed again; deleted-before-observation history cannot be recovered. Missing, archived, partial and unavailable remain distinguishable from observed empty. Silence/connection loss never proves completion.
 
 Authenticated, CSRF-protected `/api/detail` uses `open`, `begin`, revision-pinned `chunk`, `retry` and `close`. Internal rich chunks contain at most 25 rows with full-session totals; a captured revision stays coherent even while acquisition advances. Compatibility `page`/`freeze` actions remain internal APIs, not a UI experience. Visible pending status reads use **500ms**, normal ready refresh uses five seconds and hidden checks use thirty seconds without requesting history. These reads are independent of SSE and never acquire source data.

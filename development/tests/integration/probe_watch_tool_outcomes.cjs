@@ -53,6 +53,12 @@ async function main() {
         assert.equal(value.exceptionDetails, undefined, JSON.stringify(value.exceptionDetails));
         return value.result.value;
        };
+       if (args.includes('--stopped-parent')) {
+         const lifecycle = await require('./probe_stopped_parent.cjs')(evaluate, command, sessionId);
+         cases.push({theme, width, ...lifecycle});
+         await command('Target.closeTarget', {targetId});
+         continue;
+       }
        const invocation = await require('./probe_watch_invocation.cjs')(evaluate, command, sessionId);
        const failures = await require('./probe_watch_failures.cjs')(evaluate, command, sessionId);
       await evaluate(`document.querySelector('.watch-active details summary').focus({preventScroll:true})`);
@@ -117,7 +123,8 @@ async function main() {
     }
     await fs.writeFile(path.join(output, 'results.json'), JSON.stringify({browser: version.product, cases}, null, 2));
     console.log(JSON.stringify({status: 'ok', browser: version.product, cases: cases.length,
-      keyboardDisclosure: true, accessibleHelp: true, themeColors: true, narrowLayout: true, terminalCleared: true}));
+      ...(args.includes('--stopped-parent') ? {stoppedParentFullMini: true} :
+        {keyboardDisclosure: true, accessibleHelp: true, themeColors: true, narrowLayout: true, terminalCleared: true})}));
   } finally {
     clearTimeout(deadline);
     const exited = once(child, 'exit');

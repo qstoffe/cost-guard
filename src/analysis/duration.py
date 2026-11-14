@@ -41,6 +41,8 @@ def prompt_duration(
         return None
     ends = [end]
     for message in messages:
+        if message.termination is not None:
+            ends.append(message.termination.completed_at_ms)
         if message.completed_at_ms is not None:
             ends.append(message.completed_at_ms)
         for part in message.parts:

@@ -406,7 +406,9 @@ class InvocationTests(unittest.TestCase):
         card = frame.active_cards[0]
         row = card.rows[0]
         tool_observation = replace(observed, background_kinds=('shell',) * 5)
-        card = replace(card, rows=(replace(row, tool=tool_observation),))
+        card = replace(card, rows=(replace(row, tool=tool_observation,
+            prompt=replace(row.prompt, subagent_active=True, parent_outcome="cancellation",
+                parent_terminal_time_ms=1_800_000_000_000)),))
         card = replace(card, session_cost=replace(card.session_cost,
             main_ccost=Decimal("4000"), subagent_ccost=Decimal("582.125")))
         frame = replace(frame, active_cards=tuple(replace(card, session_id=f's{i}') for i in range(100)))
@@ -414,12 +416,22 @@ class InvocationTests(unittest.TestCase):
 
         for tick in range(8):
             payload = project_live(replace(frame, now_ms=frame.now_ms + tick * 1000)).to_json()
+            from development.tests.integration.invocation_observations import observe_invocations
+            self.assertEqual(1000, observe_invocations(payload), "live probe inspects both five-call lists, not suppressed singular duplicates")
             encoded = json.dumps(payload).encode()
             self.assertLess(len(encoded), MAX_EVENT_BYTES)
             self.assertNotIn(b'synthetic-private', encoded)
             hub.publish('live', payload)
 
         self.assertLessEqual(hub.bytes, MAX_REPLAY_BYTES)
+        activity = payload["active_cards"][0]["rows"][0]["tool"]
+        # Legacy singular fallback does not double-count a duplicate native call.
+        fields = ("identity", "revision", "text", "qualification")
+        activity["running_invocation"] = {key: activity["running_invocations"][0][key] for key in fields}
+        activity["background_invocation"] = activity["running_invocation"]
+        activity["running_invocations"] = activity["background_invocations"] = []
+        payload["active_cards"] = payload["active_cards"][:1]
+        self.assertEqual(1, observe_invocations(payload))
 
     def test_dto_retained_unverified_terminal_and_100_card_replay_budget(self):
         frame = summary_watch()

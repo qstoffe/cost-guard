@@ -57,6 +57,9 @@ class PromptProjection:
     extra_ccost: Decimal | None
     token_mix_percent: tuple[int, int, int, int] | None
     in_progress: bool = False
+    subagent_active: bool = False
+    parent_outcome: str = ""
+    parent_terminal_time_ms: int = 0
     execution_unverified: bool = False
     aborted: bool = False
     is_compaction: bool = False

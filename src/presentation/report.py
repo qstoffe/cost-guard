@@ -218,7 +218,8 @@ class ReportRenderer:
                 last_model = current_model
                 table_has_additional = table_has_additional or item.has_additional_model
             prefix = f"{clock} #{item.prompt_number}"
-            suffix = " [UNVERIFIED]" if item.execution_unverified else " [RUNNING]" if item.in_progress else ""
+            suffix = (" [UNVERIFIED]" if item.execution_unverified else
+                      " [RUNNING · subagent activity]" if item.subagent_active else " [RUNNING]" if item.in_progress else "")
             if item.in_progress and snapshot_running_metrics:
                 prefix, suffix = f"{clock} [RUNNING] #{item.prompt_number}", ""
             preview = item.label if item.is_compaction else single_line(item.preview)
