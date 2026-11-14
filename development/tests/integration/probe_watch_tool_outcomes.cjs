@@ -6,6 +6,7 @@ const {spawn} = require('node:child_process');
 const {once} = require('node:events');
 const args = process.argv.slice(2), argument = name => args[args.indexOf(name) + 1];
 const browser = argument('--browser'), output = argument('--output');
+const port = args.includes('--port') ? Number(argument('--port')) : 18753;
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   await fs.mkdir(output, {recursive: true});
@@ -45,7 +46,7 @@ async function main() {
       await command('Page.enable', {}, sessionId);
       await command('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: false}, sessionId);
       const loaded = event('Page.loadEventFired', sessionId);
-      await command('Page.navigate', {url: 'http://127.0.0.1:18753/case.html?theme=' +
+       await command('Page.navigate', {url: 'http://127.0.0.1:' + port + '/case.html?theme=' +
         (theme === 'classic' ? 'classic' : 'web') + '&scheme=' + (theme === 'dark' ? 'dark' : 'light')}, sessionId);
       await loaded;
        const evaluate = async expression => {
@@ -59,7 +60,11 @@ async function main() {
          await command('Target.closeTarget', {targetId});
          continue;
        }
-       const invocation = await require('./probe_watch_invocation.cjs')(evaluate, command, sessionId);
+        const disclosures = await require('./probe_watch_disclosures.cjs')(evaluate);
+        if (args.includes('--disclosures-only')) {
+          cases.push({theme, width, disclosures}); await command('Target.closeTarget', {targetId}); continue;
+        }
+        const invocation = await require('./probe_watch_invocation.cjs')(evaluate, command, sessionId);
        const failures = await require('./probe_watch_failures.cjs')(evaluate, command, sessionId);
       await evaluate(`document.querySelector('.watch-active details summary').focus({preventScroll:true})`);
       await command('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r'}, sessionId);
@@ -118,7 +123,7 @@ async function main() {
         return {hidden:card.running.hidden, text:card.running.textContent, backgroundHidden:card.background.hidden,
           open:card.tools.node.open, lines:card.tools.list.children.length}; })()`);
       assert.deepEqual(ended, {hidden: true, text: '', backgroundHidden: true, open: true, lines: 9});
-        cases.push({theme, width, ...facts, invocation, failures, helpAccessible: true, terminalCleared: true});
+         cases.push({theme, width, ...facts, disclosures, invocation, failures, helpAccessible: true, terminalCleared: true});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'results.json'), JSON.stringify({browser: version.product, cases}, null, 2));

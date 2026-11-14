@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.52, 2026-11-14), the supported distribution.
+Use **current `main`** (v81.53, 2026-11-14), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -380,7 +380,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.52 (2026-11-14):** Stopping a parent prompt no longer ends its RUNNING state while an attempt-bound linked subagent is still executing. Parent cancellation/failure stays separate from tree activity; the final child end restores the real parent outcome without losing late usage. Full Watch, Mini/PiP, Sessions and CLI share that lifecycle. [Behavior and evidence](development/journal/stopped-parent-children.md).
+**v81.53 (2026-11-14):** Full Watch keeps Running, failed-call and Skills disclosures steady across ordinary Live refreshes and temporary detail gaps. Established failure arrows remain controls; private input is cleared immediately while unavailable, and real source/call changes discard invalid state. [Behavior and evidence](development/journal/web/watch-disclosures.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

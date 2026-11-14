@@ -68,6 +68,8 @@ class ToolObservation:
     running_invocation_count: int = 0
     background_invocation_count: int = 0
     failed_invocations: tuple[ToolFailure, ...] = ()
+    # Pending means only prior UI membership may survive, never prior input.
+    detail_state: str = "observed"
 
     @property
     def cancelled_count(self) -> int:
@@ -145,6 +147,7 @@ class WatchCard:
     session_cost_state: str = "loading"
     observed_at_ms: int | None = None
     context_handoff: tuple[str, int] | None = None
+    activity_scope: str = ""
 
 
 @dataclass(frozen=True, slots=True)

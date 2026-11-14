@@ -11,10 +11,13 @@ from .reference_cost import issue_records
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
-def card_row(row, now_ms, invocation_verified=True):
+def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
     tool = row.tool
-    activity_verified = invocation_verified and not row.prompt.execution_unverified
-    invocation_verified = invocation_verified and row.prompt.in_progress and not row.prompt.execution_unverified
+    detail_state = detail_state if detail_state != "observed" or tool is None else tool.detail_state
+    if row.prompt.execution_unverified or not invocation_verified and detail_state == "observed":
+        detail_state = "invalidated"
+    activity_verified = invocation_verified and detail_state == "observed"
+    invocation_verified = activity_verified and row.prompt.in_progress
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost incoming_context_ccost extra_ccost cost_estimated unresolved_cost
         incoming_context_ccost_known extra_ccost_known
         calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model
@@ -28,6 +31,7 @@ def card_row(row, now_ms, invocation_verified=True):
         watch_duration_ms=row.prompt.duration_ms,
         live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens watch_context_detail"),
         tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
+            detail_state=detail_state,
             cancelled_count=tool.cancelled_count, failed_or_cancelled_count=tool.failed_or_cancelled_count,
             outcomes=tuple(fields(item, "tool_name outcome count") for item in tool.tool_outcomes),
             failed_invocations=tuple(record(tool_name=item.tool_name, reason=item.reason,
@@ -55,7 +59,11 @@ def card(value, now_ms):
     context = value.session_context
     cost = value.session_cost
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
-        rows=tuple(card_row(row, now_ms, value.state == "observed") for row in value.rows), state=value.state,
+        activity_scope=value.activity_scope,
+        rows=tuple(card_row(row, now_ms, value.state == "observed",
+            "observed" if value.state == "observed" else
+            "pending" if value.state in {"partial", "pending", "loading", "refreshing", "retrying", "retained"}
+            else "invalidated") for row in value.rows), state=value.state,
         observed_at_ms=value.observed_at_ms,
         context_handoff=None if value.context_handoff is None else record(
             previous_id=value.context_handoff[0], previous_tokens=value.context_handoff[1]),

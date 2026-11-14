@@ -3,6 +3,7 @@
 No real source, credentials, settings or inference; stops after ten minutes.
 """
 from dataclasses import replace
+import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -20,6 +21,12 @@ from src.analysis.timezones import local_day_start_ms
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--port', type=int, default=18753)
+    parser.add_argument('--tool-outcomes', action='store_true')
+    parser.add_argument('--stopped-parent', action='store_true')
+    parser.add_argument('--watch-script', type=Path, help='Explicit baseline asset for before-fix comparison.')
+    args = parser.parse_args()
     assets = ROOT / 'src/web/assets'
     frames = None
     if '--stopped-parent' in sys.argv:
@@ -35,6 +42,8 @@ def main():
     frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
         day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
     resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'mini.css', 'mini.js', 'help.js', 'render.js', 'account-cards.js', 'watch.js')}
+    if args.watch_script:
+        resources['/watch.js'] = args.watch_script.read_bytes()
     resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(frame).to_json())) + ';').encode()
     if frames is not None:
         resources['/data.js'] = ('const FRAMES = ' + json.dumps(frames) +
@@ -46,6 +55,8 @@ def main():
                      for tool in revision_observations(mode, count)]
                      for mode in ('foreground', 'background') for count in (1, 2)}
         resources['/data.js'] += ('const REVISIONS = ' + json.dumps(sequences) + ';').encode()
+        from development.tests.fixtures.watch_tool_outcomes import disclosure_publications
+        resources['/data.js'] += ('const DISCLOSURES = ' + json.dumps(disclosure_publications()) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -90,10 +101,10 @@ def main():
         def log_message(self, *_):
             pass
 
-    server = ThreadingHTTPServer(('127.0.0.1', 18753), Handler)
+    server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     timer = Timer(600, server.shutdown); timer.start()
     try:
-        print('Synthetic Watch fixture ready on http://127.0.0.1:18753', flush=True)
+        print(f'Synthetic Watch fixture ready on http://127.0.0.1:{args.port}', flush=True)
         server.serve_forever()
     finally:
         timer.cancel(); server.server_close()

@@ -55,6 +55,14 @@ module.exports = (card, helpText, document, select) => {
   assert.equal(group.jobs.get('call-b'), b);
   assert.equal(b.node.open, true);
   select(null);
+  card.drawActivity({...detailed, detail_state:'pending', failed_invocations:[]}, false);
+  assert.equal(group.node.open, true, 'pending aggregate keeps its established arrow and choice');
+  assert.equal(group.jobs.get('call-b'), b);
+  assert.equal(b.node.open, true, 'pending identity retains UI only');
+  assert.equal(b.input.textContent, '', 'pending detail must clear sensitive input immediately');
+  card.drawActivity(detailed, true);
+  assert.equal(group.jobs.get('call-b'), b, 'same physical failure recovers into the same control');
+  assert.equal(b.node.open, true);
   card.drawActivity({...detailed, outcomes:[{tool_name:'grep',outcome:'failed',count:25}],
     failed_or_cancelled_count:25}, true);
   assert.match(group.note.textContent, /\+23 additional failed calls not shown/);

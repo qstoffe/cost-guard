@@ -1,5 +1,6 @@
 """Web history membership and prompt-card lifecycle; no CLI retention changes."""
 from dataclasses import dataclass, field, replace
+import hashlib
 
 from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
@@ -349,7 +350,8 @@ class WatchCards:
                         if row.in_progress and row.background_kinds else 0)
                 if state != "observed" or entry.verified_generation != entry.generation or capture.retained or row.execution_unverified:
                     tool = replace(tool, running_invocation=None, background_invocation=None,
-                                   running_invocations=(), background_invocations=(), failed_invocations=())
+                        running_invocations=(), background_invocations=(), failed_invocations=(),
+                        detail_state="invalidated" if state == "unavailable" or row.execution_unverified else "pending")
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,
@@ -358,7 +360,9 @@ class WatchCards:
             observed_at_ms=None if capture.retained else capture.observed_at_ms,
             context_handoff=(dict(capture.context_handoffs).get(focal.event_id)
                 if focal is not None and state == 'observed' and not capture.retained
-                and entry.verified_generation == entry.generation else None))
+                and entry.verified_generation == entry.generation else None),
+            activity_scope=hashlib.sha256(repr((entry.root.provenance.source_type,
+                entry.root.provenance.source_generation, entry.root.provenance.source_instance)).encode()).hexdigest())
 
     def project(self, now_ms):
         active = []

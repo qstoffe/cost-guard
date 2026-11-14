@@ -15,6 +15,19 @@ Optional notice history uses `cache/model_notices.py` for resource-error classif
 
 ## Public contract
 
+FR000709 adds `ToolObservation.detail_state`: observed membership, pending detail
+availability, or invalidation. `cards.py` qualifies this separately from card
+freshness (an observed card can await a newer catalog revision); `live_projection.py`
+enforces it before exporting any private detail. `WatchCard.activity_scope` hashes
+root source type/generation/instance, not its volatile revision or private locator.
+Full Watch keys cards by that scope/root/focal and retains bounded native call
+nodes during pending gaps with empty input and neutral notes. Authoritative missing
+members, unverified execution, unavailable sources and removed/replaced cards clear
+obsolete inputs/identities. Established aggregate failure controls outlive omitted
+detail lists; count-only groups do not invent records. Skills/fragments reconcile
+incrementally. Acquisition, canonical counts/privacy budgets and CLI/Mini are
+unchanged. [Reproduction, verification and limits](../../journal/web/watch-disclosures.md).
+
 FR000703 removes the CLI `_advance` transient Refreshing projection, not actual
 source/provider failure feedback or acquisition. Last rendered data stays visible.
 Web Earlier membership remains producer-qualified; recent overlays and ongoing
