@@ -109,3 +109,20 @@ cause. A read-only identity diagnostic then confirmed `git_dubious_ownership`
 decision, those read-only Git commands now use `-c safe.directory=<exact ROOT>`;
 there is no global/wildcard trust change or protection bypass. All three native
 platform checks passed on these revisions; scoped browser acceptance remains pending.
+
+Actual hosted Document PiP opened successfully at native 125% browser zoom. Native
+silent-exit watchdog/ARIA, lifecycle/action inputs and both-unit Full/Mini cost
+values passed before later Mini context-fixture checks. Two test-only expectations
+were corrected against existing source behavior: integral `8 Credits` precision
+(not `8.0`) and FR000703's retained `300k` during same-source pending context
+(still no warning/help). An offline production-projected VM replay independently
+confirmed `112k, 117k, N/A, 112k, 300k, 300k, 300k`.
+
+One macOS ARM smoke attempt on PR head `8d74d118fb31b48f82c9705108d6a4f5fa8c0a5f`
+(actual checkout `0fba17d830e04027308dafa1357a04fe9171e649`) failed the existing
+launcher-return assertion at the restart boundary. No exact cause was established;
+an empty filtered lifecycle-error list was not treated as proof. Decision Delegate
+authorized one targeted unchanged job rerun after verifying the PR/revision.
+Job 132288202184 then **passed** on the same head. Retain both attempts:
+**initial native failure, unchanged rerun passed; cause unresolved**. No launcher
+safety checks, identity guards, assertions or timeouts were changed or waived.

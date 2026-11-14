@@ -311,12 +311,14 @@ async function main() {
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope === '--watch-only' ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : scope === '--live-status' ? ['Live surfaces and cached-report routes only; synthetic Sessions catalog/detail are not configured in this host.'] : [])]};
   } catch (error) {
-    const site=error.stack?.match(/(probe_[a-z_]+\.cjs:\d+:\d+)/)?.[1];
+    const sites=[...(error.stack || '').matchAll(/(probe_[a-z_]+\.cjs:\d+:\d+)/g)].map(match=>match[1]);
+    const site=sites.find(value=>!value.startsWith('probe_web_help.cjs:')) || sites[0];
     const scalar=value=>typeof value==='boolean'||typeof value==='number'?value:undefined;
     const diagnostic={phase,site,code:error.code==='ERR_ASSERTION'?'assertion_failed':
       error.message.startsWith('Condition not reached:')?'condition_not_reached':
       error.message.startsWith('CDP timeout:')?'cdp_timeout':'browser_probe_error',
-      actual:scalar(error.actual),expected:scalar(error.expected)};
+      actual:scalar(error.actual),expected:scalar(error.expected),
+      probeCase:error.probeCase,observation:error.observation};
     evidence={outcome:'FAIL',reason:error.message,diagnostic,checks,layouts};
     throw error;
   } finally {

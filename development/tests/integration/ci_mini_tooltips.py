@@ -45,7 +45,8 @@ def probe(state):
     detail = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
     notice("mini-tooltips", dict(outcome="PASS" if result.returncode == 0 else "FAIL",
         reason="Actual full-Chromium Document PiP, native input and elapsed-time regression",
-        evidence="mini-tooltips.json", diagnostic=detail.get("diagnostic"), checks=detail.get("checks", [])))
+        evidence="mini-tooltips.json", diagnostic=detail.get("diagnostic"),
+        checks=[check if isinstance(check, str) else check.get("case") for check in detail.get("checks", [])]))
     return result.returncode
 
 

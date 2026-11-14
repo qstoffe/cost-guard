@@ -19,6 +19,19 @@ module.exports = async function help({evaluate,until,fixture,command,pip,checks}
     window.helpRow=miniWatch.view.promptRows.get('help-synthetic');
     window.helpTitle=helpRow.querySelector('.mini-session');window.helpCtx=helpRow.cells[4];`);
   const panel = `miniWatch.view.doc.getElementById('context-help')`;
+  const contextReady=async(phase,condition)=>{
+    try {await until(condition);}
+    catch(error) {
+      error.probeCase='mini-context-'+phase;
+      error.observation=await evaluate(`(()=>{const c=liveValue.view.active_cards[0]||liveValue.view.history_cards[0],
+        r=miniWatch.view.promptRows.get('root'),raw=c?.rows[0]?.live_context.watch_next_context_tokens,
+        visible=r?.cells[4].textContent,state=c?.session_summary?.context?.context_state;
+        return {raw:typeof raw==='number'?raw:null,rowPresent:!!r,helpEmpty:r?.contextHelp==='',
+          visible:/^(?:[0-9.]+k|N\\/A)$/.test(visible)?visible:'other',
+          contextState:['ready-current','pending','invalidated','unavailable','historical'].includes(state)?state:'other'};})()`);
+      throw error;
+    }
+  };
   const read = () => evaluate(`({session:helpRow.sessionHelp,context:helpRow.contextHelp,
      visible:helpRow.cells[4].textContent,columns:helpRow.cells.length,
     buttons:helpRow.querySelectorAll('button').length,native:!!helpRow.querySelector('[title]'),
@@ -73,14 +86,14 @@ module.exports = async function help({evaluate,until,fixture,command,pip,checks}
   await evaluate('miniWatch.update=helpUpdate;delete window.helpUpdate;miniWatch.update(liveValue)');
   checks.push('Mini value help: no approaching/pending popup, exceeded-only short warning and immediate invalidation; Unicode/text-only Session preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry');
   await fixture('context-running');
-  await until(`miniWatch.view.promptRows.has('root') && liveValue.view.active_cards[0]?.rows[0]?.live_context.watch_next_context_tokens===112000`);
+  await contextReady('running',`miniWatch.view.promptRows.has('root') && liveValue.view.active_cards[0]?.rows[0]?.live_context.watch_next_context_tokens===112000`);
   await evaluate(`window.sourceRow=miniWatch.view.promptRows.get('root');sourceRow.cells[4].focus()`);
   assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
   assert.equal(await evaluate(`document.querySelector('.watch-card .watch-prompt-table')?.textContent.includes('+12k')`),true,'Full Watch uses same canonical delta');
   for(const [phase,next,delta] of [['later','117k','+17k'],['boundary','N/A','N/A'],
-      ['running','112k','+12k'],['history','300k','+12k'],['zero','300k','0'],['waiting','N/A','N/A']]) {
+      ['running','112k','+12k'],['history','300k','+12k'],['zero','300k','0'],['waiting','300k','N/A']]) {
     await fixture('context-'+phase);
-    await until(`miniWatch.view.promptRows.get('root')?.cells[4].textContent===${JSON.stringify(next)} &&
+    await contextReady(phase,`miniWatch.view.promptRows.get('root')?.cells[4].textContent===${JSON.stringify(next)} &&
       miniWatch.view.promptRows.get('root')?.contextHelp===''`);
     assert.equal(await evaluate(`miniWatch.view.promptRows.get('root')===sourceRow`),true);
     assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
