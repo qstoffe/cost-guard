@@ -50,6 +50,23 @@ def ordered(rows, key, direction):
     return tuple(sorted(rows, key=cmp_to_key(compare)))
 
 
+def retain_pending_metrics(row, previous):
+    """Display-only last-good fields; pending qualification still blocks sorting."""
+    if previous is None:
+        return row
+    fields = {}
+    if not row.context_qualified and row.context_tokens is None:
+        fields.update(context_tokens=previous.context_tokens,
+            context_detail="Previous same-session Ctx; source acquisition pending.")
+    if row.model_pending and row.model == "N/A":
+        for name in ("model", "multiple_models", "contributor_models", "main_models", "subagent_models"):
+            fields[name] = getattr(previous, name)
+    if (row.effort_pending or not row.effort_qualified) and row.effort_key is None:
+        for name in ("effort", "effort_key", "effort_contributors", "effort_details_complete"):
+            fields[name] = getattr(previous, name)
+    return replace(row, **fields)
+
+
 class SessionCatalog:
     def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC"):
         self.clock = clock
@@ -297,7 +314,7 @@ class SessionCatalog:
                     if (key in self.roots and root.provenance == self.roots[key].provenance
                             and revision == self.revisions.get(key)):
                         if actual == revision:
-                            self.rows[key] = row
+                            self.rows[key] = retain_pending_metrics(row, self.rows.get(key))
                             self.model_dependencies[key] = identity_values
                             self.valid[key] = actual, self.clock()
                             self.prompt_activity[key] = self.attempted[key], row.running
@@ -341,9 +358,6 @@ class SessionCatalog:
             root = self.roots[key]
             value = self.rows.get(key) or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False)
-            if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
-                value = replace(value, context_tokens=None,
-                    context_detail="Source revision changed; waiting for current session context.")
             activity = self.activity.get(key)
             rows.append(replace(value, title=root.title or "Untitled session",
                 last_activity_ms=activity if type(activity) is int and 0 < activity <= now else None,
@@ -445,13 +459,14 @@ class SessionCatalog:
                 row["running"] = self._running(key, bool(row["running"] and current and not unavailable))
                 row["metric_states"] = {name: row["metric_state"] for name in ("model", "effort", "ccost", "prompts", "duration", "ctx")}
                 if current and not self.rows[key].context_qualified:
-                    row["metric_states"]["ctx"] = "unavailable"
+                    row["metric_states"]["ctx"] = "retained" if row["context_tokens"] is not None else "pending"
                 if key in self.rows and (key not in self.valid or self.valid[key][0] != self.revisions.get(key)):
-                    row["metric_states"]["ctx"] = "unavailable" if unavailable else "pending"
+                    row["metric_states"]["ctx"] = ("retained" if row["context_tokens"] is not None else
+                        "unavailable" if unavailable else "pending")
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].model_pending:
                     row["metric_states"]["model"] = "pending"
                 if current and not self.rows[key].effort_qualified:
-                    row["metric_states"]["effort"] = "unavailable"
+                    row["metric_states"]["effort"] = "retained" if self.rows[key].effort_key is not None else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].effort_pending:
                     row["metric_states"]["effort"] = "pending"
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=PAGE_SIZE,

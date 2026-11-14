@@ -5,12 +5,28 @@ const WatchView = (() => {
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
   function historyNotice(view, retained) {
-    if (view?.recent_finished_cards?.length && view?.history_state !== 'observed')
-      return view?.history_state === 'unavailable' ? 'Unable to load earlier sessions' : 'Loading earlier sessions…';
     if (retained) return '';
     if (view?.history_state === 'observed' || view?.history_epoch > 0) return 'No earlier sessions';
     if (view?.history_state === 'unavailable') return 'Unable to load earlier sessions';
     return 'Loading earlier sessions…';
+  }
+  function retainContext(current, previous) {
+    const changed = current?.context_scope && previous &&
+      (current.context_scope !== previous.context_scope || current.context_epoch !== previous.context_epoch ||
+       current.context_provider && previous.context_provider && current.context_provider !== previous.context_provider ||
+       current.context_model && previous.context_model && current.context_model !== previous.context_model);
+    if (changed || current?.context_state === 'invalidated' || Number.isFinite(current?.watch_next_context_tokens))
+      return current;
+    return previous && Number.isFinite(previous.watch_next_context_tokens) ?
+      {...previous, context_state: 'pending', warning: current?.warning} : current;
+  }
+  function retainSummary(current, previous) {
+    // Session cost survives prompt/model changes, but not a different source/root.
+    const scope = current?.context?.context_scope, oldScope = previous?.context?.context_scope;
+    if (scope && oldScope && scope !== oldScope) previous = null;
+    const pending = !current || ['loading', 'pending', 'refreshing', 'retrying'].includes(current.state);
+    return {...current, cost: pending ? current?.cost ?? previous?.cost : current.cost,
+      context: retainContext(current?.context, previous?.context)};
   }
   function finishedCards(view) {
     const usable = view?.history_state === 'observed' || view?.history_epoch > 0;
@@ -277,6 +293,8 @@ const WatchView = (() => {
     return line;
   }
   function drawContext(target, context) {
+    context = retainContext(context, target.contextObservation);
+    target.contextObservation = context;
     target.contextState = context?.context_state;
     ContextHelp.refresh(target.contextHelp);
     const warning = context?.warning;
@@ -394,10 +412,7 @@ const WatchView = (() => {
       this.drawSummary(value.session_summary);
     }
     drawSummary(value) {
-      const pending = !value || ['loading', 'refreshing', 'retrying'].includes(value.state);
-      // Keep the last coherent footer through ordinary reacquisition, not through
-      // an observed correction or a confirmed unavailable/partial result.
-      if (pending) value = {...value, cost: value?.cost ?? this.summaryValue?.cost};
+      value = retainSummary(value, this.summaryValue);
       this.summaryValue = value;
       drawContext(this, value?.context);
       text(this.costLabel, () => value?.cost ?
@@ -494,5 +509,5 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, historyNotice, finishedCards};
+  return {View, ContextLine, historyNotice, finishedCards, retainContext, retainSummary};
 })();

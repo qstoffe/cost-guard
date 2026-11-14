@@ -193,21 +193,36 @@ async function main() {
     await until(`!!miniWatch.measure?.ready`);
     await evaluate('miniWatch.toggle()', true);
     await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
-    const miniIds = JSON.stringify(spec.history_rows.map(row=>row[0]));
+    const expectedMini = require('../fixtures/mini_history_expected.cjs').toString();
     await until(`JSON.stringify([...miniWatch.view.body.querySelectorAll('[data-id]')]
-      .map(row=>row.dataset.id))===${JSON.stringify(miniIds)}`);
-    assert.equal(await evaluate(`liveValue.view.history_cards.every(card=>{
-      const row=miniWatch.view.promptRows.get(card.session_id), prompt=card.rows[0].prompt;
-      return row && row.getBoundingClientRect().height>0 && row.children[0].children[0].textContent===
-        (prompt.completed_at_ms==null?'—':prompt.display.finished_clock) && row.activityHelp===
-        (prompt.completed_at_ms==null?'Unknown finish time':prompt.display.finished_date_time);
-    })`), true);
+      .map(row=>row.dataset.id))===JSON.stringify((${expectedMini})(liveValue.view).map(row=>row.id))`);
+    const miniCount=await evaluate(`(()=>{
+      miniWatch.render();
+      const expected=(${expectedMini})(liveValue.view),now=Date.now();
+      const today=ReportView.timestamp(now).slice(0,10);
+      for(const value of expected) {
+        const row=miniWatch.view.promptRows.get(value.id), time=row?.children[0].children[0];
+        if(!row || row.getBoundingClientRect().height<=0 || row.activityHelp!==value.help)
+          throw Error('Mini population/activity help mismatch');
+        const known=Number.isSafeInteger(value.at) && value.at>=0, age=now-value.at;
+        let label=known ? value.clock : '—';
+        if(known && age>=12*3600000 && /^\\d{4}-\\d{2}-\\d{2} /.test(value.help) && !value.help.startsWith(today+' ')) {
+          const unit=age<86400000 ? [3600000,'h'] : age<30*86400000 ? [86400000,'d'] :
+            age<365*86400000 ? [30*86400000,'m'] : [365*86400000,'y'];
+          label=Math.floor(age/unit[0])+unit[1]+' ago';
+        }
+        if(time.children[1].textContent!==label ||
+            time.children[0].textContent!==(value.play ? '▶ ' : ''))
+          throw Error('Mini start/finish activity mismatch');
+      }
+      return expected.length;
+    })()`);
     const blank = await command('Target.createTarget', {url:'about:blank'}, null);
     const other = (await command('Target.attachToTarget', {targetId:blank.targetId, flatten:true}, null)).sessionId;
     await command('Page.bringToFront', {}, other);
     await until('document.hidden && !miniWatch.window.document.hidden');
     assert.equal(await evaluate(`miniWatch.demand.payload(true).history && miniWatch.demand.payload(true).visible`), true);
-    facts.mini = {count:Math.min(5,spec.history_rows.length), dom_order:true, finish_display:true,
+    facts.mini = {count:miniCount, dom_order:true, start_finish_display:true,
       opener_hidden:true, mini_visible:true, independent_history_demand:true};
     await command('Target.closeTarget', {targetId:blank.targetId}, null);
     await command('Page.bringToFront');

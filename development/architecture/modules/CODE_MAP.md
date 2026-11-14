@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000703: `application/session_catalog.py` owns display-only pending scalar
+retention, independently of fresh sort qualification. `assets/watch.js` shares
+context/session-summary retention and history-status precedence; `mini.js` keeps
+visible capacity separate from history demand. `benchmark.js` and CLI coordinator
+remove passive refresh prose. Coverage: `test_stable_refresh.py`, catalog/Watch/Mini/
+Models suites, `fixtures/watch_refresh.cjs`, and `probe_web_help.cjs ... --stable-refresh`
+with actual hidden PiP/AX. Read-only `probe_web_live.py --sessions` and serial-first
+`--history-oracle` provide complementary installation evidence.
+[Inventory and truthful verification limits](../../journal/web/stable-refresh.md).
+
 FR000701: `watch/tools.py` retains physical failed-call members from the existing
 observation; `invocation.py` shares its privacy filter/card-wide input budget.
 `cards.py`/`live_projection.py` enforce verified activity lifetime, including

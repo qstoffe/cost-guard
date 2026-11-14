@@ -7,7 +7,8 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   const pending = async () => {
     assert.equal(await evaluate(`liveValue.view.history_state`),'loading');
     assert.equal(await evaluate(`liveValue.view.history_epoch`),0);
-    assert.equal(await evaluate(`document.querySelector('.watch-history').textContent.includes('Loading earlier sessions…')`),true);
+    assert.equal(await evaluate(`document.querySelector('.watch-history').textContent.includes('Loading earlier sessions…')`),
+      await evaluate(`!document.querySelector('.watch-history article')`));
   };
   await pending();
   let dimensions = await evaluate(`[miniWatch.window.outerWidth,miniWatch.window.outerHeight]`);

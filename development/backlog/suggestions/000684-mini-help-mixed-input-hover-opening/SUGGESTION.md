@@ -1,4 +1,4 @@
-# Suggestion 000684 — Restore Mini hover opening after mixed touch and keyboard help
+# Suggestion 000684 — Restore Mini and Models hover opening after mixed touch and keyboard help
 
 **Non-executable owner inbox proposal; no Ready priority or implementation approval.**
 Origin method: `selected-worker-deferral`, Cost Guard FR000683, 2026-11-12.
@@ -77,3 +77,53 @@ Targeted semantic comparison found no equivalent current proposal or rejection:
 static benchmark. Historical shared-help fixes address orphan dismissal and
 intrinsic targets, not this newly reproduced negative-hover opening interaction.
 See the [FR000683 journal and decisions](../../../journal/web/contextual-help.md#fr-000683-bounded-hover-watchdog-2026-11-12).
+
+## Models reproduction and FR000703 exclusion — 2026-11-14
+
+FR000703's stable-refresh portfolio independently passed its retention/DOM/AX cases,
+but the appended canonical Models promotion-help journey **failed**, not merely
+lacked evidence. Decision Delegate authorized scope-limited FR000703 delivery
+excluding this ancillary mixed-input interaction, without weakening product help
+guards or claiming a whole-portfolio PASS. This extends the existing proposal;
+it grants no implementation approval and establishes no identical internal cause.
+
+The shipped HTTP/CSP/SSE harness with a fresh owned headless Chrome
+157.0.8103.51 document retains one `.model-relative.promotion` target across
+Classic 360 → 1366 → 1920. Keyboard focus, exact multiline prices/promotion/Token
+Mix content, Escape and bounds succeed. After earlier touch/open/outside-dismiss
+cases, the original single mouse arrival in the 1920 case does not open help.
+Trusted mouse entry/movement reaches the same connected trigger; native hover is
+true at arrival but false at the unchanged 600 ms production guard. No intervening
+pointer departure or focus loss is recorded.
+
+Distinguishing controls, without rebuilding the target or forcing the panel:
+
+- Fixed Classic 1920: two keyboard/Escape/blur/single-arrival hover cycles before
+  touch pass; touch opening/outside dismissal passes; the post-touch hover fails.
+- Touch capability enabled once before all input and left enabled throughout:
+  the same two pre-touch passes and post-touch failure recur. Delivered mouse
+  events remain trusted `pointerType: "mouse"`. Repeated capability toggles and
+  resizing are therefore not required to reproduce this failure.
+- Pass-through logging reads the native guard result before geometry diagnostics.
+  Bounds, viewport/scroll offsets, identity, connectedness, document focus and
+  the descendant hit at the arrival coordinates remain valid at the failed guard.
+  This does not prove current physical OS pointer presence or a Chromium defect.
+- Separate keyboard/mouse and touch journeys each pass all nine existing
+  Classic/Web-light/Web-dark × 360/1366/1920 configurations, using one fresh
+  document per journey and retaining its target across all cases. Exact content,
+  bounds and named dismissal assertions remain strict. These are **not** mixed
+  interaction proof. Terminal authorization feedback also passes independently.
+
+The original mixed assertions/artifacts remain **FAIL**; later unreached mixed
+cases are **NOT RUN**. Browser-versus-emulation causation and physical-desktop
+prevalence remain unknown. No new Edge comparison or global source acquisition
+was performed for this Models investigation.
+
+Future acceptance includes both the original Mini path above and the original
+same-node Models mixed-input nine-configuration journey, without resetting
+between cases to obtain success. Preserve exact content, focus/touch alternatives,
+Escape/outside dismissal, ARIA cleanup and bounded popovers, together with the
+600 ms opening guard, silent-exit cancellation/watchdog and finite stale-signal
+lease. Investigate actual ownership/layout/browser/harness causation; remembered
+coordinates or a forced positive `:hover` must not substitute for safe presence.
+See [FR000703 evidence and Decision Delegate disposition](../../../journal/web/stable-refresh.md).

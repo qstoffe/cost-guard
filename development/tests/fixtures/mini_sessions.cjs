@@ -28,8 +28,30 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
     assert.equal(rows().length,Math.max(5,count));
     assert.deepEqual(ids(),[...history.slice(Math.min(5,count)).map(c=>c.session_id),...active.map(c=>c.session_id)]);
+    const expected=require('./mini_history_expected.cjs')(input.view);
+    assert.deepEqual(ids(),expected.map(row=>row.id));
+    if(count===1) assert.notDeepEqual(ids(),history.map(c=>c.session_id),
+      'the obsolete history-only oracle excludes a legitimate running representative');
     assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,count<5);
     for(const row of rows()) assert.equal(row.children[0].textContent,row.dataset.id.startsWith('a')?'▶ 12:34':'23:47');
+  }
+  show([],history);
+  const fixed=[...view.body.children];
+  saved.recent_finished_cards=[history.at(-1)];
+  for(let epoch=1;epoch<4;epoch++) for(const state of ['loading','pending','refreshing','retrying','unavailable','observed']) {
+    show([],history,state,epoch);
+    assert.equal(view.body.children.length,5,'five real rows never acquire a sixth status row');
+    assert.deepEqual([...view.body.children],fixed);
+    assert.doesNotMatch(view.body.textContent,/Loading earlier|Refreshing|Retrying/);
+  }
+  saved.recent_finished_cards=[];
+  for(let count=0;count<5;count++) {
+    show([],history.slice(0,count),'observed',1);
+    for(const state of ['loading','refreshing','retrying']) {
+      show([],history.slice(0,count),state,1);
+      assert.doesNotMatch(view.body.textContent,/Loading earlier|Refreshing|Retrying/);
+      assert.equal(rows().length,count);
+    }
   }
   show([],history);const retained=view.promptRows.get('h4'),time=retained.children[0].children[0];
   assert.ok(rows().every(row=>row.className===''),'successful cold history is neutral');
@@ -118,7 +140,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   show([],[]);assert.equal(rows().length,0);assert.equal(view.body.children[0].children[0].colSpan,5);
   show([],history.slice(0,2));assert.equal(rows().length,2,'no duplicate/fake data rows');
   for(const [amount,total] of [['N/A','562'],['49','Loading…'],['?49','562'],['0','0']]) {
-    const value=card('only',10);value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=amount;
+    const value=card('only-'+amount,10);value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=amount;
     value.session_summary.cost=total==='Loading…'?null:{display:{account_ccost:total}};value.session_summary.state='loading';show([],[value]);
     assert.equal(rows()[0].children[2].textContent,amount);
     assert.equal(rows()[0].children[3].textContent,total);

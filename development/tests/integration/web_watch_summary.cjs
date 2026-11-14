@@ -266,7 +266,7 @@ vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 const inactiveCard = watch.accounts.children[0].children[0];
 assert.equal(primaryDetails(inactiveCard).children[0].textContent, 'Window not started');
 assert.equal(primaryDetails(inactiveCard).children[2].textContent, 'Remaining: no workdays left');
-context.input.view.active_cards[0].session_summary.context = null;
+context.input.view.active_cards[0].session_summary.context = {context_state:'invalidated'};
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.warningIcon.hidden, true);
 assert.equal(card.warningText.textContent, '');
@@ -567,4 +567,5 @@ require('../fixtures/live_status.cjs')(vm, context, value => value == null ? now
 require('../fixtures/account_links.cjs')(vm, context, monthly);
 require('../fixtures/account_today.cjs')(vm, context, monthly, helpText);
 require('../fixtures/account_capacity.cjs')(vm,context,capacitySample,helpText);
+require('../fixtures/watch_refresh.cjs')(vm, context);
 console.log('watch summary passed');

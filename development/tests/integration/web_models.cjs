@@ -263,6 +263,11 @@ assert.equal(bv.choice.efforts.size, 0, 'a removed selected source option reconc
 assert.equal(bv.summary.textContent, 'Effort levels · None');
 
 (async()=>{
+  const priorRows=[...bv.body.children];
+  await bv.load(async()=>({...bv.data,refreshing:true}),true);
+  assert.equal(bv.status.textContent,'','automatic refresh has no visible/live-region progress');
+  assert.deepEqual([...bv.body.children],priorRows);
+  await bv.load(async()=>({...bv.data,refreshing:false}),true);
   let calls=[];bv.controls(true,async(path,value)=>{calls.push([path,value]);return path.endsWith('/refresh')?{status:'refreshing'}:{...benchmark,refreshing:true};});
   await bv.refreshSource();assert.deepEqual(calls.map(([p])=>p),['/api/models/benchmark/refresh','/api/models/benchmark']);
   assert.equal(bv.refresh.disabled,true);await bv.refreshSource();assert.equal(calls.length,2);

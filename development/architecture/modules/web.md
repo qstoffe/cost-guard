@@ -16,6 +16,16 @@ read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 
+FR000703 separates display retention from fresh qualification. Sessions retains
+same-root scalar context/model/effort through partial revision reacquisition;
+pending keys still cannot qualify a newly requested sort. `watch.js` shares guarded
+context/session-summary retention with Mini, checks real Earlier content before
+acquisition status, and preserves qualified empty history. Mini's visible status
+eligibility additionally requires fewer than five real rows, independently of
+background history demand. Benchmark automatic refresh is silent; explicit toolbar
+progress and genuine errors remain. No acquisition, history-membership, accounting
+or security owner moves. [Surface inventory and evidence](../../journal/web/stable-refresh.md).
+
 FR000696 (v81.40) scopes Sessions before scalar indexing. The validated `period`
 is carried by URL/request, lease and immutable epoch. `session_catalog_scope.py`
 reuses AI Stats window boundaries and bisects the cheap tree-activity index;

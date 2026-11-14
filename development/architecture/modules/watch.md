@@ -15,6 +15,13 @@ Optional notice history uses `cache/model_notices.py` for resource-error classif
 
 ## Public contract
 
+FR000703 removes the CLI `_advance` transient Refreshing projection, not actual
+source/provider failure feedback or acquisition. Last rendered data stays visible.
+Web Earlier membership remains producer-qualified; recent overlays and ongoing
+history demand cannot insert a loading node among retained cards or below Mini's
+five real rows. Context/session-summary display retention is shared in `watch.js`,
+with source/root/epoch/model invalidation intact. [Causal checks and limits](../../journal/web/stable-refresh.md).
+
 FR000701 refines invocation lifetime: revision changes update bounded safe text,
 not native disclosure openness. Browser per-call nodes survive single/multi
 membership changes; new siblings do not inherit expansion. Logical nested spacing
