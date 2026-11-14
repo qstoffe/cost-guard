@@ -7,6 +7,7 @@ from src.analysis.cache import dependency_signature
 from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.context import ContextEpochs
 from src.analysis.session_context import session_context_observation
+from src.analysis.session_cost import reconcile_session_cost
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
 from src.domain.effort import EffortEvidence
@@ -16,8 +17,9 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .models import SessionUsageRow
 from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
+from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-8"
+ALGORITHM = "session-summary-9"
 NAMESPACE = "session-summary"
 
 
@@ -83,6 +85,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             if set(values) != {field.name for field in fields(SessionUsageRow)}:
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
+            values["cost_groups"] = decode_cost_groups(values["cost_groups"])
+            if sum((part.known_ccost for part in values["cost_groups"]), Decimal(0)) != values["ccost"]:
+                raise ValueError("inconsistent_session_cost_groups")
             for role in ("main_ccost", "subagent_ccost"):
                 values[role] = Decimal(values[role])
             values["contributor_models"] = tuple(values["contributor_models"])
@@ -134,7 +139,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     item = service._analyze(root, detail=True, force_fresh=active)
     stage('projecting_summary')
     row = service._session_rows((item,), catalog_models=True)[0]
-    row = replace(row, complete=row.complete and item.snapshot.complete)
+    cost = reconcile_session_cost(service.cache_repository, item.snapshot, service._load_comparison_catalog())
+    row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=cost.groups)
     actual = item.bundle.source_revision
     identity_values = dependencies(item.bundle.trace_entries)
     if on_dependencies is not None:
@@ -145,6 +151,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         values['model_identity_dependencies'] = identity_values
         values['recorded_model_help'] = True
         values["ccost"] = str(row.ccost)
+        for part in values["cost_groups"]:
+            part["known_ccost"] = str(part["known_ccost"])
         for role in ("main_ccost", "subagent_ccost"):
             values[role] = str(getattr(row, role))
         try:

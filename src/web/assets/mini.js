@@ -322,8 +322,8 @@ const MiniWatch = (() => {
         const cell = this.el('th'); cell.scope = 'col';
         const explanation = {Activity: '• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.', Session: 'The name of the session.',
           CCost: "Reference cost of this session's latest represented prompt, including attributed linked subagent calls.",
-          Total: 'The entire session’s reference cost, including attributed linked subagents.',
-          Ctx: 'Estimated context for this session, in tokens.'}[name];
+          Total: ReportView.headerHelp.sessionCost,
+          Ctx: ReportView.headerHelp.context}[name];
         const button = ContextHelp.button(name, explanation, this.doc);
         if (name === 'Session') cell.className = 'mini-session-cell';
         cell.append(button);
@@ -370,9 +370,7 @@ const MiniWatch = (() => {
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
       row.costHelp = this.promptDetails(item, highlight);
       const cost = card.session_summary?.cost;
-      const duration = card.session_summary?.duration_ms;
-      row.totalCostHelp = this.costGroups(cost, true) + '\n\nDuration: ' +
-        (Number.isFinite(duration) ? ReportView.display(card.session_summary, 'duration_ms') : 'Loading…');
+      row.totalCostHelp = ReportView.sessionCostHelp(cost, card.session_summary);
       const source = card.session_summary?.context, warning = source?.warning;
       const exceeded = warning?.severity === 'exceeded' && source.context_state === 'ready-current' &&
         Number.isFinite(source.watch_next_context_tokens) && warning.guidance_state === 'ready';

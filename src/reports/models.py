@@ -18,6 +18,7 @@ from src.analysis.ai_stats import StatsPeriod
 from src.analysis.matched_runs import MatchesPage
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
+from src.analysis.session_cost import SessionCostGroup
 from src.analysis.token_mix import TokenMix
 from src.analysis.models import MixEvidence
 from src.analysis.coverage import AgentCoverage
@@ -183,6 +184,7 @@ class SessionUsageRow:
     subagent_models: tuple[SessionModel, ...] = ()
     main_ccost: Decimal = Decimal(0)
     subagent_ccost: Decimal = Decimal(0)
+    cost_groups: tuple[SessionCostGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

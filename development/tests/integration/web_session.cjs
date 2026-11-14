@@ -297,13 +297,15 @@ async function main() {
     assert.ok(!context.coldCatalog.usable);
     context.coldCatalog.update({...catalogData,pending_sort:true,total:1,view:{session_usage:[{
       session_id:'first',title:'First usable row',indexed:false,metric_state:'pending'}]}});
-    assert.equal(context.coldCatalog.body.children.length,0,'pending Activity fallback is never applied as the requested sort');
+    assert.equal(context.coldCatalog.body.children.length,1,'cheap metadata is visible with an explicit provisional-order label');
+    assert.match(context.coldCatalog.status.textContent,/Provisional Last activity order/);
+    assert.equal(context.coldCatalog.data,null,'provisional order is not published as the requested globally sorted data');
      const cold = Array.from({length:25}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
    catalog.update({...catalogData,total:26,view:{session_usage:cold}});
    assert.equal(catalog.body.children.length, 25);
-    assert.ok(catalog.body.children.every(row => row.children.slice(2).every((cell,index) =>
-      cell.textContent === (index === 2 ? '0' : 'Loading…'))));
+    assert.ok(catalog.body.children.every(row => row.children.slice(2).every(cell =>
+      cell.textContent === 'Loading…')));
    assert.equal(catalog.previous.tag, 'button'); assert.equal(catalog.previous.disabled,true); assert.equal(catalog.next.disabled,false);
    catalog.next.events.click(); assert.match(context.location.hash, /offset=25/);
    const known = {...cold[0],indexed:true,has_summary:true,metric_state:'ready',running:true,prompt_count:0,model:'N/A',display:{ccost:'0.00',duration_ms:'0s'}};
@@ -311,7 +313,7 @@ async function main() {
    assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
    assert.equal(catalog.body.children[0].className,'session-running');
    assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
-    assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','N/A','0.00','0','0s','N/A']);
+     assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s','N/A']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
     assert.equal(catalog.body.children[0].className,'');
@@ -323,13 +325,13 @@ async function main() {
     catalog.update({...usable,pending_sort:true,sort:'activity',indexed:1,available:26,view:{session_usage:[]}});
     assert.equal(catalog.body.children[0],firstRow);
     assert.equal(catalog.label.textContent,labelBefore);
-    assert.equal(catalog.status.textContent,'');
+     assert.match(catalog.status.textContent,/Provisional Last activity order/);
     assert.notEqual(catalog.pan.hidden,true); assert.notEqual(catalog.pager.hidden,true);
       assert.equal(catalog.loader.root.hidden,true);
      catalog.configure(new URLSearchParams('sort=ccost&direction=1'));
       catalog.update({...usable,pending_sort:true});
       assert.match(catalog.next.destination,/sort=activity&direction=-1/,'retained pager belongs to the actual displayed order');
-      assert.equal(catalog.pan.hidden,true);
+      assert.equal(catalog.pan.hidden,false);
       assert.equal(catalog.loader.root.hidden,false);
       assert.equal(catalog.loader.bar.max,100);
     catalog.attached=true;
@@ -411,8 +413,8 @@ async function main() {
      assert.equal(liveRow.children[2].textContent, 'Main Model*');
     assert.equal(liveRow.children[1].children[0],link,'focused link survives live metric deltas');
     assert.equal(liveRow.children[2].children[0],model,'metric/help target remains keyed');
-    assert.equal(liveRow.children[4].textContent,'1.25?','focus cannot freeze live cost');
-    assert.equal(liveRow.children[5].textContent,'2');
+     assert.equal(liveRow.children[3].textContent,'1.25?','focus cannot freeze live cost');
+     assert.equal(liveRow.children[4].textContent,'2');
     model.events.focus();
     assert.match(document.body.children.at(-1).textContent,/alpha\/model[\s\S]*beta\/model[\s\S]*Observed so far/);
     catalog.update({...catalogData,total:1,view:{session_usage:[{...multiple,contributor_models:['alpha/model','beta/model','child/model'],
@@ -421,10 +423,10 @@ async function main() {
     document.activeElement=null;
     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,metric_states:{model:'pending'},duration_ms:null}]} });
     assert.equal(liveRow.children[2].textContent,'Loading…');
-    assert.equal(liveRow.children[5].textContent,'0','known zero count remains independent of pending model');
+     assert.equal(liveRow.children[4].textContent,'0','known zero count remains independent of pending model');
     catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
-    assert.ok(catalog.body.children[0].children.slice(2).every((cell,index)=>
-      cell.textContent===(index===2?'0':'Unavailable')));
+    assert.ok(catalog.body.children[0].children.slice(2).every(cell =>
+      cell.textContent === 'Unavailable'));
    assert.equal(catalog.body.children[0].className,'');
     await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
     const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';

@@ -100,9 +100,9 @@ async function main() {
               inference_calls:0,personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify({outcome:evidence.outcome,checks,measurements:details.measurements})); return;
           }
-        if (mode === '--periods-only' || mode === '--catalog-navigation-only') {
+        if (['--periods-only', '--catalog-navigation-only', '--calendar-cache-only'].includes(mode)) {
           const details = await require(mode === '--periods-only' ? '../fixtures/sessions_periods_browser.cjs' :
-            '../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
+            mode === '--calendar-cache-only' ? '../fixtures/sessions_calendar_browser.cjs' : '../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
             command:(method, params) => command(method, params, sessionId)});
           checks.push(...details.checks); layouts.push(...details.layouts);
           assert.deepEqual(errors, []);
@@ -196,40 +196,28 @@ async function main() {
       await evaluate('history.back()'); await until('location.hash.startsWith("#/sessions?period=today&") && current.catalog');
      await evaluate('history.back()'); await until('location.hash === "#/settings"');
       await evaluate('history.forward()'); await until('location.hash.startsWith("#/sessions?period=today&") && current.catalog');
-     assert.deepEqual(await evaluate('reportKinds'),[]);
+      assert.equal(await evaluate('reportKinds.includes("date")'),false);
      checks.push('retired-hashes-valid-invalid-reload-back-forward-no-jobs-or-date-filter-wide-narrow-nav');
       for(const section of ['token-mix']) {
        const before=await evaluate('reportKinds.length');
        await evaluate(`location.hash='#/${section}'`); await until(`current.section === '${section}'`);
-       assert.equal(await evaluate('reportKinds.length'),before,'opening remains explicit');
-       assert.equal(await evaluate('document.querySelector("#refresh").disabled'),false);
-       await evaluate('document.querySelector("#refresh").click()');
-       await until('current.result && !current.loading');
-       assert.equal(await evaluate('reportKinds.at(-1)'),section);
-       await evaluate('document.querySelector("#refresh").click()');
-       await until('!current.loading');
-       assert.equal(await evaluate('reportKinds.length'),before+2,'explicit Refresh reacquires only this report');
-       const frozen=await evaluate('document.querySelector("#result").textContent');
-       await fixture('hold-captures');
-       await evaluate('document.querySelector("#refresh").click()');
-       await until('current.active && !document.querySelector("#cancel")');
-       await evaluate('api("/api/jobs/"+current.active+"/cancel",{})');
-       await until('!current.loading && document.querySelector("#notice").textContent.includes("cancelled")');
-       assert.equal(await evaluate('document.querySelector("#result").textContent'),frozen);
-       await fixture('resume-captures');
+        await until('current.result && !current.loading');
+        assert.equal(await evaluate('reportKinds.at(-1)'),section);
+        assert.equal(await evaluate('document.querySelector("#refresh").hidden'),true,'automatic history has no manual Refresh gate');
+        assert.ok(await evaluate('reportKinds.length')>=before);
      }
      assert.equal(await evaluate('reportKinds.includes("date")'),false);
-       checks.push('token-mix reacquisition/internal API cancellation retains result with no UI Cancel; AI Stats lifecycle has its own probe');
+        checks.push('automatic Token Mix cached route returns without a date report; AI Stats lifecycle has its own probe');
      }
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),
-       ['Last activity','Session name','Model','Effort','CCost','Prompts','Duration','CTX']);
+       ['Last activity','Session name','Model','CCost','Prompts','Duration','Ctx']);
     assert.equal(await evaluate('document.querySelectorAll("#result tbody tr").length'),25);
     assert.equal(await evaluate('getComputedStyle(document.querySelector(".toolbar")).display'),'none');
     assert.equal(await evaluate('document.querySelector("#scope-controls").textContent'),'');
-     checks.push('eight-column-catalog-with-period-selector');
-    await evaluate('document.querySelectorAll("#result th button")[5].click()');
+     checks.push('seven-column-catalog-with-period-selector');
+    await evaluate('document.querySelectorAll("#result th button")[4].click()');
     await until('current.catalog.data.sort === "prompts" && !current.catalog.data.pending_sort');
     assert.equal(await evaluate('current.catalog.data.total'),120);
     checks.push('cold-to-global-metric-sort-ready');

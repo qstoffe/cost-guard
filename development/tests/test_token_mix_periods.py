@@ -40,7 +40,8 @@ class TokenMixPeriodTests(unittest.TestCase):
         prompts = {entry: ('old-parent', 'same-prompt') for entry in entries}
         for scope, members, start in [
             ('today', (6, 7), '2026-03-28T23:00:00+00:00'),
-            ('7-days', (4, 5, 6, 7), stamps[4]), ('30-days', tuple(range(1, 8)), stamps[1]),
+            ('7-days', (5, 6, 7), '2026-03-22T23:00:00+00:00'),
+            ('30-days', tuple(range(2, 8)), '2026-02-27T23:00:00+00:00'),
             ('month', tuple(range(2, 8)), stamps[2]), ('all', tuple(range(8)), stamps[0]),
         ]:
             with self.subTest(scope=scope):

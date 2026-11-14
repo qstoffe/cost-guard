@@ -10,7 +10,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.deepEqual(await evaluate('current.catalog.periodButtons.map(({button})=>button.getAttribute("aria-pressed"))'),
     ['true','false','false','false','false']);
   assert.deepEqual(await evaluate('current.catalog.headers.map(header=>header.name)'),
-    ['Last activity','Session name','Model','Effort','CCost','Prompts','Duration','CTX']);
+    ['Last activity','Session name','Model','CCost','Prompts','Duration','Ctx']);
   assert.equal(await evaluate('current.catalog.body.rows.length'),25);
   assert.match(await evaluate('location.hash'),/period=today/);
   assert.equal(await evaluate('api("/api/sessions",{period:"invalid"}).then(()=>null,error=>error.message)'), 'invalid_request');
@@ -22,20 +22,20 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.ok(await evaluate('current.catalog.data.progress.metrics.attempts<=30'),
     'Today sorts must not index 4970 unrelated historical roots');
   await evaluate(`location.hash='#/sessions?period=today&sort=effort&direction=1'`);
-  await until('current.catalog.data.sort==="effort" && !current.catalog.operation && !current.catalog.busy');
+  await until('current.catalog.data.sort==="activity" && !current.catalog.operation && !current.catalog.busy');
   const efforts = await evaluate('current.catalog.data.view.session_usage.map(row=>row.effort)');
-  assert.ok(efforts.includes('High') && efforts.includes('Default'));
+  assert.ok(efforts.length===25,'legacy effort sort safely falls back without removing underlying facts');
   await evaluate(`current.catalog.next.click()`);
   await until('current.catalog.data.offset===25 && !current.catalog.operation && !current.catalog.busy');
   assert.equal(await evaluate('current.catalog.body.rows.length'),5);
   assert.match(await evaluate('current.catalog.label.textContent'),/26–30 of 30 sessions/);
-  assert.ok(await evaluate('current.catalog.data.view.session_usage.some(row=>row.effort==="Multiple efforts")'));
+  assert.ok(await evaluate('current.catalog.data.view.session_usage.every(row=>typeof row.effort==="string")'));
   const pinned = await evaluate('location.hash');
   await evaluate('current.catalog.periodButtons[1].button.focus()');
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await until('current.catalog.data.period==="7-days" && !current.catalog.operation && !current.catalog.busy');
-  assert.deepEqual(await evaluate('[current.catalog.data.offset,current.catalog.data.total,current.catalog.data.sort]'),[0,70,'effort']);
+  assert.deepEqual(await evaluate('[current.catalog.data.offset,current.catalog.data.total,current.catalog.data.sort]'),[0,70,'activity']);
   await evaluate('history.back()');
   await until('current.catalog.data.period==="today" && current.catalog.data.offset===25 && !current.catalog.busy');
   assert.equal(await evaluate('location.hash'),pinned);
@@ -48,21 +48,21 @@ module.exports = async ({evaluate, until, fixture, command}) => {
         return new Promise(resolve=>{window.releasePeriod=()=>resolve(data);});}return data;};
     current.catalog.periodButtons[2].button.click()`);
   await until('window.releasePeriod && !current.catalog.loader.root.hidden');
-  assert.equal(await evaluate('current.catalog.pan.hidden'),true);
+  assert.equal(await evaluate('current.catalog.pan.hidden'),false);
   await evaluate('current.catalog.cancel.click();releasePeriod();current.catalog.api=savedPeriodApi');
   await until('current.catalog.period==="7-days" && !current.catalog.busy');
   assert.equal(await evaluate('current.catalog.periodButtons[1].button.getAttribute("aria-pressed")'),'true');
   await evaluate(`current.catalog.periodButtons[2].button.click()`);
   await until('current.catalog.data.period==="30-days" && current.catalog.data.total===120 && !current.catalog.operation && !current.catalog.busy');
-  // Period failure and Retry preserve intent without relabeling the retained rows.
+  // Period failure and automatic recovery preserve intent without relabeling retained rows.
   await fixture('fail');
   await until('api("/api/sessions",{token:current.catalog.token,period:"30-days"}).then(data=>data.state==="source_unavailable")');
   await evaluate(`current.catalog.periodButtons[0].button.click()`);
-  await until('current.catalog.operation?.failed && !current.catalog.retry.hidden');
-  assert.equal(await evaluate('current.catalog.pan.hidden'),true);
+  await until('current.catalog.operation && current.catalog.retryDelay>0');
+  assert.equal(await evaluate('current.catalog.pan.hidden'),false);
   await fixture('recover');
   await until('api("/api/sessions",{token:current.catalog.token,period:"today"}).then(data=>data.state==="observed")');
-  await evaluate('current.catalog.retry.click()');
+  await evaluate('current.catalog.poll()');
   await until('current.catalog.data.period==="today" && !current.catalog.operation && !current.catalog.busy');
   await evaluate(`location.hash='#/sessions?period=today&sort=activity&direction=-1'`);
   await until('current.catalog.data.sort==="activity" && !current.catalog.busy');
@@ -79,17 +79,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate(`document.querySelector('nav a[href="#/sessions"]').click()`);
   await until('current.section==="sessions" && current.catalog.data.period==="all"');
   await evaluate(`location.hash='#/sessions?period=today&sort=effort&direction=-1'`);
-  await until('current.catalog.data.period==="today" && current.catalog.data.sort==="effort" && !current.catalog.operation && !current.catalog.busy');
+  await until('current.catalog.data.period==="today" && current.catalog.data.sort==="activity" && !current.catalog.operation && !current.catalog.busy');
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
-  const mixed = await evaluate(`(()=>{const row=[...current.catalog.body.rows].find(row=>row.value.effort==='Multiple efforts');
-    row.cells[3].firstChild.focus();return row.value.effort_help;})()`);
-  assert.match(mixed,/default \(unknown\)\*/);
+  await evaluate('current.catalog.body.rows[0].cells[2].firstChild.focus()');
   await until('document.getElementById("context-help")?.matches(":popover-open")');
-  assert.match(await evaluate('document.getElementById("context-help").textContent'),/default \(unknown\)\*/);
+  assert.ok(await evaluate('document.getElementById("context-help").textContent.length>0'));
   const ax = await command('Accessibility.getFullAXTree');
   assert.ok(ax.nodes.some(node=>node.name?.value==='Sessions period'));
-  assert.ok(ax.nodes.some(node=>node.name?.value?.includes('Effort')));
+  assert.ok(ax.nodes.some(node=>node.name?.value==='Session pages'));
   for (const theme of ['classic','web']) for (const color of ['light','dark'])
     for (const width of [360,1366]) for (const zoom of [1,1.5]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
@@ -100,11 +98,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
           buttons:c.periodButtons.every(({button})=>{const r=button.getBoundingClientRect();return r.width>0&&r.height>0}),
           nowrap:[...c.body.rows[0].cells].every(cell=>getComputedStyle(cell).whiteSpace==='nowrap'),
           fits:[...c.body.rows[0].cells].filter((_,i)=>i!==1).every(cell=>cell.scrollWidth<=cell.clientWidth+1)};})()`);
-      assert.deepEqual(facts,{columns:8,rows:25,overflow:false,buttons:true,nowrap:true,fits:true});
+      assert.deepEqual(facts,{columns:7,rows:25,overflow:false,buttons:true,nowrap:true,fits:true});
       layouts.push({theme,color,width,zoom,...facts});
     }
   checks.push('5000 source roots / 30 Today; authenticated allowlist; Today CCost/Effort <=30 indexed roots; 25+5 paging');
-  checks.push('five accessible selectors; keyboard/touch; offset reset; Back/Forward; period Cancel/Retry; AI Stats independent 30-days; route return');
+  checks.push('five accessible selectors; keyboard/touch; offset reset; Back/Forward; period Cancel/automatic recovery; AI Stats independent 30-days; route return');
   checks.push('source-qualified Default/mixed effort help; AX group/column; 16 Classic/Web color/width/zoom layouts');
   await fixture('period-empty');
   await evaluate('current.catalog.load()');

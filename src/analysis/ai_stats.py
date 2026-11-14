@@ -54,8 +54,10 @@ class StatsPeriod:
 
 
 def windows(zone, now):
-    return (('today', local_day_start_ms(zone, now_ms=now)), ('7-days', now - 7 * DAY_MS),
-            ('30-days', now - 30 * DAY_MS), ('month', local_month_start_ms(zone, now_ms=now)),
+    return (('today', local_day_start_ms(zone, now_ms=now)),
+            ('7-days', local_day_start_ms(zone, now_ms=now, days_ago=6)),
+            ('30-days', local_day_start_ms(zone, now_ms=now, days_ago=29)),
+            ('month', local_month_start_ms(zone, now_ms=now)),
             ('all', None))
 
 

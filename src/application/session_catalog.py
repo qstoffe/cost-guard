@@ -21,7 +21,7 @@ from src.sources.errors import SourceError
 from .projection import project
 from .session_catalog_scope import CatalogEpoch, PAGE_SIZE, catalog_window, population
 
-SORTS = ("activity", "name", "model", "effort", "ccost", "prompts", "duration", "ctx")
+SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
 
 def effort_sort(key):
@@ -103,6 +103,7 @@ class SessionCatalog:
         self.background_due = 0
         self.observed = None
         self.last_observation = None
+        self.orders = OrderedDict()
 
     def enable_warm(self, enabled=True):
         with self.lock:
@@ -140,6 +141,10 @@ class SessionCatalog:
     def observe(self, observation, *, unavailable=False, timezone_id=None):
         with self.lock:
             if timezone_id is not None:
+                if timezone_id != self.timezone_id:
+                    self.valid.clear()
+                    self.orders.clear()
+                    self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
                 self.state = "source_unavailable"
@@ -209,8 +214,7 @@ class SessionCatalog:
     def _current(self, key):
         value = self.valid.get(key)
         return (not self.index_unavailable and value is not None and value[0] == self.revisions.get(key)
-                and 0 <= self.clock() - value[1] <= 3600
-                and (key not in self.active and not self.rows[key].running or self.clock() - value[1] <= 15))
+                and key in self.rows and not self.failures.get(key, (None, False))[1])
 
     def needed(self):
         with self.lock:
@@ -229,9 +233,10 @@ class SessionCatalog:
         failure = self.failures.get(key)
         if failure and failure[1]:
             return False  # Unsupported/auth failures require changed source evidence.
-        delay = 30 if failure else 5
+        delay = min(120, 30 * 2 ** min(2, self.failure_counts.get(key, 1) - 1)) if failure else 5
+        visible = any(self._browsing(lease) and key in lease.get('visible', ()) for lease in self.leases.values())
         return (self.clock() - self.attempted.get(key, -100) >= delay
-                and (not self._current(key) or key in self.active or self.rows[key].running
+                and (not self._current(key) or visible and (key in self.active or self.rows[key].running)
                      or not self.rows[key].context_qualified and self._requested(key, 'ctx')
                      or not self.rows[key].effort_qualified and self._requested(key, 'effort')))
 
@@ -372,13 +377,14 @@ class SessionCatalog:
     def _progress(self, sort, pending, selected, indexed, pinned, candidates):
         keys = candidates if pending else tuple(row.session_id for row in selected)
         completed = indexed if pending else sum(self._current(key) for key in keys)
-        failed = [key for key in keys if key in self.failures and
-                  (self.failures[key][1] or self.failure_counts.get(key, 0) >= 3)]
+        failed = [key for key in keys if key in self.failures and self.failures[key][1]]
+        waiting = [key for key in keys if key in self.failures]
         reason = ('source_unavailable' if self.state == 'source_unavailable' else
                   'index_unavailable' if self.index_unavailable else
-                  self.failure_reasons.get(failed[0], 'source_key_unavailable') if failed else None)
+                  self.failure_reasons.get((failed or waiting)[0], 'source_key_unavailable') if waiting else None)
         return dict(generation=self.generation, phase='index' if pending else 'page',
-            status='failed' if reason else 'pending' if pending or completed < len(keys) else 'ready',
+            status='failed' if failed else 'pending' if reason or pending or completed < len(keys) else 'ready',
+            retryable=not bool(failed),
             completed=completed, total=len(keys), reason=reason,
             failed=len(failed), waiting=sum(key in self.failures for key in keys),
             pinned=pinned, metrics=dict(self.metrics),
@@ -407,7 +413,15 @@ class SessionCatalog:
             if offset == 0:
                 applied = "activity" if pending else sort
                 order = -1 if pending else direction
-                rows = ordered(self._rows(candidates), applied, order)
+                cache_key = window.identity, applied, order
+                signature = tuple((key, self.roots[key].title, self.activity.get(key), self.rows.get(key))
+                                  for key in candidates)
+                cached = self.orders.get(cache_key)
+                rows = cached[1] if cached and cached[0] == signature else ordered(self._rows(candidates), applied, order)
+                self.orders[cache_key] = signature, rows
+                self.orders.move_to_end(cache_key)
+                while len(self.orders) > 32:
+                    self.orders.popitem(last=False)
                 latest = next(reversed(lease["epochs"]), None)
                 previous = lease["epochs"].get(latest)
                 if (previous is not None and (previous.sort, previous.direction) == (applied, order)
@@ -456,7 +470,10 @@ class SessionCatalog:
                 unavailable = self.index_unavailable or self.state == "source_unavailable" or key in self.failures or key not in self.roots
                 row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
                     "ready" if current else "retained" if row["has_summary"] else "pending")
-                row["running"] = self._running(key, bool(row["running"] and current and not unavailable))
+                if current and (key in self.active or self.rows[key].running) and self.clock() - self.valid[key][1] > 15:
+                    row["metric_state"] = "retained"
+                row["running"] = self._running(key, bool(row["running"] and current and not unavailable
+                    and self.clock() - self.valid[key][1] <= 15))
                 row["metric_states"] = {name: row["metric_state"] for name in ("model", "effort", "ccost", "prompts", "duration", "ctx")}
                 if current and not self.rows[key].context_qualified:
                     row["metric_states"]["ctx"] = "retained" if row["context_tokens"] is not None else "pending"

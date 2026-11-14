@@ -46,7 +46,7 @@ class SessionPeriodTests(unittest.TestCase):
         activities = ([self.now - 1000] * 30 + [self.now - 3 * DAY] * 40 +
                       [self.now - 20 * DAY] * 50 + [self.now - (31 + index % 699) * DAY for index in range(4880)])
         evidence = []
-        for sort in ("ccost", "effort", "ctx"):
+        for sort in ("ccost", "prompts", "ctx"):
             source, catalog = self.catalog(activities)
             service = report_service(self, source, now_ms=self.now)
             page = catalog_page(catalog, {"sort": sort})
@@ -133,7 +133,7 @@ class SessionPeriodTests(unittest.TestCase):
         self.assertIsNone(rows["root-0003"]["last_activity_ms"])
         self.assertEqual(rows["root-0005"]["last_activity_ms"], self.now - 1000)
 
-    def test_stockholm_dst_day_month_year_and_exact_rolling_boundaries(self):
+    def test_stockholm_dst_day_month_year_and_exact_calendar_boundaries(self):
         for date, hours in (("2026-03-29", 23), ("2026-10-25", 25)):
             day = local_date_range(date, "Europe/Stockholm")
             self.assertEqual(day.end_ms - day.start_ms, hours * 3_600_000)
@@ -150,7 +150,7 @@ class SessionPeriodTests(unittest.TestCase):
             self.assertEqual(page["total"], 1)
             self.assertEqual(page["window"]["start_ms"], midnight)
         for days, period in ((7, "7-days"), (30, "30-days")):
-            cutoff = self.now - days * DAY
+            cutoff = timestamp("2026-12-31T00:00:00") - (days - 1) * DAY
             _, catalog = self.catalog([cutoff - 1, cutoff, self.now])
             self.assertEqual(catalog.page(period=period)["total"], 2)
             self.assertEqual(catalog.page(period=period)["window"]["start_ms"], cutoff)
@@ -198,7 +198,7 @@ class SessionPeriodTests(unittest.TestCase):
         self.assertEqual(len(catalog._targets()), 70)
         catalog.interest(all_time["token"], False)
 
-    def test_default_today_validation_empty_scope_and_rolling_reconciliation(self):
+    def test_default_today_validation_empty_scope_and_same_day_stability(self):
         _, catalog = self.catalog([self.now - 8 * DAY])
         catalog.enable_warm()
         page = catalog_page(catalog, {})
@@ -209,12 +209,17 @@ class SessionPeriodTests(unittest.TestCase):
                 catalog_page(catalog, {"period": period})
         with self.assertRaises(ValueError):
             catalog_page(catalog, {"offset": 24})
-        _, catalog = self.catalog([self.now - 7 * DAY, self.now - 1000])
+        cutoff = timestamp("2026-11-07T00:00:00")
+        _, catalog = self.catalog([cutoff, self.now - 1000])
         rolling = catalog.page(period="7-days")
         self.now += 1
         latest = catalog.page(token=rolling["token"], period="7-days")
-        self.assertEqual((rolling["total"], latest["total"]), (2, 1))
-        self.assertNotEqual(rolling["epoch"], latest["epoch"])
+        self.assertEqual((rolling["total"], latest["total"]), (2, 2))
+        self.assertEqual(rolling["epoch"], latest["epoch"])
+        self.now = timestamp("2026-11-14T00:00:00")
+        tomorrow = catalog.page(token=rolling["token"], period="7-days")
+        self.assertEqual(tomorrow["total"], 1)
+        self.assertNotEqual(rolling["epoch"], tomorrow["epoch"])
 
 
 if __name__ == "__main__":

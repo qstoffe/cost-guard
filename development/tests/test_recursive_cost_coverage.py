@@ -18,10 +18,11 @@ from src.analysis.session_cost import reconcile_session_cost
 from src.analysis.token_mix import priced_token_mix
 from src.analysis.valuation import comparison_cost, unique_usage
 from src.application.live_projection import project_live
-from src.application.projection import block as export_block
+from src.application.projection import block as export_block, project
 from src.cache import CacheDatabase, CacheRepository
 from src.domain import TokenUsage, ModelRef
 from src.reports.prompts import build_prompt_block
+from src.reports.models import ReportKind, ReportProjection
 from src.reports.sampling import AnalyzedRoot
 from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, summary_key
 from src.watch.models import WatchCard, WatchProjection, WatchRow
@@ -92,7 +93,7 @@ class RecursiveCostCoverageTests(unittest.TestCase):
     def test_sessions_scalar_cache_preserves_recursive_role_totals_and_rejects_corruption(self):
         with recursive_source() as (source, _server):
             snapshot = source.load_session_snapshot("ses_current")
-            bundle, _block = self.project(snapshot)
+            bundle, block = self.project(snapshot)
             item = AnalyzedRoot(snapshot.root, bundle, False, snapshot)
             service = report_service(self, source, now_ms=20_000)
             with patch.object(service, "_load_catalog", return_value=catalog()), \
@@ -104,6 +105,20 @@ class RecursiveCostCoverageTests(unittest.TestCase):
                 self.assertEqual(cold, warm)
                 self.assertEqual((D(672), D(183), D(489), True),
                     (warm.ccost, warm.main_ccost, warm.subagent_ccost, warm.complete))
+                cost = reconcile_session_cost(service.cache_repository, snapshot, catalog())
+                card = WatchCard("ses_current", "Synthetic", "u1",
+                    (WatchRow("ses_current", "Synthetic", block.rows[0]),), "observed",
+                    session_cost=cost, session_duration_ms=warm.duration_ms)
+                mini = project_live(WatchProjection("Watch", "Synthetic", (), now_ms=20_000,
+                    active_cards=(card,))).to_json()["active_cards"][0]["session_summary"]
+                sessions = project(ReportProjection(ReportKind.SESSIONS, "Sessions", "Synthetic",
+                    session_usage=(warm,))).to_json()["session_usage"][0]
+                self.assertEqual(D(672), sum(group.known_ccost for group in warm.cost_groups))
+                self.assertEqual(warm.duration_ms, mini["duration_ms"])
+                self.assertIsNotNone(warm.duration_ms)
+                for name in ("mini_cost_models", "mini_cost_amounts"):
+                    self.assertEqual(mini["cost"]["display"][name], sessions["display"][name])
+                self.assertNotIn("mini_cost_groups", sessions)
                 key = summary_key(service, snapshot.root)
                 cached = service.cache_repository.get(NAMESPACE, key)
                 service.cache_repository.put(NAMESPACE, key, dict(cached.payload, subagent_ccost="0"),
@@ -111,6 +126,15 @@ class RecursiveCostCoverageTests(unittest.TestCase):
                 rebuilt, _revision = session_summary(service, snapshot.root, revision)
                 self.assertEqual(2, hydration.call_count)
                 self.assertEqual(cold, rebuilt)
+                for groups in ([], [dict(cached.payload["cost_groups"][0], known_ccost="-1")],
+                        [dict(cached.payload["cost_groups"][0], selected_models=[42])]):
+                    with self.subTest(groups=groups):
+                        service.cache_repository.put(NAMESPACE, key, dict(cached.payload, cost_groups=groups),
+                            source_revision=revision, algorithm_version=ALGORITHM)
+                        before = hydration.call_count
+                        repaired, _revision = session_summary(service, snapshot.root, revision)
+                        self.assertEqual(before + 1, hydration.call_count)
+                        self.assertEqual(cold, repaired)
 
     def test_response_without_tokens_is_observed_unpriced_call_not_a_zero_or_lost_child(self):
         with incident_source() as (source, server):

@@ -392,7 +392,7 @@ async function main() {
   const beforeFilter = requests;
    assert.equal(all(ids.result, 'input').length, 0, 'catalog has no page-only presentation filter');
     assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
-    const column = all(all(ids.result, 'th')[4], 'button')[0];
+    const column = all(all(ids.result, 'th')[3], 'button')[0];
    column.click();
    await handlers.hashchange();
    // Drive real HTTP refreshes rather than racing the normal five-second poll
@@ -402,7 +402,7 @@ async function main() {
      await vm.runInContext('current.catalog.load()', context);
      return vm.runInContext('current.catalog.data.sort', context) === 'ccost';
    });
-    assert.equal(all(ids.result, 'th')[4].attrs['aria-sort'], 'ascending');
+    assert.equal(all(ids.result, 'th')[3].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
     context.example = result;

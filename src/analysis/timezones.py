@@ -149,11 +149,12 @@ def local_report_range(target: str, timezone_id: str) -> DateRange:
     )
 
 
-def local_day_start_ms(timezone_id: str, *, now_ms: int | None = None) -> int:
+def local_day_start_ms(timezone_id: str, *, now_ms: int | None = None, days_ago: int = 0) -> int:
     tz = resolve_timezone(timezone_id)
     now = datetime.now(tz=timezone.utc) if now_ms is None else datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
     local = now.astimezone(tz)
-    midnight = datetime(local.year, local.month, local.day, tzinfo=tz)
+    day = local.date() - timedelta(days=days_ago)
+    midnight = datetime(day.year, day.month, day.day, tzinfo=tz)
     return int(midnight.timestamp() * 1000)
 
 
