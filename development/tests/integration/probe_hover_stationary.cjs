@@ -1,6 +1,6 @@
 // Real elapsed time and native CDP pointer input; no clock/selector emulation.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises');
-module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output})=>{
+module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,fixture})=>{
   const mouse=(id,x,y)=>command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},id);
   const open=async(id,selector)=>{
     await command('Page.bringToFront',{},id);
@@ -19,7 +19,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output})
     if(source.includes('panel.hidden || !panel.isConnected || now() >= hoverDeadline')) {
       await evaluate(mini,`(()=>{${source.replace("panel.id = 'context-help'","panel.id = 'baseline-help'")}
         const b=ContextHelp.button('Original 30-second cutoff','Baseline stationary reading',document);
-        b.id='baseline-trigger';document.body.append(b);})()`);
+        b.id='baseline-trigger';document.body.append(b);b.scrollIntoView({block:'center'});})()`);
       await command('Page.bringToFront',{},mini);await mouse(mini,1,1);
       const point=await evaluate(mini,`(()=>{const r=document.getElementById('baseline-trigger').getBoundingClientRect();
         return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
@@ -34,7 +34,12 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output})
   }
   await evaluate(owner,`window.stationaryRefresh=setInterval(()=>{
     const c=liveValue.view.active_cards[0],p=c.rows[0].prompt;
+    liveValue.view.now_ms+=3000;
     p.display.ccost=String(30+(window.stationaryTicks=(window.stationaryTicks||0)+1)%10);
+    if(p.display_units?.credits)p.display_units.credits.ccost=p.display.ccost;
+    const a=liveValue.view.accounts.accounts[0];
+    a.primary.quota.quota_display.used.percent=(20+stationaryTicks%10)+'%';
+    a.primary.quota.quota_display.used.account_percent=a.primary.quota.quota_display.used.percent;
     current.watch.update(liveValue);miniWatch.update(liveValue);
   },3000)`);
   const scenarios=[
@@ -87,4 +92,23 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output})
     await fs.writeFile(output.replace(/\.json$/,`-${theme}-${scheme}.png`),Buffer.from(image.data,'base64'));
   }
   checks.push('GREEN: twelve actual 61-second stationary native hovers across PiP and Full Watch, with 3-second in-place refresh and real normal exits');
+  await mouse(mini,1,1);
+  const size=await evaluate(owner,'[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
+  for(const count of [0,1,3,5]) {
+    await fixture(`density-${count}-6`);
+    await until(owner,`miniWatch.view.promptRows.size===${count}`);
+    const state=await evaluate(owner,`(()=>{const w=miniWatch.window,v=miniWatch.view;return {
+      rows:v.promptRows.size,columns:v.body.parentNode.tHead.rows[0].cells.length,
+      overflow:v.doc.documentElement.scrollWidth>w.innerWidth+1,
+      size:[w.outerWidth,w.outerHeight],accounts:v.lines.size};})()`);
+    assert.deepEqual(state.size,size,'Live does not resize native PiP');
+    assert.equal(state.overflow,false);assert.equal(state.columns,5);assert.equal(state.accounts,6);
+    layouts.push({case:'native-density-125-percent',...state});
+  }
+  await evaluate(owner,'window.retiredHelpDocument=miniWatch.window.document;miniWatch.close()');
+  await until(owner,'!miniWatch.window');
+  await evaluate(owner,'miniWatch.toggle()',true);
+  await until(owner,'!!miniWatch.view && miniWatch.window.document!==retiredHelpDocument');
+  assert.equal(await evaluate(owner,`retiredHelpDocument.getElementById('context-help')?.hidden`),true);
+  checks.push('Actual PiP 0/1/3/5-row narrow native-125% matrix, stable native size through SSE, and close/reopen retires old help document');
 };

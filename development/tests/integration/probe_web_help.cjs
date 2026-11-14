@@ -133,7 +133,7 @@ async function main() {
           await require('./probe_mini_duration.cjs')({command,pip:mini,ownerSession:owner,checks,
             evaluate:(text,gesture=false)=>evaluate(owner,text,gesture),until:text=>until(owner,text)});
           phase='real-stationary-hover';
-          await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output});
+          await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
          evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
            limitations:['Actual headless Chromium Document PiP with synthetic source-qualified DTOs.',
              'Physical Windows/chrome/other-application input NOT RUN; stale positive CSS without any browser exit is unobservable.']};

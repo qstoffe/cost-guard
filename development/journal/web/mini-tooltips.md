@@ -23,7 +23,10 @@ remain in canonical parts; Full Watch's independent grouped detail is preserved.
 Request effort evidence separates Mini combinations without changing accounting.
 Presentation-only grouping inputs are consumed before wire export; obsolete verbose
 Mini detail was removed rather than increasing the 2 MiB event/replay cap. The
-100-card foreground/background-job regression passes with that cap unchanged.
+100-card foreground/background-job regression passes with that cap unchanged,
+including realistic whole-session groups. Model/effort labels are shared across
+units; only already-formatted amounts have a unit overlay. Browser code merely
+joins those prepared pairs, never totals or prices requests.
 
 The cost observation has no authoritative session execution interval. Total
 therefore shows **Duration: N/A**, explicitly permitted by the FR, rather than
@@ -87,3 +90,13 @@ probes supplement those holds. The ordinary smoke retains its 180-second budget.
 Physical Windows PiP→browser chrome/other-application transitions, screen readers
 and the owner's intermittent incident are **NOT RUN / not proved**. No OS hook,
 paid inference, new source scan on hover, shared OpenCode stop or release ZIP.
+
+## opencode-toolkit: ÅTKOMSTFEL – GITHUB / HTTP401
+
+The first PR common run passed Quick (56 groups, 694 tests), package validation and
+ordinary rendered Chromium smoke. The scoped Mini step failed before emitting a
+stage result. Raw Actions job-log retrieval returned HTTP 401; those logs and the
+first failure cause remain unavailable. Existing authenticated check/run reads
+work. Decision Delegate authorized stage-specific allowlisted Checks diagnostics
+on the same PR as an adequate alternative; no credentials/access route changed,
+log endpoint retry, manual workflow dispatch or browser acceptance waiver.
