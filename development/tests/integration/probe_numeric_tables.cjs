@@ -12,9 +12,14 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         const p={...liveValue,view:structuredClone(liveValue.probe_ccost_unavailable['${mode}'])};
         p.source_observed_at_ms=p.view.now_ms=Date.now();
         // Distinct synthetic sessions isolate each source fixture's state.
-        for(const c of [...p.view.active_cards,...p.view.history_cards]) {
-          c.observed_at_ms=Date.now();c.session_id+='-numeric-${mode}';
-        }
+         for(const c of [...p.view.active_cards,...p.view.history_cards]) {
+           c.observed_at_ms=Date.now();c.session_id+='-numeric-${mode}';
+         }
+         // Main Watch now requires positively running rows. Keep the canonical
+         // cost fixture amounts intact; only adapt this synthetic lifecycle.
+         for(const c of p.view.active_cards) for(const r of c.rows) {
+           r.prompt.in_progress=true;r.prompt.execution_unverified=false;
+         }
         current.watch.update(p);miniWatch.update(p);
       })()`);
       for (const [id,selector] of [[owner,full],[mini,prompt],[mini,total]]) {
