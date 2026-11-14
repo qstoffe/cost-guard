@@ -142,6 +142,19 @@ clear **running** detail immediately; final failed detail follows the separate
 brief terminal activity lifetime above. Existing timers, status/count lifecycle
 and CLI/Mini are unchanged.
 
+Full Watch distinguishes pending detail projections from authoritative membership.
+During a same-source partial/retrying/reverification publication, existing native
+controls keep the user's open/closed choice; their old input and failure reason
+are cleared immediately, even under focus or text selection. Only bounded opaque
+UI identities survive until recovery or invalidation. A genuinely unavailable or
+execution-unverified source removes old call identities; real completion, removal
+and source/prompt switches cannot inherit them.
+
+Once a red failure group has evidenced members, its nonzero aggregate keeps the
+same expansion arrow during omitted-detail updates, with an honest availability
+note. New count-only groups remain plain counts until actual members arrive.
+Skills and unchanged activity fragments reconcile in place, not as rebuilt lists.
+
 ## Width and colors
 
 Tool totals and failures retain priority over category detail. Hidden tool calls aggregate into `other`, so the visible breakdown still sums to the total. The Skills row keeps distinct count, newest whole IDs and verified failure indicators before older names; omitted IDs use exact `+N more` and are never partially truncated.

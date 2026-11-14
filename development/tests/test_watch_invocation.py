@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot, part
 from development.tests.fixtures.watch_summary import summary_watch
-from development.tests.fixtures.watch_tool_outcomes import revision_observations
+from development.tests.fixtures.watch_tool_outcomes import disclosure_publications, revision_observations
 from src.application.live_projection import project_live
 from src.domain import BackgroundActivity
 from src.sources.opencode_v2_background import background_activities, running_jobs
@@ -32,6 +32,55 @@ def snapshot_with(*parts, background=()):
 
 
 class InvocationTests(unittest.TestCase):
+    def test_partial_publications_separate_aggregate_authority_from_private_detail_availability(self):
+        frames = disclosure_publications()
+        first = frames[0]["active_cards"][0]["rows"][0]["tool"]
+        pending = frames[6]["active_cards"][0]["rows"][0]["tool"]
+        recovered = frames[7]["active_cards"][0]["rows"][0]["tool"]
+
+        self.assertEqual("observed", first["detail_state"])
+        self.assertEqual(4, len(first["failed_invocations"]))
+        self.assertEqual("pending", pending["detail_state"])
+        self.assertEqual(first["outcomes"], pending["outcomes"])
+        self.assertEqual(first["running_tool"], pending["running_tool"])
+        self.assertEqual([], pending["failed_invocations"])
+        self.assertEqual([], pending["running_invocations"])
+        self.assertEqual([], pending["background_invocations"])
+        self.assertIsNone(pending["running_invocation"])
+        self.assertIsNone(pending["background_invocation"])
+        self.assertEqual([item["identity"] for item in first["failed_invocations"]],
+                         [item["identity"] for item in recovered["failed_invocations"]])
+        self.assertEqual(first["running_invocations"][0]["identity"],
+                         recovered["running_invocations"][0]["identity"])
+
+    def test_explicit_invalidation_is_not_a_pending_detail_projection(self):
+        frame = summary_watch()
+        card = frame.active_cards[0]
+        detail = invocation(tool(inputs={"command": "PRIVATE-MARKER"}))
+        row = replace(card.rows[0], tool=replace(
+            observe_tools(snapshot_with(tool()), "u_next", now_ms=20_000),
+            running_invocation=detail))
+        for state, unverified in [("unavailable", False), ("observed", True), ("partial", True)]:
+            changed = replace(card, state=state,
+                rows=(replace(row, prompt=replace(row.prompt, execution_unverified=unverified)),))
+            exported = project_live(replace(frame, active_cards=(changed,))).to_json()
+            activity = exported["active_cards"][0]["rows"][0]["tool"]
+            self.assertEqual("invalidated", activity["detail_state"])
+            self.assertNotIn("PRIVATE-MARKER", json.dumps(activity))
+
+    def test_detail_state_alone_withholds_private_input_even_on_an_observed_card(self):
+        frame = summary_watch()
+        card = frame.active_cards[0]
+        observation = observe_tools(snapshot_with(tool(inputs={"command": "PRIVATE-MARKER"})),
+                                    "u_next", now_ms=20_000, include_invocations=True)
+        for state in ("pending", "invalidated"):
+            row = replace(card.rows[0], tool=replace(observation, detail_state=state))
+            exported = project_live(replace(frame, active_cards=(replace(card, rows=(row,)),))).to_json()
+            activity = exported["active_cards"][0]["rows"][0]["tool"]
+            self.assertEqual(state, activity["detail_state"])
+            self.assertEqual([], activity["running_invocations"])
+            self.assertNotIn("PRIVATE-MARKER", json.dumps(activity))
+
     def test_source_revisions_keep_physical_identity_and_elapsed_origin_in_all_running_modes(self):
         for mode in ("foreground", "background"):
             for count in (1, 2):
@@ -406,7 +455,7 @@ class InvocationTests(unittest.TestCase):
         card = frame.active_cards[0]
         row = card.rows[0]
         tool_observation = replace(observed, background_kinds=('shell',) * 5)
-        card = replace(card, rows=(replace(row, tool=tool_observation,
+        card = replace(card, activity_scope="f" * 64, rows=(replace(row, tool=tool_observation,
             prompt=replace(row.prompt, subagent_active=True, parent_outcome="cancellation",
                 parent_terminal_time_ms=1_800_000_000_000)),))
         card = replace(card, session_cost=replace(card.session_cost,
@@ -440,7 +489,7 @@ class InvocationTests(unittest.TestCase):
             running_invocation=detail, background_invocation=detail, background_kinds=("shell",))
         card = frame.active_cards[0]
         row = replace(card.rows[0], tool=observation, prompt=replace(card.rows[0].prompt, in_progress=True))
-        card = replace(card, rows=(row,), state="observed")
+        card = replace(card, rows=(row,), state="observed", activity_scope="f" * 64)
         for state, prompt in [("unavailable", row.prompt), ("retrying", row.prompt),
                               ("partial", row.prompt), ("observed", replace(row.prompt, in_progress=False)),
                               ("observed", replace(row.prompt, execution_unverified=True))]:

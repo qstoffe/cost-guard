@@ -1168,6 +1168,11 @@ same-call revisions retain the user's expansion/selection while safely updating
 content. Per-call nodes survive 1→2→1 job transitions; newly added siblings do not
 inherit an unrelated expanded state. Different physical calls and lost live evidence
 clear stale input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
+During explicitly pending same-source projections, the existing controls and their
+open/closed choices survive, but private input is cleared immediately and replaced
+by a temporary-unavailability note. Recovery updates the same surviving call nodes.
+Fresh authoritative membership, revoked execution and source/prompt switches discard
+invalid child identities; this is not a last-good command cache.
 The compact **N failed / cancelled** count includes only evidenced, distinct tool
 outcomes. Expanded Tool Calls shows red tool-name/outcome subsets, for example
 **2 × grep failed** and **1 × execute cancelled**, below the ordinary all-call groups.
@@ -1177,7 +1182,11 @@ success or an invented outcome. Unidentified retained aggregate differences are
 labelled honestly. Expanded help explains counts and direct failure-only skill
 attribution; a recently loaded skill never inherits unrelated tool outcomes.
 Failed groups with source-owned members expand into separate physical-call
-disclosures, even for identical inputs. Each shows its own allowlisted/redacted
+disclosures. Once established, a nonzero aggregate keeps its arrow even when detail
+availability temporarily disappears; a count-only group never invents failed calls.
+Skills and surviving activity rows update in place rather than rebuilding their lists.
+Individual failed-call disclosures remain separate even for identical inputs.
+Each shows its own allowlisted/redacted
 path/command/arguments and a fixed safe reason category, or **Failure reason
 unavailable**; arbitrary native errors/output are not displayed. At most ten failed
 details share one 4 KiB card-wide input budget with running details, with honest

@@ -133,11 +133,28 @@ const WatchView = (() => {
     drawInvocation(job, '', null);
     job.node.remove();
   }
-  function drawInvocations(target, label, details, total, verified, mode, legacy) {
+  function withholdInvocation(job) {
+    // Keep only the bounded UI identity and native choice. Never cache a DTO or
+    // sensitive text through a pending projection, even under focus/selection.
+    invocationText(job.input, '');
+    text(job.note, 'Invocation details temporarily unavailable.');
+    job.note.hidden = false;
+  }
+  function drawInvocations(target, label, details, total, verified, mode, legacy, state) {
     const reason = !verified ? 'Awaiting verified live source; previous commands cleared.' :
       mode === 'background' ? 'Original call links missing; only background activity is observable.' :
       'Command not recorded in the current tool event.';
     const rows = label && verified ? (details?.length ? details : legacy ? [legacy] : []).slice(0, 5) : [];
+    const pending = label && state === 'pending';
+    if (pending) {
+      for (const job of target.jobs.values()) withholdInvocation(job);
+      target.node.hidden = false;
+      invocationText(target.summary, label);
+      text(target.note, 'Invocation details temporarily unavailable; awaiting verified live source.');
+      target.note.hidden = false;
+      reconcile(target.list, [...target.jobs.values()].map(job => job.node).concat(target.note));
+      return;
+    }
     const keep = new Set(rows.map(detail => detail.identity));
     const continuing = [...keep].some(key => target.jobs.has(key));
     if (!continuing) target.node.open = false;
@@ -170,22 +187,26 @@ const WatchView = (() => {
   }
   function fragments(target, parts) {
     const signature = JSON.stringify(parts);
-    if (target.signature === signature || protectedNode(target)) return;
-    target.replaceChildren(...parts.map(([label, role]) => el('span', label, role)));
+    if (target.signature === signature) return;
+    const nodes = parts.map(([label, role], index) => {
+      const node = target.children[index] || el('span');
+      invocationText(node, label); node.className = role; return node;
+    });
+    reconcile(target, nodes);
     target.signature = signature;
   }
   function drawDisclosure(target, summary, lines, empty) {
-    // Retain header and breakdown together while focus/selection protects either.
-    if (protectedNode(target.node)) return;
     fragments(target.summary, summary);
-    const signature = JSON.stringify(lines);
-    if (target.list.signature === signature) return;
-    target.list.replaceChildren(...(lines.length ? lines : [[[empty, '']]]).map(parts => {
-      const line = el('div'); fragments(line, parts); return line;
-    }));
-    target.list.signature = signature;
+    target.rows ||= new Map();
+    const keep = new Set(), wanted = (lines.length ? lines : [[[empty, '']]]).map(parts => {
+      const key = parts[0][0]; keep.add(key);
+      const line = target.rows.get(key) || el('div');
+      target.rows.set(key, line); fragments(line, parts); return line;
+    });
+    for (const key of target.rows.keys()) if (!keep.has(key)) target.rows.delete(key);
+    reconcile(target.list, wanted);
   }
-  function drawTools(target, summary, groups, outcomes, failures, unidentified) {
+  function drawTools(target, summary, groups, outcomes, failures, unidentified, state) {
     fragments(target.summary, summary);
     target.rows ||= new Map();
     const wanted = [], keep = new Set();
@@ -205,7 +226,7 @@ const WatchView = (() => {
         const value = disclosure(); value.jobs = new Map(); value.note = el('p', undefined, 'detail');
         value.summary.className = 'watch-activity-error'; return value;
       });
-      text(group.summary, `${item.count} × ${item.tool_name} ${item.outcome}`);
+      invocationText(group.summary, `${item.count} × ${item.tool_name} ${item.outcome}`);
       const calls = [], identities = new Set();
       members.forEach((detail, index) => {
         identities.add(detail.identity);
@@ -217,18 +238,22 @@ const WatchView = (() => {
         calls.push(call.node);
       });
       for (const [id, call] of group.jobs) if (!identities.has(id)) {
-        clearInvocation(call); group.jobs.delete(id);
+        if (state === 'pending') { withholdInvocation(call); calls.push(call.node); }
+        else { clearInvocation(call); group.jobs.delete(id); }
       }
       const omitted = Math.max(0, item.count - members.length);
-      text(group.note, omitted ? `+${omitted} additional ${item.outcome} calls not shown; individual evidence unavailable or display limit reached.` : '');
-      if (omitted) calls.push(group.note);
+      text(group.note, state === 'pending' ? 'Individual failure details temporarily unavailable.' :
+        omitted ? `+${omitted} additional ${item.outcome} calls not shown; individual evidence unavailable or display limit reached.` : '');
+      if (group.note.textContent) calls.push(group.note);
       reconcile(group.list, calls);
-      // No evidenced members means plain aggregate text, not an empty control.
-      group.node.hidden = !members.length;
+      // Once established, the aggregate owns its arrow independently of detail
+      // availability. Never offer invented call records for a new count-only group.
+      group.established ||= members.length > 0;
+      group.node.hidden = !group.established;
       group.plain ||= el('div', undefined, 'watch-activity-error');
       text(group.plain, group.summary.textContent);
-      if (!members.length) group.node.open = false;
-      wanted.push(members.length ? group.node : group.plain);
+      if (state === 'invalidated') group.node.open = false;
+      wanted.push(group.established ? group.node : group.plain);
     }
     if (unidentified > 0) {
       const line = row('unknown', () => ({node: el('div', undefined, 'watch-activity-error')}));
@@ -236,6 +261,7 @@ const WatchView = (() => {
     }
     for (const [key, value] of target.rows) if (!keep.has(key)) {
       for (const call of value.jobs?.values() || []) clearInvocation(call);
+      value.jobs?.clear();
       value.node.open = false; value.node.remove(); value.plain?.remove(); target.rows.delete(key);
     }
     if (!wanted.length) wanted.push(row('empty', () => ({node: el('div', 'No tool calls')})).node);
@@ -451,6 +477,8 @@ const WatchView = (() => {
       ContextHelp.refresh(this.costHelp);
     }
     drawActivity(tool, verified, activityVerified = verified) {
+      const state = tool?.detail_state === 'pending' ? 'pending' :
+        tool?.detail_state === 'invalidated' || !activityVerified ? 'invalidated' : 'observed';
       const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
       const total = groups.reduce((sum, pair) => sum + pair[1], 0);
       const omitted = groups.slice(5).reduce((sum, pair) => sum + pair[1], 0);
@@ -465,14 +493,14 @@ const WatchView = (() => {
       if (skills.length > 5) summary.push([` · ${skills.length - 5} other`, '']);
       const outcomes = tool?.outcomes || [];
       const unidentified = outcomeTotal - outcomes.reduce((sum, item) => sum + item.count, 0);
-      drawTools(this.tools, toolParts, groups, outcomes, activityVerified ? tool?.failed_invocations || [] : [], unidentified);
+      drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [], unidentified, state);
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
       drawInvocations(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
-        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation);
+        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state);
       const kinds = tool?.background_kinds || [];
       const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
       drawInvocations(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
-        tool?.background_invocations, kinds.length, verified, 'background', kinds.length === 1 ? tool?.background_invocation : null);
+        tool?.background_invocations, kinds.length, verified, 'background', kinds.length === 1 ? tool?.background_invocation : null, state);
     }
   }
   class View {
@@ -514,7 +542,7 @@ const WatchView = (() => {
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
         const wanted = values.map(value => {
-          const key = JSON.stringify([value.session_id, value.focal_id || 'history']); keep.add(key);
+          const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history']); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || !connected); return card.root;
         });
@@ -527,7 +555,9 @@ const WatchView = (() => {
         }
         reconcile(parent, wanted);
       }
-      for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
+      for (const [key, card] of this.cards) if (!keep.has(key)) {
+        card.drawActivity(null, false); this.cards.delete(key);
+      }
       const dailyValue = view.daily_usage ?? (this.dailyValue &&
         (this.dailyValue.day_end_ms == null || this.dailyValue.day_end_ms > Date.now()) ? this.dailyValue : null);
       this.dailyValue = dailyValue;

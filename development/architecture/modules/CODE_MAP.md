@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000709: `watch/models.py`/`cards.py` separate pending detail availability from
+authoritative membership and export an opaque stable source scope;
+`application/live_projection.py` clears non-observed detail before publication.
+`assets/watch.js` retains pending native controls without private text, keeps
+established failure-group arrows and incrementally reconciles Skills/fragments.
+Coverage: invocation/card/tool/Watch VM regressions, Python source-shaped
+`disclosure_publications()` and `probe_watch_disclosures.cjs` inside the existing
+outcome browser matrix. [Evidence and native-incident limits](../../journal/web/watch-disclosures.md).
+
 FR000708: `analysis/child_links.py` separates delegation launch windows from
 already-bound crossing/late child attempts; `child_activity.py` qualifies descendant
 activity independently of the parent outcome. `causal.py` keeps cancellation,

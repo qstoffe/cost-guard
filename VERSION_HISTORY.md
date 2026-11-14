@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.53 - 2026-11-14
+
+- Full Watch separates temporary detail unavailability from authoritative removal. Same-source Running and failed-call native controls retain user-open/user-closed choices through pending projections, while old private input is immediately cleared.
+- An established nonzero failure group keeps its expansion arrow even without current call-level details; new count-only groups do not invent records. Skills and activity fragments reconcile incrementally; source/prompt switches and true call removal clear invalid identities and sensitive text.
+
 ## v81.52 - 2026-11-14
 
 - A cancelled parent prompt remains RUNNING while a positively observed, causally linked child or nested descendant executes. Shared analysis preserves the parent's real outcome/reason/time separately and returns to Aborted/Error after the last owned activity ends, without relabeling child success as parent success.

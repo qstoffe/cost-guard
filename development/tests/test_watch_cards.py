@@ -225,7 +225,8 @@ class WatchCardTests(unittest.TestCase):
             running_invocations=(detail,), background_invocations=(detail, replace(detail, identity='second')),
             failed_invocations=(ToolFailure("shell", detail),))
 
-        first = cards.project(2000)[0][0].rows[0].tool
+        first_card = cards.project(2000)[0][0]
+        first = first_card.rows[0].tool
         self.assertEqual(detail, cards.project(2001)[0][0].rows[0].tool.running_invocation)
         cards.catalog(self.catalog((root,), active=(root.session_id,), revision="changed"))
         verifying = cards.project(2001)[0][0].rows[0].tool
@@ -239,6 +240,20 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual(1, len(first.failed_invocations))
         self.assertEqual((), verifying.failed_invocations)
         self.assertEqual(first.tool_count, verifying.tool_count)
+        self.assertEqual("observed", first.detail_state)
+        self.assertEqual("pending", verifying.detail_state)
+        wire = project_live(WatchProjection("Watch", "fixture", (),
+            active_cards=cards.project(2001)[0])).to_json()["active_cards"][0]
+        self.assertEqual("pending", wire["rows"][0]["tool"]["detail_state"],
+                         "card state may still be observed while its revision awaits verification")
+        self.assertEqual(cards.project(2001)[0][0].activity_scope, wire["activity_scope"])
+        self.assertEqual(64, len(wire["activity_scope"]))
+        self.assertEqual(first_card.activity_scope, wire["activity_scope"],
+                         "ordinary revisions must not become new disclosure scopes")
+        replacement = replace(root, provenance=replace(root.provenance, source_instance="replacement"))
+        cards.catalog(self.catalog((replacement,), active=(replacement.session_id,)))
+        self.publish(cards, replacement, capture)
+        self.assertNotEqual(first_card.activity_scope, cards.project(2001)[0][0].activity_scope)
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):
         root = self.roots[0]
