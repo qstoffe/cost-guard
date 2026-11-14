@@ -2,8 +2,16 @@
 const assert=require('node:assert/strict');
 module.exports=async function colors({evaluate,until,fixture,command,sessionId,open,close,capture,layouts,checks}) {
   const publish=async phase=>{const {published}=await fixture('mini-lifecycle-'+phase);
-    await until(`liveValue.view.now_ms===${published} && JSON.stringify(miniWatch.observations.view.history_cards)===JSON.stringify(liveValue.view.history_cards) &&
-      miniWatch.observations.view.cards_state===liveValue.view.cards_state`);};
+    // Retention may enrich display/context fields; compare source membership and
+    // lifecycle/metric facts, not byte equality with an unretained raw publication.
+    await until(`(()=>{const facts=cards=>cards.map(c=>[c.session_id,c.focal_id,
+      c.rows.map(r=>[r.prompt.event_id,r.prompt.in_progress,r.prompt.execution_unverified,
+        r.prompt.completed_successfully,r.prompt.aborted,r.prompt.has_error]),
+      c.session_summary?.context?.watch_next_context_tokens,c.session_summary?.cost?.known_ccost]);
+      return liveValue.view.now_ms===${published} && miniWatch.publication.view.now_ms===${published} &&
+      JSON.stringify(facts(miniWatch.observations.view.history_cards))===JSON.stringify(facts(liveValue.view.history_cards)) &&
+      JSON.stringify(facts(miniWatch.observations.view.active_cards))===JSON.stringify(facts(liveValue.view.active_cards)) &&
+      miniWatch.observations.view.cards_state===liveValue.view.cards_state;})()`);};
   const inspect=()=>evaluate(`(()=>{const v=miniWatch.view,w=miniWatch.window,style=n=>w.getComputedStyle(n);
     const token=name=>{const n=v.doc.createElement('span');n.style.color='var('+name+')';v.root.append(n);
       const value=style(n).color;n.remove();return value;};
@@ -12,7 +20,8 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
          activity:row.cells[0].textContent,indicator:row.querySelector('.mini-activity-running').textContent,
          decorative:row.querySelector('.mini-activity-running').getAttribute('aria-hidden'),
          focusable:row.querySelector('.mini-activity-running').tabIndex,
-        values:[...row.cells].map(cell=>style(cell.firstElementChild||cell).color),label:row.getAttribute('aria-label'),
+         values:[...row.cells].map(cell=>style(cell.firstElementChild||cell).color),
+         exceeded:row.cells[4].classList.contains('mini-context-exceeded'),label:row.getAttribute('aria-label'),
         same:row.dataset.id!=='mini-lifecycle-4'||row===window.lifecycleRow})),
       fullHistory:[...document.querySelectorAll('.watch-history tbody tr')].map(row=>row.className),
       fullActive:[...document.querySelectorAll('.watch-active tbody tr')].map(row=>row.className)};})()`);
@@ -25,7 +34,10 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
        assert.equal(item.activity.startsWith('▶ '),item===row&&cls==='mini-running');
        assert.equal(item.decorative,'true');assert.equal(item.focusable,-1);
       const expected=item===row&&cls?value[cls.replace('mini-','')]:value.normal;
-      assert.equal(item.color,expected);assert.ok(item.values.every(color=>color===expected),'all four values share the foreground');
+       assert.equal(item.color,expected);
+       item.values.forEach((color,index)=>assert.equal(color,index===4&&!(item===row&&cls==='mini-running')?
+         (item.exceeded?value.error:value.normal):expected,
+         'Running colors all five cells; non-running Ctx retains its independent policy'));
     }
     assert.ok(value.fullHistory.every(cls=>cls===''),'Full Watch history stays neutral');
     if(cls==='mini-running'||cls==='mini-success')assert.deepEqual(value.fullActive,[cls.replace('mini-','watch-')]);

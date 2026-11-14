@@ -61,6 +61,11 @@ async function main() {
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+    if(scope==='context-colors-only'||scope==='all') {
+      await open();await require('./probe_mini_context_colors.cjs')({evaluate,command,sessionId,pip:await pipSession(),layouts:evidence.layouts,checks:evidence.checks});
+      await close();
+      if(scope==='context-colors-only') {evidence.outcome='PASS';return;}
+    }
     if(scope==='context-only') {
       await open();await require('./probe_mini_context.cjs')({evaluate,until,fixture,command,pip:await pipSession(),open,close,checks:evidence.checks});
       evidence.outcome='PASS';return;

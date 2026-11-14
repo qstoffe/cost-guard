@@ -46,6 +46,8 @@ body { padding: .5rem; max-width: none; }
 .mini-error { color: var(--error); }
 .mini-context { color: var(--ink); }
 .mini-context-exceeded { color: var(--error); }
+/* Verified Running wins over cell-level context warnings without removing help. */
+.mini-prompt-table .mini-running > td { color: var(--watch-running); }
 .mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem;
   flex: 0 0 auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .mini-accounts li { min-height: 2.65rem; padding-bottom: .4rem; }

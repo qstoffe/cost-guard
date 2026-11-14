@@ -5,6 +5,61 @@ Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
+## Running Ctx color precedence (FR000711)
+
+Scoped v81.55 change, checked locally 2026-11-14 against base
+`64a6964888c9803013b6ea338f8b31784e486575`. Earlier sections retain their own evidence.
+
+Actual headless Chrome Document PiP reproduced the owner-observed cascade bug:
+all first four Running cells computed `rgb(255, 255, 85)`, while ordinary Ctx
+computed `rgb(229, 229, 229)`. A directly colored cell overrides inherited row
+color. `mini.css` now scopes the Running foreground to Mini prompt-table `td`
+elements, above the independent Ctx foreground. No JavaScript, warning condition,
+source calculation, acquisition, Full Watch or theme token is changed.
+
+Verification:
+
+- Full: **200 groups, 2459 tests passed, four macOS zsh/PTY skips, zero failures**,
+  177.1 seconds. `scratch:/full.json`.
+- Working-tree validator: **11 passes, zero failures, eight existing advisory
+  budgets**. No new dependency, cap change, ZIP, tag or release.
+- Actual headless **Chrome 157.0.8103.51** and **Edge 157.0.4341.46** Document PiP:
+  **192 matrix cases per browser**, plus unseeded pending/N/A after invalidation.
+  All five `td` values and their descendants have the expected computed foreground.
+  Classic/Web × light/dark covers Running → finished → Earlier → new Running,
+  unverified and error; normal/approaching/exceeded, pending/refreshing/unavailable
+  price guidance and pending/invalidated source context. Headers remain unchanged.
+  Immutable publication, unchanged session/CCost/Total text, exact supported Ctx,
+  keyed row identity and refresh assertions pass. Both Running and Earlier retain
+  the same eligible help through real CDP keyboard, hover and touch input.
+  `scratch:/chrome-colors-final.json`, `scratch:/edge-colors-final.json`;
+  RED evidence `scratch:/baseline-colors.json`.
+- Supplemental Edge `colors-only` lifecycle/650px/280px/Credits/USD/reopen matrix
+  passes after a test-harness repair. Retention can enrich raw display fields, so
+  synchronization compares accepted publication, source membership, lifecycle and
+  numeric facts instead of whole-object raw JSON equality. Computed per-cell
+  assertions now respect non-running Ctx's existing independent policy.
+  Initial failure `scratch:/edge-lifecycle.json`; repaired
+  `scratch:/edge-lifecycle-repaired.json`. This is not a product retention change.
+- Read-only real installation: V2, **39 coherent projections**, one Running prompt,
+  complete Running cost, one bounded-preview/context row checked, no finished history.
+  Owned acquisition closed in 0.035 seconds; shared OpenCode untouched. No paid
+  request was started. This is source/projection evidence, **not live-browser color
+  proof**; the rendered color matrix uses synthetic canonical-shaped publications.
+
+**Narrow approved exception — Decision Delegate, FR000711 only:** supplemental
+`help-only` completed `probe_mini_help`'s warning, input and source-driven checks,
+then **FAILED** `probe_mini_duration` at `mini-total-heading-hover` opening.
+`scratch:/chrome-help.json` retains FAIL and the original assertion; subsequent
+unreached Duration cases are **NOT RUN**. The delegate inspected the selector,
+probes and [existing mixed-input follow-up](../../backlog/suggestions/000684-mini-help-mixed-input-hover-opening/SUGGESTION.md)
+and excluded only that unrelated supplemental Total-heading interaction. No duplicate
+Suggestion, blanket help PASS or FR000704 exception extension is claimed.
+Required Ctx input/color evidence above remains independently passing in both browsers;
+Full and required CI are not waived. The Total interaction's precise current cause
+and physical-desktop prevalence remain unproved. All browser evidence is headless
+native Document PiP, not physical OS/focus proof.
+
 ## Shared pointer/keyboard focus (FR000695)
 
 v81.39 installs the main Web's modality owner on the actual PiP document, including

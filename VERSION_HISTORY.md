@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.55 - 2026-11-14
+
+- Mini Watch's verified Running row foreground takes precedence over cell-specific Ctx colors, keeping all five values yellow. Earlier and other non-running Ctx cells retain ordinary/red canonical threshold styling.
+- Warning eligibility, source severity, numbers and keyboard/hover/touch help are unchanged. Classic/Web light/dark, lifecycle transitions and repeated refreshes are covered by real headless Document PiP computed-style regression checks.
+
 ## v81.54 - 2026-11-14
 
 - Session Detail adds independent, initially collapsed Tool Calls and Skills sections over the full recorded root history and causally linked descendants, not only visible prompt rows or the latest Watch card. Model Calls retains its existing meaning.
