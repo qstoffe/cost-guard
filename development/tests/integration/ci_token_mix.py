@@ -7,8 +7,18 @@ import sys
 
 
 def main():
-    from playwright.sync_api import sync_playwright
     root = Path(__file__).resolve().parents[3]
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
+        raise SystemExit('Requires a disposable standard GitHub-hosted runner.')
+    if os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
+        changed = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
+                                 cwd=root, capture_output=True, text=True, check=True).stdout.splitlines()
+        owners = {'src/application/projection.py', 'src/application/display.py', 'src/reports/models.py',
+                  'src/web/jobs.py', 'src/web/composition.py', 'src/web/report_control.py', 'src/web/assets/app.css'}
+        if not any('token_mix' in path or 'token-mix' in path or path in owners for path in changed):
+            print('Token Mix-specific probe not applicable: no affected owner or probe changed.')
+            return
+    from playwright.sync_api import sync_playwright
     output = root / 'ci-results/token-mix.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
