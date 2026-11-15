@@ -20,6 +20,10 @@ module.exports = async ({vm, context, Node, timers}) => {
   const view = context.navigation;
   new Node('main').append(view.root); view.attached = true; view.token = previous.token;
   view.update(previous);
+  const start = params => {
+    view.navigateTo('#/sessions?' + params);
+    view.configure(new URLSearchParams(params));
+  };
   const restorePrevious = async () => {
     view.detach();
     const params = 'period=today&sort=activity&direction=-1&offset=25&epoch=pinned';
@@ -31,7 +35,7 @@ module.exports = async ({vm, context, Node, timers}) => {
    assert.equal(view.body.children[0].metrics[4].textContent,'172k');
   const retained = view.body.children[0];
   view.next.focus();
-   view.configure(new URLSearchParams('sort=ctx&direction=1'));
+   start('sort=ctx&direction=1');
   const pending = view.load();
   await restorePrevious();
   assert.equal(signal.aborted, true);
@@ -43,7 +47,7 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(view.data, previous, 'late cancelled completion cannot replace the restored snapshot');
   assert.ok(calls.some(value => value.action === 'interest' && !value.visible));
   assert.equal(calls.filter(value => !value.action).at(-1).sort, 'activity');
-  view.configure(new URLSearchParams('sort=ctx&direction=1'));
+  start('sort=ctx&direction=1');
   const progress = (completed, generation=1, total=3217) => ({...previous,pending_sort:true,
     progress:{generation,phase:'index',status:'pending',completed,total}});
   view.update(progress(428));
@@ -56,7 +60,7 @@ module.exports = async ({vm, context, Node, timers}) => {
     assert.equal(view.operation.failed,false,'ordinary source generations cannot exhaust navigation');
     assert.equal(view.status,banner);
   }
-  assert.match(view.status.textContent,/^Sorting sessions by Ctx\./);
+  assert.match(view.status.textContent,/^Sorting sessions by Ctx · Indexed 450 of 3,217 sessions\./);
   assert.equal(view.operation.completed,450);
   const operation = view.operation;
   view.configure(new URLSearchParams('sort=ctx&direction=1'));
@@ -77,10 +81,10 @@ module.exports = async ({vm, context, Node, timers}) => {
    assert.equal(view.operation.failed,false,'a redundant hash notification retains recoverable intent');
   assert.match(view.status.textContent,/no_source_progress/);
   await restorePrevious();
-  view.configure(new URLSearchParams('sort=activity&direction=-1&offset=100&epoch=pinned'));
+  start('sort=activity&direction=-1&offset=100&epoch=pinned');
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'pending',completed:4,total:17}});
   assert.equal(view.operation.kind,'page'); assert.equal(view.operation.percent,23);
-  assert.match(view.status.textContent,/^Loading Sessions page 5\./);
+  assert.match(view.status.textContent,/^Loading Sessions page 5 · Prepared 4 of 17 sessions\./);
   assert.equal(view.operation.completed,4);
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
    assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/http_auth_failure/);
@@ -91,7 +95,7 @@ module.exports = async ({vm, context, Node, timers}) => {
    await restorePrevious();
    assert.equal(view.offset,25); assert.equal(view.body.children[0],retained);
    view.terminal=false; // The following independent scenarios model a newly authorized host/view.
-  view.configure(new URLSearchParams('sort=duration&direction=1'));
+  start('sort=duration&direction=1');
   view.update({...previous,sort:'duration',direction:1,offset:0,pending_sort:false});
   assert.equal(view.operation,null); assert.equal(view.status.hidden,true);
   let releaseTimeout;
@@ -99,7 +103,7 @@ module.exports = async ({vm, context, Node, timers}) => {
     calls.push(request);
     return request.action ? {} : new Promise(resolve => { releaseTimeout = resolve; });
   };
-  view.configure(new URLSearchParams('sort=model&direction=1'));
+  start('sort=model&direction=1');
    const stalled = view.load();
    timers.get(view.requestDeadline)();
    await stalled;
@@ -123,9 +127,9 @@ module.exports = async ({vm, context, Node, timers}) => {
     if (expired) { expired=false; throw new Error('catalog_expired'); }
     return {...progress(600,50),token:'reopened',requested_sort:'ccost'};
   };
-  view.configure(new URLSearchParams('sort=ccost&direction=1')); await view.load();
+  start('sort=ccost&direction=1'); await view.load();
   assert.equal(view.operation.failed,false); assert.equal(view.sort,'ccost');
-  assert.equal(view.token,'reopened'); assert.match(view.status.textContent,/^Sorting sessions by CCost\./);
+  assert.equal(view.token,'reopened'); assert.match(view.status.textContent,/^Sorting sessions by CCost · Indexed 600 of 3,217 sessions\./);
   assert.equal(view.operation.completed,600);
   assert.equal(view.data.sort,'duration','lease recovery cannot apply its Activity fallback');
   view.detach();

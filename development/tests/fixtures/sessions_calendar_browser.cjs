@@ -47,13 +47,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     assert.equal(facts.overflow, false); layouts.push({width,...facts});
   }
   // Thirteen genuinely qualified rows on page four; twelve missing keys have already failed five times.
+  await evaluate(`location.hash='#/sessions?period=today&sort=activity&direction=-1&offset=50&epoch='+catalog.data.epoch`);
+  await until('catalog.data.offset===50 && !catalog.operation && !catalog.busy');
   await fixture('catalog-page-four-partial');
   await evaluate(`window.previousIds=[...catalog.body.rows].map(row=>row.dataset.id);
     window.previousHash=location.hash;window.oldEpoch=catalog.data.epoch;
-    location.hash='#/sessions?period=today&sort=activity&direction=-1&offset=75&epoch='+oldEpoch`);
+     catalog.pageButtons.get(4).click()`);
   await until('catalog.operation?.completed===13');
   assert.equal(await evaluate('catalog.operation.failed'), false);
-  assert.match(await evaluate('catalog.status.textContent'), /^Loading Sessions page 4\./);
+  assert.match(await evaluate('catalog.status.textContent'), /^Loading Sessions page 4 · Prepared 13 of 25 sessions\./);
   assert.equal(await evaluate('catalog.operation.total'),25);
   assert.equal(await evaluate('catalog.pan.hidden'), false);
   assert.equal(await evaluate('catalog.retry===undefined'), true);
@@ -64,7 +66,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('catalog.status.textContent.includes("request_timeout") && !catalog.busy', 22000);
   assert.equal(await evaluate('catalog.operation.failed'), false);
   await evaluate('releaseLate();catalog.api=normalApi;deadlineFlight');
-  assert.equal(await evaluate('catalog.data.offset'), 0);
+  assert.equal(await evaluate('catalog.data.offset'), 50);
   await fixture('fail');
   await until('api("/api/sessions",{token:catalog.token}).then(data=>data.state==="source_unavailable")');
   await evaluate(`window.recoveryCalls=0;window.inFlight=0;window.maxFlights=0;
@@ -74,7 +76,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     catalog.poll()`);
   await new Promise(resolve=>setTimeout(resolve, 47000));
   assert.equal(await evaluate('catalog.operation.failed'), false);
-  assert.equal(await evaluate('catalog.data.offset'), 0);
+  assert.equal(await evaluate('catalog.data.offset'), 50);
   const recovery = await evaluate('({calls:recoveryCalls,maxFlights,delay:catalog.retryDelay,completed:catalog.operation.completed})');
   assert.ok(recovery.calls <= 8 && recovery.calls >= 2, JSON.stringify(recovery));
   assert.equal(recovery.maxFlights, 1); assert.ok(recovery.delay<=30000); assert.equal(recovery.completed,13);

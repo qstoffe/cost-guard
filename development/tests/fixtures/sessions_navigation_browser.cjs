@@ -97,15 +97,17 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('catalog-partial'); await load();
   assert.equal(await evaluate('current.catalog.operation.completed'),428);
   const status = await evaluate('current.catalog.status.textContent');
-  assert.match(status,/^Sorting sessions by CCost\./);
+  assert.match(status,/^Sorting sessions by CCost · Indexed 428 of 3,217 sessions\./);
   for (let update=0;update<20;update++) {
     await fixture('catalog-churn'); await load();
     assert.equal(await evaluate('current.catalog.operation.failed'),false);
-    assert.equal(await evaluate('current.catalog.status.textContent'),status,'count changes do not create repeated live announcements');
+    assert.match(await evaluate('current.catalog.status.textContent'),/^Sorting sessions by CCost · Indexed/);
+    assert.equal(await evaluate('current.catalog.statusCount.textContent.includes(current.catalog.operation.completed.toLocaleString("en-US")+" of 3,217")'),true);
+    assert.equal(await evaluate('current.catalog.statusCount.getAttribute("aria-live")'),'off');
   }
   await evaluate('history.back()');
   await settled(25); assert.deepEqual(await ids(),original);
-  checks.push('cold CCost preserves actual Activity page; 20 source generations retain progress without count announcements; Back retires pending sort');
+  checks.push('cold CCost preserves actual Activity page; 20 source generations visibly advance source counts without per-count live announcements; Back retires pending sort');
   await evaluate(`window.normalCatalogApi=current.catalog.api;window.catalogHeld=false;
     current.catalog.api=async(...args)=>{const data=await normalCatalogApi(...args);
       if(!args[1]?.action && args[1]?.sort==='ccost' && !catalogHeld){catalogHeld=true;
@@ -117,7 +119,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.deepEqual(await ids(),original);
   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
   checks.push('Back supersedes held post-HTTP sort; late answer cannot replace retained page');
-  await evaluate(`location.hash='#/sessions?sort=ctx&direction=1'`);
+  await evaluate(`current.catalog.headers[6].th.querySelector('button').click()`);
   await until('current.catalog.operation?.pending');
   await fixture('fail'); await load();
   await until('current.catalog.operation && !current.catalog.operation.failed && current.catalog.retryDelay>0');
@@ -156,6 +158,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('passiveRelease();current.catalog.api=passiveApi;passive');
   await evaluate('spinnerObserver.disconnect()');
   checks.push({warm_scoped_sorts:timings,eligible_keys:3217,rendered_rows:25});
+  // The deliberate Ctx click above pinned its help. Begin the touch toggle from
+  // a known closed state rather than accidentally testing a second-close click.
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await until('!document.getElementById("context-help")?.matches(":popover-open")');
   await command('Emulation.setTouchEmulationEnabled',{enabled:true});
   const ctxTouch = await evaluate(`(()=>{const b=current.catalog.headers[6].th.querySelector('button');b.scrollIntoView();const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[ctxTouch]});
