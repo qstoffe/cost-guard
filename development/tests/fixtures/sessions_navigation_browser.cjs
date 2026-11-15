@@ -97,11 +97,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('catalog-partial'); await load();
   assert.equal(await evaluate('current.catalog.operation.completed'),428);
   const status = await evaluate('current.catalog.status.textContent');
-  assert.match(status,/^Sorting sessions by CCost · Indexed 428 of 3,217 sessions\./);
+   assert.equal(status,'Sorting sessions by CCost · 428 of 3,217 sessions');
   for (let update=0;update<20;update++) {
     await fixture('catalog-churn'); await load();
     assert.equal(await evaluate('current.catalog.operation.failed'),false);
-    assert.match(await evaluate('current.catalog.status.textContent'),/^Sorting sessions by CCost · Indexed/);
+     assert.match(await evaluate('current.catalog.status.textContent'),/^Sorting sessions by CCost · \d/);
     assert.equal(await evaluate('current.catalog.statusCount.textContent.includes(current.catalog.operation.completed.toLocaleString("en-US")+" of 3,217")'),true);
     assert.equal(await evaluate('current.catalog.statusCount.getAttribute("aria-live")'),'off');
   }
@@ -125,7 +125,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.operation && !current.catalog.operation.failed && current.catalog.retryDelay>0');
   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
   assert.equal(await evaluate('current.catalog.pan.hidden'),false);
-  assert.match(await evaluate('current.catalog.status.textContent'),/Sorting sessions by Ctx.*source_unavailable/);
+   assert.match(await evaluate('current.catalog.status.textContent'),/Sorting sessions by Ctx.*Loading paused\. Retrying/);
   await fixture('recover'); await fixture('catalog-index');
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
   await evaluate('current.catalog.poll()');

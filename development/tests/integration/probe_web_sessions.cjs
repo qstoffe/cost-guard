@@ -118,8 +118,9 @@ async function main() {
               inference_calls:0,personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify({outcome:evidence.outcome,checks,measurements:details.measurements})); return;
           }
-        if (['--periods-only', '--catalog-navigation-only', '--calendar-cache-only', '--catalog-banner-only'].includes(mode)) {
-          const details = await require(mode === '--periods-only' ? '../fixtures/sessions_periods_browser.cjs' :
+         if (['--periods-only', '--catalog-navigation-only', '--calendar-cache-only', '--catalog-banner-only', '--catalog-cohort-only'].includes(mode)) {
+           const details = await require(mode === '--periods-only' ? '../fixtures/sessions_periods_browser.cjs' :
+             mode === '--catalog-cohort-only' ? '../fixtures/sessions_cohort_browser.cjs' :
             mode === '--catalog-banner-only' ? '../fixtures/sessions_banner_browser.cjs' :
             mode === '--calendar-cache-only' ? '../fixtures/sessions_calendar_browser.cjs' : '../fixtures/sessions_navigation_browser.cjs')({evaluate, until, fixture,
             command:(method, params) => command(method, params, sessionId)});

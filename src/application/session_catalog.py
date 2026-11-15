@@ -18,8 +18,9 @@ from src.reports.session_summary import session_summary
 from src.sources.errors import SourceError
 
 from .projection import project
+from .session_navigation import Navigation
 from .session_catalog_scope import (
-    CatalogEpoch, PAGE_SIZE, catalog_window, candidate_population, event_members, provisional_order,
+    CatalogEpoch, PAGE_SIZE, catalog_window, candidate_population, event_members, provisional_order, in_window,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -110,6 +111,8 @@ class SessionCatalog:
         self.observed = None
         self.last_observation = None
         self.orders = OrderedDict()
+        self.discovery = {}
+        self.discovery_sequence = 0
 
     def enable_warm(self, enabled=True):
         with self.lock:
@@ -128,8 +131,20 @@ class SessionCatalog:
 
     def _targets(self):
         browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
-        selected = {key for lease in browsing for key in lease.get('visible', ())}
+        selected = set()
         for lease in browsing:
+            navigation = lease.get('navigation')
+            if navigation is not None:
+                if navigation.invalid:
+                    continue
+                selected.update(navigation.pending)
+                # A previously released live lane stays eligible under repeated
+                # clicks, but never admits arrivals before the first application.
+                if lease.get('released'):
+                    lease['candidates'] = self._population(lease['period'])[1]
+                    selected.update(lease['candidates'])
+                continue
+            selected.update(lease.get('visible', ()))
             if not lease.get('pinned') and (lease.get('sort') not in (None, 'name')
                                           or lease.get('period') != 'all'):
                 lease['candidates'] = self._population(lease['period'])[1]
@@ -150,10 +165,17 @@ class SessionCatalog:
         return (key in self.rows and self.rows[key].activity_qualified
                 and self.activity_valid.get(key, self.valid.get(key, (None,))[0]) == self.revisions.get(key))
 
+    def _invalidate_navigation(self, keys=None):
+        for lease in self.leases.values():
+            navigation = lease.get('navigation')
+            if navigation is not None and (keys is None or navigation.roots.keys() & set(keys)):
+                navigation.invalid = True
+
     def observe(self, observation, *, unavailable=False, timezone_id=None):
         with self.lock:
             if timezone_id is not None:
                 if timezone_id != self.timezone_id:
+                    self._invalidate_navigation()
                     self.valid.clear()
                     self.orders.clear()
                     self.generation += 1
@@ -164,6 +186,7 @@ class SessionCatalog:
             if observation is self.last_observation:
                 return  # Publishing the same old catalog cannot renew source age.
             if self.last_observation and self.last_observation.source_epoch != observation.source_epoch:
+                self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'watch_activity', 'model_dependencies', 'orders'):
                     getattr(self, name).clear()
@@ -173,8 +196,14 @@ class SessionCatalog:
             previous_roots = self.roots
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions
                                      if root.parent_session_id is None)
+            self.discovery = {key: age for key, age in self.discovery.items() if key in self.roots}
+            for key in self.roots:
+                if key not in self.discovery:
+                    self.discovery_sequence += 1
+                    self.discovery[key] = self.discovery_sequence
             if any(previous_roots[key].provenance != root.provenance
                    for key, root in self.roots.items() if key in previous_roots):
+                self._invalidate_navigation()
                 for lease in self.leases.values():
                     lease['epochs'].clear()
                 self.last_page = ()
@@ -260,8 +289,11 @@ class SessionCatalog:
             return False  # Unsupported/auth failures require changed source evidence.
         delay = min(120, 30 * 2 ** min(2, self.failure_counts.get(key, 1) - 1)) if failure else 5
         visible = any(self._browsing(lease) and key in lease.get('visible', ()) for lease in self.leases.values())
+        navigation_pending = any(self._browsing(lease) and lease.get('navigation') is not None
+            and key in lease['navigation'].roots and key not in lease['navigation'].facts
+            for lease in self.leases.values())
         return (self.clock() - self.attempted.get(key, -100) >= delay
-                and (not self._current(key) or visible and (key in self.active or self.rows[key].running)
+                 and (navigation_pending or not self._current(key) or visible and (key in self.active or self.rows[key].running)
                      or not self.rows[key].context_qualified and self._requested(key, 'ctx')
                       or not self.rows[key].effort_qualified and self._requested(key, 'effort')
                       or not self._activity_current(key) and any(self._browsing(lease)
@@ -281,12 +313,17 @@ class SessionCatalog:
         if not candidates:
             return None
         self.turn += 1
+        pending = {key for lease in self.leases.values() if self._browsing(lease)
+            and lease.get('navigation') is not None for key in lease['navigation'].pending}
+        if self.turn % 8 and pending.intersection(candidates):
+            return min(pending.intersection(candidates),
+                       key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
         visible = dict.fromkeys(key for lease in sorted(self.leases.values(), key=lambda item: -item["touched"])
                                 if self._browsing(lease) for key in lease.get("visible", ()))
         priority = [key for key in visible if key in candidates]
         if self.turn % 8 and priority:
             return min(priority, key=lambda key: (self._current(key), self.attempted.get(key, -100)))
-        return min(candidates, key=lambda key: (self.attempted.get(key, -100), key))
+        return min(candidates, key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
 
     def tick(self, service):
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
@@ -295,6 +332,8 @@ class SessionCatalog:
             self.checked_at = self.clock()
             self.index_unavailable = False
             if dependencies != self.dependencies:
+                if self.dependencies is not None:
+                    self._invalidate_navigation()
                 self.valid.clear()
                 self.failures.clear()
                 self.failure_counts.clear()
@@ -319,6 +358,7 @@ class SessionCatalog:
                 self.failure_reasons.pop(key, None)
                 self.attempted.pop(key, None)
             if changed:
+                self._invalidate_navigation(changed)
                 self.generation += 1
         for _ in range(4):
             with self.lock:
@@ -334,11 +374,19 @@ class SessionCatalog:
                 self.metrics['attempts'] += 1
                 self.metrics['retries'] += int(key in self.failures)
                 retrying = key in self.failures
+                navigations = [lease['navigation'] for lease in self.leases.values()
+                    if self._browsing(lease) and lease.get('navigation') is not None
+                    and key in lease['navigation'].roots and key not in lease['navigation'].facts]
+                memberships = {}
+                windows = {nav.window for nav in navigations if nav.window.period != 'all'}
             try:
                 identity_values = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
                     on_stage=lambda stage: self._stage(stage, retrying),
-                    on_dependencies=identity_values.extend)
+                    on_dependencies=identity_values.extend,
+                    activity_end_ms=min((window.end_ms for window in windows), default=None),
+                    on_activity=lambda values, complete: memberships.update(
+                        (window, any(in_window(at, window) for at in values)) for window in windows if complete))
             except (SourceError, PricingUnavailableError) as error:
                 with self.lock:
                     if (key in self.roots and revision == self.revisions.get(key)
@@ -370,6 +418,9 @@ class SessionCatalog:
                                 self.failures.pop(key, None)
                                 self.failure_counts.pop(key, None)
                                 self.failure_reasons.pop(key, None)
+                            for nav in navigations:
+                                nav.capture(self, {key: memberships[nav.window]} if nav.window in memberships else None,
+                                            keys=(key,))
                         else:
                             self.failures[key] = revision, False
                             self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
@@ -382,6 +433,16 @@ class SessionCatalog:
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
                 break
+        with self.lock:
+            finalizing = [lease['navigation'] for lease in self.leases.values()
+                if lease.get('navigation') is not None and not lease['navigation'].pending
+                and not lease['navigation'].invalid]
+        # No extra history pass. Recheck dependency authority of the accepted
+        # facts at the publication boundary, not only the remaining live targets.
+        for nav in finalizing:
+            if any(not payload_current(service.source, values) for values in nav.authorities.values()):
+                with self.lock:
+                    nav.invalid = True
         with self.lock:
             if not any(self._browsing(lease) for lease in self.leases.values()):
                 self.background_due = self.clock() + (15 if any(
@@ -432,7 +493,8 @@ class SessionCatalog:
                 stage='waiting_retry' if any(key in self.failures for key in keys) else
                       'queued' if pending or completed < len(keys) else 'ready'))
 
-    def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today"):
+    def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today",
+             navigation=None, applied=None, cancelled=None):
         with self.lock:
             window, candidates = self._population(period)
             self._expire()
@@ -447,10 +509,48 @@ class SessionCatalog:
             lease["touched"] = self.clock()
             if 'interest_until' in lease:
                 lease['interest_until'] = self.clock() + 90
+            nav = lease.get('navigation')
+            if nav is not None and cancelled == nav.sequence:
+                lease.pop('navigation')
+                nav = None
+            if nav is not None and applied == nav.sequence and not nav.pending:
+                lease.pop('navigation')
+                lease['released'] = True
+                nav = None
+            if navigation is not None:
+                intent = sort, direction, period, offset, epoch if offset else None
+                if nav is None or nav.sequence != navigation:
+                    if navigation <= lease.get('navigation_sequence', 0):
+                        raise ValueError('invalid_request')
+                    if offset:
+                        snapshot = lease['epochs'].get(epoch)
+                        if snapshot is None:
+                            raise KeyError('catalog_expired')
+                        keys = tuple(row.session_id for row in snapshot.rows[offset:offset + PAGE_SIZE])
+                        if any(key not in self.roots for key in keys):
+                            raise KeyError('catalog_expired')
+                        nav_window = snapshot.window
+                    else:
+                        keys, nav_window = candidates, window
+                    nav = Navigation(navigation, intent, nav_window,
+                        {key: self.roots[key] for key in keys}, self.last_observation.source_epoch
+                        if self.last_observation else None)
+                    if offset and snapshot.facts:
+                        nav.facts.update((key, fact) for key, fact in snapshot.facts if key in nav.roots)
+                    lease.update(navigation=nav, navigation_sequence=navigation)
+                elif nav.intent != intent:
+                    raise ValueError('invalid_request')
+                nav.check(self, window if not offset else catalog_window(period, self.timezone_id,
+                    nav.window.end_ms - 1))
+                nav.capture(self)
+                if not offset:
+                    window, candidates = nav.window, tuple(nav.roots)
             qualified = lambda key: ((sort == 'name' or self._key_current(key, sort))
                 and (period == 'all' and sort != 'activity' or self._activity_current(key)))
             indexed = sum(qualified(key) for key in candidates)
             pending = indexed != len(candidates)
+            if nav is not None and navigation is not None and not offset:
+                indexed, pending = len(nav.facts), bool(nav.pending)
             if offset == 0:
                 applied = "activity" if pending else sort
                 order = -1 if pending else direction
@@ -459,7 +559,9 @@ class SessionCatalog:
                 signature = tuple((key, self.roots[key].title, self.activity.get(key), self.rows.get(key))
                                   for key in members)
                 cached = self.orders.get(cache_key)
-                if cached and cached[0] == signature:
+                if nav is not None and navigation is not None and not pending:
+                    rows = ordered(nav.rows, sort, direction)
+                elif cached and cached[0] == signature:
                     rows = cached[1]
                 else:
                     rows = ordered(self._rows(members), applied, order)
@@ -474,12 +576,14 @@ class SessionCatalog:
                 if (previous is not None and (previous.sort, previous.direction) == (applied, order)
                         and previous.provisional == pending
                         and previous.window.identity == window.identity and tuple(
-                        row.session_id for row in previous.rows) == tuple(row.session_id for row in rows)):
+                        row.session_id for row in previous.rows) == tuple(row.session_id for row in rows)
+                        and (not previous.facts or previous.rows == rows)):
                     epoch = latest
                     window = previous.window
                 else:
                     epoch = uuid4().hex
-                    lease["epochs"][epoch] = CatalogEpoch(rows, applied, order, window, pending)
+                    facts = tuple(nav.facts.items()) if nav is not None and navigation is not None and not pending else ()
+                    lease["epochs"][epoch] = CatalogEpoch(rows, applied, order, window, pending, facts)
                 while len(lease["epochs"]) > 8:
                     lease["epochs"].popitem(last=False)
             else:
@@ -500,14 +604,20 @@ class SessionCatalog:
                     raise KeyError('catalog_expired')
                 if any(row.session_id not in self.roots for row in rows[offset:offset + PAGE_SIZE]):
                     raise KeyError('catalog_expired')
+            snapshot = lease['epochs'][epoch]
+            frozen = bool(snapshot.facts) or nav is not None and navigation is not None and not pending
             lease.update(sort=sort, period=period, candidates=candidates, pinned=offset > 0)
             selected = rows[offset:offset + PAGE_SIZE]
             lease["visible"] = tuple(row.session_id for row in selected)
             self.last_page = lease['visible']
             # Older pages retain membership/order; only independently observed
             # values may change. Deleted rows retain their epoch evidence.
-            fresh = {row.session_id: row for row in self._rows(lease['visible'])}
-            selected = tuple(fresh.get(row.session_id, row) for row in selected)
+            if not frozen:
+                fresh = {row.session_id: row for row in self._rows(lease['visible'])}
+                selected = tuple(fresh.get(row.session_id, row) for row in selected)
+            if nav is not None and navigation is not None and offset:
+                selected = tuple(nav.facts[row.session_id][0] if row.session_id in nav.facts else row
+                                 for row in selected)
             report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", (), session_usage=selected)
             result = project(report, self.timezone_id, self.unit).to_json()
             for row in result["session_usage"]:
@@ -540,6 +650,25 @@ class SessionCatalog:
                     row["metric_states"]["effort"] = "retained" if self.rows[key].effort_key is not None else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].effort_pending:
                     row["metric_states"]["effort"] = "pending"
+                facts = nav.facts if nav is not None and navigation is not None else dict(snapshot.facts)
+                if key in facts:
+                    row['snapshot_revision'] = facts[key][1]
+                    row['snapshot_semantics'] = 'independently-qualified-navigation-facts'
+                    row['metric_state'] = row['activity_state'] = 'snapshot'
+                    row['metric_states'] = dict.fromkeys(row['metric_states'], 'snapshot')
+                    evidence = facts[key][0]
+                    if not evidence.context_qualified:
+                        row['metric_states']['ctx'] = 'retained' if row['context_tokens'] is not None else 'pending'
+                    if evidence.model_pending:
+                        row['metric_states']['model'] = 'retained' if row['model'] != 'N/A' else 'pending'
+                    row['indexed'] = False
+            progress = self._progress(sort, pending, selected, indexed, offset > 0, candidates,
+                scope=offset == 0 and (period != 'all' or sort != 'name'))
+            if nav is not None and navigation is not None:
+                progress.update(completed=len(nav.facts), total=len(nav.roots),
+                    phase='page' if offset else 'index')
+                if not nav.pending and not progress['reason']:
+                    progress['status'] = 'ready'
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=PAGE_SIZE,
                 candidate_scope='source_catalog_metadata',
                 membership_pending=lease["epochs"][epoch].provisional,
@@ -548,8 +677,7 @@ class SessionCatalog:
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
                 available=len(candidates), state=self.state, view=result,
                 requested_sort=sort, requested_direction=direction,
-                progress=self._progress(sort, pending, selected, indexed, offset > 0, candidates,
-                    scope=offset == 0 and (period != 'all' or sort != 'name')),
+                navigation=navigation, progress=progress,
                 age_ms=None if self.observed is None else int(max(0, self.clock() - self.observed) * 1000),
                 page_ready=sum(self._current(row.session_id) for row in selected if row.session_id in self.roots))
 

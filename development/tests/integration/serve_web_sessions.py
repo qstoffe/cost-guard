@@ -266,6 +266,23 @@ def main():
             elif command.startswith('catalog-'):
                 host.live.scalar_hold = True
                 catalog = host.live.catalog
+                if command == 'catalog-navigation-source':
+                    with host.live.observation_lock:
+                        source.snapshots = SyntheticMonthSource(324, 1, month_start_ms=1000).snapshots
+                        catalog = host.live.catalog = SessionCatalog(clock_ms=lambda: service.now_ms,
+                            timezone_id=service.timezone_id)
+                        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                        catalog.tick(service)  # Establish dependencies with no interested roots.
+                if command == 'catalog-navigation-arrive':
+                    for number in (324, 325):
+                        source.snapshots[f'root-{number:04d}'] = make_root_snapshot(number, 1, month_start_ms=1000)
+                    source.snapshots['root-0000'] = replace(source.snapshots['root-0000'], source_revision='hot')
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                if command == 'catalog-navigation-observe':
+                    print(json.dumps(dict(ok=True, roots=len(catalog.roots), qualified=len(catalog.valid),
+                        arrivals_qualified=sum(key in catalog.valid for key in ('root-0324', 'root-0325')),
+                        metrics=dict(catalog.metrics))), flush=True)
+                    continue
                 if command == 'catalog-large':
                     source.snapshots = SyntheticMonthSource(3217, 1, month_start_ms=1000).snapshots
                     source.snapshots = {key: replace(snapshot, root=replace(snapshot.root,
@@ -282,10 +299,14 @@ def main():
                     if command == 'catalog-clear':
                         catalog.valid.clear()
                         catalog.activity_valid.clear()
-                    if command in ('catalog-partial', 'catalog-index'):
+                    if command in ('catalog-partial', 'catalog-index', 'catalog-navigation-partial', 'catalog-navigation-finish'):
                         for number, (key, root) in enumerate(catalog.roots.items()):
                             if command == 'catalog-partial' and number >= 428:
                                 break
+                            if command == 'catalog-navigation-partial' and number >= 20:
+                                break
+                            if command == 'catalog-navigation-finish' and (number < 20 or number >= 324):
+                                continue
                             catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
                                 Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number,
                                 last_activity_ms=catalog.activity[key])
@@ -315,6 +336,8 @@ def main():
                                 last_activity_ms=catalog.activity[key])
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
                             catalog.activity_valid[key] = catalog.revisions[key]
+                if command == 'catalog-navigation-resume':
+                    host.live.scalar_hold = False
             elif command in ("fail", "recover"):
                 host.live.unavailable = command == "fail"
             elif command == "end":

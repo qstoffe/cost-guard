@@ -28,6 +28,7 @@ class CatalogEpoch:
     direction: int
     window: CatalogWindow
     provisional: bool = False
+    facts: tuple = ()
 
 
 def catalog_window(period, timezone_id, now_ms):

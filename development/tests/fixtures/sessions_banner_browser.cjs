@@ -65,23 +65,24 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await evaluate(`bannerMode='pending';bannerWork={phase:'${phase}',status:'pending',generation:1};${action}`);
     await until('current.catalog.operation?.userInitiated && current.catalog.operation.pending && !current.catalog.busy');
     assert.equal(await evaluate('current.catalog.statusCount.textContent'),'','unknown totals never borrow available/indexed counts');
-    assert.match(await evaluate('current.catalog.status.textContent'),/Waiting/);
-    const countWord = phase==='index'?'Indexed':'Prepared';
+     assert.equal(await evaluate('current.catalog.status.textContent'),label+'…');
     await evaluate('window.userOperation=current.catalog.operation');
     for (const completed of [3,4,5]) {
       await run(`bannerWork={phase:'${phase}',status:'pending',generation:${completed},completed:${completed},total:100};
         await current.catalog.load()`);
       assert.equal(await evaluate('current.catalog.statusTask.textContent'),label);
-      assert.equal(await evaluate('current.catalog.statusCount.textContent'),` · ${countWord} ${completed} of 100 sessions`);
+       assert.equal(await evaluate('current.catalog.statusCount.textContent'),` · ${completed} of 100 sessions`);
+       assert.equal(await evaluate('current.catalog.statusStage.textContent'),'');
+       assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/worker|revalidating|cached|source|Indexed|Prepared/i);
       assert.equal(await evaluate('current.catalog.statusCount.getAttribute("aria-live")'),'off');
       assert.equal(await evaluate('current.catalog.status.getAttribute("role")'),'status');
       assert.equal(await evaluate('current.catalog.status.getAttribute("aria-atomic")'),'false');
       assert.equal(await evaluate('current.catalog.operation===userOperation'),true,'source updates retain the initiating identity');
     }
     await run(`bannerWork={phase:'index',status:'pending',generation:20,completed:1,total:80};await current.catalog.load()`);
-    assert.match(await evaluate('current.catalog.status.textContent'),/Indexed 1 of 80 sessions.*revalidating/);
+     assert.equal(await evaluate('current.catalog.status.textContent'),label+' · 1 of 80 sessions');
     await run(`bannerMode='retry';await current.catalog.load()`);
-    assert.match(await evaluate('current.catalog.status.textContent'),/Recovering automatically/);
+     assert.match(await evaluate('current.catalog.status.textContent'),/Loading paused\. Retrying/);
     assert.equal(await evaluate('current.catalog.operation===userOperation && !current.catalog.operation.failed'),true);
     await run(`bannerMode='pending';bannerWork={phase:'${phase}',status:'pending',generation:21,completed:5,total:100};await current.catalog.load()`);
     assert.equal(await evaluate('current.catalog.statusTask.textContent'),label);
@@ -103,7 +104,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.statusTask.textContent==="Loading sessions in 30 days" && current.catalog.operation?.completed===3');
   await evaluate('releaseBanner();void 0');
   assert.equal(await evaluate('current.catalog.statusTask.textContent'),'Loading sessions in 30 days');
-  assert.match(await evaluate('current.catalog.statusCount.textContent'),/Prepared 3 of 100/);
+   assert.match(await evaluate('current.catalog.statusCount.textContent'),/3 of 100/);
   await run(`bannerMode='normal';await current.catalog.load()`);
   await until('!current.catalog.operation && !current.catalog.busy'); await quiet();
   // A passive route notification/change is not itself a user gesture.
@@ -115,7 +116,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/Loading|Sorting/);
   await run(`bannerMode='pending';await current.catalog.load()`); await quiet();
   await run(`bannerMode='terminal';await current.catalog.load()`);
-  assert.match(await evaluate('current.catalog.status.textContent'),/permission_denied.*Resolve the error and reopen Cost Guard/);
+   assert.match(await evaluate('current.catalog.status.textContent'),/Access unavailable.*reopen Sessions/);
   assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/Loading|Sorting|Cancel/);
   assert.equal(await evaluate('current.catalog.operation.failed'),true);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
