@@ -22,6 +22,9 @@ from src.reports.watch_capture import capture_rows
 from src.watch.card_workers import CardResult
 from src.watch.cards import WatchCards
 from src.watch.observers import observe_catalog
+from src.application.session_catalog import SessionCatalog
+from src.reports.models import SessionUsageRow
+from decimal import Decimal
 
 NOW = 1_000_000_000
 
@@ -121,12 +124,24 @@ def main():
     parser.add_argument('--baseline', required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--roots', type=int, default=2700)
+    parser.add_argument('--previews-only', action='store_true',
+        help='Blocked-rich-worker first-useful-row matrix; no hydration or full proof benchmark.')
     args = parser.parse_args()
     code = subprocess.check_output(['git', 'show', f'{args.baseline}:src/watch/cards.py'], cwd=ROOT, text=True)
     baseline = types.ModuleType('src.watch.history_baseline')
     baseline.__package__ = 'src.watch'
     sys.modules[baseline.__name__] = baseline
     exec(compile(code, 'baseline/cards.py', 'exec'), baseline.__dict__)
+    if args.previews_only:
+        evidence = dict(baseline_revision=args.baseline, scenarios=[
+            preview_measure(baseline.WatchCards, count, running, warm)
+            for count in (25, 324, 2793, 3217) for running in (0, 1, 2, 5) for warm in (False, True)],
+            limitations=['Synthetic shared scalar facts and metadata, not disk/network or installed-source timing.',
+                'Rich workers remain blocked for a logical ten-minute interval; no ten-minute sleep or private scan.',
+                'Preview eligibility is not certified global latest-five coverage.'])
+        args.output.write_text(json.dumps(evidence, indent=2)+'\n', encoding='utf-8')
+        print(json.dumps(evidence))
+        return
     evidence = dict(baseline_revision=args.baseline, baseline=measure(baseline.WatchCards, args.roots),
         candidate=measure(WatchCards, args.roots), limitations=[
             'Synthetic single-prompt roots; four-capture slices executed serially for reproducible logical IO.',
@@ -136,6 +151,43 @@ def main():
     assert evidence['candidate']['replacements_without_new_activity'] == 0
     args.output.write_text(json.dumps(evidence, indent=2)+'\n', encoding='utf-8')
     print(json.dumps(evidence))
+
+
+def preview_measure(baseline_type, count, running, warm):
+    source = SyntheticMonthSource(count, 0, month_start_ms=1000)
+    source.snapshots = {key: replace(value, root=replace(value.root, active=False))
+        for key, value in source.snapshots.items()}
+    observation = observe_catalog(source)
+    catalog = SessionCatalog(clock_ms=lambda: NOW)
+    catalog.observe(observation)
+    if warm:
+        # Synthetic already-qualified Sessions scalar observations; no model or
+        # source history is acquired by either measured publication.
+        for key in list(catalog.roots)[-25:]:
+            catalog.rows[key] = SessionUsageRow(key, catalog.roots[key].title, 'N/A', False,
+                Decimal(12), 1, last_activity_ms=catalog.activity[key])
+            catalog.valid[key] = catalog.revisions[key], catalog.clock()
+            catalog.activity_valid[key] = catalog.revisions[key]
+    baseline = baseline_type(type('BlockedWorkers', (), {'drain': lambda self: (), 'jobs': {}, 'limit': 4})())
+    baseline.catalog(observation)
+    before = source.load_count, source.catalog_count, source.batch_count
+    started = time.perf_counter()
+    history = baseline.project(NOW)[1]
+    baseline_seconds = time.perf_counter() - started
+    excluded = tuple(list(catalog.roots)[-(running):]) if running else ()
+    started = time.perf_counter()
+    previews = catalog.previews(excluded, limit=5-running)
+    candidate_seconds = time.perf_counter() - started
+    assert not history
+    assert len(previews) == 5-running
+    assert before == (source.load_count, source.catalog_count, source.batch_count)
+    assert not catalog.leases
+    return dict(roots=count, running=running, warm=warm, baseline_named_earlier_rows=len(history),
+        candidate_named_earlier_rows=len(previews), blocked_worker_interval_seconds=600,
+        baseline_publication_ms=round(baseline_seconds * 1000, 3),
+        catalog_to_preview_ms=round(candidate_seconds * 1000, 3),
+        qualified_totals=sum(value.total_ccost is not None for value in previews),
+        extra_source_reads=0, browser_leases=0, global_proof_claimed=False)
 
 
 if __name__ == '__main__':

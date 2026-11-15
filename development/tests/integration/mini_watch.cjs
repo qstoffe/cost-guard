@@ -142,6 +142,7 @@ function setup() {
     require('../fixtures/mini_activity.cjs')(vm,context,controller,view,input,helpText,{get:()=>now,set:value=>{now=value;}});
      require('../fixtures/mini_help.cjs')(controller,view,input,helpText);
      require('../fixtures/mini_context.cjs')(controller,view,input,helpText);
+     require('../fixtures/mini_previews.cjs')(controller,view,input,helpText);
    const demandCalls = [];
    controller.setDemandFactory(win => {
      assert.equal(win, child, 'Mini demand belongs to the actual PiP document');

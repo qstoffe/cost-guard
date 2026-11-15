@@ -257,6 +257,10 @@ def roles(values):
 def history_time_tokens(values, timezone_id):
     """Canonical start/finish/abort labels are identical in both CCost units."""
     tokens = {}
+    if "activity_ms" in values:
+        at = values["activity_ms"]
+        tokens["activity_clock"] = "Loading…" if at is None else format_local_timestamp(at, timezone_id, "%H:%M")
+        tokens["activity_date_time"] = "" if at is None else format_local_timestamp(at, timezone_id, "%Y-%m-%d %H:%M")
     if "at_ms" in values:
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
         tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")

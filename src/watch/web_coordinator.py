@@ -120,6 +120,18 @@ class WebWatchCoordinator(WatchCoordinator):
         if not self._closed and catalog.needed():
             self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
 
+    def catalog_frame(self, catalog, frame):
+        # Publication reads only the shared index. Never wait for catalog_job or
+        # rich card workers; even the first metadata-only observation is useful.
+        if frame is None:
+            return None
+        running = {card.session_id for card in frame.active_cards
+            if any(row.prompt.in_progress or row.prompt.execution_unverified for row in card.rows)}
+        previews = catalog.previews(running, limit=5 - len(running))
+        self.cards.preview_ids = tuple(item.session_id for item in previews)
+        return replace(frame, earlier_previews=previews,
+            earlier_cards=self.cards.preview_cards(frame.now_ms))
+
     def _catalog_capture(self, catalog, now_ms):
         service = None
         try:

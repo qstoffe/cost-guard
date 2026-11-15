@@ -5,6 +5,7 @@ every period-eligible root; an unindexed root is not a canonically unknown metri
 """
 from collections import OrderedDict
 from dataclasses import replace
+from heapq import nsmallest
 from threading import Lock
 import time
 from uuid import uuid4
@@ -16,6 +17,7 @@ from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
 from src.reports.session_summary import session_summary
 from src.sources.errors import SourceError
+from src.watch.models import SessionPreview
 
 from .projection import project
 from .session_navigation import Navigation
@@ -113,6 +115,7 @@ class SessionCatalog:
         self.orders = OrderedDict()
         self.discovery = {}
         self.discovery_sequence = 0
+        self.preview_totals = {}
 
     def enable_warm(self, enabled=True):
         with self.lock:
@@ -685,3 +688,42 @@ class SessionCatalog:
         for token, lease in tuple(self.leases.items()):
             if self.clock() - lease["touched"] > 300:
                 del self.leases[token]
+
+    def previews(self, excluded=(), *, limit=5):
+        """Small all-time Live projection; no lease, IO, hydration or proof gate.
+
+        Reuse current shared scalar facts, never a browser's pinned epoch. Metadata
+        is an activity estimate, not prompt completion. Next-context has a separate
+        owner and is deliberately absent from this DTO.
+        """
+        with self.lock:
+            limit = max(0, min(5, limit))
+            if self.last_observation is None or not limit:
+                return ()
+            excluded = set(excluded) | self.active
+            now = self.clock_ms()
+            def total_scope(key):
+                return (self.revisions.get(key), self.roots[key].provenance,
+                    self.last_observation.source_epoch, self.dependencies, self.timezone_id)
+            def candidate(key):
+                row = self.rows.get(key)
+                current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
+                    and not self.failures.get(key, (None, False))[1])
+                if key in excluded or self._running(key, bool(current and row and row.running)):
+                    return None
+                at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
+                at = at if type(at) is int and 0 < at <= now else None
+                scope = total_scope(key)
+                previous = None if self.failures.get(key, (None, False))[1] else self.preview_totals.get(key)
+                total = (row.ccost if current and row is not None and row.complete else
+                    previous[1] if previous is not None and previous[0] == scope else None)
+                return SessionPreview(key, self.roots[key].title or "Untitled session", at,
+                    "events" if self._activity_current(key) else "catalog",
+                    total, total is not None)
+            # O(N log 5), bounded output/memory; no full-history sort or capture.
+            selected = tuple(nsmallest(limit, (value for key in self.roots
+                if (value := candidate(key)) is not None),
+                key=lambda value: (-(value.activity_ms or 0), value.session_id)))
+            self.preview_totals = {value.session_id: (total_scope(value.session_id), value.total_ccost)
+                for value in selected if value.total_ccost is not None}
+            return selected

@@ -69,6 +69,8 @@ class LiveRuntime:
                     frame = driver.tick()
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
                         driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
+                    if callable(getattr(type(driver.coordinator), "catalog_frame", None)):
+                        frame = driver.coordinator.catalog_frame(self.catalog, frame)
                     if callable(getattr(type(driver.coordinator), "tick_details", None)):
                         driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
                     else:

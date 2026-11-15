@@ -63,6 +63,7 @@ const WatchView = (() => {
     return {...view, active_cards: (view.active_cards || []).map(card),
       history_cards: (view.history_cards || []).map(card),
       recent_finished_cards: (view.recent_finished_cards || []).map(card),
+      earlier_cards: (view.earlier_cards || []).map(card),
       daily_usage: daily ? costs.select(daily, [source, daily.day_start_ms, daily.day_end_ms],
         'daily_ccost', total?.complete === true, total?.known_ccost) : null};
   }

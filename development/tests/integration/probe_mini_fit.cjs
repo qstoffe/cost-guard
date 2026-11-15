@@ -7,7 +7,8 @@ async function main() {
   const profile=await fs.mkdtemp(path.join(path.dirname(output),'mini-browser-'));
   const config=await fs.mkdtemp(path.join(path.dirname(output),'mini-config-'));
    const server=spawn(process.env.COST_GUARD_TEST_PYTHON||'py',
-     [...(process.env.COST_GUARD_TEST_PYTHON?[]:['-3']),'development/tests/integration/serve_mini_watch.py',config],
+     [...(process.env.COST_GUARD_TEST_PYTHON?[]:['-3']),'development/tests/integration/serve_mini_watch.py',config,
+       ...(scope==='previews-only'?['--catalog-previews']:[])],
      {windowsHide:true,stdio:['pipe','pipe','pipe']});
   const lines=readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const launch=JSON.parse((await lines.next()).value); // Capability URL stays in memory.
@@ -114,10 +115,14 @@ async function main() {
       await open();await require('./probe_mini_context.cjs')({evaluate,until,fixture,command,pip:await pipSession(),open,close,checks:evidence.checks});
       evidence.outcome='PASS';return;
     }
-    if(scope==='history-only') {
+     if(scope==='history-only') {
       await require('./probe_history_readiness.cjs')({fixture,evaluate,until,command,sessionId,open,close,checks:evidence.checks});
       evidence.outcome='PASS';return;
-    }
+     }
+     if(scope==='previews-only') {
+       await require('./probe_catalog_previews.cjs')({fixture,evaluate,until,command,sessionId,open,close,evidence});
+       evidence.outcome='PASS';return;
+     }
     if(scope==='recent-only') {
       await require('./probe_recent_finished.cjs')({fixture,evaluate,until,open,close,command,sessionId,targetId,checks:evidence.checks,evidence});
       evidence.outcome='PASS';return;

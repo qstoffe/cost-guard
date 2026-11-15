@@ -63,6 +63,7 @@ class WatchCards:
         self.catalog_revision = 0
         self.evidence_revision = 0
         self.completion_paused = False
+        self.preview_ids = None  # None preserves the independent certified-history consumer.
 
     def catalog(self, observation):
         identity = frozenset((root.provenance.source_type, root.provenance.source_generation,
@@ -224,6 +225,15 @@ class WatchCards:
     def historical_ids(self, now_ms):
         return tuple(card.session_id for card in self.history.project(self, now_ms))
 
+    def preview_cards(self, now_ms):
+        """Actual representatives for the small shortlist, not global winners."""
+        return tuple(self._card(entry, None, now_ms) for key in self.preview_ids or ()
+            if (entry := self.sessions.get(key)) is not None
+            and entry.verified_generation == entry.generation
+            and entry.source_status.failed_at is None and entry.capture is not None
+            and entry.capture.authoritative and not entry.capture.retained
+            and entry.capture.history_row is not None and not self._focals(entry, now_ms))
+
     def _ranked_ids(self, now_ms):
         # Unknown-ended history sorts before known finishes and fills spare slots;
         # neither source receipt nor start time is passed off as a finish clock.
@@ -247,7 +257,7 @@ class WatchCards:
             for entry in self.sessions.values():
                 entry.terminals = {key: seen for key, seen in entry.terminals.items()
                     if 0 <= now_ms - seen < self.recent_ms}
-        historical = set(self._ranked_ids(now_ms))
+        historical = set(self._ranked_ids(now_ms)) | set(self.preview_ids or ())
         active, history = [], []
         for key, entry in self.sessions.items():
             busy = bool(self._focals(entry, now_ms)) or (key in self.active_candidates
@@ -255,12 +265,16 @@ class WatchCards:
             unverified = entry.verified_generation != entry.generation or entry.source_status.failed_at is not None
             due = entry.refresh_requested or (key in historical and entry.capture is None)
             needed = busy or unverified or key in historical
+            if self.preview_ids is not None:
+                needed = busy or entry.inspect_recent or key in historical
             if (due and needed and key not in self.workers.jobs
                     and (not completed_only or not entry.retry_on_tick)):
                 (active if busy or entry.inspect_recent else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
         # Metadata is an admission hint only, never a finish bound/proof.
-        history.sort(key=lambda item: (item[0], -(item[2].root.updated_at_ms or 0), item[1]))
+        preview_order = {key: index for index, key in enumerate(self.preview_ids or ())}
+        history.sort(key=lambda item: (item[0], preview_order.get(item[1], 5),
+            -(item[2].root.updated_at_ms or 0), item[1]))
         planned = []
         admission_turns = {}
         history_limit = getattr(self.workers, 'history_limit', self.workers.limit)
@@ -320,7 +334,7 @@ class WatchCards:
     def _tick_costs(self, now_ms):
         if self.costs is None:
             return
-        visible = set(self._ranked_ids(now_ms)) | self.recent.entries.keys() | {
+        visible = set(self._ranked_ids(now_ms)) | set(self.preview_ids or ()) | self.recent.entries.keys() | {
             key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
         self.costs.tick({key: entry.cost for key, entry in self.sessions.items()}, visible, now_ms)
 

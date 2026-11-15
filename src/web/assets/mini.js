@@ -98,6 +98,7 @@ const MiniWatch = (() => {
         // The producer owns atomic history retention, invalidation and source scope.
         history_cards: (view.history_cards || []).map(card => this.context(card)),
         recent_finished_cards: (view.recent_finished_cards || []).map(card => this.context(card)),
+        earlier_cards: (view.earlier_cards || []).map(card => this.context(card)),
         // Missing refresh data retains this day's usable summary only. The
         // configured boundary below still clears yesterday, even disconnected.
         daily_usage: daily ? dailyUsable || !previous?.daily_usage ||
@@ -122,8 +123,10 @@ const MiniWatch = (() => {
   // Never infer completion, revalue costs or resolve identity from display names.
   function sessions(view) {
     const active = new Map(), finished = new Map();
+    const catalog = new Map((view?.earlier_previews || []).map(value => [value.session_id, value]));
     const start = value => [value.item?.prompt?.at_ms ?? 0, value.item?.prompt?.event_id || ''];
-    const activity = value => value.running ? value.item.prompt.at_ms : value.item?.prompt?.completed_at_ms;
+    const activity = value => value.preview ? value.card.activity_ms :
+      value.running ? value.item.prompt.at_ms : value.item?.prompt?.completed_at_ms;
     const compare = (a, b) => (activity(a) ?? -Infinity) - (activity(b) ?? -Infinity) ||
       a.card.session_id.localeCompare(b.card.session_id) || start(a)[1].localeCompare(start(b)[1]);
     const add = (pool, value, newer) => {
@@ -143,14 +146,17 @@ const MiniWatch = (() => {
       });
       else add(finished, value, (a, b) => compare(a, b) > 0);
     }
-    for (const card of WatchView.finishedCards(view)) {
+    for (const card of [...(view?.earlier_cards || []), ...WatchView.finishedCards(view)]) {
       const value = {card, item: card.rows?.[0], running: false, historical: true};
       add(finished, value, (a, b) => compare(a, b) >= 0);
     }
+    for (const card of view?.earlier_previews || []) if (!finished.has(card.session_id))
+      finished.set(card.session_id, {card, preview: true, running: false, historical: true});
     for (const id of active.keys()) finished.delete(id);
     const fillers = [...finished.values()].sort(compare).slice(-Math.max(0, 5 - active.size));
     // slice(-0) would select everything when five or more sessions are active.
-    return [...active.values(), ...(active.size < 5 ? fillers : [])].sort(compare);
+    return [...active.values(), ...(active.size < 5 ? fillers : [])].sort(compare)
+      .map(value => ({...value, catalog: catalog.get(value.card.session_id)}));
   }
   function activityLabel(prompt, running, now, today) {
     const at = running ? prompt?.at_ms : prompt?.completed_at_ms;
@@ -320,7 +326,7 @@ const MiniWatch = (() => {
       table.setAttribute('aria-label', 'Session activity: representative prompt CCost, whole-session Total CCost and estimated next incoming context (Ctx)');
       for (const name of ['Activity', 'Session', 'CCost', 'Total', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Activity: '• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.', Session: 'The name of the session.',
+        const explanation = {Activity: '• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.\n• While prompt details load, shows session activity.', Session: 'The name of the session.',
           CCost: "Reference cost of this session's latest represented prompt, including attributed linked subagent calls.",
           Total: ReportView.headerHelp.sessionCost,
           Ctx: ReportView.headerHelp.context}[name];
@@ -383,14 +389,38 @@ const MiniWatch = (() => {
         .filter(Boolean).join(' · ') : '';
       if (!exceeded) ContextHelp.dismiss(cell);
     }
-    drawCost(row, card, prompt) {
+    drawCost(row, card, prompt, catalog) {
       const summary = card.session_summary, cost = summary?.cost;
-      const total = ReportView.display(cost, 'account_ccost');
+      const total = cost?.known_ccost != null || !catalog ? ReportView.display(cost, 'account_ccost') :
+        catalog.total_ccost == null ? 'Loading…' : ReportView.display(catalog, 'total_ccost');
       const amount = ReportView.display(prompt, 'ccost');
       ReportView.text(row.children[2].children[0], amount);
       ReportView.text(row.children[3].children[0], total);
       row.children[2].children[0].setAttribute('aria-label', `Prompt reference CCost: ${amount}`);
       row.children[3].children[0].setAttribute('aria-label', `Whole-session reference CCost: ${total}`);
+    }
+    drawPreview(row, card, now, today) {
+      const text = ReportView.text, session = this.drawSession(row.children[1], card);
+      row.className = ''; row.setAttribute('aria-label', session + ' · Session activity');
+      row.sessionHelp = session; row.costHelp = 'Prompt reference CCost';
+      row.totalCostHelp = 'The entire session’s reference cost, including attributed linked subagents.';
+      row.contextHelp = ''; row.children[4].className = 'mini-context'; row.children[4].tabIndex = -1;
+      row.children[4].dataset.guidance = 'pending'; ContextHelp.dismiss(row.children[4]);
+      const time = row.children[0].children[0], at = card.activity_ms;
+      text(time.children[0], '');
+      // Generic activity only; no synthetic prompt, event ID or finish outcome.
+      const full = card.display?.activity_date_time;
+      const label = card.display?.activity_clock || 'Loading…';
+      const age = now - at, day = 86400000;
+      text(time.children[1], at == null || age < 43200000 || !today || full?.startsWith(today + ' ') ? label :
+        age < day ? Math.floor(age / 3600000) + 'h ago' : age < 30 * day ? Math.floor(age / day) + 'd ago' :
+        age < 365 * day ? Math.floor(age / (30 * day)) + 'm ago' : Math.floor(age / (365 * day)) + 'y ago');
+      row.activityHelp = full ? 'Session activity · ' + full : 'Session activity';
+      const total = card.total_ccost == null ? 'Loading…' : ReportView.display(card, 'total_ccost');
+      text(row.children[2].children[0], 'Loading…'); text(row.children[3].children[0], total);
+      row.children[2].children[0].setAttribute('aria-label', 'Prompt reference CCost: Loading…');
+      row.children[3].children[0].setAttribute('aria-label', 'Whole-session reference CCost: ' + total);
+      text(row.children[4], 'Loading…');
     }
     costGroups(value, session = false) {
       return WatchView.costGroups(value, session);
@@ -399,7 +429,8 @@ const MiniWatch = (() => {
       return WatchView.promptDetails(item, highlight);
     }
     update(publication, health, overdue, observations, now) {
-      const view = observations.snapshot(now);
+      const snapshot = observations.snapshot(now);
+      const view = health.terminal ? {...snapshot, earlier_previews: [], earlier_cards: []} : snapshot;
       const fresh = health.kind === 'connected' && publication?.state === 'running' && !overdue;
       const text = ReportView.text;
       const state = {authorization_required: 'Authorization expired · return to Cost Guard',
@@ -427,7 +458,7 @@ const MiniWatch = (() => {
       const values = sessions(view);
       const needsHistory = values.filter(value => value.running).length < 5;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
-      for (const {card, item, running, historical} of values) {
+      for (const {card, item, running, historical, preview, catalog} of values) {
         const prompt = item?.prompt, key = card.session_id;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -436,6 +467,7 @@ const MiniWatch = (() => {
           row = this.sessionRow(); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
+        if (preview) { this.drawPreview(row, card, now, today); wanted.push(row); continue; }
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
@@ -454,13 +486,13 @@ const MiniWatch = (() => {
         text(time.children[0], verifiedRunning ? '▶ ' : '');
         text(time.children[1], activityLabel(prompt, running, now, today));
         row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
-        this.drawCost(row, card, prompt);
+        this.drawCost(row, card, prompt, catalog);
         text(row.children[4], context); wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;
       // Background demand may remain useful even with five filled slots. It
       // cannot authorize a sixth physical/accessible acquisition-status row.
-      const notice = wanted.length < 5 && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
+      const notice = !values.some(value => value.preview) && wanted.length < 5 && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
         WatchView.historyNotice(view, values.some(value => value.historical)) : '';
       text(this.emptyPrompts.children[0].children[0], notice || (view?.cards_state === 'observed' ? 'No sessions' : 'Loading…'));
       this.emptyPrompts.setAttribute('role', 'status');

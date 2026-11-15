@@ -18,7 +18,7 @@ def main():
     results = ROOT / "ci-results"
     results.mkdir(exist_ok=True)
     environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
-    for scope in ("opening", "opening-races", "header", "dashboard"):
+    for scope in ("opening", "opening-races", "header", "dashboard", "previews"):
         output = results / f"watch-{scope}.json"
         result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
             browser, str(output), "1", "1", scope + "-only"],
