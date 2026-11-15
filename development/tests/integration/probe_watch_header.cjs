@@ -4,9 +4,9 @@ module.exports=async({evaluate,until,command,sessionId,layouts,checks,capture})=
   await evaluate(`location.hash='#/watch';window.headerOriginal=structuredClone(liveValue);
     window.headerTheme=document.documentElement.dataset.theme;`);
   await until('!!current.watch');
-  for(const width of [360,520,768,1280,1920]) {
+  for(const width of [360,520,768,1024,1366,1920]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false},sessionId);
-    for(const [theme,scheme] of [['classic','light'],['web','light'],['web','dark']]) {
+    for(const [theme,scheme] of [['classic','light'],['classic','dark'],['web','light'],['web','dark']]) {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},sessionId);
       for(const count of [0,1,2,3,6,8])for(const unit of ['credits','usd']) {
         const value=await evaluate(`(()=>{
@@ -28,8 +28,14 @@ module.exports=async({evaluate,until,command,sessionId,layouts,checks,capture})=
           ReportView.setUnit('${unit}');show(current);
           const view=current.watch,r=n=>{const b=n.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,right:b.right,bottom:b.bottom};};
           const band=r(view.band),daily=r(view.daily),accounts=r(view.accounts),controls=r(miniWatch.button.parentNode);
+          const style=getComputedStyle(view.band);
           return {band,daily,accounts,controls,button:r(miniWatch.button),
-            bars:[...view.accounts.querySelectorAll('progress')].map(n=>({rect:r(n),max:n.max,value:n.value,hidden:n.hidden})),
+            dailyLines:[...view.daily.children].map(n=>({rect:r(n),font:getComputedStyle(n).fontSize,
+              weight:getComputedStyle(n).fontWeight,color:getComputedStyle(n).color})),
+            border:style.borderBottomWidth,shadow:style.boxShadow,
+            pseudo:['::before','::after'].map(p=>getComputedStyle(view.band,p).content),
+            bars:[...view.accounts.querySelectorAll('progress')].map(n=>({rect:r(n),label:r(n.previousElementSibling),
+              max:n.max,value:n.value,hidden:n.hidden,aria:n.getAttribute('aria-valuetext')})),
             lines:view.accountCards.lines.size,parents:view.accounts.parentNode===view.band,
             only:view.root.querySelectorAll('.mini-accounts').length===1,
             cardsBelow:!view.active.children.length||r(view.active).y>=band.bottom,
@@ -43,19 +49,35 @@ module.exports=async({evaluate,until,command,sessionId,layouts,checks,capture})=
         assert.equal(value.overflow||value.headerOverflow,false,JSON.stringify({label,value}));
         assert.ok(value.button.height>=44&&value.button.width>=44);
         assert.ok(value.amounts[2].includes('999999'));
+        assert.equal(value.border,'0px');assert.equal(value.shadow,'none');
+        assert.ok(value.pseudo.every(content=>content==='none'||content==='normal'));
+        const center=rect=>rect.x+rect.width/2;
+        const lines=value.dailyLines;
+        assert.equal(lines.length,3);
+        assert.ok(lines[0].rect.bottom<=lines[1].rect.y&&lines[1].rect.bottom<=lines[2].rect.y,
+          JSON.stringify({label,lines}));
+        for(const line of lines)assert.ok(Math.abs(center(line.rect)-center(value.daily))<1,
+          JSON.stringify({label,lines}));
+        assert.ok(parseFloat(lines[1].font)>parseFloat(lines[0].font)&&Number(lines[1].weight)>=600);
+        assert.equal(lines[0].color,lines[2].color);
+        assert.ok(Math.abs(center(value.accounts)-center(value.band))<2,JSON.stringify({label,value}));
         for(const bar of value.bars)if(!bar.hidden){
           assert.equal(bar.max,1);assert.ok(bar.value>=0&&bar.value<=1);
           assert.ok(bar.rect.width<=Math.min(value.accounts.width,211)+1);
+          assert.ok(Math.abs(bar.rect.x-bar.label.x)<1&&Math.abs(bar.rect.x-value.accounts.x)<1,
+            JSON.stringify({label,bar}));
+          assert.ok(bar.aria);
         }
         if(value.accounts.y<value.daily.bottom&&value.controls.y<value.accounts.bottom) {
           assert.ok(Math.abs(value.accounts.x+value.accounts.width/2-value.band.x-value.band.width/2)<2);
           assert.ok(value.daily.right<=value.accounts.x&&value.accounts.right<=value.controls.x);
+          assert.ok(Math.abs(value.daily.y+value.daily.height/2-value.accounts.y-value.accounts.height/2)<2);
         } else {
           assert.ok(value.daily.bottom<=value.accounts.y+1&&value.accounts.bottom<=value.controls.y+1,
             JSON.stringify({label,value}));
         }
         layouts.push({case:'watch-header',...label,...value});
-        if(unit==='usd'&&((width===1280&&count===3&&theme==='classic')||
+        if(unit==='usd'&&((width===1366&&count===3&&theme==='classic'&&scheme==='dark')||
             (width===360&&count===8&&theme==='web'&&scheme==='dark')))
           await capture('header-'+width+'-'+theme+'-'+scheme);
       }
@@ -65,5 +87,5 @@ module.exports=async({evaluate,until,command,sessionId,layouts,checks,capture})=
   await command('Emulation.setEmulatedMedia',{features:[]},sessionId);
   await evaluate(`liveValue=headerOriginal;document.documentElement.dataset.theme=headerTheme;
     ReportView.setUnit('credits');show(current);`);
-  checks.push('360/520/768/1280/1920px × Classic/Web light/dark × 0/1/2/3/6/8 accounts × Credits/USD: centered/reflowed geometry, long labels, large totals, compact bars, 44px target and no overflow');
+  checks.push('360/520/768/1024/1366/1920px x Classic/Web light/dark x 0/1/2/3/6/8 accounts x Credits/USD: common left label/track baseline, centered collective group, three-line internally centered Today, no divider, long labels/large totals, compact bars, 44px target and no overflow');
 };

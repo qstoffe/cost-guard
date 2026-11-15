@@ -19,19 +19,21 @@ def main():
     results.mkdir(exist_ok=True)
     environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
     for scope in ("opening", "opening-races", "header", "dashboard", "previews"):
-        output = results / f"watch-{scope}.json"
-        result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
-            browser, str(output), "1", "1", scope + "-only"],
-            cwd=ROOT, env=environment, timeout=150, check=False)
-        evidence = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
-        notice("watch-" + scope, dict(outcome=evidence.get("outcome", "FAIL"),
-            checks=evidence.get("checks", []), layouts=len(evidence.get("layouts", [])),
-            error=evidence.get("error"), phase=evidence.get("phase"),
-            diagnostic=evidence.get("diagnostic", dict(returncode=result.returncode)),
-            limitations=evidence.get("limitations", [])))
-        result.check_returncode()
-        if evidence.get("outcome") != "PASS":
-            raise SystemExit("Watch evidence did not pass")
+        for zoom in (("1", "1.25", "1.5", "2") if scope == "header" else ("1",)):
+            label = f"watch-{scope}" + (f"-zoom-{zoom}" if zoom != "1" else "")
+            output = results / f"{label}.json"
+            result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
+                browser, str(output), "1", zoom, scope + "-only"],
+                cwd=ROOT, env=environment, timeout=150, check=False)
+            evidence = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
+            notice(label, dict(outcome=evidence.get("outcome", "FAIL"), zoom=zoom,
+                checks=evidence.get("checks", []), layouts=len(evidence.get("layouts", [])),
+                error=evidence.get("error"), phase=evidence.get("phase"),
+                diagnostic=evidence.get("diagnostic", dict(returncode=result.returncode)),
+                limitations=evidence.get("limitations", [])))
+            result.check_returncode()
+            if evidence.get("outcome") != "PASS":
+                raise SystemExit("Watch evidence did not pass")
 
 
 if __name__ == "__main__":
