@@ -53,10 +53,10 @@ async function main() {
   assert.deepEqual(action.root.children, [action.button, action.notice], 'one action and one quiet live region');
   assert.equal(action.notice.attributes.role, 'status'); assert.equal(action.notice.textContent, '');
   assert.equal(action.button.passive, false, 'the action itself owns non-pinning help');
-  assert.match(action.button.help, /redacts sensitive transcript and file data/);
+  assert.equal(action.button.help,'Export a sanitized point-in-time snapshot. Review the file before sharing.');
   assert.match(action.button.help, /Review the file before sharing/);
   assert.match(action.button.help, /point-in-time snapshot/);
-  assert.match(action.button.help, /otherwise your browser handles/);
+  assert.doesNotMatch(action.button.help, /\n/,'privacy reminder remains concise; native picker/fallback behavior is tested below');
   action.update('refreshed', true); assert.equal(action.notice.textContent, '', 'refresh cannot restore passive advice');
   action.update('selected', true, 'Fix:Auth|Tests?');
   window.showSaveFilePicker = async options => {

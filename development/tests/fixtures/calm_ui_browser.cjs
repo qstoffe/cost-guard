@@ -8,7 +8,7 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
     window.quietRevision=current.detail.data.revision;window.quietFocus=current.detail.root.querySelector('a');
     quietFocus.focus();window.quietTop=current.detail.scroll.getBoundingClientRect().top;`);
   await fixture('detail-quiet-stall');
-  await run(`await current.detail.load()`);
+  await run(`await current.detail.pendingLoad;await current.detail.poll()`);
   const internal = await fixture('detail-observe');
   assert.ok(internal.entries.some(entry=>entry.reason==='detail_not_admitted'));
   const silent = async () => {
@@ -21,7 +21,7 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
     await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]});
     await evaluate(`document.documentElement.dataset.theme='${theme}'`);
-    await run(`await current.detail.load()`);
+    await run(`await current.detail.pendingLoad;await current.detail.poll()`);
     await silent();
     const facts = await evaluate(`({warning:current.detail.status.getBoundingClientRect().height,
       retry:current.detail.retry.getBoundingClientRect().height,loader:current.detail.loader.root.getBoundingClientRect().height,
@@ -34,7 +34,8 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   }
   assert.equal(await evaluate('current.detail.footer.textContent===quietFooter'),true);
   await fixture('detail-quiet-recover');
-  await run(`await current.detail.load()`);
+  // Observe only: the existing poll owner must discover the fresh acquisition.
+  // A forced read here would not prove autonomous browser recovery.
   try {
     await until('current.detail?.data?.total===1002 && !current.detail.busy');
   } catch (_) {
@@ -48,8 +49,9 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   checks.push('120s unadmitted loaded detail: typed failure, no warning/Retry/ARIA/layout/focus change; existing owner re-admits after 30s cooldown and publishes 1002 fresh rows without a click');
   const originalApi = await evaluate(`!!current.detail.api`);
   assert.equal(originalApi,true);
-  await run(`window.quietApi=current.detail.api;current.detail.api=async()=>{throw new Error('connection_timeout')};
-    await current.detail.load();current.detail.api=quietApi`);
+  await run(`await current.detail.pendingLoad;window.quietApi=current.detail.api;
+    try{current.detail.api=async()=>{throw new Error('connection_timeout')};await current.detail.poll()}
+    finally{current.detail.api=quietApi}`);
   await silent();
   checks.push('passive asynchronous exception retains source-qualified history with no 500ms busy retry or user affordance');
   // Real route composition and popovers, with controlled benign presentation
