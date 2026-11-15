@@ -67,7 +67,7 @@ def prompt(value, *, details=False):
         abort_at_ms running_cost_warning ictx_price_threshold billed_cost completed_successfully execution_unverified
         next_context_warning_severity next_context_cost_multiplier background_kinds background_started_ms
         background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort recorded_selections
-        subagent_active parent_outcome parent_terminal_time_ms""")
+        subagent_active parent_outcome parent_terminal_time_ms has_model_details""")
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),
                                       ("incoming_context_ccost_usage_missing", not value.incoming_context_ccost_known),
                                       ("extra_ccost_usage_missing", not value.extra_ccost_known),
@@ -229,9 +229,10 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models has_model_details linked_agent_count ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
             (("model_help", session_model_help(item)), ("effort_help", session_effort_help(item)),
-             ("mini_session_cost", True), ("mini_cost_groups", mini_groups(item.cost_groups, complete=item.complete)),
+              ("mini_session_cost", True), ("mini_cost_groups", mini_groups(item.cost_groups, complete=item.complete)),
+              ("mini_missing_agents", int(bool(item.linked_agent_count and not any(part.agent for part in item.cost_groups)))),
              ("ccost_unavailable", issue_records(item.ccost_unavailable))))
             for item in report.session_usage),
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,

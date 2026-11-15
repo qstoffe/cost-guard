@@ -353,6 +353,11 @@ class ReportService:
             if catalog_models:
                 from .session_models import model_fields
                 row = replace(row, **model_fields(item, catalog))
+            else:
+                from .model_details import has_model_details, linked_agents
+                agents = {sid for record in item.bundle.prompts for sid in linked_agents(record)}
+                row = replace(row, has_model_details=has_model_details(item.bundle.trace_entries, len(agents)),
+                              linked_agent_count=len(agents))
             rows.append(row)
         return tuple(rows)
 

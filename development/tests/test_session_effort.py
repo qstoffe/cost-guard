@@ -51,6 +51,7 @@ class SessionEffortTests(unittest.TestCase):
         mixed = self.row((selected_default, replace(self.entry, selected_effort="high", message_id="second")))
         self.assertEqual((mixed.effort, mixed.effort_key), ("Multiple efforts", "multiple"))
         self.assertFalse(mixed.multiple_models)
+        self.assertTrue(mixed.has_model_details)
         self.assertEqual({part.evidence.selected for part in mixed.effort_contributors}, {"default", "high"})
         report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", session_usage=(mixed,))
         help_text = project(report, "UTC").to_json()["session_usage"][0]["effort_help"]

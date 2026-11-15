@@ -115,6 +115,7 @@ class PromptProjection:
     cost_parts: tuple[PromptCostPart, ...] = ()
     recorded_selections: tuple[str, ...] = ()  # Saved replies without request usage; not contributors.
     agent_coverage: tuple[AgentCoverage, ...] = ()
+    has_model_details: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +185,8 @@ class SessionUsageRow:
     effort_pending: bool = False
     main_models: tuple[SessionModel, ...] = ()
     subagent_models: tuple[SessionModel, ...] = ()
+    has_model_details: bool = False
+    linked_agent_count: int = 0
     main_ccost: Decimal = Decimal(0)
     subagent_ccost: Decimal = Decimal(0)
     cost_groups: tuple[SessionCostGroup, ...] = ()

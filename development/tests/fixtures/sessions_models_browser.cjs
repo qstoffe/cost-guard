@@ -11,7 +11,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(ascending[0][1],'Model-00');
   assert.equal(await evaluate('current.catalog.body.rows[0].cells[2].textContent'),'Model-00*');
   assert.equal(await evaluate('current.catalog.body.rows[1].cells[2].textContent'),'Model-01');
-  assert.equal(await evaluate('current.catalog.body.rows[2].cells[2].textContent'),'Model-02');
+   assert.equal(await evaluate('current.catalog.body.rows[2].cells[2].textContent'),'Model-02*');
   const duration = await evaluate(`(()=>{
     const view=current.catalog,values=view.data.view.session_usage,target=view.body.rows[0].cells[5].firstChild;
     const states=[];
@@ -40,15 +40,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('window.modelTarget=current.catalog.body.rows[0].cells[2].firstChild;modelTarget.focus()');
   await until('document.getElementById("context-help")?.matches(":popover-open")');
   const help = await evaluate('document.getElementById("context-help").textContent');
-  assert.match(help,/Main models used in session\n• main-provider\/Earlier[\s\S]*• main-provider\/Model-00/);
-  assert.match(help,/\n\nSub-agents used in session\n• child-provider\/Child/);
+   assert.match(help,/Session Models: main-provider\/Earlier[\s\S]*Session Models: main-provider\/Model-00/);
+   assert.match(help,/\nSub Agents: child-provider\/Child/);
   await fixture('models-update');
   await until('document.getElementById("context-help").textContent.includes("child-provider/Child-new")');
   assert.equal(await evaluate('document.activeElement===modelTarget && modelTarget.isConnected'),true);
   await evaluate('current.catalog.body.rows[1].cells[2].firstChild.focus()');
-  assert.doesNotMatch(await evaluate('document.getElementById("context-help").textContent'),/Sub-agents/);
+   assert.doesNotMatch(await evaluate('document.getElementById("context-help").textContent'),/Sub Agents/);
   await evaluate('current.catalog.body.rows[2].cells[2].firstChild.focus()');
-  assert.match(await evaluate('document.getElementById("context-help").textContent'),/Sub-agents used in session\n• main-provider\/Model-02/);
+   assert.match(await evaluate('document.getElementById("context-help").textContent'),/Sub Agents: main-provider\/Model-02/);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await evaluate('document.activeElement.blur()');
   const point = await evaluate('(()=>{const r=modelTarget.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
@@ -64,7 +64,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('current.catalog.next.click()');
   await until('current.catalog.data.offset===25 && !current.catalog.busy');
   assert.equal(await evaluate('current.catalog.body.rows.length'),5);
-  assert.equal(await evaluate('current.catalog.body.rows[4].cells[2].textContent'),'N/A');
+   assert.equal(await evaluate('current.catalog.body.rows[4].cells[2].textContent'),'N/A*');
   assert.match(await evaluate('current.catalog.body.rows[4].value.display.model_help'),/No attributable executed main-thread model[\s\S]*Sub-agents/);
   await evaluate("location.hash='#/sessions?period=today&sort=model&direction=-1'");
   await until('current.catalog.data.direction===-1 && !current.catalog.busy');

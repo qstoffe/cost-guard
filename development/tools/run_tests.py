@@ -97,6 +97,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_sessions_calendar_cache.py",
     "test_session_effort.py",
     "test_session_models.py",
+    "test_model_details.py",
     "test_session_export.py",
     "test_session_activity.py",
     "test_session_quota.py",

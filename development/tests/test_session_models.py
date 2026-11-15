@@ -64,6 +64,8 @@ class SessionModelTests(unittest.TestCase):
                 row = self.row(main, children)
                 wire = self.wire(row)
                 self.assertEqual((name, mixed), (row.model, row.multiple_models))
+                self.assertEqual(bool(children) or mixed, row.has_model_details)
+                self.assertEqual(row.has_model_details, wire["has_model_details"])
                 self.assertEqual(expected_main, tuple(p.model for p in row.main_models))
                 self.assertEqual(expected_child, tuple(p.model for p in row.subagent_models))
                 help_text = wire["display"]["model_help"]
@@ -147,8 +149,11 @@ class SessionModelTests(unittest.TestCase):
         missing.pop("main_models")
         malformed = dict(cached.payload, main_models=[{"provider": "p"}])
         wrong_star = dict(cached.payload, multiple_models=not cached.payload["multiple_models"])
+        wrong_details = dict(cached.payload, has_model_details=not cached.payload["has_model_details"])
         for payload, algorithm in ((cached.payload, "session-summary-5"), (missing, ALGORITHM),
-                                   (malformed, ALGORITHM), (wrong_star, ALGORITHM)):
+                                   (malformed, ALGORITHM), (wrong_star, ALGORITHM),
+                                   (wrong_details, ALGORITHM),
+                                   (dict(cached.payload, has_model_details=1), ALGORITHM)):
             self.service.cache_repository.put(NAMESPACE, key, payload, source_revision=revision, algorithm_version=algorithm)
             with patch.object(self.service, "_analyze", wraps=self.service._analyze) as analyze:
                 self.assertEqual(original, session_summary(self.service, root, revision)[0])

@@ -72,7 +72,16 @@ const SessionDetail = (() => {
     const targets = [document.activeElement, ...(selection && !selection.isCollapsed ? [selection.anchorNode, selection.focusNode] : [])].filter(Boolean);
     return node => targets.some(target => node.contains(target));
   }
-  function cells(value) {
+  function updateModel(node, value) {
+    const name = value.watch_model || value.model_effort || 'N/A';
+    ReportView.text(node, name + (value.has_model_details ? '*' : ''));
+    if (value.linked_agent_count) node.setAttribute('aria-label',
+      `${name} · Linked subagents participated (${value.linked_agent_count})`);
+    else if (value.has_model_details) node.setAttribute('aria-label',
+      `${name} · Multiple models or different effort levels`);
+    else node.removeAttribute('aria-label');
+  }
+  function cells(value, modelValue = () => value) {
     const label = el('span', undefined, 'session-prompt-label');
     const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
     const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
@@ -82,11 +91,9 @@ const SessionDetail = (() => {
       () => (value.prompt_number == null ? '' : `Prompt #${value.prompt_number}\n`) +
         ReportView.costGroups(value) + (Number.isFinite(value.duration_ms) ?
           '\n\nDuration: ' + ReportView.display(value, 'duration_ms') : ''));
-    const modelName = value.watch_model || value.model_effort || 'N/A';
-    const model = ContextHelp.value(el('span', modelName + (value.linked_agent_count ? '*' : '')),
-       () => ReportView.display(value, 'model_detail_help'));
-    if (value.linked_agent_count) model.setAttribute('aria-label',
-      `${modelName} · Linked subagents participated (${value.linked_agent_count})`);
+    const model = ContextHelp.value(el('span'),
+       () => ReportView.display(modelValue(), 'model_detail_help'));
+    updateModel(model, value);
     const calls = ContextHelp.value(el('span', value.display?.calls ?? String(value.calls ?? 'N/A')),
       () => value.watch_calls_help || 'Model/effort request details unavailable.');
     const effort = el('span', value.watch_effort || 'N/A');
@@ -379,13 +386,26 @@ const SessionDetail = (() => {
         const signature = JSON.stringify(value);
         const withdrawn = ['invalidated', 'unavailable'].includes(data.value_authority?.rows?.[value.event_id]);
         const protectedRow = !withdrawn && protectedNode(row);
+        row.modelValue = value;
+        const model = row.children[1]?.firstChild;
+        const selection = window.getSelection?.();
+        const selectedModel = selection && !selection.isCollapsed &&
+          [selection.anchorNode, selection.focusNode].some(target => target && model?.contains(target));
+        if (model && !selectedModel) {
+          updateModel(model, value);
+          ContextHelp.refresh(model);
+        }
         if (withdrawn) ContextHelp.dismiss(row);
         if (row.signature !== signature && protectedRow) this.pendingRender = true;
         if (row.signature !== signature && !protectedRow) {
-          const content = cells(value);
-          row.replaceChildren(...content.map((item, column) => {
-            const td = el('td'); td.append(typeof item === 'object' ? item : el('span', () => cellsText(value, column))); return td;
-          })); row.signature = signature;
+          const content = cells(value, () => row.modelValue);
+          content.forEach((item, column) => {
+            const td = row.children[column] || el('td');
+            // A gesture owns its ancestor chain too: never detach/reparent Model.
+            if (column !== 1 || !model)
+              td.replaceChildren(typeof item === 'object' ? item : el('span', () => cellsText(value, column)));
+            if (!td.parentNode) row.append(td);
+          }); row.signature = signature;
         }
         if (deferOrder) { if (!row.parentNode) append.push(row); }
         else if (index >= initialLength) append.push(row);

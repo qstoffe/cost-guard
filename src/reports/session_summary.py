@@ -21,7 +21,7 @@ from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-10"
+ALGORITHM = "session-summary-11"
 NAMESPACE = "session-summary"
 
 
@@ -116,7 +116,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and all(value.is_finite() and value >= 0 for value in (row.main_ccost, row.subagent_ccost))
                     and row.main_ccost + row.subagent_ccost == row.ccost
                     and isinstance(row.title, str) and isinstance(row.model, str)
-                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending", "activity_qualified"))
+                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "has_model_details", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending", "activity_qualified"))
                     and row.activity_qualified
                     and (row.last_activity_ms is None or type(row.last_activity_ms) is int and row.last_activity_ms > 0)
                     and row.context_qualified
