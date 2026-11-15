@@ -1,11 +1,15 @@
-// FR707 changes CCost amounts only; other pending cards remain Loading-only.
-module.exports = (selector, root = 'document') => `(() => {
+// FR731: unknown costs are N/A; qualified same-scope costs retain exact amounts.
+module.exports = (selector, root = 'document', expectedCosts = 'null') => `(() => {
   const cards=[...${root}.querySelectorAll(${JSON.stringify(selector)})];
   const cost=new Set(['hourly-rate','total-cost','average-cost','expensive-session']);
-  return cards.length===12 && cards.every(card => cost.has(card.dataset.metric) ?
-    [...card.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')]
-      .every(value => value.textContent==='No workdays' && value.closest('.ai-stat-rate')?.getAttribute('aria-label')==='Workday average' ||
-        /^\\$?[<\\d]/.test(value.textContent) && !/N\\/A|Loading|Unavailable/.test(value.textContent)) &&
-      !!card.querySelector('.ai-stat-value') :
-    card.textContent==='Loading…' && card.childNodes.length===1 && card.children.length===0);
+  const expected=${expectedCosts};
+  return cards.length===12 && cards.every(card => {
+    if(!cost.has(card.dataset.metric))
+      return card.textContent==='Loading…' && card.childNodes.length===1 && card.children.length===0;
+    const values=[...card.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')]
+      .map(value=>value.textContent);
+    return values.length>0 && !!card.querySelector('.ai-stat-value') &&
+      (expected ? JSON.stringify(values)===JSON.stringify(expected[card.dataset.metric]) :
+        values.every(value=>value==='N/A'));
+  });
 })()`;

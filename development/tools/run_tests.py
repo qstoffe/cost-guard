@@ -175,6 +175,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_v2_synthetic_attribution.py",
     "test_v2_tool_continuations.py",
     "test_subagent_attribution.py",
+    "test_model_subagent_history.py",
     "test_child_links.py",
     "test_threshold_multiplier.py",
     "test_watch_lifecycle.py",

@@ -90,6 +90,10 @@ const ReportView = (() => {
     return costKeys.has(key) && (value == null || ['', 'N/A', 'Not Applicable', '—', '-', 'Loading…', 'Unavailable'].includes(value)) ?
       'N/A' : value ?? 'N/A';
   };
+  // AI Stats prepares concise provider/model + By Effort help. Do not route it
+  // through the generic prompt identity shortener above or lose the effort rows.
+  const aiStatsModelHelp = row => row?.display_units?.[unit]?.model_help ??
+    row?.display?.model_help ?? row?.model_help ?? '';
   class CostDisplay {
     constructor() { this.values = new Map(); }
     select(row, scope, key = 'ccost', complete = row?.complete === true || row?.unresolved_cost === false, raw = row?.[key], extra = []) {
@@ -822,5 +826,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

@@ -31,6 +31,14 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   await evaluate(`window.__racer=document.querySelector('.ai-stat-racer');current.stats.update(current);`);
   assert.equal(await evaluate(`document.activeElement===__podiumHeading && __racer===document.querySelector('.ai-stat-racer')`),true);
   await evaluate(`window.__modelLabel=document.querySelector('[data-metric="token-rate"] .ai-stat-model');__modelLabel.focus();`);
+  const helpEvidence=await evaluate(`(() => {
+    const row=current.result.view.ai_stats.find(r=>r.period===current.period).metrics
+      .find(m=>m.metric==='token-rate').podium[0];
+    return {focused:document.activeElement===__modelLabel,visible:!document.getElementById('context-help').hidden,
+      text:document.getElementById('context-help').textContent,prepared:row.model_help,
+      display:ReportView.display(row,'model_help'),units:row.display_units};
+  })()`);
+  assert.equal(helpEvidence.text,helpEvidence.prepared,JSON.stringify(helpEvidence));
   await until(`document.getElementById('context-help').textContent.includes('synthetic/model-')`);
   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/\n\nBy Effort:\n• Default — \d+ tok\/s$/);
   await evaluate(`current.stats.update(current);`);

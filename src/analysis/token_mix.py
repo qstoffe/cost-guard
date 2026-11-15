@@ -157,8 +157,8 @@ def model_token_mixes(
 ) -> tuple[ModelTokenMix, ...]:
     """Group requests by model identity.
 
-    Calls count every attributed request. Prompts count unique initiating user
-    prompts per model, so one prompt may appear on several model rows.
+    Calls count every attributed request. Prompts count distinct caller-supplied
+    logical prompt identities per model; one may appear on several model rows.
     """
     groups: dict[str, list[TraceEntry]] = {}
     for entry in entries:

@@ -280,6 +280,10 @@ def main():
                             status=job['status'], progress=job['progress']) for job in jobs._jobs.values()],
                         loads=[json.loads(line) for line in loads.read_text().splitlines()] if loads.exists() else [])), flush=True)
                     continue
+                if command == 'model-attribution' and sys.argv[2:] == ['--ai-stats']:
+                    from development.tests.fixtures.model_subagent_history import attribution_views
+                    print(json.dumps(attribution_views()), flush=True)
+                    continue
                 if command == 'stats-evidence' and sys.argv[2:] == ['--ai-stats']:
                     print(json.dumps(evidence_views()), flush=True)
                     continue

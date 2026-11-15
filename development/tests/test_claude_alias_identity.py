@@ -266,7 +266,7 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
         self.assertIsNone(publisher_for(catalog(), 'sonnet'))
         original.model_availability_source.ids = ('claude-agent/sonnet',)
         filtered = reopen(original, shared=True).build_token_mix_history()
-        self.assertEqual([LABEL], [row.model for row in filtered.model_token_mix])
+        self.assertEqual(report, filtered, 'historical alias/backend identities are not a selectable roster')
 
     def test_other_moving_selections_and_missing_pinned_rates_are_honest(self):
         reference = catalog()
