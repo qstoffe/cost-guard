@@ -21,6 +21,7 @@ class CatalogObservation:
     revisions: Mapping[str, str]
     active_candidates: frozenset[str] = frozenset()
     live_candidates: frozenset[str] = frozenset()
+    source_epoch: str | None = None
 
 
 def _root_map(sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, str]]:
@@ -60,7 +61,8 @@ def observe_catalog(source: SessionSource, *, session_id: str | None = None,
     active = frozenset(root_by_session[item] for item in candidates if item in root_by_session)
     live = (active if getattr(source, "watch_candidates_have_live_evidence", False) else
             frozenset(root_by_session[item.session_id] for item in sessions if item.active is True and item.session_id in root_by_session))
-    return CatalogObservation(sessions, roots, root_by_session, revisions, active, live)
+    return CatalogObservation(sessions, roots, root_by_session, revisions, active, live,
+                              getattr(source, "observation_epoch", None))
 
 
 @dataclass(frozen=True, slots=True)

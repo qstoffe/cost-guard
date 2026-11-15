@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.compact_reports import report_service
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.application.session_catalog import SessionCatalog, SORTS
 from src.analysis.timezones import local_date_range
 from src.reports.models import SessionUsageRow
@@ -28,7 +28,8 @@ class SessionPeriodTests(unittest.TestCase):
 
     def catalog(self, activities, *, zone="UTC"):
         source = SyntheticMonthSource(len(activities), 1, month_start_ms=self.now - 730 * DAY)
-        for (key, snapshot), activity in zip(tuple(source.snapshots.items()), activities):
+        for index, ((key, snapshot), activity) in enumerate(zip(tuple(source.snapshots.items()), activities)):
+            snapshot = make_root_snapshot(index, 1, month_start_ms=activity - 300 - index * 60_000)
             root = replace(snapshot.root, created_at_ms=min(activity, snapshot.root.created_at_ms),
                            updated_at_ms=activity)
             source.snapshots[key] = replace(snapshot, root=root, sessions=(root,), complete=True)
@@ -39,8 +40,10 @@ class SessionPeriodTests(unittest.TestCase):
     def qualify(self, catalog):
         for index, (key, root) in enumerate(catalog.roots.items()):
             catalog.rows[key] = SessionUsageRow(key, root.title, "Model", False, Decimal(index), index,
-                context_tokens=index, effort="High", effort_key="high")
+                context_tokens=index, effort="High", effort_key="high",
+                last_activity_ms=catalog.activity[key])
             catalog.valid[key] = catalog.revisions[key], self.clock
+            catalog.activity_valid[key] = catalog.revisions[key]
 
     def test_cold_5000_root_sorts_hydrate_only_thirty_today_then_reuse_and_revise(self):
         activities = ([self.now - 1000] * 30 + [self.now - 3 * DAY] * 40 +
@@ -115,7 +118,7 @@ class SessionPeriodTests(unittest.TestCase):
                         # Leases are bounded; this test has finished this browser.
                         catalog.leases.pop(page["token"])
 
-    def test_half_open_bounds_missing_future_activity_and_child_last_activity(self):
+    def test_metadata_candidates_are_provisional_until_event_bounds_are_known(self):
         midnight = timestamp("2026-11-13T00:00:00")
         source, catalog = self.catalog([midnight - 1, midnight, self.now, self.now + 1, 0, self.now - DAY])
         root = source.snapshots["root-0005"]
@@ -125,13 +128,21 @@ class SessionPeriodTests(unittest.TestCase):
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         page = catalog.page()
         self.assertEqual({row["session_id"] for row in page["view"]["session_usage"]},
-                         {"root-0001", "root-0002", "root-0005"})
+                         {"root-0001", "root-0002", "root-0003", "root-0004", "root-0005"})
+        self.assertTrue(page["membership_pending"])
+        self.assertTrue(all(row["last_activity_ms"] is None for row in page["view"]["session_usage"]))
+        self.qualify(catalog)
+        # A child's metadata qualifies discovery only, not the displayed event.
+        catalog.rows["root-0005"] = replace(catalog.rows["root-0005"], last_activity_ms=self.now - DAY)
+        confirmed = catalog.page(token=page["token"])
+        self.assertEqual({row["session_id"] for row in confirmed["view"]["session_usage"]},
+                         {"root-0001", "root-0002"})
         all_time = catalog.page(token=page["token"], period="all")
         rows = {row["session_id"]: row for row in all_time["view"]["session_usage"]}
         self.assertEqual(len(rows), 6)
         self.assertIsNone(rows["root-0004"]["last_activity_ms"])
         self.assertIsNone(rows["root-0003"]["last_activity_ms"])
-        self.assertEqual(rows["root-0005"]["last_activity_ms"], self.now - 1000)
+        self.assertEqual(rows["root-0005"]["last_activity_ms"], self.now - DAY)
 
     def test_stockholm_dst_day_month_year_and_exact_calendar_boundaries(self):
         for date, hours in (("2026-03-29", 23), ("2026-10-25", 25)):

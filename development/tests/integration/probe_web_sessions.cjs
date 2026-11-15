@@ -45,9 +45,9 @@ async function main() {
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId}=await command('Target.attachToTarget',{targetId,flatten:true});
     await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
-    const evaluate=async expression => {
+     const evaluate=async (expression, userGesture=false) => {
       lastExpression=expression;
-      const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId).catch(async error=>{
+       const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture},sessionId).catch(async error=>{
         await command('Runtime.terminateExecution',{},sessionId).catch(()=>{});
         const state=await command('Runtime.evaluate',{expression:'JSON.stringify(window.detailProbe)',returnByValue:true},sessionId).catch(()=>({}));
         evidence.debug=state; throw new Error(error.message+': '+expression.slice(0,160)+'; '+JSON.stringify(state));
@@ -64,6 +64,15 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+         if (mode === '--prompt-activity-parity') {
+           const details = await require('../fixtures/catalog_activity_browser.cjs')({evaluate, until, fixture,
+             command:(method, params) => command(method, params, sessionId)});
+           checks.push(...details.checks);
+           assert.deepEqual(errors, []);
+           evidence = {outcome:'PASS',browser:version.product,checks,measurements:details.measurements,
+             inference_calls:0,personal_profile:false,desktop_effects:false};
+           console.log(JSON.stringify(evidence)); return;
+         }
            if (mode === '--catalog-real-churn' || mode === '--catalog-real-recovery') {
             const probe = require('../fixtures/sessions_source_browser.cjs');
             const details = await (mode === '--catalog-real-recovery' ? probe.recovery : probe)({evaluate, until,
@@ -289,7 +298,9 @@ async function main() {
        current.detail.sourceStatus=data=>{detailStates.push(data.state);return sourceStatus(data);}`);
      await fixture('fail');
      await until('detailStates.includes("source_unavailable")');
-     assert.equal(await evaluate('current.detail.status.hidden && current.detail.status.textContent==="" && current.detail.loader.root.hidden'),true);
+      assert.equal(await evaluate('current.detail.loader.root.hidden'),true);
+      assert.equal(await evaluate('current.detail.status.hidden'),false);
+      assert.match(await evaluate('current.detail.status.textContent'),/Source unavailable/);
     assert.equal(await evaluate('document.querySelectorAll("tbody tr").length'),1002);
      await evaluate('detailStates.length=0');
      await fixture('recover'); await until('detailStates.includes("observed")');
@@ -311,7 +322,7 @@ async function main() {
           await until('current.section === "token-mix"');
           await until('current.result && !current.loading');
          await until('document.querySelectorAll(".token-mix-table").length===2');
-          assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[9,9]);
+           assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[10,9]);
        }
        if (route==='sessions') await until('current.catalog?.data?.total===121');
        if (route==='sessions/root-0000') {
@@ -358,7 +369,7 @@ async function main() {
          }
        }
      }
-     checks.push('watch-sessions-detail-models-two-nine-column-token-mix-parity-three-themes-four-widths-two-zooms');
+      checks.push('watch-sessions-detail-models-ten/nine-column-token-mix-parity-three-themes-four-widths-two-zooms');
      assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
       inference_calls:0,personal_profile:false,desktop_effects:false};

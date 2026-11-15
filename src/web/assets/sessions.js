@@ -3,7 +3,7 @@
 const SessionsCatalog = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
-    ['activity', 'Last activity', 'The most recent recorded activity in this session.'],
+    ['activity', 'Last activity', 'Latest source-confirmed prompt start or completion, including attributable child work and compaction. Metadata edits and archive times do not count. Periods discover candidates through source catalog metadata, then verify prompt-based membership; All time also covers older catalog entries.'],
     ['name', 'Session name', 'The session title. Open the name for its complete live prompt history.'],
     ['model', 'Model', ReportView.headerHelp.model],
     ['ccost', 'CCost', ReportView.headerHelp.sessionCost],
@@ -62,7 +62,8 @@ const SessionsCatalog = (() => {
       for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
         if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
       });
-      this.root.append(this.periods, this.status, pan, pager);
+      const scope = el('p', 'Periods verify prompt activity among source catalog candidates. Stale catalog metadata may omit undiscovered sessions; All time expands discovery.', 'sessions-candidate-scope');
+      this.root.append(this.periods, scope, this.status, pan, pager);
       this.loader = new ReportLoading.View(); this.loader.root.hidden = true;
       this.loader.bar.setAttribute('aria-label', 'Sessions loading progress');
       this.task = el('p', '', 'sessions-loading-task');
@@ -300,11 +301,11 @@ const SessionsCatalog = (() => {
         row.className = running ? 'session-running' : '';
         if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
       }
-      // A requested scoped sort is not applied until every eligible key is valid. Keep
+      // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
       if (this.pendingNavigation(data) || data.pending_sort) {
         if (data.pending_sort && !this.operation) {
-          this.status.textContent = 'Provisional Last activity order; requested global sort is still indexing.';
+          this.status.textContent = 'Provisional candidate order; prompt activity, period membership and requested sort are still being verified.';
           this.status.hidden = false;
         }
         // Qualified metadata may render while independent scalars are acquired.
@@ -332,7 +333,8 @@ const SessionsCatalog = (() => {
         this.canonicalPeriod = false;
       }
       // A safely applied replacement completes recovery, not a lasting warning.
-      this.status.textContent = data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' : '';
+      this.status.textContent = data.state !== 'observed' && !data.view.session_usage.length ? 'Loading sessions…' :
+        data.order_state === 'provisional' ? 'Pinned candidate page: membership and order were provisional when opened.' : '';
       this.status.hidden = !this.status.textContent;
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
@@ -350,7 +352,7 @@ const SessionsCatalog = (() => {
       if (restoreFocus) this.actionFocus = completed.focus;
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + data.size, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` :
-        data.state === 'observed' ? `No sessions in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable';
+        data.state === 'observed' ? `No confirmed matches among catalog candidates in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable';
       const link = (node, offset, enabled) => {
         node.destination = enabled ? destination(offset, data.epoch, data.sort, data.direction, data.period) : null;
       };
@@ -419,7 +421,14 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-          ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone));
+          ContextHelp.value(row.activity, () => {
+            const value = row.value, state = value.activity_state || 'ready';
+            return [ReportView.activityHelp(value.last_activity_ms, this.renderTimezone),
+              state === 'retained' ? 'Retained same-source prompt event; current revision is awaiting verification.' :
+              state === 'partial' ? 'Partial history: observed prompt event, not yet a verified latest activity.' :
+              state === 'pending' ? 'Prompt activity is awaiting source observation.' :
+              state === 'unavailable' ? 'Prompt activity unavailable.' : 'Source-confirmed prompt event.'].filter(Boolean).join('\n');
+          });
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             ContextHelp.value(node, () => {
@@ -441,7 +450,8 @@ const SessionsCatalog = (() => {
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
         }
         row.className = value.running ? 'session-running' : '';
-        ReportView.text(row.activity, ReportView.timestamp(value.last_activity_ms, this.renderTimezone));
+        ReportView.text(row.activity, value.last_activity_ms == null && value.activity_state === 'pending' ?
+          'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
         const texts = [(value.model || 'N/A') + (value.multiple_models && value.model && value.model !== 'N/A' ? '*' : ''),
