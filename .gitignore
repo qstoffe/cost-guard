@@ -5,6 +5,7 @@
 /cache/
 /diagnostics/
 /logs/
+/development/logs/
 
 # Generated release artifacts; never source and never nested into a release ZIP.
 /releases/

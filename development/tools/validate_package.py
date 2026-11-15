@@ -170,6 +170,8 @@ def check_required_layout(root: Path, results: Results) -> None:
     for name in sorted(RETIRED_TOP_LEVEL):
         if (root / name).exists():
             results.fail("retired layout", f"retired top-level path must not ship: {name}")
+    if (root / "development/logs").exists():
+        results.fail("runtime artifact", "generated development/logs must not ship")
     for path in root.glob("*.py"):
         results.fail("retired layout", f"root Python entrypoints must live under src/: {path.name}")
 
@@ -182,7 +184,7 @@ def check_required_layout(root: Path, results: Results) -> None:
     gitignore = root / ".gitignore"
     if gitignore.is_file():
         text = gitignore.read_text(encoding="utf-8")
-        for required in ("/cache/", "/diagnostics/", "/logs/", "/releases/", "/config/user-config.jsonc"):
+        for required in ("/cache/", "/diagnostics/", "/logs/", "/development/logs/", "/releases/", "/config/user-config.jsonc"):
             if required not in text:
                 results.fail("gitignore contract", f".gitignore must include {required}")
     results.ok("required layout/runtime-artifact rules checked")
@@ -378,9 +380,17 @@ def check_entrypoint(root: Path, results: Results) -> None:
         results.fail("entry-point architecture", "bootstrap import must occur inside the guarded application callback")
     runtime = root / "src/runtime_errors.py"
     if runtime.exists():
-        disallowed = sorted(m for m in imported_modules(runtime, root) if m.startswith("src.") and m != "src.version")
+        infrastructure = {"src.version", "src.log_paths", "src.log_housekeeping"}
+        disallowed = sorted(m for m in imported_modules(runtime, root) if m.startswith("src.") and m not in infrastructure)
         if disallowed:
             results.fail("runtime-error architecture", f"minimal reporter imports application layers: {disallowed}")
+        for name in ("log_paths", "log_housekeeping"):
+            helper = root / "src" / (name + ".py")
+            if helper.exists():
+                disallowed = sorted(m for m in imported_modules(helper, root)
+                                    if m.startswith("src.") and m not in infrastructure)
+                if disallowed:
+                    results.fail("runtime-error architecture", f"log infrastructure imports application layers: {disallowed}")
     results.ok("thin entry-point architecture checked")
 
 
@@ -568,6 +578,8 @@ def main(argv: list[str] | None = None) -> int:
             ignored = {name for name in names if name in {".git", "__pycache__"} or name.endswith((".pyc", ".zip"))}
             if current == root:
                 ignored.update(name for name in (".vs", "cache", "diagnostics", "logs", "releases") if name in names)
+            if current == root / "development":
+                ignored.add("logs")
             if current == (root / "config").resolve() and "user-config.jsonc" in names:
                 ignored.add("user-config.jsonc")
             return ignored

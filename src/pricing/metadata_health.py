@@ -1,9 +1,9 @@
 """Persistent, privacy-safe release-metadata health, retry schedule and failure periods.
 
 State survives restarts in `cache/state/model-metadata.json` (bounded). Failure
-periods are appended as JSON lines to `logs/errors/cost-guard-metadata-<date>.log`:
+periods are appended as JSON lines to `development/logs/errors/cost-guard-metadata-<date>.log`:
 first failure, changed failure and bounded repeat summaries, never one line per
-attempt. Actual recovery events go to `logs/recovery/`; legacy state is retained.
+attempt. Actual recovery events go to `development/logs/recovery/`; legacy state is retained.
 Only stable codes, counts, timestamps and public source
 names are written: no URLs with credentials, headers, payloads or messages.
 """
@@ -18,6 +18,7 @@ import threading
 
 from src.version import DISPLAY_VERSION
 from src.cache.metadata_state import migrate_state, persist_state, read_state
+from src.log_paths import WRITE_LOCK, file_lock, log_root, owned_files
 
 from .release_metadata import MetadataAttempt, SourceResult
 
@@ -53,8 +54,8 @@ def recent_events(root: Path, limit: int = 60) -> list[dict]:
     """Bounded whitelisted events for Diagnostics, newest last."""
     events: list[dict] = []
     try:
-        files = [path for folder in ("errors", "recovery")
-                 for path in sorted((Path(root) / "logs" / folder).glob("cost-guard-metadata-????-??-??.log"))[-31:]]
+        files = [path for path, kind in owned_files(Path(root))
+                 if kind in {"errors", "recovery"} and path.name.startswith("cost-guard-metadata-")][-124:]
     except OSError:
         return events
     for path in files:
@@ -69,7 +70,8 @@ def recent_events(root: Path, limit: int = 60) -> list[dict]:
                 continue
             if isinstance(raw, dict) and raw.get("component") == COMPONENT:
                 events.append({key: raw[key] for key in _EVENT_KEYS if key in raw})
-    return sorted(events, key=lambda event: event.get("timestamp", ""))[-limit:]
+    unique = {json.dumps(event, sort_keys=True): event for event in events}
+    return sorted(unique.values(), key=lambda event: event.get("timestamp", ""))[-limit:]
 
 
 class MetadataHealthStore:
@@ -211,11 +213,13 @@ class MetadataHealthStore:
                 "timeout_seconds": result.timeout_seconds, "retry_after_seconds": result.retry_after_seconds,
                 **values}
         folder = "recovery" if event == "recovered" else "errors"
-        path = self.root / "logs" / folder / f"cost-guard-metadata-{datetime.now().astimezone():%Y-%m-%d}.log"
+        path = log_root(self.root) / folder / f"cost-guard-metadata-{datetime.now().astimezone():%Y-%m-%d}.log"
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as target:
-                target.write(json.dumps({k: v for k, v in line.items() if v is not None}, sort_keys=True) + "\n")
+            with WRITE_LOCK:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("a", encoding="utf-8") as target, file_lock(target):
+                    target.write(json.dumps({k: v for k, v in line.items() if v is not None}, sort_keys=True) + "\n")
+                    target.flush()
         except OSError:
             pass  # Logging cannot change metadata recovery or Watch behavior.
 

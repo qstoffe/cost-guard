@@ -7,21 +7,20 @@ Only explicit isolated owners may call recoverable(); all other faults are fatal
 from __future__ import annotations
 
 import _thread
-from datetime import datetime, timedelta
+from datetime import datetime
 import hashlib
 import os
 from pathlib import Path
 import platform
-import re
 import sqlite3
 import sys
 import threading
 import time
 from typing import Callable
 
+from .log_paths import WRITE_LOCK, file_lock, log_root
+
 _active: RuntimeErrors | None = None
-_OWNED = re.compile(r"cost-guard-(?:(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log|crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt)\Z")
-_RECOVERY_FILES = frozenset({"watch-recovery.json"})  # Legacy metadata state is never disposable log history.
 
 
 def _cache_details(exc: BaseException) -> str:
@@ -64,8 +63,11 @@ def emergency(original: BaseException, reporting: BaseException, stream=None) ->
 
 
 class RuntimeErrors:
-    def __init__(self, root: Path, *, mode: str = "startup", stream=None):
+    def __init__(self, root: Path, *, mode: str = "startup", stream=None, private=False):
         self.root = Path(root).resolve()
+        self.log_directory = self.root / "logs" if private else log_root(self.root)
+        self.private = private
+        self.housekeeping = None
         self.mode, self.phase = mode, "initialization"
         self.stream = stream
         self.version = "unknown"
@@ -123,13 +125,15 @@ class RuntimeErrors:
         return digest, frame
 
     def _log_path(self) -> Path:
-        return self.root / "logs/errors" / f"cost-guard-errors-{datetime.now().astimezone():%Y-%m-%d}.log"
+        return self.log_directory / "errors" / f"cost-guard-errors-{datetime.now().astimezone():%Y-%m-%d}.log"
 
     def _append(self, text: str) -> Path:
         path = self._log_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as target:
-            target.write(text + "\n\n")
+        with WRITE_LOCK:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as target, file_lock(target):
+                target.write(text + "\n\n")
+                target.flush()
         return path
 
     def _details(self, exc: BaseException, component: str, severity: str, thread: str) -> str:
@@ -190,7 +194,7 @@ class RuntimeErrors:
     def fatal(self, exc: BaseException, component: str = "application", thread: str | None = None) -> int:
         try:
             with self._lock:
-                directory = self.root / "logs/crashes"
+                directory = self.log_directory / "crashes"
                 directory.mkdir(parents=True, exist_ok=True)
                 stem = f"cost-guard-crash-{datetime.now():%Y%m%d-%H%M%S}-{os.getpid()}"
                 # Exclusive creation is safe across processes and same-second crashes.
@@ -222,25 +226,16 @@ class RuntimeErrors:
         return 1
 
     def cleanup(self) -> None:
-        """Bounded owned-file cleanup; never creates directories or logs."""
-        cutoff = (datetime.now().astimezone() - timedelta(days=30)).timestamp()
-        for folder in ("errors", "crashes", "recovery"):
-            try:
-                directory = self.root / "logs" / folder
-                if directory.is_symlink() or directory.parent.is_symlink():
-                    continue
-                with os.scandir(directory) as entries:
-                    for index, entry in enumerate(entries):
-                        if index >= 2048:
-                            break
-                        try:
-                            if ((_OWNED.fullmatch(entry.name) or (folder == "recovery" and entry.name in _RECOVERY_FILES)) and not entry.is_symlink()
-                                    and entry.is_file(follow_symlinks=False) and entry.stat().st_mtime < cutoff):
-                                os.unlink(entry.path)
-                        except OSError:
-                            pass  # Disposable diagnostics maintenance, not application state.
-            except OSError:
-                pass
+        """Explicit compatibility entry only; never called on the startup path."""
+        if not self.private:
+            from .log_housekeeping import prune_logs
+            prune_logs(self.root)
+
+    def usable(self) -> None:
+        if self.housekeeping is None and not self.private and self.mode not in {"Web", "Diagnostics"}:
+            from .log_housekeeping import LogHousekeeping
+            self.housekeeping = LogHousekeeping(self.root)
+            self.housekeeping.start()
 
     def _coordinate(self, exc: BaseException, component: str, thread: str) -> None:
         # Unknown worker/finalizer roots have no isolation contract. Preserve the
@@ -287,7 +282,6 @@ class RuntimeErrors:
     def run(self, application: Callable[[], int], *, preserve_hooks: bool = False) -> int:
         try:
             self.install()
-            self.cleanup()
             # Stable metadata is optional; a damaged version module is still
             # owned by this boundary, rather than a dependency of the reporter.
             from .version import DISPLAY_VERSION
@@ -309,6 +303,8 @@ class RuntimeErrors:
                 return 1 if self._pending_reported else self.fatal(*self._pending)
             return self.fatal(exc)
         finally:
+            if self.housekeeping is not None:
+                self.housekeeping.close()
             try:
                 self.flush()
             except BaseException:
@@ -339,3 +335,5 @@ def context(*, mode: str | None = None, phase: str | None = None) -> None:
             _active.mode = mode
         if phase is not None:
             _active.phase = phase
+            if phase in {"Watch runtime", "report presentation"}:
+                _active.usable()

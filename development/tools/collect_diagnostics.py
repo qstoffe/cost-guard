@@ -62,6 +62,7 @@ from src.sources.opencode_v1 import OpenCodeV1Source  # noqa: E402
 from src.sources.opencode_v2 import OpenCodeV2Source  # noqa: E402
 from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, mode_heading  # noqa: E402
+from src.log_paths import log_root  # noqa: E402
 from src.runtime_errors import recoverable  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
 from development.tools.diagnostic_connectivity import connectivity_summary
@@ -622,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-network", action="store_true", help="Skip live GitHub pricing/quota requests.")
     parser.add_argument("--snapshots", type=int, default=3, help="Latest root snapshots to inspect per healthy source (default 3).")
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "diagnostics")
+    parser.add_argument("--output-dir", type=Path, default=log_root(ROOT) / "diagnostics")
     parser.add_argument(
         "--test-service-start", action="store_true",
         help="Test the real source startup path if no source is selectable; never stop OpenCode.",

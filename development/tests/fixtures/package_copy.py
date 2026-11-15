@@ -31,6 +31,8 @@ def copy_package(destination: Path) -> Path:
         current = Path(directory).resolve()
         if current == ROOT.resolve():
             ignored.update(name for name in (".vs", "cache", "diagnostics", "logs", "releases") if name in names)
+        if current == (ROOT / "development").resolve():
+            ignored.add("logs")
         if current == (ROOT / "config").resolve() and "user-config.jsonc" in names:
             ignored.add("user-config.jsonc")
         return ignored

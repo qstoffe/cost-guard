@@ -179,6 +179,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_threshold_multiplier.py",
     "test_watch_lifecycle.py",
     "test_runtime_errors.py",
+    "test_log_housekeeping.py",
     "test_zero_data_robustness.py",
     "test_token_mix.py",
     "test_token_mix_periods.py",
@@ -313,7 +314,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
 # is intentionally NOT included wholesale: retain only native startup ownership.
 NATIVE_WEB_PATTERNS = {
     "win32": ("test_windows_web.py", "test_windows_launcher.py", "test_launcher_feedback.py", "test_windows_web_activity.py", "test_windows_clipboard.py",
-              "test_web_browser_links.py") + tuple(
+              "test_web_browser_links.py", "test_log_housekeeping.py") + tuple(
         "test_web_lifecycle.LifecycleTests.test_" + name for name in (
             "managed_host_uses_gui_interpreter_for_console_free_report_children",
             "missing_gui_interpreter_fails_without_spawning_console_host",
@@ -325,7 +326,7 @@ NATIVE_WEB_PATTERNS = {
             "native_identity_query_failure_closes_handle_and_retains_access_reason",
             "os_lock_serializes_and_crash_releases_both_locks",
             "native_process_birth_identity_and_owned_termination")),
-    "darwin": ("test_macos_web.py", "test_macos_app.py", "test_launcher_feedback.py",
+    "darwin": ("test_macos_web.py", "test_macos_app.py", "test_launcher_feedback.py", "test_log_housekeeping.py",
         "test_web_lifecycle.LifecycleTests.test_os_lock_serializes_and_crash_releases_both_locks",
         "test_web_lifecycle.LifecycleTests.test_native_process_birth_identity_and_owned_termination"),
 }

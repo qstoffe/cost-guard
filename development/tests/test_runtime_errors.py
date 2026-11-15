@@ -46,10 +46,10 @@ class RuntimeErrorTests(unittest.TestCase):
         self.temp.cleanup()
 
     def logs(self):
-        return list((self.root / "logs/errors").glob("*.log"))
+        return list((self.root / "development/logs/errors").glob("*.log"))
 
     def crashes(self):
-        return list((self.root / "logs/crashes").glob("*.txt"))
+        return list((self.root / "development/logs/crashes").glob("*.txt"))
 
     def logged(self):
         return "\n".join(path.read_text(encoding="utf-8") for path in self.logs())
@@ -57,6 +57,8 @@ class RuntimeErrorTests(unittest.TestCase):
     def test_healthy_startup_does_not_create_diagnostics(self):
         self.assertEqual(0, self.reporter.run(lambda: 0))
         self.assertFalse((self.root / "diagnostics").exists())
+        self.assertFalse((self.root / "development/logs").exists())
+        self.assertFalse((self.root / "logs").exists())
 
     def test_unhandled_exception_families_are_fatal_sanitized_and_unique(self):
         for kind in (TypeError, AttributeError, KeyError, IndexError, AssertionError, RuntimeError, OSError,
@@ -390,7 +392,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
                          "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/application/live.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
-                                 "src/watch/observers.py", "src/web/host.py", "src/web/jobs.py",
+                                 "src/watch/observers.py", "src/web/host.py", "src/web/jobs.py", "src/log_housekeeping.py",
                                    "src/web/native_windows.py", "src/web/native_windows.py",
                                    "src/web/native_macos.py"]), sorted(roots))
 
@@ -404,11 +406,12 @@ class RuntimeErrorTests(unittest.TestCase):
             path.write_text("test")
         os.utime(old, (time.time() - 31 * 86400,) * 2)
         os.utime(unrelated, (time.time() - 31 * 86400,) * 2)
-        self.reporter.cleanup()
+        with patch.dict(os.environ, {"COST_GUARD_TEST_MODE": ""}):
+            self.reporter.cleanup()
         self.assertFalse(old.exists())
         self.assertTrue(recent.exists())
         self.assertTrue(unrelated.exists())
-        with patch("src.runtime_errors.os.scandir", side_effect=PermissionError):
+        with patch("src.log_housekeeping.os.scandir", side_effect=PermissionError):
             self.reporter.cleanup()
         self.assertEqual("test", recent.read_text())
 

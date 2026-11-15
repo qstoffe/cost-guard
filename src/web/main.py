@@ -34,7 +34,7 @@ def managed(root, nonce, module):
                 return 0 if owner.ready else 1
 
             # Reuse existing sanitized fault machinery, rooted outside tracked source.
-            return RuntimeErrors(store.directory, mode="Web").run(run)
+            return RuntimeErrors(store.directory, mode="Web", private=True).run(run)
     except Exception:
         store.log("runtime_fault")
         return 1

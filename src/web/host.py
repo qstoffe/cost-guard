@@ -7,6 +7,7 @@ import webbrowser
 
 from src.version import VERSION
 from src.application.live import LiveRuntime
+from src.log_housekeeping import LogHousekeeping
 from .change_guard import SourceGuard
 from .http import LoopbackServer
 from .instance_state import SCHEMA
@@ -50,6 +51,7 @@ class WebHost:
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)
+        self.log_housekeeping = LogHousekeeping(root)
         from .benchmark import BenchmarkLane
         self.benchmark = BenchmarkLane(root)
 
@@ -125,6 +127,7 @@ class WebHost:
                                   "ready_ns": time.time_ns()})
                 self.store.log("ready")
             self.ready = True
+            self.log_housekeeping.start()
 
     def _serve(self):
         try:
@@ -196,6 +199,7 @@ class WebHost:
 
     def close(self):
         self.stop()
+        self.log_housekeeping.close()
         if self.thread:
             self.thread.join(timeout=10)
             if self.thread.is_alive():

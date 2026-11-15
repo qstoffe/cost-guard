@@ -10,10 +10,11 @@ import time
 from pathlib import Path
 import os
 from src.version import DISPLAY_VERSION
+from src.log_paths import log_root, read_events
 from .errors import FailureCode
 
 ROOT = Path(__file__).resolve().parents[2]
-FILE = ROOT / "logs" / "recovery" / "watch-recovery.json"
+FILE = log_root(ROOT) / "recovery" / "watch-recovery.json"
 _ALLOWED_EVENTS = frozenset({"retrying", "recovered", "failed"})
 _ALLOWED_SOURCES = frozenset({"v1", "v2"})
 _ALLOWED_KINDS = frozenset({"available", "unavailable", "unreadable", "unsupported"})
@@ -41,7 +42,7 @@ def _evidence(values: dict) -> dict[str, object]:
 def recent_events(now_ms: int | None = None) -> list[dict[str, object]]:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     try:
-        raw = json.loads(FILE.read_text(encoding="utf-8"))
+        raw = json.loads(read_events(FILE))
     except (OSError, ValueError, UnicodeError):
         return []
     if not isinstance(raw, list):
