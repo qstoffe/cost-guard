@@ -76,6 +76,15 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   await until(`current.detail.quotaUsage.cards.size===1`);
   assert.doesNotMatch(await evaluate(`current.detail.quotaUsage.grid.textContent`),/account 1/);
   checks.push('320/360/1280 light/dark/Classic no overflow; focused heading survives round trip; removed account disappears without source reread');
+  await command('Page.reload');
+  await until(`typeof current!=='undefined' && current?.detail?.id==='root' && current.detail.data &&
+    current.detail.quotaUsage.cards.size===1`);
+  assert.equal(await evaluate(`document.querySelector('nav a[href^="#/sessions"]').getAttribute('href')`),'#/sessions/root');
+  await evaluate(`connectionStatus('Synthetic authentication expiry',
+    {kind:'authorization_required',terminal:true,writable:false})`);
+  assert.equal(await evaluate(`!current.detail.data && current.detail.quotaUsage.root.hidden &&
+    current.detail.quotaUsage.cards.size===0 && !current.detail.token`),true);
+  checks.push('explicit-detail reload reopens the route/lease; terminal authentication loss clears retained table/quota values and lease');
   return {checks,layouts,measurements:{history_reads_before_capacity:before.history_reads,
     history_reads_after_capacity:after.history_reads}};
 };
