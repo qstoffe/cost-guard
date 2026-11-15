@@ -42,6 +42,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await settled(offset);
     await labelOnlyPager();
     assert.equal(await evaluate('initiator.getBoundingClientRect().width'),await evaluate('originalWidth'));
+    assert.equal(await evaluate(`!initiator.matches('[aria-current=page]') ||
+      (getComputedStyle(initiator).outlineStyle==='solid' && getComputedStyle(initiator).outlineWidth==='2px' &&
+      getComputedStyle(initiator).outlineOffset==='-2px')`),true,'current-page outline survives pointer-focus styling');
   };
   await fixture('catalog-large'); await fixture('catalog-index');
   await evaluate(`location.hash='#/sessions'`);

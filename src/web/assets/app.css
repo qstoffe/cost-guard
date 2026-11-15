@@ -320,8 +320,8 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-catalog .page-navigation { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
 .sessions-catalog .page-navigation > span { grid-column: 1 / -1; grid-row: 1; }
 .sessions-page-numbers { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: center; gap: .3rem; }
-.sessions-page-numbers button { min-width: 2.2em; }
-.sessions-page-numbers [aria-current="page"] { font-weight: bold; outline: 2px solid currentColor; outline-offset: -2px; }
+.sessions-page-numbers button { min-width: 2.2em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sessions-page-numbers [aria-current="page"] { outline: 2px solid currentColor; outline-offset: -2px; }
 .sessions-page-numbers .page-gap { padding-inline: .2rem; min-width: 0; flex: none; }
 .sessions-catalog button:is(:disabled, [aria-disabled="true"]) {
   color: var(--muted); background: var(--surface); border: 1px dashed var(--control-line);
