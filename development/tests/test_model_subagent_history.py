@@ -1,6 +1,9 @@
 """Native synthetic child trees distinguish model usage from whole-prompt cost."""
 from dataclasses import replace
 from decimal import Decimal as D
+from pathlib import Path
+import shutil
+import subprocess
 from unittest.mock import patch
 import unittest
 
@@ -18,6 +21,26 @@ from src.reports.token_mix_history import history_prompt_keys
 
 
 class ModelSubagentHistoryTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
+    def test_ai_stats_accessor_keeps_prepared_efforts_and_units_without_changing_generic_help(self):
+        script = """
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+vm.runInThisContext(fs.readFileSync('src/web/assets/render.js','utf8'));
+const row={label:'GPT-6.1 Sol',model_help:'route/GPT-6.1 Sol\\n\\nBy Effort:\\n• High — 2 CCost',
+  display:{model_help:'route/GPT-6.1 Sol\\n\\nBy Effort:\\n• High — 2 CCost'},
+  display_units:{usd:{model_help:'route/GPT-6.1 Sol\\n\\nBy Effort:\\n• High — $0.02'}}};
+assert.equal(ReportView.aiStatsModelHelp(row),row.display.model_help);
+ReportView.setUnit('usd');
+assert.equal(ReportView.aiStatsModelHelp(row),row.display_units.usd.model_help);
+assert.equal(ReportView.display(row,'model_help'),'GPT-6.1 Sol');
+ReportView.setUnit('credits');
+assert.equal(ReportView.aiStatsModelHelp(row),row.model_help);
+assert.equal(ReportView.aiStatsModelHelp({}), '');
+"""
+        result = subprocess.run([shutil.which('node'), '-e', script],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=15)
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def service(self, snapshot, *, cached=False, available=None):
         service = report_service(self, MutableSource(snapshot), now_ms=NOW,
             availability=Availability(available if available is not None else

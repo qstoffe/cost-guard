@@ -33,6 +33,11 @@ module.exports = async ({evaluate,until,fixture,checks}) => {
         assert.match(sol.model_help,/• High/);
         if(item.name!=='different') assert.match(sol.model_help,/• Max/);
         if(item.name==='different') assert.doesNotMatch(sol.model_help,/• Max/);
+        await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+          [...document.querySelectorAll('[data-metric="total-tokens"] .ai-stat-model')]
+            .find(n=>n.textContent==='GPT-6.1 Sol').focus()`);
+        await until(`!document.getElementById('context-help').hidden`);
+        assert.equal(await evaluate(`document.getElementById('context-help').textContent`),sol.model_help);
       }
     }
     await evaluate(`current.result=${JSON.stringify(saved)};

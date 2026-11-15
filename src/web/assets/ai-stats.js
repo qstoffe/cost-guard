@@ -135,7 +135,7 @@ const AIStatsView = (() => {
               const row = e('div', undefined, 'ai-stat-racer'), label = e('span', '', 'ai-stat-model');
               ContextHelp.value(label, () => {
                 const row = retained.metric?.podium[retained.podium.findIndex(item => item.label === label)];
-                return row ? ReportView.display(row, 'model_help') || row.model_help : '';
+                return row ? ReportView.aiStatsModelHelp(row) : '';
               });
               const icon = e('span', medal); icon.setAttribute('aria-hidden', 'true');
               const speed = e('span', '', 'ai-stat-speed');
