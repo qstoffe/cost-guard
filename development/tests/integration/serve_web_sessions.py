@@ -65,6 +65,7 @@ class FixtureRuntime:
         self.scalar_hold = False
         self.live_root = None
         self.parity = False
+        self.quota_fixture = None
         self.observation_lock = Lock()
         self.detail_mode = None
         self.detail_capture = DetailCapture(run_owned_fixture, no_progress_seconds=3)
@@ -101,6 +102,10 @@ class FixtureRuntime:
         if not self.scalar_hold and self.catalog.needed():
             self.catalog.tick(self.service)
         frame = summary_watch()
+        if self.quota_fixture is not None:
+            from src.application.session_quota import source_scope
+            self.details.observe_accounts(self.quota_fixture, source_scope(self.service.source), self.service.now_ms)
+            frame = replace(frame, quota=self.quota_fixture)
         if self.parity:
             from src.watch.models import WatchCard, WatchRow
             snapshot = self.service.source.snapshots["root-0000"]
@@ -163,6 +168,14 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = replace(make_root_snapshot(120, 1, month_start_ms=1000), complete=True)
+            elif command.startswith("quota-"):
+                if command == "quota-observe":
+                    print(json.dumps(dict(ok=True, history_reads=source.load_count,
+                        leases=len(host.live.details.leases))), flush=True)
+                    continue
+                from development.tests.fixtures.session_quota import configure
+                with host.live.observation_lock:
+                    configure(host.live, command)
             elif command == "parity-observe":
                 print(json.dumps(dict(ok=True, source_instance="synthetic-month",
                     roots=len(source.snapshots), history_reads=source.load_count,

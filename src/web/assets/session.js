@@ -125,7 +125,9 @@ const SessionDetail = (() => {
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
       this.values = new Values();
+      this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.status, this.retry, this.loader.root, scroll, this.context.root, this.activity.root);
+      if (this.quotaUsage) this.root.append(this.quotaUsage.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
     }
@@ -196,6 +198,7 @@ const SessionDetail = (() => {
           return;
         }
         this.sourceStatus(data);
+        this.quotaUsage?.update(data.quota_usage);
         if (this.data?.activity?.scope && data.activity?.scope !== this.data.activity.scope) {
           this.activity.update(null); this.activityLimit = 25; this.data.activity = null;
         }
@@ -340,6 +343,7 @@ const SessionDetail = (() => {
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
       this.exporter?.close(); this.freshness();
+      this.quotaUsage?.update(null);
     }
     update(data) {
       ReportView.defaultUnit();

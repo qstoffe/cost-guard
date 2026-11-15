@@ -127,16 +127,18 @@ class V1WebWatchTests(unittest.TestCase):
     def test_live_generation_is_allowlisted_and_withheld_without_fresh_source_proof(self):
         published = []
         runtime = LiveRuntime(None, lambda _, value: published.append(value.to_json()))
+        frame = SimpleNamespace(quota=None, now_ms=123, quota_stale=False)
         driver = SimpleNamespace(source_state="running", error=None, observed_at_ms=123,
             coordinator=SimpleNamespace(selection=SimpleNamespace(selected="v1"),
-                report_service=SimpleNamespace(timezone_id="UTC", config={})))
+                report_service=SimpleNamespace(timezone_id="UTC", config={},
+                    source=SimpleNamespace(source_id="synthetic", source_instance="instance"))))
         with patch("src.application.live.project_live", return_value=None):
-            for selected, frame, error, expected in (("v1", object(), None, "v1"),
-                    ("v2", object(), None, "v2"), ("/private/path", object(), None, "unknown"),
-                    ("v1", None, None, "unknown"), ("v1", object(), SourceUnavailableError("private"), "unknown")):
+            for selected, value, error, expected in (("v1", frame, None, "v1"),
+                    ("v2", frame, None, "v2"), ("/private/path", frame, None, "unknown"),
+                    ("v1", None, None, "unknown"), ("v1", frame, SourceUnavailableError("private"), "unknown")):
                 driver.coordinator.selection.selected = selected
                 driver.error = error
-                runtime._publish_frame(driver, frame)
+                runtime._publish_frame(driver, value)
                 self.assertEqual(expected, published[-1]["source_generation"])
         self.assertNotIn("private", json.dumps(published))
 

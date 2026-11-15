@@ -347,5 +347,51 @@ const AccountCards = (() => {
       for (const [key, line] of this.lines) if (!keep.has(line)) this.lines.delete(key);
     }
   }
-  return {View, CompactView};
+  // Detail-only, compact session equivalents. Never renders live account totals.
+  class SessionUsage {
+    constructor() {
+      this.root = el('section', undefined, 'session-quota-usage');
+      this.root.setAttribute('aria-label', 'Session Quota Usage');
+      this.grid = el('div', undefined, 'account-grid session-quota-grid');
+      this.root.append(el('h2', 'Session Quota Usage'), this.grid);
+      this.cards = new Map(); this.root.hidden = true;
+    }
+    update(value) {
+      if (!value || this.scope !== value.scope) {
+        this.cards.clear(); this.grid.replaceChildren();
+      }
+      this.scope = value?.scope;
+      this.root.hidden = !value?.accounts?.length;
+      const wanted = new Set();
+      for (const item of value?.accounts || []) {
+        const key = JSON.stringify([item.observation.provider_id, item.observation.id]);
+        wanted.add(key);
+        let card = this.cards.get(key);
+        if (!card) {
+          card = {root: el('section', undefined, 'account-card'), rows: new Map(), value: item};
+          card.heading = ReportView.accountHeading(() => card.value.observation);
+          card.root.append(card.heading); this.cards.set(key, card);
+        }
+        card.value = item;
+        const rows = new Set(item.quotas.map(row => row.id));
+        for (const [id, node] of card.rows) if (!rows.has(id)) { node.remove(); card.rows.delete(id); }
+        item.quotas.forEach((quota, index) => {
+          let line = card.rows.get(quota.id);
+          if (!line) { line = el('p', undefined, 'metric-value session-quota-row'); card.rows.set(quota.id, line); }
+          const suffix = quota.scope === 'model' && quota.model_id &&
+            !quota.label.toLowerCase().includes(quota.model_id.toLowerCase()) ? ` · ${quota.model_id}` : '';
+          ReportView.text(line, `${quota.label}${suffix} · ${quota.percent}`);
+          if (card.root.children[index + 1] !== line)
+            card.root.insertBefore(line, card.root.children[index + 1] || null);
+        });
+        ReportView.syncUnits(card.heading);
+      }
+      for (const [key, card] of this.cards) if (!wanted.has(key)) { card.root.remove(); this.cards.delete(key); }
+      (value?.accounts || []).forEach((item, index) => {
+        const node = this.cards.get(JSON.stringify([item.observation.provider_id, item.observation.id])).root;
+        if (this.grid.children[index] !== node) this.grid.insertBefore(node, this.grid.children[index] || null);
+      });
+    }
+  }
+  return {View, CompactView, SessionUsage};
 })();

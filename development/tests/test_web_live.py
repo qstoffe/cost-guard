@@ -166,12 +166,13 @@ class LiveTests(unittest.TestCase):
         published = []
         runtime = LiveRuntime(None, lambda *_: published.append(runtime.observed.is_set()))
         driver = SimpleNamespace(source_state='starting', observed_at_ms=None, error=None,
-                                 coordinator=SimpleNamespace(report_service=SimpleNamespace(timezone_id='UTC', config={})))
+                                 coordinator=SimpleNamespace(report_service=SimpleNamespace(timezone_id='UTC', config={},
+                                     source=SimpleNamespace(source_id="synthetic", source_instance="instance"))))
         runtime._publish_frame(driver, None)
         self.assertFalse(runtime.observed.is_set())
         driver.observed_at_ms = 2200
         with patch('src.application.live.project_live', return_value=None):
-            runtime._publish_frame(driver, object())
+            runtime._publish_frame(driver, SimpleNamespace(quota=None, now_ms=2200, quota_stale=False))
         self.assertTrue(runtime.observed.is_set())
         self.assertEqual([False, False], published, 'readiness must follow publication, not precede it')
 
