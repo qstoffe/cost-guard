@@ -17,7 +17,7 @@ def main():
         browser = playwright.chromium.executable_path
     results = ROOT / "ci-results"
     results.mkdir(exist_ok=True)
-    environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable)
+    environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
     for scope in ("opening", "opening-races", "header", "dashboard"):
         output = results / f"watch-{scope}.json"
         result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
@@ -26,7 +26,9 @@ def main():
         evidence = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
         notice("watch-" + scope, dict(outcome=evidence.get("outcome", "FAIL"),
             checks=evidence.get("checks", []), layouts=len(evidence.get("layouts", [])),
-            error=evidence.get("error"), limitations=evidence.get("limitations", [])))
+            error=evidence.get("error"), phase=evidence.get("phase"),
+            diagnostic=evidence.get("diagnostic", dict(returncode=result.returncode)),
+            limitations=evidence.get("limitations", [])))
         result.check_returncode()
         if evidence.get("outcome") != "PASS":
             raise SystemExit("Watch evidence did not pass")

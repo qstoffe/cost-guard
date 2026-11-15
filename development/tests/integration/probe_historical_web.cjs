@@ -192,7 +192,7 @@ async function main() {
     facts.full = {count:spec.history_rows.length, identity_prompt_finish_order:true, dom_order:true};
     await until(`!!miniWatch.measure?.ready`);
     await evaluate('miniWatch.toggle()', true);
-    await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
+    await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length+miniWatch.window.document.adoptedStyleSheets.length===2');
     const expectedMini = require('../fixtures/mini_history_expected.cjs').toString();
     await until(`JSON.stringify([...miniWatch.view.body.querySelectorAll('[data-id]')]
       .map(row=>row.dataset.id))===JSON.stringify((${expectedMini})(liveValue.view).map(row=>row.id))`);
@@ -421,7 +421,7 @@ async function main() {
       facts.promotion = {mode:'mini', before, switch_wall_ms:Date.now()};
       const switched = performance.now();
       await evaluate('miniWatch.toggle()', true);
-      await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
+      await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length+miniWatch.window.document.adoptedStyleSheets.length===2');
       const blank = await command('Target.createTarget', {url:'about:blank'}, null);
       const other = (await command('Target.attachToTarget', {targetId:blank.targetId, flatten:true}, null)).sessionId;
       await command('Page.bringToFront', {}, other);
@@ -526,7 +526,7 @@ async function main() {
     await until(`typeof miniWatch!=='undefined' && !!miniWatch.measure?.ready`);
     const miniStart = performance.now();
     await evaluate('miniWatch.toggle()', true);
-    await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length===2');
+    await until('!!miniWatch.view && miniWatch.window.document.styleSheets.length+miniWatch.window.document.adoptedStyleSheets.length===2');
     // No running sessions in this workload: all five canonical winners fill Mini.
     const newestFive = JSON.stringify([...spec.winners].sort());
     await until(`JSON.stringify([...miniWatch.view.promptRows.keys()].sort())===${JSON.stringify(newestFive)}`);
