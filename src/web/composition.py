@@ -60,6 +60,8 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
             service.history_batch_size = request.history_batch_size
             service.history_slice_roots = 256
             service.history_checkpoint = history_checkpoint
+            service.history_scan = request.history_scan or None
+        service.history_resuming = getattr(request, 'resuming', False)
         if request.kind is ReportKind.AI_STATS:
             service.stats_slice_roots = getattr(request, 'slice_roots', None)
             service.stats_batch_size = getattr(request, 'batch_size', 64)

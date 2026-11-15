@@ -123,7 +123,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
   for(const unit of ['credits','usd']) {
     await evaluate(owner,`ReportView.setUnit('${unit}',document.body);numericStats.update(numericStatsState)`);
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      'N/A');
+      'Loading…');
     await evaluate(owner,`(() => {
       const names=['hourly-rate','total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost',
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
@@ -148,8 +148,13 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     }
     await evaluate(owner,`numericStatsState.period='all';numericStatsState.result=null;numericStats.update(numericStatsState)`);
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      'N/A','pending period cannot inherit another period');
-    assert.equal(await evaluate(owner,`numericStats.cards.get('total-tokens').card.textContent`),'Loading…');
+      'Loading…','pending period cannot inherit another period');
+    assert.equal(await evaluate(owner,`numericStats.cards.get('total-tokens').value.textContent`),'Loading…');
+    assert.equal(await evaluate(owner,`[...numericStats.cards.values()].every(card=>
+      card.card.querySelector('h4') && (card.rates.size ?
+        [...card.rates.values()].every(value=>value.textContent==='Loading…') :
+        card.value.textContent==='Loading…'))`),true,
+      'pending period retains every heading and uniformly unresolved values');
   }
-  checks.push('AI Stats actual DOM: cold unavailable is N/A, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation; noncost pending remains Loading');
+  checks.push('AI Stats actual DOM: cold and pending periods retain all headings with uniform Loading…, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');
 };

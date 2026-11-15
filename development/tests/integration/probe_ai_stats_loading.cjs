@@ -41,14 +41,27 @@ module.exports = async ({evaluate,checks}) => {
             view.update(state);failed &&= ${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};cases++;
          }
     state.failed=false;state.result=original;state.period='30-days';view.update(state);
-    const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
-      c.getBoundingClientRect().height===before[i].height);
-      parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,qualifiedRetention,order,cases,coldState};
+     const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
+       c.getBoundingClientRect().height===before[i].height);
+     const unsupported=structuredClone(original);
+     for(const row of unsupported.view.ai_stats) for(const metric of row.metrics) {
+       for(const display of [metric.display,...Object.values(metric.display_units||{})])
+         for(const key of ['value','calendar_rate','workday_rate','active_rate']) display[key]='N/A';
+       metric.detail='Not Applicable';metric.display.trait='N/A';metric.podium=[];
+       if(metric.metric==='token-rate')metric.value='0';
+     }
+     const neutralView=new AIStatsView.View(()=>{});
+     neutralView.update({period:'30-days',result:unsupported});
+     const neutral=!/N\\/A|Not Applicable/i.test(neutralView.root.textContent) &&
+       [...neutralView.root.querySelectorAll('.ai-stat-value:not(.ai-stat-rates),.ai-stat-rate-value')].every(n=>n.textContent==='—');
+     state.result=null;state.statsIdentity='invalidated';view.update(state);
+     const invalidated=pending();
+     parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,qualifiedRetention,neutral,invalidated,order,cases,coldState};
   })()`);
    for(const [key,value] of Object.entries(result)) if(!['order','cases','coldState'].includes(key))
      assert.equal(value,true,key+': '+JSON.stringify(result.coldState));
    assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
      'AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
-   checks.push('thirteen stable shells: cold/new-scope N/A, exact same-scope retained CCost and Loading-only noncost cards; quiet polls, ready commit, truthful failure, token unit independence');
+    checks.push('thirteen stable shells: cold/new-scope Loading, whole same-scope retained cards, no N/A; quiet polls, ready commit, truthful failure, token unit independence');
 };

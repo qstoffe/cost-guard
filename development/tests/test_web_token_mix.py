@@ -72,6 +72,45 @@ class TokenMixCacheTests(unittest.TestCase):
         self.assertIsNone(empty.token_mix.known_total_tokens)
         self.assertEqual((), empty.model_token_mix)
 
+    def test_sliced_initial_cohort_has_fixed_proof_and_finishes_despite_arrivals(self):
+        from src.reports.history_work import HistoryContinuation
+        source = SyntheticMonthSource(5, 3, month_start_ms=START)
+        source.snapshots = {sid: replace(s, complete=True) for sid, s in source.snapshots.items()}
+        original = report_service(self, source)
+        proofs = []
+
+        def slice_service():
+            service = self.fresh(original)
+            service.shared_web_evidence = service.allow_partial_history = True
+            service.history_scan = 'finite-token-mix'
+            service.history_slice_roots = service.history_batch_size = 2
+            service.history_checkpoint = proofs.append
+            return service
+
+        with self.assertRaises(HistoryContinuation):
+            slice_service().build_token_mix_history()
+        source.snapshots['root-0000'] = replace(source.snapshots['root-0000'], source_revision='late-change')
+        for index in (10, 11):
+            added = replace(make_root_snapshot(index, 3, month_start_ms=START), complete=True)
+            source.snapshots[added.root.session_id] = added
+            try:
+                result = slice_service().build_token_mix_history()
+            except HistoryContinuation:
+                continue
+
+        self.assertEqual({5}, {p['total'] for p in proofs})
+        self.assertEqual(1, len({p['signature'] for p in proofs}))
+        self.assertEqual(sorted({p['completed'] for p in proofs}), [p['completed'] for p in proofs])
+        self.assertEqual(1, result.history_omitted_roots)
+        self.assertEqual(12, result.token_mix.request_count)
+        next_service = slice_service()
+        next_service.history_scan = 'next-token-mix'
+        next_service.history_slice_roots = 100
+        refreshed = next_service.build_token_mix_history()
+        independent = self.fresh(original, cached=False).build_token_mix_history()
+        self.assertEqual(independent.token_mix, refreshed.token_mix)
+        self.assertEqual(independent.model_token_mix, refreshed.model_token_mix)
+
     def test_only_changed_new_roots_load_and_removed_roots_do_not_survive(self):
         source = SyntheticMonthSource(6, 3, month_start_ms=START)
         original = report_service(self, source)

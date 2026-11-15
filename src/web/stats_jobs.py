@@ -12,6 +12,7 @@ class StatsSlice(ReportRequest):
     scan: str = ''
     slice_roots: int = SLICE_ROOTS
     batch_size: int = BATCH_SIZE
+    resuming: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +46,7 @@ def request(job, key):
     options = dict(source_identity=original.source_identity) if isinstance(original, ManagedReport) else {}
     return cls(ReportKind.AI_STATS, stats_scope=scope,
         observation_ms=job['observation_ms'], scan='ai-stats-scan-' + key,
-        batch_size=job.get('batch_size', BATCH_SIZE), **options)
+        batch_size=job.get('batch_size', BATCH_SIZE), resuming=job.get('result') is not None, **options)
 
 
 def accept(job, result):

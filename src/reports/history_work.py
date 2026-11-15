@@ -28,22 +28,24 @@ def active_roots(sessions):
 
 
 class HistoryWork:
-    def __init__(self, service, sessions, roots, versions, reference):
+    def __init__(self, service, sessions, roots, versions, reference, cohort=None):
         if getattr(service, 'history_checkpoint', None) and len(roots) > 100_000:
             raise HistoryCheckpointError('history_resource_limit')
         self.service, self.sessions, self.roots, self.versions = service, sessions, roots, versions
-        self.signature = dependency_signature((session_catalog_revision(service.selection.selected, sessions),
+        self.cohort = cohort
+        self.signature = cohort.signature if cohort else dependency_signature((session_catalog_revision(service.selection.selected, sessions),
             sorted(versions.items()), service._dependencies(service._load_catalog()), reference.analysis_signature))
-        self.saved = 0
+        self.saved = len(cohort.omitted) if cohort else 0
+        self.total = cohort.total if cohort else len(roots)
         self.processed = 0
 
     def checkpoint(self, count, *, processed, remaining, error=None):
-        """Count only successful stable writes, never analyzed/partial roots."""
+        """Resolved roots require durable qualified evidence or explicit scan-local omissions."""
         self.saved += count
         self.processed += processed
         callback = getattr(self.service, 'history_checkpoint', None)
         if callback and count:
-            callback(dict(signature=self.signature, completed=self.saved, total=len(self.roots)))
+            callback(dict(signature=self.signature, completed=self.saved, total=self.total))
         limit = getattr(self.service, 'history_slice_roots', None)
         if callback and limit and self.processed >= limit and remaining:
             if not count:
@@ -59,6 +61,11 @@ class HistoryWork:
         service = self.service
         service.progress(WorkProgress('Verifying complete history revisions', 'catalog', stage='history-verify'))
         latest = tuple(service.source.list_sessions()) if latest is None else latest
+        if self.cohort:
+            roots = [r for r in latest if r.parent_session_id is None
+                     and r.session_id in self.cohort.value['roots']]
+            self.cohort.reconcile(latest, roots, revisions(service, roots))
+            return set(self.cohort.omitted)
         if getattr(service, 'allow_partial_history', False):
             # Updates may be withheld; changed membership, ancestry, archive or
             # source identity must still invalidate the whole ordering/scope.

@@ -1,6 +1,6 @@
 'use strict';
 // AI Stats = BEST EFFORT / NEVER Unavailable, for every present and future card.
-// Sparse/partial/estimated ready observations show fun values; non-cost Loading and real
+// Sparse/partial/estimated ready observations show fun values; unresolved Loading and real
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
@@ -27,6 +27,7 @@ const AIStatsView = (() => {
   const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
   const costMetrics = new Set(['hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session']);
   const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
+  const face = value => typeof value === 'string' ? value.replace(/\b(?:N\/A|Not Applicable)\b/gi, '—') : value;
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
@@ -147,6 +148,7 @@ const AIStatsView = (() => {
           const trait = e('p', '', 'ai-stat-trait');
           grid.append(card);
           this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
+          card.append(heading, value, podium, detail, trait);
         }
       }
       this.root.append(this.selector, this.content);
@@ -161,8 +163,8 @@ const AIStatsView = (() => {
       this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
     }
     update(state) {
-      // FR707 supersedes Loading in CCost amount positions only. Other cards
-      // preserve their Loading contract; operational failure remains page-level.
+      // Every card has its shell from first render. Only a complete compatible
+      // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;
       if (state.result?.source) this.sourceIdentity = JSON.stringify([
         state.result.source.identity, state.result.source.generation, state.result.view.timezone_id]);
@@ -174,31 +176,22 @@ const AIStatsView = (() => {
       const ready = state.result?.view?.ai_stats_work?.scopes?.[state.period]?.ready === true;
       const row = ready && valid(state.result) && state.result.view.ai_stats.find(item => item.period === state.period);
       if (!row) {
+        if (this.readyScope === scope) return;
+        this.readyScope = null;
         const message = 'Loading…';
-        for (const [key, item] of this.cards) {
-          if (costMetrics.has(key)) {
-            const unknown = {display:{value:'N/A',calendar_rate:'N/A',workday_rate:'N/A',active_rate:'N/A'}};
-            const metric = item.costScope === scope && item.metric ? item.metric : unknown;
-            if (item.rates.size) {
-              for (const [id, node] of item.rates) ReportView.text(node, () => ReportView.display(metric, id));
-            } else ReportView.text(item.value, () => ReportView.display(metric, 'value'));
-            if (item.costScope !== scope) {
-              ReportView.text(item.detail, ''); ReportView.text(item.trait, '');
-              item.podiumNode.replaceChildren(); item.metric = null;
-            }
-            if (item.pending || !item.card.firstChild) item.card.replaceChildren(...item.nodes);
-            item.pending = null; item.card.removeAttribute('role'); item.card.removeAttribute('aria-live');
-            continue;
-          }
-          if (item.pending !== message) {
-            item.card.replaceChildren(message); item.pending = message;
-            item.card.setAttribute('role', 'status'); item.card.setAttribute('aria-live', 'off');
-          }
+        for (const item of this.cards.values()) {
+          item.metric = null;
+          if (item.rates.size) {
+            for (const node of item.rates.values()) ReportView.text(node, message);
+          } else ReportView.text(item.value, message);
+          ReportView.text(item.detail, ''); ReportView.text(item.trait, '');
+          if (item.podiumNode.firstChild) item.podiumNode.replaceChildren();
         }
         this.extra.remove();
         return;
       }
       // Reveal each complete card in this synchronous commit; retain nodes on quiet refresh.
+      this.readyScope = scope;
       this.costs ||= new ReportView.CostDisplay();
       for (let metric of row.metrics) {
         if (costMetrics.has(metric.metric)) {
@@ -212,15 +205,15 @@ const AIStatsView = (() => {
         if (costMetrics.has(metric.metric)) card.costScope = scope;
         card.metric = metric;
         if (card.rates.size) {
-          for (const [id, node] of card.rates) ReportView.text(node, () => ReportView.display(metric, id));
-        } else ReportView.text(card.value, () => ReportView.display(metric, 'value'));
+          for (const [id, node] of card.rates) ReportView.text(node, () => face(ReportView.display(metric, id)));
+        } else ReportView.text(card.value, () => face(ReportView.display(metric, 'value')));
         if (card.podium.length) {
           if (metric.podium.length) {
             for (const [index, item] of card.podium.entries()) {
               const racer = metric.podium[index];
               if (!racer) { item.row.remove(); continue; }
               ReportView.text(item.label, racer.label);
-              ReportView.text(item.speed, () => racer.speed ?? ReportView.display(racer, 'amount'));
+              ReportView.text(item.speed, () => face(racer.speed ?? ReportView.display(racer, 'amount')));
               item.row.setAttribute('aria-label', `Rank ${index + 1}: ${racer.label}`);
             }
             const nodes = card.podium.slice(0, metric.podium.length).map(item => item.row);
@@ -228,23 +221,19 @@ const AIStatsView = (() => {
               card.podiumNode.replaceChildren(...nodes);
           } else if (card.podiumNode.firstChild) card.podiumNode.replaceChildren();
         }
-        ReportView.text(card.trait, metric.display.trait);
+        ReportView.text(card.trait, face(metric.display.trait));
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {
           const link = target || e('a'); ReportView.text(link, metric.session_title);
           link.href = '#/sessions/' + metric.session_id;
           if (!target) card.detail.replaceChildren(link);
-        } else ReportView.text(card.detail, metric.metric === 'token-rate' ? '' : metric.detail || '');
-        if (card.pending || !card.card.firstChild) {
-          card.card.replaceChildren(...card.nodes); card.pending = null;
-          card.card.removeAttribute('role'); card.card.removeAttribute('aria-live');
-        }
+        } else ReportView.text(card.detail, metric.metric === 'token-rate' ? '' : face(metric.detail || ''));
       }
       if (!this.content.contains(this.grid)) this.content.replaceChildren(this.grid);
       if (row.matched) {
         ReportView.text(this.extraHeading, row.matched.metric === 'original-thinker' ? 'Original Thinker' : 'Biggest AI Speed Gap');
-        ReportView.text(this.extraValue, () => ReportView.display(row.matched, 'value'));
-        ReportView.text(this.extraTrait, row.matched.display.trait); ReportView.text(this.extraDetail, row.matched.detail);
+        ReportView.text(this.extraValue, () => face(ReportView.display(row.matched, 'value')));
+        ReportView.text(this.extraTrait, face(row.matched.display.trait)); ReportView.text(this.extraDetail, face(row.matched.detail));
         const grid = this.grid.querySelectorAll('.ai-stats-grid')[1];
         if (!grid.contains(this.extra)) grid.append(this.extra);
       } else this.extra.remove();

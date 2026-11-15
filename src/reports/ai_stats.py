@@ -6,6 +6,7 @@ import sqlite3
 from src.analysis.ai_stats import StatsObservation, windows
 from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.cache import dependency_signature
+from src.analysis.model_identity import current
 from src.analysis.matched_runs import period_fact
 from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
@@ -73,16 +74,21 @@ class StatsAcquisition:
         if len(self.roots) > MAX_ROOTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
         self.revisions = _revisions(service, self.roots)
+        self.scan = getattr(service, 'stats_scan', None)
+        self.cohort = None
+        if self.scan:
+            from .history_cohort import HistoryCohort
+            self.cohort = HistoryCohort(service, self.scan, sessions, self.roots, self.revisions, self.reference)
+            self.roots = self.cohort.reconcile(sessions, self.roots, self.revisions)
         self.keys = {r.session_id: dependency_signature((ALGORITHM, cache_key(service, r, self.reference))) for r in self.roots}
         self.bounds = {}
         self.evidence = {}
         self.fact_count = 0
         self.fresh = set()
-        self.unavailable = set()
+        self.unavailable = set(self.cohort.omitted) if self.cohort else set()
         self.pending = []
         self.checkpoint_busy = True
         self.checkpoint_error = None
-        self.scan = getattr(service, 'stats_scan', None)
         with service.metrics.measure('ai_stats_restore'):
             self._restore()
 
@@ -161,8 +167,10 @@ class StatsAcquisition:
         writes = []
         for root in roots:
             snapshot = snapshots.get(root.session_id)
-            if snapshot is None:
+            if snapshot is None or self.cohort and not self.cohort.accepts(snapshot):
                 self.unavailable.add(root.session_id)
+                if self.cohort:
+                    self.cohort.omit((root.session_id,))
                 self._discard(root.session_id)
                 continue
             # The compact evidence cache is sufficient here: do not also persist
@@ -237,6 +245,19 @@ class StatsAcquisition:
         service.progress(WorkProgress('Verifying history coverage', 'catalog', stage='history-verify'))
         sessions = service.source.list_sessions()
         latest, _activity = service._ordered_roots(sessions)
+        if self.cohort:
+            candidates = [r for r in latest if r.session_id in self.cohort.value['roots']]
+            versions = _revisions(service, candidates)
+            self.cohort.reconcile(sessions, candidates, versions)
+            self.unavailable.update(self.cohort.omitted)
+            for sid in self.unavailable:
+                self._discard(sid)
+            self.roots = [r for r in self.roots if r.session_id not in self.unavailable]
+            self.pending = [r for r in self.pending if r.session_id not in self.unavailable]
+            for root in self.roots:
+                if root.session_id in self.evidence:
+                    service._acquisition.revisions[root.session_id] = self.revisions[root.session_id]
+            return
         if len(latest) > MAX_ROOTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
         if any(r.session_id in self.provenance and r.provenance != self.provenance[r.session_id] for r in latest):
@@ -275,6 +296,8 @@ class StatsAcquisition:
             for entry, _prompt, parts in facts:
                 costs[entry.model, entry.tokens] = None if parts is None else sum(parts, Decimal(0))
         rows, scopes = [], {}
+        if self.cohort and not current(service.source, (entry.model for root in evidence for entry in root.entries)):
+            raise StatsCheckpointError('ai_stats_revision_churn')
         calculation = StatsObservation(evidence, lambda model, tokens: costs[model, tokens],
                                        now=service.now_ms, zone=service.timezone_id,
                                         workday_calendar=service.config.get('workdayCalendar', 'SE'),
@@ -285,7 +308,14 @@ class StatsAcquisition:
             omitted = sum(r.session_id in self.unavailable for r in self.pending)
             ready = len(excluded) + omitted == len(self.pending) and all(
                 not volatile or sid in self.fresh for sid, (_facts, volatile) in self.evidence.items())
-            scopes[name] = dict(completed=len(self.roots) - len(self.pending) + len(excluded), total=len(self.roots), ready=ready)
+            if self.cohort and self.unavailable:
+                meaningful = any(start is None or start <= entry.completed_at_ms
+                    for root in evidence for entry in root.entries if 0 < entry.completed_at_ms <= service.now_ms)
+                ready &= meaningful
+                if name == self.scope and not self.pending and not meaningful:
+                    raise StatsCheckpointError('ai_stats_revision_churn')
+            total = self.cohort.total if self.cohort else len(self.roots)
+            scopes[name] = dict(completed=total - len(self.pending) + len(excluded), total=total, ready=ready)
             gaps = migration_gap_notes(service.selection.migration_gap, start_ms=start)
             complete = not service.selection.warnings and not gaps and not self.unavailable and ready
             rows.append(replace(calculation.period(period=name, start=start, source_complete=complete),
@@ -295,9 +325,12 @@ class StatsAcquisition:
         gaps = migration_gap_notes(service.selection.migration_gap, start_ms=dict(self.periods)[self.scope])
         return ReportProjection(ReportKind.AI_STATS, 'AI Stats', service.selection.selected.upper(),
             (*service.selection.warnings, *((f'AI Stats roots not verified: {len(self.unavailable)}',) if self.unavailable else ())),
-            notes=gaps, ai_stats=tuple(rows), history_omitted_roots=len(self.unavailable - self.evidence.keys()),
-             ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=len(self.roots) - len(self.pending),
-                                total=len(self.roots), checkpoint_error=self.checkpoint_error))
+            notes=(*gaps, *(('Bounded initial catalog cohort; later observations reconcile arrivals and omitted roots.',)
+                if self.cohort else ())),
+             ai_stats=tuple(rows), history_omitted_roots=len(self.unavailable - self.evidence.keys()),
+              ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=total - len(self.pending),
+                                 total=total, checkpoint_error=self.checkpoint_error,
+                                 verified=len(self.evidence), omitted=len(self.unavailable)))
 
 
 def build_ai_stats(service, scope):
