@@ -71,8 +71,6 @@ const SessionsCatalog = (() => {
     }
     pageButton(label) {
       const button = el('button', label); button.type = 'button';
-      const spinner = el('span', undefined, 'sessions-page-spinner');
-      spinner.setAttribute('aria-hidden', 'true'); button.append(spinner);
       button.addEventListener('click', () => {
         if (button.disabled || button.navigationDisabled || !button.destination) return;
         this.navigateTo(button.destination, button, 'page');
@@ -409,9 +407,9 @@ const SessionsCatalog = (() => {
         const initiating = navigating && this.operation.kind === 'page' && this.operation.button === button;
         button.navigationDisabled = Boolean(disabled);
         if (initiating) {
-          button.setAttribute('aria-disabled', 'true'); button.setAttribute('aria-busy', 'true');
+          button.setAttribute('aria-disabled', 'true');
         } else {
-          button.removeAttribute('aria-disabled'); button.removeAttribute('aria-busy');
+          button.removeAttribute('aria-disabled');
         }
         const nativeDisabled = Boolean(disabled && !initiating);
         if (button.disabled !== nativeDisabled) button.disabled = nativeDisabled;

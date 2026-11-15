@@ -20,8 +20,21 @@ module.exports = async ({vm, context, Node, timers}) => {
   const view = context.navigation;
   new Node('main').append(view.root); view.attached = true; view.token = previous.token;
   view.update(previous);
-  const start = params => {
-    view.navigateTo('#/sessions?' + params);
+  const labelOnlyPager = (catalog = view) => {
+    for (const button of [catalog.previous,catalog.next,...catalog.pageButtons.values()]) {
+      assert.equal(button.children.length,0,'pager labels must not reserve any hidden child slot');
+      assert.equal(button.attributes['aria-busy'],undefined,'the existing table/banner own progress');
+      assert.match(button.textContent,/^(Previous|Next|\d+)$/);
+    }
+  };
+  labelOnlyPager();
+  vm.runInContext('globalThis.singlePage = new SessionsCatalog.View(navigationApi)', context);
+  const singlePage = context.singlePage;
+  singlePage.update({...previous,total:1,offset:0});
+  labelOnlyPager(singlePage);
+  assert.equal(singlePage.previous.disabled,true); assert.equal(singlePage.next.disabled,true);
+  const start = (params, button = null) => {
+    view.navigateTo('#/sessions?' + params, button, button ? 'page' : null);
     view.configure(new URLSearchParams(params));
   };
   const restorePrevious = async () => {
@@ -81,8 +94,17 @@ module.exports = async ({vm, context, Node, timers}) => {
    assert.equal(view.operation.failed,false,'a redundant hash notification retains recoverable intent');
    assert.match(view.status.textContent,/Loading paused\. Retrying/);
   await restorePrevious();
-  start('sort=activity&direction=-1&offset=100&epoch=pinned');
+  const pageFive = view.pageButtons.get(5);
+  pageFive.focus();
+  start('sort=activity&direction=-1&offset=100&epoch=pinned',pageFive);
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'pending',completed:4,total:17}});
+  labelOnlyPager();
+  assert.equal(view.pageButtons.get(5),pageFive,'pending navigation retains button identity');
+  assert.equal(pageFive.disabled,false); assert.equal(pageFive.attributes['aria-disabled'],'true');
+  const pendingHash = context.location.hash;
+  pageFive.events.click();
+  assert.equal(context.location.hash,pendingHash,'the focusable initiating button remains inert');
+  assert.equal(view.next.disabled,true);
   assert.equal(view.operation.kind,'page'); assert.equal(view.operation.percent,23);
    assert.equal(view.status.textContent,'Loading Sessions page 5 · 4 of 17 sessions');
   assert.equal(view.operation.completed,4);
@@ -90,6 +112,7 @@ module.exports = async ({vm, context, Node, timers}) => {
     assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Access unavailable/);
    assert.doesNotMatch(view.status.textContent,/Cancel/);
    assert.equal(view.operation.pending,false);
+   labelOnlyPager();
    const authCalls = calls.length; await view.poll();
    assert.equal(calls.length,authCalls,'terminal authority failure cannot keep retrying');
    await restorePrevious();
