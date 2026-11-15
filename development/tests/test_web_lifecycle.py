@@ -26,7 +26,7 @@ from src.web.process_identity import InstanceConflict, process_identity, termina
 class LifecycleTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'nt', 'Windows paired GUI interpreter')
     def test_managed_host_uses_gui_interpreter_for_console_free_report_children(self):
-        (self.root / 'cost-guard-web.py').write_text('pass\n')
+        (self.root / 'src/entrypoints/web.py').write_text('pass\n')
         with patch.object(lifecycle.subprocess, 'Popen') as spawn:
             lifecycle.spawn_detached(self.root, self.store(), 'a' * 32, 'src.web.native_windows')
         args, options = spawn.call_args
@@ -35,7 +35,7 @@ class LifecycleTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'nt', 'Windows paired GUI interpreter')
     def test_missing_gui_interpreter_fails_without_spawning_console_host(self):
-        (self.root / 'cost-guard-web.py').write_text('pass\n')
+        (self.root / 'src/entrypoints/web.py').write_text('pass\n')
         with patch.object(Path, 'is_file', return_value=False), patch.object(lifecycle.subprocess, 'Popen') as spawn:
             with self.assertRaises(InstanceConflict):
                 lifecycle.spawn_detached(self.root, self.store(), 'a' * 32, 'src.web.native_windows')
@@ -57,6 +57,7 @@ class LifecycleTests(unittest.TestCase):
         self.base = Path(self.temporary.name).resolve()
         self.root = self.base / "checkout space å"
         (self.root / "src/web/assets").mkdir(parents=True)
+        (self.root / "src/entrypoints").mkdir()
         self.source = self.root / "src/code.py"
         self.source.write_text("pass\n")
         self.home = self.base / "private"
@@ -88,7 +89,7 @@ class LifecycleTests(unittest.TestCase):
                 elif operation == "asset":
                     (self.root / "src/web/assets/app.js").write_text("changed")
                 elif operation == "entry":
-                    (self.root / "cost-guard-web.py").write_text("pass")
+                    (self.root / "src/entrypoints/web.py").write_text("pass")
                 else:
                     (self.root / "pyproject.toml").write_text("[project]")
                 self.assertEqual(guard.check(), "source_changed")
@@ -502,7 +503,7 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(lifecycle.subprocess, "Popen") as popen:
             lifecycle.spawn_detached(self.root, store, "a" * 32, "src.web.native_windows")
         arguments, options = popen.call_args
-        self.assertIn(str(self.root / "cost-guard-web.py"), arguments[0])
+        self.assertIn(str(self.root / "src/entrypoints/web.py"), arguments[0])
         self.assertEqual(options["cwd"], str(store.directory))
         self.assertTrue(options["close_fds"])
         for stream in ("stdin", "stdout", "stderr"):

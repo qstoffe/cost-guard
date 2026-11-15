@@ -23,7 +23,8 @@ class WindowsWebActivityTests(unittest.TestCase):
                 (web / 'windows_launch.ps1').write_text(source, encoding='utf-8-sig')
                 (root / 'src/python_discovery.ps1').write_bytes((ROOT / 'src/python_discovery.ps1').read_bytes())
                 (web / 'launch_messages.json').write_bytes((ROOT / 'src/web/launch_messages.json').read_bytes())
-                (root / 'cost-guard-web.py').write_text(f'''
+                (root / 'src/entrypoints').mkdir()
+                (root / 'src/entrypoints/web.py').write_text(f'''
 import sys, time
 if sys.argv[1:] != ['--launch-windows']:
     raise SystemExit(99)

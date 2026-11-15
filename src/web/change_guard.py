@@ -7,7 +7,7 @@ import time
 
 class SourceGuard:
     # Explicit runtime surface; documentation/configuration and development are not code.
-    FILES = ("cost-guard.py", "cost-guard-cli.py", "cost-guard-web.py", "pyproject.toml",
+    FILES = ("pyproject.toml",
              "requirements.txt", "config/default-config.jsonc")
     TREES = ("src", "windows", "macos")
     SUFFIXES = {".py", ".pyw", ".html", ".css", ".js", ".json", ".svg", ".ico",

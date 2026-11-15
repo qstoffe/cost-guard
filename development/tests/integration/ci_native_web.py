@@ -35,6 +35,7 @@ import socket
 import time, json
 from pathlib import Path
 started = time.monotonic()
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 mode = 'wrapper' if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']) else 'preflight' if sys.argv[1:] == ['--preflight-macos'] else 'host'
 case = os.environ['CG_CI_CASE']
 trace = Path(os.environ['CG_CI_STATE']) / ('ci-startup-' + case + '-' + mode + '.json')
@@ -81,7 +82,7 @@ if sys.platform == 'darwin':
                 return observed(*args, **kwargs)
             return real_run(*args, **kwargs)
         subprocess.run = traced_run
-root = Path(__file__).resolve().parent
+root = Path(__file__).resolve().parents[2]
 real_connect = socket.socket.connect
 def offline_connect(stream, address):
     if address[0] != '127.0.0.1':
@@ -374,7 +375,7 @@ def main():
             support = root / 'development/tools'
             support.mkdir(parents=True)
             shutil.copyfile(ROOT / 'development/tools/ci_web_beta.py', support / 'ci_web_beta.py')
-            (root / "cost-guard-web.py").write_text(SHIM, encoding="utf-8")
+            (root / "src/entrypoints/web.py").write_text(SHIM, encoding="utf-8")
             home = base / "private"
             home.mkdir()
             if os.name == "nt":

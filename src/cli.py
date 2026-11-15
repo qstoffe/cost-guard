@@ -48,17 +48,17 @@ def help_text() -> str:
     return f"""{PRODUCT_NAME} {DISPLAY_VERSION}
 
 Usage:
-  python cost-guard-cli.py
-  python cost-guard-cli.py --all-models
-  python cost-guard-cli.py --token-mix
-  python cost-guard-cli.py --sessions N|all
-  python cost-guard-cli.py --watch
-  python cost-guard-cli.py <session-id>
-  python cost-guard-cli.py <session-id> --watch
-  python cost-guard-cli.py YYYY-MM-DD
-  python cost-guard-cli.py YYYY-MM-DD:YYYY-MM-DD
+  python src/entrypoints/cli.py
+  python src/entrypoints/cli.py --all-models
+  python src/entrypoints/cli.py --token-mix
+  python src/entrypoints/cli.py --sessions N|all
+  python src/entrypoints/cli.py --watch
+  python src/entrypoints/cli.py <session-id>
+  python src/entrypoints/cli.py <session-id> --watch
+  python src/entrypoints/cli.py YYYY-MM-DD
+  python src/entrypoints/cli.py YYYY-MM-DD:YYYY-MM-DD
 
-Default desktop Web: python cost-guard.py (Windows/macOS).
+Default desktop Web: python src/entrypoints/desktop.py (Windows/macOS).
 Legacy terminal launchers: windows/Legacy/ or macos/Legacy/.
 
 Options:

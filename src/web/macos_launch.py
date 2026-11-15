@@ -17,7 +17,7 @@ MESSAGES = messages('macos')
 def native_preflight(root):
     # Contain a native ABI/Objective-C crash or stalled WindowServer before restart.
     try:
-        result = subprocess.run([sys.executable, str(Path(root) / "cost-guard-web.py"),
+        result = subprocess.run([sys.executable, str(Path(root) / "src/entrypoints/web.py"),
                                  "--preflight-macos"], stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 timeout=10, check=False)
@@ -29,7 +29,7 @@ def native_preflight(root):
 
 def launch_macos(root):
     if sys.platform != "darwin" or sys.version_info < (3, 11):
-        print("Cost Guard requires macOS and already-installed Python 3.11+. Legacy CLI: python cost-guard-cli.py")
+        print("Cost Guard requires macOS and already-installed Python 3.11+. Legacy CLI: python src/entrypoints/cli.py")
         return 1
     store = None
     progress = StartupProgress()

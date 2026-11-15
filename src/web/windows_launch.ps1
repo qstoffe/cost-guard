@@ -74,7 +74,7 @@ try {
         $safe = $null
         $info = [Diagnostics.ProcessStartInfo]::new()
         $info.FileName = $python
-        $info.Arguments = (($pythonArgs + @('-u', ('"' + (Join-Path $root 'cost-guard-web.py') + '"'), '--launch-windows')) -join ' ')
+        $info.Arguments = (($pythonArgs + @('-u', ('"' + (Join-Path $root 'src/entrypoints/web.py') + '"'), '--launch-windows')) -join ' ')
         $info.UseShellExecute = $false
         $info.CreateNoWindow = $true
         $info.RedirectStandardOutput = $true

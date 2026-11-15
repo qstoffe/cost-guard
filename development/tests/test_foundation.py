@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import shutil
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,19 +21,18 @@ class ValidationTests(unittest.TestCase):
     def test_only_named_product_prose_can_cross_former_caps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = copy_package(Path(tmp))
-            for relative, threshold in (("README.md", 32768), ("VERSION_HISTORY.md", 32768),
-                                        ("docs/web-beta.md", 65536)):
+            for relative, threshold in (("README.md", 32768),):
                 path = copy / relative
                 with path.open("a", encoding="utf-8") as stream:
                     stream.write("\n" + "x" * (threshold + 1))
             validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
             self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
-            for kind in ("rootReadme", "versionHistory", "webUserGuide"):
+            for kind in ("rootReadme",):
                 self.assertIn(f"WARN  {kind} prose budget", validation.stdout)
 
             # Neither Markdown nor operational-context names inherit the prose exception.
             for relative in ("AGENTS.md", "skills/example/SKILL.md", "commands/example.md",
-                             "docs/agent-reference.md", "docs/example/README.md", "docs/example.md"):
+                             "manual/agent-reference.md", "manual/example/README.md", "manual/example.md"):
                 path = copy / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"x" * 65537)
@@ -42,7 +44,7 @@ class ValidationTests(unittest.TestCase):
             validate_package.check_budgets(copy, results)
             details = "\n".join(detail for _, detail in results.failures)
             for relative in ("AGENTS.md", "skills/example/SKILL.md", "commands/example.md",
-                             "docs/agent-reference.md", "docs/example/README.md", "docs/example.md",
+                             "manual/agent-reference.md", "manual/example/README.md", "manual/example.md",
                              "config/default-config.jsonc", "src/oversize.py"):
                 self.assertIn(relative + ":", details)
             (copy / "README.md").write_bytes(b"x" * 2097153)
@@ -81,7 +83,7 @@ class ValidationTests(unittest.TestCase):
             self.assertNotEqual(0, explicit.returncode)
             self.assertIn("forbidden packaged top-level path: .vs", explicit.stdout)
 
-            malformed = copy / "docs/Unexpected/oversize.txt"
+            malformed = copy / "src/Unexpected/oversize.txt"
             malformed.parent.mkdir(parents=True)
             malformed.write_text("x" * 65537, encoding="utf-8")
             validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
@@ -92,22 +94,22 @@ class ValidationTests(unittest.TestCase):
     def test_nested_visual_studio_directory_is_not_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = copy_package(Path(tmp))
-            nested = copy / "docs/.vs/Unexpected/index.vsidx"
+            nested = copy / "src/.vs/Unexpected/index.vsidx"
             nested.parent.mkdir(parents=True)
             nested.write_bytes(b"\0" * 65537)
             validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
             self.assertNotEqual(0, validation.returncode)
-            self.assertIn("docs/.vs/Unexpected", validation.stdout)
+            self.assertIn("src/.vs/Unexpected", validation.stdout)
 
-    def test_documentation_images_use_existing_binary_cap_not_text_cap(self) -> None:
+    def test_runtime_images_use_existing_binary_cap_not_text_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "development/tests/policies").mkdir(parents=True)
             shutil.copyfile(ROOT / "development/tests/policies/file-budgets.json", root / "development/tests/policies/file-budgets.json")
-            image = root / "docs/images/example.png"
+            image = root / "src/web/assets/example.png"
             image.parent.mkdir(parents=True)
             self.assertEqual("universalFile", validate_package.file_kind(root, image))
-            self.assertEqual("otherText", validate_package.file_kind(root, root / "docs/example.md"))
+            self.assertEqual("otherText", validate_package.file_kind(root, root / "example.md"))
             image.write_bytes(b"\0" * 65537)
             results = validate_package.Results()
             validate_package.check_budgets(root, results)
@@ -126,13 +128,51 @@ class ValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             copy = copy_package(Path(tmp))
             self.assertFalse((copy / "releases").exists())
-            version = run_python(str(copy / "cost-guard.py"), "--version", cwd=copy)
+            version = run_python(str(copy / "src/entrypoints/desktop.py"), "--version", cwd=copy)
             self.assertEqual(0, version.returncode, version.stdout + version.stderr)
             self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", version.stdout.strip())
             validation = run_python(str(copy / "development/tools/validate_package.py"), "--working-tree", cwd=copy)
             self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
             self.assertFalse((copy / "releases").exists())
             self.assertEqual([], list(copy.rglob("*.zip")))
+
+    def test_tiny_readme_is_web_first_with_real_launchers(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertLessEqual(len(readme.split()), 100)
+        self.assertLessEqual(len(readme.splitlines()), 25)
+        self.assertLess(readme.index("## Windows"), readme.index("## macOS"))
+        self.assertIn("local Web server", readme)
+        for path in ("windows/Cost-Guard-Web.cmd", "macos/Cost-Guard-Web.command"):
+            self.assertIn(f"]({path})", readme)
+            self.assertTrue((ROOT / path).is_file())
+        for retired in ("docs/", "VERSION_HISTORY", "python ", "## Current version"):
+            self.assertNotIn(retired, readme)
+
+    def test_installed_entries_bootstrap_from_unrelated_unicode_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "Install space å 日本"
+            base.mkdir()
+            copy = copy_package(base)
+            outside = Path(tmp) / "unrelated"
+            outside.mkdir()
+            self.assertEqual([], list(copy.glob("*.py")))
+            self.assertFalse((copy / "docs").exists())
+            self.assertFalse((copy / "VERSION_HISTORY.md").exists())
+            for entry in ("desktop", "cli", "web"):
+                with self.subTest(entry=entry):
+                    result = run_python(str(copy / f"src/entrypoints/{entry}.py"), "--help", cwd=outside)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertNotIn("Traceback", result.stdout + result.stderr)
+                    # Standard module dispatch needs the installation on the import path.
+                    environment = {**os.environ, "PYTHONPATH": str(copy), "PYTHONDONTWRITEBYTECODE": "1"}
+                    module = subprocess.run([sys.executable, "-m", f"src.entrypoints.{entry}", "--help"],
+                                            cwd=outside, env=environment, capture_output=True, text=True, timeout=20)
+                    self.assertEqual(result.stdout, module.stdout, module.stderr)
+                    self.assertEqual(0, module.returncode)
+            for entry in ("desktop", "cli"):
+                result = run_python(str(copy / f"src/entrypoints/{entry}.py"), "--version", cwd=outside)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", result.stdout.strip())
 
 
 class BrokenPackageTests(unittest.TestCase):
@@ -157,6 +197,36 @@ class BrokenPackageTests(unittest.TestCase):
         copy = self.broken_copy("cache/should-not-ship.txt", "runtime only", append=False)
         failures = self.failures(validate_package.check_required_layout, copy)
         self.assertIn(("runtime artifact", "forbidden packaged top-level path: cache"), failures)
+
+    def test_validator_rejects_retired_documentation_and_root_shims(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = copy_package(Path(temporary))
+            for name in ("docs", "VERSION_HISTORY.md", "cost-guard.py", "cost-guard-web.py", "cost-guard-cli.py"):
+                with self.subTest(name=name):
+                    path = root / name
+                    if name == "docs":
+                        path.mkdir()
+                    else:
+                        path.write_text("retired", encoding="utf-8")
+                    failures = self.failures(validate_package.check_required_layout, root)
+                    self.assertIn(("retired layout", f"retired top-level path must not ship: {name}"), failures)
+
+    def test_validator_checks_literal_runtime_version_and_release_date_without_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = copy_package(Path(temporary))
+            metadata = root / "src/version.py"
+            original = metadata.read_text(encoding="utf-8")
+            for source, expected in (
+                (original.replace('DISPLAY_VERSION = f"v{VERSION}"', 'DISPLAY_VERSION = "v0.0"'),
+                 "runtime/UI display metadata"),
+                (original.replace('RELEASE_DATE = "', 'RELEASE_DATE = "invalid-'),
+                 "valid YYYY-MM-DD"),
+                (original.replace('VERSION = "', 'VERSION = "bad-', 1), "MAJOR.MINOR"),
+            ):
+                with self.subTest(expected=expected):
+                    metadata.write_text(source, encoding="utf-8")
+                    failures = self.failures(validate_package.check_version_consistency, root)
+                    self.assertTrue(any(expected in detail for _, detail in failures), failures)
 
     def test_validator_requires_web_and_legacy_and_rejects_old_distribution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

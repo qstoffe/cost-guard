@@ -418,8 +418,8 @@ class Absent(importlib.abc.MetaPathFinder):
             raise ImportError('Optional application/web dependencies are absent')
 sys.meta_path.insert(0, Absent())
 import development.tools.collect_diagnostics
-sys.argv = ['cost-guard.py', sys.argv[1]]
-runpy.run_path('cost-guard.py', run_name='__main__')
+sys.argv = ['src/entrypoints/desktop.py', sys.argv[1]]
+runpy.run_path('src/entrypoints/desktop.py', run_name='__main__')
 """
         for argument in ("--version", "--help"):
             proc = subprocess.run([sys.executable, "-c", code, argument], cwd=ROOT,

@@ -56,11 +56,11 @@ def main():
         except Exception:
             return 3
     if arguments == ["--help"]:
-        print("Usage: python cost-guard-web.py --foreground\n"
+        print("Usage: python src/entrypoints/web.py --foreground\n"
               "Developer loopback Web. Ctrl+C or runtime changes stop owned work.\n"
               "Windows: windows/Cost-Guard-Web.cmd for detached tray mode.\n"
               "macOS: macos/Cost-Guard-Web.command (native validation pending).\n"
-              "Legacy CLI: python cost-guard-cli.py or windows/Legacy / macos/Legacy.\n"
+              "Legacy CLI: python src/entrypoints/cli.py or windows/Legacy / macos/Legacy.\n"
               "No browser opens in --foreground developer mode.")
         return 0
     is_managed = (len(arguments) == 3 and arguments[0] == "--managed"

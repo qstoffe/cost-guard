@@ -14,17 +14,17 @@ def main():
         return 0
     if arguments in (["--help"], ["-h"]):
         print(f"Cost Guard {DISPLAY_VERSION}\n\n"
-              "Usage: python cost-guard.py\n"
+              "Usage: python src/entrypoints/desktop.py\n"
               "Default: managed Web on Windows/macOS (requires a logged-in desktop).\n"
               "Windows: windows/Cost-Guard-Web.cmd\n"
               "macOS: macos/Cost-Guard-Web.command\n\n"
-              "Legacy CLI (also Linux/headless): python cost-guard-cli.py [arguments]\n"
-              "  python cost-guard-cli.py --watch\n"
-              "  python cost-guard-cli.py <session-id> --watch\n"
-              "  python cost-guard-cli.py --help\n"
+              "Legacy CLI (also Linux/headless): python src/entrypoints/cli.py [arguments]\n"
+              "  python src/entrypoints/cli.py --watch\n"
+              "  python src/entrypoints/cli.py <session-id> --watch\n"
+              "  python src/entrypoints/cli.py --help\n"
               "Launchers: windows/Legacy/ or macos/Legacy/\n"
               "Explicit old report/date/session/Watch arguments still forward unchanged to CLI.\n"
-              "Developer server: python cost-guard-web.py --foreground (no browser).")
+              "Developer server: python src/entrypoints/web.py --foreground (no browser).")
         return 0
     if arguments:
         # Preserve every explicit legacy argument, including argparse's unknown-flag errors.
@@ -40,6 +40,6 @@ def main():
         from .web.macos_launch import launch_macos
         return launch_macos(root)
     print("Cost Guard's default Web launcher requires Windows/macOS and a logged-in desktop.\n"
-          "Linux/headless: use python cost-guard-cli.py [arguments], or developer mode\n"
-          "python cost-guard-web.py --foreground (no automatic browser).", file=sys.stderr)
+          "Linux/headless: use python src/entrypoints/cli.py [arguments], or developer mode\n"
+          "python src/entrypoints/web.py --foreground (no automatic browser).", file=sys.stderr)
     return 2

@@ -15,7 +15,7 @@ from src.presentation import StartupProgress
 from src.version import DISPLAY_VERSION, RELEASE_DATE, VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
-ENTRYPOINT = ROOT / "cost-guard.py"
+ENTRYPOINT = ROOT / "src/entrypoints/desktop.py"
 
 
 def run_python(*args: str) -> subprocess.CompletedProcess[str]:
@@ -86,8 +86,8 @@ class BootstrapQuickTests(unittest.TestCase):
         proc = run_python(str(ENTRYPOINT), "--help")
         self.assertEqual(0, proc.returncode, proc.stderr)
         self.assertIn("Default: managed Web", proc.stdout)
-        self.assertIn("python cost-guard-cli.py <session-id> --watch", proc.stdout)
-        legacy = run_python(str(ROOT / "cost-guard-cli.py"), "--help")
+        self.assertIn("python src/entrypoints/cli.py <session-id> --watch", proc.stdout)
+        legacy = run_python(str(ROOT / "src/entrypoints/cli.py"), "--help")
         self.assertEqual(0, legacy.returncode, legacy.stderr)
         self.assertIn("YYYY-MM-DD:YYYY-MM-DD", legacy.stdout)
 
@@ -117,7 +117,7 @@ class BootstrapQuickTests(unittest.TestCase):
             return original(name, *args, **kwargs)
 
         for argument in ("--help", "-h", "--version"):
-            with self.subTest(argument=argument), patch.object(sys, "argv", ["cost-guard.py", argument]), \
+            with self.subTest(argument=argument), patch.object(sys, "argv", [str(ENTRYPOINT), argument]), \
                     patch("builtins.__import__", guarded), redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(0, product_entry.main())
                 self.assertIn(DISPLAY_VERSION, output.getvalue())
@@ -127,7 +127,7 @@ class BootstrapQuickTests(unittest.TestCase):
         cases = (["--watch"], ["--sessions", "all"], ["--token-mix"], ["--all-models"],
                  ["2026-11-01:2026-11-09"], ["ses_example", "--watch"], ["--unknown"])
         for arguments in cases:
-            with self.subTest(arguments=arguments), patch.object(sys, "argv", ["cost-guard.py", *arguments]), \
+            with self.subTest(arguments=arguments), patch.object(sys, "argv", [str(ENTRYPOINT), *arguments]), \
                     patch.object(bootstrap, "main", return_value=17) as cli, \
                     patch.object(product_entry.subprocess, "run") as native:
                 self.assertEqual(17, product_entry.main())
@@ -137,7 +137,7 @@ class BootstrapQuickTests(unittest.TestCase):
 
     def test_product_windows_default_uses_existing_powershell_handoff(self) -> None:
         from src import product_entry
-        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "win32"), \
+        with patch.object(sys, "argv", [str(ENTRYPOINT)]), patch.object(sys, "platform", "win32"), \
                 patch.dict(os.environ, SystemRoot="C:/Windows"), \
                 patch.object(product_entry.subprocess, "run", return_value=SimpleNamespace(returncode=4)) as native:
             self.assertEqual(4, product_entry.main())
@@ -148,29 +148,30 @@ class BootstrapQuickTests(unittest.TestCase):
 
     def test_product_macos_default_uses_existing_managed_launcher(self) -> None:
         from src import product_entry
-        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "darwin"), \
+        with patch.object(sys, "argv", [str(ENTRYPOINT)]), patch.object(sys, "platform", "darwin"), \
                 patch("src.web.macos_launch.launch_macos", return_value=4) as native:
             self.assertEqual(4, product_entry.main())
         native.assert_called_once_with(ROOT)
 
     def test_product_unsupported_default_never_attempts_a_native_launch(self) -> None:
         from src import product_entry
-        with patch.object(sys, "argv", ["cost-guard.py"]), patch.object(sys, "platform", "linux"), \
+        with patch.object(sys, "argv", [str(ENTRYPOINT)]), patch.object(sys, "platform", "linux"), \
                 patch.object(product_entry.subprocess, "run") as native, redirect_stderr(io.StringIO()) as output:
             self.assertEqual(2, product_entry.main())
         native.assert_not_called()
-        self.assertIn("cost-guard-cli.py", output.getvalue())
+        self.assertIn("src/entrypoints/cli.py", output.getvalue())
         self.assertIn("--foreground", output.getvalue())
 
     def test_both_entries_reject_unknown_flags_without_starting_web(self) -> None:
-        for name in ("cost-guard.py", "cost-guard-cli.py"):
+        for name in ("src/entrypoints/desktop.py", "src/entrypoints/cli.py"):
             result = run_python(str(ROOT / name), "--not-a-cost-guard-option")
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Unknown option", result.stdout + result.stderr)
 
     def test_promoted_source_guard_tracks_each_actual_entry(self) -> None:
         from src.web.change_guard import SourceGuard
-        entries = ("cost-guard-cli.py", "windows/Cost-Guard-Web.cmd", "macos/Cost-Guard-Web.command",
+        entries = ("src/entrypoints/desktop.py", "src/entrypoints/cli.py", "src/entrypoints/web.py",
+                   "windows/Cost-Guard-Web.cmd", "macos/Cost-Guard-Web.command",
                    "macos/launcher.applescript", "windows/Legacy/Cost-Guard.cmd")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

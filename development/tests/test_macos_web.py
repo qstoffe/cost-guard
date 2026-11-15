@@ -184,7 +184,7 @@ def ready():
 def failed():
     calls.append('failed')
     raise RuntimeError('synthetic native failure')
-sys.argv = ['cost-guard-web.py', '--preflight-macos']
+sys.argv = ['src/entrypoints/web.py', '--preflight-macos']
 native_macos.preflight = ready
 assert main() == 0
 native_macos.preflight = failed
@@ -363,7 +363,7 @@ exit "$CG_FAKE_EXIT"
                         activity = os.read(master, 8192).decode('utf-8') if readable else ''
                         activity += (child.stdout or b'').decode('utf-8')
                         self.assertIn('Checking native support', activity)
-                        self.assertIn('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos', activity)
+                        self.assertIn('ENTRY:-u|' + str(root / 'src/entrypoints/web.py') + '|--launch-macos', activity)
                         self.assertIn('Launching web', activity)
                         if redirected is None:
                             self.assertIn('[|]', activity)
@@ -401,7 +401,7 @@ exit 17
                     env=dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH']),
                     stdin=subprocess.DEVNULL, capture_output=True, timeout=5)
                 self.assertEqual(17, result.returncode, result.stderr)
-                self.assertIn(('ENTRY:' + str(root / 'cost-guard-cli.py') + '|' + argument).encode(), result.stdout)
+                self.assertIn(('ENTRY:' + str(root / 'src/entrypoints/cli.py') + '|' + argument).encode(), result.stdout)
 
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):
         source = (ROOT / "macos/Cost-Guard-Web.command").read_text(encoding="utf-8")

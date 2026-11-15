@@ -138,7 +138,7 @@ class LauncherFeedbackTests(unittest.TestCase):
             shell = shutil.which(executable)
             if shell is None:
                 continue
-            for mode, argument in (("report", "cost-guard-cli.py"), ("watch", "--watch"),
+            for mode, argument in (("report", "src/entrypoints/cli.py"), ("watch", "--watch"),
                                    ("diagnostics", "--test-service-start")):
                 with self.subTest(shell=executable, mode=mode), tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)

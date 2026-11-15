@@ -17,7 +17,7 @@ cg_find_python || {
   exit 1
 }
 
-"$PYTHON" "$CG_ROOT/cost-guard-cli.py"
+"$PYTHON" "$CG_ROOT/src/entrypoints/cli.py"
 RESULT=$?
 echo
 if [[ -t 0 && -t 1 ]]; then read -r '?Press Return to close...'; fi
