@@ -19,6 +19,7 @@ def token_mix_report(generation=1):
             (tokens.input, tokens.cache_read * 2, tokens.cache_write * 3, (tokens.output + tokens.reasoning) * 4))
 
     models, publishers, requests = [], [], []
+    observed_total = [0] * 4
     for index in range(65):
         model = ModelRef('synthetic', 'unknown' if index == 63 else f'model-{index}')
         usage = TokenUsage(input=100 + index * 3, cache_read=65 - index, cache_write=index,
@@ -32,11 +33,17 @@ def token_mix_report(generation=1):
         items = [(model, usage)] * (index + 1)
         requests.extend(items)
         mix = priced_token_mix(items, valuation, sample_size=1)
-        models.append(ModelTokenMixProjection(f'Synthetic model {index:02d} — Full readable model name', 1, index + 1, mix))
-        publishers.append(PublisherTokenMixProjection(f'Publisher {index:02d}', 1, index + 1, mix))
+        observed = tuple((getattr(usage, name) if name in usage.known_fields else 0) * len(items)
+                         for name in ('input', 'cache_read', 'cache_write', 'output'))
+        observed = (*observed[:3], observed[3] + usage.reasoning * len(items))
+        observed_total = [a + b for a, b in zip(observed_total, observed)]
+        models.append(ModelTokenMixProjection(f'Synthetic model {index:02d} — Full readable model name', 1, index + 1, mix,
+            f'Publisher {index:02d}', f'model-{index}', observed))
+        publishers.append(PublisherTokenMixProjection(f'Publisher {index:02d}', 1, index + 1, mix, observed))
     return ReportProjection(ReportKind.TOKEN_MIX, 'Token Mix', 'SYNTHETIC', (),
         token_mix=priced_token_mix(requests, valuation, sample_size=65),
-        model_token_mix=tuple(models), publisher_token_mix=tuple(publishers))
+        model_token_mix=tuple(models), publisher_token_mix=tuple(publishers),
+        token_mix_observed_totals=tuple(observed_total))
 
 
 class TokenMixJobs:

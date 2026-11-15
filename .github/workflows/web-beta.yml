@@ -79,6 +79,9 @@ jobs:
       - name: Mini keyboard and mouse stationary regression (representative; Full on manual dispatch)
         if: ${{ !cancelled() }}
         run: python development/tests/integration/ci_mini_tooltips.py mouse
+      - name: Token Mix numeric shares, periods, help and compact-evidence performance
+        if: ${{ !cancelled() }}
+        run: python development/tests/integration/ci_token_mix.py
       - name: Mini independent touch regression
         if: ${{ !cancelled() }}
         run: python development/tests/integration/ci_mini_tooltips.py touch

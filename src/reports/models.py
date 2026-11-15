@@ -235,6 +235,9 @@ class ModelTokenMixProjection:
     prompts: int
     calls: int
     mix: TokenMix
+    publisher: str = "—"
+    identity: str = ""
+    observed_totals: tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +246,7 @@ class PublisherTokenMixProjection:
     prompts: int
     calls: int
     mix: TokenMix
+    observed_totals: tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,3 +316,4 @@ class ReportProjection:
     history_omitted_roots: int = 0
     model_comparison_mix: tuple[Decimal, Decimal, Decimal, Decimal] | None = None
     token_mix_period: Mapping[str, object] = field(default_factory=dict)
+    token_mix_observed_totals: tuple[int, int, int, int] | None = None

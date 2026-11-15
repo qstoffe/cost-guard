@@ -6,10 +6,12 @@ async function main() {
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'token-mix-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'token-mix-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--token-mix'],
+  const python=process.env.COST_GUARD_TEST_PYTHON;
+  const server = spawn(python || 'py', [...(python?[]:['-3']), 'development/tests/integration/serve_mini_watch.py', config, '--token-mix'],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
-  const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
+  const child = spawn(browser, ['--headless=new',...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+    '--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
@@ -56,6 +58,14 @@ async function main() {
     const loadedAt=await evaluate(`current.checkedAt`);
     const rows=await evaluate(`current.result.view.model_token_mix`);
     assert.equal(rows.length,65);
+    const numericCells=await evaluate(`(() => {
+      const shares=[...current.tokenMix.summary.querySelectorAll('strong > span:first-child')].map(s=>s.textContent.split(' · ')[0]);
+      for(const [index,table] of [...document.querySelectorAll('.token-mix-table')].entries())
+        for(const row of table.tBodies[0].rows) shares.push(...[...row.cells].slice(index===0?5:4,index===0?9:8).map(c=>c.textContent));
+      return shares;
+    })()`);
+    assert.equal(numericCells.length,524);
+    assert.ok(numericCells.every(value=>/^\d+(?:\.\d)?%$/.test(value)),JSON.stringify(numericCells));
     for (const theme of ['classic','light','dark']) for (const width of [360,800,1280,1920]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
@@ -68,16 +78,16 @@ async function main() {
           boxed:document.querySelectorAll('.token-mix-section').length && [...document.querySelectorAll('.token-mix-section')].some(s=>getComputedStyle(s).borderTopWidth!=='0px'),
           prose:/Snapshot|Reading this report|Sample and price coverage|Token category order|\\?/.test(document.getElementById('result').textContent),
           tooltipTargets:document.querySelectorAll('.token-mix-table th .help-label').length}; })()`);
-      assert.equal(layout.tables,2); assert.deepEqual(layout.rows,[65,65]); assert.deepEqual(layout.columns,[9,9]);
+      assert.equal(layout.tables,2); assert.deepEqual(layout.rows,[65,65]); assert.deepEqual(layout.columns,[10,9]);
       assert.deepEqual(layout.vertical,[false,false]); assert.equal(layout.nowrap,true); assert.equal(layout.boxed,false);
-      assert.equal(layout.prose,false); assert.equal(layout.tooltipTargets,17);
+      assert.equal(layout.prose,false); assert.equal(layout.tooltipTargets,18);
       const arrows=await evaluate(`[...document.querySelectorAll('.token-mix-table th')].filter(th=>th.getAttribute('aria-sort')!=='none').map(th=>({
         glyphs:(th.textContent.match(/[↑↓]/g)||[]).length,after:getComputedStyle(th.querySelector('button'),'::after').content}))`);
       assert.ok(arrows.every(arrow=>arrow.glyphs===1 && arrow.after==='none'),JSON.stringify(arrows));
       if(width===360) assert.deepEqual(layout.horizontal,[true,true]);
       layouts.push({theme,width,...layout});
     }
-    checks.push('three themes, four widths, 65 uncapped single-line rows, 9 columns, horizontal-only panning, one sort arrow');
+    checks.push('three themes, four widths, 65 uncapped single-line rows, 10/9 columns, horizontal-only panning, one sort arrow');
     await evaluate(`ReportView.setUnit('credits',current.tokenMix.root)`);
     const publishers=await evaluate(`document.querySelectorAll('tbody')[1].textContent`);
     const total=await evaluate(`current.tokenMix.title.textContent`);
@@ -94,18 +104,20 @@ async function main() {
     };
     const metric=(row,col)=> {
       if(col===1||col===2) return fraction(col===1?row.prompts:row.calls);
-      if(col===3) return fraction(row.mix.known_total_tokens);
-      if(col===8) return row.mix.priced_requests?fraction(row.mix.total_cost):null;
+      if(col===3) return fraction(row.mix.observed_total_tokens);
+      if(col===8) return fraction(row.mix.total_cost);
       const index=col-4;
-      return row.mix.shares[index]==null?null:[BigInt(row.mix.exact_totals[index]),BigInt(row.mix.exact_total_tokens)];
+      return [BigInt(row.mix.observed_totals[index]),BigInt(row.mix.observed_total_tokens)||1n];
     };
     for (const [table,key] of [[0,'model'],[1,'publisher']]) {
+      const offset=table===0?1:0;
       const source=table?await evaluate(`current.result.view.publisher_token_mix`):rows;
       const other=await evaluate(`document.querySelectorAll('tbody')[${1-table}].textContent`);
-      for(let col=0;col<9;col++) for(const direction of [1,-1]) {
+      for(let col=0;col<9+offset;col++) for(const direction of [1,-1]) {
         await evaluate(`document.querySelectorAll('.token-mix-table')[${table}].tHead.rows[0].cells[${col}].querySelector('button').click()`);
-        const actual=await evaluate(`[...document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows].map(row=>row.cells[0].textContent)`);
-        const expected=[...source].sort((a,b)=>(col===0?a[key].localeCompare(b[key])*direction:compare(metric(a,col),metric(b,col),direction))||
+        const actual=await evaluate(`[...document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows].map(row=>row.cells[${offset}].textContent)`);
+        const textKey=col===0?'publisher':offset&&col===1?'model':null;
+        const expected=[...source].sort((a,b)=>(textKey?a[textKey].localeCompare(b[textKey])*direction:compare(metric(a,col-offset),metric(b,col-offset),direction))||
           b.calls-a.calls||a[key].localeCompare(b[key],undefined,{numeric:true})).map(row=>row[key]);
         assert.deepEqual(actual,expected,'exact '+key+' column '+col+' direction '+direction);
         assert.equal(await evaluate(`(()=>{const t=document.querySelectorAll('.token-mix-table')[${table}],th=t.tHead.rows[0].cells[${col}];
@@ -115,8 +127,8 @@ async function main() {
         assert.equal(await evaluate(`current.tokenMix.title.textContent`),total);
       }
     }
-    checks.push('all 18 headings sort both directions by exact independent expectations; unknown last, other table/total untouched');
-    await evaluate(`document.querySelectorAll('.token-mix-table th button')[1].focus()`);
+    checks.push('all 19 headings sort both directions by exact independent expectations; other table/total untouched');
+    await evaluate(`document.querySelectorAll('.token-mix-table th button')[2].focus()`);
     await until(`document.getElementById('context-help')?.hidden===false`);
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
@@ -153,6 +165,14 @@ async function main() {
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
     await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
     await require('./probe_token_mix_periods.cjs')({evaluate,until,command,tab,checks});
+    await evaluate(`(()=>{const value=structuredClone(current.result);
+      value.view.model_token_mix[0].model=value.view.model_token_mix[1].model='Same display name';
+      current.tokenMix.update(value);})()`);
+    assert.equal(await evaluate(`current.tokenMix.models.body.rows.length`),65,'equal catalog labels never merge identities');
+    const blankRange=await evaluate(`(()=>{const value=structuredClone(current.result);
+      value.view.token_mix_period={period:'all',start_ms:null,end_ms:null};current.tokenMix.update(value);
+      current.tokenMix.title.focus();return document.getElementById('context-help').textContent;})()`);
+    assert.match(blankRange,/^\d[\d,]* recorded tokens for the selected period$/,'missing boundaries are omitted, not invented');
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',checks,layouts,cadence_ms:startedAt-loadedAt,
       limitations:['Synthetic browser history; real installation performance is measured by the separate read-only process probe.','No physical OS input or screen-reader proof.']};

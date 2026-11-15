@@ -99,6 +99,8 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_web_display.py",
     "test_web_remaining.py",
     "test_web_token_mix.py",
+    "test_token_mix_observed.py",
+    "test_token_mix_reuse.py",
     "test_web_overview.py",
     "test_web_models.py",
     "test_web_price_refresh.py",

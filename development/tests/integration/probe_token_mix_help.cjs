@@ -19,8 +19,9 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
         view:{...originalMix.view,timezone_id:'Europe/Stockholm',token_mix_period:{
           period:'all',start_ms:Date.parse('${instant}'),end_ms:Date.parse('${instant}')}}})`);
       const text = await focus();
-      assert.ok(text.includes(`${expected}:00.000 GMT`), text);
-      assert.match(text, /known recorded tokens for the selected period/);
+      assert.ok(text.includes(`${expected} – ${expected}`), text);
+      assert.match(text, /^\d[\d,]* recorded tokens for the selected period\n\d{4}-\d{2}-\d{2} \d{2}:\d{2} – \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+      assert.doesNotMatch(text, /GMT|Europe|[+-]\d{2}:\d{2}|\d{2}:\d{2}:\d{2}/);
       assert.doesNotMatch(text, /Observed|CLI|Partial pricing|CCost|Deleted|telemetry/);
       assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`), /Partial|\?|Incomplete token telemetry/);
       assert.equal(await evaluate(`current.tokenMix.root.querySelectorAll('.partial').length`), 0);
@@ -45,14 +46,15 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   for (const state of ['complete', 'unpriced', 'empty']) {
     await evaluate(`(()=>{const value=structuredClone(originalMix);const mix=value.view.token_mix;
       if('${state}'==='complete'){mix.cost_complete=true;mix.exact_total_tokens=mix.known_total_tokens;}
-      if('${state}'==='unpriced'){mix.priced_requests=0;for(const key of Object.keys(mix.display))if(key.endsWith('_cost'))mix.display[key]='N/A';delete mix.display_units;}
-      if('${state}'==='empty'){mix.request_count=0;mix.known_total_tokens=null;mix.display.mix_total_tokens='N/A';value.view.model_token_mix=[];value.view.publisher_token_mix=[];}
+      if('${state}'==='unpriced'){mix.priced_requests=0;mix.cost_complete=false;}
+      if('${state}'==='empty'){mix.request_count=0;mix.known_total_tokens=null;mix.observed_total_tokens='0';value.view.model_token_mix=[];value.view.publisher_token_mix=[];}
       current.tokenMix.update(value);})()`);
     const text = await focus();
     if (state==='complete' || state==='empty') assert.doesNotMatch(text,/Partial pricing:/);
-    if (state==='unpriced') assert.match(await evaluate(`current.tokenMix.summary.textContent`),/N\/A/);
+    assert.doesNotMatch(await evaluate(`current.tokenMix.summary.textContent`),/N\/A|Partial|\\?|unavailable/);
     if (state==='empty') assert.match(await evaluate(`current.tokenMix.root.textContent`),/No available historical usage/);
   }
+  assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('.help-value,.help-label,[title],[tabindex]').length`),0);
   await evaluate(`current.tokenMix.update(originalMix);current.tokenMix.title.scrollIntoView({block:'center'});current.tokenMix.title.blur()`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},tab);
