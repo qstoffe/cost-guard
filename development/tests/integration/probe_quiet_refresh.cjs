@@ -98,12 +98,12 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
   await run(`window.delayCatalog=true;window.quietFlight=current.catalog.poll();void 0`);
   await ready(`!!window.finishQuietRefresh`);
   assert.equal(await run(`current.catalog.body.firstChild===quietRow && !current.catalog.pan.hidden &&
-    !current.catalog.pager.hidden && current.catalog.loader.root.hidden && current.catalog.status.textContent===''`),true);
+    !current.catalog.pager.hidden && !current.catalog.operation && current.catalog.status.textContent===''`),true);
   await run(`catalogRows[0].prompt_count=2;delayCatalog=false;finishQuietRefresh();quietFlight`);
    assert.equal(await run(`current.catalog.body.firstChild===quietRow && quietRow.cells[5].textContent==='2' &&
     document.activeElement===quietFocus && scrollY===quietScroll`),true);await audit();
   await run(`catalogFailure=true;current.catalog.load()`);await audit();
-  assert.equal(await run(`current.catalog.body.children.length===50 && current.catalog.loader.root.hidden &&
+  assert.equal(await run(`current.catalog.body.children.length===50 && !current.catalog.operation &&
     !current.catalog.pan.hidden && !current.catalog.pager.hidden && current.catalog.status.textContent.includes('offline')`),true);
   await run(`catalogFailure=false;current.catalog.poll()`);await audit();
   assert.equal(await run(`current.catalog.status.hidden && current.catalog.status.textContent===''`),true);

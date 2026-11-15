@@ -298,7 +298,7 @@ async function main() {
     context.coldCatalog.update({...catalogData,pending_sort:true,total:1,view:{session_usage:[{
       session_id:'first',title:'First usable row',indexed:false,metric_state:'pending'}]}});
     assert.equal(context.coldCatalog.body.children.length,1,'cheap metadata is visible with an explicit provisional-order label');
-    assert.match(context.coldCatalog.status.textContent,/Provisional candidate order/);
+    assert.equal(context.coldCatalog.status.hidden,true,'passive first acquisition has no loading banner');
     assert.equal(context.coldCatalog.data,null,'provisional order is not published as the requested globally sorted data');
      const cold = Array.from({length:25}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
@@ -325,15 +325,17 @@ async function main() {
     catalog.update({...usable,pending_sort:true,sort:'activity',indexed:1,available:26,view:{session_usage:[]}});
     assert.equal(catalog.body.children[0],firstRow);
     assert.equal(catalog.label.textContent,labelBefore);
-     assert.match(catalog.status.textContent,/Provisional candidate order/);
+      assert.equal(catalog.status.hidden,true,'passive pending-sort observation is silent');
     assert.notEqual(catalog.pan.hidden,true); assert.notEqual(catalog.pager.hidden,true);
-      assert.equal(catalog.loader.root.hidden,true);
-     catalog.configure(new URLSearchParams('sort=ccost&direction=1'));
+       assert.equal(catalog.operation,null);
+      catalog.navigateTo('#/sessions?sort=ccost&direction=1',null,'sort');
+      catalog.configure(new URLSearchParams('sort=ccost&direction=1'));
       catalog.update({...usable,pending_sort:true});
       assert.match(catalog.next.destination,/sort=activity&direction=-1/,'retained pager belongs to the actual displayed order');
       assert.equal(catalog.pan.hidden,false);
-      assert.equal(catalog.loader.root.hidden,false);
-      assert.equal(catalog.loader.bar.max,100);
+       assert.equal(catalog.operation.pending,true);
+       assert.match(catalog.status.textContent,/Sorting sessions by CCost/);
+       assert.equal(catalog.loader,undefined);
     catalog.attached=true;
      for (const direction of [1,-1]) for (const offset of [0,25]) {
        const requests=[]; let expire=true;
@@ -362,7 +364,7 @@ async function main() {
          await catalog.poll();
          assert.equal(catalog.status.textContent,''); assert.equal(catalog.status.hidden,true);
          assert.equal(catalog.body.children[0],firstRow);
-         assert.equal(catalog.loader.root.hidden,true); assert.equal(catalog.pan.hidden,false);
+          assert.equal(catalog.operation,null); assert.equal(catalog.pan.hidden,false);
          assert.equal(delays.at(-1),5000,'recovery returns to normal visible polling');
        }
     }

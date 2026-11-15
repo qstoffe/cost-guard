@@ -102,7 +102,7 @@ async function main() {
     catalog: current?.catalog && {busy:current.catalog.busy, pending:current.catalog.data?.pending_sort,
       sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available,
       offset:current.catalog.offset, displayedOffset:current.catalog.data?.offset, label:current.catalog.label.textContent,
-      status:current.catalog.status.textContent, operation:current.catalog.operation?.kind, stage:current.catalog.loader.stage.textContent},
+      status:current.catalog.status.textContent, operation:current.catalog.operation?.kind},
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
       state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
