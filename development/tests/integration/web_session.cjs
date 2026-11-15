@@ -80,7 +80,7 @@ async function main() {
   assert.ok(!view.body.children.at(-1).textContent.includes('[RUNNING]'));
   assert.equal(view.body.children.at(-1).className, '');
   const retained = view.body.textContent; offline = true; await view.load();
-   assert.equal(view.body.textContent, retained); assert.equal(view.status.textContent, '');
+   assert.equal(view.body.textContent, retained); assert.match(view.status.textContent, /updates unavailable.*Previously verified/);
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
   offline = false; page.export_available = true;
@@ -435,6 +435,17 @@ async function main() {
    page=ictxPage; view.attached=true; await view.load();
    assert.equal(view.body.children[0].children[6].textContent,'17K');
    view.detach();
-  console.log('PASS complete history, keyed selection, running/end, retained errors, lease release and navigation races');
+   require('../fixtures/session_values_vm.cjs')({vm, context, Node, input, document});
+   for (const reason of ['authentication_required','host_identity_changed']) {
+     vm.runInContext("globalThis.retired = new SessionDetail.View(api, 'root-0000')",context);
+     const retired=context.retired;retired.update(JSON.parse(JSON.stringify(input.first)));
+     retired.attached=true;retired.token='retired';
+     retired.api=async (_,request)=>{if(request.action==='close')return {};throw new Error(reason);};
+     await retired.load();
+     assert.equal(retired.body.children.length,0,'terminal host/auth loss clears retained table');
+     assert.equal(retired.footer.children.length,0);
+     assert.equal(retired.attached,false);
+   }
+   console.log('PASS complete history, keyed selection, running/end, retained errors, lease release and navigation races');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

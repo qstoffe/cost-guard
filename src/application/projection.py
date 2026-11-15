@@ -12,7 +12,7 @@ from src.reports.models import ReportKind
 
 from .contracts import ObjectValue, record
 from .display import with_display
-from .prompt_costs import cost_detail
+from .prompt_costs import cost_detail, watch_calls
 from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
 from .benchmark import benchmark_view
@@ -69,8 +69,10 @@ def prompt(value, *, details=False):
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),
                                       ("incoming_context_ccost_usage_missing", not value.incoming_context_ccost_known),
                                       ("extra_ccost_usage_missing", not value.extra_ccost_known),
-                                      ("cost_detail", cost_detail(value) if details else None),
-                                      ("has_error", value.watch_error)))
+                                       ("cost_detail", cost_detail(value) if details else None),
+                                       *((("watch_calls_help", watch_calls(value)),
+                                          ("linked_agent_count", value.linked_agent_count)) if details else ()),
+                                       ("has_error", value.watch_error)))
 
 
 def hourly(value):

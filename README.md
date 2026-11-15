@@ -22,7 +22,7 @@ Private development access is not required to build, test or run Cost Guard.
 
 ## Quick start
 
-Use **current `main`** (v81.59, 2026-11-15), the supported distribution.
+Use **current `main`** (v81.61, 2026-11-15), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.60 (2026-11-15):** Sessions computes each row's sort value once when building a new ordering, reducing cold-page CPU work for large catalogs. Ascending identity ties, unknown-last metrics, pinned pages and source acquisition are unchanged.
+**v81.61 (2026-11-15):** Session Detail places Context below the complete history table, shares Watch's Model/Calls/Duration help and removes Effort cell help. Source-qualified Token Mix and independent Complete session totals survive background refresh without replacing footer controls; corrections and source/authorization changes invalidate old display observations.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

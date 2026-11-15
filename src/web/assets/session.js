@@ -4,16 +4,69 @@ const SessionDetail = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
     ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work.'],
-    ['Model', 'The canonical main prompt model. Linked subagents may use other models.'],
+    ['Model', ReportView.headerHelp.model],
     ['Effort', 'Reasoning effort requested for the main prompt.'],
     ['CCost', 'Reference cost of this prompt, including linked work; not your bill.'],
-    ['Calls', 'Recorded model requests, including linked subagents. Not tool calls.'],
-    ['Duration', 'Canonical execution time, excluding idle gaps. Retained observations do not advance.'],
+    ['Calls', ReportView.headerHelp.calls],
+    ['Duration', ReportView.headerHelp.duration],
     ['Ictx', 'Context on the first request of this prompt, not the next session context. N/A is unknown.'],
     ['Ictx CCost', 'Reference incoming-context cost component. Estimates and unavailable evidence retain their canonical meaning.'],
     ['Extra CCost', 'Other reference cost: output, later requests and linked subagents.'],
     ['Token Mix %', 'Token percentages in Input / Cached input / Cache write / Output order. Output includes reasoning. Not cost.']
   ];
+  class Values {
+    constructor() { this.clear(); }
+    clear() { this.scope = null; this.retained = false; this.mixes = new Map(); this.totals = new Map(); }
+    select(row, key, state, cache) {
+      const names = key === 'total_ccost' ? ['total_ccost', 'session_cost_help'] : [key];
+      const extract = tokens => Object.fromEntries(names.filter(name => Object.hasOwn(tokens || {}, name))
+        .map(name => [name, tokens[name]]));
+      if (state === 'known') cache.set(key, {display: extract(row.display),
+        units: Object.fromEntries(['credits', 'usd'].map(unit => [unit, extract(row.display_units?.[unit])])),
+        value: row[key]});
+      else if (state !== 'pending') cache.delete(key);
+      const old = cache.get(key);
+      if (!old) return row;
+      if (state === 'pending') this.retained = true;
+      // Display-only observations; raw billing/accounting and source DTOs stay untouched.
+      return {...row, [key]: old.value, display: {...row.display, ...old.display},
+        display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+          [unit, {...row.display_units?.[unit], ...old.units[unit]}]))};
+    }
+    project(block, authority) {
+      if (!authority?.scope || authority.scope !== this.scope) this.clear();
+      this.scope = authority?.scope; this.retained = false;
+      const wanted = new Set();
+      const rows = block.rows.map(row => {
+        const key = JSON.stringify([row.id, row.event_id, row.at_ms]); wanted.add(key);
+        const cache = this.mixes.get(key) || new Map(); this.mixes.set(key, cache);
+        const valid = Array.isArray(row.token_mix_percent) && row.token_mix_percent.length === 4 &&
+          row.token_mix_percent.every(value => Number.isFinite(value) && value >= 0);
+        const state = authority?.rows?.[row.event_id];
+        let value = this.select(row, 'token_mix_percent', state === 'known' && !valid ? 'unavailable' : state, cache);
+        if (!Array.isArray(value.token_mix_percent) || value.token_mix_percent.length !== 4 ||
+            state === 'pending' && !cache.has('token_mix_percent')) {
+          const token = row.in_progress || authority?.rows?.[row.event_id] === 'pending' ? 'Loading…' : 'N/A';
+          value = {...value, display: {...value.display, token_mix_percent: token},
+            display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+              [unit, {...value.display_units?.[unit], token_mix_percent: token}]))};
+        }
+        return value;
+      });
+      for (const key of this.mixes.keys()) if (!wanted.has(key)) this.mixes.delete(key);
+      let result = {...block, rows};
+      for (const key of ['total_calls', 'duration_ms', 'total_ccost', 'total_ictx_cost_text',
+        'total_extra_cost_text', 'total_mix_text']) {
+        result = this.select(result, key, authority?.totals?.[key], this.totals);
+        if (authority?.totals?.[key] === 'pending' && !this.totals.has(key)) {
+          result = {...result, [key]: 'Loading…', display: {...result.display, [key]: 'Loading…'},
+            display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
+              [unit, {...result.display_units?.[unit], [key]: 'Loading…'}]))};
+        }
+      }
+      return result;
+    }
+  }
   function protection() {
     const selection = window.getSelection?.();
     const targets = [document.activeElement, ...(selection && !selection.isCollapsed ? [selection.anchorNode, selection.focusNode] : [])].filter(Boolean);
@@ -27,12 +80,14 @@ const SessionDetail = (() => {
     label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
       () => [ReportView.costHelp(value), ReportView.display(value, 'cost_detail_help')].filter(text => text && text !== 'N/A').join('\n\n'));
-    const model = ContextHelp.value(el('span', value.watch_model || value.model_effort || 'N/A'),
-      () => ReportView.display(value, 'model_detail_help'));
+    const modelName = value.watch_model || value.model_effort || 'N/A';
+    const model = ContextHelp.value(el('span', modelName + (value.linked_agent_count ? '*' : '')),
+       () => ReportView.display(value, 'model_detail_help'));
+    if (value.linked_agent_count) model.setAttribute('aria-label',
+      `${modelName} · Linked subagents participated (${value.linked_agent_count})`);
     const calls = ContextHelp.value(el('span', value.display?.calls ?? String(value.calls ?? 'N/A')),
-      () => ReportView.display(value, 'calls_help'));
-    const effort = ContextHelp.value(el('span', value.watch_effort || 'N/A'),
-      () => ReportView.display(value, 'effort_help'));
+      () => value.watch_calls_help || 'Model/effort request details unavailable.');
+    const effort = el('span', value.watch_effort || 'N/A');
     return [label, model, effort, cost,
       calls, ReportView.display(value, 'duration_ms'),
       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
@@ -67,7 +122,8 @@ const SessionDetail = (() => {
       columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, this.retry, this.loader.root, scroll, this.activity.root);
+      this.values = new Values();
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.status, this.retry, this.loader.root, scroll, this.context.root, this.activity.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
     }
@@ -127,6 +183,11 @@ const SessionDetail = (() => {
         }
         let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
         if (!this.attached || generation !== this.generation) return;
+        if (data.values_invalidated) {
+          this.invalidateValues(); this.sourceStatus(data); return;
+        }
+        if (data.result && this.values.scope && data.value_authority?.scope !== this.values.scope)
+          this.invalidateValues();
         this.exporter?.update(this.token, data.export_available === true, data.result?.view?.prompt_blocks?.[0]?.title);
         if (!data.result) {
           this.sourceStatus(data);
@@ -161,6 +222,9 @@ const SessionDetail = (() => {
           if (chunk.revision !== data.revision || chunk.total !== data.total || chunk.offset !== rows.length ||
               !Array.isArray(next) || !next.length || rows.length + next.length > data.total) throw new Error('inconsistent_history');
           validate(next);
+          if (data.value_authority?.scope !== chunk.value_authority?.scope || chunk.values_invalidated)
+            throw new Error('inconsistent_history');
+          if (data.value_authority) Object.assign(data.value_authority.rows, chunk.value_authority.rows);
           rows.push(...next);
           this.historyProgress(rows.length, data.total);
           // Yield between bounded chunks without discarding a retained history.
@@ -188,19 +252,24 @@ const SessionDetail = (() => {
         this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        this.status.textContent = this.data ? '' : `Session unavailable (${error.message}).`;
+        this.status.textContent = this.data ?
+          `Session updates unavailable (${error.message}). Previously verified history is retained.` :
+          `Session unavailable (${error.message}).`;
         this.status.hidden = !this.status.textContent;
         this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
         if (error.message === 'detail_expired') {
           this.token = null; this.exporter?.close(); this.activity.update(null);
           if (this.data) this.data.activity = null;
         }
-        if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
+        if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) {
+          this.invalidateValues(); this.detach();
+        }
       } finally { this.busy = false; this.activity.more.disabled = false; }
     }
     sourceStatus(data) {
       this.freshness();
       const acquisition = data.acquisition;
+      if (data.values_invalidated) this.invalidateValues();
       this.waiting = !data.result && acquisition?.phase !== 'failed';
       this.retry.hidden = !acquisition?.retry_available;
       if (acquisition?.phase === 'failed') {
@@ -235,13 +304,17 @@ const SessionDetail = (() => {
       }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
         if (!this.data) this.loading('Waiting for session source…');
-        else { this.status.textContent = ''; this.status.hidden = true; }
+        else { this.status.textContent = 'Updating session; previously verified history is retained.'; this.status.hidden = false; }
         return;
       }
-      this.status.textContent = data.state === 'observed' || this.data && ['history_retained', 'source_unavailable'].includes(data.state) ? '' :
+      this.status.textContent = data.state === 'observed' || this.data && data.state === 'history_retained' ? '' :
         ({history_retained: 'Session data unavailable.', source_unavailable: 'Source unavailable.',
           session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
       this.status.hidden = !this.status.textContent;
+      if (this.values.retained && this.status.hidden) {
+        this.status.textContent = 'Updating session; previously verified values are retained.';
+        this.status.hidden = false;
+      }
       if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
     }
     historyProgress(completed, total) {
@@ -263,12 +336,21 @@ const SessionDetail = (() => {
       this.scroll.hidden = !this.data;
       this.context.root.hidden = !this.data;
     }
+    invalidateValues() {
+      this.values.clear(); this.costs = null; this.data = null;
+      ContextHelp.dismiss(this.root);
+      this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
+      this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
+      this.exporter?.close(); this.freshness();
+    }
     update(data) {
       ReportView.defaultUnit();
+      const scope = data.value_authority?.scope;
+      if (this.values.scope && scope !== this.values.scope) this.invalidateValues();
+      if (Object.values(data.value_authority?.rows || {}).includes('invalidated')) this.costs = null;
       this.costs ||= new ReportView.CostDisplay();
-      const source = [data.result.source?.identity, data.result.source?.generation, this.id];
-      const block = this.costs.select(data.result.view.prompt_blocks[0], source, 'total_ccost',
-        data.result.view.prompt_blocks[0].comparison_cost_complete === true);
+      const source = [scope, this.id];
+      const block = this.values.project(data.result.view.prompt_blocks[0], data.value_authority);
       this.pendingRender = false;
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
@@ -288,8 +370,11 @@ const SessionDetail = (() => {
         const row = old.get(value.id) || el('tr'); row.dataset.id = value.id;
         row.className = value.in_progress ? 'session-running' : value.has_error || value.aborted ? 'error' : '';
         const signature = JSON.stringify(value);
-        if (row.signature !== signature && protectedNode(row)) this.pendingRender = true;
-        if (row.signature !== signature && !protectedNode(row)) {
+        const withdrawn = ['invalidated', 'unavailable'].includes(data.value_authority?.rows?.[value.event_id]);
+        const protectedRow = !withdrawn && protectedNode(row);
+        if (withdrawn) ContextHelp.dismiss(row);
+        if (row.signature !== signature && protectedRow) this.pendingRender = true;
+        if (row.signature !== signature && !protectedRow) {
           const content = cells(value);
           row.replaceChildren(...content.map((item, column) => {
             const td = el('td'); td.append(typeof item === 'object' ? item : el('span', () => cellsText(value, column))); return td;
@@ -300,11 +385,7 @@ const SessionDetail = (() => {
         else if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
       });
       for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
-      const totals = () => { const values = ReportView.detailTotals(block); return [values[0], '', '', ...values.slice(1)]; };
-      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map(value => {
-        const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
-      }));
-      else this.pendingRender = true;
+      this.updateFooter(block, data.value_authority);
       if (anchor?.isConnected && top != null) {
         const delta = anchor.getBoundingClientRect().top - top;
         if (delta) window.scrollBy(0, delta);
@@ -312,6 +393,25 @@ const SessionDetail = (() => {
       if (!this.data) this.loader.update({percent: 100, stage: 'Session ready', stageLabel: 'Session ready'});
       this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
       this.freshness();
+    }
+    updateFooter(block, authority) {
+      this.footerBlock = block;
+      const value = index => {
+        const row = this.footerBlock;
+        return ['Complete session', '', '', ReportView.display(row, 'total_ccost'),
+          String(row.total_calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), '—',
+          row.total_ictx_cost_text || 'N/A', row.total_extra_cost_text || 'N/A', row.total_mix_text || 'N/A'][index];
+      };
+      for (let index = 0; index < 10; index++) {
+        const cell = this.footer.children[index] || el('td'), node = cell.children[0] || el('span');
+        ReportView.text(node, () => index === 3 && authority?.totals?.total_ccost === 'pending' &&
+          !this.values.totals.has('total_ccost') ? 'Loading…' : value(index));
+        if (index === 3) ContextHelp.value(node, () => ReportView.display(this.footerBlock, 'session_cost_help') +
+          (this.values.retained ? '\nPreviously verified display observation; current values are updating.' : ''));
+        if (!node.parentNode) cell.append(node);
+        if (!cell.parentNode) this.footer.append(cell);
+      }
+      ContextHelp.refresh(this.footer);
     }
   }
   // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.

@@ -146,6 +146,22 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+            elif command.startswith("detail-values-"):
+                from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
+                from src.domain import TokenUsage
+                snapshot = make_uncompacted_snapshot(running=True)
+                if command in ("detail-values-partial", "detail-values-correction"):
+                    snapshot = replace(snapshot, invocations=tuple(replace(item,
+                        tokens=TokenUsage(input=20, known_fields=("input",)))
+                        if item.invocation_id == "i_next" else item for item in snapshot.invocations),
+                        complete=command == "detail-values-correction")
+                if command == "detail-values-epoch":
+                    source.observation_epoch = "different-epoch"
+                source.snapshots["root"] = replace(snapshot, source_revision=command,
+                    root=replace(snapshot.root, active=True, updated_at_ms=service.now_ms))
+                with host.live.details.lock:
+                    if "root" in host.live.details.histories:
+                        host.live.details.histories["root"]["due"] = 0
             elif command in ("activity-source", "activity-update", "activity-correction"):
                 from development.tests.fixtures.session_activity import activity_snapshot
                 snapshot = activity_snapshot(60 if command == "activity-source" else 61)

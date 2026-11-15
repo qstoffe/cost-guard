@@ -271,7 +271,7 @@ async function main() {
    offline = true;
    await until(() => !vm.runInContext('current.detail.busy', context));
    await vm.runInContext('current.detail.load()', context);
-    assert.equal(vm.runInContext('current.detail.status.textContent', context), '');
+     assert.match(vm.runInContext('current.detail.status.textContent', context), /updates unavailable.*Previously verified history is retained/);
    assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
   assert.equal(all(ids.result, 'progress').length, 1, 'detail retains its keyed progress node');

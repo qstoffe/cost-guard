@@ -4,6 +4,7 @@ Only safe detached values cross HTTP. No source reads on expansion, no Watch
 card retention/caps, and no totals inferred from a partially transferred table.
 """
 from collections.abc import Mapping
+from uuid import uuid4
 
 from src.domain.progress import observe_work
 from src.reports.session_history import SessionHistory
@@ -23,6 +24,8 @@ class ActivityHistory(SessionHistory):
         super().__init__()
         self.activity_snapshot = None
         self.activity = None
+        self.value_epoch = uuid4().hex
+        self.value_usage = {}
 
     def activity_for(self, source, rows):
         if self.snapshot is not self.activity_snapshot:

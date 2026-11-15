@@ -9,6 +9,8 @@ const ReportView = (() => {
   function setTimezone(value) { timezone = value; }
   const headerHelp = {
     model: '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.',
+    calls: 'Model requests for this prompt, including linked subagents.\nNot tool calls.',
+    duration: 'Time spent on this prompt.',
     sessionCost: 'The entire session’s reference cost, including attributed linked subagents.',
     context: 'Estimated context for this session, in tokens.'
   };
