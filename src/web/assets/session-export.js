@@ -1,7 +1,7 @@
 'use strict';
 // Native Save As is requested synchronously from the click, before source work.
 const SessionExport = (() => {
-  const help = 'Exports this session as native OpenCode JSON using sanitized mode.\nOpenCode redacts sensitive transcript and file data. Review the file before sharing.\nRunning sessions are saved as a point-in-time snapshot.\nSupported browsers open Save As; otherwise your browser handles the download.';
+  const help = 'Export a sanitized point-in-time snapshot. Review the file before sharing.';
   const messages = {
     export_unavailable: 'Export unavailable for this source/version. CLI alternative: opencode session export <session-id> --sanitize.',
     export_source_changed: 'Source changed. Reopen this session before exporting.',

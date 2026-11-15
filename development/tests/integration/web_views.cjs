@@ -483,7 +483,7 @@ async function main() {
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
   assert.match(ids['host-state'].textContent, /Reopen Cost Guard from the launcher/);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
-  assert.match(ids['host-details'].textContent, /Reports stay frozen/);
+  assert.equal(ids['host-details'].textContent, '');
   assert.equal(ids.notice.textContent, '', 'host recovery is the single terminal surface');
   assert.equal(ids.refresh.disabled, true);
   assert.equal(ids['scope-controls'].inert, true);

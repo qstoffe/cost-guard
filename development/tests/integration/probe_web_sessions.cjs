@@ -43,7 +43,8 @@ async function main() {
     const line=await lines.next();
     if (line.done) throw new Error('Fixture failed: '+serverError);
     const launch=JSON.parse(line.value);
-    const version=await command('Browser.getVersion');
+     const version=await command('Browser.getVersion');
+     evidence.browser=version.product;
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId}=await command('Target.attachToTarget',{targetId,flatten:true});
     await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
@@ -67,9 +68,8 @@ async function main() {
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
           if (mode === '--calm-ui') {
-            const details = await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture,
+            await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture, checks, layouts,
               command:(method, params) => command(method, params, sessionId)});
-            checks.push(...details.checks); layouts.push(...details.layouts);
             assert.deepEqual(errors, []);
             evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
               personal_profile:false,desktop_effects:false};

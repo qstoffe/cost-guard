@@ -1,7 +1,6 @@
 // Shipped HTTP/worker plus controlled frontend failures; never installed source or desktop.
 const assert = require('node:assert/strict');
-module.exports = async ({evaluate, until, fixture, command}) => {
-  const checks = [], layouts = [];
+module.exports = async ({evaluate, until, fixture, command, checks = [], layouts = []}) => {
   const run = source => evaluate(`(async()=>{${source}})()`);
   await evaluate(`location.hash='#/sessions/root-0000'`);
   await until('current.detail?.data?.total===1001 && !current.detail.busy');
@@ -112,9 +111,23 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       acquisition:{phase:'failed',reason:'detail_not_admitted',retry_available:true}},'cold');
     coldQuiet.attach(output);await coldQuiet.pendingLoad;`);
   assert.equal(await evaluate(`!coldQuiet.retry.hidden && coldQuiet.status.textContent==='Could not load. Try again or return to Sessions.'`),true);
-  assert.ok(await evaluate(`parseFloat(getComputedStyle(coldQuiet.retry).marginBottom)>=16`));
-  const ax = await command('Accessibility.getFullAXTree');
-  assert.ok(ax.nodes.some(node=>!node.ignored && node.role?.value==='button' && node.name?.value==='Try again'));
+  for (const theme of ['classic','web']) for (const scheme of ['light','dark']) for (const width of [360,1366]) {
+    await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
+    await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]});
+    await evaluate(`document.documentElement.dataset.theme='${theme}'`);
+    assert.ok(await evaluate(`parseFloat(getComputedStyle(coldQuiet.retry).marginBottom)>=16`));
+    const ax = await command('Accessibility.getFullAXTree');
+    assert.ok(ax.nodes.some(node=>!node.ignored && node.role?.value==='button' && node.name?.value==='Try again'));
+    layouts.push({surface:'cold-detail',theme,scheme,width,retryMarginAtLeast16:true,accessible:true});
+  }
   checks.push('cold foreground failure keeps nontechnical, spaced and accessible Try again; never appears on populated history');
+  await run(`window.quietExport=new SessionExport.Action(async()=>{throw new Error('export_source_unavailable')},'synthetic');
+    output.replaceChildren(quietExport.root);quietExport.update('synthetic',false,'Synthetic');`);
+  assert.equal(await evaluate('quietExport.notice.textContent==="" && quietExport.button.disabled'),true);
+  await run(`const picker=window.showSaveFilePicker;
+    try{window.showSaveFilePicker=async()=>null;quietExport.update('synthetic',true,'Synthetic');
+      await quietExport.save()}finally{window.showSaveFilePicker=picker}`);
+  assert.equal(await evaluate('quietExport.notice.textContent'),'The selected OpenCode source is unavailable. Retry when it is ready.');
+  checks.push('Export passive availability remains quiet/disabled; explicit synthetic failure preserves a truthful actionable outcome without a dialog or file write');
   return {checks,layouts};
 };
