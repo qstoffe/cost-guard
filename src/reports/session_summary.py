@@ -56,7 +56,8 @@ def summary_key(service, root):
         service._load_comparison_catalog().diagnostic_signature, getattr(service.source, "observation_epoch", None)))
 
 
-def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None):
+def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
+                    on_activity=None, activity_end_ms=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -125,6 +126,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and all(isinstance(value, str) and 0 < len(value) <= 256
                             and all(value.partition("/")[::2]) for value in row.contributor_models)
                     and row.contributor_models == tuple(sorted(set(row.contributor_models)))
+                    and (activity_end_ms is None or row.last_activity_ms is None
+                         or row.last_activity_ms < activity_end_ms)
                     and not row.running
                     and not row.model_pending
                     and type(row.prompt_count) is int and row.prompt_count >= 0
@@ -133,6 +136,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     metrics['cache_hits'] += 1
                 if on_dependencies is not None:
                     on_dependencies(identity_values)
+                if on_activity is not None:
+                    on_activity(() if row.last_activity_ms is None else (row.last_activity_ms,), True)
                 return row, revision
         except (KeyError, TypeError, ValueError, InvalidOperation):
             pass  # Disposable malformed summaries are misses, never source evidence.
@@ -147,7 +152,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     row = service._session_rows((item,), catalog_models=True)[0]
     cost = reconcile_session_cost(service.cache_repository, item.snapshot, service._load_comparison_catalog())
     row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=cost.groups,
-                  **activity_fields(item))
+                  **activity_fields(item, on_activity=on_activity))
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
     actual = item.bundle.source_revision

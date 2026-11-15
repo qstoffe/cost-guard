@@ -14,7 +14,7 @@ def source_identity(provenance):
     return provenance.source_type, provenance.source_generation, provenance.source_instance
 
 
-def activity_fields(item):
+def activity_fields(item, *, on_activity=None):
     """Latest attributable start or explicit completion; absence needs full history.
 
     A catalog touch, part rewrite, polling time, and inferred inactivity are not
@@ -73,4 +73,6 @@ def activity_fields(item):
                     latest.completed_at_ms if latest.finish_reason not in (None, "tool-calls") or latest.error_name else None)
         if type(terminal) is int and terminal >= start:
             values.append(terminal)
+    if on_activity is not None:
+        on_activity(values, snapshot.complete)
     return dict(last_activity_ms=max(values, default=None), activity_qualified=snapshot.complete)

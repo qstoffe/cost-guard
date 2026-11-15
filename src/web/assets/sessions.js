@@ -24,7 +24,7 @@ const SessionsCatalog = (() => {
   }
   class View {
     constructor(api) {
-      Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0});
+      Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', undefined, 'warning'); this.status.setAttribute('role', 'status');
       this.status.setAttribute('aria-atomic', 'false'); this.status.hidden = true;
@@ -99,6 +99,7 @@ const SessionsCatalog = (() => {
         sort === this.sort && direction === this.direction && period === this.period) return;
       const action = this.userAction?.destination === location.hash ? this.userAction : null;
       this.userAction = null;
+      if (this.operation?.navigation) this.cancelledNavigation = this.operation.navigation;
       this.actionFocus = null; this.retire();
       this.setStatus();
       Object.assign(this, {offset, epoch, sort, direction, period});
@@ -109,7 +110,8 @@ const SessionsCatalog = (() => {
         changedPeriod || this.direction !== this.data.direction || this.offset && this.epoch !== this.data.epoch);
       this.operation = changed || !this.data ? {kind: action?.kind || (changedPeriod ? 'period' : this.data && this.sort === this.data.sort &&
         this.direction === this.data.direction ? 'page' : 'sort'),
-        userInitiated: Boolean(action), button: action?.button,
+        userInitiated: Boolean(action), button: action?.button, navigation: action ? ++this.navigationSequence : null,
+        restarts: 0,
         pending: false,
         advanced: Date.now(), percent: 0, completed: -1, highWater: -1, source: null, rebases: 0, failed: false} : null;
       this.pan.hidden = this.pager.hidden = false;
@@ -159,7 +161,7 @@ const SessionsCatalog = (() => {
       const flight = {controller: new AbortController()}; this.flight = flight;
       if (this.operation) this.admission = setTimeout(() => {
         if (generation === this.generation && this.operation && !this.operation.pending)
-          this.showProgress('Waiting for Sessions source…');
+          this.showProgress();
       }, 180);
       const deadline = new Promise((_, reject) => {
         this.requestDeadline = setTimeout(() => {
@@ -169,15 +171,20 @@ const SessionsCatalog = (() => {
       });
       try {
         const request = () => Promise.race([this.api('/api/sessions', {token: this.token, offset: this.offset,
-          epoch: this.epoch, sort: this.sort, direction: this.direction, period: this.period}, flight.controller.signal), deadline]);
+          epoch: this.epoch, sort: this.sort, direction: this.direction, period: this.period,
+          navigation: this.operation?.navigation || null, applied: this.appliedNavigation || null,
+          cancelled: this.cancelledNavigation || null}, flight.controller.signal), deadline]);
         let data;
         try { data = await request(); }
         catch (error) {
           if (error.message !== 'catalog_expired' || !this.attached || generation !== this.generation) throw error;
+          if (this.operation && this.operation.restarts++ >= 1) {
+            this.failNavigation('navigation_invalidated'); return;
+          }
           // No proof that a new lease has the old membership: safely return to
           // latest, preserving sort intent. One reopen per poll, never a loop.
           this.interest(false);
-          this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
+          this.token = null; this.appliedNavigation = null; this.epoch = null; this.offset = 0; this.recovering = true;
           data = await request();
         }
         if (!this.attached || generation !== this.generation) {
@@ -221,7 +228,7 @@ const SessionsCatalog = (() => {
         }
       }
     }
-    showProgress(stage) {
+    showProgress(message = '') {
       if (!this.operation) return;
       const operation = this.operation;
       operation.pending = !operation.failed;
@@ -231,9 +238,9 @@ const SessionsCatalog = (() => {
         operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 25) + 1}` : `Sorting sessions by ${name}`;
       ReportView.text(this.statusTask, task);
       const count = operation.count;
-      ReportView.text(this.statusCount, !operation.failed && count ?
-        ` · ${count.phase === 'index' ? 'Indexed' : 'Prepared'} ${count.completed.toLocaleString('en-US')} of ${count.total.toLocaleString('en-US')} sessions` : '');
-      ReportView.text(this.statusStage, `. ${stage}`);
+      ReportView.text(this.statusCount, !operation.failed && !message && count ?
+        ` · ${count.completed.toLocaleString('en-US')} of ${count.total.toLocaleString('en-US')} sessions` : '');
+      ReportView.text(this.statusStage, message ? `. ${message}` : count ? '' : '…');
       this.status.hidden = false;
       this.pagerBusy();
     }
@@ -243,13 +250,15 @@ const SessionsCatalog = (() => {
       this.operation.failed = true;
       this.operation.pending = false;
       this.interest(false);
-      const message = `Could not finish (${reason}). Retaining the last observed page. Resolve the error and reopen Cost Guard, or leave Sessions using the navigation links.`;
+      const message = ['authentication_required', 'http_auth_failure', 'permission_denied', 'csrf_required'].includes(reason) ?
+        'Access unavailable. Check your connection and access, then reopen Sessions.' :
+        'Could not finish. Reopen Sessions to try again.';
       if (this.operation.userInitiated) this.showProgress(message);
       else { this.setStatus(`Sessions unavailable. ${message}`); this.pagerBusy(); }
     }
     waitNavigation(reason) {
       this.retryDelay = Math.min(30000, (this.retryDelay || 500) * 2);
-      if (this.operation?.userInitiated) this.showProgress(`Source temporarily unavailable (${reason}). Recovering automatically…`);
+      if (this.operation?.userInitiated) this.showProgress('Loading paused. Retrying…');
       else this.setStatus(`Sessions unavailable (${reason}). Retaining the last observed page. Recovering automatically…`);
     }
     pendingNavigation(data) {
@@ -287,15 +296,11 @@ const SessionsCatalog = (() => {
       if (Date.now() - operation.advanced >= 45000 && !progress?.work?.active) {
         this.waitNavigation('no_source_progress'); return true;
       }
-      const stages = {checking_cache: 'Checking cached session summaries…', reading_summary: 'Reading session summary…',
-        projecting_summary: 'Preparing session summary…', waiting_retry: 'Waiting to retry a session summary…',
-        queued: 'Waiting for the session index worker…', ready: 'Applying requested view…'};
-      const revalidating = restarted || progress?.revalidating > 0;
-      const stage = stages[progress?.work?.stage] || 'Waiting for session sort keys…';
-      this.showProgress(`${revalidating ? 'Source changed; revalidating keys. ' : ''}${progress?.work?.retrying ? 'Retrying. ' : ''}${stage}`);
+      this.showProgress();
       return true;
     }
     update(data) {
+      if (data.navigation != null && data.navigation !== this.operation?.navigation) return;
       if (!this.operation && data.progress?.status === 'failed' && data.progress.retryable !== true) {
         this.terminal = true; this.terminalReason = data.progress.reason || 'source_unavailable';
         this.interest(false);
@@ -325,7 +330,6 @@ const SessionsCatalog = (() => {
       const changedPage = this.recovering && (this.body.children.length !== values.length ||
         values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
-      this.operation = null; clearTimeout(this.admission);
       this.pan.hidden = this.pager.hidden = false;
       this.data = data;
       this.renderTimezone = data.view.timezone_id;
@@ -362,6 +366,10 @@ const SessionsCatalog = (() => {
       link(this.previous, Math.max(0, data.offset - data.size), data.offset > 0);
       link(this.next, data.offset + data.size, data.offset + data.size < data.total);
       this.numberedPages(data);
+      // Release the cohort only after its matching table and pager were applied.
+      // The next existing poll acknowledges it; no extra timer or acquisition lane.
+      if (completed?.navigation) this.appliedNavigation = completed.navigation;
+      this.operation = null; clearTimeout(this.admission);
       this.pagerBusy();
     }
     numberedPages(data) {
@@ -436,7 +444,8 @@ const SessionsCatalog = (() => {
           ContextHelp.value(row.name, () => row.value.title);
           ContextHelp.value(row.activity, () => {
             const value = row.value, state = value.activity_state || 'ready';
-            return [ReportView.activityHelp(value.last_activity_ms, this.renderTimezone),
+             return [ReportView.activityHelp(value.last_activity_ms, this.renderTimezone),
+              state === 'snapshot' ? 'Navigation snapshot: independently verified session facts collected over time, not an atomic live view. Later changes appear on refresh.' :
               state === 'retained' ? 'Retained same-source prompt event; current revision is awaiting verification.' :
               state === 'partial' ? 'Partial history: observed prompt event, not yet a verified latest activity.' :
               state === 'pending' ? 'Prompt activity is awaiting source observation.' :
@@ -446,7 +455,8 @@ const SessionsCatalog = (() => {
             const node = el('span');
             if (key === 'duration') return node;
             ContextHelp.value(node, () => {
-              const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
+               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
+               if (state === 'snapshot') return 'Navigation snapshot: this value and its sort position use the same verified session revision. Later changes appear on refresh; this is not an atomic live view.';
               if (key === 'ccost' && !current.has_summary && !current.indexed && state !== 'retained')
                 return state === 'pending' ? 'Session cost is awaiting source observation.' : 'Session cost unavailable.';
               if (key === 'ccost') return ReportView.sessionCostHelp(current, current);

@@ -55,7 +55,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
      catalog.pageButtons.get(4).click()`);
   await until('catalog.operation?.completed===13');
   assert.equal(await evaluate('catalog.operation.failed'), false);
-  assert.match(await evaluate('catalog.status.textContent'), /^Loading Sessions page 4 · Prepared 13 of 25 sessions\./);
+   assert.equal(await evaluate('catalog.status.textContent'), 'Loading Sessions page 4. Loading paused. Retrying…');
   assert.equal(await evaluate('catalog.operation.total'),25);
   assert.equal(await evaluate('catalog.pan.hidden'), false);
   assert.equal(await evaluate('catalog.retry===undefined'), true);
@@ -63,7 +63,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate(`catalog.retire();window.releaseLate=null;
     catalog.api=async(...args)=>{const data=await normalApi(...args);return args[1]?.action ? data :
       new Promise(resolve=>{releaseLate=()=>resolve(data);});};window.deadlineFlight=catalog.load();void 0`);
-  await until('catalog.status.textContent.includes("request_timeout") && !catalog.busy', 22000);
+   await until('catalog.status.textContent.includes("Loading paused. Retrying") && !catalog.busy && window.releaseLate', 22000);
   assert.equal(await evaluate('catalog.operation.failed'), false);
   await evaluate('releaseLate();catalog.api=normalApi;deadlineFlight');
   assert.equal(await evaluate('catalog.data.offset'), 50);
@@ -89,7 +89,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await evaluate(`catalog.terminal=false;catalog.api=async(_,value)=>{if(value.action)return {};throw new Error('${reason}');};
       location.hash='#/sessions?period=today&sort=name&direction=1'`);
     await until('catalog.operation?.failed && !catalog.busy');
-    assert.match(await evaluate('catalog.status.textContent'), new RegExp(reason));
+     assert.match(await evaluate('catalog.status.textContent'), /Access unavailable|Could not finish/);
+     assert.doesNotMatch(await evaluate('catalog.status.textContent'), new RegExp(reason));
     assert.doesNotMatch(await evaluate('catalog.status.textContent'),/Cancel/);
     assert.equal(await evaluate('catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
     await evaluate('catalog.api=normalApi;history.back()');
