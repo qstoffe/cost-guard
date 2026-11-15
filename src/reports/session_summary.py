@@ -21,7 +21,7 @@ from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-11"
+ALGORITHM = "session-summary-12"
 NAMESPACE = "session-summary"
 
 
@@ -119,6 +119,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "has_model_details", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending", "activity_qualified"))
                     and row.activity_qualified
                     and (row.last_activity_ms is None or type(row.last_activity_ms) is int and row.last_activity_ms > 0)
+                    and isinstance(row.activity_prompt_id, str) and len(row.activity_prompt_id) <= 256
+                    and (row.prompt_started_ms is None or type(row.prompt_started_ms) is int and row.prompt_started_ms > 0)
+                    and (row.activity_latest_ms is None or type(row.activity_latest_ms) is int and row.activity_latest_ms > 0)
                     and row.context_qualified
                     and (row.context_tokens is None or type(row.context_tokens) is int and row.context_tokens >= 0)
                     and isinstance(row.context_detail, str) and len(row.context_detail) <= 128
@@ -126,8 +129,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and all(isinstance(value, str) and 0 < len(value) <= 256
                             and all(value.partition("/")[::2]) for value in row.contributor_models)
                     and row.contributor_models == tuple(sorted(set(row.contributor_models)))
-                    and (activity_end_ms is None or row.last_activity_ms is None
-                         or row.last_activity_ms < activity_end_ms)
+                    and (activity_end_ms is None or row.activity_latest_ms is None
+                         or row.activity_latest_ms < activity_end_ms)
                     and not row.running
                     and not row.model_pending
                     and type(row.prompt_count) is int and row.prompt_count >= 0
@@ -137,7 +140,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                 if on_dependencies is not None:
                     on_dependencies(identity_values)
                 if on_activity is not None:
-                    on_activity(() if row.last_activity_ms is None else (row.last_activity_ms,), True)
+                    on_activity(() if row.activity_latest_ms is None else (row.activity_latest_ms,), True)
                 return row, revision
         except (KeyError, TypeError, ValueError, InvalidOperation):
             pass  # Disposable malformed summaries are misses, never source evidence.

@@ -237,7 +237,9 @@ async function main() {
    navigate('sessions?period=all');
     await until(() => ids.result.textContent.includes('1–25 of 55'));
   assert.match(ids.result.textContent, /1–25 of 55/);
-  assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
+   assert.ok(all(ids.result, 'a').some(node => node.href === '#/sessions/root-0000'),
+     'running session locator is reachable in the first-page priority group');
     const next = all(ids.result, 'button').find(node => node.textContent === 'Next');
     assert.equal(next.disabled, false);
     navigate(next.destination.slice(2));
@@ -247,7 +249,7 @@ async function main() {
    navigate(olderPage.slice(2));
     await until(() => ids.result.textContent.includes('51–55 of 55'));
   assert.match(ids.result.textContent, /51–55 of 55/);
-  const sessionLink = all(ids.result, 'a').find(node => node.href === '#/sessions/root-0000');
+   const sessionLink = all(ids.result, 'a').find(node => node.href === '#/sessions/root-0001');
   assert.ok(sessionLink, 'session locator links are reachable on the last page');
   navigate('sessions/root-0000');
    await until(() => all(ids.result, 'tbody')[0]?.children.length === 151);

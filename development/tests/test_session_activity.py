@@ -12,9 +12,12 @@ from development.tests.fixtures.session_activity import activity_snapshot
 from development.tests.fixtures.session_snapshots import message, part, prov, MODEL
 from src.application.session_activity import build_activity, activity_page
 from src.application.session_detail import SessionDetails
+from src.analysis import analyze_snapshot
+from src.analysis.session_activity import activity_fields
+from src.reports.sampling import AnalyzedRoot
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
-from src.domain import EventKind, MessageRole
+from src.domain import BackgroundActivity, EventKind, MessageRole, TerminalOutcome
 from src.reports import ReportService
 from src.sources.selection import SourceSelection
 
@@ -23,6 +26,26 @@ ORIGINS = SimpleNamespace(skill_origins_for_session=lambda _: {"auto-github-api"
 
 
 class SessionActivityTests(unittest.TestCase):
+    def test_catalog_clock_uses_explicit_owned_background_end_not_registry_disappearance(self):
+        from development.tests.fixtures.catalog_prompt_activity import finished_snapshot, at
+        snapshot = finished_snapshot()
+        root = snapshot.root
+        work = BackgroundActivity("owned-shell", root.session_id, "shell", at("01:17:59"),
+            snapshot.messages[-1].message_id, running=False, ended_at_ms=at("01:52:00"),
+            outcome=TerminalOutcome.SUCCESS)
+        snapshot = replace(snapshot, background=(work,))
+        observations = []
+        item = AnalyzedRoot(root, analyze_snapshot(snapshot, now_ms=at("02:00:00")), False, snapshot)
+
+        fields = activity_fields(item, on_activity=lambda values, complete: observations.append(tuple(values)))
+
+        self.assertEqual(fields["last_activity_ms"], at("01:52:00"))
+        self.assertIn(at("01:52:00"), observations[0])
+        unknown = replace(snapshot, background=(replace(work, ended_at_ms=None, outcome=None),))
+        item = AnalyzedRoot(root, analyze_snapshot(unknown, now_ms=at("02:00:00")), False, unknown)
+        self.assertIsNone(activity_fields(item)["last_activity_ms"])
+        self.assertFalse(activity_fields(item)["running"])
+
     def test_all_prompts_compaction_physical_duplicates_and_safe_distinct_outcomes(self):
         snapshot = activity_snapshot()
 

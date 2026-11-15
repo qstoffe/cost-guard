@@ -103,7 +103,68 @@ class CatalogPromptActivityTests(unittest.TestCase):
                 row, _ = session_summary(self.service, root, state, active=True)
 
                 self.assertEqual(row.last_activity_ms,
-                    at("01:52:00") if state in ("failed", "aborted") else at("01:18:00") - 300)
+                    at("01:52:00") if state in ("failed", "aborted") else
+                    at("01:18:00") - 300 if state == "running" else None)
+                self.assertEqual(row.running, state == "running")
+                self.assertEqual(row.prompt_started_ms, at("01:18:00") - 300)
+
+    def test_running_start_is_fixed_under_metadata_part_and_revision_churn_then_new_prompt_and_terminal(self):
+        source = SyntheticMonthSource(1, 2, month_start_ms=at("01:00:00"), running_roots=1)
+        snapshot = replace(source.snapshots["root-0000"], complete=True)
+        self.source.snapshots = {"root-0000": snapshot}
+        self.observe()
+        first = self.acquire(period="all")
+        start = at("01:00:01")
+        for sequence in range(5):
+            root = replace(snapshot.root, updated_at_ms=self.now - sequence)
+            assistant = snapshot.messages[-1]
+            part = NormalizedPart("stream", assistant.message_id, root.session_id, "text",
+                start + 100, self.now - sequence, assistant.provenance, {"text": "streaming" * sequence})
+            self.source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=(root,),
+                messages=(*snapshot.messages[:-1], replace(assistant, parts=(part,))),
+                source_revision=f"stream-{sequence}")
+            self.clock += 6
+            self.observe()
+            self.catalog.tick(self.service)
+            row = self.catalog.page(token=first["token"], period="all")["view"]["session_usage"][0]
+            self.assertEqual(row["last_activity_ms"], start)
+            self.assertTrue(row["running"])
+        newer = SyntheticMonthSource(1, 3, month_start_ms=at("01:00:00"), running_roots=1).snapshots["root-0000"]
+        self.source.snapshots["root-0000"] = replace(newer, complete=True, source_revision="new-prompt")
+        self.clock += 6
+        self.observe()
+        self.catalog.tick(self.service)
+        latest = self.catalog.page(token=first["token"], period="all")["view"]["session_usage"][0]
+        self.assertEqual(latest["last_activity_ms"], at("01:00:02"))
+        self.assertTrue(latest["running"])
+        for outcome in (TerminalOutcome.SUCCESS, TerminalOutcome.FAILURE, TerminalOutcome.CANCELLATION):
+            terminal = TerminalEvidence(at("01:52:00"), outcome)
+            root = replace(newer.root, active=False)
+            self.source.snapshots[root.session_id] = replace(newer, root=root, sessions=(root,), complete=True,
+                messages=(*newer.messages[:-1], replace(newer.messages[-1], termination=terminal)),
+                source_revision=outcome.value)
+            self.clock += 6
+            self.observe()
+            self.catalog.tick(self.service)
+            ended = self.catalog.page(token=first["token"], period="all")["view"]["session_usage"][0]
+            self.assertEqual(ended["last_activity_ms"], at("01:52:00"))
+            self.assertFalse(ended["running"])
+
+    def test_running_before_local_midnight_remains_in_today_but_finished_ancient_work_does_not(self):
+        for zone in ("UTC", "Europe/Stockholm"):
+            source = SyntheticMonthSource(2, 1, month_start_ms=at("00:00:00") - 4 * 3_600_000,
+                                          running_roots=1)
+            source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+            service = report_service(self, source, now_ms=self.now, timezone_id=zone)
+            catalog = SessionCatalog(clock=lambda: self.clock, clock_ms=lambda: self.now, timezone_id=zone)
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            first = catalog.page(period="all")
+            catalog.tick(service)
+            today = catalog.page(token=first["token"], navigation=1, period="today")
+            self.assertFalse(today["pending_sort"])
+            self.assertEqual([row["session_id"] for row in today["view"]["session_usage"]], ["root-0000"])
+            self.assertLess(today["view"]["session_usage"][0]["last_activity_ms"], today["window"]["start_ms"])
+            self.assertTrue(today["view"]["session_usage"][0]["running"])
 
     def test_metadata_today_candidate_is_excluded_after_yesterdays_prompt_is_verified(self):
         self.source.snapshots["root-0000"] = finished_snapshot(finished=at("00:00:00") - 1)
@@ -261,6 +322,19 @@ class CatalogPromptActivityTests(unittest.TestCase):
             messages=(*snapshot.messages, reply))
         item = AnalyzedRoot(root, analyze_snapshot(later_snapshot, now_ms=self.now), False, later_snapshot)
         self.assertEqual(activity_fields(item)["last_activity_ms"], at("01:52:00"))
+        # A newer root turn owns the clock even when an older linked turn ends later.
+        newer = finished_snapshot(finished=at("01:45:00"))
+        new_event = replace(newer.events[0], event_id="new-root-turn")
+        new_messages = tuple(replace(message, message_id="new-" + message.message_id,
+            parent_message_id="new-root-turn" if message.parent_message_id else None)
+            for message in newer.messages)
+        new_messages = (replace(new_messages[0], message_id="new-root-turn"), *new_messages[1:])
+        overlapping = replace(later_snapshot, events=(*later_snapshot.events, new_event),
+            messages=(*later_snapshot.messages, *new_messages))
+        item = AnalyzedRoot(root, analyze_snapshot(overlapping, now_ms=self.now), False, overlapping)
+        fields = activity_fields(item)
+        self.assertEqual(fields["last_activity_ms"], at("01:45:00"))
+        self.assertEqual(fields["activity_latest_ms"], at("01:52:00"), "period evidence remains independent")
         # No valid task link: mere ancestry/metadata does not count as work.
         snapshot = replace(snapshot, messages=(*root_snapshot.messages, *child_snapshot.messages),
             events=(*root_snapshot.events, *child_snapshot.events))
@@ -280,7 +354,9 @@ class CatalogPromptActivityTests(unittest.TestCase):
         event = replace(event, kind=EventKind.USER_PROMPT, created_at_ms=at("01:55:00"))
         snapshot = replace(snapshot, events=(event,), messages=(), invocations=())
         item = AnalyzedRoot(snapshot.root, analyze_snapshot(snapshot, now_ms=self.now), False, snapshot)
-        self.assertEqual(activity_fields(item)["last_activity_ms"], at("01:55:00"))
+        fields = activity_fields(item)
+        self.assertIsNone(fields["last_activity_ms"], "a bare start is not a supported finish")
+        self.assertEqual(fields["prompt_started_ms"], at("01:55:00"))
 
 
 if __name__ == "__main__":

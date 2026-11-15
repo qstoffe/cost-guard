@@ -207,6 +207,77 @@ class SessionNavigationTests(unittest.TestCase):
                         self.assertEqual(epoch.rows[-1].session_id, key)
                         self.catalog.leases.pop(page['token'])
 
+    def test_running_first_all_sorts_both_directions_and_overflow_boundaries(self):
+        for running_count in (0, 1, 10, 24, 25, 26, 50, 51):
+            self.setup_catalog(100 + running_count)
+            for index, (key, root) in enumerate(self.catalog.roots.items()):
+                row, revision = self.summary(self.service, root, self.catalog.revisions[key],
+                                             on_activity=lambda *_: None)
+                # Two running starts tie, including sub-minute precision.
+                start = self.now - 10_000 + index // 2
+                self.catalog.rows[key] = replace(row, running=index < running_count,
+                    prompt_started_ms=start, activity_prompt_id=f"prompt-{index}",
+                    last_activity_ms=start if index < running_count else self.now - 1000 + index)
+                self.catalog.valid[key] = revision, self.clock
+                self.catalog.activity_valid[key] = revision
+            running_ids = [f"root-{index:04d}" for index in
+                           sorted(range(running_count), key=lambda index: (-(index // 2), index))]
+            for sort in ('activity', 'name', 'model', 'ccost', 'prompts', 'duration', 'ctx'):
+                for direction in (1, -1):
+                    with self.subTest(running=running_count, sort=sort, direction=direction):
+                        page = self.catalog.page(period='all', sort=sort, direction=direction, navigation=1)
+                        self.assertFalse(page['pending_sort'])
+                        ids, running_flags = [], []
+                        for offset in range(0, 100 + running_count, 25):
+                            current = page if offset == 0 else self.catalog.page(token=page['token'],
+                                offset=offset, epoch=page['epoch'], period='all', sort=sort, direction=direction)
+                            ids.extend(row['session_id'] for row in current['view']['session_usage'])
+                            running_flags.extend(row['running'] for row in current['view']['session_usage'])
+                        finished = list(range(running_count, 100 + running_count))
+                        if direction == -1:
+                            finished.reverse()
+                        self.assertEqual(ids, running_ids + [f"root-{index:04d}" for index in finished])
+                        self.assertEqual(running_flags, [True] * running_count + [False] * 100)
+                        self.assertEqual(len(set(ids)), 100 + running_count)
+                        self.catalog.leases.pop(page['token'])
+            # Mutable metrics never participate in running-group order.
+            for key, row in tuple(self.catalog.rows.items())[:running_count]:
+                self.catalog.rows[key] = replace(row, ccost=Decimal(99999), model="Changed",
+                    context_tokens=None, context_qualified=False, model_pending=True, prompt_count=0)
+            changed = self.catalog.page(period='all', sort='ccost', direction=1)
+            epoch = self.catalog.leases[changed['token']]['epochs'][changed['epoch']]
+            self.assertEqual([row.session_id for row in epoch.rows[:running_count]], running_ids)
+            for sort in ('ctx', 'model'):
+                missing = self.catalog.page(period='all', sort=sort, direction=1, navigation=1)
+                self.assertFalse(missing['pending_sort'], "running sort never requires changing metric keys")
+                self.catalog.leases.pop(missing['token'])
+
+    def test_running_terminal_reinsertion_and_new_arrival_do_not_shift_pinned_pages(self):
+        self.setup_catalog(151)
+        for index, (key, root) in enumerate(self.catalog.roots.items()):
+            row, revision = self.summary(self.service, root, self.catalog.revisions[key],
+                                         on_activity=lambda *_: None)
+            self.catalog.rows[key] = replace(row, running=index < 51,
+                prompt_started_ms=self.now - 1000 + index, activity_prompt_id=f"prompt-{index}")
+            self.catalog.valid[key] = revision, self.clock
+            self.catalog.activity_valid[key] = revision
+        first = self.request(navigation=1)
+        old_pages = [self.request(first, offset=offset, epoch=first['epoch'])
+                     for offset in (25, 50, 75)]
+        old_ids = [[row['session_id'] for row in page['view']['session_usage']] for page in old_pages]
+        self.catalog.rows['root-0050'] = replace(self.catalog.rows['root-0050'], running=False,
+                                               last_activity_ms=self.now, ccost=Decimal(1000))
+        self.catalog.rows['root-0150'] = replace(self.catalog.rows['root-0150'], running=True,
+            activity_prompt_id='new', prompt_started_ms=self.now, last_activity_ms=self.now)
+        latest = self.request(first, applied=1)
+        self.assertNotEqual(latest['epoch'], first['epoch'])
+        self.assertEqual(latest['view']['session_usage'][0]['session_id'], 'root-0150')
+        newest = self.catalog.leases[first['token']]['epochs'][latest['epoch']]
+        self.assertEqual(newest.rows[-1].session_id, 'root-0050')
+        for offset, expected in zip((25, 50, 75), old_ids):
+            pinned = self.request(first, offset=offset, epoch=first['epoch'])
+            self.assertEqual([row['session_id'] for row in pinned['view']['session_usage']], expected)
+
     def test_repeated_supersession_preserves_released_background_fairness(self):
         self.setup_catalog(26)
         first = self.request(navigation=1)

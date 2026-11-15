@@ -46,15 +46,19 @@ def sort_value(row, key):
 def ordered(rows, key, direction):
     # Stable value sorting preserves ascending IDs for ties in either direction.
     # Extract each value once; unknown values stay last, including descending.
-    known, unknown = [], []
+    running, known, unknown = [], [], []
     for row in sorted(rows, key=lambda row: row.session_id):
+        if row.running and type(row.prompt_started_ms) is int and row.prompt_started_ms > 0:
+            running.append(row)
+            continue
         value = sort_value(row, key)
         if value is None:
             unknown.append(row)
         else:
             known.append((value, row))
     known.sort(key=lambda item: item[0], reverse=direction == -1)
-    return tuple(row for _, row in known) + tuple(unknown)
+    running.sort(key=lambda row: -row.prompt_started_ms)
+    return tuple(running) + tuple(row for _, row in known) + tuple(unknown)
 
 
 def retain_pending_metrics(row, previous):
@@ -141,6 +145,11 @@ class SessionCatalog:
         browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
         selected = set()
         for lease in browsing:
+            # A verified pinned page has complete cohort coverage. A provisional
+            # page does not prove that offscreen live candidates are absent.
+            if not lease.get('pinned') or not lease.get('cohort_verified'):
+                selected.update(self.active)
+                selected.update(key for key, row in self.rows.items() if row.running)
             navigation = lease.get('navigation')
             if navigation is not None:
                 if navigation.invalid:
@@ -167,7 +176,8 @@ class SessionCatalog:
     def _population(self, period):
         window = catalog_window(period, self.timezone_id, self.clock_ms())
         return window, candidate_population(self.roots, self.activity, self.activity_index,
-            self.rows, self.changed_roots | self.active, window)
+            self.rows, self.changed_roots | self.active | {key for key, value in self.watch_activity.items()
+                if value[1] and 0 <= self.clock() - value[0] <= 15}, window)
 
     def _activity_current(self, key):
         return (key in self.rows and self.rows[key].activity_qualified
@@ -261,8 +271,8 @@ class SessionCatalog:
         not proof; scalar/pricing acquisition cannot invalidate independent proof.
         """
         with self.lock:
-            self.watch_activity = {root.session_id: (self.clock() - age, running)
-                for root, running, age in evidence if 0 <= age <= 15
+            self.watch_activity = {root.session_id: (self.clock() - age, running, prompt_id, start)
+                for root, running, age, prompt_id, start in evidence if 0 <= age <= 15
                 and root.session_id in self.roots
                 and root.provenance == self.roots[root.session_id].provenance}
 
@@ -301,7 +311,7 @@ class SessionCatalog:
             and key in lease['navigation'].roots and key not in lease['navigation'].facts
             for lease in self.leases.values())
         return (self.clock() - self.attempted.get(key, -100) >= delay
-                 and (navigation_pending or not self._current(key) or visible and (key in self.active or self.rows[key].running)
+                 and (navigation_pending or not self._current(key) or (key in self.active or self.rows[key].running)
                      or not self.rows[key].context_qualified and self._requested(key, 'ctx')
                       or not self.rows[key].effort_qualified and self._requested(key, 'effort')
                       or not self._activity_current(key) and any(self._browsing(lease)
@@ -416,8 +426,9 @@ class SessionCatalog:
                             else:
                                 self.activity_valid.pop(key, None)
                             self.prompt_activity[key] = self.attempted[key], row.running
-                            partial = ('context' if not row.context_qualified and self._requested(key, 'ctx') else
-                                       'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
+                            partial = None if row.running else (
+                                'context' if not row.context_qualified and self._requested(key, 'ctx') else
+                                'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
                             if partial:
                                 self.failures[key] = revision, False
                                 self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
@@ -470,9 +481,27 @@ class SessionCatalog:
             value = self.rows.get(key) or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False, activity_qualified=False)
             activity = value.last_activity_ms
+            current = self._current(key)
+            unavailable = self.index_unavailable or key in self.failures
+            watch = self.watch_activity.get(key)
+            prompt = self.prompt_activity.get(key)
+            watch_current = bool(watch and 0 <= self.clock() - watch[0] <= 15
+                and (prompt is None or watch[0] >= prompt[0]) and self.state == 'observed')
+            if (watch_current and watch[1] and isinstance(watch[2], str) and watch[2]
+                    and type(watch[3]) is int and 0 < watch[3] <= now):
+                value = replace(value, running=True, activity_prompt_id=watch[2],
+                                prompt_started_ms=watch[3], last_activity_ms=watch[3])
+                activity = value.last_activity_ms
+                unavailable = False  # Independent Watch proof survives scalar/pricing failure.
+            running = bool(value.running and type(value.prompt_started_ms) is int
+                and 0 < value.prompt_started_ms <= now and not unavailable
+                and self._running(key, bool(current and self.clock() - self.valid[key][1] <= 15)))
+            # A newer negative lifecycle signal is not itself a finish clock.
+            if value.running and value.prompt_started_ms is not None and not running:
+                activity = None
             rows.append(replace(value, title=root.title or "Untitled session",
                 last_activity_ms=activity if type(activity) is int and 0 < activity <= now else None,
-                archived=root.archived_at_ms is not None))
+                running=running, archived=root.archived_at_ms is not None))
         return rows
 
     def _key_current(self, key, sort):
@@ -553,8 +582,11 @@ class SessionCatalog:
                 nav.capture(self)
                 if not offset:
                     window, candidates = nav.window, tuple(nav.roots)
-            qualified = lambda key: ((sort == 'name' or self._key_current(key, sort))
-                and (period == 'all' and sort != 'activity' or self._activity_current(key)))
+            display_rows = {row.session_id: row for row in self._rows(candidates)} if not offset else {}
+            qualified = lambda key: ((sort == 'name' or self._key_current(key, sort)
+                or not offset and display_rows[key].running)
+                and (period == 'all' and sort != 'activity' or self._activity_current(key))
+                and (key not in self.active or self._activity_current(key)))
             indexed = sum(qualified(key) for key in candidates)
             pending = indexed != len(candidates)
             if nav is not None and navigation is not None and not offset:
@@ -563,8 +595,8 @@ class SessionCatalog:
                 applied = "activity" if pending else sort
                 order = -1 if pending else direction
                 cache_key = window.identity, applied, order, pending
-                members = event_members(candidates, window, self.rows, self._activity_current)
-                signature = tuple((key, self.roots[key].title, self.activity.get(key), self.rows.get(key))
+                members = event_members(candidates, window, display_rows, self._activity_current)
+                signature = tuple((key, self.roots[key].title, self.activity.get(key), display_rows[key])
                                   for key in members)
                 cached = self.orders.get(cache_key)
                 if nav is not None and navigation is not None and not pending:
@@ -572,7 +604,7 @@ class SessionCatalog:
                 elif cached and cached[0] == signature:
                     rows = cached[1]
                 else:
-                    rows = ordered(self._rows(members), applied, order)
+                    rows = ordered((display_rows[key] for key in members), applied, order)
                     if pending:
                         rows = provisional_order(rows, self.activity)
                 self.orders[cache_key] = signature, rows
@@ -614,7 +646,8 @@ class SessionCatalog:
                     raise KeyError('catalog_expired')
             snapshot = lease['epochs'][epoch]
             frozen = bool(snapshot.facts) or nav is not None and navigation is not None and not pending
-            lease.update(sort=sort, period=period, candidates=candidates, pinned=offset > 0)
+            lease.update(sort=sort, period=period, candidates=candidates, pinned=offset > 0,
+                         cohort_verified=not snapshot.provisional)
             selected = rows[offset:offset + PAGE_SIZE]
             lease["visible"] = tuple(row.session_id for row in selected)
             self.last_page = lease['visible']
@@ -626,6 +659,13 @@ class SessionCatalog:
             if nav is not None and navigation is not None and offset:
                 selected = tuple(nav.facts[row.session_id][0] if row.session_id in nav.facts else row
                                  for row in selected)
+            if frozen:
+                # Frozen metrics/membership are historical facts, not a license
+                # to keep claiming an old prompt is currently executing.
+                lifecycle = {row.session_id: row for row in self._rows(lease['visible'])}
+                selected = tuple(replace(row, **{name: getattr(lifecycle[row.session_id], name)
+                    for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id')})
+                    for row in selected)
             report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", (), session_usage=selected)
             result = project(report, self.timezone_id, self.unit).to_json()
             for row in result["session_usage"]:
@@ -644,8 +684,9 @@ class SessionCatalog:
                     "ready" if current else "retained" if row["has_summary"] else "pending")
                 if current and (key in self.active or self.rows[key].running) and self.clock() - self.valid[key][1] > 15:
                     row["metric_state"] = "retained"
-                row["running"] = self._running(key, bool(row["running"] and current and not unavailable
-                    and self.clock() - self.valid[key][1] <= 15))
+                # Running and its bound start were qualified before ordering (or
+                # captured together in a frozen navigation fact), never upgraded
+                # afterward from a boolean Watch hint with no prompt identity.
                 row["metric_states"] = {name: row["metric_state"] for name in ("model", "effort", "ccost", "prompts", "duration", "ctx")}
                 if current and not self.rows[key].context_qualified:
                     row["metric_states"]["ctx"] = "retained" if row["context_tokens"] is not None else "pending"
@@ -662,7 +703,7 @@ class SessionCatalog:
                 if key in facts:
                     row['snapshot_revision'] = facts[key][1]
                     row['snapshot_semantics'] = 'independently-qualified-navigation-facts'
-                    row['metric_state'] = row['activity_state'] = 'snapshot'
+                    row['metric_state'] = 'snapshot'
                     row['metric_states'] = dict.fromkeys(row['metric_states'], 'snapshot')
                     evidence = facts[key][0]
                     if not evidence.context_qualified:

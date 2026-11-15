@@ -14,19 +14,10 @@ const ReportView = (() => {
     sessionCost: 'The entire session’s reference cost, including attributed linked subagents.',
     context: 'Estimated context for this session, in tokens.'
   };
-  function activityHelp(value, zone, now = Date.now()) {
-    if (!Number.isSafeInteger(value) || value <= 0 || typeof zone !== 'string') return 'Activity time unavailable.';
-    try {
-      const format = new Intl.DateTimeFormat('en-GB', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-        second: '2-digit', hourCycle: 'h23', timeZoneName: 'longOffset', weekday: 'long'});
-      const parts = time => Object.fromEntries(format.formatToParts(time).map(part => [part.type, part.value]));
-      const at = parts(value), today = parts(now);
-      const ordinal = fields => Date.UTC(Number(fields.year), Number(fields.month) - 1, Number(fields.day)) / 86400000;
-      const age = ordinal(today) - ordinal(at);
-      const relative = age === 0 ? 'Today' : age === 1 ? 'Yesterday' : age >= 2 && age <= 6 ? at.weekday : '';
-      return `${at.year}-${at.month}-${at.day} ${at.hour}:${at.minute}:${at.second}.${String(value % 1000).padStart(3, '0')} ${at.timeZoneName} (${zone})${relative ? ' · ' + relative : ''}`;
-    } catch (_) { return 'Activity time unavailable.'; }
+  function activityHelp(value, zone, running = false) {
+    const label = Number.isSafeInteger(value) && value > 0 ? timestamp(value, zone) : 'N/A';
+    if (label === 'N/A') return 'Activity time unavailable.';
+    return label + (running === true ? '\n* Running sessions appear first, regardless of sorting.' : '');
   }
   function costGroups(value, session = false) {
     const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
