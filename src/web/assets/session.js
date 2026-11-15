@@ -337,7 +337,7 @@ const SessionDetail = (() => {
       this.context.root.hidden = !this.data;
     }
     invalidateValues() {
-      this.values.clear(); this.costs = null; this.data = null;
+      this.values.clear(); this.costs = null; this.costSource = null; this.data = null;
       ContextHelp.dismiss(this.root);
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
@@ -348,8 +348,14 @@ const SessionDetail = (() => {
       const scope = data.value_authority?.scope;
       if (this.values.scope && scope !== this.values.scope) this.invalidateValues();
       if (Object.values(data.value_authority?.rows || {}).includes('invalidated')) this.costs = null;
+      // Legacy DTOs have no detail authority, but still carry source provenance.
+      // Without either identity, do not qualify cross-observation cost retention.
+      const source = scope ? [scope, this.id] : data.result.source?.identity != null ?
+        [data.result.source.identity, data.result.source.generation, this.id] : null;
+      const costSource = JSON.stringify(source);
+      if (!source || costSource !== this.costSource) this.costs = null;
+      this.costSource = costSource;
       this.costs ||= new ReportView.CostDisplay();
-      const source = [scope, this.id];
       const block = this.values.project(data.result.view.prompt_blocks[0], data.value_authority);
       this.pendingRender = false;
       const protectedNode = protection();
@@ -366,7 +372,7 @@ const SessionDetail = (() => {
       }
       const initialLength = this.body.children.length, append = [];
       block.rows.forEach((value, index) => {
-        value = this.costs.select(value, [...source, value.id]);
+        value = this.costs.select(value, source && [...source, value.id]);
         const row = old.get(value.id) || el('tr'); row.dataset.id = value.id;
         row.className = value.in_progress ? 'session-running' : value.has_error || value.aborted ? 'error' : '';
         const signature = JSON.stringify(value);

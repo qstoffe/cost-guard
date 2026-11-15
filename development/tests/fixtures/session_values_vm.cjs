@@ -75,4 +75,28 @@ module.exports = ({vm, context, Node, input, document}) => {
   assert.equal(view.body.children.length,0);assert.equal(view.footer.children.length,0);
   assert.equal(view.values.mixes.size,0);assert.equal(view.values.totals.size,0);
   assert.equal(view.scroll.hidden,true);
+  // Legacy DTOs lack detail authority: keep compatible source costs, never
+  // reuse them across source/generation switches or unidentified observations.
+  const legacy = JSON.parse(JSON.stringify(data));
+  delete legacy.value_authority;
+  const legacyRow = legacy.result.view.prompt_blocks[0].rows[0];
+  legacyRow.unresolved_cost = true;
+  const cost = () => view.body.children[0].children[3].textContent;
+  const publishCost = amount => {
+    legacyRow.ccost = amount; legacyRow.display.ccost = amount;
+    legacyRow.display_units = {credits:{ccost:amount},usd:{ccost:'$'+(Number(amount)/100).toFixed(2)}};
+    view.update(legacy);
+  };
+  for (const unit of ['credits','usd']) {
+    vm.runInContext(`ReportView.setUnit('${unit}', stable.root)`, context);
+    legacy.result.source = {identity:'legacy-a',generation:'one'};
+    publishCost('125'); publishCost('0');
+    assert.equal(cost(),unit === 'usd' ? '$1.25' : '125','compatible source retains partial cost');
+    legacy.result.source.identity = 'legacy-b'; publishCost('0');
+    assert.equal(cost(),unit === 'usd' ? '$0.00' : '0','source switch isolates legacy costs');
+    publishCost('125'); legacy.result.source.generation = 'two'; publishCost('0');
+    assert.equal(cost(),unit === 'usd' ? '$0.00' : '0','generation switch isolates legacy costs');
+    delete legacy.result.source; publishCost('125'); publishCost('0');
+    assert.equal(cost(),unit === 'usd' ? '$0.00' : '0','unidentified observations cannot retain costs');
+  }
 };
