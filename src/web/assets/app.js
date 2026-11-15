@@ -8,6 +8,8 @@ const notice = document.getElementById('notice');
 const refresh = document.getElementById('refresh');
 const heading = document.getElementById('heading');
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
+const sessionsNav = document.querySelector('nav a[href="#/sessions"]');
+let rememberedSession = null;
 let csrf = null;
 let current = null;
 let liveConnection = null;
@@ -139,7 +141,9 @@ function connectionStatus(message, state = {}) {
       warning.textContent = banner.hidden ? '' : hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
     }
   }
-  if (hostState.terminal) for (const view of views.values()) { view.detail?.detach(); view.catalog?.detach(); }
+  if (hostState.terminal) for (const view of views.values()) {
+    view.detail?.invalidateValues(); view.detail?.detach(); view.catalog?.detach();
+  }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
   scheduleCachedReport();
@@ -548,13 +552,17 @@ function navigate() {
     route = ReportRoutes.resolve(location.hash);
   }
   const match = route.session;
+  if (match) rememberedSession = '#/sessions/' + match[1];
+  else if (route.catalog) rememberedSession = null; // Explicit list URLs/history always win.
+  if (sessionsNav) sessionsNav.setAttribute('href', rememberedSession || '#/sessions');
   document.title = `${route.title} · Cost Guard`;
   document.body.dataset.section = route.section;
   const key = match ? 'session/' + match[1] : route.section === 'sessions' ? 'sessions-catalog' : location.hash || '#/models';
   heading.textContent = route.title;
    ReportRoutes.controls(document.getElementById('scope-controls'), route);
   for (const item of document.querySelectorAll('nav a')) {
-    if (item.getAttribute('href') === '#/' + route.section) item.setAttribute('aria-current', 'page');
+    if (item === sessionsNav && route.section === 'sessions' ||
+        item !== sessionsNav && item.getAttribute('href') === '#/' + route.section) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   }
   if (!views.has(key)) {
@@ -573,6 +581,10 @@ function navigate() {
         request ? (demand ? 'Loading the host-owned report…' : 'Capture/Refresh to acquire this report.') : 'Choose a report scope.'});
   }
   const previous = current;
+  if (current?.detail) {
+    current.detailScroll = window.scrollY;
+    current.detailFocus = current.detail.root.contains(document.activeElement) ? document.activeElement : null;
+  }
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
@@ -604,6 +616,11 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  if (current !== previous && current.detail) {
+    if (current.detailFocus?.isConnected) current.detailFocus.focus({preventScroll: true});
+    else focusReport({preventScroll: true});
+    window.scrollTo(0, current.detailScroll || 0);
+  }
   demand?.update();
   if (current !== previous) enterCachedReport(current);
   scheduleCachedReport();
@@ -682,8 +699,9 @@ window.addEventListener('hashchange', () => {
   navigate();
 });
 window.addEventListener('pageshow', () => liveConnection?.resync());
-for (const link of document.querySelectorAll('nav a')) {
-  if (link.getAttribute('href') === '#/sessions') link.addEventListener('click', event => {
+if (sessionsNav) {
+  sessionsNav.addEventListener('click', event => {
+    if (rememberedSession || event.button > 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const catalog = views.get('sessions-catalog')?.catalog;
     if (catalog?.rememberedDestination) { event.preventDefault(); location.hash = catalog.rememberedDestination(); }
   });

@@ -290,6 +290,10 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .threshold { font-weight: 650; text-decoration: underline dotted; text-underline-offset: .2em; }
 .compaction { background: var(--surface); }
 .session-detail > h3 { margin-top: var(--space-3); }
+.session-quota-usage { margin-top: 1.5rem; }
+.session-quota-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 28rem)); }
+.session-quota-grid .account-card { min-width: 0; overflow-wrap: anywhere; }
+.session-quota-row { margin-block: .5rem; font-variant-numeric: tabular-nums; }
 .session-detail .pager input { width: 7rem; }
 .session-detail > p:empty, .session-detail .warning:empty { display: none; }
 .session-detail .table-scroll { overflow-anchor: auto; }

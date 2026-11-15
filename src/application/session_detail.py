@@ -15,6 +15,7 @@ from src.sources.errors import SourceError, SessionExportError
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
 from .session_values import INVALID_REASONS, value_authority
+from .session_quota import session_quota_evidence, session_quota_usage
 
 
 class SessionDetails:
@@ -23,6 +24,12 @@ class SessionDetails:
         self.lock = Lock()
         self.histories = OrderedDict()
         self.leases = OrderedDict()
+        self.quota_context = None
+
+    def observe_accounts(self, accounts, source, now_ms, *, stale=False):
+        # One shared Live observation; no IO and no table/history revaluation.
+        with self.lock:
+            self.quota_context = accounts, source, now_ms, stale
 
     def open(self, session_id, mode):
         with self.lock:
@@ -41,7 +48,7 @@ class SessionDetails:
                 raise RuntimeError("detail_busy")
             entry = self.histories.setdefault(session_id, dict(history=ActivityHistory(), result=None, activity=None,
                 revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
-                value_authority=None,
+                value_authority=None, quota_evidence=None,
                 row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
                 acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                     queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None))
@@ -57,6 +64,7 @@ class SessionDetails:
         with self.lock:
             self.leases.clear()
             self.histories.clear()
+            self.quota_context = None
 
     def freeze(self, token):
         with self.lock:
@@ -217,7 +225,7 @@ class SessionDetails:
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
                                               "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit", "activity",
-                                              "value_authority")}
+                                              "value_authority", "quota_evidence")}
 
     def activity_page(self, token, revision, offset):
         with self.lock:
@@ -252,6 +260,7 @@ class SessionDetails:
             pending = pending or expired
             acquisition = self.acquisition_status(entry)
             invalidated = acquisition["reason"] in INVALID_REASONS
+            quota_context = self.quota_context
         report = capture["result"]
         if pending or report is None:
             return dict(state=capture["state"], pending=pending, result=None, acquisition=acquisition,
@@ -275,7 +284,12 @@ class SessionDetails:
         if authority is not None:
             authority = {**authority, "rows": {row["event_id"]: authority["rows"].get(row["event_id"])
                 for row in view["prompt_blocks"][0]["rows"]}}
+        usage = None
+        if quota_context is not None and not invalidated and not chunk:
+            accounts, source, now_ms, quota_stale = quota_context
+            usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms, stale=quota_stale)
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
+            **(dict(quota_usage=usage) if not chunk else {}),
             values_invalidated=invalidated,
             value_authority=authority,
             **(dict(activity=activity_summary(capture["activity"])) if not chunk else {}),
@@ -310,7 +324,8 @@ def acquire_detail(service, history, key, *, unavailable=False):
             metadata=dict(timezone_id=service.timezone_id,
                 ccost_display_unit=service.config.get('ccostDisplayUnit', 'credits'),
                 activity=history.activity_for(source, report.prompt_blocks[0].rows),
-                value_authority=value_authority(history, source),
+                 value_authority=value_authority(history, source),
+                 quota_evidence=session_quota_evidence(history, service),
                 observed_at_ms=service.now_ms, row_observations=history.row_observations,
                 omitted_ids=history.omitted_ids, export_identity=export_identity))
     except SourceError as error:

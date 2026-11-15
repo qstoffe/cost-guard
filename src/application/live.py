@@ -8,6 +8,7 @@ from .contracts import record
 from .live_projection import project_live
 from .session_detail import SessionDetails
 from .session_catalog import SessionCatalog
+from .session_quota import source_scope
 
 
 class LiveRuntime:
@@ -104,6 +105,9 @@ class LiveRuntime:
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
+        if frame is not None:
+            self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
+                frame.now_ms, stale=frame.quota_stale or not verified)
         self.publish("live", record(state=driver.source_state,
             source_generation=generation if verified and generation in {"v1", "v2"} else "unknown",
             source_observed_at_ms=driver.observed_at_ms,

@@ -39,11 +39,26 @@ async function main() {
       return result;
     }});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const file of ['render', 'watch', 'report-loading', 'session-export', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+  for (const file of ['render', 'account-cards', 'watch', 'report-loading', 'session-export', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000')", context);
   const view = context.view; view.attached = true;
+  page.quota_usage={scope:'same-source',accounts:[{observation:{id:'safe',provider_id:'synthetic',label:'Synthetic Plan'},
+    quotas:[{id:'five',label:'5-hour',percent:'~235%'},{id:'model',label:'Special',scope:'model',model_id:'special',percent:'0%'}]}]};
   new Node('main').append(view.root);
   await view.load();
+  assert.equal(view.root.children.at(-1),view.quotaUsage.root,'summary follows all existing activity');
+  assert.equal(view.root.children.at(-2),view.activity.root);
+  const quotaCard=view.quotaUsage.grid.children[0],quotaRow=quotaCard.children[1];
+  assert.match(quotaRow.textContent,/~235%/);
+  page.quota_usage.accounts[0].quotas[0].percent='~117.5%';
+  await view.load();
+  assert.equal(view.quotaUsage.grid.children[0],quotaCard);
+  assert.equal(quotaCard.children[1],quotaRow);
+  assert.equal(quotaRow.textContent,'5-hour · ~117.5%','same-revision capacity update must not be skipped');
+  // Unit switching exercises the bound production heading and ordinary rows.
+  vm.runInContext("ReportView.setUnit('usd');ReportView.syncUnits(view.root)",context);
+  assert.equal(quotaRow.textContent,'5-hour · ~117.5%');
+  vm.runInContext("ReportView.setUnit('credits');ReportView.syncUnits(view.root)",context);
   assert.equal(view.body.children.length, 100);
   assert.equal(view.body.children[0].children.length, 10);
   assert.match(view.root.textContent, /Show all sessions/);
@@ -53,7 +68,9 @@ async function main() {
   assert.ok(!/Freeze|Snapshot|Go to row|Refresh|Token Mix order/.test(view.root.textContent));
   const row = view.body.children[10], cell = row.children[0];
   page = input.changed;
+  page.quota_usage={scope:'same-source',accounts:[]};
   await view.load();
+  assert.equal(view.quotaUsage.root.hidden,true,'observed removal clears old-account cards');
   assert.equal(view.body.children.length, 101);
   assert.equal(view.body.children[10], row);
   assert.equal(row.children[0], cell, 'unchanged rows keep their text and help DOM');
