@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v81.60 - 2026-11-15
+
+- Sessions extracts each sort value once per row instead of once per comparison. Stable value sorting preserves ascending session IDs for equal values in either direction and keeps unknown values last.
+- No catalog membership, scalar qualification, freshness, pinned-page or source acquisition changes. Large-catalog performance evidence is synthetic, not a real-source or browser latency guarantee.
+
 ## v81.59 - 2026-11-15
 
 - Sessions, Token Mix and AI Stats share inclusive configured-local calendar windows: today plus the previous six or 29 dates, stable until midnight and correct across DST.

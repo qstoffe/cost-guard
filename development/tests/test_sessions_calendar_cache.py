@@ -1,6 +1,7 @@
 """Calendar consumer boundaries and source-counted immutable navigation."""
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import time
 import unittest
 from unittest.mock import patch
@@ -9,12 +10,33 @@ from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.analysis.ai_stats import windows
 from src.analysis.timezones import local_date_range
-from src.application.session_catalog import SessionCatalog
+from src.application.session_catalog import SessionCatalog, ordered, sort_value
+from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest
 from src.watch.observers import observe_catalog
 
 
 class SessionsCalendarCacheTests(unittest.TestCase):
+    def test_sort_values_are_extracted_once_with_stable_ties_and_unknowns_last(self):
+        zero = SessionUsageRow("b", "Alpha", "Alpha", False, Decimal(0), 0,
+            last_activity_ms=0, duration_ms=0, context_tokens=0, effort_key="none")
+        high = replace(zero, session_id="c", title="Zulu", model="Zulu", ccost=Decimal("1.25"),
+            prompt_count=9, last_activity_ms=99, duration_ms=999, context_tokens=99, effort_key="max")
+        unknown = replace(high, session_id="e", model="N/A", complete=False, prompt_count=None,
+            last_activity_ms=None, duration_ms=None, context_qualified=False, effort_key=None)
+        rows = (unknown, zero, high, replace(unknown, session_id="d"), replace(zero, session_id="a"))
+        for key in ("activity", "model", "ccost", "prompts", "duration", "ctx", "effort", "name"):
+            for direction in (-1, 1):
+                with self.subTest(key=key, direction=direction):
+                    if key == "name":
+                        expected = ["c", "d", "e", "a", "b"] if direction == -1 else ["a", "b", "c", "d", "e"]
+                    else:
+                        expected = ["c", "a", "b", "d", "e"] if direction == -1 else ["a", "b", "c", "d", "e"]
+                    with patch("src.application.session_catalog.sort_value", wraps=sort_value) as extract:
+                        result = ordered(rows, key, direction)
+                    self.assertEqual([row.session_id for row in result], expected)
+                    self.assertEqual(extract.call_count, len(rows))
+
     def test_shared_boundaries_across_dst_leap_month_year_and_timezone(self):
         for zone in ("Europe/Stockholm", "UTC"):
             for day in ("2026-03-29", "2026-10-25", "2024-02-29", "2027-01-01"):

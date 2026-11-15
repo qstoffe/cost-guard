@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.59 (2026-11-15):** Sessions reuses revision-qualified summaries and pinned pages, automatically recovers from temporary interruptions, and adds direct numbered paging. Its seven columns share Watch/Mini help, with configured-local activity dates. Sessions, Token Mix and AI Stats use inclusive local-calendar 7/30-day periods.
+**v81.60 (2026-11-15):** Sessions computes each row's sort value once when building a new ordering, reducing cold-page CPU work for large catalogs. Ascending identity ties, unknown-last metrics, pinned pages and source acquisition are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

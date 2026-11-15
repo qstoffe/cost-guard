@@ -5,7 +5,6 @@ every period-eligible root; an unindexed root is not a canonically unknown metri
 """
 from collections import OrderedDict
 from dataclasses import replace
-from functools import cmp_to_key
 from threading import Lock
 import time
 from uuid import uuid4
@@ -40,14 +39,17 @@ def sort_value(row, key):
 
 
 def ordered(rows, key, direction):
-    def compare(left, right):
-        a, b = sort_value(left, key), sort_value(right, key)
-        if a is None or b is None:
-            result = (a is None) - (b is None)
+    # Stable value sorting preserves ascending IDs for ties in either direction.
+    # Extract each value once; unknown values stay last, including descending.
+    known, unknown = [], []
+    for row in sorted(rows, key=lambda row: row.session_id):
+        value = sort_value(row, key)
+        if value is None:
+            unknown.append(row)
         else:
-            result = ((a > b) - (a < b)) * direction
-        return result or ((left.session_id > right.session_id) - (left.session_id < right.session_id))
-    return tuple(sorted(rows, key=cmp_to_key(compare)))
+            known.append((value, row))
+    known.sort(key=lambda item: item[0], reverse=direction == -1)
+    return tuple(row for _, row in known) + tuple(unknown)
 
 
 def retain_pending_metrics(row, previous):
