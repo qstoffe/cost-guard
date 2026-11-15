@@ -5,6 +5,7 @@ stay private; HTTP receives the same safe headings as Accounts and percentages.
 """
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Literal
 
 from src.analysis.causal import trace_entries
 from src.analysis.coverage import snapshot_coverage_complete
@@ -86,19 +87,15 @@ def percentage(amount, capacity, estimated):
     return ("~" if estimated else "") + text + "%"
 
 
-def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
-    if quota.unlimited:
-        return "Unlimited"
-    capacity = reference.get("capacity")
-    if (stale or not evidence.complete or not reference.get("current") or not reference.get("coherent")
-            or quota.scope not in {"account", "model"}
-            or quota.scope == "model" and not quota.model_id):
-        return "—"
+def quota_contributions(evidence, native, quota, candidates):
+    """Resolve membership independently of capacity, freshness and formatting."""
+    if quota.scope not in {"account", "model"} or quota.scope == "model" and not quota.model_id:
+        return [], False, True
     model = canonical_model_name(quota.model_id) if quota.scope == "model" else None
     if model and unverified_alias(quota.model_id, native.ref.provider_id):
-        return "—"
+        return [], False, True
     routes = account_usage_routes(native, proven=True)
-    eligible, estimated = [], reference["basis"] == "ratio"
+    eligible, estimated, uncertain = [], False, False
     for part in evidence.contributions:
         if part.route and part.route not in routes:
             continue
@@ -107,12 +104,44 @@ def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
         if part.account_key is not None and part.account_key != native.key:
             continue
         if not part.route or model and part.model is None:
-            return "—"
+            uncertain = True
+            continue
         if part.account_key is None:
             if candidates.get(part.route) != (native.key,):
-                return "—"
+                uncertain = True
+                continue
             estimated = True
         eligible.append(part)
+    return eligible, estimated, uncertain
+
+
+def quota_contribution(evidence, native, quota, candidates) -> Literal["positive", "zero", "unknown"]:
+    """Wire-safe positive/zero/unknown state; no account refs or raw costs."""
+    eligible, _, uncertain = quota_contributions(evidence, native, quota, candidates)
+    unit = (quota.unit or "").casefold()
+    direct = bool(eligible and unit) and all(
+        part.account_key == native.key and dict(part.native).get(unit, (0, 0))[1] == part.requests
+        for part in eligible)
+    amounts = ([dict(part.native)[unit][0] for part in eligible] if direct
+               else [amount for part in eligible for amount in
+                     (part.amount, *(amount for amount, _ in dict(part.native).values()))])
+    if any(amount > 0 for amount in amounts):
+        return "positive"
+    if evidence.complete and not uncertain and (direct or all(part.complete for part in eligible)):
+        return "zero"
+    return "unknown"
+
+
+def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
+    if quota.unlimited:
+        return "Unlimited"
+    capacity = reference.get("capacity")
+    if stale or not evidence.complete or not reference.get("current") or not reference.get("coherent"):
+        return "—"
+    eligible, estimated, uncertain = quota_contributions(evidence, native, quota, candidates)
+    if uncertain:
+        return "—"
+    estimated = estimated or reference["basis"] == "ratio"
     # A native same-unit per-request observation is exact only with proven
     # account identity. Reference valuation is not a native provider debit.
     unit = (quota.unit or "").casefold()
@@ -155,6 +184,7 @@ def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False):
             reference = quota_ccost_values(values, now_ms)
             rows.append(dict(id=identity((index, quota.label, quota.scope, quota.model_id)),
                 label=quota.label, scope=quota.scope, model_id=quota.model_id,
+                contribution=quota_contribution(evidence, native, quota, candidates),
                 percent=quota_share(evidence, native, quota, reference, candidates, stale=stale)))
         cards.append(dict(observation=safe, quotas=rows))
     return dict(scope=identity(evidence.source), accounts=cards)

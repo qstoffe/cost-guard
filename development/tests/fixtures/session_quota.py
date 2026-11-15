@@ -20,7 +20,7 @@ def configure(runtime, command):
     snapshot = service.source.snapshots["root"]
     value = comparison_cost(trace_entries(snapshot), service._load_comparison_catalog().reference_valuation)
     capacity = value.known_ccost / D("2.35") * (2 if command == "quota-capacity" else 1)
-    monthly = QuotaComponent("Monthly", period="fixed", limit=D(70), used=D(7), remaining=D(63),
+    monthly = QuotaComponent("monthly", period="fixed", limit=D(70), used=D(7), remaining=D(63),
         unit="AI credits", reset_at_ms=service.now_ms + 86_400_000, status="available")
     five = QuotaComponent("5-hour", period="rolling", remaining_fraction=D(".8"),
         duration_seconds=18000, reset_at_ms=service.now_ms + 1000, status="available")

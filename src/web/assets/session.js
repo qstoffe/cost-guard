@@ -198,7 +198,9 @@ const SessionDetail = (() => {
           return;
         }
         this.sourceStatus(data);
-        this.quotaUsage?.update(data.quota_usage);
+        // Pending quota publication is not observed nonuse. Host/source
+        // invalidation above still retires the entire retained projection.
+        if (data.quota_usage) this.quotaUsage?.update(data.quota_usage);
         if (this.data?.activity?.scope && data.activity?.scope !== this.data.activity.scope) {
           this.activity.update(null); this.activityLimit = 25; this.data.activity = null;
         }
