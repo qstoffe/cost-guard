@@ -128,7 +128,7 @@ class StatsResumeTests(unittest.TestCase):
         rebuilt = self.build(scope='all')
 
         self.assertEqual(before + 5, self.source.load_count)
-        self.assertEqual('fun-3-responses', project(rebuilt).to_json()['ai_stats_policy'])
+        self.assertEqual('fun-4-models', project(rebuilt).to_json()['ai_stats_policy'])
         self.assertTrue(all(scope['ready'] for scope in rebuilt.ai_stats_work['scopes'].values()))
 
     def test_active_root_cannot_be_skipped_using_its_previous_stable_exclusion(self):

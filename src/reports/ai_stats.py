@@ -137,8 +137,8 @@ class StatsAcquisition:
     def _retain(self, sid, value, volatile):
         previous = self.evidence.get(sid)
         if previous:
-            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals)
-        self.fact_count += len(value[0].entries) + len(value[0].intervals)
+            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals) + len(previous[0][0].activity)
+        self.fact_count += len(value[0].entries) + len(value[0].intervals) + len(value[0].activity)
         if self.fact_count > MAX_FACTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
         self.evidence[sid] = value, volatile
@@ -146,7 +146,7 @@ class StatsAcquisition:
     def _discard(self, sid):
         previous = self.evidence.pop(sid, None)
         if previous:
-            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals)
+            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals) + len(previous[0][0].activity)
         self.service._acquisition.revisions.pop(sid, None)
 
     def _batch(self, roots):
@@ -272,7 +272,8 @@ class StatsAcquisition:
         rows, scopes = [], {}
         calculation = StatsObservation(evidence, lambda model, tokens: costs[model, tokens],
                                        now=service.now_ms, zone=service.timezone_id,
-                                       workday_calendar=service.config.get('workdayCalendar', 'SE'))
+                                        workday_calendar=service.config.get('workdayCalendar', 'SE'),
+                                        model_name=lambda model, provider: self.reference.display_name(model, provider, exact=True))
         for name, start in self.periods:
             excluded = [self.bounds.get(coverage_key(r)) for r in self.pending
                         if r.session_id not in self.unavailable and self._excludes(r, start)]

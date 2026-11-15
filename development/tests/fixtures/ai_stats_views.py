@@ -20,6 +20,7 @@ def evidence_views():
     from decimal import Decimal
     from src.analysis.ai_stats import StatsRoot, period_stats
     from src.analysis.ai_stats_responses import ResponseCall
+    from src.analysis.ai_stats_models import ModelActivity
     from src.analysis.models import TraceEntry
     from src.application.projection import project
     from src.domain import ModelRef, TokenUsage
@@ -31,11 +32,12 @@ def evidence_views():
     entry = TraceEntry('root', 'prompt', 'message', None, at, 0,
                        ModelRef('synthetic', 'model'), None, TokenUsage(input=4, output=100))
     root = StatsRoot('root', 'Synthetic record', (entry,), ((at, 3_600_000, False),),
-                     responses=(ResponseCall(entry, 1000),))
+                     responses=(ResponseCall(entry, 1000),), activity=(ModelActivity(entry, at - 1000, 1000),))
     missing = replace(root, entries=(replace(entry, tokens=TokenUsage(input=4, known_fields=())),))
     racers = tuple(replace(entry, message_id='racer-' + str(i), model=ModelRef('synthetic', 'model-' + str(i)),
                            tokens=TokenUsage(output=300 - 100 * i)) for i in range(3))
-    podium = replace(root, entries=racers, responses=tuple(ResponseCall(e, 1000) for e in racers))
+    podium = replace(root, entries=racers, responses=tuple(ResponseCall(e, 1000) for e in racers),
+                     activity=tuple(ModelActivity(e, at - 1000, 1000) for e in racers))
     base = stats_result(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
     cases = (
         ('complete', (root,), True, Decimal(4)), ('empty', (), True, Decimal(4)),
@@ -46,7 +48,7 @@ def evidence_views():
         ('provisional', (replace(root, intervals=((at, 3_600_000, True),)),), True, Decimal(4)),
         ('observed-time', (replace(root, intervals=((at, 1_800_000, False), (at - 86_400_000, None, False))),), True, Decimal(4)),
         ('podium-three', (podium,), False, None),
-        ('podium-two', (replace(podium, entries=racers[:2], responses=podium.responses[:2]),), True, Decimal(4)),
+        ('podium-two', (replace(podium, entries=racers[:2], responses=podium.responses[:2], activity=podium.activity[:2]),), True, Decimal(4)),
     )
     result = []
     for name, roots, complete, price in cases:

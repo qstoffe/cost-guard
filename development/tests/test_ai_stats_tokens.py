@@ -47,6 +47,7 @@ class TokenTrafficTests(unittest.TestCase):
                 self.assertEqual(requests * 1080, metrics['total-tokens'].value)
                 self.assertEqual('complete', metrics['total-tokens'].status)
                 self.assertEqual(str(requests * 1080), dto['total-tokens']['exact_value'])
+                self.assertEqual(requests * 1080, metrics['total-tokens'].podium[0].value)
                 self.assertNotIn('display_units', dto['total-tokens'])
                 self.assertNotIn('display_units', dto['token-rate'])
 
@@ -149,10 +150,9 @@ class ResponsePodiumTests(unittest.TestCase):
         metrics, dto = calculate((self.root(calls),), self.NOW, complete=False)
         podium = metrics['token-rate'].podium
 
-        self.assertEqual([('a', 'high', Decimal(200), 1), ('b', '', Decimal(200), 1),
-                          ('a', '', Decimal(100), 2)],
-                         [(r.model, r.variant, r.tokens_per_second, r.sampled_calls) for r in podium])
-        self.assertEqual((1000, 10000), (podium[2].output_tokens, podium[2].duration_ms))
+        self.assertEqual([('b', '', Decimal(200), 1), ('a', '', Decimal(1200) / 11, 3)],
+                          [(r.model, r.variant, r.tokens_per_second, r.sampled_calls) for r in podium])
+        self.assertEqual((1200, 11000), (podium[1].output_tokens, podium[1].duration_ms))
         self.assertEqual('1 sampled call', dto['token-rate']['podium'][0]['sample'])
         self.assertNotIn('calendar_rate', dto['token-rate']['display'])
         for card in dto.values():

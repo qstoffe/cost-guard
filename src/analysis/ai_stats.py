@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from .active_hour import HOUR_MS, USAGE_FIELDS, deduplicated_requests
 from .ai_stats_rates import HourlyRates, hourly_rates
 from .ai_stats_responses import podium
+from .ai_stats_models import model_costs, model_time, observed_tokens, standings
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
 DAY_MS = 24 * HOUR_MS
@@ -16,7 +17,7 @@ GENERIC_TOKEN_COST = Decimal('.000003')
 # AI Stats = BEST EFFORT / NEVER Unavailable. Sparse, partial and estimated
 # observations show fun values; Loading and genuine operational errors differ.
 # Standing contract: see development/README.md for the Reports module contract.
-POLICY = 'fun-3-responses'
+POLICY = 'fun-4-models'
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +30,7 @@ class StatsRoot:
     cost_pending: bool = False
     source_complete: bool = True
     responses: tuple = ()
+    activity: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +222,7 @@ def _request_costs(entries, valuation):
 def _cost_metrics(roots, entries, valuation, source_complete, duration, time_reasons, per_root):
     owner = {entry.session_id: root for root in roots for entry in root.entries}
     values, guessed = _request_costs(entries, valuation)
+    cost_podium, average_podium = model_costs(roots, entries, values)
     reasons = tuple(code for code, present in (
         ('source-incomplete', not source_complete), ('unpriced-requests', guessed),
         ('missing-token-usage', any(not USAGE_FIELDS <= set(e.tokens.known_fields) for e in entries)),
@@ -239,8 +242,8 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
     root = next((root for root in roots if root.session_id == expensive), None)
     rate_reasons = tuple(dict.fromkeys((*reasons, *time_reasons)))
     return (Stat('hourly-rate', min(Decimal('1e9'), rate), cost_status, reasons=rate_reasons),
-         Stat('total-cost', total, cost_status, reasons=reasons),
-         Stat('average-cost', average, cost_status, reasons=reasons),
+         Stat('total-cost', total, cost_status, reasons=reasons, podium=cost_podium),
+         Stat('average-cost', average, cost_status, reasons=reasons, podium=average_podium),
          Stat('expensive-session', costs[expensive] if root else Decimal(0), cost_status,
               root.session_id if root else None, root.title if root else '',
               reasons=reasons))
@@ -253,21 +256,22 @@ def _token_metrics(roots, entries, complete, start, now):
         ('missing-token-usage', any(not USAGE_FIELDS <= set(e.tokens.known_fields) for e in entries)),
         ('unknown-request-time', any(e.completed_at_ms <= 0 for root in roots for e in root.entries)),
         ('pending-usage', any(root.cost_pending for root in roots))) if present)
-    total = sum(sum(getattr(e.tokens, field) for field in USAGE_FIELDS if field in e.tokens.known_fields)
-                + (e.tokens.reasoning if 'output' in e.tokens.known_fields else 0)
-                for e in entries if e.completed_at_ms > 0)
-    return (Stat('total-tokens', total, 'partial' if reasons else 'complete', reasons=reasons),
+    volumes = [observed_tokens(e) for e in entries]
+    total = sum(volumes)
+    return (Stat('total-tokens', total, 'partial' if reasons else 'complete', reasons=reasons,
+                 podium=standings(entries, volumes)),
             Stat('token-rate', 0, podium=podium(roots, entries, start, now),
                  detail='activity' if entries or any(root.intervals for root in roots) else ''))
 
 
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
-    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE'):
+    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None):
         self.roots, self.valuation = tuple(roots), valuation
         self.now, self.zone = now, zone
         self.workday_calendar = workday_calendar
         self._timelines, self._requests = {}, {}
+        self.model_name = model_name
 
     def timing(self, root):
         key = id(root)
@@ -294,9 +298,13 @@ class StatsObservation:
                       if 0 < left <= self.now)
         rates = hourly_rates(cost[1].value, duration, period=period, now=self.now, zone=self.zone,
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
-        return StatsPeriod(period, start, self.now,
-            (replace(cost[0], rates=rates), cost[1], timed[0], *cost[2:], *timed[1:],
-             *_token_metrics(roots, entries, complete, start, self.now)))
+        metrics = (replace(cost[0], rates=rates), cost[1],
+            replace(timed[0], podium=model_time(roots, entries, start, self.now, union)),
+            *cost[2:], *timed[1:], *_token_metrics(roots, entries, complete, start, self.now))
+        if self.model_name:
+            metrics = tuple(replace(metric, podium=tuple(replace(row,
+                display_name=self.model_name(row.model, row.provider)) for row in metric.podium)) for metric in metrics)
+        return StatsPeriod(period, start, self.now, metrics)
 
 
 def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True, workday_calendar='SE'):

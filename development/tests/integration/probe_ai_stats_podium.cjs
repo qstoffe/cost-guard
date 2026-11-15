@@ -7,14 +7,19 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
     await evaluate(`current.result=${JSON.stringify(item.result)};current.period='all';current.stats.update(current);`);
     const rows=await evaluate(`[...document.querySelectorAll('[data-metric="token-rate"] .ai-stat-racer')].map(r=>({
       label:r.querySelector('.ai-stat-model').textContent,speed:r.querySelector('.ai-stat-speed').textContent,
-      sample:r.querySelector('.ai-stat-sample').textContent,rank:r.getAttribute('aria-label'),medal:r.firstChild.textContent}))`);
+      rank:r.getAttribute('aria-label'),medal:r.firstChild.textContent}))`);
     assert.equal(rows.length,count);
     if(count) {
       assert.deepEqual(rows.map(r=>r.medal),['🥇','🥈','🥉'].slice(0,count));
-      assert.ok(rows.every(r=>r.sample==='1 sampled call' && /tok\/s/.test(r.speed)));
+      assert.ok(rows.every(r=>!r.label.includes('/') && /tok\/s/.test(r.speed)));
     }
     if(count===3) assert.deepEqual(rows.map(r=>r.speed),['300 tok/s','200 tok/s','100 tok/s']);
     assert.equal(await evaluate(`document.querySelectorAll('[data-metric="token-rate"] .ai-stat-rate').length`),0);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-sample').length`),0);
+    for(const metric of ['total-tokens','total-cost','working-time','average-cost']) {
+      assert.equal(await evaluate(`document.querySelectorAll('[data-metric="${metric}"] .ai-stat-racer').length`),count,metric);
+      assert.ok(await evaluate(`!!document.querySelector('[data-metric="${metric}"] .ai-stat-value').textContent`));
+    }
     assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),/Unavailable|N\/A/);
   }
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
@@ -23,6 +28,21 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/round trip.*network.*first token/);
   await evaluate(`window.__racer=document.querySelector('.ai-stat-racer');current.stats.update(current);`);
   assert.equal(await evaluate(`document.activeElement===__podiumHeading && __racer===document.querySelector('.ai-stat-racer')`),true);
+  await evaluate(`window.__modelLabel=document.querySelector('[data-metric="token-rate"] .ai-stat-model');__modelLabel.focus();`);
+  await until(`document.getElementById('context-help').textContent.includes('synthetic/model-')`);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/sampled calls/);
+  await evaluate(`current.stats.update(current);`);
+  assert.equal(await evaluate(`document.activeElement===__modelLabel`),true);
+  await evaluate(`ReportView.setUnit('usd',output)`);
+  assert.ok(await evaluate(`[...document.querySelectorAll('[data-metric="total-cost"] .ai-stat-speed')].every(n=>n.textContent.startsWith('$'))`));
+  await evaluate(`ReportView.setUnit('credits',output)`);
+  for(const metric of ['total-cost','total-tokens','token-rate','working-time','average-cost']) {
+    assert.equal(await evaluate(`(() => {const c=document.querySelector('[data-metric="${metric}"]');
+      return [...c.querySelectorAll('.ai-stat-racer')].every(r=>{
+        const model=r.querySelector('.ai-stat-model').getBoundingClientRect(),amount=r.querySelector('.ai-stat-speed').getBoundingClientRect();
+        return Math.abs(model.top-amount.top)<2;
+      });})()`),true,'one-line '+metric);
+  }
   for(const width of [360,800]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
     assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true);
@@ -30,5 +50,5 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},tab);
   await evaluate(`current.result=${JSON.stringify(original)};current.period=${JSON.stringify(period)};current.stats.update(current);`);
-  checks.push('canonical 0/1/2/3 medal rows, weighted prepared speeds, sampled count, no hourly token rows, best-effort all-card policy, responsive podium and retained focus/help');
+  checks.push('five shared canonical 0/1/2/3 medal lists, retained large totals, compact short names, no sample rows, units, model keyboard help and retained focus/nodes');
 };

@@ -132,7 +132,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
           calendar_rate:'125 CCost/h',workday_rate:'125 CCost/h',active_rate:'125 CCost/h',rate_help:'Fixture rates'},
         display_units:{usd:{value:'$1.25',calendar_rate:'$1.25/h',workday_rate:'$1.25/h',active_rate:'$1.25/h'}}}));
       numericStatsState={period:'today',result:{source:{identity:'stats-${unit}',generation:'v2'},view:{
-        kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-3-responses',ai_stats_work:{scopes:{today:{ready:true}}},
+        kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-4-models',ai_stats_work:{scopes:{today:{ready:true}}},
         ai_stats:[{period:'today',start_ms:1000,metrics}]}}};
       numericStats.update(numericStatsState);
     })()`);

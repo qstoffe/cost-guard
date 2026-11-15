@@ -80,7 +80,7 @@ def traffic_tokens(values):
                 'No races yet. The podium is polished.',
         'trait': 'The silicon sprint podium.',
         'response_help': 'Approximate output tokens per second across sampled model responses. '
-            'Output (including reasoning once) ÷ summed response seconds; up to 32 sampled calls per model and effort. '
+            'Output (including reasoning once) ÷ summed response seconds; up to 32 sampled calls per model across efforts. '
             'Client-observed response round trip includes network, queueing and time to first token, not just decoding. '
             'Local tool execution is excluded. Newest eight plus identity-spread historical samples; '
             'small samples and historical-window selection are best effort.'}
@@ -88,14 +88,40 @@ def traffic_tokens(values):
 
 def response_tokens(row):
     effort = "\n".join(dict.fromkeys(effort_help(value, explicit=row.variant) for value in row.effort_evidence))
-    return dict(label=f'{row.provider}/{row.model}' + (f' · {row.variant}' if row.variant else ''),
+    return dict(label=short_model(row),
                 model_help=request_model_help(row.provider, row.recorded_models,
-                    catalog_model=row.model if row.catalog_estimate else None) + ("\n" + effort if effort else ""),
+                    catalog_model=row.catalog_model or None) + ("\n" + effort if effort else "") +
+                    f'\n{row.sampled_calls} sampled calls across recorded efforts.' +
+                    (f'\nSource-qualified model group {row.identity_hint}.' if row.identity_hint else ''),
                 speed=('<0.1' if row.tokens_per_second < Decimal('.1') else compact_volume(row.tokens_per_second)) + ' tok/s',
                 sample=f'{row.sampled_calls} sampled call' + ('s' if row.sampled_calls != 1 else ''))
 
 
+def short_model(row):
+    return (row.display_name or row.model).removeprefix(row.provider + '/').split('/')[-1]
+
+
+def standing_tokens(row, metric):
+    effort = '\n'.join(dict.fromkeys(effort_help(value) for value in row.effort_evidence))
+    detail = request_model_help(row.provider, row.recorded_models, catalog_model=row.catalog_model or None)
+    if row.identity_hint:
+        detail += f'\nSource-qualified model group {row.identity_hint}.'
+    if metric == 'total-tokens':
+        detail += f'\n{row.value} observed tokens (known categories only).'
+    elif metric == 'working-time':
+        detail += '\nUnion of completed attributable provider-response intervals, excluding local tool waits; not whole session time.'
+    elif metric == 'average-cost':
+        detail += '\nAttributed period CCost / distinct participating root sessions for this model.'
+    return dict(label=short_model(row), model_help=detail + ('\n' + effort if effort else ''))
+
+
 def stat_tokens(values):
+    if 'podium_metric' in values:
+        metric, value = values['podium_metric'], values['podium_value']
+        amount = (compact_volume(value) if metric == 'total-tokens' else duration_text(value)
+                  if metric == 'working-time' else ccost_amount(number(value)) +
+                  ('' if ccost_unit() == 'usd' else ' CCost'))
+        return {'amount': amount}
     if 'metric' not in values:
         return {}
     if values['metric'] in ('total-tokens', 'token-rate'):

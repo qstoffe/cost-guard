@@ -6,9 +6,9 @@ from src.analysis.cache import dependency_signature
 from src.analysis.model_identity import current
 from .token_mix_cache import encode, decode
 from .matched_runs import project_run, encode_run, decode_run
-from .ai_stats_responses import encode_responses, decode_responses
+from .ai_stats_responses import encode_responses, decode_responses, decode_activity
 
-ALGORITHM = 'ai-stats-evidence-6-response-stream'
+ALGORITHM = 'ai-stats-evidence-7-model-activity'
 NAMESPACE = 'ai-stats-evidence'
 COVERAGE = 'ai-stats-coverage-3'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)
@@ -47,7 +47,8 @@ def decoded(value, root, source=None, *, now=None):
         raise ValueError('invalid_match_root')
     return StatsRoot(root.session_id, root.title, tuple(e for e, _p, _c in facts),
                      tuple(tuple(pair) for pair in intervals), value['pending'], value['complete'],
-                     decode_responses(value['responses'], facts, now)), facts, matched
+                      decode_responses(value['responses'], facts, now),
+                      decode_activity(value['responses'], facts)), facts, matched
 
 
 def coverage_key(root):

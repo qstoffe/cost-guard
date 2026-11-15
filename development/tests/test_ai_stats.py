@@ -283,8 +283,11 @@ class AIStatsAcquisitionTests(unittest.TestCase):
             changed = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
 
             for before, after in zip(first.ai_stats, changed.ai_stats):
-                self.assertEqual(tuple(m for m in before.metrics if m.metric != 'token-rate'),
-                                 tuple(m for m in after.metrics if m.metric != 'token-rate'))
+                self.assertEqual(tuple(replace(m, podium=()) for m in before.metrics if m.metric != 'token-rate'),
+                                 tuple(replace(m, podium=()) for m in after.metrics if m.metric != 'token-rate'))
+                work = next(m for m in after.metrics if m.metric == 'working-time')
+                if work.podium:
+                    self.assertEqual(3 if delay == 1 else 600, work.podium[0].value)
                 self.assertEqual(before.matched, after.matched)
             podium = changed.ai_stats[-1].metrics[-1].podium
             self.assertEqual((30, 3 if delay == 1 else 600, 3),
