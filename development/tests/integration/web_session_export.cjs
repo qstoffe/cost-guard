@@ -83,7 +83,7 @@ async function main() {
   action.close(); assert.equal(order.at(-1), 'revoke'); assert.equal(timers.size, 0);
   for (const [available, token] of [[false, 'selected'], [true, null]]) {
     action.update(token, available); assert.equal(action.button.disabled, true);
-    assert.match(action.notice.textContent, /Export unavailable/);
+    assert.equal(action.notice.textContent, '', 'passive export availability is silent');
   }
   for (const code of ['detail_expired', 'export_too_large', 'export_source_unavailable']) {
     const failed = new context.Action(async () => { throw new Error(code); }, 'ses_test');

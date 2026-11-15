@@ -24,9 +24,9 @@ module.exports = (vm, context) => {
    assert.equal(vm.runInContext('WatchView.finishedCards(refreshInput.view)[0].session_id',context),'new-qualified-root');
   // A new source has no eligible history/epoch. Empty proof persists through retries.
   Object.assign(saved.view,{history_cards:[],history_scope:'new-source',history_epoch:0,history_state:'loading'});
-   render();assert.equal(vm.runInContext('WatchView.historyNotice(refreshInput.view,false)',context),'Loading earlier sessions…');
+   render();assert.equal(vm.runInContext('WatchView.historyNotice(refreshInput.view,false)',context),'');
    saved.view.history_state='unavailable';render();
-   assert.equal(vm.runInContext('WatchView.historyNotice(refreshInput.view,false)',context),'Unable to load earlier sessions');
+   assert.equal(vm.runInContext('WatchView.historyNotice(refreshInput.view,false)',context),'');
   saved.view.history_state='observed';saved.view.history_epoch=1;render();
   for(const state of ['loading','refreshing','retrying']) {
      saved.view.history_state=state;render();

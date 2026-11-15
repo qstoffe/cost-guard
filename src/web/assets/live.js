@@ -6,8 +6,21 @@ const LiveConnection = (() => {
       clock = {now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), cancel: id => clearTimeout(id)}) {
     let source = null, instance = null, sequence = 0, syncing = null, stopped = false;
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
+    let sourceOutage = false, healthOwner = null, healthCheck = -1;
+    function sourceHealth() {
+      const proof = values.live?.source_health;
+      if (!proof || !Number.isSafeInteger(proof.check_id)) return;
+      if (proof.owner !== healthOwner) { healthOwner = proof.owner; healthCheck = -1; }
+      if (proof.check_id < healthCheck) return; // Cached earlier checks cannot recover an outage.
+      const fresh = proof.check_id > healthCheck;
+      healthCheck = proof.check_id;
+      if (proof.reachable === true && fresh) sourceOutage = false;
+      else if (proof.reachable === false && proof.failed_checks >= 2 && proof.unavailable_seconds >= 20)
+        sourceOutage = true;
+    }
     function report(kind, message) {
       status(message, {kind, authenticatedAt, observedAt: values.live?.source_observed_at_ms ?? null,
+        sourceOutage, sourceError: values.live?.error_code,
         sourceGeneration: kind === 'connected' && ['v1', 'v2'].includes(values.live?.source_generation) ? values.live.source_generation : 'unknown',
         terminal: stopped, writable: !stopped && ['connected', 'starting', 'source_starting', 'source_retrying', 'source_unavailable'].includes(kind)});
     }
@@ -19,6 +32,7 @@ const LiveConnection = (() => {
     }
     function health() {
       const live = values.live;
+      sourceHealth();
       if (!live || live.state === 'starting' || (live.state === 'running' && !live.view)) report('starting', 'STARTING — source observation pending. HTTP is not source readiness.');
       else if (live.state === 'starting_opencode') report('source_starting', 'Starting OpenCode server…');
       else if (!streamOpen && ['running', 'retrying'].includes(live.state)) report('reconnecting', 'RECONNECTING — HTTP connected; live stream interrupted. Last source observation retained.');

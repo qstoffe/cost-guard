@@ -47,8 +47,7 @@ module.exports=(vm,context,sample,helpText)=>{
       assert.match(line.textContent,phase==='unknown'?/: \?$/:unit==='usd' ? /: ~\$/ : /: ~/);
       const help=helpText(line.children[0]);
       assert.doesNotMatch(help,/Native Used|Native Remaining|rolling|scope/);
-      assert.match(help,phase==='unknown'?/No positive same-window reference CCost sample/:/^(Monthly )?Capacity: ~/);
-      if(phase==='known')assert.doesNotMatch(help,/[\r\n]|÷|×|Unrounded|estimate|Observed|Provider-reported|attribution|pricing/i);
+      assert.equal(help,phase==='unknown'?'N/A':'Estimated reference-cost capacity for this quota.');
     }
   }
   // Native eligibility comes from the projection, not provider, label or amount.

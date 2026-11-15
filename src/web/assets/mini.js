@@ -435,7 +435,7 @@ const MiniWatch = (() => {
       const text = ReportView.text;
       const state = {authorization_required: 'Authorization expired · return to Cost Guard',
         identity_changed: 'Host changed · reopen Cost Guard', stopped: 'Host stopped · restart Cost Guard'}[health.kind];
-      text(this.health, state || (health.kind === 'offline' ? 'Host unavailable · return to Cost Guard' : ''));
+      text(this.health, state || '');
       this.health.hidden = !this.health.textContent;
       this.root.dataset.live = fresh && publication?.view?.cards_state === 'observed' ? 'true' : 'false';
       this.drawDaily(view);
@@ -530,11 +530,8 @@ const MiniWatch = (() => {
       // Keep unavailable controls keyboard-discoverable. Normal preparation is quiet.
       this.button.setAttribute('aria-disabled', String(Boolean(this.reason) || !this.placement ||
         !this.measure?.ready || Boolean(this.healthState.terminal)));
-      const message = this.reason || (!this.placement ? 'Mini Watch settings unavailable. Open Settings to retry.' :
-        this.measure?.failed ? 'Mini Watch styles could not load. Reload Cost Guard to retry.' :
-        this.healthState.terminal ? 'Host unavailable. Reopen Cost Guard to retry Mini Watch.' : this.failure);
-      ReportView.text(this.feedback, message);
-      this.button.title = message;
+      ReportView.text(this.feedback, this.failure || '');
+      this.button.title = '';
     }
     release(win) {
       if (this.window !== win) return;
@@ -585,7 +582,9 @@ const MiniWatch = (() => {
     }
     async toggle() {
       this.sync();
-      if (this.reason || this.ended || !this.placement || !this.measure?.ready || this.healthState.terminal) return;
+      if (this.reason || this.ended || !this.placement || !this.measure?.ready || this.healthState.terminal) {
+        this.failure = 'Could not open Mini Watch. Try again.'; this.sync(); return;
+      }
       if (this.window) { this.close(); return; }
       if (this.pending) {
         this.pending.cancelled = !this.pending.cancelled; return;
@@ -648,7 +647,7 @@ const MiniWatch = (() => {
       } catch (_) {
         const cancelled = request.cancelled;
         if (win) { this.release(win); win.close(); }
-        if (!cancelled) this.failure = 'Mini Watch could not open. Check browser support, policy and user-activation restrictions; click to retry.';
+        if (!cancelled) this.failure = 'Could not open Mini Watch. Try again.';
       } finally { if (this.pending === request) this.pending = null; this.sync(); }
     }
     update(value) {

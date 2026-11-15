@@ -5,6 +5,7 @@ touches the existing service. Leases bound admission, never logical history.
 """
 from collections import OrderedDict
 from dataclasses import replace
+import logging
 from threading import Lock
 import time
 from uuid import uuid4
@@ -16,6 +17,15 @@ from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
 from .session_values import INVALID_REASONS, value_authority
 from .session_quota import session_quota_evidence, session_quota_usage
+
+
+LOG = logging.getLogger(__name__)
+RECOVERABLE = frozenset({
+    'detail_not_admitted', 'detail_no_progress', 'detail_worker_failed', 'detail_internal_error',
+    'source_unavailable', 'concurrent_source_change', 'connection_timeout', 'connection_reset',
+    'connection_refused', 'connection_disconnected', 'endpoint_unresponsive', 'registration_missing',
+    'pricing_unavailable', 'v1_database_missing',
+})
 
 
 class SessionDetails:
@@ -50,8 +60,9 @@ class SessionDetails:
                 revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
                 value_authority=None, quota_evidence=None,
                 row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
-                acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
-                    queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None))
+                 acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
+                    queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None,
+                retry_windows=0, retry_at=None, attempt_leases=()))
             if entry['acquisition']['phase'] != 'failed':
                 entry["due"] = 0
             token = uuid4().hex
@@ -89,6 +100,8 @@ class SessionDetails:
                 raise KeyError('detail_expired')
             entry = self.histories[lease['session_id']]
             entry['attempt'] = None
+            entry['retry_windows'] = 0
+            entry['retry_at'] = None
             entry['due'] = 0
             entry['acquisition'] = dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                 queued_at=self.clock(), changed_at=self.clock(), started_at=None)
@@ -99,8 +112,31 @@ class SessionDetails:
                    and (lease['mode'] == 'live' or lease['frozen'] is None)
                    for lease in self.leases.values())
 
-    def claim(self):
+    def _attempt_active(self, key, entry):
+        return any(token in self.leases and self.clock() - self.leases[token]['touched'] <= 300
+                   for token in entry['attempt_leases'])
+
+    def _schedule(self, entry):
+        if entry['acquisition']['reason'] not in RECOVERABLE and not entry['acquisition'].get('recoverable'):
+            entry['retry_at'] = None
+            return
+        entry['retry_windows'] = min(5, entry['retry_windows'] + 1)
+        entry['retry_at'] = self.clock() + min(300, 30 * 2 ** (entry['retry_windows'] - 1))
+        entry['due'] = entry['retry_at']
+        LOG.info("detail_retry_scheduled reason=%s window=%s cooldown=%s",
+            entry['acquisition']['reason'], entry['retry_windows'], entry['retry_at'] - self.clock())
+
+    def claim(self, *, unavailable=False):
         with self.lock:
+            # Re-arm only on the existing owner lane, after cooldown and while a
+            # live lease still wants this source. HTTP reads cannot reset budgets.
+            for key, entry in self.histories.items():
+                if (not unavailable and self._active(key) and entry['attempt'] is None
+                        and entry['acquisition']['phase'] == 'failed' and entry['retry_at'] is not None
+                        and self.clock() >= entry['retry_at']):
+                    entry['acquisition'] = dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
+                        queued_at=self.clock(), changed_at=self.clock(), started_at=None)
+                    entry['retry_at'] = None
             candidate = next(((key, entry) for key, entry in self.histories.items()
                 if self._active(key) and self.clock() >= entry['due'] and entry['attempt'] is None
                 and entry['acquisition']['phase'] != 'failed'), None)
@@ -110,6 +146,8 @@ class SessionDetails:
             self.histories.move_to_end(key)
             attempt = uuid4().hex
             entry['attempt'] = attempt
+            entry['attempt_leases'] = tuple(token for token, lease in self.leases.items()
+                if lease['session_id'] == key and self.clock() - lease['touched'] <= 300)
             entry['acquisition'] = dict(phase='selecting', reason=None, percent=3, attempt_id=attempt,
                 attempts=entry['acquisition']['attempts'] + 1, completed=0,
                 queued_at=self.clock(), changed_at=self.clock(), started_at=self.clock())
@@ -118,7 +156,7 @@ class SessionDetails:
     def current(self, key, attempt):
         with self.lock:
             entry = self.histories.get(key)
-            return entry is not None and entry['attempt'] == attempt and self._active(key)
+            return entry is not None and entry['attempt'] == attempt and self._attempt_active(key, entry)
 
     def progress(self, key, attempt, phase, completed, *, percent=0, phase_completed=-1, phase_total=-1):
         with self.lock:
@@ -140,8 +178,9 @@ class SessionDetails:
             if entry is None or entry['attempt'] != attempt:
                 return
             entry['attempt'] = None
-            if not self._active(key):
+            if not self._attempt_active(key, entry):
                 entry['acquisition']['phase'] = 'queued'
+                entry['acquisition']['changed_at'] = self.clock()
                 return
             reason = outcome.get('error')
             status = entry['acquisition']
@@ -154,8 +193,11 @@ class SessionDetails:
                                 if lease.get(name) is not None:
                                     lease[name] = {**lease[name], "activity": None}
                 status['reason'] = reason
+                status['recoverable'] = outcome.get('recoverable', False)
                 status['phase'] = 'failed' if outcome.get('terminal') or status['attempts'] >= 3 else 'retrying'
                 entry['due'] = self.clock() + 5 * status['attempts']
+                if status['phase'] == 'failed':
+                    self._schedule(entry)
                 entry['state'] = outcome.get('state', 'source_unavailable')
                 entry['export_identity'] = None
             else:
@@ -166,6 +208,10 @@ class SessionDetails:
                     entry['revision'] = uuid4().hex
                 entry.update(outcome['metadata'])
                 entry['validated'] = self.clock()
+                if entry['retry_windows']:
+                    LOG.info("detail_recovered windows=%s", entry['retry_windows'])
+                entry['retry_windows'] = 0
+                entry['retry_at'] = None
                 entry['state'] = outcome['state']
                 status.update(phase='ready', reason=None, attempts=0, percent=70,
                     phase_completed=None, phase_total=None)
@@ -176,14 +222,16 @@ class SessionDetails:
         status = entry['acquisition']
         age = max(0, self.clock() - status['changed_at'])
         # A stopped/uninitialized owner must not leave an eternal unadmitted bar.
-        if status['phase'] == 'queued' and age >= 120:
+        if status['phase'] == 'queued' and entry['attempt'] is None and age >= 120:
             status.update(phase='failed', reason='detail_not_admitted')
+            self._schedule(entry)
         return dict(phase=status['phase'], reason=status['reason'], attempts=status['attempts'],
             attempt_id=status.get('attempt_id'), percent=status['percent'],
             phase_completed=status.get('phase_completed'), phase_total=status.get('phase_total'),
             completed=status['completed'], progress_age_seconds=int(age),
             attempt_age_seconds=int(max(0, self.clock() - (status['started_at'] or self.clock()))),
-            retry_available=status['phase'] == 'failed')
+            retry_available=status['phase'] == 'failed',
+            retry_after_seconds=max(0, int(entry['retry_at'] - self.clock())) if entry['retry_at'] is not None else None)
 
     def failed(self, reason):
         with self.lock:
@@ -191,6 +239,7 @@ class SessionDetails:
                 if self._active(key):
                     entry['attempt'] = None
                     entry['acquisition'].update(phase='failed', reason=reason)
+                    self._schedule(entry)
 
     def export_identity(self, token):
         """Only a freshly observed canonical selection may authorize transfer."""
@@ -301,7 +350,7 @@ class SessionDetails:
                                     atomicity="per_root_snapshot")))
 
     def tick(self, service, *, unavailable=False):
-        claimed = self.claim()
+        claimed = self.claim(unavailable=unavailable)
         if claimed is not None:
             key, attempt, history = claimed
             self.finish(key, attempt, acquire_detail(service, history, key, unavailable=unavailable))
@@ -329,7 +378,8 @@ def acquire_detail(service, history, key, *, unavailable=False):
                 observed_at_ms=service.now_ms, row_observations=history.row_observations,
                 omitted_ids=history.omitted_ids, export_identity=export_identity))
     except SourceError as error:
-        return dict(error=error.code.value, terminal=error.terminal)
+        return dict(error=error.code.value, terminal=error.terminal,
+            recoverable=not error.terminal and error.readiness_retryable)
     except PricingUnavailableError:
         return dict(error='pricing_unavailable')
     except Exception:

@@ -33,7 +33,7 @@ const SessionExport = (() => {
       Object.assign(this, {api, id, token: null, available: false, operation: null, filename: filename(null, id)});
       this.root = ReportView.element('div', undefined, 'session-export');
       this.button = ReportView.element('button', 'Export Sanitized JSON'); this.button.type = 'button'; this.button.disabled = true;
-      this.notice = ReportView.element('span', 'Export unavailable until the selected session is observed.');
+      this.notice = ReportView.element('span', '');
       this.notice.setAttribute('role', 'status');
       this.root.append(this.button, this.notice);
       ContextHelp.attach(this.button, help);
@@ -45,7 +45,7 @@ const SessionExport = (() => {
       this.token = token; this.available = available;
       this.filename = filename(token && available ? title : null, this.id);
       this.button.disabled = !token || !available || !!this.operation;
-      if (changed && !this.operation) this.notice.textContent = available && token ? '' : messages.export_unavailable;
+      if (changed && !this.operation) this.notice.textContent = '';
     }
     close() {
       this.token = null; this.available = false; this.filename = filename(null, this.id); this.operation?.abort();

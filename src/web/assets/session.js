@@ -103,7 +103,7 @@ const SessionDetail = (() => {
       this.heading = el('h1');
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
-      this.retry = el('button', 'Retry session loading'); this.retry.type = 'button'; this.retry.hidden = true;
+      this.retry = el('button', 'Try again'); this.retry.type = 'button'; this.retry.hidden = true;
       this.retry.addEventListener('click', () => this.retrySource());
       this.loader = new ReportLoading.View();
       this.loader.bar.setAttribute('aria-label', 'Session loading progress');
@@ -169,8 +169,8 @@ const SessionDetail = (() => {
         this.retry.hidden = true; this.waiting = true;
         await this.poll();
       } catch (error) {
-        this.status.textContent = `Retry unavailable (${error.message}). Return to Sessions and reopen this session.`;
-        this.status.hidden = false;
+        this.status.textContent = this.data ? '' : 'Could not load. Return to Sessions to try again.';
+        this.status.hidden = !this.status.textContent;
       } finally { this.retry.disabled = false; }
     }
     async load() {
@@ -257,16 +257,17 @@ const SessionDetail = (() => {
         this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        this.status.textContent = this.data ?
-          `Session updates unavailable (${error.message}). Previously verified history is retained.` :
-          `Session unavailable (${error.message}).`;
+        this.waiting = false;
+        this.status.textContent = this.data ? '' : 'Could not load. Return to Sessions to try again.';
+        this.retry.hidden = true;
         this.status.hidden = !this.status.textContent;
         this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
         if (error.message === 'detail_expired') {
           this.token = null; this.exporter?.close(); this.activity.update(null);
           if (this.data) this.data.activity = null;
         }
-        if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) {
+        if (['instance_stopping', 'authentication_required', 'host_identity_changed', 'csrf_required',
+            'permission_denied', 'http_auth_failure', 'source_identity_changed', 'session_missing'].includes(error.message)) {
           this.invalidateValues(); this.detach();
         }
       } finally { this.busy = false; this.activity.more.disabled = false; }
@@ -274,47 +275,43 @@ const SessionDetail = (() => {
     sourceStatus(data) {
       this.freshness();
       const acquisition = data.acquisition;
-      if (data.values_invalidated) this.invalidateValues();
-      this.waiting = !data.result && acquisition?.phase !== 'failed';
-      this.retry.hidden = !acquisition?.retry_available;
+      if (data.values_invalidated) {
+        this.invalidateValues(); this.detach();
+        this.waiting = false; this.retry.hidden = true;
+        this.status.textContent = 'Could not load. Return to Sessions to try again.';
+        this.status.hidden = false;
+        return;
+      }
+      this.waiting = !this.data && !data.result && acquisition?.phase !== 'failed';
+      this.retry.hidden = Boolean(this.data) || !acquisition?.retry_available;
+      // Retained live history is never a foreground action. Silence includes
+      // the live region, Retry tab stop, loader and its reserved geometry.
+      if (this.data && !data.values_invalidated) {
+        this.status.textContent = ''; this.status.hidden = true;
+        this.retry.hidden = true; this.loader.root.hidden = true;
+        this.scroll.setAttribute('aria-busy', 'false');
+        return;
+      }
       if (acquisition?.phase === 'failed') {
         if (['source_identity_changed', 'session_missing'].includes(acquisition.reason)) {
           this.activity.update(null); if (this.data) this.data.activity = null;
         }
-        const reasons = {
-          detail_no_progress: 'No forward progress was observed during source acquisition.',
-          detail_not_admitted: 'The session acquisition worker did not start. Check the source connection.',
-          session_missing: 'This session is no longer present in the selected source.',
-          concurrent_source_change: 'The session changed repeatedly while it was being verified.',
-          source_identity_changed: 'The source changed. Return to Sessions to select it again.',
-          http_auth_failure: 'The source rejected authentication. Restore source access before retrying.',
-          unsupported_schema: 'This source data format is unsupported.',
-          unsupported_version: 'This source version is unsupported.'
-        };
-        this.status.textContent = `${reasons[acquisition.reason] || 'Session acquisition failed.'} (${acquisition.reason || 'detail_unavailable'}). Retry or return to Sessions.${this.data ? ' Previously verified history is retained.' : ''}`;
+        this.status.textContent = 'Could not load. Try again or return to Sessions.';
         this.status.hidden = false; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
         return;
       }
       if (!data.result && acquisition) {
-        const phase = ({queued: 'Queued for session source', selecting: 'Selecting session source', reading: 'Reading session source',
-          verifying: 'Verifying session revision', analyzing: 'Analyzing session history',
-          projecting: 'Building session table', publishing: 'Preparing verified session history',
-          retrying: 'Waiting to retry session source'})[acquisition.phase] || 'Waiting for session source';
+        const phase = 'Loading session';
         const percent = Number.isFinite(acquisition.percent) && acquisition.percent >= 0 && acquisition.percent <= 70 ? acquisition.percent : this.progress.percent;
-        const work = Number.isSafeInteger(acquisition.phase_total) && acquisition.phase_total > 0 &&
-          Number.isSafeInteger(acquisition.phase_completed) && acquisition.phase_completed >= 0 && acquisition.phase_completed <= acquisition.phase_total ?
-          `${acquisition.phase_completed} of ${acquisition.phase_total} stage units; ` : '';
-        this.loading(`${phase}… ${work}${acquisition.completed || 0} completed work units; attempt ${acquisition.attempts || 0}; last progress ${acquisition.progress_age_seconds || 0}s ago${acquisition.reason ? ` (${acquisition.reason})` : ''}`, percent, phase);
+        this.loading(`${phase}…`, percent, phase);
         return;
       }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
-        if (!this.data) this.loading('Waiting for session source…');
+        if (!this.data) this.loading('Loading session…');
         // Passive work is silent; a pending observation cannot clear a real fault.
         return;
       }
-      this.status.textContent = data.state === 'observed' || this.data && data.state === 'history_retained' ? '' :
-        ({history_retained: 'Session data unavailable.', source_unavailable: 'Source unavailable.',
-          session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
+      this.status.textContent = data.result ? '' : 'Could not load. Return to Sessions to try again.';
       this.status.hidden = !this.status.textContent;
       if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
     }

@@ -11,11 +11,37 @@ from unittest.mock import patch
 from src.web.events import EventHub
 from src.web.http import RequestHandler
 from src.web.security import BrowserSession
+from src.watch.source_status import SourceStatus
+from src.sources.errors import FailureCode, SourceUnavailableError, SourceConcurrentChangeError
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class ConnectionTests(unittest.TestCase):
+    def test_only_real_transport_checks_corroborate_twenty_second_outage(self):
+        now = [0]
+        health = SourceStatus(lambda: now[0])
+        failure = SourceUnavailableError('synthetic', code=FailureCode.REFUSED)
+        health.fail(failure)
+        for second in (3, 9, 15, 19.9, 20):
+            now[0] = second
+            evidence = health.reachability()
+            self.assertEqual(1, evidence['failed_checks'], 'status reads never create source checks')
+            self.assertEqual(int(second), evidence['unavailable_seconds'])
+        health.fail(failure)
+        self.assertEqual(2, health.reachability()['failed_checks'])
+        self.assertEqual(20, health.reachability()['unavailable_seconds'])
+        health.clear()
+        self.assertTrue(health.reachability()['reachable'])
+        self.assertEqual(0, health.reachability()['failed_checks'])
+        for error in (SourceConcurrentChangeError('changing'),
+                      SourceUnavailableError('auth', code=FailureCode.AUTH),
+                      SourceUnavailableError('permissions', code=FailureCode.REGISTRATION_UNREADABLE)):
+            health.fail(error)
+            now[0] += 60
+            health.fail(error)
+            self.assertEqual(0, health.reachability()['failed_checks'])
+
     def test_stream_validation_does_not_extend_idle_but_normal_sync_keeps_it_alive(self):
         for polling in (False, True):
             now = [1000]

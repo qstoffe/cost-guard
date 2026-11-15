@@ -68,6 +68,9 @@ class FixtureRuntime:
         self.quota_fixture = None
         self.observation_lock = Lock()
         self.detail_mode = None
+        self.detail_paused = False
+        self.detail_clock_offset = 0
+        self.details.clock = lambda: time.monotonic() + self.detail_clock_offset
         self.detail_capture = DetailCapture(run_owned_fixture, no_progress_seconds=3)
         self.detail_pool = ThreadPoolExecutor(max_workers=1)
         self.detail_future = None
@@ -90,7 +93,9 @@ class FixtureRuntime:
             root = self.service.source.snapshots[self.live_root].root
             capture, _ = capture_rows(self.service, root)
             self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
-        if self.detail_mode is None:
+        if self.detail_paused:
+            pass
+        elif self.detail_mode is None:
             self.details.tick(self.service, unavailable=self.unavailable)
         elif self.detail_future is None or self.detail_future.done():
             if self.detail_future is not None:
@@ -266,6 +271,18 @@ def main():
                     host.live.scalar_hold = False
             elif command == "period-empty":
                 service.now_ms += 2 * 86_400_000
+            elif command == 'detail-quiet-stall':
+                with host.live.observation_lock, host.live.details.lock:
+                    host.live.detail_paused = True
+                    entry = host.live.details.histories['root-0000']
+                    entry['attempt'] = None
+                    entry['acquisition'].update(phase='queued', changed_at=host.live.details.clock() - 120)
+            elif command == 'detail-quiet-recover':
+                with host.live.observation_lock:
+                    host.live.detail_clock_offset += 31
+                    source.snapshots['root-0000'] = replace(
+                        make_root_snapshot(0, 1002, month_start_ms=1000), source_revision='quiet-fresh', complete=True)
+                    host.live.detail_paused = False
             elif command in ('detail-blocked', 'detail-recover', 'detail-progress', 'detail-delayed'):
                 host.live.detail_mode = {'detail-blocked': 'blocked', 'detail-recover': 'fast',
                     'detail-progress': 'progress', 'detail-delayed': 'delayed'}[command]

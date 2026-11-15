@@ -28,8 +28,7 @@ cards.forEach((card, index) => {
 });
 for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
   'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
-  'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2', 'Rate limited',
-  'Connection failed', 'Window not started', 'Attribution incomplete', 'Quota unavailable; not zero or unlimited.']) {
+  'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2', 'Window not started']) {
   assert.ok(output.textContent.includes(text), text);
 }
 assert.equal(all(cards[0], 'progress')[0].value, '10');
@@ -37,8 +36,8 @@ assert.equal(all(cards[1], 'progress')[0].value, '100', 'exhausted is determinat
 assert.ok(cards[1].textContent.includes('BLOCKED'));
 for (const index of [2, 3, 4, 5]) assert.equal(all(cards[index], 'progress').length, 0, 'unknown/unlimited never empty progress');
 assert.ok(cards[2].textContent.includes('Unlimited'));
-assert.ok(cards[4].textContent.includes('Used percentage unavailable'));
-assert.ok(cards[6].textContent.includes('stale'));
+assert.ok(cards[4].textContent.includes('N/A'));
+assert.doesNotMatch(cards[6].textContent,/Stale|stale/);
 assert.equal(all(output, 'details').length, 8, 'one observation disclosure per account plus report help');
 for (const text of ['PRIVATE', '0.89876543211', '89.876543211', '1.23456789', 'rate_limited', 'window_active', '9999']) {
   assert.ok(!output.textContent.includes(text), 'no raw diagnostic/fraction/global substituted value: ' + text);
@@ -71,7 +70,7 @@ assert.equal(compact.length, 7);
 for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
   'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
   'Monthly Remaining: 29/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2',
-  'Rate limited', 'Connection failed', 'Window not started', 'Quota unavailable; not zero or unlimited.']) {
+  'Window not started']) {
   assert.ok(visible(output).includes(text), 'important CLI value visible by default: ' + text);
 }
 assert.ok(!compact[0].children.some(node => node.tag === 'p' && /^Available/.test(node.textContent)), 'healthy observation prose hidden, not the legitimate account name');
@@ -79,8 +78,9 @@ assert.ok(!visible(compact[0]).includes('GitHub Copilot'), 'no second provider/p
 assert.ok(!visible(compact[0]).includes('Extra usage'), 'billing component detail collapsed');
 assert.ok(!visible(output).includes('Attribution incomplete'), 'verbose attribution detail collapsed');
 assert.ok(visible(compact[1]).includes('BLOCKED'));
-assert.ok(visible(compact[6]).includes('Stale'));
+assert.ok(!visible(compact[6]).includes('Stale'));
 assert.equal(all(output, 'details').length, 7);
 assert.ok(all(output, 'summary').every(node => node.textContent === 'Details'));
 assert.ok(all(output, 'details').every(node => !node.open));
-assert.ok(output.textContent.includes('Extra usage') && output.textContent.includes('Attribution incomplete'));
+assert.ok(output.textContent.includes('Extra usage'));
+assert.doesNotMatch(output.textContent,/Attribution incomplete|Connection failed|Quota unavailable; not zero/);

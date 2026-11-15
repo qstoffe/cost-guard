@@ -3,6 +3,7 @@ from threading import Event, Thread
 import time
 
 from src.sources.errors import SourceError
+from src.watch.source_status import SourceStatus
 
 from .contracts import record
 from .live_projection import project_live
@@ -25,6 +26,7 @@ class LiveRuntime:
         self.source_failure = None
         self.observed = Event()
         self.working = Event()
+        self.startup_health = SourceStatus()
 
     def start(self):
         if self.thread is not None:
@@ -39,9 +41,11 @@ class LiveRuntime:
                 try:
                     driver = self.factory()
                 except SourceError as error:
+                    self.startup_health.fail(error)
                     if error.terminal or not error.watch_retryable:
                         raise
-                    self.publish("live", record(state="source_unavailable", view=None))
+                    self.publish("live", record(state="source_unavailable", view=None,
+                        source_health=record(**self.startup_health.reachability())))
                     self.stopping.wait(5)
             if driver is None:
                 return
@@ -84,7 +88,8 @@ class LiveRuntime:
                 publication_due = time.monotonic() + (0.25 if driver.coordinator.today_ccost.history_pending else 1)
         except SourceError as error:
             self.source_failure = error
-            self.publish("live", record(state="failed", error_code=error.code.value, view=None))
+            self.publish("live", record(state="failed", error_code=error.code.value, view=None,
+                source_health=record(**self.startup_health.reachability())))
         except BaseException as error:
             self.failure = error
             self.publish("live", record(state="internal_error", view=None))
@@ -104,6 +109,7 @@ class LiveRuntime:
                         raise
 
     def _publish_frame(self, driver, frame):
+        health = getattr(driver, 'source_status', None)
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
@@ -114,6 +120,7 @@ class LiveRuntime:
             source_generation=generation if verified and generation in {"v1", "v2"} else "unknown",
             source_observed_at_ms=driver.observed_at_ms,
             error_code=driver.error.code.value if driver.error else None,
+            source_health=record(**health.reachability()) if isinstance(health, SourceStatus) else None,
             view=project_live(frame, driver.coordinator.report_service.timezone_id,
                  driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
         if frame is not None and driver.error is None and driver.observed_at_ms is not None:

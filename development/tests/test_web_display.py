@@ -128,14 +128,14 @@ class WebDisplayTests(unittest.TestCase):
         self.assertEqual({"credits": {"ccost": "395"}, "usd": {"ccost": "$3.95"}}, dto["display_units"])
         for value in (None, Decimal(0)):
             unknown = with_display(record(ccost=value, unresolved_cost=True)).to_json()
-            self.assertEqual("0", unknown["display"]["ccost"])
-            self.assertEqual("$0.00", unknown["display_units"]["usd"]["ccost"])
+            self.assertEqual("N/A", unknown["display"]["ccost"])
+            self.assertNotIn("display_units", unknown)
         sparse = with_display(record(ccost=Decimal(0), calls=0, is_compaction=True)).to_json()
         self.assertEqual("0", sparse["display"]["ccost"])
         self.assertEqual("$0.00", sparse["display_units"]["usd"]["ccost"])
 
     def test_ccost_money_and_duration_goldens_keep_exact_raw_values(self):
-        cases = [(None, "0"), ("0", "0"), ("0.00000000001", "<0.1"),
+        cases = [(None, "N/A"), ("0", "0"), ("0.00000000001", "<0.1"),
                  ("0.1234567890123456789", "0.2"), ("1.000000000001", "2"), ("-0.12", "-0.1")]
         for raw, expected in cases:
             value = None if raw is None else Decimal(raw)

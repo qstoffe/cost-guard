@@ -7,14 +7,16 @@ async function main() {
   const directory = path.dirname(output);
   const profile = await fs.mkdtemp(path.join(directory, 'sessions-browser-'));
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py',
+  const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
+  const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']), 'development/tests/integration/serve_web_sessions.py',
     ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
   let serverError = ''; server.stderr.on('data', bytes => serverError += bytes.toString());
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return JSON.parse((await lines.next()).value);};
-  const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+  const child = spawn(browser, ['--headless=new', ...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--disable-background-networking', '--remote-debugging-pipe', '--user-data-dir='+profile, 'about:blank'],
     {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
   const browserExit = new Promise(resolve => child.once('exit',resolve));
@@ -64,7 +66,16 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-         if (mode === '--prompt-activity-parity') {
+          if (mode === '--calm-ui') {
+            const details = await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture,
+              command:(method, params) => command(method, params, sessionId)});
+            checks.push(...details.checks); layouts.push(...details.layouts);
+            assert.deepEqual(errors, []);
+            evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+              personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify(evidence)); return;
+          }
+          if (mode === '--prompt-activity-parity') {
            const details = await require('../fixtures/catalog_activity_browser.cjs')({evaluate, until, fixture,
              command:(method, params) => command(method, params, sessionId)});
            checks.push(...details.checks);

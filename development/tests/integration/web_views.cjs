@@ -112,7 +112,7 @@ async function main() {
     assert.equal(response.status, 200);
      vm.runInContext(await response.text(), context);
    }
-   assert.match(ids.result.textContent, /0%.*Authorizing browser session/, 'slow authorization has honest initial progress');
+    assert.match(ids.result.textContent, /0%.*Loading…/, 'cold authorization has simple initial progress');
    assert.doesNotMatch(ids.result.textContent, /≈|Approximately/);
   assert.equal(location.hash, '#/models', 'credential erased before waiting');
   assert.equal(ids['product-version'].textContent, '', 'no invented version before authentication');
@@ -174,7 +174,7 @@ async function main() {
   assert.equal(overviewScroll.scrollTop, 317);
   assert.equal(requests, beforeHeartbeat, 'no hidden reacquisition');
   assert.equal(ids['host-state'].hidden, true, 'healthy operation has no persistent banner');
-  assert.equal(ids.status.textContent, 'Live connected.', 'one compact accessible status');
+  assert.equal(ids.status.textContent, '', 'healthy background connection is silent');
   assert.equal(ids.status.title, undefined, 'hidden status does not duplicate visible connection details');
   ids.search.events.input({target: {value: 'no matching model'}});
   assert.ok(all(ids.result, 'tbody')[0].children.length, 'Overview ignores hidden legacy search state');
@@ -271,15 +271,15 @@ async function main() {
    offline = true;
    await until(() => !vm.runInContext('current.detail.busy', context));
    await vm.runInContext('current.detail.load()', context);
-     assert.match(vm.runInContext('current.detail.status.textContent', context), /updates unavailable.*Previously verified history is retained/);
+     assert.equal(vm.runInContext('current.detail.status.textContent', context), '');
    assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
   assert.equal(all(ids.result, 'progress').length, 1, 'detail retains its keyed progress node');
   assert.equal(vm.runInContext('current.detail.loader.root.hidden', context), true, 'retained history never shows initial progress');
    offline = false;
    navigate('sessions/missing');
-    await until(() => vm.runInContext('current.detail.status.textContent', context).includes('no longer present'));
-    assert.equal(vm.runInContext('current.detail.retry.hidden', context), false);
+    await until(() => vm.runInContext('current.detail.status.textContent', context).includes('Could not load'));
+    assert.equal(vm.runInContext('current.detail.retry.hidden', context), true);
   navigate('sessions/root-0001');
    await until(() => vm.runInContext('current.detail.data?.total', context) === 0);
    assert.equal(all(ids.result, 'tbody')[0].children.length, 0);
@@ -294,7 +294,7 @@ async function main() {
   vm.runInContext(`connectionStatus('Retrying source read — last observation retained, not current.',
     {kind:'source_retrying',writable:true}); show(current)`, context);
   assert.equal(vm.runInContext('current.connectionKind', context), 'source_retrying');
-  assert.match(ids['host-message'].textContent, /Retrying source read/,'global source-health notice is not suppressed');
+   assert.equal(ids['host-message'].textContent, '', 'uncorroborated source retry stays silent');
   vm.runInContext("connectionStatus('Live connected.',{kind:'connected',writable:true}); show(current)", context);
   assert.equal(ids.refresh.disabled, true);
   navigate('watch');
@@ -310,7 +310,7 @@ async function main() {
   assert.equal(vm.runInContext('current.result.observed_at_ms', context), overviewTime);
   navigate('accounts');
   retainedHeartbeat();
-  assert.equal(ids.result.textContent, 'Loading accounts…');
+  assert.equal(ids.result.textContent, 'Loading…');
   assert.equal(vm.runInContext('current.request', context), null);
   assert.equal(vm.runInContext('current.live', context), true);
   assert.equal(ids.refresh.disabled, true);
@@ -480,7 +480,7 @@ async function main() {
    await until(() => vm.runInContext('Boolean(current?.result) && !current.loading && !current.withheld', watchReload));
   const retained = ids.result.textContent, terminalRequests = requests;
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
-  assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
+  assert.match(ids['host-state'].textContent, /Reopen Cost Guard from the launcher/);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
   assert.match(ids['host-details'].textContent, /Reports stay frozen/);
   assert.equal(ids.notice.textContent, '', 'host recovery is the single terminal surface');

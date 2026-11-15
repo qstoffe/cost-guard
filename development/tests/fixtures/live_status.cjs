@@ -52,11 +52,11 @@ module.exports = function liveStatus(vm, context, clock) {
   assert.equal(rendered.message.textContent, '');
   assert.doesNotMatch(view.daily.textContent, /Updates delayed/);
   assert.doesNotMatch(quota.textContent, /Updates delayed/);
-  // Typed actionable failures and genuinely new incomplete native evidence stay visible.
+  // Account diagnostics never become a global/source failure or passive prose.
   account.observation.availability = 'stale'; account.observation.error_code = 'auth_failure';
-  update(63000); assert.match(quota.textContent, /Authentication unavailable/);
+  update(63000); assert.doesNotMatch(quota.textContent, /Authentication unavailable/);
   account.observation.error_code = null; account.observation.availability = 'partial'; account.observation.observed_at_ms++;
-  update(64000); assert.match(quota.textContent, /Partial quota data/);
-  update(65000); assert.match(quota.textContent, /Partial quota data/, 'actual incomplete observation is not a transient retry');
+  update(64000); assert.doesNotMatch(quota.textContent, /Partial quota data/);
+  update(65000); assert.doesNotMatch(quota.textContent, /Partial quota data/);
   clock(start);
 };

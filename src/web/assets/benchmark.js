@@ -99,7 +99,7 @@ const BenchmarkView = (() => {
           this.manual = false;
           this.status.textContent = data.unavailable ? 'Refresh failed; previous benchmark retained.' : 'Benchmark refreshed.';
         } else if (data.refreshing) this.status.textContent = this.manual ? 'Refreshing…' : '';
-        else if (!this.manual) this.status.textContent = data.unavailable ? 'Benchmark unavailable; previous data retained.' : '';
+        else if (!this.manual) this.status.textContent = '';
       } catch (_) {
         if (this.manual) { this.manual = false; this.status.textContent = 'Refresh failed; previous benchmark retained.'; }
         // Last-good rows/date survive network/host failure.

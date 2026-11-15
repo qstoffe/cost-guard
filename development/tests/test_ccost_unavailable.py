@@ -49,7 +49,7 @@ class CCostUnavailableTests(unittest.TestCase):
         self.assertTrue(row.unresolved_cost)
         for kind in ("active_cards", "history_cards"):
             display = wire[kind][0]["rows"][0]["prompt"]["display"]
-            self.assertEqual("0", display["ccost"])
+            self.assertEqual("N/A", display["ccost"])
             self.assertIn("Claude Sonnet 4 has no listed reference price in the available GitHub Copilot", display["ccost_unavailable_help"])
             self.assertIn("Display zero is not proof of zero", display["ccost_unavailable_help"])
             self.assertIn("• github-copilot/claude-sonnet-4 — default (unknown) — (N/A)", display["cost_detail_help"])

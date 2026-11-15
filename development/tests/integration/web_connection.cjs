@@ -36,6 +36,23 @@ async function main() {
   };
   await connect();
   assert.equal(states.at(-1).kind, 'connected');
+  const publishHealth = async proof => {
+    snapshot.sequence++; snapshot.values.live.source_health = {owner:'source',...proof};
+    await tick();
+  };
+  for (const seconds of [3,9,15,19.9]) {
+    await publishHealth({check_id:1,reachable:false,failed_checks:2,unavailable_seconds:seconds});
+    assert.equal(states.at(-1).sourceOutage,false);
+  }
+  await publishHealth({check_id:1,reachable:false,failed_checks:1,unavailable_seconds:20});
+  assert.equal(states.at(-1).sourceOutage,false,'one real failure cannot corroborate an outage');
+  await publishHealth({check_id:2,reachable:false,failed_checks:2,unavailable_seconds:20});
+  assert.equal(states.at(-1).sourceOutage,true);
+  await publishHealth({check_id:1,reachable:true,failed_checks:0,unavailable_seconds:0});
+  assert.equal(states.at(-1).sourceOutage,true,'a cached old success cannot clear connection loss');
+  await publishHealth({check_id:3,reachable:true,failed_checks:0,unavailable_seconds:0});
+  assert.equal(states.at(-1).sourceOutage,false);
+  snapshot.values.live.source_health = undefined;
   assert.equal(states.at(-1).observedAt, 900);
   assert.equal(streams.length, 1);
   const retainedView = snapshot.values.live.view;
@@ -58,7 +75,7 @@ async function main() {
   await tick();
   assert.equal(states.at(-1).kind, 'offline');
   assert.match(states.at(-1).message, /OFFLINE — last observation/);
-  assert.equal(states.at(-1).authenticatedAt, 31000, 'failed probes cannot freshen the timestamp');
+  assert.equal(states.at(-1).authenticatedAt, now-10000, 'failed probes cannot freshen the timestamp');
   assert.equal(updates.at(-1).view.retained, 'not zero');
   streams[0].listeners.progress({lastEventId: 'first:4', data: '{"jobs":[]}'});
   assert.equal(states.at(-1).kind, 'offline', 'job progress cannot claim that a failed source/host check recovered');

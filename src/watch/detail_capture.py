@@ -91,7 +91,7 @@ class DetailCapture:
         self.retired_count += 1
 
     def capture(self, details, source, config, now_ms, *, unavailable=False):
-        claimed = details.claim()
+        claimed = details.claim(unavailable=unavailable)
         if claimed is None:
             return
         key, attempt, history = claimed

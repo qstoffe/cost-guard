@@ -98,7 +98,7 @@ assert.equal(controls.children[0],toggle);
 // Accounts route still uses full native cards, capacity, reset, pace and details.
 context.shared={...input.view,accounts:{accounts:[monthly]},quota_stale:false,quota_recovering_count:0};
 vm.runInContext('globalThis.accountsPage=new AccountCards.View(true)',context);
-const page=context.accountsPage;assert.equal(page.root.textContent,'Loading accounts…');
+const page=context.accountsPage;assert.equal(page.root.textContent,'Loading…');
 vm.runInContext('accountsPage.update(shared)',context);
 const account=page.grid.children[0],label=account.children[2];
 assert.equal(label.textContent,'Monthly · 8.4% used (2088)');

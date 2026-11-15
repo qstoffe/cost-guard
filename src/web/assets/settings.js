@@ -154,7 +154,7 @@ const WebSettings = (() => {
     }
     error(error) {
       this.feedback.className = 'error';
-      this.feedback.textContent = messages[error.message] || 'Web settings could not be confirmed. Check the host connection and retry; no save is claimed.';
+      this.feedback.textContent = messages[error.message] || 'Could not save. Try again.';
     }
     lock(busy) {
       this.busy = busy;
@@ -179,11 +179,11 @@ const WebSettings = (() => {
     async read() {
       if (this.busy) return;
       this.lock(true);
-      this.feedback.className = ''; this.feedback.textContent = 'Reading saved Web settings…';
+      this.feedback.className = ''; this.feedback.textContent = this.loaded ? '' : 'Loading…';
       try {
         this.confirm(await this.api('/api/settings'));
         this.feedback.textContent = '';
-      } catch (error) { this.error(error); }
+      } catch (_) { this.feedback.textContent = ''; }
       finally { this.lock(false); }
     }
     async save(field) {

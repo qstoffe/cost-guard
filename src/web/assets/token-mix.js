@@ -126,7 +126,7 @@ const TokenMixView = (() => {
       this.summary = e('div', undefined, 'token-mix-summary');
       this.metrics = categories.map((key, index) => {
         const group = e('div'), label = e('span', names[index]), value = e('strong');
-        ReportView.text(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') : '0%');
+        ReportView.text(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') : 'N/A');
         ContextHelp.value(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_cost_value') : '');
         group.append(label, value); this.summary.append(group); return value;
       });
@@ -146,11 +146,7 @@ const TokenMixView = (() => {
       ContextHelp.refresh(this.title);
       this.metrics.forEach(value => ReportView.syncUnits(value));
       const view = result.view;
-      const operational = (view.source_warnings || []).filter(text => text.startsWith('ERROR:'));
-      if ((view.source_warnings || []).some(text => text.startsWith('⚠ Could not verify currently selectable')))
-        operational.push('Model availability service unavailable.');
-      this.status.textContent = [view.model_token_mix.length ? '' : 'No available historical usage.',
-        ...operational].filter(Boolean).join(' ');
+      this.status.textContent = view.model_token_mix.length ? '' : result.source?.status === 'partial' ? 'N/A' : 'No usage yet.';
       this.status.hidden = !this.status.textContent;
       this.models.update(view.model_token_mix); this.publishers.update(view.publisher_token_mix);
     }
