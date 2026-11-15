@@ -29,7 +29,12 @@ def main():
     parser.add_argument('--budget-seconds', type=int, default=600)
     parser.add_argument('--period', action='append', choices=('today', '7-days', '30-days', 'month', 'all'))
     parser.add_argument('--managed', action='store_true', help='Use the production Web partial-history/quantum path.')
+    parser.add_argument('--synthetic', action='store_true', help='Measure the isolated 520-root fixture, never personal history.')
     args = parser.parse_args()
+    if args.synthetic:
+        from development.tests.integration.token_mix_measurements import measure
+        print(json.dumps(measure()), flush=True)
+        return
     if not 1 <= args.budget_seconds <= 1800:
         parser.error('budget-seconds must be between 1 and 1800')
     temporary = tempfile.TemporaryDirectory(dir=os.environ['OPENCODE_TOOLKIT_SESSION_SCRATCH'], prefix='token-mix-probe-') if args.cold_and_warm else None

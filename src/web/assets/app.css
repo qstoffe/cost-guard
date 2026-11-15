@@ -259,6 +259,7 @@ section > label input { min-width: 0; }
   width: 100%; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal;
 }
 .token-mix-table th button { width: auto; }
+.token-mix-section:first-of-type .token-mix-table :is(th, td):nth-child(2) { text-align: left; }
 .token-mix-table th[aria-sort] button::after { content: none; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; font-size: .85rem; }
 caption { text-align: left; padding: .9rem 1rem; font-weight: 650; background: var(--surface); }

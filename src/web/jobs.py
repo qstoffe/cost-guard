@@ -120,8 +120,11 @@ def run_report(sender, request):
         from .composition import application
         quantum = Quantum(sender, request.quantum_seconds) if isinstance(request, ManagedReport) else None
         relay = ProgressRelay(sender, quantum=quantum)
-        app = application(request, read_admission=quantum.admit_read,
-            history_checkpoint=lambda value: sender.send(('checkpoint', value))) if quantum else application(request)
+        options = dict(publish_token_mix_reuse=lambda value: sender.send(('token-mix-evidence', value)))
+        if quantum:
+            options.update(read_admission=quantum.admit_read,
+                history_checkpoint=lambda value: sender.send(('checkpoint', value)))
+        app = application(request, **options)
         if quantum:
             quantum.admit()
         result = app.execute(request, progress=relay.observe).to_json()
@@ -191,6 +194,8 @@ class ReportJobs:
         self._retiring = []
         self._closed = False
         self._failure = None
+        self._token_mix_evidence = None
+        self._token_mix_evidence_at = 0
         self.analysis = "not_requested"
         self.source = "not_acquired"
         self.accounts = "not_acquired"
@@ -464,6 +469,12 @@ class ReportJobs:
             elif kind == 'checkpoint':
                 history_jobs.checkpoint(job, payload)
                 job.pop('startup_interrupted', None)
+            elif kind == 'token-mix-evidence' and job['request'].kind is ReportKind.TOKEN_MIX:
+                from src.reports.token_mix_reuse import MAX_BYTES
+                if not isinstance(payload, bytes) or len(payload) > MAX_BYTES:
+                    raise ValueError('invalid_token_mix_evidence')
+                self._token_mix_evidence = payload
+                self._token_mix_evidence_at = time.monotonic()
             elif kind == 'result':
                 result = json.loads(payload)
                 if history_jobs.managed(job) and (result.get('error') or {}).get('code') == 'history_continue':
@@ -518,6 +529,17 @@ class ReportJobs:
                 continue
             receiver, sender = self._context.Pipe(duplex=isinstance(job['request'], ManagedReport))
             request = stats_jobs.request(job, key)
+            if request.kind is ReportKind.TOKEN_MIX:
+                from dataclasses import fields
+                from .report_control import TokenMixReport
+                from src.reports.token_mix_reuse import MAX_AGE
+                if time.monotonic() - self._token_mix_evidence_at >= MAX_AGE:
+                    self._token_mix_evidence = None
+                if isinstance(request, ManagedReport):
+                    request = replace(request, token_mix_evidence=self._token_mix_evidence)
+                else:
+                    request = TokenMixReport(**{field.name: getattr(request, field.name)
+                        for field in fields(ReportRequest)}, token_mix_evidence=self._token_mix_evidence)
             if isinstance(request, ManagedReport) and request.kind is not ReportKind.AI_STATS:
                 job.setdefault('observation_ms', int(time.time() * 1000))
                 request = replace(request, observation_ms=job['observation_ms'],
@@ -553,6 +575,7 @@ class ReportJobs:
     def close(self):
         with self._lock:
             self._closed = True
+            self._token_mix_evidence = None
             failures = []
 
             def attempt(stop):

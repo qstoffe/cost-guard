@@ -80,8 +80,8 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertEqual(0, month.token_mix.request_count)
         self.assertTrue(any('Request time unavailable' in warning for warning in month.source_warnings))
         help_text = project(all_time).to_json()['token_mix']['display_units']
-        self.assertIn('Input CCost: 0 USD', help_text['usd']['mix_input_cost_help'])
-        self.assertIn('not zero', help_text['credits']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: $0.00', help_text['usd']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: 0 Credits', help_text['credits']['mix_input_cost_help'])
 
     def test_period_changes_reuse_warm_root_evidence_without_hydration_or_repricing(self):
         source = SyntheticMonthSource(40, 2, month_start_ms=instant('2026-03-01T00:00:00+00:00'))
@@ -112,8 +112,8 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertEqual(3, report.token_mix.request_count)
         self.assertEqual(instant(stamps[1]), report.token_mix_period['start_ms'])
         help_text = project(report).to_json()['token_mix']['display_units']
-        self.assertIn('0.370370367 Credits', help_text['credits']['mix_input_cost_help'])
-        self.assertIn('0.00370370367 USD', help_text['usd']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: 0 Credits', help_text['credits']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: $0.00', help_text['usd']['mix_input_cost_help'])
 
     def test_http_scope_identity_and_defaults_are_page_specific(self):
         self.assertEqual('all', parse_report({'kind': 'token-mix'}).token_mix_scope)

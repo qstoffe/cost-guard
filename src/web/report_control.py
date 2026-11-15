@@ -12,7 +12,13 @@ from src.reports import ReportRequest
 
 
 @dataclass(frozen=True, slots=True)
-class ManagedReport(ReportRequest):
+class TokenMixReport(ReportRequest):
+    # Internal IPC only; the HTTP parser never accepts private evidence.
+    token_mix_evidence: bytes | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedReport(TokenMixReport):
     source_identity: str = ''
     quantum_seconds: float = 0.1
     observation_ms: int = 0

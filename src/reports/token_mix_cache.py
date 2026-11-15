@@ -19,6 +19,7 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .token_mix_history import history_projection
 from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
 from .history_snapshots import load as load_snapshots, warnings as history_warnings
+from . import token_mix_reuse as reuse
 
 ALGORITHM = 'web-token-mix-evidence-2'
 NAMESPACE = 'web-token-mix-evidence'
@@ -113,8 +114,23 @@ def build_cached_token_mix(service, progress, *, scope=None):
     work = HistoryWork(service, sessions, roots, versions, reference)
     active = active_roots(sessions)
     keys = {root.session_id: cache_key(service, root, reference) for root in roots}
+    reuse_key = reuse.signature(service, reference)
+    prior = getattr(service, 'token_mix_reuse', None)
+    retained = prior['roots'] if reuse.qualified(prior, reuse_key) else {}
+    reusable = {}
+    payloads = {}
+    for root in roots:
+        sid = root.session_id
+        item = retained.get(sid)
+        if (sid not in active and item and item['key'] == keys[sid] and item['revision'] == versions[sid]):
+            facts = load(CacheEntry(NAMESPACE, keys[sid], item['payload'], versions[sid], ALGORITHM),
+                         versions[sid], service.source)
+            if facts is not None:
+                reusable[sid] = facts
+                payloads[sid] = item
+    missing_keys = [keys[root.session_id] for root in roots if root.session_id not in reusable]
     try:
-        cached = service.cache_repository.get_many(NAMESPACE, keys.values(), busy_timeout_ms=50)
+        cached = service.cache_repository.get_many(NAMESPACE, missing_keys, busy_timeout_ms=50) if missing_keys else {}
     except (OSError, sqlite3.Error):
         cached = {}
     facts_by_root = {}
@@ -132,7 +148,14 @@ def build_cached_token_mix(service, progress, *, scope=None):
     for index, root in enumerate(roots):
         revision = versions[root.session_id]
         key = keys[root.session_id]
-        facts = load(cached.pop(key, None), revision, service.source) if root.session_id not in active else None
+        cached_item = cached.pop(key, None)
+        facts = reusable.get(root.session_id)
+        if facts is not None:
+            service.metrics.add('token_mix_ephemeral_hits')
+        elif root.session_id not in active:
+            facts = load(cached_item, revision, service.source)
+            if facts is not None:
+                payloads[root.session_id] = dict(key=key, revision=revision, payload=cached_item.payload)
         service.metrics.add('token_mix_cache_hits' if facts is not None else 'token_mix_cache_misses')
         if facts is not None:
             service._acquisition.revisions[root.session_id] = revision
@@ -140,7 +163,8 @@ def build_cached_token_mix(service, progress, *, scope=None):
             work.saved += 1
         else:
             pending.append((root, key))
-        progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots), stage='history-cache'), None)
+        if root.session_id not in reusable:
+            progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots), stage='history-cache'), None)
     progress(WorkProgress('Updating changed history', 'history', 0, len(pending), stage='history-load'), None)
     batch_size = getattr(service, 'history_batch_size', BATCH_SIZE)
     for start in range(0, len(pending), batch_size):
@@ -166,6 +190,7 @@ def build_cached_token_mix(service, progress, *, scope=None):
                     == item.bundle.source_revision):
                 writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM,
                     snapshot_scope(item.snapshot) if item.snapshot is not None else None))
+                payloads[root.session_id] = dict(key=key, revision=item.bundle.source_revision, payload=payload)
             service._analyzed.pop(root.session_id, None)
         write_error = None
         try:
@@ -178,6 +203,8 @@ def build_cached_token_mix(service, progress, *, scope=None):
     unavailable.update(work.verify())
     if unavailable and len(unavailable) == len(roots):
         raise HistoryCheckpointError('history_revision_churn')
+    for sid in unavailable:
+        payloads.pop(sid, None)
     entries, prompts, costs = [], {}, {}
     for sid, facts in facts_by_root.items():
         if sid in unavailable:
@@ -190,5 +217,6 @@ def build_cached_token_mix(service, progress, *, scope=None):
             costs[entry.model, entry.tokens] = parts
     report = history_projection(service, reference, entries, prompts, progress,
         valuation=lambda model, tokens: costs[model, tokens], scope=scope)
+    reuse.publish(service, reuse_key, payloads)
     return replace(report, source_warnings=(*report.source_warnings, *history_warnings(unavailable)),
                    history_omitted_roots=len(unavailable))

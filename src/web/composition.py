@@ -13,7 +13,7 @@ from .jobs import ModelsPriceRefresh
 from .report_control import ManagedReport
 
 
-def application(request, *, read_admission=None, history_checkpoint=None):
+def application(request, *, read_admission=None, history_checkpoint=None, publish_token_mix_reuse=None):
     # Reuse existing account/model wiring, not CLI source wake or dispatch.
     from src.bootstrap import _model_availability_source
 
@@ -47,6 +47,13 @@ def application(request, *, read_admission=None, history_checkpoint=None):
             cache_repository=cache, config=config, now_ms=now, progress=progress,
             cache_token_mix_history=True)
         service.catalog = catalog  # Pin one coherent valuation/catalog for this job.
+        if request.kind is ReportKind.TOKEN_MIX:
+            import json
+            from src.reports.token_mix_reuse import MAX_BYTES
+            evidence = getattr(request, 'token_mix_evidence', None)
+            if evidence is not None and len(evidence) <= MAX_BYTES:
+                service.token_mix_reuse = json.loads(evidence)
+            service.publish_token_mix_reuse = publish_token_mix_reuse
         if isinstance(request, ManagedReport):
             service.shared_web_evidence = True
             service.allow_partial_history = True

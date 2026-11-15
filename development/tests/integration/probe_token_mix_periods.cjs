@@ -33,7 +33,7 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     assert.equal(await evaluate(`current.tokenMix.selector.querySelector('[aria-pressed="true"]').textContent`),
       {today:'Today','7-days':'7 days','30-days':'30 days',month:'This month',all:'All time'}[period]);
     assert.equal(await evaluate(`JSON.stringify([current.tokenMix.models.sort,current.tokenMix.publishers.sort])===mixSort`),true);
-    assert.match(await evaluate(`ReportView.display(current.result.view.token_mix,'mix_input_cost_help')`),/USD/,'period does not change the unit');
+    assert.match(await evaluate(`ReportView.display(current.result.view.token_mix,'mix_input_cost_help')`),/^Input CCost: \$\d+\.\d{2}$/,'period does not change the unit');
   }
   // Supersede a slow in-flight scope; its eventual completion must never win.
   await evaluate(`selectTokenMix(current,'today');selectTokenMix(current,'month')`);
@@ -44,19 +44,19 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   const help=`document.getElementById('context-help')`;
   for (const unit of ['usd','credits']) for (const table of [0,1]) for (let col=4;col<8;col++) {
     await evaluate(`ReportView.setUnit('${unit}',current.tokenMix.root);document.activeElement?.blur();
-      document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows[0].cells[${col}].firstElementChild.focus()`);
+      document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows[0].cells[${col+(table===0?1:0)}].firstElementChild.focus()`);
     await until(`${help}?.matches(':popover-open')`);
-    assert.match(await evaluate(`${help}.textContent`),new RegExp(`${['Input','Cached input','Cache write','Output'][col-4]} CCost: .*${unit==='usd'?'USD':'Credits'}`));
+    assert.match(await evaluate(`${help}.textContent`),new RegExp(`^${['Input','Cached input','Cache write','Output'][col-4]} CCost: `+(unit==='usd'?'\\$\\d+\\.\\d{2}':'\\d+ Credits')+'$'));
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
   }
   for (const name of ['63','64']) {
     await evaluate(`document.activeElement?.blur();[...document.querySelectorAll('.token-mix-table')[0].tBodies[0].rows]
-      .find(row=>row.cells[0].textContent.includes('model ${name}')).cells[4].firstElementChild.focus()`);
+      .find(row=>row.cells[1].textContent.includes('model ${name}')).cells[5].firstElementChild.focus()`);
     await until(`${help}?.matches(':popover-open')`);
-    assert.match(await evaluate(`${help}.textContent`),/Partial reference valuation.*not zero/);
-    if (name==='63') assert.match(await evaluate(`${help}.textContent`),/N\/A/);
+    assert.match(await evaluate(`${help}.textContent`),/^Input CCost: \d+ Credits$/);
+    assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`),/N\/A|Partial|\?|not zero/);
   }
-  await evaluate(`document.activeElement?.blur();globalThis.categoryTarget=document.querySelector('.token-mix-table tbody tr').cells[4].firstElementChild;
+  await evaluate(`document.activeElement?.blur();globalThis.categoryTarget=document.querySelector('.token-mix-table tbody tr').cells[5].firstElementChild;
     categoryTarget.scrollIntoView({block:'center',inline:'center'})`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
   const point=await evaluate(`(()=>{const r=categoryTarget.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -73,14 +73,14 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   assert.match(await evaluate(`${help}.textContent`),/Input CCost/);
   await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
-  await evaluate(`document.activeElement?.blur();current.tokenMix.models.headers[0].th.querySelector('button').focus()`);
-  assert.equal(await evaluate(`current.tokenMix.models.headers[0].th.querySelector('.help-label')`),null);
-  await evaluate(`current.tokenMix.models.headers[1].th.querySelector('button').focus()`);
+  await evaluate(`document.activeElement?.blur();current.tokenMix.models.headers[1].th.querySelector('button').focus()`);
+  assert.equal(await evaluate(`current.tokenMix.models.headers[1].th.querySelector('.help-label')`),null);
+  await evaluate(`current.tokenMix.models.headers[2].th.querySelector('button').focus()`);
   await until(`${help}?.matches(':popover-open')`);
   assert.doesNotMatch(await evaluate(`${help}.textContent`),/Activate to sort/);
   await go('ai-stats'); assert.equal(await evaluate(`current.period`),'30-days');
   await go('sessions'); assert.equal(await evaluate(`current.catalog.period`),'today');
   await evaluate(`location.hash='#/token-mix?period=7-days'`);
   await until(`current.section==='token-mix' && !current.loading && current.result?.view.token_mix_period?.period==='7-days'`);
-  checks.push('five Token Mix scopes/deep link; stale attempts rejected; sort/unit/page defaults retained; 16 focused category help values plus real hover/touch and missing/partial help; compact three-page geometry in themes/mobile');
+  checks.push('five Token Mix scopes/deep link; stale attempts rejected; sort/unit/page defaults retained; 16 concise numeric category help values plus real hover/touch; compact three-page geometry in themes/mobile');
 };

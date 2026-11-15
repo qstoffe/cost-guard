@@ -14,7 +14,7 @@ from src.analysis.ai_stats import windows
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity, unverified_alias
-from src.pricing.publishers import publisher_for
+from src.pricing.publishers import model_publisher
 
 from .migration_notice import migration_gap_notes
 from .models import ModelTokenMixProjection, PublisherTokenMixProjection, ReportKind, ReportProjection
@@ -31,6 +31,19 @@ def _model_key(model: ModelRef) -> str:
     if unverified_alias(model.model, model.provider):
         return f"{model.provider.lower()}/{reference_identity(model.model)}"
     return reference_identity(model.model) or (model.model or "").lower()
+
+
+def observed_totals(entries):
+    """Web-only known-category numerators; never promote canonical unknowns."""
+    totals = [0, 0, 0, 0]
+    for entry in entries:
+        usage = entry.tokens
+        for index, name in enumerate(("input", "cache_read", "cache_write", "output")):
+            if name in usage.known_fields:
+                totals[index] += getattr(usage, name)
+        # Reasoning is a separately recorded canonical scalar, folded into O once.
+        totals[3] += usage.reasoning
+    return tuple(totals)
 
 
 def build_token_mix_history(service: ReportService, progress: HistoryProgress, *, scope=None) -> ReportProjection:
@@ -106,16 +119,35 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
                          f"{len(groups) - len(shown)} other historically used model(s) omitted.")
         groups = shown
     rows = []
+    by_model = {}
+    for entry in usage:
+        by_model.setdefault(_model_key(entry.model), []).append(entry)
+
+    def catalog_model(model):
+        return None if unverified_alias(model.model, model.provider) else reference.resolve_reference(model.model)
+
+    def publisher_key(model):
+        return model_publisher(catalog_model(model)) or "Unknown / unverified"
+
     for group in groups:
+        matched = catalog_model(group.model)
         name = (group.model.display_name if group.model.resolution and group.model.display_name else
                 reference.display_name(group.model.model, group.model.provider, exact=True))
-        rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix))
+        web_name = (matched.model.display_name or matched.model.model) if matched else (
+            group.model.recorded_model if unverified_alias(group.model.model, group.model.provider) else
+            group.model.display_name or group.model.recorded_model)
+        key = _model_key(group.model)
+        rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix,
+            model_publisher(matched) or "—", key, observed_totals(by_model[key]), web_name))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
     shown_keys = {_model_key(group.model) for group in groups}
     shown_usage = [entry for entry in usage if _model_key(entry.model) in shown_keys]
-    publisher_key = lambda model: publisher_for(reference, model.model) or "Unknown / unverified"
-    publishers = [PublisherTokenMixProjection(publisher_key(group.model), group.prompts, group.calls, group.mix)
+    by_publisher = {}
+    for entry in shown_usage:
+        by_publisher.setdefault(publisher_key(entry.model), []).append(entry)
+    publishers = [PublisherTokenMixProjection(publisher_key(group.model), group.prompts, group.calls, group.mix,
+                    observed_totals(by_publisher[publisher_key(group.model)]))
                    for group in model_token_mixes(shown_usage, prompt_of, valuation,
                                                model_key=publisher_key)]
     publishers.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.publisher))
@@ -132,4 +164,5 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,
         notes=tuple(notes), model_token_mix=tuple(rows), publisher_token_mix=tuple(publishers), token_mix=total,
         token_mix_period=period,
+        token_mix_observed_totals=observed_totals(shown_usage),
     )

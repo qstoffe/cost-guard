@@ -316,6 +316,10 @@ def history_tokens(values, timezone_id, *, times=None):
                     decimal(values.get("next_context_cached_ccost")), decimal(values.get("next_context_fresh_ccost"))) + ")"
     if "totals" in values and "shares" in values:
         shares = balanced_share_percents(values["totals"]) if all(item is not None for item in values["shares"]) else ("--",) * 4
+        observed = values.get("observed_totals")
+        if observed is not None:
+            counts = tuple(map(int, observed))
+            shares = balanced_share_percents(counts) if sum(counts) else ("0%",) * 4
         costs = values.get("costs")
         priced = costs is not None
         for index, (name, label) in enumerate(TOKEN_CATEGORIES):
@@ -324,21 +328,18 @@ def history_tokens(values, timezone_id, *, times=None):
             tokens["mix_" + name + "_share"] = "N/A" if shares[index] == "--" else shares[index]
             tokens["mix_" + name + "_cost"] = cost
             if values.get('category_cost_help'):
-                amount = decimal(costs[index]) if priced else None
-                exact = ccost_amount(None) if amount is None else format(amount / 100 if ccost_unit() == 'usd' else amount, 'f')
-                if amount is None and ccost_unit() == 'usd':
-                    exact = exact.removeprefix('$')
-                tokens["mix_" + name + "_cost_help"] = (
-                    f"{label} CCost: {exact} {'USD' if ccost_unit() == 'usd' else 'Credits'}."
-                    + (" Reference valuation, not billing." if values["cost_complete"] else
-                       " Partial reference valuation; missing pricing or usage is not zero.")
-                )
+                amount = decimal(costs[index]) if priced else Decimal(0)
+                exact = (ccost_amount(amount) if ccost_unit() == 'usd' else
+                         f"{amount.to_integral_value(rounding=ROUND_HALF_UP):f} Credits")
+                tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {exact}"
         tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),
                                              None if known_volume is None else int(known_volume))
         tokens["mix_total_tokens"] = tokens["total_tokens"]
+        if observed is not None:
+            tokens["mix_total_tokens"] = token_volume(sum(map(int, observed)), sum(map(int, observed)))
     return tokens
 
 
