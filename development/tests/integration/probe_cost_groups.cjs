@@ -79,7 +79,12 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
         return{text:n.textContent,left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight,
           scroll:n.scrollHeight>n.clientHeight&&n.scrollTop>0};
       })()`);
-      assert.equal(bounds.text.match(/• fixture\/main-model — Effort \d+ — \(25 Credits\)/g)?.length,30);
+      assert.equal(bounds.text.match(/• (?:fixture|second)\/model-\d — Effort \d+ — \(25 Credits\)/g)?.length,30);
+      const [main,agents]=bounds.text.split('\n\nSub Agents:\n');
+      assert.equal(main.match(/• /g)?.length,2);
+      assert.equal(agents.match(/• /g)?.length,28);
+      assert.match(main,/• fixture\/model-0 — Effort 0 — \(25 Credits\)/);
+      assert.match(main,/• second\/model-1 — Effort 1 — \(25 Credits\)/);
       assert.doesNotMatch(bounds.text,/not shown|Known subtotal|Total CCost|Partial cost coverage/);
       const {text,...geometry}=bounds;
       assert.ok(bounds.scroll&&bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify(geometry));
