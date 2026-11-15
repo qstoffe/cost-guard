@@ -1,6 +1,47 @@
 """Request identity copy from recorded selectors, never labels or pricing guesses."""
 from src.domain.model_identity import CATALOG_ESTIMATE_HELP
 from .effort_help import effort_help
+from src.domain.model_identity import catalog_display_name
+
+
+def prompt_display_help(row):
+    """Consumer identity copy from structured row facts, not cost-help text."""
+    label = row.watch_model or row.model_effort or "N/A"
+    if row.watch_effort and row.watch_effort != "N/A":
+        label += " · " + row.watch_effort
+    if row.recorded_selections:
+        return label + "\nSelected model · no request usage recorded"
+    lines = [label]
+    for part in row.cost_parts[:24]:
+        role = "Main prompt" if not part.agent else f"Subagent {part.agent}"
+        name = catalog_display_name(part.provider_id, part.model)
+        identity = f"{part.provider_id}/{name}" if part.provider_id else name
+        efforts = " / ".join(dict.fromkeys(effort_help(e) for e in part.effort_evidence))
+        effort = efforts or part.effort
+        lines.append(f"{role} — {identity}" + (f" · {effort}" if effort and effort != "N/A" else ""))
+    if row.linked_agent_count and not any(part.agent for part in row.cost_parts):
+        lines.append("Subagents — model unknown")
+    return "\n".join(dict.fromkeys(lines))
+
+
+def session_display_help(item):
+    if item.model == "N/A" and item.selected_display_model:
+        effort = f" · {item.selected_effort.capitalize()}" if item.selected_effort else ""
+        label = item.selected_display_model + effort + "\nSelected model · no request usage recorded"
+    else:
+        label = item.model
+    sections = [label]
+    for heading, models in (("Main models", item.main_models), ("Subagents", item.subagent_models)):
+        lines = []
+        for part in models:
+            identity = f"{part.provider}/{part.display_model or part.model}"
+            efforts = " / ".join(dict.fromkeys(effort_help(e) for e in part.efforts if e.selected is not None))
+            lines.append("• " + identity + (f" · {efforts}" if efforts else ""))
+        if lines:
+            sections.append(heading + "\n" + "\n".join(lines))
+    if item.linked_agent_count and not item.subagent_models:
+        sections.append("Subagents — model unknown")
+    return "\n\n".join(sections)
 
 
 def request_model_help(provider, recorded, *, catalog_model=None):
@@ -48,7 +89,12 @@ def session_model_help(item):
         if lines:
             sections.append(heading + "\n" + "\n".join(lines))
     if not item.main_models:
-        sections.insert(0, "No attributable executed main-thread model is available.")
+        if item.selected_display_model:
+            effort = f" · {item.selected_effort.capitalize()}" if item.selected_effort else ""
+            sections.insert(0, f"Selected model: {item.selected_display_model}{effort}"
+                f"\nRecorded selection: {item.selected_model_id}\nNo request usage recorded for this selection.")
+        else:
+            sections.insert(0, "No attributable executed main-thread model is available.")
     if item.linked_agent_count and not item.subagent_models:
         sections.append("Sub-agents used in session\n• Linked subagent work; model and effort not yet reported.")
     if omitted:

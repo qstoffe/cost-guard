@@ -2,11 +2,13 @@
 from dataclasses import dataclass
 
 from src.analysis.effort_defaults import request_effort
+from src.analysis.effort import prompt_replies
 from src.analysis.valuation import unique_usage
 from src.domain.effort import EffortEvidence
 from src.domain.model_identity import catalog_display_name
 from src.domain.session_tree import root_by_session
 from .model_details import executed as _executed, model_identity as _identity, has_model_details, linked_agents, selected_effort
+from .prompt_selection import selected_model, selection_name, selection_variant
 
 LIMIT = 64
 
@@ -17,6 +19,7 @@ class SessionModel:
     model: str
     catalog_model: str = ""
     efforts: tuple[EffortEvidence, ...] = ()
+    display_model: str = ""
 
 
 def model_fields(item, catalog):
@@ -95,23 +98,49 @@ def model_fields(item, catalog):
     def parts(role):
         return tuple(SessionModel(provider, model,
             ref.model if ref.resolution and ref.model != model and len(ref.model) <= 256
-                and ref.model.isprintable() else "", tuple(efforts))
+                and ref.model.isprintable() else "", tuple(efforts), selection_name(ref, catalog))
             for (provider, model), (ref, efforts) in groups[role].items())
 
+    selection = None
+    variant = ""
+    if (latest is None and prompts and snapshot is not None
+            and snapshot.source_revision == item.bundle.source_revision
+            and snapshot.root.provenance == item.session.provenance):
+        replies = prompt_replies(snapshot)
+        selection = selected_model(prompts[-1], replies)
+        if selection is not None:
+            variant = selection_variant(prompts[-1], replies, selection)
+            texts = (selection.provider, f"{selection.provider}/{selection.recorded_model}",
+                     selection_name(selection, catalog), variant)
+            if any(len(text) > limit or text and not text.isprintable()
+                   for text, limit in zip(texts, (128, 256, 256, 64))):
+                selection = None
     return dict(model=model, multiple_models=len(identities) > 1,
+        selected_display_model=selection_name(selection, catalog) if selection else "",
+        selected_model_id=f"{selection.provider}/{selection.recorded_model}" if selection else "",
+        selected_effort=variant if selection else "",
         has_model_details=has_model_details(scoped, len(agents)), linked_agent_count=len(agents),
         contributor_models=tuple(sorted(f"{provider}/{model}" for provider, model in accepted)),
         contributor_models_complete=complete, main_models=parts("main"), subagent_models=parts("subagent"),
-        model_pending=latest is None and any(p.in_progress for p in prompts))
+        model_pending=latest is None and selection is None and any(p.in_progress for p in prompts))
 
 
 def decode_models(values):
     return tuple(SessionModel(part["provider"], part["model"], part["catalog_model"],
-        tuple(EffortEvidence(**e) for e in part["efforts"])) for part in values)
+        tuple(EffortEvidence(**e) for e in part["efforts"]), part["display_model"]) for part in values)
 
 
 def valid_models(values):
     """Reject malformed/old role claims, rather than promote undifferentiated IDs."""
+    selection = values["selected_display_model"]
+    identity = values["selected_model_id"]
+    effort = values["selected_effort"]
+    if (any(not isinstance(text, str) or len(text) > limit or text and not text.isprintable()
+            for text, limit in ((selection, 256), (identity, 256), (effort, 64)))
+            or bool(selection) != bool(identity)
+            or identity and (not all(identity.partition("/")[::2]) or values["model"] != "N/A")
+            or effort and not identity):
+        return False
     union = set()
     for role in ("main_models", "subagent_models"):
         parts = values[role]
@@ -124,6 +153,8 @@ def valid_models(values):
                     or not identity.isprintable() or part.model == "N/A"
                     or not isinstance(part.catalog_model, str) or len(part.catalog_model) > 256
                     or part.catalog_model and not part.catalog_model.isprintable()
+                    or not isinstance(part.display_model, str) or len(part.display_model) > 256
+                    or part.display_model and not part.display_model.isprintable()
                     or len(part.efforts) > 4 or any(
                         e.selected is not None and (not isinstance(e.selected, str) or len(e.selected) > 64
                             or e.selected and not e.selected.isprintable())

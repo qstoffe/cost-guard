@@ -143,7 +143,8 @@ def detail_tokens(values):
         models.append(note + f" ({detail['model_count']} distinct models overall)")
         calls.append(note + f": {detail.get('omitted_calls', 0)} calls")
     if not detail['parts'] and values.get('recorded_selections'):
-        selection = '\n'.join('Recorded selection: ' + value for value in values['recorded_selections'])
+        selection = 'Selected model · no request usage recorded'
+        selection += '\n' + '\n'.join('Recorded selection: ' + value for value in values['recorded_selections'])
         selection += '\nUsage unavailable; cost unknown. Selection is not executed-model or contribution proof.'
         models.append(selection)
         main_models.append(selection)

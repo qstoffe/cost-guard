@@ -16,7 +16,7 @@ async function main() {
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return JSON.parse((await lines.next()).value);};
    let extensionArgs = ['--disable-extensions'];
-   if (mode === '--model-details') {
+           if (mode === '--model-details') {
      const extension = path.join(profile, 'zoom-extension');
      await fs.mkdir(extension);
      await fs.writeFile(path.join(extension, 'manifest.json'), JSON.stringify({manifest_version:3,
@@ -173,6 +173,14 @@ async function main() {
              evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
                personal_profile:false,desktop_effects:false};
              console.log(JSON.stringify(evidence)); return;
+           }
+           if (mode === '--quick-aborts') {
+             await require('../fixtures/quick_aborts_browser.cjs')({evaluate,until,fixture,checks,layouts,
+               command:(method,params)=>command(method,params,sessionId)});
+             assert.deepEqual(errors,[]);
+             evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+               personal_profile:false,desktop_effects:false};
+             console.log(JSON.stringify(evidence));return;
            }
            if (mode === '--detail-first-load') {
              const details = await require('../fixtures/session_loading_browser.cjs').firstLoad({evaluate,until,fixture});

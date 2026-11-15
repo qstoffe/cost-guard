@@ -15,6 +15,8 @@ from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.context_deltas import context_snapshot
 from development.tests.fixtures.session_snapshots import make_native_v2_compaction_snapshot
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.quick_aborts import quick_aborts
+from development.tests.fixtures.claude_alias import service as model_service
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
 from src.application.session_catalog import SessionCatalog, SORTS
@@ -40,6 +42,30 @@ def all_time_catalog(**kwargs):
 
 
 class SessionCatalogTests(unittest.TestCase):
+    def test_selection_sort_and_running_to_aborted_revision_do_not_become_execution(self):
+        saved = quick_aborts(running=True)
+        service = model_service(self, snapshots=(saved,))
+        catalog = all_time_catalog(clock=lambda: self.clock)
+        catalog.observe(observe_catalog(service.source, include_archived_revisions=True))
+        page = catalog.page(sort="model", direction=1)
+        catalog.interest(page["token"], True)
+        catalog.tick(service)
+
+        current = catalog.page(token=page["token"], sort="model", direction=1)
+
+        self.assertFalse(current["pending_sort"])
+        row, = current["view"]["session_usage"]
+        self.assertEqual(("N/A", "Claude Sonnet 5.5", 2, False),
+            (row["model"], row["selected_display_model"], row["prompt_count"], row["has_model_details"]))
+        terminal = quick_aborts(second_model=False)
+        service.source.snapshots[saved.root.session_id] = terminal
+        catalog.observe(observe_catalog(service.source, include_archived_revisions=True))
+        self.clock += 6
+        catalog.tick(service)
+        updated = catalog.page(token=page["token"], sort="model", direction=1)
+        self.assertEqual("", updated["view"]["session_usage"][0]["selected_display_model"])
+        self.assertFalse(updated["view"]["session_usage"][0]["running"])
+
     def setUp(self):
         self.clock = 0
         self.source = SyntheticMonthSource(120, 1, month_start_ms=1000)

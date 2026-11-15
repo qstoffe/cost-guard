@@ -7,6 +7,8 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.claude_alias import desktop_service, snapshot as alias_snapshot
+from development.tests.fixtures.quick_aborts import quick_aborts
+from development.tests.fixtures.claude_alias import service as alias_service
 from src.application.projection import project
 from src.application.session_catalog import ordered
 from src.domain import ModelRef, TokenUsage
@@ -15,6 +17,38 @@ from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, s
 
 
 class SessionModelTests(unittest.TestCase):
+    def test_latest_quick_abort_selection_is_separate_and_does_not_borrow_previous_model(self):
+        for second_model in (False, True):
+            saved = quick_aborts(second_model=second_model)
+            service = alias_service(self, snapshots=(saved,))
+            item = service._analyze(saved.root, detail=True)
+
+            row = service._session_rows((item,), catalog_models=True)[0]
+            wire = self.wire(row)
+
+            self.assertEqual(("N/A", (), (), False, 2),
+                (row.model, row.main_models, row.contributor_models, row.has_model_details, row.prompt_count))
+            self.assertEqual("Claude Sonnet 5.5" if second_model else "", row.selected_display_model)
+            self.assertEqual(row.selected_display_model, wire["selected_display_model"])
+            self.assertEqual(second_model, "Selected model:" in wire["display"]["model_help"])
+            self.assertNotIn("Main models used in session", wire["display"]["model_help"])
+
+    def test_quick_abort_scalar_selection_roundtrip_and_source_revision(self):
+        saved = quick_aborts()
+        service = alias_service(self, snapshots=(saved,))
+
+        row, _ = session_summary(service, saved.root, saved.source_revision)
+        with patch.object(service, "_analyze", side_effect=AssertionError("warm hydration")):
+            cached, _ = session_summary(service, saved.root, saved.source_revision)
+
+        self.assertEqual(row, cached)
+        self.assertEqual("Claude Sonnet 5.5", cached.selected_display_model)
+        updated = quick_aborts(second_model=False)
+        service.source.snapshots[saved.root.session_id] = updated
+        current, revision = session_summary(service, updated.root, updated.source_revision)
+        self.assertEqual(updated.source_revision, revision)
+        self.assertEqual("", current.selected_display_model)
+
     def setUp(self):
         self.source = SyntheticMonthSource(1, 2, month_start_ms=1000)
         saved = self.source.snapshots["root-0000"]
@@ -80,7 +114,8 @@ class SessionModelTests(unittest.TestCase):
         self.assertEqual(("Claude Test", True, False), (pending.model, pending.multiple_models, pending.contributor_models_complete))
         self.assertIn("Observed so far", self.wire(pending)["display"]["model_help"])
         empty = self.row((), ("C",), saved=True)
-        self.assertEqual(("N/A", True), (empty.model, empty.model_pending))
+        self.assertEqual(("N/A", False, "never-used"),
+            (empty.model, empty.model_pending, empty.selected_display_model))
         failed = replace(self.entry, model=ModelRef("p", "unexecuted"), tokens=TokenUsage(),
                          reported_cost=Decimal(0), error_name="provider-error", message_id="failed")
         self.assertFalse(self.row(("A",), extra=(failed,)).multiple_models)

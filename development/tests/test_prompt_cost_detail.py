@@ -108,7 +108,7 @@ class PromptCostDetailTests(unittest.TestCase):
         displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertTrue(waiting.unresolved_cost)
         self.assertIn("Subagent 1 — Request usage unavailable; model/effort unknown", displayed["model_detail_help"])
-        self.assertIn("Sub Agents:\n• N/A — N/A — (N/A)", displayed["cost_detail_help"])
+        self.assertIn("Sub Agents:\n• Request usage unavailable — (N/A)", displayed["cost_detail_help"])
         self.assertNotIn("Partial cost coverage", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
         self.assertIn("Subagent 1 — github-copilot/gpt-test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])

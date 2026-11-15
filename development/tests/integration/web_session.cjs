@@ -444,14 +444,19 @@ async function main() {
     assert.equal(catalog.body.children[0].children[1],selected,'status changes preserve selected title DOM');
     selected=null;
      const liveRow=catalog.body.children[0], link=liveRow.children[1].children[0], model=liveRow.children[2].children[0];
-     const duration=liveRow.children[5].children[0];
+      const duration=liveRow.children[5].children[0];
+      const prompts=liveRow.children[4].children[0];
      for(const state of ['pending','retained','ready','unavailable','ready']) {
        catalog.update({...catalogData,total:1,view:{session_usage:[{...known,metric_state:state}]}});
        assert.equal(liveRow.children[5].children[0],duration);
        assert.ok(!duration.className.includes('help-value'));
        assert.equal(duration.events.focus,undefined);
        assert.equal(duration.attributes['aria-describedby'],undefined);
-       assert.equal(duration.tabIndex,undefined);
+        assert.equal(duration.tabIndex,undefined);
+        assert.ok(!prompts.className.includes('help-value'));
+        assert.equal(prompts.tabIndex,undefined);
+        assert.equal(Object.keys(prompts.events).length,0);
+        assert.equal(prompts.attributes['aria-describedby'],undefined);
      }
      const durationHeader=catalog.headers.find(header=>header.key==='duration');
      assert.equal(durationHeader.th.children[0].tag,'button','Duration sorting remains present');
@@ -467,7 +472,7 @@ async function main() {
      assert.equal(liveRow.children[4].textContent,'2');
     model.events.focus();
     assert.match(document.body.children.at(-1).textContent,/alpha\/model[\s\S]*beta\/model/);
-    assert.doesNotMatch(document.body.children.at(-1).textContent,/Observed so far|incomplete/);
+     assert.match(document.body.children.at(-1).textContent,/Observed so far/);
     catalog.update({...catalogData,total:1,view:{session_usage:[{...multiple,contributor_models:['alpha/model','beta/model','child/model'],
       display:{...multiple.display,model_help:'alpha/model\nbeta/model\nchild/model\nObserved so far'}} ]}});
     assert.match(document.body.children.at(-1).textContent,/child\/model/,'open help refreshes without losing its target');

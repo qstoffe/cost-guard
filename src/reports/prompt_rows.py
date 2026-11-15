@@ -21,6 +21,7 @@ from src.pricing.catalog import PricingCatalog
 from .models import PromptProjection
 from .model_details import has_model_details, linked_agents
 from .prompt_costs import prompt_cost_parts
+from .prompt_selection import selected_model, selection_name, selection_variant
 from .semantics import input_context_above_price_threshold, prompt_has_additional_model
 
 ThresholdMultiplier = Callable[[str, int], Decimal | None]
@@ -147,6 +148,14 @@ class PromptRowProjector:
         if resolved is not None:
             model = catalog_display_name(resolved.provider, resolved.display_name)
             model_label = model + (f" ({effort})" if effort != "N/A" else "")
+        selection = selected_model(record, self.replies) if not record.entries else None
+        if selection is not None:
+            model = selection_name(selection, catalog)
+            # Without a request, an absent variant does not establish Default.
+            variant = selection_variant(record, self.replies, selection)
+            _, effort = effort_model_parts(catalog, selection.model,
+                interpret_effort(variant, attributable=bool(variant)), selection.provider)
+            model_label = model + (f" ({effort})" if effort != "N/A" else "")
         return PromptProjection(
             at_ms=record.prompt_time_ms,
             prompt_number=record.prompt_number,
@@ -199,9 +208,11 @@ class PromptRowProjector:
             has_model_details=has_model_details(record.entries, len(linked_agents(record))),
             agent_coverage=record.agent_coverage,
             cost_parts=prompt_cost_parts(record, catalog),
-            recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'
-                for message in self.replies.get((record.session_id, record.prompt_id), ())
-                if message.model.provider and message.model.recorded_model}))[:24] if not record.entries else (),
+             recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'
+                 for message in self.replies.get((record.session_id, record.prompt_id), ())
+                 if message.model.provider and message.model.recorded_model}
+                 | ({f'{selection.provider}/{selection.recorded_model}'} if selection is not None else set())))[:24]
+                 if not record.entries else (),
             abort_at_ms=record.abort_time_ms,
             completed_successfully=record.completed_successfully,
             running_cost_warning=bool(record.in_progress and self.running_warning_ccost > 0

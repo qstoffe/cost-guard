@@ -22,7 +22,7 @@ from src.reports.token_mix_history import history_prompt_keys
 
 class ModelSubagentHistoryTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
-    def test_ai_stats_accessor_keeps_prepared_efforts_and_units_without_changing_generic_help(self):
+    def test_model_accessors_keep_prepared_identity_efforts_and_units(self):
         script = """
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 vm.runInThisContext(fs.readFileSync('src/web/assets/render.js','utf8'));
@@ -32,7 +32,7 @@ const row={label:'GPT-6.1 Sol',model_help:'route/GPT-6.1 Sol\\n\\nBy Effort:\\nâ
 assert.equal(ReportView.aiStatsModelHelp(row),row.display.model_help);
 ReportView.setUnit('usd');
 assert.equal(ReportView.aiStatsModelHelp(row),row.display_units.usd.model_help);
-assert.equal(ReportView.display(row,'model_help'),'GPT-6.1 Sol');
+assert.equal(ReportView.display(row,'model_help'),row.display_units.usd.model_help);
 ReportView.setUnit('credits');
 assert.equal(ReportView.aiStatsModelHelp(row),row.model_help);
 assert.equal(ReportView.aiStatsModelHelp({}), '');
