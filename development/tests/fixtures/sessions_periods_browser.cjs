@@ -41,16 +41,19 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('location.hash'),pinned);
   await evaluate('history.forward()');
   await until('current.catalog.data.period==="7-days" && !current.catalog.busy');
-  // Pending period Cancel restores its own period/sort/page, not an all-time fallback.
+  // Back supersedes a pending period without applying its late answer.
   await evaluate(`window.savedPeriodApi=current.catalog.api;window.periodHeld=false;
     current.catalog.api=async(...args)=>{const data=await savedPeriodApi(...args);
       if(!args[1]?.action&&args[1]?.period==='30-days'&&!periodHeld){periodHeld=true;
         return new Promise(resolve=>{window.releasePeriod=()=>resolve(data);});}return data;};
     current.catalog.periodButtons[2].button.click()`);
-  await until('window.releasePeriod && !current.catalog.loader.root.hidden');
+  await until('window.releasePeriod && current.catalog.operation?.pending');
   assert.equal(await evaluate('current.catalog.pan.hidden'),false);
-  await evaluate('current.catalog.cancel.click();releasePeriod();current.catalog.api=savedPeriodApi');
+  assert.match(await evaluate('current.catalog.status.textContent'),/^Loading sessions in 30 days\./);
+  assert.equal(await evaluate('current.catalog.root.querySelectorAll("progress,.report-loading,.sessions-candidate-scope").length'),0);
+  await evaluate('history.back()');
   await until('current.catalog.period==="7-days" && !current.catalog.busy');
+  await evaluate('releasePeriod();current.catalog.api=savedPeriodApi');
   assert.equal(await evaluate('current.catalog.periodButtons[1].button.getAttribute("aria-pressed")'),'true');
   await evaluate(`current.catalog.periodButtons[2].button.click()`);
   await until('current.catalog.data.period==="30-days" && current.catalog.data.total===120 && !current.catalog.operation && !current.catalog.busy');
@@ -107,7 +110,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       layouts.push({theme,color,width,zoom,...facts});
     }
   checks.push('5000 source roots / 30 Today; authenticated allowlist; Today CCost/Effort <=30 indexed roots; 25+5 paging');
-  checks.push('five accessible selectors; keyboard/touch; offset reset; Back/Forward; period Cancel/automatic recovery; AI Stats independent 30-days; route return');
+  checks.push('five accessible selectors; keyboard/touch; offset reset; Back/Forward; pending period supersession/automatic recovery; AI Stats independent 30-days; route return');
   checks.push('source-qualified Default/mixed effort help; AX group/column; 16 Classic/Web color/width/zoom layouts');
   await fixture('period-empty');
   await evaluate('current.catalog.load()');

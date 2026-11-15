@@ -55,12 +55,12 @@ def check_pagers(browser, evidence):
                             page.emulate_media(color_scheme=scheme)
                             page.evaluate('(theme) => document.documentElement.dataset.theme=theme', theme)
                             geometry = page.locator('.page-navigation').evaluate('''bar => {
-                                const label=bar.querySelector('span').getBoundingClientRect(),
+                                const label=bar.querySelector(':scope > span').getBoundingClientRect(),
                                     buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()), rect=bar.getBoundingClientRect();
                                 return {viewport:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,
                                     centerError:Math.abs(label.left+label.right-rect.left-rect.right)/2,
                                     above:label.bottom<=buttons[0].top,
-                                    buttonHeights:buttons.map(b=>b.height), live:bar.querySelector('span').getAttribute('aria-live')};
+                                    buttonHeights:buttons.map(b=>b.height), live:bar.querySelector(':scope > span').getAttribute('aria-live')};
                             }''')
                             assert not geometry['overflow']
                             assert geometry['centerError'] <= 1

@@ -361,7 +361,7 @@ async function main() {
             await until(`(()=>{const row=document.querySelector('.session-catalog-table tbody tr');return row.classList.contains('session-running') &&
               new Set([...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color)).size===1;})()`);
             const pager=await evaluate(`(() => {
-              const bar=document.querySelector('.page-navigation'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
+              const bar=document.querySelector('.page-navigation'),label=bar.querySelector(':scope > span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
              const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
               const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
               current.catalog.update(pagerOriginal);return result;})()`);

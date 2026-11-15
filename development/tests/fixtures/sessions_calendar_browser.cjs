@@ -53,14 +53,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     location.hash='#/sessions?period=today&sort=activity&direction=-1&offset=75&epoch='+oldEpoch`);
   await until('catalog.operation?.completed===13');
   assert.equal(await evaluate('catalog.operation.failed'), false);
-  assert.match(await evaluate('catalog.count.textContent'), /13 of 25/);
+  assert.match(await evaluate('catalog.status.textContent'), /^Loading Sessions page 4\./);
+  assert.equal(await evaluate('catalog.operation.total'),25);
   assert.equal(await evaluate('catalog.pan.hidden'), false);
   assert.equal(await evaluate('catalog.retry===undefined'), true);
   // Hold one response beyond the actual 15s client deadline. The late answer must not apply.
   await evaluate(`catalog.retire();window.releaseLate=null;
     catalog.api=async(...args)=>{const data=await normalApi(...args);return args[1]?.action ? data :
       new Promise(resolve=>{releaseLate=()=>resolve(data);});};window.deadlineFlight=catalog.load();void 0`);
-  await until('catalog.loader.stage.textContent.includes("request_timeout") && !catalog.busy', 22000);
+  await until('catalog.status.textContent.includes("request_timeout") && !catalog.busy', 22000);
   assert.equal(await evaluate('catalog.operation.failed'), false);
   await evaluate('releaseLate();catalog.api=normalApi;deadlineFlight');
   assert.equal(await evaluate('catalog.data.offset'), 0);
@@ -86,12 +87,14 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await evaluate(`catalog.terminal=false;catalog.api=async(_,value)=>{if(value.action)return {};throw new Error('${reason}');};
       location.hash='#/sessions?period=today&sort=name&direction=1'`);
     await until('catalog.operation?.failed && !catalog.busy');
-    assert.match(await evaluate('catalog.loader.stage.textContent'), new RegExp(reason));
-    await evaluate('catalog.api=normalApi;catalog.cancel.click()');
+    assert.match(await evaluate('catalog.status.textContent'), new RegExp(reason));
+    assert.doesNotMatch(await evaluate('catalog.status.textContent'),/Cancel/);
+    assert.equal(await evaluate('catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
+    await evaluate('catalog.api=normalApi;history.back()');
     await until('!catalog.operation && !catalog.busy');
     assert.equal(await evaluate('catalog.terminal'), true);
   }
-  checks.push('terminal authorization/host identity/permission/invalid request stop retrying; Cancel restores last-good page');
+  checks.push('terminal authorization/host identity/permission/invalid request stop retrying; actionable single banner, no Cancel/spinner; Back retains last-good page');
   await evaluate(`window.sample=Date.parse('2026-10-25T00:30:00Z');`);
   for (const timezoneId of ['America/New_York', 'Asia/Tokyo']) {
     await command('Emulation.setTimezoneOverride',{timezoneId});

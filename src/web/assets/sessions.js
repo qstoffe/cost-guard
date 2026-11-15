@@ -27,6 +27,7 @@ const SessionsCatalog = (() => {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', 'Loading sessions…', 'warning'); this.status.setAttribute('role', 'status');
+      this.status.setAttribute('aria-atomic', 'true');
       this.periods = el('div', undefined, 'ai-stats-periods sessions-periods');
       this.periods.setAttribute('role', 'group'); this.periods.setAttribute('aria-label', 'Sessions period');
       this.periodButtons = periods.map(([key, label]) => {
@@ -50,50 +51,40 @@ const SessionsCatalog = (() => {
       head.append(header); this.body = el('tbody'); table.append(head, this.body); pan.append(table);
       const pager = el('div', undefined, 'pager page-navigation');
       this.pan = pan; this.pager = pager;
-      this.previous = el('button', 'Previous'); this.next = el('button', 'Next'); this.label = el('span');
+      this.previous = this.pageButton('Previous'); this.next = this.pageButton('Next'); this.label = el('span');
       this.numbers = el('div', undefined, 'sessions-page-numbers');
       this.numbers.setAttribute('role', 'group'); this.numbers.setAttribute('aria-label', 'Session pages');
       this.pageButtons = new Map();
       for (const button of [this.previous, this.next]) {
-        button.type = 'button'; button.disabled = true;
-        button.addEventListener('click', () => { if (!button.disabled && button.destination) location.hash = button.destination; });
+        button.disabled = true;
       }
       this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.numbers, this.next);
       for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
         if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
       });
-      const scope = el('p', 'Periods verify prompt activity among source catalog candidates. Stale catalog metadata may omit undiscovered sessions; All time expands discovery.', 'sessions-candidate-scope');
-      this.root.append(this.periods, scope, this.status, pan, pager);
-      this.loader = new ReportLoading.View(); this.loader.root.hidden = true;
-      this.loader.bar.setAttribute('aria-label', 'Sessions loading progress');
-      this.task = el('p', '', 'sessions-loading-task');
-      this.count = el('p', '', 'sessions-loading-count');
-      this.loader.root.insertBefore(this.task, this.loader.bar);
-      const track = el('div', undefined, 'sessions-loading-track');
-      track.append(this.loader.bar, this.loader.percent);
-      this.loader.root.insertBefore(track, this.loader.stage);
-      this.loader.root.insertBefore(this.count, this.loader.stage);
-      this.cancel = el('button', 'Cancel');
-      this.cancel.type = 'button';
-      ContextHelp.attach(this.cancel, () => this.operation?.kind === 'page' ?
-        'Cancel loading this page and return to the previous page.' :
-        this.operation?.kind === 'period' ? 'Cancel loading this period and return to the previous period.' :
-        'Cancel this sort and return to the previous sorting and page.');
-      this.cancel.addEventListener('click', () => this.cancelNavigation());
-      const actions = el('div', undefined, 'sessions-loading-actions'); actions.append(this.cancel);
-      this.loader.root.append(actions); this.root.append(this.loader.root);
+      this.root.append(this.periods, this.status, pan, pager);
+    }
+    pageButton(label) {
+      const button = el('button', label); button.type = 'button';
+      const spinner = el('span', undefined, 'sessions-page-spinner');
+      spinner.setAttribute('aria-hidden', 'true'); button.append(spinner);
+      button.addEventListener('click', () => {
+        if (button.disabled || button.navigationDisabled || !button.destination) return;
+        this.pageAction = {button, destination: button.destination};
+        location.hash = button.destination;
+      });
+      return button;
     }
     configure(params) {
       const offset = Number(params?.get('offset') || 0), epoch = params?.get('epoch') || null;
       const sort = columns.some(([key]) => key === params?.get('sort')) ? params.get('sort') : 'activity';
       const direction = params?.get('direction') === '1' ? 1 : -1;
       const period = params?.has('period') ? params.get('period') : 'today';
-      // Repeated route notifications cannot impersonate Cancel or erase a failure.
+      // Repeated route notifications cannot erase pending intent or a failure.
       if (this.operation && offset === this.offset && epoch === this.epoch &&
         sort === this.sort && direction === this.direction && period === this.period) return;
-      this.retire();
-      const focus = this.operation?.focus || document.activeElement;
-      const scroll = this.operation?.scroll || [window.scrollX || 0, window.scrollY || 0, this.pan.scrollLeft || 0];
+      const action = this.pageAction; this.pageAction = null;
+      this.actionFocus = null; this.retire();
       Object.assign(this, {offset, epoch, sort, direction, period});
       this.canonicalPeriod = !params?.has('period');
       this.periodSelection();
@@ -101,9 +92,11 @@ const SessionsCatalog = (() => {
       const changed = this.data && (this.offset !== this.data.offset || this.sort !== this.data.sort ||
         changedPeriod || this.direction !== this.data.direction || this.offset && this.epoch !== this.data.epoch);
       this.operation = changed || !this.data ? {kind: changedPeriod ? 'period' : this.data && this.sort === this.data.sort &&
-        this.direction === this.data.direction ? 'page' : 'sort', focus, scroll,
+        this.direction === this.data.direction ? 'page' : 'sort',
+        button: action?.destination === destination(offset, epoch, sort, direction, period) ? action.button : null,
+        pending: false,
         advanced: Date.now(), percent: 0, completed: -1, highWater: -1, source: null, rebases: 0, failed: false} : null;
-      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
+      this.pan.hidden = this.pager.hidden = false;
       this.retryDelay = 0;
       this.rerun = true;
       if (this.terminal) this.failNavigation(this.terminalReason);
@@ -112,6 +105,8 @@ const SessionsCatalog = (() => {
       this.generation++; this.flight?.controller.abort(); this.flight = null; this.busy = false;
       clearTimeout(this.admission); clearTimeout(this.timer);
       clearTimeout(this.requestDeadline);
+      if (this.operation) this.operation.pending = false;
+      this.pagerBusy(false);
     }
     periodSelection() {
       for (const {key, button} of this.periodButtons) button.setAttribute('aria-pressed', String(key === this.period));
@@ -125,7 +120,12 @@ const SessionsCatalog = (() => {
     interest(visible = this.attached && !document.hidden, token = this.token) {
       if (token) this.api('/api/sessions', {action: 'interest', token, visible}).catch(() => {});
     }
-    detach() { this.attached = false; this.interest(false); this.retire(); }
+    detach() {
+      this.attached = false; this.actionFocus = null;
+      // The router detaches even for another page in this same catalog.
+      if (this.pageAction?.destination !== location.hash) this.pageAction = null;
+      this.interest(false); this.retire();
+    }
     async poll() {
       if (!this.attached || this.busy || this.terminal || this.operation?.failed) return;
       clearTimeout(this.timer);
@@ -142,7 +142,7 @@ const SessionsCatalog = (() => {
       const generation = this.generation;
       const flight = {controller: new AbortController()}; this.flight = flight;
       if (this.operation) this.admission = setTimeout(() => {
-        if (generation === this.generation && this.operation && this.loader.root.hidden)
+        if (generation === this.generation && this.operation && !this.operation.pending)
           this.showProgress('Waiting for Sessions source…');
       }, 180);
       const deadline = new Promise((_, reject) => {
@@ -192,7 +192,8 @@ const SessionsCatalog = (() => {
           if (terminal) this.failNavigation(error.message);
           else this.waitNavigation(flight.timedOut ? 'request_timeout' : error.message);
         }
-        else this.status.textContent = `Sessions unavailable (${error.message}). Retaining the last observed page.`;
+        else this.status.textContent = `Sessions unavailable (${error.message}). Retaining the last observed page.` +
+          (terminal ? ' Resolve the error and reopen Cost Guard, or leave Sessions using the navigation links.' : '');
         if (error.message === 'catalog_expired') {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
@@ -204,22 +205,15 @@ const SessionsCatalog = (() => {
         }
       }
     }
-    showProgress(stage, stageLabel = 'Loading Sessions') {
+    showProgress(stage) {
       if (!this.operation) return;
       const operation = this.operation;
       const name = columns.find(([key]) => key === this.sort)[1];
       const task = operation.kind === 'period' ? `Loading sessions in ${periods.find(([key]) => key === this.period)?.[1] || this.period}` :
         operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 25) + 1}` : `Sorting sessions by ${name}`;
-      ReportView.text(this.task, task);
-      this.task.setAttribute('aria-label', task + (operation.kind === 'sort' ? this.direction === 1 ? ', ascending' : ', descending' : ''));
-      ReportView.text(this.count, operation.completed < 0 ? 'Waiting for source counts…' :
-        `${operation.phase === 'index' ? 'Indexed' : 'Prepared'} ${operation.completed.toLocaleString('en-US')} of ${operation.total.toLocaleString('en-US')} sessions`);
-      this.loader.update({percent: this.operation.percent, stage, stageLabel});
-      this.loader.root.hidden = false;
-      ReportView.text(this.status, `${task}. ${this.count.textContent} ${stage}`);
+      operation.pending = !operation.failed;
+      ReportView.text(this.status, `${task}. ${stage}`);
       this.status.hidden = false;
-      if (this.pan.contains(document.activeElement) || this.pager.contains(document.activeElement) ||
-        this.actionFocus && document.activeElement === document.body) this.cancel.focus?.({preventScroll: true});
       this.pagerBusy();
     }
     failNavigation(reason) {
@@ -227,11 +221,11 @@ const SessionsCatalog = (() => {
       this.terminal = true; this.terminalReason = reason;
       this.operation.failed = true;
       this.interest(false);
-      this.showProgress(`Could not finish (${reason}). Reopen Cost Guard after resolving the error, or Cancel to return to the previous view.`, `Sessions navigation failed: ${reason}`);
+      this.showProgress(`Could not finish (${reason}). Retaining the last observed page. Resolve the error and reopen Cost Guard, or leave Sessions using the navigation links.`);
     }
     waitNavigation(reason) {
       this.retryDelay = Math.min(30000, (this.retryDelay || 500) * 2);
-      this.showProgress(`Source temporarily unavailable (${reason}). Recovering automatically…`, 'Waiting for Sessions source');
+      this.showProgress(`Source temporarily unavailable (${reason}). Recovering automatically…`);
     }
     pendingNavigation(data) {
       if (!this.operation) return false;
@@ -269,29 +263,8 @@ const SessionsCatalog = (() => {
         queued: 'Waiting for the session index worker…', ready: 'Applying requested view…'};
       const revalidating = restarted || progress?.revalidating > 0;
       const stage = stages[progress?.work?.stage] || 'Waiting for session sort keys…';
-      this.showProgress(`${revalidating ? 'Source changed; revalidating keys. ' : ''}${progress?.work?.retrying ? 'Retrying. ' : ''}${stage}`,
-        revalidating ? 'Revalidating Sessions keys' : progress?.waiting ? 'Waiting for Sessions source' :
-          phase === 'index' ? 'Indexing Sessions' : 'Preparing Sessions page');
+      this.showProgress(`${revalidating ? 'Source changed; revalidating keys. ' : ''}${progress?.work?.retrying ? 'Retrying. ' : ''}${stage}`);
       return true;
-    }
-    cancelNavigation() {
-      const operation = this.operation;
-      if (!operation) return;
-      this.retire(); this.interest(false); this.operation = null;
-      if (this.data) {
-        this.offset = this.data.offset; this.epoch = this.data.epoch;
-        this.sort = this.data.sort; this.direction = this.data.direction;
-        this.period = this.data.period;
-        this.rows(this.data.view.session_usage);
-      } else { this.offset = 0; this.epoch = null; this.sort = 'activity'; this.direction = -1; }
-      this.periodSelection();
-      history.replaceState(null, '', this.rememberedDestination());
-      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false; this.pagerBusy();
-      this.renderTimezone = this.data?.view.timezone_id;
-      operation.focus?.focus?.({preventScroll: true});
-      if (operation.scroll) { window.scrollTo?.(operation.scroll[0], operation.scroll[1]); this.pan.scrollLeft = operation.scroll[2]; }
-      // Reassert only the restored lease demand. Shared caches/index work survive.
-      this.poll();
     }
     update(data) {
       // Even a deferred sort/outage must retire unsupported running indicators.
@@ -308,9 +281,9 @@ const SessionsCatalog = (() => {
           this.status.textContent = 'Provisional candidate order; prompt activity, period membership and requested sort are still being verified.';
           this.status.hidden = false;
         }
-        // Qualified metadata may render while independent scalars are acquired.
-        // An expensive pending sort keeps the last valid order explicitly visible.
-        if (data.state === 'observed' && (!data.pending_sort && this.operation?.kind === 'page' || !this.data)) {
+        // A pending page is not applied: keep the last qualified rows with their
+        // actual pager/order. Only cold entry has no valid page to retain.
+        if (data.state === 'observed' && !this.data) {
           this.renderTimezone = data.view.timezone_id; this.rows(data.view.session_usage);
         }
         return;
@@ -319,9 +292,8 @@ const SessionsCatalog = (() => {
       const changedPage = this.recovering && (this.body.children.length !== values.length ||
         values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
-      const restoreFocus = completed && this.loader.root.contains(document.activeElement);
       this.operation = null; clearTimeout(this.admission);
-      this.loader.root.hidden = true; this.pan.hidden = this.pager.hidden = false;
+      this.pan.hidden = this.pager.hidden = false;
       this.data = data;
       this.renderTimezone = data.view.timezone_id;
       this.usable = data.state === 'observed' || data.view.session_usage.length > 0;
@@ -348,8 +320,7 @@ const SessionsCatalog = (() => {
         if (this.body.contains(document.activeElement)) document.activeElement.blur?.();
       }
       this.rows(values);
-      if (completed && !restoreFocus) ContextHelp.refresh(this.root);
-      if (restoreFocus) this.actionFocus = completed.focus;
+      if (completed) ContextHelp.refresh(this.root);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + data.size, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` :
         data.state === 'observed' ? `No confirmed matches among catalog candidates in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable';
@@ -360,7 +331,6 @@ const SessionsCatalog = (() => {
       link(this.next, data.offset + data.size, data.offset + data.size < data.total);
       this.numberedPages(data);
       this.pagerBusy();
-      if (completed) this.loader.update({percent: 100, stage: 'Page applied', stageLabel: 'Page applied'});
     }
     numberedPages(data) {
       const pages = Math.max(1, Math.ceil(data.total / data.size)), current = Math.floor(data.offset / data.size) + 1;
@@ -370,12 +340,11 @@ const SessionsCatalog = (() => {
       for (const page of wanted) {
         let button = this.pageButtons.get(page);
         if (!button) {
-          button = el('button', String(page)); button.type = 'button';
+          button = this.pageButton(String(page));
           button.setAttribute('aria-label', `Page ${page}`);
-          button.addEventListener('click', () => { if (!button.disabled && button.destination) location.hash = button.destination; });
           this.pageButtons.set(page, button);
         }
-        button.destination = data.state === 'observed' || data.total > 0 ?
+        button.destination = page !== current && (data.state === 'observed' || data.total > 0) ?
           destination((page - 1) * data.size, data.epoch, data.sort, data.direction, data.period) : null;
         if (page === current) button.setAttribute('aria-current', 'page');
         else button.removeAttribute('aria-current');
@@ -388,19 +357,31 @@ const SessionsCatalog = (() => {
       });
       for (const [page, button] of this.pageButtons) if (!nodes.includes(button)) this.pageButtons.delete(page);
     }
-    pagerBusy() {
-      const navigating = Boolean(this.operation && !this.loader.root.hidden);
+    pagerBusy(restoreFocus = true) {
+      const navigating = Boolean(this.operation?.pending && !this.operation.failed);
       const buttons = [this.previous, this.next, ...this.pageButtons.values()];
       if (navigating && buttons.includes(document.activeElement)) this.actionFocus = document.activeElement;
       for (const button of buttons) {
         const disabled = navigating || this.recovering || !button.destination;
         if (disabled && document.activeElement === button) this.actionFocus = button;
-        if (button.disabled !== Boolean(disabled)) button.disabled = Boolean(disabled);
+        // Keep the initiating button focusable but inert while its target loads.
+        // Other unavailable controls use native disabled semantics.
+        const initiating = navigating && this.operation.kind === 'page' && this.operation.button === button;
+        button.navigationDisabled = Boolean(disabled);
+        if (initiating) {
+          button.setAttribute('aria-disabled', 'true'); button.setAttribute('aria-busy', 'true');
+        } else {
+          button.removeAttribute('aria-disabled'); button.removeAttribute('aria-busy');
+        }
+        const nativeDisabled = Boolean(disabled && !initiating);
+        if (button.disabled !== nativeDisabled) button.disabled = nativeDisabled;
       }
-      if (!navigating && !this.busy && this.actionFocus) {
-        if (document.activeElement === document.body || document.activeElement === this.actionFocus ||
-          this.loader.root.contains(document.activeElement)) {
-          (this.actionFocus.disabled ? this.actionFocus === this.next ? this.previous : this.next : this.actionFocus).focus({preventScroll: true});
+      this.pan.setAttribute('aria-busy', String(navigating));
+      if (restoreFocus && !navigating && !this.busy && this.actionFocus) {
+        if (document.activeElement === document.body || document.activeElement === this.actionFocus) {
+          const target = !this.actionFocus.disabled && this.pager.contains(this.actionFocus) ? this.actionFocus :
+            buttons.find(button => !button.disabled);
+          (target || this.pan).focus?.({preventScroll: true});
         }
         this.actionFocus = null;
       }
