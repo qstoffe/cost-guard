@@ -1,6 +1,7 @@
 /* Shared semantic colors; PiP chrome is browser-owned, not another inner card. */
 html, body { min-height: 100%; overflow: auto; }
 body { padding: .5rem; max-width: none; }
+.mini-opening { margin: .5rem; color: var(--muted); font-size: .85rem; }
 .mini-watch { padding: 0; min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
 .mini-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .35rem .75rem;
   font-size: .8rem; line-height: 1.5;

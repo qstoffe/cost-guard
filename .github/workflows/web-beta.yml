@@ -74,6 +74,9 @@ jobs:
           if evidence.get("outcome") != "PASS":
               raise SystemExit("numeric CCost evidence did not pass")
           PY
+      - name: Watch header geometry and native Mini opening lifecycle
+        if: ${{ !cancelled() }}
+        run: python development/tests/integration/ci_watch_header.py
       # Ordinary affected-source coverage keeps one real 61s hold per document.
       # Manual Full retains all twelve holds and the mixed/control diagnostics.
       - name: Mini keyboard and mouse stationary regression (representative; Full on manual dispatch)
@@ -104,5 +107,6 @@ jobs:
           path: |
             ci-results/*.json
             ci-results/mini-tooltips*.png
+            ci-results/watch-*.png
           retention-days: 7
           if-no-files-found: error

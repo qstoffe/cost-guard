@@ -158,6 +158,13 @@ def main():
 
         try:
             host.start()
+            from src.web.http import RequestHandler
+            send_header = RequestHandler.send_header
+            def probe_header(handler, name, value):
+                if name == "Permissions-Policy" and getattr(handler.server, "pip_denied", False):
+                    value += ", picture-in-picture=()"
+                send_header(handler, name, value)
+            RequestHandler.send_header = probe_header
             host.publish_ready()
             if sys.argv[2:] != ["--accounts-live"]:
                 publish()
@@ -169,6 +176,10 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command == "deny-pip":
+                    host.server.pip_denied = True
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command.startswith("recent-"):
                     from development.tests.fixtures.recent_history import RecentHistoryFixture
                     if recent_history is None or command == "recent-loading":

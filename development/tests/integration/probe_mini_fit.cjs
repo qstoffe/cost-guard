@@ -6,25 +6,34 @@ async function main() {
   assert.ok(path.isAbsolute(browser)&&path.isAbsolute(output));await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(path.dirname(output),'mini-browser-'));
   const config=await fs.mkdtemp(path.join(path.dirname(output),'mini-config-'));
-  const server=spawn('py',['-3','development/tests/integration/serve_mini_watch.py',config],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+   const server=spawn(process.env.COST_GUARD_TEST_PYTHON||'py',
+     [...(process.env.COST_GUARD_TEST_PYTHON?[]:['-3']),'development/tests/integration/serve_mini_watch.py',config],
+     {windowsHide:true,stdio:['pipe','pipe','pipe']});
   const lines=readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const launch=JSON.parse((await lines.next()).value); // Capability URL stays in memory.
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
-  const child=spawn(browser,['--headless=new',`--screen-info={${1920*Number(scale)}x${1200*Number(scale)}}`,
+   const child=spawn(browser,['--headless=new',...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+     `--screen-info={${1920*Number(scale)}x${1200*Number(scale)}}`,
     '--force-device-scale-factor='+scale,'--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,
     ...(scrollbars==='overlay'?['--enable-features=OverlayScrollbar,FluentOverlayScrollbar,FluentScrollbar']:[]),'about:blank'],
-    {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending=new Map();let sequence=0,buffer='';
+     {windowsHide:true,stdio:['ignore','ignore','pipe','pipe','pipe']});
+   const pending=new Map();let sequence=0,buffer='',browserErrors='',browserExit=null;
+   child.stderr.on('data',chunk=>{browserErrors=(browserErrors+chunk.toString()).slice(-3000);});
+   const failed=error=>{for(const item of pending.values()){clearTimeout(item.timer);item.reject(error);}pending.clear();};
+   child.on('error',error=>failed(error));
+   child.on('exit',(code,signal)=>{browserExit={code,signal};failed(new Error('Browser exited: '+JSON.stringify(browserExit)));});
+   child.stdio[3].on('error',error=>failed(error));
   child.stdio[4].on('data',chunk=>{buffer+=chunk.toString();let index;while((index=buffer.indexOf('\0'))>=0){
     const value=JSON.parse(buffer.slice(0,index));buffer=buffer.slice(index+1);const item=pending.get(value.id);
     if(item){clearTimeout(item.timer);pending.delete(value.id);value.error?item.reject(new Error(JSON.stringify(value.error))):item.resolve(value.result);}
   }});
-  const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++sequence;
+   const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++sequence;
+     if(browserExit){reject(new Error('Browser exited: '+JSON.stringify(browserExit)));return;}
     const timer=setTimeout(()=>reject(new Error('CDP timeout '+method)),15000);pending.set(id,{resolve,reject,timer});
     child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');});
   const deadline=setTimeout(()=>{child.kill();server.kill();},240000);
-   const evidence={outcome:'FAIL',scale,zoom,scrollbars,layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
+    const evidence={outcome:'FAIL',phase:'browser-start',scale,zoom,scrollbars,layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
   try {
     evidence.browser=await command('Browser.getVersion');
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
@@ -35,14 +44,17 @@ async function main() {
       {expression,returnByValue:true,awaitPromise:true,userGesture},session);if(result.exceptionDetails)throw new Error(JSON.stringify(result.exceptionDetails));return result.result.value;};
     const until=async expression=>{const end=Date.now()+15000;while(Date.now()<end){if(await evaluate(expression))return;
       await new Promise(resolve=>setTimeout(resolve,25));}throw new Error('Condition not reached: '+expression);};
-    await command('Page.enable',{},sessionId);await command('Page.navigate',{url:'chrome://settings/appearance'},sessionId);
+     evidence.phase='browser-zoom';
+     await command('Page.enable',{},sessionId);await command('Page.navigate',{url:'chrome://settings/appearance'},sessionId);
     await until(`typeof chrome.settingsPrivate?.getDefaultZoom==='function'`);
     await evaluate(`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(${Number(zoom)},resolve))`);
     evidence.browserZoom=await evaluate('new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))');
     assert.ok(Math.abs(evidence.browserZoom-Number(zoom))<.001);
     await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.probeStreams=0;const Native=EventSource;window.EventSource=class extends Native{constructor(...args){super(...args);probeStreams++;}};`},sessionId);
-    await command('Page.navigate',{url:launch.url},sessionId);
-    await until(`typeof miniWatch!=='undefined' && miniWatch.measure?.ready && liveValue?.view?.active_cards?.length===2`);
+     evidence.phase='fixture-ready';
+     await command('Page.navigate',{url:launch.url},sessionId);
+     await until(`typeof miniWatch!=='undefined' && miniWatch.measure?.ready && liveValue?.view?.active_cards?.length===2`);
+     evidence.phase=scope;
     await evaluate(`location.hash='#/watch';window.probeRequests=[];const nativeRequest=documentPictureInPicture.requestWindow.bind(documentPictureInPicture);
       documentPictureInPicture.requestWindow=options=>{probeRequests.push(options);return nativeRequest(options);}`);
     const settle=()=>evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))');
@@ -60,7 +72,24 @@ async function main() {
       if(await evaluate('!!document.querySelector(".mini-watch")',false,a.sessionId))return a.sessionId;}throw new Error('No PiP target');};
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
-    const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+     if(scope==='opening-baseline-only'||scope==='opening-only'||scope==='all') {
+       await require('./probe_mini_opening.cjs')({evaluate,until,checks:evidence.checks,layouts:evidence.layouts,
+         baseline:scope==='opening-baseline-only'});
+       if(scope!=='all') {evidence.outcome='PASS';return;}
+     }
+     if(scope==='header-only'||scope==='all') {
+       await require('./probe_watch_header.cjs')({evaluate,until,command,sessionId,layouts:evidence.layouts,checks:evidence.checks,
+         capture:async label=>{
+           const image=await command('Page.captureScreenshot',{format:'png'},sessionId);
+           await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));
+         }});
+       if(scope==='header-only') {evidence.outcome='PASS';return;}
+     }
+     if(scope==='opening-races-only') {
+       await require('./probe_mini_opening_races.cjs')({evaluate,until,fixture,command,sessionId,checks:evidence.checks});
+       evidence.outcome='PASS';return;
+     }
     if(scope==='dashboard-only'||scope==='all') {
       await require('./probe_watch_dashboard.cjs')({evaluate,until,command,sessionId,open,close,checks:evidence.checks});
       if(scope==='dashboard-only') {evidence.outcome='PASS';return;}
@@ -171,7 +200,7 @@ async function main() {
     assert.deepEqual(await evaluate('({local:localStorage.length,session:sessionStorage.length})'),{local:0,session:0});
     evidence.checks.push('Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage');
     evidence.outcome='PASS';
-  }catch(error){evidence.error=String(error.stack||error);throw error;}
+   }catch(error){evidence.error=String(error.stack||error);evidence.diagnostic={browserExit,browserErrors};throw error;}
   finally{await fs.writeFile(output,JSON.stringify(evidence,null,2));clearTimeout(deadline);try{await command('Browser.close');}catch(_){}
     child.kill();server.stdin.end();for(const item of pending.values())clearTimeout(item.timer);}
 }

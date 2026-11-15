@@ -113,7 +113,8 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') &&
+        document.styleSheets.length+document.adoptedStyleSheets.length===2`);
        if(scope==='--cost-tooltips') {
          phase='compact-cost-groups';
          await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
