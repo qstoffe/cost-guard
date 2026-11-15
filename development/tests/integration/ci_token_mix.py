@@ -18,15 +18,21 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.executable_path
     environment = {**os.environ, 'COST_GUARD_TEST_PYTHON': sys.executable, 'COST_GUARD_CI_BROWSER': '1'}
-    subprocess.run(['node', 'development/tests/integration/probe_token_mix.cjs',
-                    browser, str(output), '--wall-clock'], cwd=root, env=environment, timeout=450, check=True)
-    evidence = json.loads(output.read_text(encoding='utf-8'))
+    result = subprocess.run(['node', 'development/tests/integration/probe_token_mix.cjs',
+                             browser, str(output), '--wall-clock'], cwd=root, env=environment,
+                            timeout=450, check=False, capture_output=True, text=True)
+    evidence = (json.loads(output.read_text(encoding='utf-8')) if output.exists() else
+                dict(outcome='FAIL', error=result.stderr[-7000:]))
+    summary = {key: evidence.get(key) for key in ('outcome', 'checks', 'error', 'errors', 'retained', 'cadence_ms', 'limitations')}
+    print('::notice title=Token Mix browser::' + json.dumps(summary).replace('%', '%25'), flush=True)
+    result.check_returncode()
     if evidence.get('outcome') != 'PASS':
         raise SystemExit('Token Mix browser evidence did not pass')
     measured = subprocess.run([sys.executable, 'development/tests/integration/probe_token_mix_baseline.py',
                               '--synthetic'], cwd=root, env=environment, timeout=120, check=True,
                               capture_output=True, text=True)
     (output.parent / 'token-mix-performance.json').write_text(measured.stdout, encoding='utf-8')
+    print('::notice title=Token Mix performance::' + measured.stdout.strip().replace('%', '%25'), flush=True)
     print(measured.stdout)
 
 
