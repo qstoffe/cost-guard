@@ -11,7 +11,7 @@ from development.tools.ci_web_beta import hosted_only, notice
 
 
 def header_zooms():
-    # Keep the full 576-layout matrix at normal zoom on ordinary delivery.
+    # Keep the full 288-layout matrix at normal zoom on ordinary delivery.
     # Repeating it at three extra browser zooms is explicit deep verification.
     return ("1", "1.25", "1.5", "2") if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" else ("1",)
 
