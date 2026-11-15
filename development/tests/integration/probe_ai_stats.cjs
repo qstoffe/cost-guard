@@ -175,9 +175,18 @@ async function main() {
     await evaluate(`location.hash='#/accounts'`); await until(`current.section==='accounts'`);
     await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && current.loading`);
     // Internal authenticated test ownership still exercises real backend cancellation.
-    await evaluate(`selectStats(current,'all'); api('/api/jobs/'+current.active+'/cancel',{})`);
+    const cancelled=await evaluate(`(async()=>{
+      selectStats(current,'all'); const id=current.active;
+      const acknowledgement=await api('/api/jobs/'+id+'/cancel',{});
+      const terminal=await api('/api/jobs/'+id);
+      return {id,acknowledgement,terminal};
+    })()`);
+    assert.ok(cancelled.id);
+    assert.equal(cancelled.acknowledgement.status,'cancel_requested');
+    assert.equal(cancelled.terminal.status,'cancelled');
+    assert.equal(cancelled.terminal.result,null);
     await until(`current.failed && !current.loading`);
-    assert.match(await evaluate(`current.message`),/cancelled/i);
+    assert.equal(await evaluate(`current.message`),'Could not load. Try again.');
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
     await evaluate(`selectStats(current,'today')`);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
@@ -233,18 +242,18 @@ async function main() {
       JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
         metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
         children:c.childNodes.length}))`)));
-    assert.match(await evaluate(`notice.textContent`),/Historical report unavailable/);
+    assert.equal(await evaluate(`notice.textContent`),'','passive failure remains silent');
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     for(const code of ['source_permission_denied','http_auth_failure','unsupported_version','report_invalid_result',
         'report_cache_unavailable','ai_stats_no_progress']) {
       await evaluate(`api=async()=>{throw new Error('${code}')}; void acquire(current)`);
       await until(`current.failed && !current.loading`);
       assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,code);
-      assert.equal(await evaluate(`notice.textContent.length>0 && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
+      assert.equal(await evaluate(`notice.textContent==='' && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
     }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
     await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===12`);
-    checks.push('failure has truthful report status, retained/zero numeric CCost only, Loading-only noncost cards, no Retry/toolbar; automatic lifecycle restores genuine results');
+    checks.push('passive failure stays silent with exact qualified CCost retained and Loading-only noncost cards; no Retry/toolbar; automatic lifecycle restores genuine results');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;
     const peer=(await command('Target.attachToTarget',{targetId:peerId,flatten:true})).sessionId;
