@@ -1,7 +1,7 @@
 """One bounded navigation cohort per lease; facts are historical, not live keys."""
 from dataclasses import dataclass, field, replace
 
-from .session_catalog_scope import in_window
+from .session_catalog_scope import row_in_window
 
 
 @dataclass
@@ -32,15 +32,18 @@ class Navigation:
             root = self.roots[key]
             if key in self.facts:
                 continue
-            if not (sort == 'name' or catalog._key_current(key, sort)) or not catalog._activity_current(key):
+            row = catalog._rows((key,))[0]
+            if not (row.running or sort == 'name' or catalog._key_current(key, sort)) or not catalog._activity_current(key):
                 continue
-            row = catalog.rows[key]
             if self.window.period == 'all':
+                member = True
+            elif row.running and row_in_window(row, self.window):
                 member = True
             elif memberships is not None and key in memberships:
                 member = memberships[key]
-            elif row.last_activity_ms is None or row.last_activity_ms < self.window.end_ms:
-                member = in_window(row.last_activity_ms, self.window)
+            elif (row.activity_latest_ms or row.last_activity_ms) is None or (
+                    row.activity_latest_ms or row.last_activity_ms) < self.window.end_ms:
+                member = row_in_window(row, self.window)
             else:
                 # Latest activity after admission does not prove absence of an
                 # earlier in-window prompt. The existing summary read resolves it.

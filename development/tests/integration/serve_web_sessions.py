@@ -92,7 +92,10 @@ class FixtureRuntime:
         if self.live_root and not self.unavailable:
             root = self.service.source.snapshots[self.live_root].root
             capture, _ = capture_rows(self.service, root)
-            self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
+            running = max((row for row in capture.rows if row.in_progress and not row.execution_unverified),
+                          key=lambda row: (row.at_ms, row.event_id), default=None)
+            self.catalog.observe_prompts(((root, running is not None, 0,
+                running.event_id if running else "", running.at_ms if running else None),))
         if self.detail_paused:
             pass
         elif self.detail_mode is None:
@@ -179,6 +182,10 @@ def main():
                         leases=len(host.live.details.leases))), flush=True)
                     continue
                 from development.tests.fixtures.session_quota import configure
+                with host.live.observation_lock:
+                    configure(host.live, command)
+            elif command.startswith("running-"):
+                from development.tests.fixtures.catalog_running import configure
                 with host.live.observation_lock:
                     configure(host.live, command)
             elif command == "parity-observe":

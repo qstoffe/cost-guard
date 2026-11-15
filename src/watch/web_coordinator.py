@@ -107,11 +107,17 @@ class WebWatchCoordinator(WatchCoordinator):
     def tick_catalog(self, catalog, *, unavailable=False):
         catalog.observe(self.catalog_observation, unavailable=unavailable, timezone_id=self.report_service.timezone_id)
         now = self.clock_ms()
-        catalog.observe_prompts((entry.snapshot.root, any(row.in_progress for row in entry.capture.rows),
-            (now - entry.capture.observed_at_ms) / 1000) for entry in self.cards.sessions.values()
-            if entry.snapshot is not None and entry.capture is not None
-            and entry.capture.authoritative and not entry.capture.retained
-            and entry.source_status.failed_at is None)
+        evidence = []
+        for entry in self.cards.sessions.values():
+            if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
+                    or entry.capture.retained or entry.source_status.failed_at is not None):
+                continue
+            running = max((row for row in entry.capture.rows if row.in_progress and not row.execution_unverified),
+                          key=lambda row: (row.at_ms, row.event_id), default=None)
+            evidence.append((entry.snapshot.root, running is not None,
+                (now - entry.capture.observed_at_ms) / 1000,
+                running.event_id if running else "", running.at_ms if running else None))
+        catalog.observe_prompts(evidence)
         if self.catalog_job is not None:
             if not self.catalog_job.done():
                 return

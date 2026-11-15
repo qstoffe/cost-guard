@@ -3,7 +3,7 @@
 const SessionsCatalog = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
-    ['activity', 'Last activity', 'When this session last worked on a prompt.'],
+    ['activity', 'Last activity', 'Prompt start while running; supported finish time afterward. Running sessions appear first, regardless of sorting.'],
     ['name', 'Session name', 'The session title. Open the name for its complete live prompt history.'],
     ['model', 'Model', ReportView.headerHelp.model],
     ['ccost', 'CCost', ReportView.headerHelp.sessionCost],
@@ -46,7 +46,8 @@ const SessionsCatalog = (() => {
       const head = el('thead'), header = el('tr'); this.headers = [];
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
-        const label = ContextHelp.heading(button, help, key === 'ctx');
+        const label = ContextHelp.heading(button, help + (key === 'activity' ? '' :
+          '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
           this.navigateTo(destination(0, null, key, direction, this.period), null, 'sort');
@@ -309,9 +310,16 @@ const SessionsCatalog = (() => {
       // Even a deferred sort/outage must retire unsupported running indicators.
       const observed = new Map(data.view.session_usage.map(value => [value.session_id, value]));
       for (const row of this.body.children) {
-        const running = data.state === 'observed' && Boolean(observed.get(row.dataset.id)?.running);
+        const value = observed.get(row.dataset.id);
+        const running = data.state === 'observed' && Boolean(row.value.running && value?.running);
         row.className = running ? 'session-running' : '';
         if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
+        if (row.value.running && !running) {
+          row.value = {...row.value, running: false,
+            last_activity_ms: value && !value.running ? value.last_activity_ms : null};
+          ReportView.text(row.activity, ReportView.timestamp(row.value.last_activity_ms, this.renderTimezone));
+          ContextHelp.refresh(row.activity);
+        }
       }
       // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
@@ -439,7 +447,7 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-           ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone));
+           ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone, row.value.running));
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             if (key === 'duration') return node;
@@ -457,7 +465,7 @@ const SessionsCatalog = (() => {
         }
         row.className = value.running ? 'session-running' : '';
         ReportView.text(row.activity, value.last_activity_ms == null && value.activity_state === 'pending' ?
-          'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone));
+          'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
         const texts = [(value.model || 'N/A') + (value.has_model_details ? '*' : ''),

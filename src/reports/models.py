@@ -170,6 +170,9 @@ class SessionUsageRow:
     running: bool = False
     last_activity_ms: int | None = None
     activity_qualified: bool = True
+    activity_prompt_id: str = ""
+    prompt_started_ms: int | None = None
+    activity_latest_ms: int | None = None
     contributor_models: tuple[str, ...] = ()
     contributor_models_complete: bool = False
     model_pending: bool = False

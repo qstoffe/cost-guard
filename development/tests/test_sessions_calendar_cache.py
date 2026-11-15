@@ -17,6 +17,71 @@ from src.watch.observers import observe_catalog
 
 
 class SessionsCalendarCacheTests(unittest.TestCase):
+    def test_running_cohort_scale_churn_and_verified_page_four_avoidance(self):
+        now = 1_800_000_000_000
+        for count in (1000, 5000):
+            for live_count in (0, 10, 26):
+                with self.subTest(roots=count, running=live_count):
+                    source = SyntheticMonthSource(count, 1, month_start_ms=now - count * 60_000 - 1000,
+                                                  running_roots=live_count)
+                    source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+                    clock = [0]
+                    catalog = SessionCatalog(clock=lambda: clock[0], clock_ms=lambda: now)
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                    service = report_service(self, source, now_ms=now)
+                    catalog.tick(service)  # Dependencies only, before seeding/admission.
+                    # Existing unchanged scalar cache: exact fixture event endpoints,
+                    # not metadata guesses. Only running roots need fresh acquisition.
+                    for index, (key, root) in enumerate(catalog.roots.items()):
+                        if index < live_count:
+                            continue
+                        catalog.rows[key] = SessionUsageRow(key, root.title, "GPT Test", False, Decimal(0), 1,
+                            last_activity_ms=source.snapshots[key].events[0].created_at_ms + 300)
+                        catalog.valid[key] = catalog.revisions[key], clock[0]
+                    first = catalog.page(period="all", sort="name", direction=-1)
+                    for _ in range((live_count + 3) // 4):
+                        catalog.tick(service)
+                    ready = catalog.page(token=first["token"], period="all", sort="name", direction=-1)
+                    self.assertFalse(ready["pending_sort"])
+                    self.assertEqual(source.load_count, live_count)
+                    expected = [f"root-{index:04d}" for index in range(live_count - 1, -1, -1)]
+                    epoch = catalog.leases[first["token"]]["epochs"][ready["epoch"]]
+                    self.assertEqual([row.session_id for row in epoch.rows[:live_count]], expected)
+                    reads = source.load_count
+                    started = time.perf_counter()
+                    for _ in range(5):
+                        catalog.page(token=first["token"], period="all", sort="name", direction=-1)
+                        catalog.tick(service)
+                    warm_ms = (time.perf_counter() - started) * 1000
+                    self.assertEqual(source.load_count, reads)
+                    for sequence in range(3):
+                        for key in expected:
+                            snapshot = source.snapshots[key]
+                            source.snapshots[key] = replace(snapshot, source_revision=f"stream-{sequence}",
+                                root=replace(snapshot.root, updated_at_ms=now - sequence))
+                        clock[0] += 6
+                        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                        for _ in range((live_count + 3) // 4):
+                            catalog.tick(service)
+                        current = catalog.page(token=first["token"], period="all", sort="name", direction=-1)
+                        current_epoch = catalog.leases[first["token"]]["epochs"][current["epoch"]]
+                        self.assertEqual([row.session_id for row in current_epoch.rows[:live_count]], expected)
+                        self.assertEqual(current["epoch"], ready["epoch"], "unchanged cohort does not drift")
+                    churn_reads = source.load_count - reads
+                    self.assertEqual(churn_reads, live_count * 3)
+                    older = catalog.page(token=first["token"], offset=75, epoch=ready["epoch"],
+                                         period="all", sort="name", direction=-1)
+                    clock[0] += 6
+                    before = source.load_count
+                    catalog.tick(service)
+                    revisit = catalog.page(token=first["token"], offset=75, epoch=ready["epoch"],
+                                           period="all", sort="name", direction=-1)
+                    self.assertEqual(older["view"]["session_usage"], revisit["view"]["session_usage"])
+                    self.assertEqual(source.load_count, before, "verified finished-only pinned page excludes live cohort")
+                    print(dict(roots=count, running=live_count, initial_running_reads=live_count,
+                        warm_five_pages_ms=round(warm_ms, 3), warm_reads=0,
+                        three_revision_waves_reads=churn_reads, warm_page_four_reads=0))
+
     def test_sort_values_are_extracted_once_with_stable_ties_and_unknowns_last(self):
         zero = SessionUsageRow("b", "Alpha", "Alpha", False, Decimal(0), 0,
             last_activity_ms=0, duration_ms=0, context_tokens=0, effort_key="none")
@@ -82,7 +147,18 @@ class SessionsCalendarCacheTests(unittest.TestCase):
         self.assertEqual(page["order_state"], "provisional")
         for _ in range(7):
             catalog.tick(service)
-        self.assertEqual(source.load_count, 25)
+        self.assertEqual(source.load_count, 26, "provisional pages must validate offscreen live hints")
+        # Seed unchanged finished scalar facts to establish complete coverage.
+        # Only the actual running root needed extra source acquisition.
+        for key, root in catalog.roots.items():
+            if key not in catalog.rows:
+                catalog.rows[key] = SessionUsageRow(key, root.title, "GPT Test", False, Decimal(0), 1,
+                    last_activity_ms=source.snapshots[key].events[0].created_at_ms + 300)
+                catalog.valid[key] = catalog.revisions[key], clock[0]
+        verified = catalog.page(token=first["token"], period="7-days")
+        self.assertEqual(verified["order_state"], "verified")
+        first = verified
+        page = catalog.page(token=first["token"], offset=75, epoch=first["epoch"], period="7-days")
         original = [row["session_id"] for row in page["view"]["session_usage"]]
         running = "root-0000"
         for sequence in range(4):
@@ -102,9 +178,10 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                 catalog.tick(service)
                 for offset in (75, 100, 75):
                     catalog.page(token=first["token"], offset=offset, epoch=first["epoch"], period="7-days")
-        self.assertEqual(source.load_count, 25)
+        self.assertEqual(source.load_count, 26)
         print(dict(roots=5000, cold_metadata_ms=round(cold_ms, 3), cold_metadata_hydrations=0,
-                   page_four_hydrations=25, warm_unchanged_hydrations=0, elapsed_hours=4))
+                   page_four_hydrations=25, offscreen_running_validation=1,
+                   warm_unchanged_hydrations=0, elapsed_hours=4))
 
     def test_cached_order_is_reused_and_changed_source_key_is_repaired_alone(self):
         now = int(datetime(2026, 11, 15, 12, tzinfo=timezone.utc).timestamp() * 1000)

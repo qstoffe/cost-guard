@@ -133,6 +133,14 @@ async function main() {
              personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify(evidence)); return;
           }
+          if (mode === '--running-first') {
+            const details = await require('../fixtures/sessions_running_browser.cjs')({evaluate, until, fixture,
+              command:(method, params) => command(method, params, sessionId)});
+            assert.deepEqual(errors, []);
+            evidence = {outcome:'PASS',browser:version.product,...details,inference_calls:0,
+              personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify(evidence)); return;
+          }
              if (mode === '--detail-quota') {
                const details = await require('../fixtures/session_quota_browser.cjs')({evaluate, until, fixture,
                  browser,targetId,origin:new URL(launch.url).origin,
@@ -311,7 +319,8 @@ async function main() {
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result tbody tr")].map(row=>row.dataset.id)'),membership);
     await evaluate("location.hash='#/sessions'"); await until('current.catalog.data.total === 121');
     const latency=Date.now()-before; assert.ok(latency<=30000);
-    assert.equal(await evaluate('document.querySelector("#result tbody tr").dataset.id'),'root-0120');
+     assert.equal(await evaluate('document.querySelector("#result tbody tr").dataset.id'),'root-0000');
+     assert.equal(await evaluate('document.querySelectorAll("#result tbody tr")[1].dataset.id'),'root-0120');
     checks.push('stable-older-page-and-live-first-page');
      for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
@@ -361,8 +370,7 @@ async function main() {
      await fixture('fail');
      await until('detailStates.includes("source_unavailable")');
       assert.equal(await evaluate('current.detail.loader.root.hidden'),true);
-      assert.equal(await evaluate('current.detail.status.hidden'),false);
-      assert.match(await evaluate('current.detail.status.textContent'),/Source unavailable/);
+       assert.equal(await evaluate('current.detail.status.hidden'),true, 'populated detail recovers silently');
     assert.equal(await evaluate('document.querySelectorAll("tbody tr").length'),1002);
      await evaluate('detailStates.length=0');
      await fixture('recover'); await until('detailStates.includes("observed")');

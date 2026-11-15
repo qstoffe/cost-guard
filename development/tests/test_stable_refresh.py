@@ -101,6 +101,23 @@ class StableRefreshTests(unittest.TestCase):
         self.assertEqual(row['context_tokens'], 47_000)
         self.assertEqual(row['metric_states']['ctx'], 'retained')
 
+    def test_pinned_running_fact_expires_without_fabricating_a_finish_or_moving_membership(self):
+        known = SessionUsageRow(self.key, 'Synthetic', 'Model', False, Decimal(0), 1,
+            running=True, activity_prompt_id='root-prompt', prompt_started_ms=1000, last_activity_ms=1000)
+        self.publish(known)
+        first = self.catalog.page(period='all', navigation=1)
+        self.assertTrue(first['view']['session_usage'][0]['running'])
+        self.assertEqual(first['view']['session_usage'][0]['last_activity_ms'], 1000)
+        self.now += 16
+
+        expired = self.catalog.page(token=first['token'], period='all', navigation=1)
+
+        self.assertEqual(expired['epoch'], first['epoch'])
+        self.assertEqual(expired['view']['session_usage'][0]['session_id'], self.key)
+        self.assertFalse(expired['view']['session_usage'][0]['running'])
+        self.assertIsNone(expired['view']['session_usage'][0]['last_activity_ms'])
+        self.assertEqual(expired['progress']['completed'], 1)
+
 
 class QuietTerminalRefreshTests(unittest.TestCase):
     def test_automatic_cycles_never_publish_transient_acquisition_status(self):
