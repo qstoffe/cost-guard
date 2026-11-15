@@ -339,6 +339,38 @@ class CiEvidenceTests(unittest.TestCase):
                 expected.append('--wall-clock')
             self.assertEqual(expected, command)
 
+    def test_watch_header_keeps_normal_zoom_and_selects_extra_zooms_only_for_manual_full(self):
+        from development.tests.integration import ci_watch_header
+
+        browser_binding = SimpleNamespace(sync_playwright=lambda: contextlib.nullcontext(
+            SimpleNamespace(chromium=SimpleNamespace(executable_path="chromium"))))
+
+        def completed_probe(command, **kwargs):
+            Path(command[3]).write_text('{"outcome":"PASS"}', encoding='utf-8')
+            return SimpleNamespace(returncode=0, check_returncode=lambda: None)
+
+        for event, zooms in (
+                ('pull_request', ('1',)), ('push', ('1',)), ('', ('1',)),
+                ('workflow_dispatch', ('1', '1.25', '1.5', '2'))):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as temporary, \
+                    patch.dict('os.environ', {'GITHUB_EVENT_NAME': event}), \
+                    patch.dict('sys.modules', {'playwright.sync_api': browser_binding}), \
+                    patch.object(ci_watch_header, 'ROOT', Path(temporary)), \
+                    patch.object(ci_watch_header, 'hosted_only'), \
+                    patch.object(ci_watch_header, 'notice') as notice, \
+                    patch.object(ci_watch_header.subprocess, 'run', side_effect=completed_probe) as run:
+
+                ci_watch_header.main()
+
+                selected = [(call.args[0][-1], call.args[0][-2]) for call in run.call_args_list]
+                self.assertEqual([('opening-only', '1'), ('opening-races-only', '1')] +
+                    [('header-only', zoom) for zoom in zooms] +
+                    [('dashboard-only', '1'), ('previews-only', '1')], selected)
+                omitted = [call.args[1] for call in notice.call_args_list
+                           if call.args[0] == 'watch-header-extra-zooms']
+                self.assertEqual([] if event == 'workflow_dispatch' else ['NOT RUN'],
+                                 [value['outcome'] for value in omitted])
+
     def test_manual_browser_full_runs_both_deep_checks_in_order(self):
         from development.tests.integration import ci_browser_web
         browser, evidence, calls = object(), {}, []
