@@ -128,8 +128,8 @@ const partial = JSON.parse(JSON.stringify(input['token-mix']));
 const partialMix = mix => ({...mix, cost_complete: false, priced_requests: 1, request_count: 3,
   exact_total_tokens: null, known_total_tokens: '842000',
   observed_total_tokens:'842000', observed_totals:['842000','0','0','0'],
-  display: {...mix.display, mix_total_tokens: '842K', mix_input_cost: '12.34'},
-  display_units: {usd: {mix_input_cost: '$0.12'}}});
+   display: {...mix.display, mix_total_tokens: '842K', mix_input_cost: '12', mix_input_cost_value: '12 Credits'},
+   display_units: {usd: {mix_input_cost: '$0.12', mix_input_cost_value: '$0.12'}}});
 partial.view.token_mix = partialMix(partial.view.token_mix);
 for (const key of ['model_token_mix', 'publisher_token_mix'])
   partial.view[key] = partial.view[key].map(row => ({...row, mix: partialMix(row.mix)}));
@@ -144,7 +144,10 @@ assert.equal(context.mixView.status.hidden, true);
 assert.match(helpText(title), /^842,000 recorded tokens for the selected period\n2026-03-29 00:00 – 2026-03-29 03:30$/);
 assert.doesNotMatch(helpText(title), /CLI|Observed|Partial pricing|CCost|Deleted/);
 vm.runInContext('ReportView.setUnit("usd", output)', context);
-assert.ok(output.textContent.includes('$0.12')); assert.doesNotMatch(output.textContent, /Partial|\?/);
+assert.equal(helpText(context.mixView.metrics[0]), '$0.12');
+assert.match(context.mixView.metrics[0].textContent, /^\d+(?:\.\d)?%$/);
+assert.doesNotMatch(context.mixView.summary.textContent, /\$|Credits| · /);
+assert.doesNotMatch(output.textContent, /Partial|\?/);
 assert.equal(partial.view.token_mix.cost_complete, false, 'presentation never changes completeness');
 assert.equal(partial.view.token_mix.exact_total_tokens, null, 'known subtotal is not a complete total');
 context.result = input['token-mix'];
