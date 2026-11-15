@@ -18,19 +18,19 @@ const WebSettings = (() => {
       help: {classic: 'Use the dark, CLI-inspired palette, independent of system appearance.',
         web: 'Follow your system’s light or dark appearance.'}},
     {key: 'ccostDisplayUnit', id: 'ccost-unit', label: 'CCost display', endpoint: 'ccost', choices: [['credits', 'Credits'], ['usd', 'USD']],
-      explanation: 'Units for estimated reference cost in Web and Mini Watch, not your bill. Terminal display is unchanged.',
+      explanation: 'Reference-cost units in Web and Mini Watch.',
       help: {credits: 'Show estimated reference cost in Credits; the underlying cost is unchanged.',
-        usd: 'Show the same estimated reference cost in US dollars, not actual charges.'}},
+         usd: 'Show the same reference cost in US dollars.'}},
     {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch position', endpoint: 'mini-placement',
       choices: [['remember-last', 'Remember last'], ['standard', 'Standard position']],
-      explanation: 'Position requested on the next Mini Watch opening. The browser couples position and size; exact coordinates are not guaranteed.',
-      help: {'remember-last': 'Ask for the browser’s last position in this live tab. Fit on open may reset it. Reload or host restart starts fresh.',
-        standard: 'Ask for initial browser placement, not exact coordinates. This can also reset remembered size.'}},
+      explanation: 'Where Mini Watch opens next.',
+      help: {'remember-last': 'Reuse the browser’s last position in this tab.',
+         standard: 'Use the browser’s standard opening position.'}},
     {key: 'miniWatchSize', id: 'mini-size', label: 'Mini Watch size', endpoint: 'mini-size',
       choices: [['fit-on-open', 'Fit on open'], ['remember-last', 'Remember last size']],
-      explanation: 'Size requested on the next Mini Watch opening. Fit Height resizes only height; passive Live updates never resize. No pixel geometry is saved.',
-      help: {'fit-on-open': 'Measure compact Activity, CCost (Total) and Ctx columns with generous Session space. Fit the header, reserving at least CCost Today 90 000 · 999 prompts or wider real text, with a small rounding allowance and scrollbar space. Real totals are unchanged. Reserve five session rows plus all subscriptions. Extra active sessions scroll inside the table. Fit Height resizes only height; Live updates never resize. Screen limits may require wrapping/scrolling.',
-        'remember-last': 'Let the browser reuse manual size in this live tab, without forcing the measured Fit opening width. Standard position can reset it. Reload or host restart starts fresh; Fit Height can still resize height.'}},
+      explanation: 'Opening size; live updates never resize the window.',
+      help: {'fit-on-open': 'Fit five session rows, the header and subscriptions when opening.',
+         'remember-last': 'Reuse the browser’s last size in this tab.'}},
     {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
       choices: [['used', 'Used'], ['remaining', 'Remaining']],
       explanation: 'Orientation of provider-native quotas in Web and Mini Watch. CCost used and the daily remaining allowance are unchanged.',
@@ -154,7 +154,7 @@ const WebSettings = (() => {
     }
     error(error) {
       this.feedback.className = 'error';
-      this.feedback.textContent = messages[error.message] || 'Web settings could not be confirmed. Check the host connection and retry; no save is claimed.';
+      this.feedback.textContent = messages[error.message] || 'Could not save. Try again.';
     }
     lock(busy) {
       this.busy = busy;
@@ -179,11 +179,11 @@ const WebSettings = (() => {
     async read() {
       if (this.busy) return;
       this.lock(true);
-      this.feedback.className = ''; this.feedback.textContent = 'Reading saved Web settings…';
+      this.feedback.className = ''; this.feedback.textContent = this.loaded ? '' : 'Loading…';
       try {
         this.confirm(await this.api('/api/settings'));
         this.feedback.textContent = '';
-      } catch (error) { this.error(error); }
+      } catch (_) { this.feedback.textContent = ''; }
       finally { this.lock(false); }
     }
     async save(field) {

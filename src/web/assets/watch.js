@@ -7,8 +7,7 @@ const WatchView = (() => {
   function historyNotice(view, retained) {
     if (retained) return '';
     if (view?.history_state === 'observed' || view?.history_epoch > 0) return 'No earlier sessions';
-    if (view?.history_state === 'unavailable') return 'Unable to load earlier sessions';
-    return 'Loading earlier sessions…';
+    return '';
   }
   function retainContext(current, previous) {
     const changed = current?.context_scope && previous &&
@@ -111,8 +110,7 @@ const WatchView = (() => {
     if (changed || !label) target.node.open = false;
     target.identity = identity;
     invocationText(target.input, label ? detail?.text || '' : '');
-    text(target.note, label ? [detail?.text ? '' : 'Invocation details unavailable.',
-      detail?.qualification, reason].filter(Boolean).join(' ') : '');
+    text(target.note, label ? detail?.reason || '' : '');
     target.note.hidden = !target.note.textContent;
     if (changed || !protectedNode(target.summary) || !label) text(target.summary, label);
     target.node.hidden = !label;
@@ -138,8 +136,8 @@ const WatchView = (() => {
     // Keep only the bounded UI identity and native choice. Never cache a DTO or
     // sensitive text through a pending projection, even under focus/selection.
     invocationText(job.input, '');
-    text(job.note, 'Invocation details temporarily unavailable.');
-    job.note.hidden = false;
+    text(job.note, '');
+    job.note.hidden = true;
   }
   function drawInvocations(target, label, details, total, verified, mode, legacy, state) {
     const reason = !verified ? 'Awaiting verified live source; previous commands cleared.' :
@@ -151,8 +149,8 @@ const WatchView = (() => {
       for (const job of target.jobs.values()) withholdInvocation(job);
       target.node.hidden = false;
       invocationText(target.summary, label);
-      text(target.note, 'Invocation details temporarily unavailable; awaiting verified live source.');
-      target.note.hidden = false;
+      text(target.note, '');
+      target.note.hidden = true;
       reconcile(target.list, [...target.jobs.values()].map(job => job.node).concat(target.note));
       return;
     }
@@ -182,7 +180,7 @@ const WatchView = (() => {
     if (!protectedNode(target.summary)) text(target.summary, label);
     const omitted = Math.max(0, total - Math.min(rows.length, 5));
     if (rows.length) target.input = target.jobs.get(rows[0].identity).input;
-    text(target.note, !verified || !rows.length ? reason : omitted ? `+${omitted} more running ${mode} items; details not shown.` : '');
+    text(target.note, verified && rows.length && omitted ? `+${omitted} more running ${mode} items` : '');
     target.note.hidden = !target.note.textContent;
     wanted.push(target.note); reconcile(target.list, wanted);
   }
@@ -456,7 +454,7 @@ const WatchView = (() => {
       const hasRows = value.rows.length > 0;
       const retryDelayed = this.sourceStatus.update(value.state === 'observed', value.observed_at_ms,
         Date.now(), hasRows ? 60000 : 30000);
-      text(this.message, sourceNotice || hasRows ? '' : value.state === 'unavailable' ? 'Prompt source unavailable.' :
+      text(this.message, sourceNotice || hasRows || value.state === 'unavailable' ? '' :
         retryDelayed ? 'Prompt updates delayed; check source availability.' : '');
       this.message.hidden = !this.message.textContent;
       {
@@ -602,7 +600,7 @@ const WatchView = (() => {
       const noRunning = result.state === 'running' && this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
         !active.some(card => card.rows.some(row => row.prompt.in_progress));
       const unverified = view.active_cards?.some(card => card.rows.some(row => row.prompt.execution_unverified));
-      text(this.empty, view.cards_state === 'unavailable' && !active.length ? 'Some prompt sources are unavailable.' : unverified ? 'Some prompt execution is unverified' : noRunning ? 'No running prompts' : '');
+      text(this.empty, noRunning ? 'No running prompts' : '');
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false]]) {

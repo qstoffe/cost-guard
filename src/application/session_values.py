@@ -8,6 +8,8 @@ from .projection import identity
 INVALID_REASONS = frozenset({
     "source_identity_changed", "session_missing", "http_auth_failure",
     "authentication_required", "host_identity_changed",
+    "permission_denied", "source_permission_denied", "registration_unreadable",
+    "unsupported_schema", "unsupported_version", "registration_invalid",
 })
 
 

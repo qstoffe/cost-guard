@@ -7,14 +7,17 @@ async function main() {
   const directory = path.dirname(output);
   const profile = await fs.mkdtemp(path.join(directory, 'sessions-browser-'));
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_web_sessions.py',
+  const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
+  const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']), 'development/tests/integration/serve_web_sessions.py',
     ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
   let serverError = ''; server.stderr.on('data', bytes => serverError += bytes.toString());
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return JSON.parse((await lines.next()).value);};
-  const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+  const child = spawn(browser, ['--headless=new', ...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+    '--screen-info={1920x1080}',
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--disable-background-networking', '--remote-debugging-pipe', '--user-data-dir='+profile, 'about:blank'],
     {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
   const browserExit = new Promise(resolve => child.once('exit',resolve));
@@ -41,10 +44,12 @@ async function main() {
     const line=await lines.next();
     if (line.done) throw new Error('Fixture failed: '+serverError);
     const launch=JSON.parse(line.value);
-    const version=await command('Browser.getVersion');
+     const version=await command('Browser.getVersion');
+     evidence.browser=version.product;
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId}=await command('Target.attachToTarget',{targetId,flatten:true});
-    await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
+     await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
+     await command('Page.bringToFront',{},sessionId);
      const evaluate=async (expression, userGesture=false) => {
       lastExpression=expression;
        const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture},sessionId).catch(async error=>{
@@ -58,13 +63,26 @@ async function main() {
      const until=async (expression, timeoutMs=30000) => {
        const end=Date.now()+timeoutMs;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
-      throw new Error('Condition not reached: '+expression+'; '+await evaluate('document.body.innerText'));
+      const state=await evaluate(mode==='--calm-ui' ?
+        `JSON.stringify({section:current?.section,hidden:document.hidden,detailTotal:current?.detail?.data?.total,detailBusy:current?.detail?.busy})` :
+        'document.body.innerText');
+      lastExpression=expression;
+      throw new Error('Condition not reached: '+expression+'; '+state);
      };
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-         if (mode === '--prompt-activity-parity') {
+           if (mode === '--calm-ui') {
+            assert.equal(await evaluate('document.hidden'),false,'foreground recovery case requires a visible headless tab');
+            await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture, checks, layouts,
+              command:(method, params) => command(method, params, sessionId)});
+            assert.deepEqual(errors, []);
+            evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+              personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify(evidence)); return;
+          }
+          if (mode === '--prompt-activity-parity') {
            const details = await require('../fixtures/catalog_activity_browser.cjs')({evaluate, until, fixture,
              command:(method, params) => command(method, params, sessionId)});
            checks.push(...details.checks);
@@ -393,6 +411,15 @@ async function main() {
      assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
       inference_calls:0,personal_profile:false,desktop_effects:false};
+  } catch (error) {
+    const bounded = value => String(value ?? '').replace(/https?:\/\/[^\s"'<>]+/g, '[url]').slice(0, 2500);
+    evidence.diagnostic = {
+      name: bounded(error.name), message: bounded(error.message),
+      location: bounded(error.stack?.split('\n').filter(line => /\bat /.test(line)).slice(0, 3).join('\n')),
+      actual: bounded(JSON.stringify(error.actual)), expected: bounded(JSON.stringify(error.expected)),
+      lastExpression: bounded(lastExpression)
+    };
+    throw error;
   } finally {
     clearTimeout(deadline); server.stdin.end();
     await command('Browser.close').catch(()=>child.kill()); await browserExit;

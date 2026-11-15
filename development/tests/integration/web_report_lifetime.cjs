@@ -185,16 +185,16 @@ async function main(){
   jobs.get(paging.active).status='complete';jobs.get(paging.active).result=firstPage;await tick();
   // Explicit page faults are bounded; timers never silently retry a failed page.
   busy=20;
-  run(`current.pageNavigation=true;current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
+  run(`current.actionRequested=true;current.pageNavigation=true;current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
   for(let i=0;i<3;i++)await tick();
   assert.equal(paging.loading,false);assert.equal(paging.failed,true);
-  assert.match(paging.message,/three recovery attempts/);assert.equal(paging.result,firstPage);
+  assert.equal(paging.message,'Could not load. Try again.');assert.equal(paging.result,firstPage);
   const failedAdmissions=admissions.length;run('scheduleCachedReport();enterCachedReport(current)');await settle();
   assert.equal(admissions.length,failedAdmissions,'only explicit Retry can restart failed navigation');
-  busy=0;run('acquire(current)');await settle();
+  busy=0;run('current.actionRequested=true;acquire(current)');await settle();
   now+=45001;await tick();
   assert.equal(paging.loading,false);assert.equal(paging.failed,true);
-  assert.match(paging.message,/45 seconds/);assert.equal(paging.result,firstPage);
+  assert.equal(paging.message,'Could not load. Try again.');assert.equal(paging.result,firstPage);
   run('acquire(current)');await settle();
   const nextPage={...firstPage,view:{...firstPage.view,comparisons:{...firstPage.view.comparisons,offset:10}}};
   jobs.get(paging.active).status='complete';jobs.get(paging.active).result=nextPage;await tick();
@@ -252,7 +252,7 @@ async function main(){
     // A cold terminal failure stays truthful, but lookups can see relevant host recovery.
     await go('watch');run(`views.delete('#/${section}')`);await go(section);
     const cold=run('current');assert.equal(cold.failed,true);assert.equal(cold.result,null);
-    assert.match(ids.notice.textContent,/cache is unavailable/,'cold blocker is visible outside card content');
+    assert.equal(ids.notice.textContent,'','passive cache failure has no technical announcement');
     assert.equal(ids.refresh.hidden,true);
     assert.equal(ids.toolbar.hidden,true,'no redundant toolbar after a cold history failure');
     const scheduled=run('cachedReportTimer');
@@ -278,7 +278,7 @@ async function main(){
   managedResponse={id:null,result:null,refresh:'delayed',error:'ai_stats_checkpoint_unavailable',terminal:false};
   await hostTick();
   assert.equal(stats.loading,true);assert.equal(stats.failed,false);
-  assert.match(ids.notice.textContent,/cache access or disk space/,'persistent retryable blocker has operational feedback');
+  assert.equal(ids.notice.textContent,'','background checkpoint retry remains internal');
   const readyStats={...partialStats,view:{...partialStats.view,ai_stats_work:{scopes:{'30-days':{ready:true}}}}};
   managedResponse={id:'ready',result_id:'ready',result:readyStats,refresh:'scheduled'};
   await hostTick();
@@ -293,7 +293,7 @@ async function main(){
   run(`api=window.__savedApi;current.loading=false;current.attempt=null`);
   // Host owns source retries; only a previously observed live view earns quiet grace.
   run(`liveValue={view:{}}; connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:null})`);
-  assert.equal(ids['host-state'].hidden,false,'no successful observation cannot be disguised as retained success');
+  assert.equal(ids['host-state'].hidden,true,'no source health evidence: no automatic warning');
   run(`connectionStatus('Live connected.', {kind:'connected',observedAt:100})`);
   const graceStart=now;
   run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
@@ -301,8 +301,8 @@ async function main(){
     now=graceStart+elapsed;
     run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
     assert.equal(ids['host-state'].hidden,true);
-    assert.equal(ids.status.textContent,'Live connected.');
-    assert.equal(ids.status.attrs['aria-description'],'');
+    assert.equal(ids.status.textContent,'');
+    assert.equal(ids.status.attrs['aria-description'],undefined);
   }
   now=graceStart+60000;
   run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
@@ -313,11 +313,16 @@ async function main(){
   run(`connectionStatus('Live connected.', {kind:'connected',observedAt:101});
     connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:101})`);
   assert.equal(ids['host-state'].hidden,true,'genuinely newer evidence restores grace');
-  for(const kind of ['source_unavailable','offline','authorization_required']) {
+  for(const kind of ['source_unavailable','offline']) {
     context.failureKind=kind;
     run(`connectionStatus('Action required', {kind:failureKind})`);
-    assert.equal(ids['host-state'].hidden,false,'actionable failures remain immediate');
+    assert.equal(ids['host-state'].hidden,true,'unqualified passive errors are silent');
   }
+  run(`connectionStatus('technical error',{kind:'source_unavailable',sourceOutage:true})`);
+  assert.equal(ids['host-message'].textContent,'OpenCode connection lost. Trying to reconnect…');
+  assert.equal(ids['host-state'].hidden,false);
+  run(`connectionStatus('access',{kind:'authorization_required',sourceOutage:false})`);
+  assert.equal(ids['host-state'].hidden,false,'hard access recovery remains actionable');
   console.log('PASS: retained intent, aged managed completion/display, stable publication identity, visible terminal wake, honest refresh and factual errors');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

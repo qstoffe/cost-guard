@@ -19,7 +19,7 @@ module.exports = (vm, context, seed, helpText) => {
       vm.runInContext(`ReportView.setUnit('credits');todayAccounts.update(todayCase);
         todayWatch.update({state:'running',view:todayCase});`, context);
       roots.forEach((root, index) => {
-        assert.match(root.textContent, new RegExp('CCost Today: ' + (amount === '—' ? '0' : amount)));
+        assert.match(root.textContent, new RegExp('CCost Today: ' + (amount === '—' ? 'N/A' : amount)));
         const card = root.querySelectorAll('h4')[0].parentNode;
         assert.equal(helpText(card.children[1].children[0]),"This account's reference cost for the local calendar day.");
         assert.equal(card.querySelectorAll('h4')[0].querySelectorAll('a')[0], targets[index]);
@@ -41,6 +41,6 @@ module.exports = (vm, context, seed, helpText) => {
   context.todayCase.now_ms += 86400000;
   scope.cost=null;
   vm.runInContext('todayAccounts.update(todayCase)',context);
-  assert.match(context.todayAccounts.grid.textContent,/CCost Today: 0/,'new configured day cannot inherit yesterday');
+  assert.match(context.todayAccounts.grid.textContent,/CCost Today: N\/A/,'new configured day cannot inherit yesterday');
   vm.runInContext('ReportView.setTimezone(null)',context);
 };

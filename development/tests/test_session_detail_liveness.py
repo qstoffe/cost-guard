@@ -127,7 +127,7 @@ class DetailLivenessTests(unittest.TestCase):
                     self.assertEqual('archived', details.page(archived, 0, begin=True)['state'])
             self.assertEqual(totals[0], totals[1], 'linked child/compaction accounting stays canonical')
 
-    def test_repeated_revision_churn_exhausts_budget_poll_and_open_cannot_reset_it(self):
+    def test_revision_churn_rearms_after_cooldown_not_poll_or_open(self):
         now = [0]
         self.details = SessionDetails(clock=lambda: now[0])
         token = self.details.open('root-0000', 'snapshot')
@@ -140,13 +140,112 @@ class DetailLivenessTests(unittest.TestCase):
             self.assertEqual('failed', page['acquisition']['phase'])
             self.assertEqual(3, page['acquisition']['attempts'])
         self.details.open('root-0000', 'live')
-        now[0] = 100
+        now[0] = 44
         self.details.tick(self.service)
         self.assertEqual(3, self.details.page(token, 0)['acquisition']['attempts'])
-        self.details.retry(token)
         self.source.load_session_snapshot = SyntheticMonthSource(2, 3, month_start_ms=1000).load_session_snapshot
+        now[0] = 45
         self.details.tick(self.service)
         self.assertEqual(3, self.details.page(token, 0, begin=True)['total'])
+        self.assertEqual(0, self.details.histories['root-0000']['retry_windows'])
+
+    def test_loaded_unadmitted_detail_heals_on_owned_lane_without_false_recovery(self):
+        now = [0]
+        details = SessionDetails(clock=lambda: now[0])
+        token = details.open('root-0000', 'live')
+        details.tick(self.service)
+        before = details.page(token, 0, begin=True)
+        entry = details.histories['root-0000']
+        entry['acquisition'].update(phase='queued', changed_at=0)
+        now[0] = 120
+
+        stalled = details.page(token, 0, begin=True)
+        self.assertEqual('detail_not_admitted', stalled['acquisition']['reason'])
+        self.assertEqual(before['revision'], stalled['revision'])
+        self.assertEqual(before['result'], stalled['result'])
+        for second in (121, 130, 149):
+            now[0] = second
+            self.assertIsNone(details.claim())
+            self.assertEqual('failed', details.page(token, 0)['acquisition']['phase'])
+        now[0] = 150
+        self.source.snapshots['root-0000'] = __import__('dataclasses').replace(
+            self.source.snapshots['root-0000'], source_revision='healed')
+        details.tick(self.service)
+        self.assertEqual('ready', entry['acquisition']['phase'])
+        self.assertGreater(entry['generation'], 1)
+        self.assertEqual(0, entry['retry_windows'])
+        self.assertNotIn('acquisition', details.page(token, 0, begin=True))
+
+    def test_repeated_failed_windows_back_off_and_peer_and_inflight_keep_ownership(self):
+        now = [0]
+        details = SessionDetails(clock=lambda: now[0])
+        token = details.open('root-0000', 'live')
+        for window in range(7):
+            for attempt_index in range(3):
+                key, attempt, _ = details.claim()
+                details.finish(key, attempt, dict(error='detail_worker_failed'))
+                now[0] += 5 * (attempt_index + 1)
+            entry = details.histories['root-0000']
+            due = entry['retry_at']
+            cooldown = min(300, 30 * 2 ** min(window, 4))
+            self.assertEqual(cooldown, due - (now[0] - 15))
+            now[0] = due - 1
+            details.page(token, 0)  # Renew only the existing interested lease.
+            self.assertIsNone(details.claim())
+            now[0] = due
+            self.assertIsNone(details.claim(unavailable=True))
+        peer = details.open('root-0001', 'live')
+        key, attempt, _ = details.claim()
+        self.assertEqual('root-0000', key)
+        now[0] += 121
+        details.progress(key, attempt, 'reading', 200)
+        self.assertNotEqual('detail_not_admitted', details.page(token, 0)['acquisition']['reason'])
+        self.assertTrue(details.current(key, attempt))
+        self.assertEqual('root-0001', details.claim()[0], 'inflight work cannot be reset or starve the peer')
+
+    def test_hard_failures_and_expired_attempts_never_automatically_reopen(self):
+        for reason in ('http_auth_failure', 'source_identity_changed', 'session_missing',
+                       'unsupported_schema', 'permission_denied'):
+            now = [0]
+            details = SessionDetails(clock=lambda: now[0])
+            token = details.open('root', 'live')
+            key, attempt, _ = details.claim()
+            details.finish(key, attempt, dict(error=reason, terminal=True))
+            now[0] = 200
+            details.page(token, 0)
+            self.assertIsNone(details.claim(), reason)
+        now = [0]
+        details = SessionDetails(clock=lambda: now[0])
+        details.open('root', 'live')
+        key, old, _ = details.claim()
+        now[0] = 301
+        replacement = details.open('root', 'live')
+        self.assertFalse(details.current(key, old))
+        details.finish(key, old, dict(error='old_failure', terminal=True))
+        self.assertEqual('queued', details.page(replacement, 0)['acquisition']['phase'])
+
+    def test_only_retryable_http_status_rearms_after_exhausted_window(self):
+        for http_status in (403, 404, 503):
+            with self.subTest(http_status=http_status):
+                now = [0]
+                details = SessionDetails(clock=lambda: now[0])
+                token = details.open('root-0000', 'live')
+                error = SourceUnavailableError('synthetic status',
+                    code=FailureCode.AUTH if http_status == 403 else FailureCode.HTTP,
+                    http_status=http_status)
+                with patch.object(self.service, 'root_for_session', side_effect=error):
+                    for second in (0, 5, 15):
+                        now[0] = second
+                        details.tick(self.service)
+                now[0] = 45
+                details.tick(self.service)
+                page = details.page(token, 0, begin=True)
+                if http_status == 503:
+                    self.assertEqual(3, page['total'])
+                    self.assertEqual('ready', details.histories['root-0000']['acquisition']['phase'])
+                else:
+                    self.assertIsNone(page['result'])
+                    self.assertEqual('failed', page['acquisition']['phase'])
 
     def test_missing_and_terminal_source_errors_are_actionable_not_empty_success(self):
         token = self.details.open('absent', 'live')

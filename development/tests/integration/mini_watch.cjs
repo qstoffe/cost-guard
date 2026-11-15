@@ -80,7 +80,7 @@ function setup() {
   const cancelled = win(); test.opened(cancelled); await first;
   assert.equal(cancelled.closed, true); assert.equal(button.textContent, 'Mini Watch: Off');
   const failed = controller.toggle(); test.reject(); await failed;
-  assert.match(feedback.textContent, /could not open/); assert.equal(button.textContent, 'Mini Watch: Off');
+  assert.match(feedback.textContent, /Could not open/); assert.equal(button.textContent, 'Mini Watch: Off');
   const opening = controller.toggle(), child = win(); test.opened(child); await opening;
   assert.equal(button.textContent, 'Mini Watch: On'); assert.equal(button.attributes['aria-pressed'], 'true');
   let view = controller.view;
@@ -335,7 +335,7 @@ function setup() {
   assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind});
-    assert.equal(view.health.hidden, ['reconnecting','source_unavailable'].includes(kind));
+    assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
      assert.match(helpText(view.body.children[1].children[2].children[0]), /Duration: 20m/);
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
@@ -370,7 +370,7 @@ function setup() {
   controller.update(input); assert.match(view.body.textContent,/No earlier sessions/,'valid empty evicts retained rows');
   input.view = {...input.view,active_cards:originals,daily_usage:{...daily,day_end_ms:now+1}};
   controller.update(input); assert.equal(view.daily.textContent,beforeDaily);
-  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today $0.00','no yesterday total after configured midnight, even disconnected');
+  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today N/A','no yesterday total after configured midnight, even disconnected');
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+3}; controller.update(input);
   view.summary.fire('click'); assert.equal(test.returned(), 1); assert.equal(test.focused(), 1);
   assert.equal(child.closed, false, 'return selects existing tab without closing Mini');
@@ -488,8 +488,7 @@ function setup() {
   initial.update({state:'recovering',view:null});
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
   const initialOpening = initial.toggle(); initialTest.opened(win()); await initialOpening;
-  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
-  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
+  assert.equal(initial.view.daily.textContent, 'CCost Today N/A');
   initial.close();
   now += 599999; assert.equal(initial.observations.delayed(now),false);
   now++; assert.equal(initial.observations.delayed(now),true);
@@ -497,8 +496,9 @@ function setup() {
       owner => {owner.top = {};}, owner => {owner.document.permissionsPolicy = {allowsFeature: () => false};}]) {
     const item = setup(); change(item.owner);
     const disabled = new Controller(item.owner, item.button, item.feedback, () => {});
-    assert.equal(item.button.attributes['aria-disabled'], 'true'); assert.ok(item.feedback.textContent);
-    assert.equal(item.button.title,item.feedback.textContent);await disabled.toggle(); assert.equal(item.calls(), 0);
+    assert.equal(item.button.attributes['aria-disabled'], 'true'); assert.equal(item.feedback.textContent,'');
+    assert.equal(item.button.title,'');await disabled.toggle(); assert.equal(item.calls(), 0);
+    assert.equal(item.feedback.textContent,'Could not open Mini Watch. Try again.');
   }
   console.log('Mini Watch VM: lifecycle/races, units/theme, native callbacks, fresh/retained states and independent DOM passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -3,7 +3,7 @@
 const SessionsCatalog = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
-    ['activity', 'Last activity', 'Latest source-confirmed prompt start or completion, including attributable child work and compaction. Metadata edits and archive times do not count. Periods discover candidates through source catalog metadata, then verify prompt-based membership; All time also covers older catalog entries.'],
+    ['activity', 'Last activity', 'When this session last worked on a prompt.'],
     ['name', 'Session name', 'The session title. Open the name for its complete live prompt history.'],
     ['model', 'Model', ReportView.headerHelp.model],
     ['ccost', 'CCost', ReportView.headerHelp.sessionCost],
@@ -213,8 +213,7 @@ const SessionsCatalog = (() => {
           if (terminal) this.failNavigation(error.message);
           else this.waitNavigation(flight.timedOut ? 'request_timeout' : error.message);
         }
-        else this.setStatus(`Sessions unavailable (${error.message}). Retaining the last observed page.` +
-          (terminal ? ' Resolve the error and reopen Cost Guard, or leave Sessions using the navigation links.' : ''));
+        else this.setStatus();
         if (error.message === 'catalog_expired') {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
@@ -249,15 +248,17 @@ const SessionsCatalog = (() => {
       this.operation.pending = false;
       this.interest(false);
       const message = ['authentication_required', 'http_auth_failure', 'permission_denied', 'csrf_required'].includes(reason) ?
-        'Access unavailable. Check your connection and access, then reopen Sessions.' :
-        'Could not finish. Reopen Sessions to try again.';
+        'Check your access, then reopen Sessions.' :
+        'Could not load. Reopen Sessions to try again.';
       if (this.operation.userInitiated) this.showProgress(message);
-      else { this.setStatus(`Sessions unavailable. ${message}`); this.pagerBusy(); }
+      else { this.setStatus(); this.pagerBusy(); }
     }
     waitNavigation(reason) {
       this.retryDelay = Math.min(30000, (this.retryDelay || 500) * 2);
-      if (this.operation?.userInitiated) this.showProgress('Loading paused. Retrying…');
-      else this.setStatus(`Sessions unavailable (${reason}). Retaining the last observed page. Recovering automatically…`);
+      if (this.operation?.userInitiated && Date.now() - this.operation.advanced >= 90000)
+        this.failNavigation(reason);
+      else if (this.operation?.userInitiated) this.showProgress();
+      else this.setStatus();
     }
     pendingNavigation(data) {
       if (!this.operation) return false;
@@ -302,7 +303,7 @@ const SessionsCatalog = (() => {
       if (!this.operation && data.progress?.status === 'failed' && data.progress.retryable !== true) {
         this.terminal = true; this.terminalReason = data.progress.reason || 'source_unavailable';
         this.interest(false);
-        this.setStatus(`Sessions unavailable (${this.terminalReason}). Retaining the last observed page. Resolve the error and reopen Cost Guard, or leave Sessions using the navigation links.`);
+        this.setStatus();
         return;
       }
       // Even a deferred sort/outage must retire unsupported running indicators.
@@ -315,8 +316,7 @@ const SessionsCatalog = (() => {
       // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
       if (this.pendingNavigation(data) || data.pending_sort) {
-        if (!this.operation) this.setStatus(data.state === 'source_unavailable' || data.progress?.reason ?
-          `Sessions unavailable (${data.progress?.reason || 'source_unavailable'}). Retaining the last observed page.` : '');
+        if (!this.operation) this.setStatus();
         // A pending page is not applied: keep the last qualified rows with their
         // actual pager/order. Only cold entry has no valid page to retain.
         if (data.state === 'observed' && !this.data) {
@@ -340,8 +340,7 @@ const SessionsCatalog = (() => {
         this.canonicalPeriod = false;
       }
       // A safely applied replacement completes recovery, not a lasting warning.
-      this.setStatus(data.state === 'source_unavailable' || data.progress?.reason ?
-        `Sessions unavailable (${data.progress?.reason || 'source_unavailable'}). Retaining the last observed page.` : '');
+      this.setStatus();
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
@@ -440,30 +439,16 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-          ContextHelp.value(row.activity, () => {
-            const value = row.value, state = value.activity_state || 'ready';
-             return [ReportView.activityHelp(value.last_activity_ms, this.renderTimezone),
-              state === 'snapshot' ? 'Navigation snapshot: independently verified session facts collected over time, not an atomic live view. Later changes appear on refresh.' :
-              state === 'retained' ? 'Retained same-source prompt event; current revision is awaiting verification.' :
-              state === 'partial' ? 'Partial history: observed prompt event, not yet a verified latest activity.' :
-              state === 'pending' ? 'Prompt activity is awaiting source observation.' :
-              state === 'unavailable' ? 'Prompt activity unavailable.' : 'Source-confirmed prompt event.'].filter(Boolean).join('\n');
-          });
+           ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone));
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             if (key === 'duration') return node;
             ContextHelp.value(node, () => {
-               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
-               if (state === 'snapshot') return 'Navigation snapshot: this value and its sort position use the same verified session revision. Later changes appear on refresh; this is not an atomic live view.';
-              if (key === 'ccost' && !current.has_summary && !current.indexed && state !== 'retained')
-                return state === 'pending' ? 'Session cost is awaiting source observation.' : 'Session cost unavailable.';
+               const current = row.value;
               if (key === 'ccost') return ReportView.sessionCostHelp(current, current);
-              if (key === 'ctx') return [current.context_tokens == null ? '' : `${current.context_tokens.toLocaleString()} estimated tokens.`,
-                current.context_detail, state === 'retained' ? 'Retained from an earlier source observation; refresh pending.' :
-                  state === 'pending' ? 'Source work is pending.' : state === 'unavailable' ? 'Source context unavailable.' : ''].filter(Boolean).join('\n');
-              if (key !== 'model') return state === 'ready' ? '' : 'Session metric is retained or pending source observation.';
-              return [ReportView.display(current, 'model_help'), state === 'ready' ? '' :
-                'Retained or pending source observation; contributing model coverage may be incomplete.'].filter(Boolean).join('\n');
+               if (key === 'ctx') return current.context_tokens == null ? '' : `~${current.context_tokens.toLocaleString()} tokens`;
+               if (key !== 'model') return '';
+                return ReportView.display(current, 'model_help');
             });
             return node;
           });

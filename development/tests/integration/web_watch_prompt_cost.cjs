@@ -23,8 +23,8 @@ for (const name of ['render', 'account-cards', 'watch']) vm.runInContext(fs.read
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
 assert.equal(cards.length, 1, 'completed history has no second Watch table');
-const credits = ['1250', '12', '100', '0', '0', '2', '0', '<0.1', '<0.1', '12', '12', '0', '0', '0', '0', '<0.1'];
-const usd = ['$12.50', '$0.12', '$1.00', '$0.00', '$0.00', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', '$0.00', '$0.00', '$0.00', '$0.00'];
+const credits = ['1250', '12', '100', '0', 'N/A', '2', '0', '<0.1', '<0.1', '12', '12', '0', 'N/A', '0', '0', '<0.1'];
+const usd = ['$12.50', '$0.12', '$1.00', '$0.00', 'N/A', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', 'N/A', '$0.00', '$0.00', '$0.00'];
 const canonical = JSON.stringify(input);
 for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', credits]]) {
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);
@@ -49,7 +49,7 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
       assert.doesNotMatch(help,/Partial cost coverage|CCost:|Subtotal:|Model \d|Sub Agent \d/);
       assert.doesNotMatch(help,/Incoming Context CCost|Extra CCost|Total CCost|Number of prompts/);
       assert.ok(target.events.focus && target.events.click && target.events.pointerenter);
-      if (expected[index] === 'N/A') assert.match(help, /CCost cannot be calculated/);
+       assert.doesNotMatch(help, /CCost cannot be calculated/);
     }
   }
 }

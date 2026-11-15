@@ -60,7 +60,8 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
     await evaluate('racePromise');
     await until('!miniWatch.pending&&!miniWatch.window');
     if(action==='css-error'){
-      assert.match(await evaluate('miniWatch.button.title'),/could not open/);
+      assert.match(await evaluate('miniWatch.feedback.textContent'),/Could not open/);
+      assert.equal(await evaluate('miniWatch.button.title'),'');
       assert.equal(await evaluate(`miniWatch.feedback.className`),'sr-only');
       await evaluate('miniWatch.close()');
     }else await off();
@@ -74,7 +75,8 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
   // requestWindow consumes transient activation. This next call has no gesture.
   await evaluate('miniWatch.toggle()');
   assert.equal(await evaluate('miniWatch.window'),null);
-  assert.match(await evaluate('miniWatch.button.title'),/could not open/);
+  assert.match(await evaluate('miniWatch.feedback.textContent'),/Could not open/);
+  assert.equal(await evaluate('miniWatch.button.title'),'');
   await evaluate('miniWatch.close()');
   assert.deepEqual(await evaluate('raceErrors'),[]);
   assert.equal(await evaluate('probeStreams'),1,'no second Live stream through any native race');
@@ -93,10 +95,12 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
     targetsBefore.sort(),'parent pagehide cannot leave an orphan native PiP');
   assert.equal(await evaluate(`miniWatch.button.getAttribute('aria-disabled')`),'true');
   assert.equal(await evaluate(`miniWatch.button.disabled`),false,'policy-disabled control remains keyboard discoverable');
-  assert.match(await evaluate('miniWatch.button.title'),/policy/);
+  assert.equal(await evaluate('miniWatch.button.title'),'');
+  assert.equal(await evaluate('miniWatch.feedback.textContent'),'');
   assert.equal(await evaluate(`document.permissionsPolicy?.allowsFeature('picture-in-picture') ??
     document.featurePolicy.allowsFeature('picture-in-picture')`),false);
   await evaluate('miniWatch.button.click()',true);
   assert.equal(await evaluate('miniWatch.window'),null,'actual header policy prevents a native request');
+  assert.equal(await evaluate('miniWatch.feedback.textContent'),'Could not open Mini Watch. Try again.');
   checks.push('Native delayed-resolution On/Off/On, native X, host identity, held/failed CSS, theme/route return, parent reload while opening, missing publication, one stream/no unhandled rejection, native user-activation rejection, actual Permissions-Policy disablement and focusable error description');
 };

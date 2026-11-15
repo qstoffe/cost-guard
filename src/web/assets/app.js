@@ -75,6 +75,7 @@ function selectStats(state, period) {
   demand?.update();
   state.result = state.statsResults?.get(period) || null;
   state.failed = false; state.message = '';
+  state.actionRequested = true;
   ReportLoading.reset(state);
   if (state.loading) AIStatsView.prioritize(state, api, !!demand);
   enterCachedReport(state); show(state);
@@ -88,6 +89,7 @@ function selectTokenMix(state, period) {
   state.period = period; state.request = {kind: 'token-mix', token_mix_scope: period};
   state.result = null; state.withheld = false; state.dataRevision = null;
   state.failed = false; state.message = ''; state.attempted = false;
+  state.actionRequested = true;
   ReportLoading.reset(state); demand?.update();
   show(state); firstReport(state); scheduleCachedReport();
 }
@@ -114,6 +116,10 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
   hostState = {...hostState, ...state};
+  hostState.sourceBlocked = ['http_auth_failure', 'source_permission_denied', 'permission_denied',
+    'registration_unreadable', 'unsupported_schema', 'unsupported_version', 'registration_invalid']
+    .includes(hostState.sourceError);
+  if (hostState.sourceBlocked) hostState.writable = false;
   if (sourceNotice) {
     sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
     sourceNoticeGeometry();
@@ -122,26 +128,29 @@ function connectionStatus(message, state = {}) {
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
   miniWatch?.health(hostState);
-  const quiet = hostState.kind === 'source_retrying' && liveValue?.view && hostState.observedAt != null;
-  statusLine.textContent = quiet ? 'Live connected.' : ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
-  statusLine.setAttribute('aria-description', quiet ? '' : message);
+  // Health governs admission, not narration of automatic retries.
+  const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
+    'Reopen Cost Guard from the launcher to reconnect.' :
+    ['http_auth_failure', 'source_permission_denied', 'permission_denied', 'registration_unreadable'].includes(hostState.sourceError) ?
+      'Check OpenCode access, then reopen Cost Guard.' :
+    hostState.sourceBlocked ? 'Update OpenCode, then reopen Cost Guard.' : '';
+  const visibleMessage = recovery || (hostState.sourceOutage ? 'OpenCode connection lost. Trying to reconnect…' : '');
+  ReportView.text(statusLine, '');
+  statusLine.removeAttribute('aria-description');
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
-    const time = value => value == null ? 'not yet observed' : ReportView.timestamp(value);
-    banner.hidden = quiet || hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
+    banner.hidden = !visibleMessage;
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
-    const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\n${demand ? 'Reports refresh through the host; retained results keep their source observation time.' : 'Reports stay frozen.'} Account updates are separate.`;
-    if (summary && details) { summary.textContent = banner.hidden ? '' : message; details.textContent = banner.hidden ? '' : timing; }
-    else banner.textContent = banner.hidden ? '' : `${message} · ${timing}`;
+    if (summary && details) { ReportView.text(summary, visibleMessage); ReportView.text(details, ''); }
+    else ReportView.text(banner, visibleMessage);
     const warning = document.getElementById('host-warning');
     if (warning) {
-      const recovery = ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ? 'Use a fresh OS launcher link.' : 'Check the local source/host; reload to retry.';
-      warning.textContent = banner.hidden ? '' : hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
+      ReportView.text(warning, '');
     }
   }
-  if (hostState.terminal) for (const view of views.values()) {
+  if (hostState.terminal || hostState.sourceBlocked) for (const view of views.values()) {
     view.detail?.invalidateValues(); view.detail?.detach(); view.catalog?.detach();
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
@@ -214,11 +223,9 @@ function show(state) {
     refresh.hidden = true;
     heading.hidden = true;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
-    if (state.failed) notice.textContent = state.message;
-    else if (['report_cache_unavailable', 'ai_stats_checkpoint_unavailable', 'ai_stats_no_progress'].includes(state.waitingReason))
-      notice.textContent = failure(state.waitingReason, state);
+     if (state.userInitiated && state.failed) notice.textContent = state.message;
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }
-  if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; heading.hidden = true; }
+   if (state.section === 'models') { refresh.textContent = 'Try again'; refresh.hidden = !state.failed || !!state.result; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
@@ -249,6 +256,7 @@ function show(state) {
       if (state.loading) return;
       state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
       state.pageNavigation = true; state.orderRetried = false; state.orderReset = false;
+      state.actionRequested = true;
       demand?.update(); acquire(state);
     });
     state.comparisons.update(state); state.comparisons.attach(output);
@@ -267,11 +275,11 @@ function show(state) {
   }
   if (state.detail) {
     ReportView.syncUnits(state.detail.root);
-    if (!hostState.terminal) state.detail.attach(output);
+    if (!hostState.terminal && !hostState.sourceBlocked) state.detail.attach(output);
     else output.replaceChildren(state.detail.root);
   } else if (state.catalog) {
     ReportView.syncUnits(state.catalog.root);
-    if (!hostState.terminal) state.catalog.attach(output);
+    if (!hostState.terminal && !hostState.sourceBlocked) state.catalog.attach(output);
     else output.replaceChildren(state.catalog.root);
   } else if (state.live) {
     state.connection = liveStatus;
@@ -319,56 +327,7 @@ function reportWork(progress) {
   return `${labels[progress.stage] || progress.phase} · ${progress.completed ?? 0}${progress.total == null ? '' : '/' + progress.total}`;
 }
 function failure(code, state) {
-  if (automaticHistory(state)) {
-    const reportErrors = {
-      internal_error: 'Historical report failed (internal_error); the source connection is checked separately.',
-      report_unavailable: 'Historical report worker was interrupted; recovery is automatic.',
-      worker_unavailable: 'Historical report worker could not start; recovery is automatic.',
-      report_invalid_result: 'Historical report returned an invalid result; no usage values were substituted.',
-      ai_stats_no_progress: 'AI Stats could not advance its saved work. Check local cache access and disk space; automatic recovery checks continue.',
-      report_cache_busy: 'Historical report cache is busy; saved work will resume automatically.',
-      report_cache_unavailable: 'Historical report cache is unavailable. Check local cache access or disk space; automatic checks continue.',
-      history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space.',
-      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space; automatic recovery checks continue.',
-      ai_stats_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
-      history_revision_churn: 'History is changing. Saved stable work is retained; recovery is automatic.',
-      history_no_progress: 'History could not resume its saved work (history_no_progress); no totals were substituted.',
-      busy: 'Waiting for an available historical report slot.',
-      source_permission_denied: 'Permission denied reading the source. Correct source access; reports recheck when the source recovers.',
-      http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization.',
-      registration_invalid: 'OpenCode source registration is invalid. Repair the registration.',
-      registration_unreadable: 'OpenCode source registration is unreadable. Check source permissions.',
-      source_identity_changed: 'Historical source identity changed; previous results cannot be reused.'};
-    if (reportErrors[code]) return reportErrors[code];
-  }
-  const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
-    result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
-    cancelled: 'Report cancelled.',
-    invalid_request: 'Invalid report scope or limits; no alternate scope was substituted.',
-      session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
-      comparison_page_no_progress: 'Page navigation made no forward progress for 45 seconds. Last page retained; Retry Comparisons to try again.',
-      comparison_page_retries: 'Page navigation exhausted three recovery attempts. Last page retained; Retry Comparisons to try again.',
-     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry when a slot is available.',
-     ai_stats_revision_churn: 'History kept changing without verified forward progress. Saved stable work is retained; Retry when the source settles.',
-     ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space, then Retry.',
-      ai_stats_resource_limit: 'AI Stats reached its bounded history/live-root resource limit. No truncated totals are shown.',
-      history_no_progress: 'History made no verified forward progress. Saved stable work is retained; check the source and Retry.',
-      history_revision_churn: 'History kept changing. Saved stable work is retained; Retry when the source settles.',
-      history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space, then Retry.',
-      history_resource_limit: 'History reached its bounded work limit. No truncated totals are shown.',
-     source_permission_denied: 'Permission denied reading the source. Correct source access before Retry.',
-     http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization before Retry.',
-     registration_invalid: 'OpenCode source registration is invalid. Repair it before Retry.',
-     registration_unreadable: 'OpenCode source registration is unreadable. Check permissions before Retry.',
-     unsupported_version: 'This OpenCode source version is unsupported. Use a supported source version.',
-     unsupported_schema: 'This OpenCode source schema is unsupported. Use a supported source version.',
-     offline: 'Host is offline. Check the local host and reload.',
-     authorization_required: 'Browser authorization expired. Use a fresh OS launcher link.',
-     identity_changed: 'Host identity changed. Use a fresh OS launcher link.'};
-  const message = errors[code];
-  if (automaticHistory(state)) return message ||
-    'Historical report unavailable; automatic checks continue. Source connection status is shown separately.';
-  return message || 'Source/report unavailable. Check the local source and retry Refresh.';
+  return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
@@ -381,7 +340,9 @@ async function acquire(state, background = false, prices = false) {
   };
   const priceFocusEvents = priceFocus ? ['focusin', 'pointerdown'] : [];
   for (const event of priceFocusEvents) document.addEventListener(event, movedPriceFocus);
-  const request = state.request;
+   const request = state.request;
+   state.userInitiated = !background && (prices || state.actionRequested === true);
+   state.actionRequested = false;
   let publication = null;
   let retry = !!state.failed && !background && !automaticHistory(state);
   state.loading = true;
@@ -392,7 +353,7 @@ async function acquire(state, background = false, prices = false) {
   ReportLoading.reset(state);
   state.lastWork = null;
   ReportLoading.observe(state, {phase: 'queued'});
-  state.message = background ? '' : state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
+   state.message = state.userInitiated ? 'Loading…' : '';
   show(state);
   async function admit() {
     while (true) {
@@ -506,14 +467,13 @@ async function acquire(state, background = false, prices = false) {
       state.orderRetried = true;
       demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
     }
-    state.message = prices ? 'Price list refresh failed; previous prices retained' : background && !automaticHistory(state) ? 'Update delayed; last completed report retained.' :
-      `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message, state)}`;
+   state.message = prices || state.userInitiated ? 'Could not load. Try again.' : '';
     if (prices) state.priceMessage = state.message;
     state.failed = !prices; // A retained price failure belongs only to its toolbar.
   } finally {
      const owned = state.attempt === attempt;
      if (owned) {
-      if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError, state); }
+     if (state.dispatchError && !prices) { state.failed = true; state.message = state.userInitiated ? failure(state.dispatchError, state) : ''; }
       state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
       show(state); scheduleCachedReport();
      }
@@ -636,7 +596,7 @@ async function connect() {
     csrf = session.csrf;
     // Lightweight file read precedes reports; HTML already carries the early-paint theme.
     try { applySettings(await api('/api/settings')); }
-    catch (_) { notice.textContent = 'Unable to read saved Web settings. Open Settings for details.'; }
+   catch (_) { /* Saved settings are optional here; explicit Settings owns errors. */ }
      const state = await api('/api/status');
      if (state.data_dispatcher && typeof DataDemand !== 'undefined') {
        const writable = () => !!csrf && hostState.writable && !hostState.terminal;
@@ -649,7 +609,7 @@ async function connect() {
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
-    statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
+   statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
         liveValue = value?.view || !liveValue?.view ? value : {...value,
@@ -658,7 +618,7 @@ async function connect() {
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
             if (current?.active === job.id && !ReportLoading.sections.includes(current.section)) {
-              notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
+             notice.textContent = current.userInitiated ? 'Loading…' : '';
             }
             if (current?.active === job.id && ReportLoading.sections.includes(current.section) &&
                 (!current.result || current.withheld) && ['queued', 'running'].includes(job.status)) {
@@ -683,7 +643,7 @@ async function connect() {
 }
 refresh.addEventListener('click', () => {
   if (!hostState.writable) return;
-   if (current?.request) acquire(current);
+   if (current?.request) { current.actionRequested = true; acquire(current); }
 });
 window.addEventListener('hashchange', () => {
   // Pasting into an already-open unauthorized tab can be same-document navigation.

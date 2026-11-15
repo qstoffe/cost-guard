@@ -79,27 +79,29 @@ const ReportLoading = (() => {
       const percent = state.percent || 0;
       if (state.waitingReason) this.bar.removeAttribute('value');
       else this.bar.value = percent;
-      this.bar.setAttribute('aria-valuetext', state.waitingReason ? state.stage : `${percent} percent`);
+      this.bar.setAttribute('aria-valuetext', state.waitingReason ? state.simple ? 'Loading…' : state.stage : `${percent} percent`);
       ReportView.text(this.percent, state.waitingReason ? 'Waiting' : `${percent}%`);
-      ReportView.text(this.stage, state.stage || 'Authorizing browser session');
+      const label = state.userInitiated ? 'Loading report…' : 'Loading…';
+      ReportView.text(this.stage, state.simple ? label : state.stage || label);
       // Announce stage transitions, not every count/poll/percentage mutation.
-      ReportView.text(this.status, state.stageLabel || 'Authorizing browser session');
+      ReportView.text(this.status, state.simple ? label : state.stageLabel || label);
     }
   }
   function show(parent, state) {
     if (state.failed || state.interrupted) {
       state.loadingError ||= ReportView.element('p', '', 'error');
-      state.loadingError.setAttribute('role', 'alert');
-      ReportView.text(state.loadingError, state.failed ? state.message : state.interrupted);
+      if (state.userInitiated) state.loadingError.setAttribute('role', 'status');
+      else state.loadingError.removeAttribute('role');
+      ReportView.text(state.loadingError, state.userInitiated ? 'Could not load. Try again.' : 'N/A');
       if (parent.firstChild !== state.loadingError) parent.replaceChildren(state.loadingError);
       return;
     }
     state.loader ||= new View(parent.querySelector('.report-loading'));
-    state.loader.update(state);
+    state.loader.update({...state, simple: true});
     if (parent.firstChild !== state.loader.root) parent.replaceChildren(state.loader.root);
   }
   function paintCompletion(state, signal) {
-    state.loader?.update(state);
+    state.loader?.update({...state, simple: true});
     if (typeof requestAnimationFrame !== 'function' || document.hidden) return;
     // Permit one real completion paint, never hold a hidden/cancelled document
     // waiting for animation frames (background browsers may suspend them).

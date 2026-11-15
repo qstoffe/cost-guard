@@ -155,6 +155,6 @@ vm.runInContext('mixView.update(result)', context);
 assert.doesNotMatch(helpText(title), /Partial pricing:/, 'complete aggregate omits partial-pricing paragraph');
 context.result = {...partial, view: {...partial.view, token_mix: {...partial.view.token_mix, request_count: 0}, model_token_mix: [], publisher_token_mix: []}};
 vm.runInContext('mixView.update(result)', context);
-assert.match(output.textContent, /No available historical usage/);
+assert.match(output.textContent, /No usage yet/);
 assert.doesNotMatch(helpText(title), /Partial pricing:/, 'empty usage never claims partial costs');
 console.log('PASS quiet Token Mix both units/tables, partial-pricing and telemetry help, live refresh and empty history');

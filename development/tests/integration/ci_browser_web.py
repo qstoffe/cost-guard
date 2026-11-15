@@ -160,7 +160,7 @@ def main():
                 assert page.locator('#result progress').count() == 0
                 # Synthetic Sessions acquisition publishes no Watch observation.
                 # An authenticated SSE socket must not claim source readiness.
-                expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
+                expect(page.locator("#status")).to_have_text("")
                 assert streams, "authenticated real SSE connection was not established"
                 expect(page.locator("#host-state")).to_be_hidden()
                 expect(page.locator("#host-state")).to_have_text("")
@@ -296,13 +296,13 @@ def main():
                 owner.events.publish("live", {"state": "CI synthetic Live observation"})
                 page.get_by_role("link", name="Watch", exact=True).click()
                 page.wait_for_function("() => liveValue?.state === 'CI synthetic Live observation'", timeout=15000)
-                expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
+                expect(page.locator("#host-state")).to_be_hidden()
                 expect(page.locator("#result")).to_have_text("")
                 page.evaluate("""() => {const now=Date.now; try {
                     Date.now=()=>now()+180000; show(current);
                 } finally {Date.now=now;}}""")
                 expect(page.locator("#result")).to_have_text("")
-                expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
+                expect(page.locator("#host-state")).to_be_hidden()
                 assert page.url.endswith("/#/watch")
                 page.goto(origin + "/#/live")
                 expect(page.locator("#heading")).to_have_text("Watch")
@@ -327,20 +327,23 @@ def main():
                         connection.shutdown(socket.SHUT_RDWR)
                     except OSError:
                         pass
-                expect(page.locator("#status")).to_contain_text(re.compile("offline|reconnecting"), timeout=45000)
+                page.wait_for_function("() => ['offline','reconnecting'].includes(hostState.kind)", timeout=45000)
+                expect(page.locator("#status")).to_have_text("")
+                expect(page.locator("#host-state")).to_be_hidden()
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 context.set_offline(False)
-                expect(page.locator("#status")).to_have_text("Connection: source unavailable. See notice below.", timeout=30000)
-                expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
-                expect(page.locator("#host-state")).to_contain_text("HTTP connected")
+                page.wait_for_function("() => hostState.writable", timeout=30000)
+                expect(page.locator("#status")).to_have_text("")
+                expect(page.locator("#host-state")).to_be_hidden()
                 # Do not shut down the fixture in the gap between the successful
                 # HTTP health probe and EventSource's asynchronous retry. A dead
                 # server cannot deliver a terminal event to a disconnected tab.
                 page.wait_for_function('() => ciEventStreams.some(stream => stream.readyState === EventSource.OPEN)', timeout=30000)
                 evidence["checks"].append("real browser network loss/reconnect retains report")
                 owner.stop("menu")
-                expect(page.locator("#status")).to_have_text("Connection: stopped. See notice below.", timeout=15000)
-                expect(page.locator("#host-message")).to_contain_text("host stopped")
+                page.wait_for_function("() => hostState.kind === 'stopped'", timeout=15000)
+                expect(page.locator("#status")).to_have_text("")
+                expect(page.locator("#host-message")).to_have_text("Reopen Cost Guard from the launcher to reconnect.")
                 expect(page.locator("#host-state")).to_be_visible()
                 assert page.locator("#refresh").is_disabled()
                 assert owner.stopped.wait(10)

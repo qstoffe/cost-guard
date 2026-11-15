@@ -50,11 +50,19 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
   }
   for (const name of ['63','64']) {
-    await evaluate(`document.activeElement?.blur();[...document.querySelectorAll('.token-mix-table')[0].tBodies[0].rows]
-      .find(row=>row.cells[1].textContent.includes('model ${name}')).cells[5].firstElementChild.focus()`);
-    await until(`${help}?.matches(':popover-open')`);
-    assert.match(await evaluate(`${help}.textContent`),/^Input CCost: \d+ Credits$/);
-    assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`),/N\/A|Partial|\?|not zero/);
+    await evaluate(`document.activeElement?.blur();ContextHelp.dismiss(current.tokenMix.root);
+      globalThis.partialCategory=[...document.querySelectorAll('.token-mix-table')[0].tBodies[0].rows]
+      .find(row=>row.cells[1].textContent.includes('model ${name}')).cells[5].firstElementChild;
+      partialCategory.focus()`);
+    if (name==='63') {
+      assert.match(await evaluate('partialCategory.textContent'),/^\d+(?:\.\d+)?%$/,'known token share remains independent of pricing');
+      assert.equal(await evaluate('partialCategory.closest("tr").cells[9].textContent'),'N/A','unpriced cost is not zero');
+      assert.equal(await evaluate(`${help}?.matches(':popover-open') || false`),false,'no diagnostic caveat replaces missing cost');
+    } else {
+      await until(`${help}?.matches(':popover-open')`);
+      assert.match(await evaluate(`${help}.textContent`),/^Input CCost: \d+ Credits$/,'known input retains its independently priced amount');
+    }
+    assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`),/Partial|\?|not zero/);
   }
   await evaluate(`document.activeElement?.blur();globalThis.categoryTarget=document.querySelector('.token-mix-table tbody tr').cells[5].firstElementChild;
     categoryTarget.scrollIntoView({block:'center',inline:'center'})`);

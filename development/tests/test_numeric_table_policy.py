@@ -47,7 +47,7 @@ class NumericTablePolicyTests(unittest.TestCase):
                 self.assertEqual("0" if unit == "credits" else "$0.00",
                                  renderer._cost_text((*scope, "new"), None, complete=False))
 
-    def test_unknown_amounts_are_only_display_zero_in_both_units(self):
+    def test_web_unknown_amounts_are_not_zero_in_either_unit(self):
         keys = ("ccost", "total_ccost", "known_ccost", "incoming_context_ccost", "extra_ccost")
         source = record(**dict.fromkeys(keys, None), unresolved_cost=True, complete=False,
                         billed_cost=None, context_tokens=None)
@@ -55,7 +55,7 @@ class NumericTablePolicyTests(unittest.TestCase):
             wire = with_display(source, ccost_display_unit=unit).to_json()
             for key in keys:
                 self.assertIsNone(wire[key])
-                self.assertEqual(zero, wire["display"][key])
+                self.assertEqual("N/A", wire["display"][key])
             self.assertFalse(wire["complete"])
             self.assertTrue(wire["unresolved_cost"])
             self.assertEqual("N/A", wire["display"]["billed_cost"])
@@ -86,6 +86,19 @@ class NumericTablePolicyTests(unittest.TestCase):
                                             ccost_display_unit=unit).to_json()
                     self.assertEqual([complete["display"][key] for key in keys],
                                      [wire["display"][key] for key in keys])
+
+    def test_web_unpriced_zero_and_independently_priced_zero_subtotal_are_distinct(self):
+        for priced, expected in ((0, "N/A"), (1, "0")):
+            source = record(known_ccost=Decimal(0), complete=False, observed_requests=2, priced_requests=priced)
+            wire = with_display(source).to_json()
+            self.assertEqual(expected, wire["display"]["known_ccost"])
+            self.assertEqual("0", wire["known_ccost"])
+            self.assertFalse(wire["complete"])
+        # A whole-session subtotal supported by a priced compaction is not proof
+        # that this wholly unpriced prompt has an observed zero cost.
+        prompt = record(ccost=Decimal(0), unresolved_cost=True,
+            comparison_cost=record(ccost=None, known_ccost=Decimal(0), priced_requests=1))
+        self.assertEqual("N/A", with_display(prompt).to_json()["display"]["ccost"])
 
     def test_comparison_run_keeps_incomplete_identity_and_plain_cost(self):
         source = record(match_run=True, started_at_ms=1000, completed_at_ms=2000,

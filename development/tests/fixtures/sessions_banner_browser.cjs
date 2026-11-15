@@ -82,7 +82,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await run(`bannerWork={phase:'index',status:'pending',generation:20,completed:1,total:80};await current.catalog.load()`);
      assert.equal(await evaluate('current.catalog.status.textContent'),label+' · 1 of 80 sessions');
     await run(`bannerMode='retry';await current.catalog.load()`);
-     assert.match(await evaluate('current.catalog.status.textContent'),/Loading paused\. Retrying/);
+     assert.equal(await evaluate('current.catalog.statusTask.textContent'),label);
+     assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/paused|Retrying|source/);
     assert.equal(await evaluate('current.catalog.operation===userOperation && !current.catalog.operation.failed'),true);
     await run(`bannerMode='pending';bannerWork={phase:'${phase}',status:'pending',generation:21,completed:5,total:100};await current.catalog.load()`);
     assert.equal(await evaluate('current.catalog.statusTask.textContent'),label);
@@ -112,12 +113,10 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.operation?.pending && !current.catalog.busy');
   assert.equal(await evaluate('current.catalog.operation.userInitiated'),false); await quiet();
   await run(`bannerMode='retry';await current.catalog.load()`);
-  assert.match(await evaluate('current.catalog.status.textContent'),/^Sessions unavailable.*Recovering automatically/);
-  assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/Loading|Sorting/);
+  await quiet();
   await run(`bannerMode='pending';await current.catalog.load()`); await quiet();
   await run(`bannerMode='terminal';await current.catalog.load()`);
-   assert.match(await evaluate('current.catalog.status.textContent'),/Access unavailable.*reopen Sessions/);
-  assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/Loading|Sorting|Cancel/);
+  await quiet();
   assert.equal(await evaluate('current.catalog.operation.failed'),true);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
   const ax = await command('Accessibility.getFullAXTree');

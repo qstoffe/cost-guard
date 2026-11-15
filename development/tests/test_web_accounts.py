@@ -26,7 +26,9 @@ class AccountsViewTests(unittest.TestCase):
         self.assertIn("$1.23", cli)
         for native, exported in zip(report.accounts_quotas.accounts, accounts, strict=True):
             for (_, cost), scope in zip(native.ccost_scopes, exported["ccost_scopes"], strict=True):
-                self.assertEqual(account_ccost_text(cost), scope["cost"]["display"]["account_ccost"])
+                expected = ("N/A" if not cost.complete and not cost.priced_requests and not cost.known_ccost
+                            else account_ccost_text(cost))
+                self.assertEqual(expected, scope["cost"]["display"]["account_ccost"])
             for quota, value in zip(native.account.quotas, exported["observation"]["quotas"], strict=True):
                 expected = "Window not started" if quota.window_active is False else format_reset(quota.reset_at_ms, "Europe/Stockholm", now_ms=NOW)
                 self.assertEqual(expected, value["display"]["reset"])
@@ -36,7 +38,7 @@ class AccountsViewTests(unittest.TestCase):
         self.assertEqual("29/day · no workdays left", pace_text(report.accounts_quotas.accounts[0].pace[0]))
         self.assertEqual("29", first["pace"][0]["display"]["per_day"])
         self.assertNotIn("PRIVATE", json.dumps(dto))
-        self.assertEqual("0", accounts[3]["ccost_scopes"][0]["cost"]["display"]["account_ccost"])
+        self.assertEqual("N/A", accounts[3]["ccost_scopes"][0]["cost"]["display"]["account_ccost"])
 
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_rendered_cards_known_unknown_zero_unlimited_and_sanitized_errors(self):

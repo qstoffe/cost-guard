@@ -33,7 +33,8 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       assert.equal(await evaluate(`dateCatalog.body.rows[0].cells[0].textContent`), expected);
       await evaluate(`ReportView.setTimezone('Europe/Stockholm');connectionStatus('Synthetic offline evidence',
         {kind:'offline',writable:false,authenticatedAt:Date.parse('${instant}'),observedAt:Date.parse('${instant}')})`);
-      assert.match(await evaluate(`document.getElementById('host-details').textContent`), new RegExp(expected));
+       assert.equal(await evaluate(`document.getElementById('host-details').textContent`), '');
+       assert.equal(await evaluate(`document.getElementById('host-state').hidden`), true);
       assert.equal(await evaluate(`CachedReports.interval({scope:{timezone_id:'Europe/Stockholm'},
         view:{ai_stats:[{period:'all',start_ms:null,end_ms:Date.parse('${instant}')}] }},'all')`),
         `All available history → ${expected} (Europe/Stockholm)`);
@@ -52,7 +53,7 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     const text = await focus();
     if (state==='complete' || state==='empty') assert.doesNotMatch(text,/Partial pricing:/);
     assert.doesNotMatch(await evaluate(`current.tokenMix.summary.textContent`),/N\/A|Partial|\?|unavailable/);
-    if (state==='empty') assert.match(await evaluate(`current.tokenMix.root.textContent`),/No available historical usage/);
+    if (state==='empty') assert.match(await evaluate(`current.tokenMix.root.textContent`),/No usage yet|N\/A/);
   }
   assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('strong.help-value[tabindex="0"]').length`),4);
   assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('div > span.help-value,.help-label,[title]').length`),0);

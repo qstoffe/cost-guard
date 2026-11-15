@@ -97,7 +97,8 @@ async function main() {
   assert.ok(!view.body.children.at(-1).textContent.includes('[RUNNING]'));
   assert.equal(view.body.children.at(-1).className, '');
   const retained = view.body.textContent; offline = true; await view.load();
-   assert.equal(view.body.textContent, retained); assert.match(view.status.textContent, /updates unavailable.*Previously verified/);
+   assert.equal(view.body.textContent, retained); assert.equal(view.status.textContent, '');
+   assert.equal(view.retry.hidden, true);
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
   offline = false; page.export_available = true;
@@ -132,7 +133,7 @@ async function main() {
   const pendingBar = pendingView.loader.bar;
   assert.equal(pendingBar.max, 100); assert.equal(pendingBar.value, 0);
   assert.equal(pendingBar.attributes['aria-valuetext'], '0 percent');
-  assert.match(pendingView.loader.stage.textContent, /Waiting for session source/);
+   assert.match(pendingView.loader.stage.textContent, /Loading session/);
   assert.equal(pendingView.status.hidden, true);
   await pendingView.load(); pendingView.freshness();
   assert.equal(pendingView.loader.bar, pendingBar, 'polls preserve the determinate DOM instance');
@@ -140,32 +141,32 @@ async function main() {
   assert.equal(delays.at(-1), 500, 'bounded short pending status polls do not acquire source history');
   assert.equal(timers.size, 1);
   pendingState = 'source_unavailable'; await pendingView.load();
-   assert.match(pendingView.status.textContent, /Source unavailable/);
+    assert.match(pendingView.status.textContent, /Could not load/);
    assert.ok(!pendingView.status.children.some(node => node.tag === 'progress'));
    assert.equal(pendingView.loader.root.hidden, true);
    assert.equal(pendingView.scroll.attributes['aria-busy'], 'false');
   assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
    acquisition = {phase:'analyzing',attempts:2,completed:73,percent:40,progress_age_seconds:1};
   await pendingView.load();
-  assert.match(pendingView.loader.stage.textContent,/Analyzing session history.*73 completed work units; attempt 2/);
+   assert.equal(pendingView.loader.stage.textContent,'Loading session…');
    assert.equal(pendingBar.value,40,'source phase milestone advances without inventing a scalar denominator');
    acquisition.completed=73000; await pendingView.load();
    assert.equal(pendingBar.value,40,'arbitrary unknown units never advance the milestone');
    acquisition={phase:'reading',percent:27,phase_completed:1,phase_total:2,attempts:2};
    await pendingView.load(); assert.equal(pendingBar.value,40,'late lower watermark cannot regress');
-   assert.match(pendingView.loader.stage.textContent,/1 of 2 stage units/);
+    assert.equal(pendingView.loader.stage.textContent,'Loading session…');
    acquisition={phase:'retrying',percent:40,attempts:2}; await pendingView.load();
    acquisition={phase:'selecting',percent:3,attempts:3}; await pendingView.load();
    assert.equal(pendingBar.value,40,'automatic retry retains watermark, not claimed current-attempt fraction');
   acquisition = {phase:'failed',reason:'detail_no_progress',attempts:3,retry_available:true};
   await pendingView.load();
   assert.equal(pendingView.retry.hidden,false);
-  assert.match(pendingView.status.textContent,/No forward progress.*Retry or return to Sessions/);
+   assert.equal(pendingView.status.textContent,'Could not load. Try again or return to Sessions.');
   assert.equal(pendingView.loader.root.hidden,true);
   await pendingView.retrySource();
   assert.equal(retryCalls,1);
   assert.equal(pendingView.retry.hidden,true);
-  assert.match(pendingView.loader.stage.textContent,/Queued for session source/);
+   assert.equal(pendingView.loader.stage.textContent,'Loading session…');
   let finishStatus;
   pendingView.pendingLoad = new Promise(resolve => {finishStatus=resolve;});
   pendingView.busy = true;
@@ -237,7 +238,7 @@ async function main() {
     const invalid = context.invalid; invalid.attached = true; await invalid.load();
     assert.equal(invalid.data, null); assert.ok(invalid.loader.bar.value < 100);
     assert.equal(invalid.scroll.attributes['aria-busy'], 'false'); assert.equal(invalid.loader.root.hidden, true);
-    assert.match(invalid.status.textContent, /inconsistent_history|detail_expired/);
+    assert.equal(invalid.status.textContent, 'Could not load. Return to Sessions to try again.');
     broken = false; await invalid.load(); assert.equal(invalid.body.children.length, 100); invalid.detach();
   }
   for (const failure of ['instance_stopping', 'authentication_required', 'host_identity_changed']) {
@@ -250,7 +251,7 @@ async function main() {
     const stopping = context.stopping; stopping.attached = true; await stopping.load();
     assert.equal(stopping.attached, false); assert.equal(stopping.token, null);
     assert.equal(stopping.scroll.attributes['aria-busy'], 'false');
-    assert.equal(stopping.loader.root.hidden, true); assert.match(stopping.status.textContent, new RegExp(failure));
+    assert.equal(stopping.loader.root.hidden, true); assert.doesNotMatch(stopping.status.textContent, new RegExp(failure));
   }
   let resolveOpen, opening = true;
   const raceCalls = [];
@@ -389,9 +390,9 @@ async function main() {
     catalog.api=async (_,request)=> {if(request.action==='interest')return {}; failures++;throw new Error('catalog_expired');};
     await catalog.load();
     assert.equal(failures,2,'one bounded reopen even when the source keeps expiring');
-    assert.equal(catalog.body.children.length,25); assert.match(catalog.status.textContent,/expired|unavailable/);
+    assert.equal(catalog.body.children.length,25); assert.equal(catalog.status.textContent,'');
      catalog.api=async ()=>{throw new Error('offline');}; await catalog.load();
-     assert.equal(catalog.body.children.length,25); assert.match(catalog.status.textContent,/unavailable/);
+     assert.equal(catalog.body.children.length,25); assert.equal(catalog.status.textContent,'');
      catalog.api=async (_,request)=>request.action==='interest'?{}:{...usable,sort:'ccost',direction:-1};
      await catalog.load();
      assert.equal(catalog.status.textContent,'','a later successful poll retires a real failure too');
@@ -447,7 +448,8 @@ async function main() {
      assert.equal(liveRow.children[3].textContent,'1.25?','focus cannot freeze live cost');
      assert.equal(liveRow.children[4].textContent,'2');
     model.events.focus();
-    assert.match(document.body.children.at(-1).textContent,/alpha\/model[\s\S]*beta\/model[\s\S]*Observed so far/);
+    assert.match(document.body.children.at(-1).textContent,/alpha\/model[\s\S]*beta\/model/);
+    assert.doesNotMatch(document.body.children.at(-1).textContent,/Observed so far|incomplete/);
     catalog.update({...catalogData,total:1,view:{session_usage:[{...multiple,contributor_models:['alpha/model','beta/model','child/model'],
       display:{...multiple.display,model_help:'alpha/model\nbeta/model\nchild/model\nObserved so far'}} ]}});
     assert.match(document.body.children.at(-1).textContent,/child\/model/,'open help refreshes without losing its target');

@@ -84,20 +84,20 @@ class WatchPromptCostTests(unittest.TestCase):
                         self.assertEqual(getattr(cli["u_next"], key), getattr(row, key))
                     prompt = self.wire((row,))["active_cards"][0]["rows"][0]["prompt"]
                     if model:
-                        self.assertEqual("0", prompt["display"]["ccost"])
+                        self.assertEqual("N/A", prompt["display"]["ccost"])
                         self.assertIsNone(prompt["incoming_context_ccost"])
                         self.assertIsNone(prompt["extra_ccost"])
                     if running and usage.known_fields == ("input",):
                         self.assertIsNone(prompt["incoming_context_ccost"])
                         self.assertIsNone(prompt["extra_ccost"])
                     if usage.known_fields == ("input",):
-                        self.assertEqual("0", prompt["display"]["incoming_context_ccost"])
-                        self.assertEqual("0", prompt["display"]["extra_ccost"])
+                        self.assertEqual("N/A", prompt["display"]["incoming_context_ccost"])
+                        self.assertEqual("N/A", prompt["display"]["extra_ccost"])
                     if not model and usage == TokenUsage(input=100):
                         self.assertEqual("0", prompt["display"]["extra_ccost"])
                     if usage == TokenUsage():
                         self.assertEqual("0", prompt["display"]["ccost"])
-                        self.assertEqual("0", prompt["display"]["incoming_context_ccost"])
+                        self.assertEqual("N/A", prompt["display"]["incoming_context_ccost"])
 
     def test_independent_first_request_and_child_coverage_agree_with_cli_unknowns(self):
         snapshot = make_uncompacted_snapshot()
@@ -125,7 +125,7 @@ class WatchPromptCostTests(unittest.TestCase):
                         expected = getattr(cli["u_sub"], key)
                         self.assertEqual(None if expected is None else str(expected), value[key])
                         if not supported:
-                            self.assertEqual("$0.00" if unit == "usd" else "0", value["display"][key])
+                            self.assertEqual("N/A", value["display"][key])
 
     @unittest.skipUnless(shutil.which("node"), "optional JavaScript VM unavailable")
     def test_both_tables_display_independent_unknown_zero_partial_and_unit_tokens(self):

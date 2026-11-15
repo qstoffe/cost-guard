@@ -78,9 +78,17 @@ const ReportView = (() => {
     'incoming_context_ccost', 'extra_ccost', 'next_context_cached_ccost', 'next_context_fresh_ccost',
     'watch_next_context_cached_ccost', 'watch_next_context_fresh_ccost']);
   const display = (row, key) => {
+    // Consumer help uses friendly acquired labels, not backend diagnostic prose.
+    // Raw DTO evidence remains unchanged for logs/CLI and numeric authority.
+    if (['model_help', 'model_detail_help'].includes(key)) {
+      const groups = row?.display?.mini_cost_models;
+      return Array.isArray(groups) && groups.length ? groups.map(([kind, model]) => `${kind}: ${model}`).join('\n') :
+        row?.contributor_models?.length ? row.contributor_models.join('\n') :
+        row?.watch_model || row?.model_effort || row?.model || row?.label || 'N/A';
+    }
     const value = row?.display_units?.[unit]?.[key] ?? row?.display?.[key];
     return costKeys.has(key) && (value == null || ['', 'N/A', 'Not Applicable', '—', '-', 'Loading…', 'Unavailable'].includes(value)) ?
-      unit === 'usd' ? '$0.00' : '0' : value ?? 'N/A';
+      'N/A' : value ?? 'N/A';
   };
   class CostDisplay {
     constructor() { this.values = new Map(); }
@@ -160,12 +168,8 @@ const ReportView = (() => {
   const capacityKnown = (quota, monthly = false) => quota.ccost_reference?.[monthly ? 'monthly_capacity' : 'capacity'] != null;
   function quotaCapacityHelp(quota, monthly = false) {
     if (quota.unlimited && !monthly) return 'Capacity: Unlimited';
-    const explanation = display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
-    if (explanation && explanation !== 'N/A') return explanation;
-    if (!capacityKnown(quota, monthly)) return monthly ?
-      'No reliable full-window reference Capacity or verified duration for a 30-day equivalent.' :
-      'No reliable same-window reference CCost or source-confirmed full-window allowance.';
-    return '';
+    if (!capacityKnown(quota, monthly)) return 'N/A';
+    return 'Estimated reference-cost capacity for this quota.';
   }
   function quotaUsageHelp(quota) {
     const view = quotaView(quota), native = quota.quota_display;
@@ -174,8 +178,6 @@ const ReportView = (() => {
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
       display(quota, 'web_reset') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
-      (['stale', 'unavailable', 'error', 'paused', 'invalid'].includes(quota.status) ? '\nQuota status: ' + quota.status + '.' : '') +
-      ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
   }
   const mixText = row => Object.entries(row?.display?.token_categories || {})
@@ -223,9 +225,9 @@ const ReportView = (() => {
   function costHelp(row, key = 'ccost') {
     if (['total_ccost', 'known_ccost'].includes(key) && display(row, 'session_cost_help') !== 'N/A') return display(row, 'session_cost_help');
     if (!row) return '';
-    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. Display zero is not proof of zero cost.';
+    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return '';
     if (row[key] != null && !row.unresolved_cost && row.complete !== false) return '';
-    return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. Display zero is not proof of zero cost.';
+    return '';
   }
   function costValue(row, key = 'ccost') {
     const node = element('span', () => ccost(row, key));
@@ -476,7 +478,7 @@ const ReportView = (() => {
       input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
-    checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\n\nIf availability cannot be checked, show the full catalog.');
+    checkbox('Show all Copilot-priced models', 'all', 'Show the full priced catalog instead of the available-model list.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
     tools.append(prices, filters); root.append(tools);
     const scroll = element('div', undefined, 'overview-models');
@@ -568,7 +570,7 @@ const ReportView = (() => {
       for (const row of [...body.children]) if (!keep.has(row)) row.remove();
       wanted.forEach((row, index) => { if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null); });
       for (const [identity, entry] of rows) if (!keep.has(entry.row)) rows.delete(identity);
-      text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
+      text(empty, shown.length ? '' : 'No matching models.');
     }
     grid.append(head, body); scroll.append(grid); root.append(scroll);
     root.append(empty);
@@ -610,7 +612,7 @@ const ReportView = (() => {
       levels.append(level);
     }
     cell.append(levels);
-    let prices = row.price_help || 'GitHub Copilot · USD / 1M tokens\nPublished rates unavailable';
+    let prices = row.price_help || 'GitHub Copilot · USD / 1M tokens';
     if (row.promotional) {
       cell.append(element('span', ' *', 'model-marker'));
       const offer = row.promotion;
@@ -626,10 +628,10 @@ const ReportView = (() => {
   function accountQuota(card, quota, compact = false) {
     const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' ') +
       (quota.status === 'blocked' ? ' error' : ''));
-    const status = quota.status === 'blocked' ? ' · BLOCKED' : compact && quota.status === 'available' ? '' : ' · ' + quota.status;
+    const status = quota.status === 'blocked' ? ' · BLOCKED' : '';
     row.append(element('strong', quota.label + status));
     const view = () => quotaView(quota);
-    const summary = () => quota.unlimited ? 'Unlimited' : view().account_percent === 'N/A' ? 'Used percentage unavailable' :
+    const summary = () => quota.unlimited ? 'Unlimited' : view().account_percent === 'N/A' ? 'N/A' :
       view().account_percent + ' ' + view().mode;
     const hasCost = quota.period_ccost?.cost != null;
     const label = element('span', undefined, 'metric-value');
@@ -673,14 +675,7 @@ const ReportView = (() => {
     card.append(row);
   }
   function accountStatus(obs, compact = false) {
-    const cause = {auth_failure: 'Authentication unavailable', unsupported_auth_method: 'Unsupported authentication method',
-      transport_failure: 'Connection failed', format_changed: 'Provider format changed',
-      software_failure: 'Account refresh failed internally', discovery_failure: 'Account metadata unavailable',
-      rate_limited: 'Rate limited', account_unavailable: 'Account unavailable'}[obs.error_code];
-    const availability = {available: 'Available', partial: 'Partial quota data', stale: 'Stale — last observation, not current',
-      unavailable: 'Unavailable', error: 'Refresh failed'}[obs.availability] || 'Availability unknown';
-    const status = obs.status === 'available' ? '' : obs.status === 'blocked' ? 'BLOCKED' : compact ? '' : 'Usage status unknown';
-    return [compact && obs.availability === 'available' ? '' : availability, status, cause, obs.has_warning && 'Provider warning'].filter(Boolean).join(' · ');
+    return obs.status === 'blocked' ? 'Provider restriction reported' : '';
   }
   function overviewAccounts(parent, accounts, title = 'Accounts Overview', detailed = false, compact = false, watch = false) {
     if (!compact && !watch) parent.append(element('h3', title));
@@ -693,8 +688,7 @@ const ReportView = (() => {
       details.append(element('summary', compact ? 'Details' : 'Observation details'));
       card.append(accountHeading(() => obs));
       (compact ? details : card).append(element('p', [obs.provider_label, obs.plan].filter(Boolean).join(' · '), 'detail'));
-      if (detailed && (!compact || obs.has_error || obs.has_warning || obs.status === 'blocked' || obs.availability !== 'available')) card.append(element('p', accountStatus(obs, compact),
-        obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
+      if (obs.status === 'blocked') card.append(element('p', accountStatus(obs, compact), 'account-status'));
       for (const scope of account.ccost_scopes) {
         const line = element('p', undefined, 'metric-value');
         line.append(ContextHelp.value(element('span', () => `CCost ${scope.name}: ${display(scope.cost, 'account_ccost')}`),
@@ -715,14 +709,7 @@ const ReportView = (() => {
         }
       }
       if (!watch && (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null)) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
-      if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
-      if (detailed && !obs.quotas.length) card.append(element('p', 'Quota unavailable; not zero or unlimited.', 'detail'));
-      if (account.ccost_account_unknown) card.append(element('p', 'CCost account attribution unknown.', 'warning'));
-      (watch ? [] : account.ccost_notes || []).forEach((note, index) => {
-        const provider = account.provider_ccost_notes?.find(item => item.index === index);
-        (compact ? details : card).append(element('p', provider ? () => `Provider-only CCost ${provider.name}: ${display(provider.cost, 'known_ccost')}${!provider.cost.complete ? ' (partial pricing)' : ''}; not allocated to accounts.` : note, 'warning'));
-      });
-      details.append(element('p', `${obs.availability} · ${obs.status} · Observed ${display(obs, 'observed_at_ms')}`));
+      details.append(element('p', `Observed ${display(obs, 'observed_at_ms')}`));
       for (const bill of obs.billing || []) (detailed && !compact ? card : details).append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
       if (compact) for (const quota of obs.quotas) accountQuota(details, quota);
       for (const quota of obs.quotas) details.append(element('p', detailed ?
@@ -758,7 +745,7 @@ const ReportView = (() => {
     parent.append(totals);
     if (block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
-      () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
+      () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'N/A'));
     contextSummary(parent, block);
     if (!block.rows.length) parent.append(element('p', 'This session exists but has no prompt rows.'));
     table(parent, 'Prompts · complete session totals, independent of page',
@@ -771,7 +758,7 @@ const ReportView = (() => {
         row.incoming_context_ccost, row.extra_ccost, row.token_mix_percent?.join('/')]);
   }
   function hourlySummary(value) {
-    return `Reference cost per active hour: ${display(value, 'rate')} · ${value.status} · CCost ${display(value, 'known_ccost')} · Active execution ${display(value, 'duration_ms')}`;
+    return `Reference cost per active hour: ${display(value, 'rate')} · Active execution ${display(value, 'duration_ms')}`;
   }
   function historyWarning(result) {
     if (result?.source?.status !== 'partial') return '';
@@ -794,20 +781,16 @@ const ReportView = (() => {
       return;
     }
     parent.replaceChildren();
-    parent.append(element('p', `Snapshot: ${timestamp(result.observed_at_ms, view.timezone_id)} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
-    if (result.source.status === 'partial') parent.append(element('p', Number.isSafeInteger(result.source.omitted_roots) && result.source.omitted_roots > 0 ?
-      historyWarning(result) : `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
-    if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
-    if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
+    parent.append(element('p', `Snapshot: ${timestamp(result.observed_at_ms, view.timezone_id)}`, 'snapshot'));
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost — Estimated reference cost, not your bill. Unknown prices are not zero.\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.', 'help-copy'));
     if (!overview) parent.append(definitions);
     parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
     if (view.session_usage.length || view.kind === 'sessions') {
-      if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'Partial source: no sessions returned; unavailable history is not empty success.' : 'Source acquired: no available sessions.'));
+      if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'N/A' : 'No sessions yet.'));
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
         row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'),
-            element('span', [!row.complete && 'Incomplete pricing', row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
+            element('span', [row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
           return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), costValue(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }
@@ -818,7 +801,6 @@ const ReportView = (() => {
       parent.append(element('p', 'Normal report · local-month / Today CCost and account-native windows. Independent frozen observations; not Watch rolling usage.', 'detail'));
       overviewAccounts(parent, accounts, 'Accounts · independent observations', true);
     }
-    for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
   }
   function contextSummary(parent, block) {
     parent.append(element('p', () => display(block, 'next_context'), block.next_context_warning ? 'threshold' : 'detail'));
@@ -832,7 +814,6 @@ const ReportView = (() => {
   }
   function detailCells(row, live = false, zone = timezone) {
     const label = promptLabel(row, live);
-    if (row.retained) label.append(element('span', `Last observed ${timestamp(row.last_observed_at_ms, zone)}; source history omitted this row`, 'detail'));
     return [label, costValue(row), row.display?.calls ?? known(row.calls),
       display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), costValue(row, 'incoming_context_ccost'),
       costValue(row, 'extra_ccost'), display(row, 'token_mix_percent')];

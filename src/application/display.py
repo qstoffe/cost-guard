@@ -22,6 +22,7 @@ from .comparisons import display_tokens as comparison_tokens
 from .reference_cost import cost_help_tokens
 from .model_help import session_model_tokens
 from .mini_costs import mini_cost_tokens
+from .web_costs import unavailable_tokens
 
 
 def decimal(value):
@@ -39,8 +40,8 @@ def amount_tokens(values):
                 "watch_next_context_cached_ccost", "watch_next_context_fresh_ccost"):
         if key not in values:
             continue
-        # Report-owned availability flags remain canonical; only the amount
-        # token uses zero while its required component evidence is missing.
+        # Shared formatter output is refined by Web availability tokens below;
+        # report-owned flags and raw component evidence remain canonical.
         if key in ("incoming_context_ccost", "extra_ccost") and values.get(key + "_known") is False:
             tokens[key] = ccost_amount(None)
             continue
@@ -374,6 +375,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(mini_cost_tokens(values))
             alternate.update(stat_tokens(values))
             alternate.update(comparison_tokens(values, timezone_id))
+            alternate.update(unavailable_tokens(values))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
     tokens.update(cost_help_tokens(values))

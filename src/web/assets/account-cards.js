@@ -27,7 +27,7 @@ const AccountCards = (() => {
     const amount = monthly => !monthly && quota().unlimited ? 'Unlimited' :
       current() && ReportView.capacityKnown(quota(), monthly) ? display(quota(), monthly ? 'monthly_capacity' : 'ccost_capacity') : '?';
     const help = monthly => {
-      if (!current()) return 'Reference CCost unavailable for a stale or unavailable observation.';
+      if (!current()) return '';
       if (quota().unlimited && !monthly) return '';
       if (ReportView.capacityKnown(quota(), monthly)) {
         // Basis is source-qualified by the projection, not inferred from provider or text.
@@ -75,7 +75,7 @@ const AccountCards = (() => {
         bar.className = view().exhausted ? 'watch-quota-exhausted' : '';
       });
       track.append(bar);
-    } else track.append(el('span', () => quota().unlimited ? 'No usage limit' : 'Usage unavailable', 'detail'));
+    } else track.append(el('span', () => quota().unlimited ? 'No usage limit' : 'N/A', 'detail'));
     return {
       nodes: [label, capacity, ...(monthlyApplicable(quota()) ? [monthly] : []), track],
       align(row, extra) {
@@ -112,19 +112,8 @@ const AccountCards = (() => {
   }
   function warnings(item, quiet) {
     const obs = item.observation;
-    const cause = {auth_failure: 'Authentication unavailable', transport_failure: 'Connection failed',
-      unsupported_auth_method: 'Unsupported authentication method', format_changed: 'Provider format changed',
-      software_failure: 'Account refresh failed', discovery_failure: 'Account metadata unavailable',
-      rate_limited: 'Rate limited', account_unavailable: 'Account unavailable'}[obs.error_code];
-    const state = {partial: 'Partial quota data', stale: 'Stale · last observation, not current',
-      unavailable: 'Quota unavailable', error: 'Refresh failed'}[obs.availability];
-    const actionable = ['auth_failure', 'unsupported_auth_method', 'format_changed', 'rate_limited', 'account_unavailable'].includes(obs.error_code);
-    const status = actionable || !quiet ? [state, cause].filter(Boolean).join(' · ') : '';
-    return [[status, 'warning'],
-      [obs.status === 'blocked' && ![item.primary, ...item.secondary].some(q => q.exhausted || q.restricted) ?
-        'Provider restriction reported; utilization not established' : '', 'warning'],
-      [obs.has_warning ? 'Provider warning' : '', 'warning'],
-      [item.ccost_account_unknown ? 'CCost account attribution unavailable' : '', 'detail']].filter(([text]) => text);
+    return [[obs.status === 'blocked' && ![item.primary, ...item.secondary].some(q => q.exhausted || q.restricted) ?
+      'Provider restriction reported' : '', 'warning']].filter(([text]) => text);
   }
   class Subscription {
     constructor() {
@@ -276,8 +265,8 @@ const AccountCards = (() => {
         this.observed = true;
       }
       const missing = failed && !view.accounts?.accounts.length;
-      const message = missing && !this.observed ? 'Accounts unavailable; retrying.' :
-        this.observed && !this.cards.size ? 'No configured accounts detected.' : !this.observed && this.showLoading ? 'Loading accounts…' : '';
+      const message = this.observed && !this.cards.size ? 'No configured accounts detected.' :
+        !this.observed && this.showLoading ? 'Loading…' : '';
       ReportView.text(this.message, message);
       // Keep the healthy view grid-only and preserve its DOM through health updates.
       if (this.cards.size && this.grid.parentNode !== this.root) this.root.append(this.grid);
@@ -316,15 +305,12 @@ const AccountCards = (() => {
           line.append(label, this.el('progress')); this.lines.set(key, line);
         }
         const warning = primary.restricted ? ' · provider restriction' : '';
-        const notes = [obs.has_warning && 'Provider warning',
-          ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
-        const note = notes.filter(Boolean).join(' · ');
         ReportView.bind(line, () => {
           const quota = ReportView.quotaView(primary.quota, primary);
           const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
           const capacity = display(primary.quota, 'capacity_amount');
           line.helpText = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${display(primary, 'mini_reset')}`;
-          text(line.children[0].children[0], `${obs.label} · ${used} (${display(primary.quota, 'ccost_' + quota.mode)})${warning}${note ? ' · ' + note : ''}`);
+          text(line.children[0].children[0], `${obs.label} · ${used} (${display(primary.quota, 'ccost_' + quota.mode)})${warning}`);
           ContextHelp.refresh(line);
           line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
           const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;

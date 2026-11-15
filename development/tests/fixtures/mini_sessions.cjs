@@ -133,7 +133,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(rows()[0].children[0].textContent,'—');assert.equal(helpText(rows()[0].children[0].children[0]),'Unknown finish time');
   for(const state of ['loading','unavailable']) {
     show([resumed],history,state);assert.deepEqual(ids(),['h4']);
-    assert.match(view.body.textContent,state==='loading'?/Loading earlier sessions…/:/Unable to load earlier sessions/);
+    assert.doesNotMatch(view.body.textContent,/Loading earlier|Unable to load/);
     assert.equal(view.needsHistory,true);
   }
   show([],history,'refreshing',1);assert.deepEqual(ids(),history.map(c=>c.session_id));

@@ -26,7 +26,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         const text=await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`);
         // The whole-session fixture includes one supported zero-cost compaction.
         // Mini intentionally uses its priced subtotal, not prompt unknownness.
-        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
+        if(mode==='absent') assert.equal(text,selector===total ? unit==='usd'?'$0.00':'0' : 'N/A',`${unit} ${mode} ${selector}`);
         else if(mode==='zero') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
         else {
           assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
@@ -67,17 +67,17 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     assert.equal(await evaluate(owner,`miniWatch.publication===zeroPending`),true,`${unit} publication accepted`);
     assert.equal(await evaluate(mini,`!!document.querySelector(${JSON.stringify(retainedPrompt)})`),true,
       `${unit} intended running prompt exists`);
-    for(const [raw,complete,expected] of [[null,false,0],['125',false,125],['0',false,125],
+    for(const [raw,complete,expected] of [[null,false,null],['125',false,125],['0',false,125],
       [null,false,125],['100',true,100],['0',true,0]]) {
       await evaluate(owner,`(() => {
         const p=structuredClone(zeroPending),c=p.view.active_cards[0],r=c.rows[0].prompt;
         r.ccost=${JSON.stringify(raw)};r.unresolved_cost=${!complete};
-        r.display.ccost=${JSON.stringify(raw ?? '0')};
-        r.display_units={credits:{ccost:${JSON.stringify(raw ?? '0')}},
-          usd:{ccost:${JSON.stringify('$'+(Number(raw)/100).toFixed(2))}}};
+        r.display.ccost=${JSON.stringify(raw ?? 'N/A')};
+        r.display_units={credits:{ccost:${JSON.stringify(raw ?? 'N/A')}},
+          usd:{ccost:${JSON.stringify(raw===null?'N/A':'$'+(Number(raw)/100).toFixed(2))}}};
         current.watch.update(p);miniWatch.update(p);
       })()`);
-      const wanted=unit==='usd'?'$'+(expected/100).toFixed(2):String(expected);
+      const wanted=expected===null?'N/A':unit==='usd'?'$'+(expected/100).toFixed(2):String(expected);
       for(const [id,selector] of [[owner,full],[mini,retainedPrompt]]) {
         assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`),wanted,
           `${unit} retention raw=${raw} complete=${complete} ${selector}`);
@@ -87,11 +87,11 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     }
     await evaluate(owner,`(() => {
       const p=structuredClone(zeroPending),r=p.view.active_cards[0].rows[0].prompt;
-      r.event_id+='-new';r.ccost=null;r.unresolved_cost=true;r.display.ccost='0';
-      r.display_units={credits:{ccost:'0'},usd:{ccost:'$0.00'}};
+      r.event_id+='-new';r.ccost=null;r.unresolved_cost=true;r.display.ccost='N/A';
+      r.display_units={credits:{ccost:'N/A'},usd:{ccost:'N/A'}};
       p.view.active_cards[0].focal_id=r.event_id;current.watch.update(p);miniWatch.update(p);
     })()`);
-    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(retainedPrompt)}).textContent`),unit==='usd'?'$0.00':'0',
+    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(retainedPrompt)}).textContent`),'N/A',
       `${unit} new prompt isolation`);
   }
   checks.push('Unknown → positive partial → observed unresolved zero/retry retains → lower correction → verified zero; new prompt isolation and Mini accessible cost label in both units');
@@ -110,7 +110,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         '.session-detail tbody td:nth-child(4)','.session-detail tfoot td:nth-child(4)']
         .map(selector=>document.querySelector(selector).textContent)`);
       for(const text of cells) {
-        if(mode==='absent') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} Sessions/detail/footer`);
+        if(mode==='absent') assert.equal(text,'N/A',`${unit} ${mode} Sessions/detail/footer`);
         else assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
         assert.doesNotMatch(text,/\?|Partial /);
       }
@@ -123,7 +123,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
   for(const unit of ['credits','usd']) {
     await evaluate(owner,`ReportView.setUnit('${unit}',document.body);numericStats.update(numericStatsState)`);
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      unit==='usd'?'$0.00':'0 CCost');
+      'N/A');
     await evaluate(owner,`(() => {
       const names=['hourly-rate','total-cost','total-tokens','token-rate','working-time','average-cost',
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
@@ -148,8 +148,8 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     }
     await evaluate(owner,`numericStatsState.period='all';numericStatsState.result=null;numericStats.update(numericStatsState)`);
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      unit==='usd'?'$0.00':'0 CCost','pending period cannot inherit another period');
+      'N/A','pending period cannot inherit another period');
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-tokens').card.textContent`),'Loading…');
   }
-  checks.push('AI Stats actual DOM: cold numeric CCost only, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation; noncost pending remains Loading');
+  checks.push('AI Stats actual DOM: cold unavailable is N/A, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation; noncost pending remains Loading');
 };

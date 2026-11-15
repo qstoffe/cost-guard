@@ -4,9 +4,9 @@ const ComparisonsView = (() => {
   const columns = [
     ['Session', 'Independent root session. Each repetition remains a separate run; follow the link for its actual session detail.'],
     ['Started', 'Configured-local first-prompt start (24-hour clock), not the session’s last activity. Groups and rows instead sort by newest session-tree activity.'],
-    ['Model', 'Provider-qualified main model selected for this first prompt. Mixed work is marked; help lists contributing request models.'],
-    ['Effort', 'Request-bound effort for the first prompt. Unavailable evidence is not an invented default. Mixed variants/models are explicitly marked.'],
-    ['CCost', 'First-prompt reference token valuation including attributable children, not full-session cost or actual billing. Unavailable amounts display zero, not proof of zero cost.'],
+    ['Model', 'Main model for the first prompt; * includes other models.'],
+    ['Effort', 'Reasoning effort for the first prompt.'],
+    ['CCost', 'Reference cost of the first prompt, including linked work.'],
     ['Duration', 'First-prompt start through its supported final execution boundary, including causal tool/child/background work. Not session age or time to first token.'],
     ['Context', 'Approximate next incoming context in tokens immediately after this first prompt. Historical estimate, not remaining model capacity or current context after later prompts. N/A means unsupported.'],
     ['Token Mix', 'I/C/W/O percentages: uncached Input / Cached input / Cache write / Output (including reasoning). Usage composition, not cost distribution.'],
@@ -20,17 +20,17 @@ const ComparisonsView = (() => {
         group.runs.every(run => /^[A-Za-z0-9_-]{1,200}$/.test(run.session_id) && run.match_run));
   }
   function provenance(run, valueCell = false) {
-    return run.contributors.map(item => `${item.model_help}\n${(valueCell ? item.effort_value_help : item.effort_help) || item.effort} · ${item.calls} calls · ${d(item, 'ccost')}${item.complete ? '' : ' (partial)'}`).join('\n\n') || 'No attributable request evidence.';
+    return run.contributors.map(item => `${item.model_label || item.model || 'N/A'} · ${item.effort || 'N/A'} · ${item.calls} calls · ${d(item, 'ccost')}`).join('\n') || 'N/A';
   }
   function help(run, column) {
     const state = `Run status: ${run.status}.`;
     if (column === 1) return `${d(run, 'precise_start')}\nFinal execution boundary: ${d(run, 'precise_end')}\n${state}`;
     if (column === 2 || column === 3) return `${run.mixed ? 'Mixed model/effort work.\n' : ''}${provenance(run, column === 3)}`;
-    if (column === 4) return `First-prompt CCost: ${d(run, 'ccost')} (${run.cost_complete ? 'fully priced' : 'partial/unavailable'}). Not billing.\nMain: ${d(run, 'main_ccost')} · Linked children: ${d(run, 'subagent_ccost')}\nIncoming: ${d(run, 'incoming_context_ccost')} + Extra: ${d(run, 'extra_ccost')}\n${provenance(run)}\n${state}`;
-    if (column === 5) return `${d(run, 'duration_ms')} · ${state}\n${columns[5][1]}\nUnfinished, failed and unknown-boundary runs never set time-gap records.`;
-    if (column === 6) return `${d(run, 'context')} tokens.\n${columns[6][1]}\nValid only for this prompt’s completion; no later prompt is used as a replacement anchor.`;
-    if (column === 7) return `${d(run, 'token_mix_percent')}% I/C/W/O\nObserved token totals: ${d(run, 'totals')}\n${columns[7][1]}\nMissing categories or zero total make the percentages unavailable.`;
-    return `${run.calls} observed physical requests; ${run.linked_agents} linked child sessions; ${run.errors} request errors.\n${state}\n${run.status === 'complete' ? 'Final attributed work.' : 'Counts may be incomplete; no success is inferred.'}`;
+    if (column === 4) return `Main: ${d(run, 'main_ccost')} · Linked children: ${d(run, 'subagent_ccost')}`;
+    if (column === 5) return `${d(run, 'duration_ms')} · ${state}`;
+    if (column === 6) return 'Approximate context after the first prompt.';
+    if (column === 7) return `${d(run, 'token_mix_percent')}% Input / Cached input / Cache write / Output`;
+    return `${run.calls} model requests · ${run.linked_agents} linked sessions · ${run.errors} errors`;
   }
   class Row {
     constructor(run) {
@@ -88,7 +88,7 @@ const ComparisonsView = (() => {
         if (!target) { target = ContextHelp.button('', () => target.help()); this.factNodes.push(target); this.facts.append(target); }
         const label = fact.kind.startsWith('same-') ? 'Same-model variation' : fact.kind === 'time' ? 'Largest time gap' : 'Largest CCost gap';
         ReportView.text(target, () => `${label}: ${d(fact, 'difference')} · ${d(fact, 'ratio')}`);
-        target.help = () => `${fact.samples} qualifying finished runs. ${fact.low_label}: ${d(fact, 'minimum')} → ${fact.high_label}: ${d(fact, 'maximum')}.\nObserved repeated input, not controlled context, answer quality or intrinsic model superiority. Zero baselines have no ratio.`;
+        target.help = () => `${fact.samples} finished runs · ${fact.low_label}: ${d(fact, 'minimum')} → ${fact.high_label}: ${d(fact, 'maximum')}`;
       });
       while (this.factNodes.length > group.facts.length) this.factNodes.pop().remove();
     }
@@ -96,7 +96,7 @@ const ComparisonsView = (() => {
   class View {
     constructor(select) {
       this.root = e('div', undefined, 'comparisons-view'); this.status = e('p'); this.status.setAttribute('role', 'status');
-      const disclaimer = ContextHelp.button('About observed runs', 'Exact first user input does not establish equal repository state, files, instructions, tools, environment or model service. These are individual observed runs, not controlled scientific benchmarks or answer-quality scores. Attachment references without recorded content are excluded.');
+      const disclaimer = ContextHelp.button('About observed runs', 'Individual sessions with the same first input, not a model ranking.');
       this.content = e('div', undefined, 'comparison-groups'); this.groups = [];
       this.feedback = e('p', '', 'comparison-feedback'); this.feedback.setAttribute('role', 'status');
       this.pager = e('div', undefined, 'pager page-navigation'); this.previous = e('button', 'Previous'); this.next = e('button', 'Next'); this.label = e('span');
@@ -125,12 +125,12 @@ const ComparisonsView = (() => {
           return {...shown, contributors: run.contributors.map(item => this.costs.select(item,
             [...scope, item.provider, item.model, item.effort], 'ccost', item.complete === true))};
         })}))};
-      const feedback = state.orderReset ? 'Comparison history changed; restarting at page 1. ' : '';
-      ReportView.text(this.feedback, feedback + (state.pageNavigation ? state.loading ? state.stage : state.failed ? state.message : '' : ''));
+      ReportView.text(this.feedback, state.userInitiated && state.pageNavigation ?
+        state.loading ? 'Loading comparisons…' : state.failed ? state.message : '' : '');
       this.feedback.hidden = !this.feedback.textContent;
       if (!page || state.withheld) {
         this.pager.hidden = true;
-        ReportView.text(this.status, state.withheld ? 'Retained report is stale and withheld.' : '');
+        ReportView.text(this.status, '');
         ReportLoading.show(this.content, state);
         return;
       }

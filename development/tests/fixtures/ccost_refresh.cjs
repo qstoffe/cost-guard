@@ -5,10 +5,10 @@ module.exports = (vm, context) => {
   const costs = new R.CostDisplay();
   const row = (amount, complete) => ({
     ccost:amount, unresolved_cost:!complete, calls:2,
-    display:{ccost:amount == null ? '0' : amount, incoming_context_ccost:'0',
+    display:{ccost:amount == null ? 'N/A' : amount, incoming_context_ccost:'0',
       cost_detail_help:`Total CCost: ${amount ?? '0'}`, mini_cost_models:[['Session Models','fixture/model — high']],
       mini_cost_amounts:[`${amount ?? '0'} Credits`]},
-    display_units:{usd:{ccost:amount == null ? '$0.00' : `$${(Number(amount)/100).toFixed(2)}`,
+    display_units:{usd:{ccost:amount == null ? 'N/A' : `$${(Number(amount)/100).toFixed(2)}`,
       cost_detail_help:`Total CCost: $${(Number(amount)/100).toFixed(2)}`,
       mini_cost_amounts:[`$${(Number(amount)/100).toFixed(2)}`]}}
   });
@@ -25,7 +25,7 @@ module.exports = (vm, context) => {
       return shown;
     };
     costs.values.clear();
-    assert.equal(R.display(select(row(null,false)),'ccost'),expected(0));
+    assert.equal(R.display(select(row(null,false)),'ccost'),'N/A');
     assert.equal(R.display(select(row('125',false)),'ccost'),expected(125),'positive partial subtotal qualifies');
     for (const raw of [null,'0','0']) {
       const shown = select(row(raw,false));
@@ -37,9 +37,9 @@ module.exports = (vm, context) => {
     assert.equal(R.display(select(row('0',true)),'ccost'),expected(0),'verified real zero replaces known amount');
     select(row('125',true));
     for(const changed of [['source-B','root','prompt-1'],['source-A','root','prompt-2'],['source-A','other','prompt-1']])
-      assert.equal(R.display(costs.select(row(null,false),changed),'ccost'),expected(0),'identity changes cannot inherit');
+      assert.equal(R.display(costs.select(row(null,false),changed),'ccost'),'N/A','identity changes cannot inherit');
     for(const placeholder of [null,'','N/A','Not Applicable','—','Loading…'])
-      assert.equal(R.display({display:{ccost:placeholder}},'ccost'),expected(0));
+      assert.equal(R.display({display:{ccost:placeholder}},'ccost'),'N/A');
     assert.equal(R.display(null,'billed_cost'),'N/A','native billing is not a CCost amount');
     assert.equal(R.display(null,'context_tokens'),'N/A');
     costs.values.clear();
@@ -76,7 +76,7 @@ module.exports = (vm, context) => {
     assert.equal(R.display(retry.active_cards[0].rows[0].prompt,'ccost'),expected(125),
       'missing context/generation during retry is not a new source');
     const changed = W.costProjection(view(null,'source-B'),live,'v2');
-    assert.equal(R.display(changed.active_cards[0].rows[0].prompt,'ccost'),expected(0),
+    assert.equal(R.display(changed.active_cards[0].rows[0].prompt,'ccost'),'N/A',
       'explicit context source changes still isolate amounts');
   }
   R.setUnit('credits');

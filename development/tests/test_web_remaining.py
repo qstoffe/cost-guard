@@ -54,7 +54,7 @@ class RemainingViewTests(unittest.TestCase):
             dto = with_display(token_mix(native)).to_json()
             self.assertEqual(mix_cells(native, labels=False),
                 tuple(dto["display"][name] for name in ("input", "cache", "write", "output")))
-            self.assertEqual(total_cost_text(native), dto["display"]["total_cost"])
+            self.assertEqual("N/A" if native.costs is None else total_cost_text(native), dto["display"]["total_cost"])
             self.assertEqual(None if native.costs is None else str(sum(native.costs, Decimal(0))), dto["total_cost"])
 
     def test_configured_prompt_clock_and_threshold_guidance_never_change_raw_values(self):

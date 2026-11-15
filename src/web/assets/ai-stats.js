@@ -176,9 +176,8 @@ const AIStatsView = (() => {
         const message = 'Loading…';
         for (const [key, item] of this.cards) {
           if (costMetrics.has(key)) {
-            const zero = {display:{value:'0 CCost',calendar_rate:'0 CCost/h',workday_rate:'0 CCost/h',active_rate:'0 CCost/h'},
-              display_units:{usd:{value:'$0.00',calendar_rate:'$0.00/h',workday_rate:'$0.00/h',active_rate:'$0.00/h'}}};
-            const metric = item.costScope === scope && item.metric ? item.metric : zero;
+            const unknown = {display:{value:'N/A',calendar_rate:'N/A',workday_rate:'N/A',active_rate:'N/A'}};
+            const metric = item.costScope === scope && item.metric ? item.metric : unknown;
             if (item.rates.size) {
               for (const [id, node] of item.rates) ReportView.text(node, () => ReportView.display(metric, id));
             } else ReportView.text(item.value, () => ReportView.display(metric, 'value'));
