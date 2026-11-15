@@ -166,6 +166,7 @@ class AIStatsRateTests(unittest.TestCase):
             for unit in ('credits', 'usd'):
                 display = {**dto['display'], **dto['display_units'][unit]}
                 paragraphs = display['rate_help'].split('\n\n')
+                self.assertEqual('The robots have three ways to split the snack bill.', paragraphs.pop(0))
                 self.assertEqual(3, len(paragraphs))
                 formulas = ('(Total CCost ÷ (calendar days × 24))', '(Total CCost ÷ (workdays × 8))',
                             '(Total CCost ÷ active AI hours)')

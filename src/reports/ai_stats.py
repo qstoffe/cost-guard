@@ -4,6 +4,7 @@ from decimal import Decimal
 import sqlite3
 
 from src.analysis.ai_stats import StatsObservation, windows
+from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.cache import dependency_signature
 from src.analysis.matched_runs import period_fact
 from src.cache.repository import CacheEntry
@@ -273,7 +274,7 @@ class StatsAcquisition:
         calculation = StatsObservation(evidence, lambda model, tokens: costs[model, tokens],
                                        now=service.now_ms, zone=service.timezone_id,
                                         workday_calendar=service.config.get('workdayCalendar', 'SE'),
-                                        model_name=lambda model, provider: self.reference.display_name(model, provider, exact=True))
+                                         model_bucket=lambda model: friendly_model(model, self.reference))
         for name, start in self.periods:
             excluded = [self.bounds.get(coverage_key(r)) for r in self.pending
                         if r.session_id not in self.unavailable and self._excludes(r, start)]

@@ -4,20 +4,21 @@
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
-  const idleRateHelp = 'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))\n\n' +
+  const idleRateHelp = 'The robots have three ways to split the snack bill.\n\n' +
+    'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))\n\n' +
     "Workday average: The robot's office calendar is taking a nap. (Total CCost ÷ (workdays × 8))\n\n" +
     "Active AI average: The silicon's hourly snack break hasn't started. (Total CCost ÷ active AI hours)";
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
-    ['total-tokens', '🍿', 'Total Tokens', 'Observed token traffic, including repeated context reads.'],
-    ['token-rate', '🍽️', 'Token Consumption Rate', 'Approximate model output response throughput in tok/s.'],
-    ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Model medals union attributable provider-response intervals, not whole session time; concurrent models need not add to the total.'],
-    ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure. Each model medal uses its own distinct participating root sessions.'],
+    ['total-tokens', '🍿', 'Total Tokens', 'The robots have eaten the entire context buffet.'],
+    ['token-rate', '🍽️', 'Token Consumption Rate', 'The silicon sprinters are racing for snacks.'],
+    ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock.\n\nOverlapping calls share the same clock time.'],
+    ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
     ['expensive-session', '🏆', 'Most Expensive Session', 'The quest with the biggest token tab.'],
     ['longest-session', '🔥', 'Longest Session', 'The longest robot marathon in this period.'],
     ['busiest-day', '📅', 'Busiest Day', 'The calendar’s boss level.'],
-    ['night-owl', '🦉', 'Night Owl', 'The share of robot work between 10 pm and 6 am. Hoot hoot.'],
+    ['night-owl', '🦉', 'Night Owl', 'The robots brought night-vision goggles.\n\nWork between 10 pm and 6 am.'],
     ['streak', '⚡', 'Coding Streak', 'Your longest chain of days with robot adventures.'],
     ['parallel', '🔀', 'Peak Parallel Sessions', 'The biggest robot party running at once.']
   ];
@@ -27,7 +28,7 @@ const AIStatsView = (() => {
   const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'working-time', 'average-cost']);
   function valid(result) {
     const rows = result?.view?.ai_stats;
-    return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-4-models' &&
+    return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
       Array.isArray(rows) && rows.length > 0 && rows.every(row =>
       periods.some(([id]) => id === row.period) && row.metrics?.length === definitions.length && definitions.every(([key]) =>
         row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
@@ -41,7 +42,8 @@ const AIStatsView = (() => {
                (key === 'token-rate' || Number.isFinite(Number(row.podium_value)) && Number(row.podium_value) > 0) &&
                ['usd', 'credits'].every(unit => typeof (row.display_units?.[unit]?.amount ?? row.display?.amount ?? row.speed) === 'string'))) &&
            (key !== 'token-rate' ||
-             typeof metric.display.response_help === 'string' && metric.podium.every(row =>
+              typeof metric.display.response_help === 'string' &&
+              (metric.podium.length ? Number(metric.value) > 0 : Number(metric.value) === 0) && metric.podium.every(row =>
               ['label', 'speed', 'sample'].every(id => typeof row[id] === 'string') &&
               Number.isFinite(Number(row.tokens_per_second)) && Number(row.tokens_per_second) > 0 &&
               Number.isInteger(row.sampled_calls) && row.sampled_calls > 0 && row.sampled_calls <= 32))).length === 1));
@@ -131,7 +133,10 @@ const AIStatsView = (() => {
             if (response) card.classList.add('ai-stat-response');
             for (const medal of ['🥇', '🥈', '🥉']) {
               const row = e('div', undefined, 'ai-stat-racer'), label = e('span', '', 'ai-stat-model');
-              ContextHelp.value(label, () => retained.metric?.podium[retained.podium.findIndex(item => item.label === label)]?.model_help || 'Recorded model identity unavailable.');
+              ContextHelp.value(label, () => {
+                const row = retained.metric?.podium[retained.podium.findIndex(item => item.label === label)];
+                return row ? ReportView.display(row, 'model_help') || row.model_help : '';
+              });
               const icon = e('span', medal); icon.setAttribute('aria-hidden', 'true');
               const speed = e('span', '', 'ai-stat-speed');
               row.append(icon, label, speed); row.setAttribute('role', 'group');

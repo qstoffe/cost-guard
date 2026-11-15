@@ -3,8 +3,6 @@ from decimal import Decimal, InvalidOperation
 
 from src.display import duration_text
 from src.numbers import ccost_amount, ccost_unit
-from .model_help import request_model_help
-from .effort_help import effort_help
 
 COPY = {
     'hourly-rate': ('Budget build. Dangerous potential.', 'Standard-issue silicon. Surprisingly functional.', 'Premium silicon has expensive tastes.'),
@@ -50,7 +48,7 @@ def rate_tokens(raw, reasons=()):
             active_help = 'The silicon nibbles through its hourly snack budget.'
         elif rate >= 100:
             active_help = 'The silicon orders the deluxe hourly buffet.'
-    help_text = '\n\n'.join((
+    help_text = 'The robots have three ways to split the snack bill.\n\n' + '\n\n'.join((
         'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))',
         f'Workday average: {workday_help} (Total CCost ÷ (workdays × 8))',
         f'Active AI average: {active_help} (Total CCost ÷ active AI hours)'))
@@ -67,33 +65,43 @@ def compact_volume(value):
 
 
 def traffic_tokens(values):
-    reasons = values.get('reasons', ())
     if values['metric'] == 'total-tokens':
         total = int(values['value'])
         return {'value': compact_volume(total),
             'trait': 'The robots have been snacking on context again.',
-            'token_help': f'{total} observed tokens: Input + Cached input + Cache write + Output '
-                '(including reasoning once). Repeated context reads count again. Token traffic, not context size, '
-                'billing or quota.' + (' Missing usage, pending requests or source gaps prevent a complete total.' if reasons else '')}
-    return {'value': '' if values.get('podium') else
+            'token_help': 'The robots have eaten the entire context buffet.'}
+    return {'value': speed_text(values['value']) if values.get('podium') else
                 'The stopwatch is waiting for a timed response.' if values.get('detail') else
                 'No races yet. The podium is polished.',
         'trait': 'The silicon sprint podium.',
-        'response_help': 'Approximate output tokens per second across sampled model responses. '
-            'Output (including reasoning once) ÷ summed response seconds; up to 32 sampled calls per model across efforts. '
-            'Client-observed response round trip includes network, queueing and time to first token, not just decoding. '
-            'Local tool execution is excluded. Newest eight plus identity-spread historical samples; '
-            'small samples and historical-window selection are best effort.'}
+        'response_help': 'The silicon sprinters are racing for snacks.\n\n'
+            'Approximate output tokens divided by sampled response time. Includes waiting and network time.'}
+
+
+def speed_text(value):
+    value = Decimal(value)
+    return ('<0.1' if value < Decimal('.1') else compact_volume(value)) + ' tok/s'
+
+
+def effort_amount(value, metric):
+    if metric == 'token-rate':
+        return speed_text(value)
+    if metric == 'total-tokens':
+        return compact_volume(value) + ' tokens'
+    if metric == 'working-time':
+        return duration_text(value)
+    return ccost_amount(number(value)) + ('' if ccost_unit() == 'usd' else ' CCost')
+
+
+def model_tooltip(provider, model, efforts, metric):
+    return f'{provider}/{model}\n\nBy Effort:' + ''.join(
+        f'\n• {effort} — {effort_amount(value, metric)}' for effort, value in efforts)
 
 
 def response_tokens(row):
-    effort = "\n".join(dict.fromkeys(effort_help(value, explicit=row.variant) for value in row.effort_evidence))
     return dict(label=short_model(row),
-                model_help=request_model_help(row.provider, row.recorded_models,
-                    catalog_model=row.catalog_model or None) + ("\n" + effort if effort else "") +
-                    f'\n{row.sampled_calls} sampled calls across recorded efforts.' +
-                    (f'\nSource-qualified model group {row.identity_hint}.' if row.identity_hint else ''),
-                speed=('<0.1' if row.tokens_per_second < Decimal('.1') else compact_volume(row.tokens_per_second)) + ' tok/s',
+                model_help=model_tooltip(row.provider, short_model(row), row.by_effort, 'token-rate'),
+                speed=speed_text(row.tokens_per_second),
                 sample=f'{row.sampled_calls} sampled call' + ('s' if row.sampled_calls != 1 else ''))
 
 
@@ -102,17 +110,8 @@ def short_model(row):
 
 
 def standing_tokens(row, metric):
-    effort = '\n'.join(dict.fromkeys(effort_help(value) for value in row.effort_evidence))
-    detail = request_model_help(row.provider, row.recorded_models, catalog_model=row.catalog_model or None)
-    if row.identity_hint:
-        detail += f'\nSource-qualified model group {row.identity_hint}.'
-    if metric == 'total-tokens':
-        detail += f'\n{row.value} observed tokens (known categories only).'
-    elif metric == 'working-time':
-        detail += '\nUnion of completed attributable provider-response intervals, excluding local tool waits; not whole session time.'
-    elif metric == 'average-cost':
-        detail += '\nAttributed period CCost / distinct participating root sessions for this model.'
-    return dict(label=short_model(row), model_help=detail + ('\n' + effort if effort else ''))
+    return dict(label=short_model(row),
+                model_help=model_tooltip(row.provider, short_model(row), row.by_effort, metric))
 
 
 def stat_tokens(values):
@@ -121,7 +120,9 @@ def stat_tokens(values):
         amount = (compact_volume(value) if metric == 'total-tokens' else duration_text(value)
                   if metric == 'working-time' else ccost_amount(number(value)) +
                   ('' if ccost_unit() == 'usd' else ' CCost'))
-        return {'amount': amount}
+        efforts = [dict(item.fields) for item in values.get('by_effort', ())]
+        return {'amount': amount, 'model_help': model_tooltip(values['provider'], values['label'],
+                ((item['effort'], item['value']) for item in efforts), metric)}
     if 'metric' not in values:
         return {}
     if values['metric'] in ('total-tokens', 'token-rate'):

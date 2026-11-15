@@ -9,11 +9,12 @@ from development.tests.fixtures.active_hour import epoch
 from src.analysis.ai_stats import StatsRoot, StatsObservation, period_stats, DAY_MS
 from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.ai_stats_responses import ResponseCall, sample, model_key
+from src.analysis.ai_stats_buckets import friendly_model
 from src.application.projection import project
 from src.domain import ModelRef, TokenUsage
 from src.domain.model_identity import ModelResolution
 from src.pricing.catalog import PricingCatalog
-from src.reports.ai_stats_responses import encode_responses, decode_activity
+from src.reports.ai_stats_responses import encode_responses, decode_activity, decode_responses
 from src.reports.models import ReportKind, ReportProjection
 
 
@@ -66,7 +67,8 @@ class ModelStandingsTests(unittest.TestCase):
         self.assertEqual(attributed + Decimal('.003'), metrics['total-cost'].value)
         self.assertEqual(attributed, metrics['average-cost'].podium[0].value)
         self.assertEqual((), metrics['working-time'].podium)
-        self.assertIn('4 observed tokens', dto['total-tokens']['podium'][0]['model_help'])
+        self.assertEqual('route/unpriced\n\nBy Effort:\n• Default — 4 tokens',
+                         dto['total-tokens']['podium'][0]['model_help'])
         cost = dto['total-cost']['podium'][0]
         self.assertIn('CCost', cost['display']['amount'])
         self.assertTrue(cost['display_units']['usd']['amount'].startswith('$'))
@@ -89,7 +91,7 @@ class ModelStandingsTests(unittest.TestCase):
         self.assertEqual(Decimal(sum(c.entry.tokens.output + 10 for c in retained)) * 1000 /
                          sum(c.duration_ms for c in retained), first.tokens_per_second)
         self.assertEqual({'release-1', 'release-2'}, {r['label'] for r in dto['token-rate']['podium']})
-        self.assertIn('32 sampled calls', next(r for r in dto['token-rate']['podium'] if r['model'] == 'release-1')['model_help'])
+        self.assertIn('By Effort:\n• ', next(r for r in dto['token-rate']['podium'] if r['model'] == 'release-1')['model_help'])
 
     def test_unsampled_activity_roundtrip_keeps_all_calls_and_clips_period_without_copying_prompt_time(self):
         requests = tuple(self.request('root', str(i), 'a', TokenUsage(output=10), age=1000 + i * 2000)
@@ -127,11 +129,11 @@ class ModelStandingsTests(unittest.TestCase):
         dto = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,))).to_json()
         rows = next(m for m in dto['ai_stats'][0]['metrics'] if m['metric'] == 'total-tokens')['podium']
 
-        self.assertEqual({'unlisted-2026', 'Exact Display · route', 'Exact Display · other'}, {r['label'] for r in rows})
-        self.assertNotEqual(model_key(one), model_key(duplicate))
+        self.assertEqual({'unlisted-2026', 'Exact Display'}, {r['label'] for r in rows})
+        self.assertEqual(model_key(one), model_key(duplicate))
         self.assertEqual(model_key(one), model_key(replace(one, variant='high')))
 
-    def test_source_qualified_aliases_remain_distinct_even_with_the_same_catalog_estimate(self):
+    def test_source_qualified_aliases_share_the_same_friendly_catalog_bucket(self):
         first = self.request('root', 'one', 'alias', TokenUsage(output=10))
         first = replace(first, model=ModelRef('claude-agent', 'claude-sonnet-5-5',
             resolution=ModelResolution('sonnet', 'synthetic-location-one', 'catalog-one')))
@@ -142,13 +144,121 @@ class ModelStandingsTests(unittest.TestCase):
 
         metrics, dto = calculate((root,), self.NOW)
 
-        self.assertEqual(2, len(metrics['total-tokens'].podium))
-        self.assertEqual(2, len(metrics['token-rate'].podium))
+        self.assertEqual(1, len(metrics['total-tokens'].podium))
+        self.assertEqual(1, len(metrics['token-rate'].podium))
         rows = dto['token-rate']['podium']
-        self.assertEqual(2, len({r['label'] for r in rows}))
-        self.assertTrue(all('Catalog modelID: claude-sonnet-5-5' in r['model_help'] for r in rows))
+        self.assertEqual(['Claude Sonnet 5.5'], [r['label'] for r in rows])
+        self.assertEqual('claude-agent/Claude Sonnet 5.5\n\nBy Effort:\n• Default — 10 tok/s',
+                         rows[0]['model_help'])
         self.assertNotIn('synthetic-location', str(rows), 'source scope must stay private')
 
+    def test_five_cards_share_alias_bucket_and_independent_effort_numeric_oracles_in_every_period(self):
+        a = replace(self.request('root', 'a', 'alias', TokenUsage(
+            input=10, cache_read=20, cache_write=30, output=100, reasoning=10), variant='medium'),
+            selected_effort='default', model=ModelRef('claude-agent', 'claude-sonnet-5-5',
+                resolution=ModelResolution('sonnet', 'one', 'signature-one')))
+        b = replace(a, message_id='b', tokens=TokenUsage(output=300), variant='high',
+                    model=replace(a.model, resolution=ModelResolution('claude-sonnet', 'two', 'signature-two')))
+        c = replace(a, message_id='c', tokens=TokenUsage(input=20, output=200), selected_effort='high')
+        d = replace(b, session_id='second', message_id='d', tokens=TokenUsage(output=400), selected_effort='high')
+        e = replace(d, message_id='e', tokens=TokenUsage(output=50), selected_effort='low')
+        clone = replace(a, session_id='z-clone')
+        roots = (
+            StatsRoot('root', 'Root', (a, b, c), (), responses=(
+                ResponseCall(a, 1000), ResponseCall(b, 3000), ResponseCall(c, 2000)),
+                activity=(ModelActivity(a, self.NOW - 8000, 4000), ModelActivity(b, self.NOW - 6000, 4000),
+                          ModelActivity(c, self.NOW - 5000, 3000))),
+            StatsRoot('second', 'Second', (d, e), (), responses=(ResponseCall(d, 8000), ResponseCall(e, 1000)),
+                activity=(ModelActivity(d, self.NOW - 3000, 2000), ModelActivity(e, self.NOW - 2000, 1000))),
+            StatsRoot('z-clone', 'Clone', (clone,), (), responses=(ResponseCall(clone, 1000),)))
+        prices = {170: Decimal('.0012'), 300: Decimal('.0023'), 220: Decimal('.0045'),
+                  400: Decimal('.0089'), 50: Decimal('.0001')}
+        observation = StatsObservation(roots, lambda _model, tokens: prices[tokens.total], now=self.NOW, zone='UTC')
+        expected = {
+            'total-cost': (Decimal('.0170'), (('High', Decimal('.0134')), ('Default', Decimal('.0035')), ('Low', Decimal('.0001')))),
+            'total-tokens': (1140, (('High', 620), ('Default', 470), ('Low', 50))),
+            'working-time': (7000, (('Default', 6000), ('High', 4000), ('Low', 1000))),
+            'average-cost': (Decimal('.0085'), (('High', Decimal('.0067')), ('Default', Decimal('.0035')), ('Low', Decimal('.0001')))),
+            'token-rate': (Decimal(1060) / 15, (('Default', Decimal('102.5')), ('High', Decimal(60)), ('Low', Decimal(50)))),
+        }
+        for period, start in (('today', self.NOW - 3600000), ('7-days', self.NOW - 7 * DAY_MS),
+                              ('30-days', self.NOW - 30 * DAY_MS), ('month', self.NOW - 10 * DAY_MS), ('all', None)):
+            result = observation.period(period=period, start=start)
+            metrics = {m.metric: m for m in result.metrics}
+            for metric, (amount, efforts) in expected.items():
+                with self.subTest(period=period, metric=metric):
+                    self.assertEqual(1, len(metrics[metric].podium))
+                    row = metrics[metric].podium[0]
+                    self.assertEqual('Claude Sonnet 5.5', row.display_name)
+                    self.assertEqual(amount, row.tokens_per_second if metric == 'token-rate' else row.value)
+                    self.assertEqual(efforts, row.by_effort)
+            dto = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(result,))).to_json()
+            for card in dto['ai_stats'][0]['metrics']:
+                if card['metric'] not in expected:
+                    continue
+                row = card['podium'][0]
+                self.assertRegex(row['model_help'], r'^claude-agent/Claude Sonnet 5\.5\n\nBy Effort:\n• ')
+                self.assertEqual(1, row['model_help'].count('• Default'))
+                self.assertNotRegex(row['model_help'], r'unverified|signature|catalog|observed|sampled|\(medium\)')
+                if card['metric'] in ('total-cost', 'average-cost'):
+                    self.assertIn('$', row['display_units']['usd']['model_help'])
+                    self.assertIn('CCost', row['display']['model_help'])
+                else:
+                    self.assertNotIn('display_units', row)
+
+    def test_catalog_family_best_effort_is_local_and_explicit_old_releases_stay_old(self):
+        from development.tests.fixtures.report_runtime import FakePricingProvider
+        base = FakePricingProvider().get_catalog().models[0]
+        catalog = PricingCatalog(tuple(replace(base, model=ModelRef('github-copilot', identity, label))
+            for identity, label in (('claude-sonnet-4-6', 'Claude Sonnet 4.6'),
+                                    ('claude-sonnet-5-5', 'Claude Sonnet 5.5'))))
+        alias = ModelRef('claude-agent', 'sonnet')
+        old = ModelRef('claude-agent', 'claude-sonnet-4-6')
+
+        self.assertEqual('Claude Sonnet 5.5', friendly_model(alias, catalog))
+        self.assertEqual('Claude Sonnet 4.6', friendly_model(old, catalog))
+        self.assertEqual('Claude Sonnet', friendly_model(alias, PricingCatalog(())))
+        self.assertEqual('Claude Sonnet (version unverified)', catalog.display_name('sonnet', 'claude-agent', exact=True))
+        self.assertIsNone(catalog.reference_valuation(alias, TokenUsage(output=100)))
+        self.assertEqual('sonnet', alias.recorded_model)
+
+    def test_alias_sampling_is_one_32_call_cohort_before_effort_and_headline_math(self):
+        calls = tuple(ResponseCall(replace(self.request('root', str(i), 'alias', TokenUsage(output=100 + i),
+                variant=('default', 'high')[i % 2], age=1000 + i),
+                model=ModelRef('claude-agent', 'claude-sonnet-5-5',
+                    resolution=ModelResolution('sonnet', str(i % 2), 'signature' + str(i % 2)))), 1000 + i * 100)
+            for i in range(96))
+        root = StatsRoot('root', 'Root', tuple(c.entry for c in calls), (), responses=calls)
+
+        metrics, _dto = calculate((root,), self.NOW)
+
+        row = metrics['token-rate'].podium[0]
+        self.assertEqual(32, row.sampled_calls)
+        selected = sample(calls)
+        self.assertEqual(Decimal(sum(c.entry.tokens.output for c in selected)) * 1000 /
+                         sum(c.duration_ms for c in selected), metrics['token-rate'].value)
+        self.assertEqual(row.tokens_per_second, metrics['token-rate'].value)
+        for effort, speed in row.by_effort:
+            subset = [c for c in selected if (c.entry.variant == 'high') == (effort == 'High')]
+            self.assertEqual(Decimal(sum(c.entry.tokens.output for c in subset)) * 1000 /
+                             sum(c.duration_ms for c in subset), speed)
+
+    def test_existing_source_qualified_compact_samples_reproject_without_history_rehydration(self):
+        requests = tuple(replace(self.request('root', str(i), 'alias', TokenUsage(output=100 + i), age=1000 + i),
+            model=ModelRef('claude-agent', 'claude-sonnet-5-5',
+                resolution=ModelResolution('sonnet', str(i % 2), 'signature' + str(i % 2)))) for i in range(96))
+        snapshot = SimpleNamespace(messages=(), invocations=tuple(SimpleNamespace(
+            session_id=e.session_id, message_id=e.message_id, step_part_id=None,
+            created_at_ms=e.completed_at_ms - 1000, completed_at_ms=e.completed_at_ms) for e in requests))
+        encoded = encode_responses(SimpleNamespace(trace_entries=requests), snapshot, self.NOW)
+        restored = decode_responses(encoded, [(e, None, None) for e in requests])
+        root = StatsRoot('root', 'Root', requests, (), responses=restored)
+
+        metrics, _dto = calculate((root,), self.NOW)
+
+        self.assertEqual(64, len(restored), 'existing source-qualified evidence remains decodable')
+        self.assertEqual(1, len(metrics['token-rate'].podium))
+        self.assertEqual(32, metrics['token-rate'].podium[0].sampled_calls, 'one final friendly cohort, not 64 calls')
 
 if __name__ == '__main__':
     unittest.main()

@@ -155,7 +155,7 @@ class ObservedStatsTests(unittest.TestCase):
                 period=period, start=start, now=NOW, zone='Europe/Stockholm', source_complete=False)
             dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()
 
-            self.assertEqual('fun-4-models', dto['ai_stats_policy'])
+            self.assertEqual('fun-5-buckets', dto['ai_stats_policy'])
             self.assertEqual(12, len(stats.metrics))
             for metric in dto['ai_stats'][0]['metrics'][:10]:
                 self.assertTrue(Decimal(metric['value']).is_finite())
