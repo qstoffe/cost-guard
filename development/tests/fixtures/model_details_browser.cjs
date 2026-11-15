@@ -21,7 +21,7 @@ module.exports = async ({evaluate,until,fixture,command,zoom}) => {
     if(name==='unknown-main')assert.equal(catalog.text,'N/A*');
     await evaluate("catalogRow.cells[2].firstChild.focus()");
     const catalogHelp=await evaluate("document.getElementById('context-help').textContent");
-    if(name.startsWith('child-'))assert.match(catalogHelp,/Session Models:[\s\S]*Sub Agents:/);
+    if(name.startsWith('child-'))assert.match(catalogHelp,/Main models[\s\S]*Subagents/);
     await evaluate(`location.hash=${JSON.stringify('#/sessions/details-'+name)}`);
     await until('current.detail?.data?.result?.view?.prompt_blocks?.[0]?.rows?.length>0 && !current.detail.busy');
     await until(`current.detail.data.result.view.prompt_blocks[0].rows.find(r=>r.event_id===${JSON.stringify(event)})?.has_model_details===${promptStar}`);
@@ -35,7 +35,7 @@ module.exports = async ({evaluate,until,fixture,command,zoom}) => {
     if(detail.some(row=>row.event==='u_next'))assert.equal(detail.find(row=>row.event==='u_next').star,false);
     await evaluate(`window.modelTarget=current.detail.body.rows[0].cells[1].firstChild;modelTarget.focus()`);
     const help=await evaluate("document.getElementById('context-help').textContent");
-    if(name.startsWith('child-') || name.startsWith('native-'))assert.match(help,/Session Models:[\s\S]*Sub Agents:/);
+    if(name.startsWith('child-') || name.startsWith('native-'))assert.match(help,/Main prompt —[\s\S]*Subagent 1 —/);
     if(['main-efforts','child-effort','native-effort'].includes(name)) {
       assert.match(help,/high/i);assert.match(help,/max/i);
     }

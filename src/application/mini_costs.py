@@ -30,7 +30,6 @@ def mini_cost_tokens(values):
     if "mini_cost_groups" not in values:
         return {}
     groups = [dict(part.fields) for part in values["mini_cost_groups"]]
-    main_count = sum(not part["subagent"] for part in groups)
     models, amounts, evidence = [], [], []
     for part in groups:
         label = "Sub Agents" if part["subagent"] else "Session Models"
@@ -41,10 +40,6 @@ def mini_cost_tokens(values):
         models.append((label, f"{part['model']} — {part['effort']}"))
         amounts.append(cost)
         evidence.append(ready)
-    if not main_count:
-        models.insert(0, ("Session Models", "N/A — N/A"))
-        amounts.insert(0, "N/A")
-        evidence.insert(0, False)
     if values.get("mini_missing_agents", 0) and ("Sub Agents", "N/A — N/A") not in models:
         models.append(("Sub Agents", "N/A — N/A"))
         amounts.append("N/A")
@@ -58,4 +53,4 @@ def mini_cost_tokens(values):
             sections.append(label + ":\n" + "\n".join(bullets))
     key = "session_cost_help" if values.get("mini_session_cost") else "cost_detail_help"
     return {"mini_cost_models": tuple(models), "mini_cost_amounts": tuple(amounts),
-            "mini_cost_ready": tuple(evidence), key: "\n\n".join(sections)}
+            "mini_cost_ready": tuple(evidence), key: "\n\n".join(sections) or "No model usage recorded"}

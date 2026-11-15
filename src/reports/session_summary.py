@@ -21,7 +21,7 @@ from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-12"
+ALGORITHM = "session-summary-13"
 NAMESPACE = "session-summary"
 
 
@@ -159,7 +159,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
     actual = item.bundle.source_revision
-    identity_values = dependencies(item.bundle.trace_entries)
+    identity_values = dependencies((*item.bundle.trace_entries,
+        *(message for message in item.snapshot.messages if message.model is not None)))
     if on_dependencies is not None:
         on_dependencies(identity_values)
     if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:

@@ -6,6 +6,7 @@ import unittest
 
 from development.tests.fixtures.claude_alias import DesktopSource, snapshot, catalog
 from development.tests.fixtures.session_snapshots import make_snapshot, one_request
+from development.tests.fixtures.quick_aborts import quick_aborts
 from src.analysis import analyze_snapshot
 from src.analysis.ai_stats_responses import ResponseCall, response_rows
 from src.application.ai_stats import response_tokens
@@ -20,6 +21,36 @@ from src.sources.opencode_v2_normalization import normalize_invocations
 
 
 class RecordedModelHelpTests(unittest.TestCase):
+    def test_two_quick_aborts_keep_prompt_bound_selection_and_honest_unknowns(self):
+        for generation in ("v1", "v2"):
+            for second_model in (False, True):
+                for assistant_model in (False, True):
+                    with self.subTest(generation=generation, second=second_model, assistant=assistant_model):
+                        saved = quick_aborts(generation=generation, second_model=second_model, assistant_model=assistant_model)
+                        bundle = analyze_snapshot(saved, tracked_provider=None, now_ms=5000)
+                        projector = PromptRowProjector(snapshot=saved, bundle=bundle, catalog=catalog(), config={})
+
+                        rows = tuple(projector.prompt(record) for record in bundle.prompts)
+                        wires = tuple(with_display(prompt(row, details=True)).to_json() for row in rows)
+
+                        self.assertEqual(2, len(rows))
+                        self.assertEqual(("Claude Sonnet 5.5", "Low"), (rows[0].watch_model, rows[0].watch_effort))
+                        self.assertEqual(("Claude Sonnet 5.5", "Low") if second_model else ("N/A", "N/A"),
+                            (rows[1].watch_model, rows[1].watch_effort))
+                        for index, row in enumerate(rows):
+                            self.assertEqual((0, (), Decimal(0), False),
+                                (row.calls, row.cost_parts, row.ccost, row.has_model_details))
+                            self.assertIsNone(row.incoming_context_tokens)
+                            self.assertEqual(100, row.duration_ms)
+                            self.assertTrue(row.aborted)
+                            self.assertEqual("No model usage recorded", wires[index]["display"]["cost_detail_help"])
+                            self.assertEqual(not index or second_model,
+                                "Selected model" in wires[index]["display"]["model_detail_help"])
+                            self.assertEqual(not index or second_model,
+                                "Selected model" in wires[index]["model_display_help"])
+                            self.assertNotIn("contribution proof", wires[index]["model_display_help"])
+                            self.assertNotIn("Recorded selection:", wires[index]["model_display_help"])
+
     def test_alias_and_pinned_requests_with_same_effective_price_keep_attributable_groups(self):
         source = DesktopSource((snapshot(),))
         original = source.load_session_snapshot('root-0000')
@@ -108,7 +139,7 @@ class RecordedModelHelpTests(unittest.TestCase):
 
         self.assertEqual((0, (), Decimal(0)), (row.calls, row.cost_parts, row.ccost))
         self.assertIn('Recorded selection: claude-agent/claude-haiku-4-5-20251001', wire['display']['model_detail_help'])
-        self.assertEqual('Session Models:\n• N/A — N/A — (N/A)', wire['display']['cost_detail_help'])
+        self.assertEqual('No model usage recorded', wire['display']['cost_detail_help'])
         self.assertNotIn('Recorded selection:', wire['display']['cost_detail_help'])
         self.assertNotIn('github-copilot', wire['display']['model_detail_help'])
         self.assertNotIn('other-provider', wire['display']['model_detail_help'])

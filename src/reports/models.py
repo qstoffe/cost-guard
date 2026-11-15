@@ -176,6 +176,9 @@ class SessionUsageRow:
     contributor_models: tuple[str, ...] = ()
     contributor_models_complete: bool = False
     model_pending: bool = False
+    selected_display_model: str = ""
+    selected_model_id: str = ""
+    selected_effort: str = ""
     ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
     context_tokens: int | None = None
     context_qualified: bool = True

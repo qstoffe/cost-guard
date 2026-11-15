@@ -22,13 +22,13 @@ const ReportView = (() => {
   function costGroups(value, session = false) {
     const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
     if (!Array.isArray(models) || !Array.isArray(amounts)) {
-      return 'Session Models:\n• N/A — N/A — (N/A)';
+      return 'No model usage recorded';
     }
     return ['Session Models', 'Sub Agents'].map(label => {
       const bullets = models.flatMap(([kind, model], index) => kind === label ?
         [`• ${model} — (${amounts[index] ?? 'N/A'})`] : []);
       return bullets.length ? label + ':\n' + bullets.join('\n') : '';
-    }).filter(Boolean).join('\n\n');
+    }).filter(Boolean).join('\n\n') || 'No model usage recorded';
   }
   function sessionCostHelp(cost, summary) {
     return costGroups(cost, true) + (Number.isFinite(summary?.duration_ms) ?
@@ -69,13 +69,11 @@ const ReportView = (() => {
     'incoming_context_ccost', 'extra_ccost', 'next_context_cached_ccost', 'next_context_fresh_ccost',
     'watch_next_context_cached_ccost', 'watch_next_context_fresh_ccost']);
   const display = (row, key) => {
-    // Consumer help uses friendly acquired labels, not backend diagnostic prose.
-    // Raw DTO evidence remains unchanged for logs/CLI and numeric authority.
+    // Identity and cost-group help have independent evidence and ownership.
     if (['model_help', 'model_detail_help'].includes(key)) {
-      const groups = row?.display?.mini_cost_models;
-      return Array.isArray(groups) && groups.length ? groups.map(([kind, model]) => `${kind}: ${model}`).join('\n') :
-        row?.contributor_models?.length ? row.contributor_models.join('\n') :
-        row?.watch_model || row?.model_effort || row?.model || row?.label || 'N/A';
+      return row?.model_display_help || row?.display_units?.[unit]?.[key] || row?.display?.[key] || row?.[key] ||
+        (row?.contributor_models?.length ? row.contributor_models.join('\n') :
+        row?.watch_model || row?.model_effort || row?.model || row?.label || 'N/A');
     }
     const value = row?.display_units?.[unit]?.[key] ?? row?.display?.[key];
     return costKeys.has(key) && (value == null || ['', 'N/A', 'Not Applicable', '—', '-', 'Loading…', 'Unavailable'].includes(value)) ?

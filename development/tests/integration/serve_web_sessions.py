@@ -178,6 +178,19 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = replace(make_root_snapshot(120, 1, month_start_ms=1000), complete=True)
+            elif command.startswith("quick-aborts"):
+                from development.tests.fixtures.quick_aborts import quick_aborts
+                from development.tests.fixtures.claude_alias import catalog
+                snapshot = quick_aborts(second_model=command != "quick-aborts-unknown",
+                    running=command == "quick-aborts-running")
+                with host.live.observation_lock:
+                    source.snapshots = {"root": snapshot}
+                    service.pricing_provider.catalog = catalog()
+                    service.invalidate_roots(("root",))
+                    with host.live.details.lock:
+                        if "root" in host.live.details.histories:
+                            host.live.details.histories["root"]["due"] = 0
+                    host.live.observe()
             elif command.startswith("quota-"):
                 if command == "quota-observe":
                     print(json.dumps(dict(ok=True, history_reads=source.load_count,

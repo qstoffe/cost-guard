@@ -6,6 +6,8 @@ from unittest import mock
 
 from development.tests.fixtures.pricing_catalog import catalog
 from development.tests.fixtures.session_snapshots import make_snapshot, make_native_v2_compaction_snapshot
+from development.tests.fixtures.quick_aborts import quick_aborts
+from development.tests.fixtures.claude_alias import catalog as model_catalog
 from src.analysis import analyze_snapshot
 from src.analysis.context import ContextEpochs, build_context_timeline
 from src.domain import ModelRef
@@ -14,6 +16,21 @@ from src.reports.prompts import build_prompt_block
 
 
 class PromptProjectionTests(unittest.TestCase):
+    def test_assistant_bound_attempt_overrides_saved_choice_without_borrowing_its_effort(self):
+        saved = quick_aborts(assistant_model=True)
+        messages = tuple(replace(message, model=ModelRef("other-provider", "own-attempt"), variant=None)
+            if message.parent_message_id == "abort-u1" else message for message in saved.messages)
+        saved = replace(saved, messages=messages)
+        bundle = analyze_snapshot(saved, tracked_provider=None, now_ms=5000)
+        projector = PromptRowProjector(snapshot=saved, bundle=bundle, catalog=model_catalog(), config={})
+
+        row = projector.prompt(bundle.prompts[1])
+
+        self.assertEqual(("own-attempt", "N/A", 0, False),
+            (row.watch_model, row.watch_effort, row.calls, row.has_model_details))
+        self.assertIn("other-provider/own-attempt", row.recorded_selections)
+        self.assertNotIn("github-copilot/claude-sonnet-5-5", row.recorded_selections)
+
     def setUp(self):
         self.snapshot = make_snapshot()
         self.bundle = analyze_snapshot(self.snapshot, now_ms=4000)

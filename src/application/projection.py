@@ -17,7 +17,7 @@ from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
 from .benchmark import benchmark_view
 from .session_effort import session_effort_help
-from .model_help import session_model_help
+from .model_help import session_model_help, session_display_help, prompt_display_help
 from .mini_costs import mini_groups
 
 
@@ -69,6 +69,7 @@ def prompt(value, *, details=False):
         background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort recorded_selections
         subagent_active parent_outcome parent_terminal_time_ms has_model_details""")
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),
+                                       ("model_display_help", prompt_display_help(value)),
                                       ("incoming_context_ccost_usage_missing", not value.incoming_context_ccost_known),
                                       ("extra_ccost_usage_missing", not value.extra_ccost_known),
                                        ("cost_detail", cost_detail(value) if details else None),
@@ -229,8 +230,9 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(ObjectValue(fields(item, "session_id title model multiple_models has_model_details linked_agent_count ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
-            (("model_help", session_model_help(item)), ("effort_help", session_effort_help(item)),
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model selected_display_model multiple_models has_model_details linked_agent_count ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
+            (("model_help", session_model_help(item)), ("model_display_help", session_display_help(item)),
+              ("effort_help", session_effort_help(item)),
               ("mini_session_cost", True), ("mini_cost_groups", mini_groups(item.cost_groups, complete=item.complete)),
               ("mini_missing_agents", int(bool(item.linked_agent_count and not any(part.agent for part in item.cost_groups)))),
              ("ccost_unavailable", issue_records(item.ccost_unavailable))))

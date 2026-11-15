@@ -453,7 +453,7 @@ const SessionsCatalog = (() => {
            ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone, row.value.running));
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
-            if (key === 'duration') return node;
+            if (['duration', 'prompts'].includes(key)) return node;
             ContextHelp.value(node, () => {
                const current = row.value;
               if (key === 'ccost') return ReportView.sessionCostHelp(current, current);
@@ -471,17 +471,17 @@ const SessionsCatalog = (() => {
           'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
-        const texts = [(value.model || 'N/A') + (value.has_model_details ? '*' : ''),
+        const texts = [(value.model !== 'N/A' && value.model || value.selected_display_model || 'N/A') + (value.has_model_details ? '*' : ''),
           () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
           () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];
         row.metrics.forEach((node, index) => {
           const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
           const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
           const missing = ((!value.has_summary && !value.indexed && state !== 'retained') ||
-            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A')) ||
+            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A') && !value.selected_display_model) ||
             (key === 'ctx' && state === 'pending' && value.context_tokens == null));
           ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
-          node.className = (key === 'duration' ? '' : 'help-value') +
+          node.className = (['duration', 'prompts'].includes(key) ? '' : 'help-value') +
             (missing || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
           if (key === 'ctx' && state === 'retained') node.setAttribute('aria-label', `Retained context: ${node.textContent}`);
           else node.removeAttribute('aria-label');
