@@ -10,6 +10,12 @@ sys.path.insert(0, str(ROOT))
 from development.tools.ci_web_beta import hosted_only, notice
 
 
+def header_zooms():
+    # Keep the full 576-layout matrix at normal zoom on ordinary delivery.
+    # Repeating it at three extra browser zooms is explicit deep verification.
+    return ("1", "1.25", "1.5", "2") if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" else ("1",)
+
+
 def main():
     hosted_only()
     from playwright.sync_api import sync_playwright
@@ -19,7 +25,7 @@ def main():
     results.mkdir(exist_ok=True)
     environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
     for scope in ("opening", "opening-races", "header", "dashboard", "previews"):
-        for zoom in (("1", "1.25", "1.5", "2") if scope == "header" else ("1",)):
+        for zoom in (header_zooms() if scope == "header" else ("1",)):
             label = f"watch-{scope}" + (f"-zoom-{zoom}" if zoom != "1" else "")
             output = results / f"{label}.json"
             result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
@@ -34,6 +40,9 @@ def main():
             result.check_returncode()
             if evidence.get("outcome") != "PASS":
                 raise SystemExit("Watch evidence did not pass")
+    if len(header_zooms()) == 1:
+        notice("watch-header-extra-zooms", dict(outcome="NOT RUN", zooms=["1.25", "1.5", "2"],
+            reason="Extra browser zoom matrices run on manual Full; ordinary coverage retains 100% zoom."))
 
 
 if __name__ == "__main__":
