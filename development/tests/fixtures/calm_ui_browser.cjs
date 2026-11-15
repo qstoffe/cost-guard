@@ -35,7 +35,14 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   assert.equal(await evaluate('current.detail.footer.textContent===quietFooter'),true);
   await fixture('detail-quiet-recover');
   await run(`await current.detail.load()`);
-  await until('current.detail?.data?.total===1002 && !current.detail.busy');
+  try {
+    await until('current.detail?.data?.total===1002 && !current.detail.busy');
+  } catch (_) {
+    const frontend=await evaluate(`({hidden:document.hidden,attached:current.detail?.attached,
+      busy:current.detail?.busy,total:current.detail?.data?.total,waiting:current.detail?.waiting})`);
+    const backend=await fixture('detail-observe');
+    throw new Error('Fresh detail recovery not observed: '+JSON.stringify({frontend,entries:backend.entries}));
+  }
   await silent();
   assert.equal(await evaluate('current.detail.data.revision!==quietRevision'),true);
   checks.push('120s unadmitted loaded detail: typed failure, no warning/Retry/ARIA/layout/focus change; existing owner re-admits after 30s cooldown and publishes 1002 fresh rows without a click');

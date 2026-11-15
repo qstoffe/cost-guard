@@ -48,7 +48,8 @@ async function main() {
      evidence.browser=version.product;
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     const {sessionId}=await command('Target.attachToTarget',{targetId,flatten:true});
-    await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
+     await command('Page.enable',{},sessionId); await command('Runtime.enable',{},sessionId);
+     await command('Page.bringToFront',{},sessionId);
      const evaluate=async (expression, userGesture=false) => {
       lastExpression=expression;
        const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture},sessionId).catch(async error=>{
@@ -62,13 +63,18 @@ async function main() {
      const until=async (expression, timeoutMs=30000) => {
        const end=Date.now()+timeoutMs;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
-      throw new Error('Condition not reached: '+expression+'; '+await evaluate('document.body.innerText'));
+      const state=await evaluate(mode==='--calm-ui' ?
+        `JSON.stringify({section:current?.section,hidden:document.hidden,detailTotal:current?.detail?.data?.total,detailBusy:current?.detail?.busy})` :
+        'document.body.innerText');
+      lastExpression=expression;
+      throw new Error('Condition not reached: '+expression+'; '+state);
      };
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-          if (mode === '--calm-ui') {
+           if (mode === '--calm-ui') {
+            assert.equal(await evaluate('document.hidden'),false,'foreground recovery case requires a visible headless tab');
             await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture, checks, layouts,
               command:(method, params) => command(method, params, sessionId)});
             assert.deepEqual(errors, []);

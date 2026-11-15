@@ -181,7 +181,7 @@ async function main() {
     assert.match(blankRange,/^\d[\d,]* recorded tokens for the selected period$/,'missing boundaries are omitted, not invented');
     await evaluate(`(()=>{const value=structuredClone(current.result);
       value.view.source_warnings=['ERROR: Token source connectivity failed.'];current.tokenMix.update(value);})()`);
-    assert.match(await evaluate(`current.tokenMix.status.textContent`),/ERROR: Token source connectivity failed/);
+    assert.equal(await evaluate(`current.tokenMix.status.textContent`),'','passive source diagnostics never become a route warning');
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',checks,layouts,cadence_ms:startedAt-loadedAt,
       limitations:['Synthetic browser history; real installation performance is measured by the separate read-only process probe.','No physical OS input or screen-reader proof.']};
