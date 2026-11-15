@@ -125,7 +125,7 @@ class TokenTrafficTests(unittest.TestCase):
 
         self.assertEqual(amount, metrics['total-tokens'].value)
         self.assertEqual(str(amount), dto['total-tokens']['exact_value'])
-        self.assertIn(str(amount), dto['total-tokens']['display']['token_help'])
+        self.assertEqual('The robots have eaten the entire context buffet.', dto['total-tokens']['display']['token_help'])
         self.assertEqual((), metrics['token-rate'].podium)
 
 
@@ -140,6 +140,29 @@ class ResponsePodiumTests(unittest.TestCase):
     def root(self, calls):
         return StatsRoot('root', 'Root', tuple(c.entry for c in calls),
                          ((self.NOW - HOUR_MS, HOUR_MS, False),), responses=tuple(calls))
+
+    def test_headline_includes_non_medal_models_and_short_playful_title_copy(self):
+        calls = (self.call('a', 80, 1000, model='a'), self.call('b', 180, 1000, model='b'),
+                 self.call('c', 280, 1000, model='c'), self.call('d', 380, 10000, model='d'))
+
+        metrics, dto = calculate((self.root(calls),), self.NOW)
+
+        # Includes reasoning once: (100 + 200 + 300 + 400) / (1 + 1 + 1 + 10).
+        self.assertEqual(Decimal(1000) / 13, metrics['token-rate'].value)
+        self.assertEqual(['c', 'b', 'a'], [r.model for r in metrics['token-rate'].podium])
+        self.assertEqual('76.9 tok/s', dto['token-rate']['display']['value'])
+        help_text = dto['token-rate']['display']['response_help']
+        shipped_help = ('Approximate output tokens per second across sampled model responses. '
+            'Output (including reasoning once) ÷ summed response seconds; up to 32 sampled calls per model across efforts. '
+            'Client-observed response round trip includes network, queueing and time to first token, not just decoding. '
+            'Local tool execution is excluded. Newest eight plus identity-spread historical samples; '
+            'small samples and historical-window selection are best effort.')
+        self.assertEqual(436, len(shipped_help))
+        self.assertLess(len(help_text), len(shipped_help) / 2)
+        opening, explanation = help_text.split('\n\n')
+        self.assertEqual('The silicon sprinters are racing for snacks.', opening)
+        self.assertLessEqual(explanation.count('.'), 2)
+        self.assertNotRegex(help_text, r'32|identity|queueing|first token|lifecycle')
 
     def test_weighted_output_oracle_parallel_models_efforts_ties_and_invalid_calls(self):
         calls = (self.call('a1', 80, 1000), self.call('a2', 880, 9000),

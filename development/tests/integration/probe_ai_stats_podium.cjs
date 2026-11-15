@@ -14,6 +14,8 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
       assert.ok(rows.every(r=>!r.label.includes('/') && /tok\/s/.test(r.speed)));
     }
     if(count===3) assert.deepEqual(rows.map(r=>r.speed),['300 tok/s','200 tok/s','100 tok/s']);
+    assert.equal(await evaluate(`document.querySelector('[data-metric="token-rate"] .ai-stat-value').textContent`),
+      count ? `${count===3?200:count===2?250:100} tok/s` : 'No races yet. The podium is polished.');
     assert.equal(await evaluate(`document.querySelectorAll('[data-metric="token-rate"] .ai-stat-rate').length`),0);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-sample').length`),0);
     for(const metric of ['total-tokens','total-cost','working-time','average-cost']) {
@@ -25,12 +27,12 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
     window.__podiumHeading=document.querySelector('[data-metric="token-rate"] h4 button');__podiumHeading.focus();`);
   await until(`!document.getElementById('context-help').hidden`);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/round trip.*network.*first token/);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/sprinters.*\n\n.*response time/);
   await evaluate(`window.__racer=document.querySelector('.ai-stat-racer');current.stats.update(current);`);
   assert.equal(await evaluate(`document.activeElement===__podiumHeading && __racer===document.querySelector('.ai-stat-racer')`),true);
   await evaluate(`window.__modelLabel=document.querySelector('[data-metric="token-rate"] .ai-stat-model');__modelLabel.focus();`);
   await until(`document.getElementById('context-help').textContent.includes('synthetic/model-')`);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/sampled calls/);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/\n\nBy Effort:\n• Default — \d+ tok\/s$/);
   await evaluate(`current.stats.update(current);`);
   assert.equal(await evaluate(`document.activeElement===__modelLabel`),true);
   await evaluate(`ReportView.setUnit('usd',output)`);
@@ -49,6 +51,7 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   }
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},tab);
+  await require('./probe_ai_stats_friendly.cjs')({command,evaluate,until,cases,tab,checks});
   await evaluate(`current.result=${JSON.stringify(original)};current.period=${JSON.stringify(period)};current.stats.update(current);`);
   checks.push('five shared canonical 0/1/2/3 medal lists, retained large totals, compact short names, no sample rows, units, model keyboard help and retained focus/nodes');
 };

@@ -127,12 +127,12 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     await evaluate(owner,`(() => {
       const names=['hourly-rate','total-cost','total-tokens','token-rate','working-time','average-cost',
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
-      const metrics=names.map(metric=>({metric,value:'125',exact_value:'125',reasons:[],podium:[],
+      const metrics=names.map(metric=>({metric,value:metric==='token-rate'?'0':'125',exact_value:'125',reasons:[],podium:[],
         display:{value:'125 CCost',trait:'Fixture',token_help:'125 tokens',response_help:'No response sample',
           calendar_rate:'125 CCost/h',workday_rate:'125 CCost/h',active_rate:'125 CCost/h',rate_help:'Fixture rates'},
         display_units:{usd:{value:'$1.25',calendar_rate:'$1.25/h',workday_rate:'$1.25/h',active_rate:'$1.25/h'}}}));
       numericStatsState={period:'today',result:{source:{identity:'stats-${unit}',generation:'v2'},view:{
-        kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-4-models',ai_stats_work:{scopes:{today:{ready:true}}},
+        kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-5-buckets',ai_stats_work:{scopes:{today:{ready:true}}},
         ai_stats:[{period:'today',start_ms:1000,metrics}]}}};
       numericStats.update(numericStatsState);
     })()`);

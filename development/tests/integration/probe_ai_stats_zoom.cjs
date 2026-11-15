@@ -40,7 +40,10 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks,config}) => {
         for(const count of [0,1,2,3]) for(const long of [false,true]) {
           await evaluate(`current.result=${JSON.stringify(result)};
             for(const metric of current.result.view.ai_stats[0].metrics) if(metric.podium) {
-              metric.podium=metric.podium.slice(0,${count});
+               metric.podium=metric.podium.slice(0,${count});
+               if(metric.metric==='token-rate' && !metric.podium.length) {
+                 metric.value='0'; metric.display.value='No races yet. The podium is polished.';
+               }
               if(${long}) for(const row of metric.podium) row.label='LongUnbrokenModelName'.repeat(4)+' gjpqy Åé';
             }
             current.stats.update(current);`);

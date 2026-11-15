@@ -8,6 +8,7 @@ import json
 from .models import TraceEntry
 from .billing import billing_request_fingerprint
 from .effort_defaults import effort_evidence
+from .ai_stats_buckets import effort_values, model_key, providers, selected_effort
 
 SAMPLE_LIMIT = 32
 RECENT_CALLS = 8
@@ -33,21 +34,11 @@ class ModelResponse:
     display_name: str = ''
     catalog_model: str = ''
     identity_hint: str = ''
+    by_effort: tuple = ()
 
     @property
     def tokens_per_second(self):
         return Decimal(self.output_tokens) * 1000 / self.duration_ms
-
-
-def model_key(entry):
-    # Exact recorded route/release, never a pricing alias or an effort contestant.
-    resolution = entry.model.resolution
-    return (entry.model.provider, entry.model.recorded_model,
-            resolution.scope if resolution else '', resolution.signature if resolution else '')
-
-
-def identity_hint(key):
-    return sha256(json.dumps(key).encode()).hexdigest()[:6] if key[2:] != ('', '') else ''
 
 
 def call_key(entry):
@@ -59,7 +50,7 @@ def _priority(call):
     return sha256(json.dumps(call_key(call.entry), separators=(',', ':')).encode()).digest(), call_key(call.entry)
 
 
-def sample(calls):
+def sample(calls, key=model_key):
     """Newest eight, then lowest identity hashes from the rest, at both tiers.
 
     Root summaries are bounded too; historical-window samples are consequently
@@ -72,7 +63,7 @@ def sample(calls):
                 or 'output' not in entry.tokens.known_fields or entry.tokens.output + entry.tokens.reasoning <= 0
                 or entry.error_name or entry.finish_reason in ('error', 'aborted')):
             continue
-        recent, spread, retained = groups.setdefault(model_key(entry), ([], [], set()))
+        recent, spread, retained = groups.setdefault(key(entry), ([], [], set()))
         identity = call_key(entry)
         if identity in retained:
             continue
@@ -88,7 +79,7 @@ def sample(calls):
     return tuple(item[2] for key in sorted(groups) for bucket in groups[key][:2] for item in bucket)
 
 
-def podium(roots, entries, start, now):
+def response_rows(roots, entries, start, now, key=model_key):
     # Reconcile canonical step/message/clone precedence before final sampling.
     durations = {call_key(c.entry): c.duration_ms for root in roots for c in root.responses}
     # A canonical clone survivor may lack timing while its same physical request
@@ -97,20 +88,25 @@ def podium(roots, entries, start, now):
               for root in roots for c in root.responses if billing_request_fingerprint(c.entry)}
     def duration(entry):
         return durations.get(call_key(entry), cloned.get((entry.source_instance, billing_request_fingerprint(entry))))
-    selected = sample(ResponseCall(e, elapsed) for e in entries
+    selected = sample((ResponseCall(e, elapsed) for e in entries
                       if (elapsed := duration(e)) is not None and (start is None or e.completed_at_ms >= start)
-                      and e.completed_at_ms <= now)
+                      and e.completed_at_ms <= now), key=key)
     groups = {}
     for call in selected:
-        key = model_key(call.entry)
-        values = groups.setdefault(key, [0, 0, 0, set(), False, []])
+        name = key(call.entry)
+        values = groups.setdefault(name, [0, 0, 0, set(), False, [], {}])
         values[0] += call.entry.tokens.output + call.entry.tokens.reasoning
         values[1] += call.duration_ms
         values[2] += 1
         values[3].add(call.entry.model.recorded_model)
         values[4] |= bool(call.entry.model.resolution)
         values[5].append(call.entry)
-    rows = [ModelResponse(*key[:2], '', *values[:3], tuple(sorted(values[3])), values[4], effort_evidence(values[5]),
-                         catalog_model=values[5][0].model.model if values[4] else '', identity_hint=identity_hint(key))
-        for key, values in groups.items()]
-    return tuple(sorted(rows, key=lambda r: (-r.tokens_per_second, r.provider, r.model, r.identity_hint))[:3])
+        effort = selected_effort(call.entry)
+        output, elapsed = values[6].get(effort, (0, 0))
+        values[6][effort] = output + call.entry.tokens.output + call.entry.tokens.reasoning, elapsed + call.duration_ms
+    rows = [ModelResponse(providers(values[5]), name, '', *values[:3], tuple(sorted(values[3])),
+                         values[4], effort_evidence(values[5]), display_name=name,
+                         by_effort=effort_values({effort: Decimal(output) * 1000 / elapsed
+                                                 for effort, (output, elapsed) in values[6].items()}))
+            for name, values in groups.items()]
+    return tuple(sorted(rows, key=lambda r: (-r.tokens_per_second, r.model, r.provider)))

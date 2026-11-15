@@ -20,7 +20,8 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
       current.stats.update(current);`);
   };
   const paragraphs=copy=>{
-    const parts=copy.split('\n\n'); assert.equal(parts.length,3);
+    const parts=copy.split('\n\n'); assert.equal(parts.shift(),'The robots have three ways to split the snack bill.');
+    assert.equal(parts.length,3);
     parts.forEach((part,index)=>{
       assert.ok(part.startsWith(['Calendar average:','Workday average:','Active AI average:'][index]));
       assert.equal(part.trim(),part); assert.doesNotMatch(part,/\n/);

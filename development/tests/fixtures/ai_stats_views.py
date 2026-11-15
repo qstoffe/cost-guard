@@ -24,6 +24,7 @@ def evidence_views():
     from src.analysis.models import TraceEntry
     from src.application.projection import project
     from src.domain import ModelRef, TokenUsage
+    from src.domain.model_identity import ModelResolution
     from src.reports import ReportRequest
     from src.reports.models import ReportProjection
 
@@ -38,6 +39,17 @@ def evidence_views():
                            tokens=TokenUsage(output=300 - 100 * i)) for i in range(3))
     podium = replace(root, entries=racers, responses=tuple(ResponseCall(e, 1000) for e in racers),
                      activity=tuple(ModelActivity(e, at - 1000, 1000) for e in racers))
+    aliases = tuple(replace(entry, message_id='alias-' + str(i), variant=('medium', None, 'high')[i],
+        selected_effort=('default', 'default', 'high')[i],
+        model=ModelRef('claude-agent', 'claude-sonnet-5-5',
+                       resolution=ModelResolution('sonnet', 'synthetic-scope-' + str(i), 'signature-' + str(i))))
+        for i in range(3))
+    def model_root(entries):
+        return replace(root, entries=entries, responses=tuple(ResponseCall(e, 1000) for e in entries),
+                       activity=tuple(ModelActivity(e, at - 1000, 1000) for e in entries))
+    unknown = (replace(aliases[0], model=ModelRef('claude-agent', 'sonnet')),)
+    releases = (replace(aliases[0], model=ModelRef('claude-agent', 'claude-sonnet-4-6')),
+                replace(aliases[1], model=ModelRef('claude-agent', 'claude-sonnet-5-5')))
     base = stats_result(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
     cases = (
         ('complete', (root,), True, Decimal(4)), ('empty', (), True, Decimal(4)),
@@ -49,6 +61,9 @@ def evidence_views():
         ('observed-time', (replace(root, intervals=((at, 1_800_000, False), (at - 86_400_000, None, False))),), True, Decimal(4)),
         ('podium-three', (podium,), False, None),
         ('podium-two', (replace(podium, entries=racers[:2], responses=podium.responses[:2], activity=podium.activity[:2]),), True, Decimal(4)),
+        ('friendly-aliases', (model_root(aliases),), True, Decimal(4)),
+        ('friendly-unknown', (model_root(unknown),), True, Decimal(4)),
+        ('friendly-releases', (model_root(releases),), True, Decimal(4)),
     )
     result = []
     for name, roots, complete, price in cases:

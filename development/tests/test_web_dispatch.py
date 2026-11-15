@@ -277,7 +277,7 @@ class DispatcherTests(unittest.TestCase):
         self.now = self.dispatch.entries[request]['due']
         fresh = self.dispatch.lookup(request)['id']
         self.assertNotEqual(key, fresh)
-        current = dict(old, view=dict(old['view'], ai_stats_policy='fun-4-models'))
+        current = dict(old, view=dict(old['view'], ai_stats_policy='fun-5-buckets'))
         self.jobs.values[fresh].update(status='complete', result=current)
         self.assertIs(current, self.dispatch.lookup(request)['result'])
         self.assertEqual(unrelated, self.dispatch.entries[self.models]['job'])

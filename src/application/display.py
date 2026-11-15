@@ -373,7 +373,10 @@ def _with_display(value, timezone_id, now_ms):
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
     tokens.update(cost_help_tokens(values))
-    tokens.update(session_model_tokens(values))
+    if 'podium_metric' not in values:
+        # Stats prepares currency-aware effort help; legacy identity copy must
+        # not overwrite its selected-unit text after the variants are built.
+        tokens.update(session_model_tokens(values))
     tokens.update(quota_tokens(values))
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     # Large cost help is already present in the selected display. Unit maps are
