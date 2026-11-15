@@ -79,9 +79,11 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertEqual(instant('2026-10-31T23:00:00+00:00'), month.token_mix_period['start_ms'])
         self.assertEqual(0, month.token_mix.request_count)
         self.assertTrue(any('Request time unavailable' in warning for warning in month.source_warnings))
-        help_text = project(all_time).to_json()['token_mix']['display_units']
-        self.assertEqual('Input CCost: $0.00', help_text['usd']['mix_input_cost_help'])
-        self.assertEqual('Input CCost: 0 Credits', help_text['credits']['mix_input_cost_help'])
+        mix = project(all_time).to_json()['token_mix']
+        for unit in ('usd', 'credits'):
+            shown = {**mix['display'], **mix.get('display_units', {}).get(unit, {})}
+            self.assertEqual('N/A', shown['mix_input_cost'])
+            self.assertEqual('', shown['mix_input_cost_help'])
 
     def test_period_changes_reuse_warm_root_evidence_without_hydration_or_repricing(self):
         source = SyntheticMonthSource(40, 2, month_start_ms=instant('2026-03-01T00:00:00+00:00'))

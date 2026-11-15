@@ -404,6 +404,15 @@ async function main() {
      assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
       inference_calls:0,personal_profile:false,desktop_effects:false};
+  } catch (error) {
+    const bounded = value => String(value ?? '').replace(/https?:\/\/[^\s"'<>]+/g, '[url]').slice(0, 2500);
+    evidence.diagnostic = {
+      name: bounded(error.name), message: bounded(error.message),
+      location: bounded(error.stack?.split('\n').filter(line => /\bat /.test(line)).slice(0, 3).join('\n')),
+      actual: bounded(JSON.stringify(error.actual)), expected: bounded(JSON.stringify(error.expected)),
+      lastExpression: bounded(lastExpression)
+    };
+    throw error;
   } finally {
     clearTimeout(deadline); server.stdin.end();
     await command('Browser.close').catch(()=>child.kill()); await browserExit;

@@ -448,7 +448,7 @@ const SessionsCatalog = (() => {
               if (key === 'ccost') return ReportView.sessionCostHelp(current, current);
                if (key === 'ctx') return current.context_tokens == null ? '' : `~${current.context_tokens.toLocaleString()} tokens`;
                if (key !== 'model') return '';
-               return current.model || 'N/A';
+                return ReportView.display(current, 'model_help');
             });
             return node;
           });

@@ -83,6 +83,7 @@ jobs:
           COST_GUARD_CI_BROWSER: '1'
         run: |
           python - <<'PY'
+          import json
           import os
           from pathlib import Path
           import subprocess
@@ -92,10 +93,19 @@ jobs:
           output.parent.mkdir(parents=True, exist_ok=True)
           with sync_playwright() as playwright:
               browser = playwright.chromium.executable_path
-          subprocess.run(["node", "development/tests/integration/probe_web_sessions.cjs",
-                          browser, str(output), "--calm-ui"],
-                         env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable},
-                         timeout=210, check=True)
+          result = subprocess.run(["node", "development/tests/integration/probe_web_sessions.cjs",
+                           browser, str(output), "--calm-ui"],
+                          env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable},
+                          timeout=210, check=False)
+          try:
+              evidence = json.loads(output.read_text(encoding="utf-8"))
+              summary = {key: evidence.get(key) for key in ("outcome", "browser", "checks", "layouts", "diagnostic")}
+          except (OSError, ValueError) as error:
+              summary = {"outcome": "FAIL", "diagnostic": "Missing or malformed Calm UI evidence: " + type(error).__name__}
+          print("::notice title=Calm UI::" + json.dumps(summary).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+          result.check_returncode()
+          if summary.get("outcome") != "PASS":
+              raise SystemExit("Calm UI evidence did not pass")
           PY
       # Ordinary affected-source coverage keeps one real 61s hold per document.
       # Manual Full retains all twelve holds and the mixed/control diagnostics.

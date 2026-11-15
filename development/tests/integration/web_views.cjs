@@ -416,7 +416,7 @@ async function main() {
     if (index === 1) assert.match(ids.result.textContent, /Running at snapshot · provisional/);
     if (index === 2) assert.match(ids.result.textContent, /Aborted|Error/);
     if (index === 3) {
-      assert.match(ids.result.textContent, /Partial source data/);
+      assert.doesNotMatch(ids.result.textContent, /Partial source data/);
       assert.match(ids.result.textContent, /N\/A|\?/);
     }
   }

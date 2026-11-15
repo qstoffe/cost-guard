@@ -488,8 +488,7 @@ function setup() {
   initial.update({state:'recovering',view:null});
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
   const initialOpening = initial.toggle(); initialTest.opened(win()); await initialOpening;
-  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
-  assert.equal(initial.view.daily.textContent, 'CCost Today 0');
+  assert.equal(initial.view.daily.textContent, 'CCost Today N/A');
   initial.close();
   now += 599999; assert.equal(initial.observations.delayed(now),false);
   now++; assert.equal(initial.observations.delayed(now),true);

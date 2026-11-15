@@ -143,11 +143,11 @@ class WebDisplayTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(None if value is None else str(value), dto["ccost"])
                 self.assertEqual(expected, dto["display"]["ccost"])
-                self.assertEqual(ccost_amount(value), dto["display"]["ccost"])
+                self.assertEqual("N/A" if value is None else ccost_amount(value), dto["display"]["ccost"])
                 self.assertEqual(money(value), dto["display"]["billed_cost"])
                 self.assertEqual("1m", dto["display"]["duration_ms"])
                 self.assertEqual(duration_text(59_500), dto["display"]["duration_ms"])
-        for value, unresolved, expected in (("0", True, "0"), ("0.12", True, "0.2"), ("0.12", False, "0.2")):
+        for value, unresolved, expected in (("0", True, "N/A"), ("0.12", True, "0.2"), ("0.12", False, "0.2")):
             dto = with_display(record(ccost=Decimal(value), unresolved_cost=unresolved)).to_json()
             self.assertEqual(expected, dto["display"]["ccost"])
 
@@ -223,8 +223,8 @@ class WebDisplayTests(unittest.TestCase):
         self.assertEqual({"run_ccost": "1", "duration_ms": "2"}, dto["by_model"])
         self.assertEqual("0", dto["rows"][0]["display"]["ccost"])
         self.assertEqual("", dto["rows"][0]["display"]["calls"])
-        self.assertEqual("0", dto["accounts"][0]["display"]["account_ccost"])
-        self.assertEqual("0", dto["accounts"][0]["display"]["known_ccost"])
+        self.assertEqual("N/A", dto["accounts"][0]["display"]["account_ccost"])
+        self.assertEqual("N/A", dto["accounts"][0]["display"]["known_ccost"])
         self.assertEqual("-2", dto["display"]["unaccounted_usage"])
 
     def test_watch_uses_latest_progress_model_and_observation_duration_not_snapshot_duration(self):

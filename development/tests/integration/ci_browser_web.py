@@ -160,7 +160,7 @@ def main():
                 assert page.locator('#result progress').count() == 0
                 # Synthetic Sessions acquisition publishes no Watch observation.
                 # An authenticated SSE socket must not claim source readiness.
-                expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
+                expect(page.locator("#status")).to_have_text("")
                 assert streams, "authenticated real SSE connection was not established"
                 expect(page.locator("#host-state")).to_be_hidden()
                 expect(page.locator("#host-state")).to_have_text("")

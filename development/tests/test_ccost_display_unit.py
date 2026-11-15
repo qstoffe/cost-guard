@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class CCostDisplayUnitTests(unittest.TestCase):
     def test_usd_goldens_preserve_exact_raw_values_and_unknowns(self):
-        cases = [(None, "$0.00"), ("0", "$0.00"), ("0.000001", "$0.00"),
+        cases = [(None, "N/A"), ("0", "$0.00"), ("0.000001", "$0.00"),
                  ("0.5", "$0.01"), ("1", "$0.01"), ("395", "$3.95"),
                  ("10742", "$107.42"), ("-395", "$-3.95"), ("-0.01", "$0.00"),
                  ("123456789012345678901234567890", "$1234567890123456789012345678.90")]
@@ -124,7 +124,8 @@ class CCostDisplayUnitTests(unittest.TestCase):
     def test_watch_progress_aborted_context_and_large_values_are_not_truncated(self):
         for state in ({"in_progress": True}, {"aborted": True}, {"unresolved_cost": True}):
             prompt = replace(warning_prompt(PriceWarningSeverity.NONE), ccost=Decimal("123456789.12"),
-                             incoming_context_ccost=Decimal(395), extra_ccost=Decimal("0.01"), **state)
+                             incoming_context_ccost=Decimal(395), extra_ccost=Decimal("0.01"),
+                             incoming_context_ccost_known=True, extra_ccost_known=True, **state)
             frame = warning_watch_projection(prompt)
             stream = io.StringIO()
             WatchRenderer({"ccostDisplayUnit": "usd"}, stream=stream, interactive=False).render(frame)

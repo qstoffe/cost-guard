@@ -102,9 +102,11 @@ async function main() {
            'Headless DOM, input and AX evidence; not physical desktop or assistive-technology acceptance.']};
        console.log(JSON.stringify({outcome:'PASS',checks,cases:layouts.length}));return;
      }
-    phase='open-document-pip';
-    await evaluate(owner,`miniWatch.toggle()`,true);
-    assert.equal(await evaluate(owner,`!!miniWatch.window`),true);
+     phase='open-document-pip';
+     await until(owner,`miniWatch.measure?.ready && miniWatch.placement && !miniWatch.healthState.terminal`);
+     await evaluate(owner,`miniWatch.toggle()`,true);
+     assert.equal(await evaluate(owner,`!!miniWatch.window`),true,
+       JSON.stringify(await evaluate(owner,`({failure:miniWatch.failure,reason:miniWatch.reason,ready:miniWatch.measure?.ready,placement:miniWatch.placement,health:miniWatch.healthState.kind})`)));
     const targets=await command('Target.getTargets');
     let mini;
     for (const target of targets.targetInfos.filter(target=>target.type==='page'&&target.targetId!==targetId)) {

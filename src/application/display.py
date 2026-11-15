@@ -40,8 +40,8 @@ def amount_tokens(values):
                 "watch_next_context_cached_ccost", "watch_next_context_fresh_ccost"):
         if key not in values:
             continue
-        # Report-owned availability flags remain canonical; only the amount
-        # token uses zero while its required component evidence is missing.
+        # Shared formatter output is refined by Web availability tokens below;
+        # report-owned flags and raw component evidence remain canonical.
         if key in ("incoming_context_ccost", "extra_ccost") and values.get(key + "_known") is False:
             tokens[key] = ccost_amount(None)
             continue

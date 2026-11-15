@@ -797,7 +797,7 @@ class SharedEvidenceTests(unittest.TestCase):
                 else:
                     self.assertFalse(value['view']['comparisons']['complete'])
 
-    def test_unverifiable_history_rejects_precise_reports_but_stats_has_playful_zeros(self):
+    def test_unverifiable_history_rejects_precise_reports_and_keeps_stats_cost_unknown(self):
         from src.application import ReportApplication
         for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
             with self.subTest(kind=kind):
@@ -816,7 +816,10 @@ class SharedEvidenceTests(unittest.TestCase):
                         self.assertEqual(12, len(row['metrics']))
                         for metric in row['metrics']:
                             self.assertEqual('0', str(metric['value']))
-                            self.assertNotRegex(str(metric['display']), r'Unavailable|N/A')
+                            if metric['metric'] in {'hourly-rate', 'total-cost', 'average-cost', 'expensive-session'}:
+                                self.assertEqual('N/A', metric['display']['value'])
+                            else:
+                                self.assertNotRegex(str(metric['display']), r'Unavailable|N/A')
                             self.assertFalse(metric.get('session_id'))
                 else:
                     self.assertIsNone(value['view'])

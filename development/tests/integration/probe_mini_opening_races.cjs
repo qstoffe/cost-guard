@@ -60,7 +60,8 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
     await evaluate('racePromise');
     await until('!miniWatch.pending&&!miniWatch.window');
     if(action==='css-error'){
-      assert.match(await evaluate('miniWatch.button.title'),/could not open/);
+      assert.match(await evaluate('miniWatch.feedback.textContent'),/Could not open/);
+      assert.equal(await evaluate('miniWatch.button.title'),'');
       assert.equal(await evaluate(`miniWatch.feedback.className`),'sr-only');
       await evaluate('miniWatch.close()');
     }else await off();
@@ -74,7 +75,8 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
   // requestWindow consumes transient activation. This next call has no gesture.
   await evaluate('miniWatch.toggle()');
   assert.equal(await evaluate('miniWatch.window'),null);
-  assert.match(await evaluate('miniWatch.button.title'),/could not open/);
+  assert.match(await evaluate('miniWatch.feedback.textContent'),/Could not open/);
+  assert.equal(await evaluate('miniWatch.button.title'),'');
   await evaluate('miniWatch.close()');
   assert.deepEqual(await evaluate('raceErrors'),[]);
   assert.equal(await evaluate('probeStreams'),1,'no second Live stream through any native race');
