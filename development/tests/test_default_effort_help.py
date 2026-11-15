@@ -217,7 +217,7 @@ class DefaultEffortHelpTests(unittest.TestCase):
                         variant="default", selected_effort=None)
         rows = podium((SimpleNamespace(responses=(ResponseCall(entry, 1000),)),), (entry,), None, entry.completed_at_ms)
         tokens = response_tokens(rows[0])
-        self.assertTrue(tokens["label"].endswith(" · default"))
+        self.assertEqual("claude-opus-5-5", tokens["label"])
         self.assertIn("default (medium)", tokens["model_help"])
         self.assertNotIn("*", tokens["model_help"])
         self.assertEqual(entry.tokens.output + entry.tokens.reasoning, rows[0].tokens_per_second)

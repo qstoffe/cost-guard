@@ -14,7 +14,8 @@ async function main() {
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
   let serverErrors = ''; server.stderr.on('data', value => { serverErrors += value.toString(); });
-  const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
+  const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check',
+    process.argv.includes('--actual-zoom')?'--enable-unsafe-extension-debugging':'--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
   const browserClosed = new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
@@ -86,6 +87,12 @@ async function main() {
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
     checks.push('automatic default, retired-route alias, twelve cards, five exact periods, safe real record links, no healthy toolbar');
+    if(process.argv.includes('--actual-zoom')) {
+      const zoom=await require('./probe_ai_stats_zoom.cjs')({command,evaluate,until,fixture,tab,checks,config});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',checks,zoom,runtimeErrors:errors};
+      return;
+    }
     await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
     await require('./probe_ai_stats_podium.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
@@ -212,7 +219,10 @@ async function main() {
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),4,'only CCost positions remain numeric during failure');
-    assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat')),true);
+    assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat')),true,
+      JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
+        metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
+        children:c.childNodes.length}))`)));
     assert.match(await evaluate(`notice.textContent`),/Historical report unavailable/);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.querySelector('.toolbar').hidden`),true);
     for(const code of ['source_permission_denied','http_auth_failure','unsupported_version','report_invalid_result',

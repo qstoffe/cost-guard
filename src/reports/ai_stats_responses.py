@@ -3,6 +3,7 @@ from collections.abc import Mapping
 
 from src.analysis.ai_stats_responses import ResponseCall, call_key, sample
 from src.analysis.active_hour import deduplicated_requests
+from src.analysis.ai_stats_models import ModelActivity
 
 
 def _explicit_tool_start(part):
@@ -34,7 +35,7 @@ def response_bounds(invocation, message):
     return left, right, False
 
 
-def response_duration(invocation, message):
+def response_interval(invocation, message):
     """Never multiply an inherited message interval by steps or include tool waits."""
     bounds = response_bounds(invocation, message)
     if bounds is None:
@@ -45,14 +46,19 @@ def response_duration(invocation, message):
         # Preserve actual stream/tool overlap; completion still owns period scope.
         streamed = message.metadata.get('streamed_at_ms')
         if type(streamed) is int and left < streamed <= right:
-            return streamed - left
+            return left, streamed - left
         # A response that requested tools can finish its message after the tools.
         # Legacy fallback: clip only explicit execution, never tool creation.
         ends = [at for p in message.parts if type(at := _explicit_tool_start(p)) is int
                 and type(left) is int and left < at and (right is None or at <= right)]
         if ends and right is not None:
             right = min(right, min(ends))
-    return right - left
+    return left, right - left
+
+
+def response_duration(invocation, message):
+    interval = response_interval(invocation, message)
+    return interval[1] if interval else None
 
 
 def encode_responses(bundle, snapshot, now):
@@ -61,6 +67,7 @@ def encode_responses(bundle, snapshot, now):
     entries = deduplicated_requests(bundle.trace_entries)
     future = min((e.completed_at_ms for e in entries if e.completed_at_ms > now), default=None)
 
+    activity = []
     def candidates():
         for entry in entries:
             if entry.completed_at_ms > now:
@@ -68,13 +75,15 @@ def encode_responses(bundle, snapshot, now):
             request = invocations.get((entry.session_id, entry.message_id, entry.step_part_id))
             if request is None:
                 continue
-            duration = response_duration(request, messages.get((entry.session_id, entry.message_id)))
-            if duration is not None:
+            interval = response_interval(request, messages.get((entry.session_id, entry.message_id)))
+            if interval is not None and not entry.error_name and entry.finish_reason not in ('error', 'aborted'):
+                left, duration = interval
+                activity.append((indices[call_key(entry)], left, duration))
                 yield ResponseCall(entry, duration)
 
     indices = {call_key(e): i for i, e in enumerate(bundle.trace_entries)}
-    return dict(as_of=now, next_completion=future,
-                calls=[(indices[call_key(c.entry)], c.duration_ms) for c in sample(candidates())])
+    calls = [(indices[call_key(c.entry)], c.duration_ms) for c in sample(candidates())]
+    return dict(as_of=now, next_completion=future, calls=calls, activity=activity)
 
 
 def decode_responses(value, facts, now=None):
@@ -93,3 +102,16 @@ def decode_responses(value, facts, now=None):
     if len(bounded) != len(calls):
         raise ValueError('invalid_response_sample')
     return bounded
+
+
+def decode_activity(value, facts):
+    result, seen = [], set()
+    for index, left, duration in value['activity']:
+        if (type(index) is not int or not 0 <= index < len(facts) or index in seen
+                or type(left) is not int or left <= 0 or type(duration) is not int or duration <= 0
+                or facts[index][0].completed_at_ms <= 0 or facts[index][0].completed_at_ms > value['as_of']
+                or left + duration > facts[index][0].completed_at_ms):
+            raise ValueError('invalid_model_activity')
+        seen.add(index)
+        result.append(ModelActivity(facts[index][0], left, duration))
+    return tuple(result)

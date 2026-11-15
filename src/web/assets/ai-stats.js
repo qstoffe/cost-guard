@@ -12,8 +12,8 @@ const AIStatsView = (() => {
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
     ['total-tokens', '🍿', 'Total Tokens', 'Observed token traffic, including repeated context reads.'],
     ['token-rate', '🍽️', 'Token Consumption Rate', 'Approximate model output response throughput in tok/s.'],
-    ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Coffee breaks excluded.'],
-    ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
+    ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock. Model medals union attributable provider-response intervals, not whole session time; concurrent models need not add to the total.'],
+    ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure. Each model medal uses its own distinct participating root sessions.'],
     ['expensive-session', '🏆', 'Most Expensive Session', 'The quest with the biggest token tab.'],
     ['longest-session', '🔥', 'Longest Session', 'The longest robot marathon in this period.'],
     ['busiest-day', '📅', 'Busiest Day', 'The calendar’s boss level.'],
@@ -24,9 +24,10 @@ const AIStatsView = (() => {
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
   const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
   const costMetrics = new Set(['hourly-rate', 'total-cost', 'average-cost', 'expensive-session']);
+  const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'working-time', 'average-cost']);
   function valid(result) {
     const rows = result?.view?.ai_stats;
-    return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-3-responses' &&
+    return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-4-models' &&
       Array.isArray(rows) && rows.length > 0 && rows.every(row =>
       periods.some(([id]) => id === row.period) && row.metrics?.length === definitions.length && definitions.every(([key]) =>
         row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
@@ -35,8 +36,12 @@ const AIStatsView = (() => {
           ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
             (key !== 'hourly-rate' || [...rateRows.map(([id]) => id), 'rate_help'].every(id =>
               typeof (metric.display_units?.[unit]?.[id] ?? metric.display[id]) === 'string'))) &&
-          (key !== 'token-rate' || Array.isArray(metric.podium) && metric.podium.length <= 3 &&
-            typeof metric.display.response_help === 'string' && metric.podium.every(row =>
+           (!podiumMetrics.has(key) || Array.isArray(metric.podium) && metric.podium.length <= 3 &&
+             metric.podium.every(row => typeof row.label === 'string' && typeof row.model_help === 'string' &&
+               (key === 'token-rate' || Number.isFinite(Number(row.podium_value)) && Number(row.podium_value) > 0) &&
+               ['usd', 'credits'].every(unit => typeof (row.display_units?.[unit]?.amount ?? row.display?.amount ?? row.speed) === 'string'))) &&
+           (key !== 'token-rate' ||
+             typeof metric.display.response_help === 'string' && metric.podium.every(row =>
               ['label', 'speed', 'sample'].every(id => typeof row[id] === 'string') &&
               Number.isFinite(Number(row.tokens_per_second)) && Number(row.tokens_per_second) > 0 &&
               Number.isInteger(row.sampled_calls) && row.sampled_calls > 0 && row.sampled_calls <= 32))).length === 1));
@@ -107,9 +112,9 @@ const AIStatsView = (() => {
           card.dataset.metric = key;
           const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
           const retained = {metric: null, rates: new Map(), podium: []};
-          const hasRates = key === 'hourly-rate', hasPodium = key === 'token-rate';
-          const helpButton = ContextHelp.button(title, () => retained.metric && (hasRates || hasPodium || key === 'total-tokens') ?
-            ReportView.display(retained.metric, hasRates ? 'rate_help' : hasPodium ? 'response_help' : 'token_help') : help);
+          const hasRates = key === 'hourly-rate', hasPodium = podiumMetrics.has(key), response = key === 'token-rate';
+          const helpButton = ContextHelp.button(title, () => retained.metric && (hasRates || response || key === 'total-tokens') ?
+            ReportView.display(retained.metric, hasRates ? 'rate_help' : response ? 'response_help' : 'token_help') : help);
           heading.append(symbol, helpButton);
           const value = e(hasRates ? 'div' : 'p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
           if (hasRates) {
@@ -121,20 +126,21 @@ const AIStatsView = (() => {
               retained.rates.set(id, amount);
             }
           }
+          const podium = e('div', undefined, 'ai-stat-podium');
           if (hasPodium) {
-            value.classList.add('ai-stat-podium');
+            if (response) card.classList.add('ai-stat-response');
             for (const medal of ['🥇', '🥈', '🥉']) {
               const row = e('div', undefined, 'ai-stat-racer'), label = e('span', '', 'ai-stat-model');
               ContextHelp.value(label, () => retained.metric?.podium[retained.podium.findIndex(item => item.label === label)]?.model_help || 'Recorded model identity unavailable.');
               const icon = e('span', medal); icon.setAttribute('aria-hidden', 'true');
-              const speed = e('span', '', 'ai-stat-speed'), sample = e('span', '', 'ai-stat-sample');
-              row.append(icon, label, speed, sample); row.setAttribute('role', 'group');
-              retained.podium.push({row, label, speed, sample});
+              const speed = e('span', '', 'ai-stat-speed');
+              row.append(icon, label, speed); row.setAttribute('role', 'group');
+              retained.podium.push({row, label, speed});
             }
           }
           const trait = e('p', '', 'ai-stat-trait');
           grid.append(card);
-          this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, detail, trait], value, detail, trait}));
+          this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
         }
       }
       this.root.append(this.selector, this.content);
@@ -171,7 +177,10 @@ const AIStatsView = (() => {
             if (item.rates.size) {
               for (const [id, node] of item.rates) ReportView.text(node, () => ReportView.display(metric, id));
             } else ReportView.text(item.value, () => ReportView.display(metric, 'value'));
-            if (item.costScope !== scope) { ReportView.text(item.detail, ''); ReportView.text(item.trait, ''); item.metric = null; }
+            if (item.costScope !== scope) {
+              ReportView.text(item.detail, ''); ReportView.text(item.trait, '');
+              item.podiumNode.replaceChildren(); item.metric = null;
+            }
             if (item.pending || !item.card.firstChild) item.card.replaceChildren(...item.nodes);
             item.pending = null; item.card.removeAttribute('role'); item.card.removeAttribute('aria-live');
             continue;
@@ -196,22 +205,23 @@ const AIStatsView = (() => {
         const card = this.cards.get(metric.metric);
         if (costMetrics.has(metric.metric)) card.costScope = scope;
         card.metric = metric;
+        if (card.rates.size) {
+          for (const [id, node] of card.rates) ReportView.text(node, () => ReportView.display(metric, id));
+        } else ReportView.text(card.value, () => ReportView.display(metric, 'value'));
         if (card.podium.length) {
           if (metric.podium.length) {
             for (const [index, item] of card.podium.entries()) {
               const racer = metric.podium[index];
               if (!racer) { item.row.remove(); continue; }
-              ReportView.text(item.label, racer.label); ReportView.text(item.speed, racer.speed);
-              ReportView.text(item.sample, racer.sample);
+              ReportView.text(item.label, racer.label);
+              ReportView.text(item.speed, () => racer.speed ?? ReportView.display(racer, 'amount'));
               item.row.setAttribute('aria-label', `Rank ${index + 1}: ${racer.label}`);
             }
             const nodes = card.podium.slice(0, metric.podium.length).map(item => item.row);
-            if (nodes.some((node, index) => card.value.children[index] !== node) || card.value.children.length !== nodes.length)
-              card.value.replaceChildren(...nodes);
-          } else ReportView.text(card.value, metric.display.value);
-        } else if (card.rates.size) {
-          for (const [id, node] of card.rates) ReportView.text(node, () => ReportView.display(metric, id));
-        } else ReportView.text(card.value, () => ReportView.display(metric, 'value'));
+            if (nodes.some((node, index) => card.podiumNode.children[index] !== node) || card.podiumNode.children.length !== nodes.length)
+              card.podiumNode.replaceChildren(...nodes);
+          } else if (card.podiumNode.firstChild) card.podiumNode.replaceChildren();
+        }
         ReportView.text(card.trait, metric.display.trait);
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {

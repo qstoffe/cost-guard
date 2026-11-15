@@ -8,7 +8,7 @@ function inspect() {
     inner.left >= outer.left - 1 && inner.right <= outer.right + 1;
   const cards = [...document.querySelectorAll('.ai-stat')];
   cards.forEach((card, index) => {
-    const bounds = rect(card), fields = [...card.children];
+    const bounds = rect(card), fields = [...card.children].filter(field => getComputedStyle(field).display !== 'none');
     const rowKey = card.parentElement.parentElement.querySelector('h3').textContent + ':' + Math.round(bounds.top);
     const heights = rows.get(rowKey) || []; heights.push(bounds.height); rows.set(rowKey, heights);
     fields.forEach((field, position) => {
@@ -67,13 +67,15 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
             metric.display_units[unit][key]=(unit==='usd'?'$':'')+'123456789012345678.90'+
               (unit==='credits'?' CCost':'')+'/h';
         metric.detail=metric.metric==='busiest-day' ? 'September 30, 2026' : '';
+        for(const [rank,model] of (metric.podium||[]).entries())
+          model.label=rank%2 ? 'LongUnbrokenModelName'.repeat(5)+' gjpqy Åé' : 'Short Model gjpqy';
         if(metric.session_id) metric.session_title=index%2 ? 'Short gjpqy' : 'LongSessionWithNoBreaks'.repeat(8)+' — gjpqy Åé';
       });
       row.matched={metric:'speed-gap',display:{value:'120×',trait:'A long matched-run trait '.repeat(5)},
         detail:'Matched first inputs on September 30, 2026 — '+ 'detail'.repeat(30)};
     }
     current.result=__statsStress; current.stats.update(current);`);
-  for (const theme of ['classic','light','dark']) for (const width of [360,520,1280]) {
+  for (const theme of ['classic','light','dark']) for (const width of [360,520,1280,1920]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
     for (const scale of [1,1.25,1.5,2]) {

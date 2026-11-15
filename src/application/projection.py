@@ -86,13 +86,23 @@ def ai_stat(value):
     base = fields(value, 'metric value status session_id session_title detail reasons')
     if value.metric == 'total-tokens':
         base = ObjectValue(base.fields + (('exact_value', str(value.value)),))
-    if value.metric == 'token-rate':
-        from .ai_stats import response_tokens
-        base = ObjectValue(base.fields + (('podium', tuple(record(
-            **dict(provider=row.provider, model=row.model, variant=row.variant,
-                   output_tokens=row.output_tokens, duration_ms=row.duration_ms,
-                   sampled_calls=row.sampled_calls, tokens_per_second=row.tokens_per_second),
-            **response_tokens(row)) for row in value.podium)),))
+    if value.metric in ('token-rate', 'total-tokens', 'total-cost', 'working-time', 'average-cost'):
+        from .ai_stats import response_tokens, short_model, standing_tokens
+        prepared = []
+        for row in value.podium:
+            tokens = response_tokens(row) if value.metric == 'token-rate' else standing_tokens(row, value.metric)
+            # Disambiguate only actual collisions; names never determine grouping.
+            peers = [r for r in value.podium if short_model(r) == short_model(row)]
+            if len(peers) > 1:
+                suffix = row.provider if len({r.provider for r in peers}) == len(peers) else f'{row.provider}/{row.model}'
+                if any(r is not row and (r.provider, r.model) == (row.provider, row.model) for r in peers):
+                    suffix += ' · ' + row.identity_hint
+                tokens['label'] += f' · {suffix}'
+            raw = (dict(variant=row.variant, output_tokens=row.output_tokens, duration_ms=row.duration_ms,
+                        sampled_calls=row.sampled_calls, tokens_per_second=row.tokens_per_second) if value.metric == 'token-rate' else
+                   dict(podium_metric=value.metric, podium_value=row.value))
+            prepared.append(record(provider=row.provider, model=row.model, **raw, **tokens))
+        base = ObjectValue(base.fields + (('podium', tuple(prepared)),))
     if value.rates is None:
         return base
     rates = fields(value.rates, 'total calendar_days workdays calendar_hours workday_hours active_hours '
