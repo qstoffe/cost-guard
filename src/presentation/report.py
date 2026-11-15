@@ -413,7 +413,7 @@ class ReportRenderer:
             f"Tokens: known {TOKEN_CATEGORY_ORDER} volume, including reasoning in Output; K/M/B are rounded display only. N/A means no known categories.",
             f"{TOKEN_CATEGORY_ORDER}: Token Mix % of the model/publisher's token volume (Output includes reasoning) and its CCost.",
             "CCost: reference token valuation priced per request, not actual billing; unavailable amounts display zero.",
-            "Prompts: unique user prompts where the model contributed usage; one prompt can count on several rows.",
+            "Prompts: distinct logical prompts in each executing session, including recorded child prompts; counts are not additive.",
             "Calls: model requests attributed to the model, including tool-loop, subagent and compaction requests.",
         ):
             self._prose(explanation, prefix="* ")

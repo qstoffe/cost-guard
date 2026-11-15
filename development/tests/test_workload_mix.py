@@ -208,10 +208,7 @@ class ComparisonHistoryTests(unittest.TestCase):
         self.assertIn('Unknown / unverified', stream.getvalue())
         service.model_availability_source = Availability(('gpt-test',))
         filtered = service.build_token_mix_history()
-        self.assertEqual(['gpt-test'], [row.model for row in filtered.model_token_mix])
-        self.assertEqual(['OpenAI'], [row.publisher for row in filtered.publisher_token_mix])
-        self.assertEqual((2, 2), (filtered.publisher_token_mix[0].prompts, filtered.publisher_token_mix[0].calls))
-        self.assertEqual(filtered.token_mix, filtered.publisher_token_mix[0].mix)
+        self.assertEqual(report, filtered, 'live selectability cannot remove recorded provider/model history')
 
 
 if __name__ == '__main__':

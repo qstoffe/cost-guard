@@ -218,14 +218,14 @@ class TokenMixHistoryTotalTests(unittest.TestCase):
         self.assertTrue(lines[heading + 1].startswith("Input: "))
         self.assertLess(heading, next(i for i, line in enumerate(lines) if line.startswith("| Model")))
 
-    def test_total_uses_the_same_availability_filter_as_rows(self):
+    def test_total_and_rows_keep_all_observed_models_regardless_of_availability(self):
         built = self.service(Availability(("github-copilot/gpt-test",))).build_token_mix_history()
-        (row,) = built.model_token_mix
-        self.assertEqual((row.mix.totals, row.mix.costs, row.mix.percentages),
-                         (built.token_mix.totals, built.token_mix.costs, built.token_mix.percentages))
+        self.assertEqual(2, len(built.model_token_mix))
+        self.assertEqual(built.token_mix.request_count, sum(row.calls for row in built.model_token_mix))
+        self.assertEqual(sum(built.token_mix.costs), sum(sum(row.mix.costs) for row in built.model_token_mix))
         hidden = self.service(Availability(("openai/other",))).build_token_mix_history()
-        self.assertEqual(0, hidden.token_mix.request_count)
-        self.assertNotIn("Total Token Mix %", rendered(hidden))
+        self.assertEqual(built, hidden)
+        self.assertIn("Total Token Mix %", rendered(hidden))
 
     def test_percent_and_ccost_parts_align_independently(self):
         def mix(counts, costs):

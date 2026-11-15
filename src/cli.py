@@ -63,7 +63,7 @@ Legacy terminal launchers: windows/Legacy/ or macos/Legacy/.
 
 Options:
   --all-models     Full pricing/model catalog only; ignore availability.
-  --token-mix      Total Token Mix % and CCost, then per currently selectable
+  --token-mix      Total Token Mix % and CCost, then per historically used
                    model and publisher, over available OpenCode history (deep scan).
   --sessions N|all Latest N (or all) currently available root sessions.
   -watch, --watch   Keep the selected scope live until Ctrl+C.

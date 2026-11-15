@@ -97,17 +97,17 @@ class TokenMixReuseTests(unittest.TestCase):
                 service.build_token_mix_history(scope='all')
             self.assertTrue(reads.called, change)
 
-    def test_availability_reprojects_without_repricing_or_reusing_an_old_period_result(self):
+    def test_availability_does_not_hide_history_or_reuse_an_old_period_result(self):
         original, source = self.service()
         original.build_token_mix_history(scope='all')
         service = self.fresh(original)
         service.model_availability_source.ids = ()
         with patch.object(service.cache_repository, 'get_many', side_effect=AssertionError('cache reread')):
             report = service.build_token_mix_history(scope='today')
-        self.assertEqual((), report.model_token_mix)
-        self.assertEqual(0, report.token_mix.request_count)
+        expected = self.fresh(original).build_token_mix_history(scope='today')
+        self.assertEqual(expected, report)
         self.assertEqual(8, source.load_count)
-        self.assertEqual(2, service.model_availability_source.calls)
+        self.assertEqual(0, service.model_availability_source.calls)
 
     def test_same_root_ids_and_revisions_in_a_new_source_instance_cannot_reuse_old_facts(self):
         original, source = self.service()

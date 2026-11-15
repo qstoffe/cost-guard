@@ -123,7 +123,7 @@ class TokenMixCacheTests(unittest.TestCase):
         self.assertEqual((None,) * 4, report.token_mix.shares)
         self.assertEqual('0', project(report).to_json()['token_mix']['display']['mix_total_tokens'])
 
-    def test_catalog_price_change_invalidates_valuation_but_availability_only_regroups(self):
+    def test_catalog_price_change_invalidates_valuation_but_availability_keeps_history(self):
         source = SyntheticMonthSource(3, 2, month_start_ms=START)
         original = report_service(self, source)
         first = self.fresh(original).build_token_mix_history()
@@ -139,9 +139,8 @@ class TokenMixCacheTests(unittest.TestCase):
 
         self.assertNotEqual(first.token_mix.costs, repriced.token_mix.costs)
         self.assertEqual(loads, source.load_count)
-        self.assertEqual((), filtered.model_token_mix)
-        self.assertEqual((), filtered.publisher_token_mix)
-        self.assertEqual(0, filtered.token_mix.request_count)
+        self.assertEqual(repriced, filtered)
+        self.assertEqual(6, filtered.token_mix.request_count)
 
     def test_malformed_disposable_evidence_is_a_miss_not_a_successful_empty_report(self):
         source = SyntheticMonthSource(1, 2, month_start_ms=START)

@@ -46,6 +46,19 @@ def observed_totals(entries):
     return tuple(totals)
 
 
+def history_prompt_keys(bundle):
+    """Model prompts belong to their executing session, not the causal root row."""
+    keys = {entry: (entry.session_id, entry.logical_prompt_id) for entry in bundle.trace_entries
+            if entry.logical_prompt_id and not entry.summary}
+    # Older sources may lack a logical ID. Only a proven own-session prompt
+    # record is a fallback; a child without one remains unknown, not a new call/prompt.
+    for prompt in bundle.prompts:
+        for entry in prompt.entries:
+            if entry.session_id == prompt.session_id and not entry.summary:
+                keys.setdefault(entry, (prompt.session_id, prompt.prompt_id))
+    return keys
+
+
 def build_token_mix_history(service: ReportService, progress: HistoryProgress, *, scope=None) -> ReportProjection:
     progress(WorkProgress("Loading pricing catalog", "pricing"), None)
     reference = service._load_comparison_catalog()
@@ -59,32 +72,13 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress, *
         # A full-history scan must not retain every hydrated snapshot in memory.
         service._analyzed.pop(root.session_id, None)
         entries.extend(bundle.trace_entries)
-        for prompt in bundle.prompts:
-            for entry in prompt.entries:
-                prompt_of.setdefault(entry, (prompt.session_id, prompt.prompt_id))
+        prompt_of.update(history_prompt_keys(bundle))
     return history_projection(service, reference, entries, prompt_of, progress, scope=scope)
 
 
 def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None):
     """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
     valuation = valuation or reference.reference_category_valuation
-    progress(WorkProgress("Checking available OpenCode models", "availability"), None)
-    try:
-        source = service.model_availability_source
-        available = source.available_model_ids() if source is not None else None
-    except Exception as exc:
-        from src.sources.errors import SourceError
-        from src.runtime_errors import recoverable
-        if not isinstance(exc, (SourceError, OSError)):
-            recoverable(exc, "history-model-availability")
-            software_fault = True
-        else:
-            software_fault = False
-        available = None
-    else:
-        from src.runtime_errors import recovered
-        recovered("history-model-availability")
-        software_fault = False
     progress(WorkProgress("Pricing token categories", "finalizing"), None)
     usage = unique_usage(entries)
     period = {}
@@ -103,21 +97,8 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         warnings += (f"Request time unavailable for {undated} recorded calls; undated usage is included only in All time.",)
     # All-history scope: any V1 gap may make the result incomplete.
     notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
-    if available is None:
-        if software_fault:
-            warnings += ("ERROR: Model availability lookup failed internally; showing all historically used models.",)
-        # Fail open: hiding usable history is worse than an unverified filter.
-        warnings += ("⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",)
-    else:
-        selectable = {_model_key(ModelRef(*value.split("/", 1))) if "/" in value
-                      else _model_key(ModelRef("", value)) for value in available}
-        alias_keys = {_model_key(entry.model) for entry in usage if
-            f'{entry.model.provider}/{entry.model.recorded_model}' in available}
-        shown = tuple(group for group in groups if _model_key(group.model) in selectable | alias_keys)
-        if len(shown) != len(groups):
-            notes.append(f"Only currently selectable OpenCode models are shown; "
-                         f"{len(groups) - len(shown)} other historically used model(s) omitted.")
-        groups = shown
+    # Executed history is not a current-entitlement/model-picker roster.
+    # Keep every observed model, including retired models and other routes.
     rows = []
     by_model = {}
     for entry in usage:
@@ -158,8 +139,9 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
                                                model_key=publisher_key)]
     publishers.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.publisher))
     notes.append("Historical publisher shares use pooled shown requests, not the 100-slot comparison prior. "
-                 "Prompts are distinct within each model/publisher; mixed prompts can appear in several rows, "
-                 "so row prompt counts are not additive. Unknown / unverified is not an account provider.")
+                  "Prompts are distinct logical prompts in each executing session, including recorded child prompts; "
+                  "mixed prompts can appear in several model/publisher rows, so row prompt counts are not additive. "
+                  "Unknown / unverified is not an account provider.")
     total = priced_token_mix(((entry.model, entry.tokens) for entry in shown_usage),
                              valuation,
                               sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))

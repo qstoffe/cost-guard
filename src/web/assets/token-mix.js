@@ -52,7 +52,7 @@ const TokenMixView = (() => {
       const columns = [...(this.offset ? ['Publisher', 'Model'] : ['Publisher']), 'Prompts', 'Calls', 'Tokens',
         ...names.map(name => name + ' %'), 'Total CCost'];
       const help = ['Model manufacturer, not an account provider.', ...(this.offset ? [null] : []),
-        'Distinct contributing user prompts. Mixed-model prompts can appear in several rows; counts are not additive.',
+        'Distinct logical prompts in each executing session, including recorded child prompts. Mixed-model prompts can appear in several rows; counts are not additive.',
         'Attributed model requests in available shown history.',
          'Recorded Input, Cached input, Cache write and Output token volume.',
         ...definitions.map(text => text + ' Share of tokens, not cost.'),

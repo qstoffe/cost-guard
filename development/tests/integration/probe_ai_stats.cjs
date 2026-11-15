@@ -93,6 +93,12 @@ async function main() {
       evidence={outcome:'PASS',checks,zoom,runtimeErrors:errors};
       return;
     }
+    if(process.argv.includes('--model-attribution')) {
+      await require('./probe_model_attribution.cjs')({evaluate,until,fixture,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',checks,runtimeErrors:errors};
+      return;
+    }
     await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
     await require('./probe_ai_stats_podium.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
@@ -214,12 +220,16 @@ async function main() {
       await evaluate(`__fail=false; acquire(current)`); await until(`!current.loading && !current.withheld && !current.failed`);
       checks.push(section+': aged completion/re-entry retains qualified content; refresh is quiet/single; genuine failure preserves original provenance; retry restores');
     }
+    await require('./probe_model_attribution.cjs')({evaluate,until,fixture,checks});
     await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && !current.loading`);
-    await evaluate(`window.__savedStats=current.result; current.result=null; current.statsResults.clear();
+    await evaluate(`window.__failureCosts=Object.fromEntries([...document.querySelectorAll('.ai-stat')]
+      .filter(c=>['hourly-rate','total-cost','average-cost','expensive-session'].includes(c.dataset.metric))
+      .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')].map(n=>n.textContent)]));
+      window.__savedStats=current.result; current.result=null; current.statsResults.clear();
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),4,'only CCost positions remain numeric during failure');
-    assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat')),true,
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),4,'only CCost amount shells remain during failure');
+    assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,
       JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
         metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
         children:c.childNodes.length}))`)));
@@ -229,7 +239,7 @@ async function main() {
         'report_cache_unavailable','ai_stats_no_progress']) {
       await evaluate(`api=async()=>{throw new Error('${code}')}; void acquire(current)`);
       await until(`current.failed && !current.loading`);
-      assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat')),true,code);
+      assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,code);
       assert.equal(await evaluate(`notice.textContent.length>0 && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
     }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);

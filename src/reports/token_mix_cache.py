@@ -16,12 +16,12 @@ from src.cache.session_scope import snapshot_scope
 from src.domain import ModelRef, TokenUsage
 from src.domain.progress import WorkProgress
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
-from .token_mix_history import history_projection
+from .token_mix_history import history_projection, history_prompt_keys
 from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
 from .history_snapshots import load as load_snapshots, warnings as history_warnings
 from . import token_mix_reuse as reuse
 
-ALGORITHM = 'web-token-mix-evidence-2'
+ALGORITHM = 'web-token-mix-evidence-3'
 NAMESPACE = 'web-token-mix-evidence'
 BATCH_SIZE = 64
 
@@ -34,10 +34,7 @@ def cache_key(service, root, reference):
 
 
 def encode(bundle, reference):
-    prompts = {}
-    for prompt in bundle.prompts:
-        for entry in prompt.entries:
-            prompts.setdefault(entry, (prompt.session_id, prompt.prompt_id))
+    prompts = history_prompt_keys(bundle)
     facts = []
     for entry in bundle.trace_entries:
         tokens = entry.tokens
@@ -49,7 +46,8 @@ def encode(bundle, reference):
             tokens=[tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning],
             known=list(tokens.known_fields), reported=str(entry.reported_cost), instance=entry.source_instance,
             prompt=prompts.get(entry), costs=None if costs is None else [str(value) for value in costs]))
-        facts[-1].update(root=entry.root_session_id, invocation=entry.invocation_id, parent_session=entry.parent_session_id)
+        facts[-1].update(root=entry.root_session_id, invocation=entry.invocation_id, parent_session=entry.parent_session_id,
+                         logical_prompt=entry.logical_prompt_id, summary=entry.summary)
         if entry.selected_effort is not None:
             facts[-1]['selected_effort'] = entry.selected_effort
         if entry.model.resolution is not None or entry.model.effort_default is not None:
@@ -77,7 +75,8 @@ def decode(facts):
             else ModelRef(*fact['model']), fact['variant'], tokens,
             reported_cost=Decimal(fact['reported']), source_instance=fact['instance'],
             selected_effort=fact.get('selected_effort'), root_session_id=fact.get('root'),
-            invocation_id=fact.get('invocation'), parent_session_id=fact.get('parent_session'))
+            invocation_id=fact.get('invocation'), parent_session_id=fact.get('parent_session'),
+            logical_prompt_id=fact.get('logical_prompt'), summary=fact.get('summary', False))
         costs = None if fact['costs'] is None else tuple(Decimal(value) for value in fact['costs'])
         if costs is not None and (len(costs) != 4 or any(not value.is_finite() or value < 0 for value in costs)):
             raise ValueError('invalid_costs')

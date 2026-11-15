@@ -170,14 +170,14 @@ class ModelHistoryTests(unittest.TestCase):
     def service(self, availability):
         return report_service(self, MutableSource(make_snapshot()), availability=availability)
 
-    def test_history_report_scans_all_roots_filters_and_renders_table(self):
+    def test_history_report_scans_all_roots_and_renders_table(self):
         service = self.service(Availability(("github-copilot/gpt-test",)))
         calls = []
         report = service.build_token_mix_history(lambda label, percent: calls.append((label, percent)))
         self.assertEqual(ReportKind.TOKEN_MIX, report.kind)
         (row,) = report.model_token_mix
         bundle = analyze_snapshot(make_snapshot(), now_ms=4000)
-        self.assertEqual(("GPT Test", 2, len(bundle.trace_entries)), (row.model, row.prompts, row.calls))
+        self.assertEqual(("GPT Test", 3, len(bundle.trace_entries)), (row.model, row.prompts, row.calls))
         self.assertEqual(HISTORY_NOTE, report.notes[0])
         self.assertFalse(service._analyzed, "deep scan must not retain snapshots")
         self.assertIn(("Analyzing usage history...", None), calls)
@@ -192,13 +192,12 @@ class ModelHistoryTests(unittest.TestCase):
             self.assertIn(heading, text)
         self.assertNotIn("Accounts Overview", text)
 
-    def test_non_selectable_models_omitted_and_unknown_availability_fails_open(self):
-        hidden = self.service(Availability(("openai/other",))).build_token_mix_history()
-        self.assertEqual((), hidden.model_token_mix)
-        self.assertIn("1 other historically used model(s) omitted", hidden.notes[1])
+    def test_historical_models_do_not_depend_on_current_selectability(self):
+        historical = self.service(Availability(("openai/other",))).build_token_mix_history()
+        self.assertEqual(1, len(historical.model_token_mix))
         unknown = self.service(Availability(None)).build_token_mix_history()
-        self.assertEqual(1, len(unknown.model_token_mix))
-        self.assertTrue(any("Could not verify currently selectable" in w for w in unknown.source_warnings))
+        self.assertEqual(historical, unknown)
+        self.assertFalse(any("currently selectable" in w for w in unknown.source_warnings))
 
     def test_cli_help_and_standalone_shape(self):
         self.assertIs(CommandKind.TOKEN_MIX, parse_command(["--token-mix"]).kind)
