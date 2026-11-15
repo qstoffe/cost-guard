@@ -11,8 +11,11 @@ def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise SystemExit('Requires a disposable standard GitHub-hosted runner.')
     if os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
-        changed = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
-                                 cwd=root, capture_output=True, text=True, check=True).stdout.splitlines()
+        difference = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
+                                    cwd=root, capture_output=True, text=True)
+        if difference.returncode:
+            raise RuntimeError('Affected-owner lookup failed: ' + difference.stderr[-4000:])
+        changed = difference.stdout.splitlines()
         owners = {'src/application/projection.py', 'src/application/display.py', 'src/reports/models.py',
                   'src/web/jobs.py', 'src/web/composition.py', 'src/web/report_control.py', 'src/web/assets/app.css'}
         if not any('token_mix' in path or 'token-mix' in path or path in owners for path in changed):
@@ -37,4 +40,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+        diagnostic = json.dumps(dict(outcome='FAIL', diagnostic=traceback.format_exc()[-7000:]))
+        print('::error title=Token Mix failure::' + diagnostic.replace('%', '%25'), flush=True)
+        raise
