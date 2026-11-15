@@ -1,9 +1,19 @@
-"""Hosted-only real Chromium Token Mix regression with numeric scale evidence."""
+"""Hosted Chromium Token Mix regression; real five-minute cadence on manual Full."""
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+
+
+def browser_command(browser, output):
+    command = ['node', 'development/tests/integration/probe_token_mix.cjs', browser, str(output)]
+    # Ordinary checks exercise the existing overdue-clock path, including slow
+    # coherent replacement. Do not spend five real minutes twice per release.
+    # Manual Full retains actual elapsed-time proof, not an equivalent ordinary PASS.
+    if os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch':
+        command.append('--wall-clock')
+    return command
 
 
 def main():
@@ -18,8 +28,7 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.executable_path
     environment = {**os.environ, 'COST_GUARD_TEST_PYTHON': sys.executable, 'COST_GUARD_CI_BROWSER': '1'}
-    result = subprocess.run(['node', 'development/tests/integration/probe_token_mix.cjs',
-                             browser, str(output), '--wall-clock'], cwd=root, env=environment,
+    result = subprocess.run(browser_command(browser, output), cwd=root, env=environment,
                             timeout=450, check=False, capture_output=True, text=True)
     evidence = (json.loads(output.read_text(encoding='utf-8')) if output.exists() else
                 dict(outcome='FAIL', error=result.stderr[-7000:]))
