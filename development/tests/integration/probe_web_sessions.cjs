@@ -372,9 +372,11 @@ async function main() {
             const pager=await evaluate(`(() => {
               const bar=document.querySelector('.page-navigation'),label=bar.querySelector(':scope > span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
              const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
-              const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
+               const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] '),
+                 labelOnly:[...bar.querySelectorAll('button')].every(b=>!b.children.length && b.childNodes.length===1 && b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy'))};
               current.catalog.update(pagerOriginal);return result;})()`);
-            assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
+             assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
+             assert.equal(pager.labelOnly,true,'all pager states use only meaningful text, never a reserved spinner slot');
          }
        }
      }

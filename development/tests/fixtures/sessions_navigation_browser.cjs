@@ -5,7 +5,13 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const load = () => evaluate('current.catalog.load()');
   const ids = () => evaluate('[...current.catalog.body.rows].map(row=>row.dataset.id)');
   const settled = offset => until(`current.catalog.data.offset===${offset} && !current.catalog.operation && !current.catalog.busy`);
+  const labelOnlyPager = async (catalog = 'current.catalog') => {
+    assert.equal(await evaluate(`(()=>{const c=${catalog};return [...c.pager.querySelectorAll('button')].every(b=>b.children.length===0 && b.childNodes.length===1 &&
+        b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy')) &&
+      [...c.numbers.querySelectorAll('.page-gap')].every(n=>n.textContent==='…' && !n.children.length);})()`),true);
+  };
   const singleBanner = async () => {
+    await labelOnlyPager();
     assert.deepEqual(await evaluate(`(()=>{const c=current.catalog;return {
       statuses:c.root.querySelectorAll('[role=status]').length,progress:c.root.querySelectorAll('progress,.report-loading').length,
       cancel:[...c.root.querySelectorAll('button')].some(b=>b.textContent==='Cancel'),
@@ -24,9 +30,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     await until('window.releasePager && current.catalog.operation?.pending');
     await singleBanner();
     assert.equal(await evaluate(`current.catalog.operation.button===initiator && document.activeElement===initiator &&
-      initiator.getAttribute('aria-busy')==='true' && initiator.getAttribute('aria-disabled')==='true' &&
-      !initiator.disabled && initiator.querySelector('.sessions-page-spinner').getAttribute('aria-hidden')==='true'`),true);
-    assert.equal(await evaluate(`current.catalog.pager.querySelectorAll('[aria-busy=true]').length`),1);
+      initiator.getAttribute('aria-disabled')==='true' && !initiator.disabled &&
+      current.catalog.pan.getAttribute('aria-busy')==='true'`),true);
     assert.equal(await evaluate('initiator.getBoundingClientRect().width'),await evaluate('originalWidth'));
     const hash = await evaluate('location.hash');
     await evaluate('initiator.click()');
@@ -35,7 +40,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const releasePage = async offset => {
     await evaluate('releasePager();current.catalog.api=pagerApi');
     await settled(offset);
-    assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
+    await labelOnlyPager();
+    assert.equal(await evaluate('initiator.getBoundingClientRect().width'),await evaluate('originalWidth'));
+    assert.equal(await evaluate(`!initiator.matches('[aria-current=page]') ||
+      (getComputedStyle(initiator).outlineStyle==='solid' && getComputedStyle(initiator).outlineWidth==='2px' &&
+      getComputedStyle(initiator).outlineOffset==='-2px')`),true,'current-page outline survives pointer-focus styling');
   };
   await fixture('catalog-large'); await fixture('catalog-index');
   await evaluate(`location.hash='#/sessions'`);
@@ -48,26 +57,29 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.doesNotMatch(await evaluate('document.getElementById("context-help").textContent'),/Activate to sort/);
   await holdPage('current.catalog.next',25);
   assert.match(await evaluate('current.catalog.status.textContent'),/Loading Sessions page 2/);
-  for (const theme of ['classic','light','dark']) for (const width of [360,800,1366,1920]) for (const zoom of [1,1.5]) {
+  for (const theme of ['classic','light','dark']) for (const width of [360,800,1366,1920]) for (const zoom of [1,1.5,2]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]});
     await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.body.style.zoom=${zoom}`);
-    const geometry = await evaluate(`(()=>{const c=current.catalog,b=initiator,s=b.querySelector('span'),busy=getComputedStyle(b),
-      active=getComputedStyle(c.periodButtons[1].button);return {
+    const geometry = await evaluate(`(()=>{const c=current.catalog,b=initiator,busy=getComputedStyle(b),
+      active=getComputedStyle(c.periodButtons[1].button),range=document.createRange();range.selectNode(b.firstChild);
+      const text=range.getBoundingClientRect(),bounds=b.getBoundingClientRect();return {
       overflow:document.documentElement.scrollWidth>innerWidth+1,
       border:busy.borderTopStyle,enabledBorder:active.borderTopStyle,background:busy.backgroundColor,enabledBackground:active.backgroundColor,
-      label:b.textContent,spinner:getComputedStyle(s).visibility,animation:getComputedStyle(s).animationName,
-      textBeforeSpinner:b.firstChild.nodeType===Node.TEXT_NODE && s.getBoundingClientRect().right<=b.getBoundingClientRect().right,
+      label:b.textContent,buttonWidth:bounds.width,textWidth:text.width,
+      trailingGap:bounds.right-text.right,leadingGap:text.left-bounds.left,
+      animation:busy.animationName,pseudo:[getComputedStyle(b,'::before').content,getComputedStyle(b,'::after').content],
       choices:c.periodButtons.every(({button})=>!button.disabled)&&c.headers.every(({th})=>!th.querySelector('button').disabled)};})()`);
     assert.equal(geometry.overflow,false,JSON.stringify({theme,width,zoom,...geometry})); assert.equal(geometry.border,'dashed'); assert.equal(geometry.enabledBorder,'solid');
     assert.notEqual(geometry.background,geometry.enabledBackground); assert.equal(geometry.label,'Next');
-    assert.equal(geometry.spinner,'visible'); assert.equal(geometry.animation,'sessions-page-spin');
-    assert.equal(geometry.textBeforeSpinner,true); assert.equal(geometry.choices,true);
+    assert.equal(geometry.animation,'none'); assert.deepEqual(geometry.pseudo,['none','none']);
+    assert.ok(Math.abs(geometry.trailingGap-geometry.leadingGap)<1,JSON.stringify(geometry));
+    assert.equal(geometry.choices,true); await labelOnlyPager();
     layouts.push({theme,width,zoom,...geometry});
   }
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
-  assert.equal(await evaluate('getComputedStyle(initiator.querySelector("span")).animationName'),'none');
-  assert.equal(await evaluate('getComputedStyle(initiator.querySelector("span")).visibility'),'visible');
+  await labelOnlyPager();
+  assert.equal(await evaluate('getComputedStyle(initiator).animationName'),'none');
   await command('Emulation.setEmulatedMedia',{features:[]});
   await evaluate('document.body.style.zoom=1');
   await releasePage(25);
@@ -75,6 +87,18 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await settled(50);
+  await command('Emulation.setTouchEmulationEnabled',{enabled:true});
+  const previousTouch = await evaluate(`(()=>{const b=current.catalog.previous;b.scrollIntoView();const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[previousTouch]});
+  await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await settled(25); await labelOnlyPager();
+  await command('Emulation.setTouchEmulationEnabled',{enabled:false});
+  const nextMouse = await evaluate(`(()=>{const b=current.catalog.next;b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  assert.equal(await evaluate(`document.elementFromPoint(${nextMouse.x},${nextMouse.y})===current.catalog.next`),true);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',...nextMouse});
+  await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...nextMouse});
+  await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...nextMouse});
+  await settled(50); await labelOnlyPager();
   await holdPage('current.catalog.previous',25); await releasePage(25);
   assert.equal(await evaluate('document.activeElement===current.catalog.previous'),true);
   await holdPage('current.catalog.pageButtons.get(1)',0); await releasePage(0);
@@ -83,7 +107,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate(`document.querySelector('nav a[href="#/accounts"]').focus()`);
   await releasePage(25);
   assert.equal(await evaluate('document.activeElement.getAttribute("href")'),'#/accounts','completion never steals deliberately moved focus');
-  checks.push('Next/Previous/numbered initiating spinner, inert focused busy button, constant width, keyboard Enter, focus fallback/no theft; 24 theme/width/zoom layouts and reduced motion');
+  checks.push('label-only Next/Previous/numbered pager, inert focused busy button, constant width/no trailing slot, keyboard Enter, focus fallback/no theft; 36 theme/width/100–200% zoom layouts and reduced motion');
   const original = await ids();
   await fixture('catalog-clear');
   await evaluate(`current.catalog.headers[3].th.querySelector('button').focus()`);
@@ -153,6 +177,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       new Promise(resolve=>{passiveRelease=()=>resolve(data);});};window.passive=current.catalog.load();void 0`);
   await until('window.passiveRelease!==null');
   assert.equal(await evaluate('current.catalog.next.disabled'),false);
+  assert.equal(await evaluate('current.catalog.status.hidden'),true);
+  await labelOnlyPager();
   assert.equal(await evaluate('spinnerFlashes'),0);
   assert.equal(await evaluate('disabledFlashes'),0);
   await evaluate('passiveRelease();current.catalog.api=passiveApi;passive');
@@ -190,6 +216,11 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
   await evaluate('current.catalog.poll()'); await settled(25);
   const epoch = await evaluate('current.catalog.data.epoch');
+  await evaluate(`location.hash='#/sessions?sort=activity&direction=-1&offset=575&epoch=${epoch}'`);
+  await settled(575);
+  await holdPage('current.catalog.pageButtons.get(25)',600); await releasePage(600);
+  assert.equal(await evaluate('current.catalog.pageButtons.get(25).getAttribute("aria-current")'),'page');
+  await labelOnlyPager();
   await evaluate(`location.hash='#/sessions?sort=activity&direction=-1&offset=3175&epoch=${epoch}'`);
   await settled(3175);
   await evaluate('current.catalog.next.focus();current.catalog.next.click()'); await settled(3200);
@@ -203,6 +234,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.section==="accounts"');
   assert.equal(await evaluate('detachedCatalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
   await evaluate('releasePager();detachedCatalog.api=pagerApi');
-  checks.push('trusted touch Ctx help; uncached page Back supersession, automatic outage recovery, 17-row last page, Back/Forward; route exit clears spinner');
+  await labelOnlyPager('detachedCatalog');
+  checks.push('trusted touch Ctx help; uncached page Back supersession, automatic outage recovery, 17-row last page, Back/Forward; route exit has label-only pager');
   return {checks,layouts};
 };
