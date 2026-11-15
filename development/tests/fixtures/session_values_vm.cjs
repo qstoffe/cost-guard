@@ -44,7 +44,11 @@ module.exports = ({vm, context, Node, input, document}) => {
     total_ictx_cost_text:'N/A',total_extra_cost_text:'N/A',total_mix_text:'N/A'});
   block.display.duration_ms='N/A'; block.display.total_ccost='0';
   block.display_units={credits:{total_ccost:'0'},usd:{total_ccost:'$0.00'}};
-  for(let poll=0;poll<5;poll++) view.update(data);
+   for(let poll=0;poll<5;poll++) {
+     view.update(data); view.sourceStatus(data);
+     assert.equal(view.status.hidden,true,'qualified retained scalars refresh silently');
+     assert.equal(view.status.textContent,'');
+   }
   assert.equal(mix(),'2/96/1/1');
   assert.deepEqual(cells.map(cell=>cell.textContent),before);
   assert.equal(document.activeElement,targets[3]);

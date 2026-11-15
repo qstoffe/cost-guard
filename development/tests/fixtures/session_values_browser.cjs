@@ -10,7 +10,12 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     window.originalMix=mix().textContent;window.footerCells=[...detail.footer.cells];
     window.footerTargets=footerCells.map(c=>c.firstChild);window.footerText=footerCells.map(c=>c.textContent);
     window.scope=detail.data.value_authority.scope;window.revision=detail.data.revision;
-    detail.activity.tools.node.open=true;`);
+     detail.activity.tools.node.open=true;
+     window.refreshNotices=[];
+     const sourceStatus=detail.sourceStatus.bind(detail);
+     detail.sourceStatus=value=>{sourceStatus(value);refreshNotices.push({
+       state:value.state,pending:value.pending,status:detail.status.textContent,
+       hidden:detail.status.hidden,loader:detail.loader.root.hidden});};`);
   assert.match(await evaluate('originalMix'),/^\d+\/\d+\/\d+\/\d+$/);
   for(const selector of ['detail.body.rows[0].cells[3].firstChild','detail.footer.cells[3].firstChild']) {
     await evaluate(`${selector}.focus()`);
@@ -31,6 +36,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.deepEqual(await evaluate('[...detail.footer.cells].map(c=>c.textContent)'),await evaluate('footerText'));
   assert.equal(await evaluate('footerCells.every((c,i)=>c===detail.footer.cells[i] && c.firstChild===footerTargets[i])'),true);
   assert.equal(await evaluate('detail.activity.tools.node.open'),true);
+  assert.equal(await evaluate('detail.values.retained && detail.status.hidden && !detail.status.textContent'),true);
+  assert.equal(await evaluate('refreshNotices.every(n=>n.hidden && !n.status && n.loader)'),true,
+    'real HTTP qualified partial refresh never exposes an informational notice');
   await evaluate('window.revision=detail.data.revision');
   await fixture('detail-values-correction');
   await until('detail.data.revision !== revision && detail.data.value_authority.rows.u_next === "invalidated"');
@@ -49,7 +57,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   // detached DTOs to the shipped renderer, not pretend source measurements.
   await evaluate(`clearTimeout(detail.timer);detail.attached=false;ReportView.setUnit('credits',detail.root);
     window.dto=structuredClone(detail.data);window.block=dto.result.view.prompt_blocks[0];
-    window.paint=()=>detail.update(structuredClone(dto));
+     window.paint=()=>{const value=structuredClone(dto);detail.update(value);detail.sourceStatus(value);};
     window.target=block.rows.find(r=>r.event_id==='u_next');
     window.qualified=()=>{for(const key of Object.keys(dto.value_authority.totals))dto.value_authority.totals[key]='known';};
     qualified();block.total_calls=42;block.duration_ms=9000;block.display.duration_ms='9s';
@@ -62,7 +70,12 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     cost.focus();window.selectedNode=duration.firstChild;window.range=document.createRange();
     range.selectNodeContents(duration);getSelection().removeAllRanges();getSelection().addRange(range);
     window.selectedText=getSelection().toString();window.y=scrollY;
-    window.help=document.getElementById('context-help');`);
+     window.help=document.getElementById('context-help');
+     window.tableTop=detail.scroll.getBoundingClientRect().top;
+     window.quietFrames=[];window.quietObserver=new MutationObserver(()=>quietFrames.push({
+       text:detail.status.textContent,status:detail.status.getBoundingClientRect().height,
+       loader:detail.loader.root.getBoundingClientRect().height}));
+     quietObserver.observe(detail.root,{subtree:true,childList:true,attributes:true,characterData:true});`);
   await evaluate(`for(const key of Object.keys(dto.value_authority.totals))dto.value_authority.totals[key]='pending';
     dto.value_authority.rows.u_next='pending';target.token_mix_percent=null;target.display.token_mix_percent='running - consider ABORT';
     block.total_calls=null;block.duration_ms=null;block.display.duration_ms='N/A';block.total_mix_text='N/A';
@@ -74,13 +87,36 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     !help.hidden && cost.getAttribute('aria-describedby')===help.id`),true);
   assert.deepEqual(await evaluate('[...detail.footer.cells].slice(3).map(c=>c.textContent)'),
     ['12','42','9s','—','70%','30%','2/96/1/1']);
-  await evaluate(`ReportView.setUnit('usd',detail.root)`);
+  await evaluate(`(async()=>{
+    for(let cycle=0;cycle<3;cycle++)for(const pending of [
+      {state:'loading',pending:true,result:null},
+      {state:'observed',pending:true,result:null},
+      {state:'loading',result:null,acquisition:{phase:'verifying',percent:35}}
+    ]){detail.sourceStatus(pending);await new Promise(requestAnimationFrame);}
+    for(let cycle=0;cycle<3;cycle++){
+      ReportView.setUnit('usd',detail.root);paint();ReportView.setUnit('credits',detail.root);paint();
+    }
+  })()`);
+  assert.equal(await evaluate(`quietFrames.length>0 && quietFrames.every(f=>!f.text && f.status===0 && f.loader===0) &&
+    Math.abs(detail.scroll.getBoundingClientRect().top-tableTop)<2 &&
+    document.activeElement===cost && !help.hidden && getSelection().toString()===selectedText`),true,
+    'pending/retained frames have no banner, loader, reserved space, status announcement or lost interaction');
+  await evaluate(`quietObserver.disconnect();ReportView.setUnit('usd',detail.root)`);
   assert.equal(await evaluate('cost.textContent'),'$1.20');
   await evaluate(`ReportView.setUnit('credits',detail.root);getSelection().removeAllRanges();cost.blur();
     qualified();block.total_calls=0;block.duration_ms=1000;block.display.duration_ms='1s';
     block.total_ccost='0';block.display.total_ccost='0';block.display_units={credits:{total_ccost:'0'},usd:{total_ccost:'$0.00'}};
     target.token_mix_percent=[0,98,1,1];target.display.token_mix_percent='0/98/1/1';dto.value_authority.rows.u_next='known';paint();`);
   assert.deepEqual(await evaluate('[detail.footer.cells[3].textContent,detail.footer.cells[4].textContent,detail.footer.cells[5].textContent]'),['0','0','1s']);
+  await evaluate(`detail.sourceStatus({state:'source_unavailable',result:null});
+    window.sourceError=detail.status.textContent;
+    detail.sourceStatus({state:'observed',pending:true,result:null});`);
+  assert.equal(await evaluate('!detail.status.hidden && detail.status.textContent===sourceError'),true);
+  assert.match(await evaluate('sourceError'),/Source unavailable/);
+  await evaluate('paint()');
+  assert.equal(await evaluate('detail.status.hidden && !detail.status.textContent'),true,
+    'qualified successful recovery clears the real fault');
+  checks.push('silent real partial refresh and repeated pending/retained rendered frames; zero status/loader height or text, no table shift, repeated units and retained focus/selection/help; genuine error survives pending until recovery');
   checks.push('explicit DTO pending refresh preserves focused open help, selected text/text-node, cells/targets and scroll; units change retained observations; authoritative smaller/zero values replace atomically');
   // Exact shared header text and source-backed model/call cell help.
   const helpText = async expression => {
