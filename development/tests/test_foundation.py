@@ -140,7 +140,17 @@ class ValidationTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertLessEqual(len(readme.split()), 100)
         self.assertLessEqual(len(readme.splitlines()), 25)
+        self.assertLess(readme.index("## Requirements"), readme.index("## Windows"))
         self.assertLess(readme.index("## Windows"), readme.index("## macOS"))
+        shared = readme.split("## Requirements\n", 1)[1].split("## Windows", 1)[0]
+        self.assertIn("Requires Python 3.11+ and OpenCode on Windows and macOS.", shared)
+        self.assertIn("Use the tray/menu **Exit Cost Guard** action to stop the application.", shared)
+        for platform, following, path in (
+            ("Windows", "macOS", "windows/Cost-Guard-Web.cmd"),
+            ("macOS", "Legacy", "macos/Cost-Guard-Web.command"),
+        ):
+            section = readme.split(f"## {platform}\n", 1)[1].split(f"## {following}", 1)[0]
+            self.assertEqual(f"Start [{path}]({path}).", section.strip())
         self.assertIn("local Web server", readme)
         for path in ("windows/Cost-Guard-Web.cmd", "macos/Cost-Guard-Web.command"):
             self.assertIn(f"]({path})", readme)

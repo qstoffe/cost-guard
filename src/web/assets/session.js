@@ -306,17 +306,13 @@ const SessionDetail = (() => {
       }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
         if (!this.data) this.loading('Waiting for session source…');
-        else { this.status.textContent = 'Updating session; previously verified history is retained.'; this.status.hidden = false; }
+        // Passive work is silent; a pending observation cannot clear a real fault.
         return;
       }
       this.status.textContent = data.state === 'observed' || this.data && data.state === 'history_retained' ? '' :
         ({history_retained: 'Session data unavailable.', source_unavailable: 'Source unavailable.',
           session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
       this.status.hidden = !this.status.textContent;
-      if (this.values.retained && this.status.hidden) {
-        this.status.textContent = 'Updating session; previously verified values are retained.';
-        this.status.hidden = false;
-      }
       if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
     }
     historyProgress(completed, total) {

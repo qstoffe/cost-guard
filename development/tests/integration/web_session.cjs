@@ -449,7 +449,8 @@ async function main() {
    page=ictxPage; view.attached=true; await view.load();
    assert.equal(view.body.children[0].children[6].textContent,'17K');
    view.detach();
-   require('../fixtures/session_values_vm.cjs')({vm, context, Node, input, document});
+    await require('../fixtures/session_refresh_vm.cjs')({vm, context, Node, input, document, delays});
+    require('../fixtures/session_values_vm.cjs')({vm, context, Node, input, document});
    for (const reason of ['authentication_required','host_identity_changed']) {
      vm.runInContext("globalThis.retired = new SessionDetail.View(api, 'root-0000')",context);
      const retired=context.retired;retired.update(JSON.parse(JSON.stringify(input.first)));
