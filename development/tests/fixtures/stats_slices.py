@@ -44,6 +44,7 @@ def slice_report(sender, request):
             cache_repository=CacheRepository(database), config={'timezone': 'UTC'}, now_ms=at, progress=progress)
         service.stats_slice_roots = 2
         service.stats_scan = request.scan
+        service.history_resuming = request.resuming
         return service
 
     if browser:
@@ -51,6 +52,7 @@ def slice_report(sender, request):
         if not seeded.exists():
             baseline = factory(now, lambda *_: None)
             baseline.stats_slice_roots = None
+            baseline.stats_scan = None
             baseline.build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
             seeded.write_text('Canonical stable coverage before a pricing change')
         pricing.catalog = PricingCatalog(tuple(replace(model,

@@ -367,13 +367,13 @@ async function acquire(state, background = false, prices = false) {
          if (state.attempt !== attempt) return;
          state.active = admission.id;
          state.waitingReason = null;
-        if (attempt.retries) ReportLoading.reset(state);
+        if (attempt.retries && !automaticHistory(state)) ReportLoading.reset(state);
         if (demand && !prices) {
           // Retained publication identity is independent of an active refresh.
           state.dispatchRefresh = admission.refresh;
           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
            if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
-             state.result = null; state.statsResults?.clear();
+              state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
            }
            if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,

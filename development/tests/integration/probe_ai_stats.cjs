@@ -237,7 +237,7 @@ async function main() {
       window.__savedStats=current.result; current.result=null; current.statsResults.clear();
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),5,'only CCost amount shells remain during failure');
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),13,'all card shells remain during failure');
     assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,
       JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
         metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
@@ -253,7 +253,7 @@ async function main() {
     }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
     await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===13`);
-    checks.push('passive failure stays silent with exact qualified CCost retained and Loading-only noncost cards; no Retry/toolbar; automatic lifecycle restores genuine results');
+    checks.push('passive failure stays silent with the whole qualified card observation retained; no Retry/toolbar; automatic lifecycle restores genuine results');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;
     const peer=(await command('Target.attachToTarget',{targetId:peerId,flatten:true})).sessionId;

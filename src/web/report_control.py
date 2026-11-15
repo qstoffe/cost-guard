@@ -23,6 +23,8 @@ class ManagedReport(TokenMixReport):
     quantum_seconds: float = 0.1
     observation_ms: int = 0
     history_batch_size: int = 64
+    history_scan: str = ''
+    resuming: bool = False
 
 
 class Quantum:

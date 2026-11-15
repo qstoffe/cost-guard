@@ -543,7 +543,8 @@ class ReportJobs:
             if isinstance(request, ManagedReport) and request.kind is not ReportKind.AI_STATS:
                 job.setdefault('observation_ms', int(time.time() * 1000))
                 request = replace(request, observation_ms=job['observation_ms'],
-                                  history_batch_size=job.get('history_batch_size', 64))
+                                  history_batch_size=job.get('history_batch_size', 64),
+                                  history_scan='history-scan-' + key, resuming=bool(job.get('continued')))
             process = self._context.Process(target=run_owned_report,
                 args=(self._target, sender, request), name='cost-guard-report', daemon=True)
             try:

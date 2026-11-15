@@ -110,7 +110,12 @@ def build_cached_token_mix(service, progress, *, scope=None):
     sessions = tuple(service.source.list_sessions())
     roots = [root for root in sessions if root.parent_session_id is None]
     versions = revisions(service, roots)
-    work = HistoryWork(service, sessions, roots, versions, reference)
+    cohort = None
+    if getattr(service, 'history_scan', None):
+        from .history_cohort import HistoryCohort, TRANSIENT
+        cohort = HistoryCohort(service, service.history_scan, sessions, roots, versions, reference)
+        roots = cohort.reconcile(sessions, roots, versions)
+    work = HistoryWork(service, sessions, roots, versions, reference, cohort)
     active = active_roots(sessions)
     keys = {root.session_id: cache_key(service, root, reference) for root in roots}
     reuse_key = reuse.signature(service, reference)
@@ -132,9 +137,14 @@ def build_cached_token_mix(service, progress, *, scope=None):
         cached = service.cache_repository.get_many(NAMESPACE, missing_keys, busy_timeout_ms=50) if missing_keys else {}
     except (OSError, sqlite3.Error):
         cached = {}
+    transient_keys = {root.session_id: dependency_signature((cohort.key, keys[root.session_id])) for root in roots} if cohort else {}
+    try:
+        transient = service.cache_repository.get_many(TRANSIENT, transient_keys.values(), busy_timeout_ms=50) if cohort else {}
+    except (OSError, sqlite3.Error):
+        transient = {}
     facts_by_root = {}
     fact_count = 0
-    unavailable = set()
+    unavailable = set(cohort.omitted) if cohort else set()
     pending = []
 
     def include(root, facts):
@@ -155,6 +165,8 @@ def build_cached_token_mix(service, progress, *, scope=None):
             facts = load(cached_item, revision, service.source)
             if facts is not None:
                 payloads[root.session_id] = dict(key=key, revision=revision, payload=cached_item.payload)
+        if facts is None and cohort:
+            facts = load(transient.get(transient_keys[root.session_id]), revision, service.source)
         service.metrics.add('token_mix_cache_hits' if facts is not None else 'token_mix_cache_misses')
         if facts is not None:
             service._acquisition.revisions[root.session_id] = revision
@@ -169,14 +181,17 @@ def build_cached_token_mix(service, progress, *, scope=None):
     for start in range(0, len(pending), batch_size):
         chunk = pending[start:start + batch_size]
         writes = []
+        omitted_before = len(cohort.omitted) if cohort else 0
         partial = getattr(service, 'allow_partial_history', False)
         observations = observe(service, [root for root, _key in chunk], versions) if partial else {}
         snapshots = load_snapshots(service, [root for root, _key in chunk]) if partial else None
         if not partial:
             service.prepare_roots([root for root, _key in chunk], progress_scope='date')
         for root, key in chunk:
-            if partial and root.session_id not in snapshots:
+            if partial and (root.session_id not in snapshots or cohort and not cohort.accepts(snapshots[root.session_id])):
                 unavailable.add(root.session_id)
+                if cohort:
+                    cohort.omit((root.session_id,))
                 continue
             item = (service._analyze(root, snapshot=snapshots[root.session_id],
                 observation=observations.get(root.session_id)) if partial else service._analyze(root))
@@ -190,6 +205,9 @@ def build_cached_token_mix(service, progress, *, scope=None):
                 writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM,
                     snapshot_scope(item.snapshot) if item.snapshot is not None else None))
                 payloads[root.session_id] = dict(key=key, revision=item.bundle.source_revision, payload=payload)
+            elif cohort:
+                writes.append(CacheEntry(TRANSIENT, transient_keys[root.session_id], payload,
+                    item.bundle.source_revision, ALGORITHM))
             service._analyzed.pop(root.session_id, None)
         write_error = None
         try:
@@ -198,9 +216,10 @@ def build_cached_token_mix(service, progress, *, scope=None):
             write_error = error
             writes = []
         progress(WorkProgress('Updating changed history', 'history', start + len(chunk), len(pending), stage='history-load'), None)
-        work.checkpoint(len(writes), processed=len(chunk), remaining=start + len(chunk) < len(pending), error=write_error)
+        omitted = len(cohort.omitted) - omitted_before if cohort else 0
+        work.checkpoint(len(writes) + omitted, processed=len(chunk), remaining=start + len(chunk) < len(pending), error=write_error)
     unavailable.update(work.verify())
-    if unavailable and len(unavailable) == len(roots):
+    if unavailable and len(unavailable) == work.total:
         raise HistoryCheckpointError('history_revision_churn')
     for sid in unavailable:
         payloads.pop(sid, None)
@@ -214,8 +233,14 @@ def build_cached_token_mix(service, progress, *, scope=None):
             if prompt is not None:
                 prompts.setdefault(entry, prompt)
             costs[entry.model, entry.tokens] = parts
+    if cohort and not current(service.source, (entry.model for entry in entries)):
+        raise HistoryCheckpointError('history_revision_churn')
     report = history_projection(service, reference, entries, prompts, progress,
         valuation=lambda model, tokens: costs[model, tokens], scope=scope)
+    if cohort and unavailable and not report.token_mix.request_count:
+        raise HistoryCheckpointError('history_revision_churn')
     reuse.publish(service, reuse_key, payloads)
     return replace(report, source_warnings=(*report.source_warnings, *history_warnings(unavailable)),
-                   history_omitted_roots=len(unavailable))
+                   history_omitted_roots=len(unavailable), notes=(*report.notes,
+                       *(('Bounded initial catalog cohort; later observations reconcile arrivals and omitted roots.',)
+                         if cohort else ())))

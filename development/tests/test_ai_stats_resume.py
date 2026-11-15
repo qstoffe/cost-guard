@@ -59,6 +59,31 @@ class StatsResumeTests(unittest.TestCase):
         self.assertEqual(loads, self.source.load_count)
         self.assertEqual(canonical.ai_stats, final.ai_stats)
 
+    def test_initial_cohort_finishes_under_arrivals_and_defers_changed_roots(self):
+        from development.tests.fixtures.synthetic_month import make_root_snapshot
+        first = self.build(2, 'all')
+        self.source.snapshots['root-0000'] = replace(self.source.snapshots['root-0000'],
+            source_revision='changed-after-first-slice')
+        results = [first]
+
+        for index in range(3):
+            added = replace(make_root_snapshot(20 + index, 3, month_start_ms=NOW - DAY), complete=True)
+            self.source.snapshots[added.root.session_id] = added
+            results.append(self.build(2, 'all'))
+
+        self.assertEqual([5] * 4, [r.ai_stats_work['total'] for r in results])
+        self.assertTrue(results[-1].ai_stats_work['scopes']['all']['ready'])
+        self.assertEqual(1, results[-1].history_omitted_roots)
+        self.assertEqual(12, next(m.value for m in results[-1].ai_stats[-1].metrics if m.metric == 'total-tokens') / 131)
+        # A new logical observation reconciles every root once the source settles.
+        refreshed = self.service()
+        refreshed.stats_scan = 'next-synthetic-scan'
+        refreshed.stats_slice_roots = 20
+        next_result = refreshed.build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+        independent = self.build(scope='all')
+        self.assertEqual(independent.ai_stats, next_result.ai_stats)
+        self.assertEqual(8, next_result.ai_stats_work['total'])
+
     def test_child_ancestry_and_subtotals_survive_slices_and_warm_compact_reprojection(self):
         source = SyntheticMonthSource(5, 3, month_start_ms=NOW - DAY, children_per_root=1)
         self.source.snapshots = {sid: replace(s, complete=True) for sid, s in source.snapshots.items()}
