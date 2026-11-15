@@ -31,16 +31,17 @@ const ReportView = (() => {
   function costGroups(value, session = false) {
     const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
     if (!Array.isArray(models) || !Array.isArray(amounts)) {
-      const label = session ? 'Session Model 1' : 'Main Model';
-      return `${label}: N/A — N/A\n${label} CCost: ${display(null, 'ccost')}`;
+      return 'Session Models:\n• N/A — N/A — (N/A)';
     }
-    return models.map(([label, model], index) =>
-      `${label}: ${model}\n${label} CCost: ${amounts[index] ?? display(null, 'ccost')}`).join('\n\n');
+    return ['Session Models', 'Sub Agents'].map(label => {
+      const bullets = models.flatMap(([kind, model], index) => kind === label ?
+        [`• ${model} — (${amounts[index] ?? 'N/A'})`] : []);
+      return bullets.length ? label + ':\n' + bullets.join('\n') : '';
+    }).filter(Boolean).join('\n\n');
   }
   function sessionCostHelp(cost, summary) {
-    return costGroups(cost, true) + '\n\nDuration: ' +
-      (Number.isFinite(summary?.duration_ms) ? display(summary, 'duration_ms') : 'Loading…') +
-      (cost?.complete === false ? '\nPartial cost coverage; unavailable usage is not zero.' : '');
+    return costGroups(cost, true) + (Number.isFinite(summary?.duration_ms) ?
+      '\n\nDuration: ' + display(summary, 'duration_ms') : '');
   }
   function timestamp(value, zone = timezone) {
     if (!Number.isSafeInteger(value) || value < 0 || typeof zone !== 'string') return 'N/A';

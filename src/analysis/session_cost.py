@@ -84,6 +84,21 @@ def _known_amount(contribution):
     return Decimal(contribution["amount"]) if contribution["amount"] is not None else Decimal(0)
 
 
+def session_cost_groups(entries, root_id, catalog):
+    """Same source-qualified role/model/effort scope for uncached detail totals."""
+    groups = {}
+    for entry in unique_usage(entries):
+        key = (int(entry.session_id != root_id), entry.model.provider,
+               entry.model.model, entry.model.recorded_model, request_effort(entry))
+        groups.setdefault(key, []).append(entry)
+    result = []
+    for (agent, provider, model, selected, effort), requests in groups.items():
+        cost = comparison_cost(requests, catalog.reference_valuation)
+        result.append(SessionCostGroup(agent, provider, model, (selected,), (effort,),
+            cost.known_ccost, cost.priced_requests, cost.complete))
+    return tuple(result)
+
+
 def reconcile_session_cost(repository, snapshot, catalog):
     provenance = snapshot.root.provenance
     key = dependency_signature((provenance.source_type, provenance.source_generation,

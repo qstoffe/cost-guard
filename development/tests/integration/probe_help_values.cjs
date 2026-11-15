@@ -25,11 +25,12 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const text=await evaluate(id,`document.querySelector('#context-help').textContent`);
     assert.match(text,new RegExp('^Prompt #'+(id===owner?'23':'37')+
-      '\\nMain Model: fixture/main-model — High\\nMain Model CCost: 25 Credits'));
-    assert.match(text,/Sub Agent 1: fixture\/child-model — Low\nSub Agent 1 CCost: 8 Credits[\s\S]*Duration: /);
+      '\\nSession Models:\\n• fixture/main-model — High — \\(25 Credits\\)'));
+    assert.match(text,/Sub Agents:\n• fixture\/child-model — Low — \(8 Credits\)/);
+    assert.doesNotMatch(text,/Duration: N\/A/);
     assert.doesNotMatch(text,/Incoming Context CCost|Extra CCost|• Input:|Default \(/);
     await evaluate(owner,`ReportView.setUnit('usd',current.watch.root);miniWatch.render()`);
-    assert.match(await evaluate(id,`document.querySelector('#context-help').textContent`),/Main Model CCost: \$0.25[\s\S]*Sub Agent 1 CCost: \$0.08/);
+    assert.match(await evaluate(id,`document.querySelector('#context-help').textContent`),/• fixture\/main-model — High — \(\$0.25\)[\s\S]*• fixture\/child-model — Low — \(\$0.08\)/);
     await evaluate(owner,`ReportView.setUnit('credits',current.watch.root);miniWatch.render()`);
     await evaluate(id,`document.activeElement.blur()`);
   }
@@ -40,9 +41,9 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await evaluate(mini,`document.querySelector('.mini-prompts tr[data-id="root"] td:nth-child(3) .help-value').focus()`);
     await until(mini,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const compact=await evaluate(mini,`document.querySelector('#context-help').textContent`);
-    assert.match(compact,new RegExp('^Prompt #\\d+\\nMain Model: fixture/main-model — High\\nMain Model CCost: '+total+
-      '\\n\\nSub Agent 1: fixture/child-model — Low\\nSub Agent 1 CCost: '+(unit==='credits'?'8 Credits':'\\$0.08')+
-      '\\n\\nDuration: '));
+    assert.match(compact,new RegExp('^Prompt #\\d+\\nSession Models:\\n• fixture/main-model — High — \\('+total+
+      '\\)\\n\\nSub Agents:\\n• fixture/child-model — Low — \\('+(unit==='credits'?'8 Credits':'\\$0.08')+
+      '\\)(?:\\n\\nDuration: .+)?$'));
     assert.doesNotMatch(compact,/• Input:|• Cached input:|• Cache write:/,'Mini uses compact help, not the full category essay');
     for(const [id,selector] of [[owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
         [mini,'.mini-prompts tr[data-id="root"] td:nth-child(4) .help-value']]) {
@@ -50,11 +51,10 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
       await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).focus()`);
       await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
       const whole=await evaluate(id,`document.querySelector('#context-help').textContent`);
-      assert.match(whole, id===owner ?
-        new RegExp('Whole root session tree\\nAll main requests: '+main+'\\nAll linked subagent requests: '+child) :
-        new RegExp('^Session Model 1: fixture/main-model — High\\nSession Model 1 CCost: '+main+
-          (unit==='credits'?' Credits':'')+'\\n\\nSub Agent 1: fixture/child-model — Low\\nSub Agent 1 CCost: '+child+
-          (unit==='credits'?' Credits':'')+'\\n\\nDuration: Loading…$'));
+      assert.match(whole,new RegExp('^Session Models:\\n• fixture/main-model — High — \\('+main+
+        (unit==='credits'?' Credits':'')+'\\)\\n\\nSub Agents:\\n• fixture/child-model — Low — \\('+child+
+        (unit==='credits'?' Credits':'')+'\\)$'));
+      assert.doesNotMatch(whole,/Prompt #|Partial cost coverage|CCost:|Subtotal:/);
       await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},id);
     }
   }

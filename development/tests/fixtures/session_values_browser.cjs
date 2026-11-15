@@ -12,6 +12,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     window.scope=detail.data.value_authority.scope;window.revision=detail.data.revision;
     detail.activity.tools.node.open=true;`);
   assert.match(await evaluate('originalMix'),/^\d+\/\d+\/\d+\/\d+$/);
+  for(const selector of ['detail.body.rows[0].cells[3].firstChild','detail.footer.cells[3].firstChild']) {
+    await evaluate(`${selector}.focus()`);
+    const costHelp=await evaluate("document.getElementById('context-help').textContent");
+    assert.match(costHelp,/Session Models:\n• .+ — .+ — \(.+\)/);
+    assert.doesNotMatch(costHelp,/Partial cost coverage|Partial pricing|CCost:|Subtotal:|independently rounded/);
+    assert.equal(costHelp.includes('Prompt #'),selector.includes('body'));
+    await evaluate('document.activeElement.blur()');
+  }
+  checks.push('Session Detail prompt/Complete-session CCost use compact grouped sections without coverage boilerplate and preserve prompt identifier scope');
   assert.equal(await evaluate(`detail.scroll.nextElementSibling===detail.context.root &&
     detail.context.root.nextElementSibling===detail.activity.root &&
     detail.root.querySelectorAll('.watch-session-summary').length===1 &&

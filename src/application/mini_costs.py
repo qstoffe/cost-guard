@@ -1,4 +1,4 @@
-"""Mini-only grouping of canonical unrounded costs; no valuation or acquisition."""
+"""Shared CCost help from canonical unrounded costs; no valuation or acquisition."""
 from decimal import Decimal
 
 from src.numbers import ccost_amount, ccost_unit
@@ -30,33 +30,32 @@ def mini_cost_tokens(values):
     if "mini_cost_groups" not in values:
         return {}
     groups = [dict(part.fields) for part in values["mini_cost_groups"]]
-    session = values.get("mini_session_cost", False)
     main_count = sum(not part["subagent"] for part in groups)
-    counters = {False: 0, True: 0}
     models, amounts, evidence = [], [], []
     for part in groups:
-        child = part["subagent"]
-        counters[child] += 1
-        label = ("Sub Agent " + str(counters[child]) if child else
-                 "Session Model " + str(counters[child]) if session else
-                 "Main Model" + (" " + str(counters[child]) if main_count > 1 else ""))
-        cost = ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"])
-        if ccost_unit() == "credits":
+        label = "Sub Agents" if part["subagent"] else "Session Models"
+        ready = Decimal(part["known_ccost"]) > 0 or part["complete"]
+        cost = ccost_amount(Decimal(part["known_ccost"])) if ready else "N/A"
+        if ready and ccost_unit() == "credits":
             cost += " Credits"
         models.append((label, f"{part['model']} — {part['effort']}"))
         amounts.append(cost)
-        evidence.append(Decimal(part["known_ccost"]) > 0 or part["complete"])
+        evidence.append(ready)
     if not main_count:
-        label = "Session Model 1" if session else "Main Model"
-        models.insert(0, (label, "N/A — N/A"))
-        amounts.insert(0, ccost_amount(None) + (" Credits" if ccost_unit() == "credits" else ""))
+        models.insert(0, ("Session Models", "N/A — N/A"))
+        amounts.insert(0, "N/A")
         evidence.insert(0, False)
-    for index in range(values.get("mini_missing_agents", 0)):
-        label = "Sub Agent " + str(counters[True] + index + 1)
-        models.append((label, "N/A — N/A"))
-        amounts.append(ccost_amount(None) + (" Credits" if ccost_unit() == "credits" else ""))
+    if values.get("mini_missing_agents", 0) and ("Sub Agents", "N/A — N/A") not in models:
+        models.append(("Sub Agents", "N/A — N/A"))
+        amounts.append("N/A")
         evidence.append(False)
     # Share model/effort text between units. The browser only joins prepared
     # labels and formatted amounts; it never groups, values or rounds requests.
+    sections = []
+    for label in ("Session Models", "Sub Agents"):
+        bullets = [f"• {model} — ({amount})" for (kind, model), amount in zip(models, amounts) if kind == label]
+        if bullets:
+            sections.append(label + ":\n" + "\n".join(bullets))
+    key = "session_cost_help" if values.get("mini_session_cost") else "cost_detail_help"
     return {"mini_cost_models": tuple(models), "mini_cost_amounts": tuple(amounts),
-            "mini_cost_ready": tuple(evidence)}
+            "mini_cost_ready": tuple(evidence), key: "\n\n".join(sections)}

@@ -12,6 +12,29 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('current.catalog.body.rows[0].cells[2].textContent'),'Model-00*');
   assert.equal(await evaluate('current.catalog.body.rows[1].cells[2].textContent'),'Model-01');
   assert.equal(await evaluate('current.catalog.body.rows[2].cells[2].textContent'),'Model-02');
+  const duration = await evaluate(`(()=>{
+    const view=current.catalog,values=view.data.view.session_usage,target=view.body.rows[0].cells[5].firstChild;
+    const states=[];
+    for(const state of ['pending','retained','ready','unavailable','ready']) {
+      view.rows(values.map(value=>({...value,metric_states:{...value.metric_states,duration:state}})));
+      states.push({state,same:target===view.body.rows[0].cells[5].firstChild,
+        help:target.classList.contains('help-value'),cursor:getComputedStyle(target).cursor,
+        tab:target.tabIndex,description:target.getAttribute('aria-describedby')});
+    }
+    view.rows(values);return states;
+  })()`);
+  for(const state of duration) {
+    assert.equal(state.same,true);assert.equal(state.help,false);assert.notEqual(state.cursor,'help');
+    assert.equal(state.tab,-1);assert.equal(state.description,null);
+  }
+  await evaluate("current.catalog.headers.find(header=>header.key==='duration').th.firstChild.focus()");
+  assert.match(await evaluate("document.getElementById('context-help').textContent"),/Execution duration, excluding idle gaps/);
+  await evaluate('current.catalog.body.rows[0].cells[3].firstChild.focus()');
+  const costHelp=await evaluate("document.getElementById('context-help').textContent");
+  assert.match(costHelp,/^Session Models:\n• /);
+  assert.match(costHelp,/\n\nSub Agents:\n• /);
+  assert.doesNotMatch(costHelp,/Prompt #|Partial cost coverage|CCost:|Subtotal:|Session Model \d/);
+  checks.push('Sessions CCost compact whole-session sections; Duration plain keyed value/cursor/tab/ARIA in pending/retained/ready/unavailable, with header help retained');
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await evaluate('window.modelTarget=current.catalog.body.rows[0].cells[2].firstChild;modelTarget.focus()');
@@ -49,10 +72,10 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   for (const width of [360,1366]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
     const geometry = await evaluate('({width:innerWidth,page:document.documentElement.scrollWidth,columns:current.catalog.headers.length})');
-    assert.ok(geometry.page<=width+1);assert.equal(geometry.columns,8);layouts.push(geometry);
+    assert.ok(geometry.page<=width+1);assert.equal(geometry.columns,7);layouts.push(geometry);
   }
   checks.push('source-backed latest main identity/star, two bullet groups, main-only omission, same-model roles, child-only N/A');
   checks.push('shared keyboard/Escape, hover/leave, touch, focused open-help source-revision refresh');
-  checks.push('period-qualified Model asc/desc, unknown last, 25+5 paging, long name and 360/1366 layouts; Effort column retained');
+  checks.push('period-qualified Model asc/desc, unknown last, 25+5 paging, long name and 360/1366 seven-column layouts');
   return {checks,layouts};
 };

@@ -12,7 +12,7 @@ from src.reports.models import ReportKind
 
 from .contracts import ObjectValue, record
 from .display import with_display
-from .prompt_costs import cost_detail, watch_calls
+from .prompt_costs import cost_detail, mini_cost_detail, watch_calls
 from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
 from .benchmark import benchmark_view
@@ -73,7 +73,8 @@ def prompt(value, *, details=False):
                                       ("extra_ccost_usage_missing", not value.extra_ccost_known),
                                        ("cost_detail", cost_detail(value) if details else None),
                                        *((("watch_calls_help", watch_calls(value)),
-                                          ("linked_agent_count", value.linked_agent_count)) if details else ()),
+                                          ("linked_agent_count", value.linked_agent_count),
+                                          *mini_cost_detail(value)) if details else ()),
                                        ("has_error", value.watch_error)))
 
 
@@ -106,6 +107,8 @@ def block(value, *, source_complete=True, details=False):
         total_breakdown_known total_has_cost_breakdown total_main_estimated total_subagent_estimated
         comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier other_ccost other_calls""")
     return ObjectValue(base.fields + (
+        ("mini_session_cost", True),
+        ("mini_cost_groups", mini_groups(value.cost_groups, complete=value.comparison_cost_complete)),
         ("rows", tuple(prompt(row, details=details) for row in value.rows)),
         ("ccost_unavailable", issue_records(value.ccost_unavailable)),
         ("current_context_sources", record(**dict(value.current_context_sources))),

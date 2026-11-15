@@ -12,7 +12,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
     c.state='observed';c.session_id='duration-synthetic';c.focal_id=r.prompt.event_id='duration-prompt';
     Object.assign(r.prompt,{in_progress:true,execution_unverified:false,has_error:false,aborted:false});
     r.display_units={};r.display.watch_duration_ms='11s';r.model='<img src=x onerror=alert(1)>';
-     r.prompt.display.mini_cost_models=[['Main Model','<img src=x onerror=alert(1)> — high']];
+     r.prompt.display.mini_cost_models=[['Session Models','<img src=x onerror=alert(1)> — high']];
       r.prompt.display.mini_cost_amounts=['1 Credits'];
       r.prompt.display.mini_cost_ready=[true];
      for(const values of Object.values(r.prompt.display_units || {}))values.mini_cost_amounts=['1 Credits'];
@@ -46,7 +46,8 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
         text:p.textContent,images:p.querySelectorAll('img').length,color:w.getComputedStyle(s).color,
         running:w.getComputedStyle(durationRow).color,normal:w.getComputedStyle(p).color};})()`);
        assert.equal(before.line,'11s');assert.equal(before.count,1);assert.equal(before.images,0);
-       assert.ok(before.text.includes('Main Model: <img src=x onerror=alert(1)>'));
+       assert.ok(before.text.includes('Session Models:\n• <img src=x onerror=alert(1)> — high — (1 Credits)'));
+       assert.doesNotMatch(before.text,/Partial cost coverage|CCost:|Model \d/);
       assert.equal(before.color,before.running);assert.notEqual(before.color,before.normal);
       // CCost still owns delayed hover and immediate touch, not just keyboard help.
       await key('Escape');await evaluate('durationRow.cells[2].firstChild.blur()');
@@ -132,7 +133,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
       // A negative hover assertion spans more than the shared 600ms help delay.
       await evaluate('new Promise(resolve=>miniWatch.window.setTimeout(resolve,700))');
        assert.equal(await evaluate(`${panel}.matches(':popover-open')`),true);
-        assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s\nPartial cost coverage; unavailable usage is not zero\.$/);
+        assert.equal(await evaluate(`${panel}.textContent`),'Session Models:\n• N/A — N/A — (N/A)\n\nDuration: 2m 3s');
       }
       await evaluate('durationRow.cells[3].firstChild.focus()');
       if(input!=='touch')for(const type of ['mousePressed','mouseReleased'])await command('Input.dispatchMouseEvent',{
@@ -142,7 +143,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
       for(const type of ['touchStart','touchEnd'])await command('Input.dispatchTouchEvent',{
         type,touchPoints:type==='touchStart'?[{x:total.x,y:total.y,id:1,radiusX:1,radiusY:1,force:1}]:[]},pip);
       await until(`${panel}.matches(':popover-open')`);
-      assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s\nPartial cost coverage; unavailable usage is not zero\.$/);
+      assert.equal(await evaluate(`${panel}.textContent`),'Session Models:\n• N/A — N/A — (N/A)\n\nDuration: 2m 3s');
       assert.equal(await evaluate(`durationRow.cells[3].firstChild.getAttribute('aria-describedby')`),'context-help');
       }
        assert.equal(await evaluate('durationRow.cells[3].firstChild.tabIndex'),0);

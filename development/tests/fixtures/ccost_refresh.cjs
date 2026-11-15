@@ -6,7 +6,7 @@ module.exports = (vm, context) => {
   const row = (amount, complete) => ({
     ccost:amount, unresolved_cost:!complete, calls:2,
     display:{ccost:amount == null ? '0' : amount, incoming_context_ccost:'0',
-      cost_detail_help:`Total CCost: ${amount ?? '0'}`, mini_cost_models:[['Main Model','fixture/model — high']],
+      cost_detail_help:`Total CCost: ${amount ?? '0'}`, mini_cost_models:[['Session Models','fixture/model — high']],
       mini_cost_amounts:[`${amount ?? '0'} Credits`]},
     display_units:{usd:{ccost:amount == null ? '$0.00' : `$${(Number(amount)/100).toFixed(2)}`,
       cost_detail_help:`Total CCost: $${(Number(amount)/100).toFixed(2)}`,
@@ -59,7 +59,7 @@ module.exports = (vm, context) => {
     assert.equal(R.display(costs.select(mix(null),['mix'],'total_cost',false),'mix_input_cost'),expected(75));
     assert.equal(R.display(costs.select(mix(null),['other-period'],'total_cost',false),'mix_input_cost'),expected(0));
     const group = (model, amount, complete) => ({...row('200',false),
-      display:{ccost:'200',mini_cost_models:[['Main Model',model]],mini_cost_amounts:[`${amount ?? '0'} Credits`],
+      display:{ccost:'200',mini_cost_models:[['Session Models',model]],mini_cost_amounts:[`${amount ?? '0'} Credits`],
         mini_cost_ready:[Number(amount)>0 || complete]},
       display_units:{usd:{ccost:'$2.00',mini_cost_amounts:['$'+(Number(amount)/100).toFixed(2)]}}});
     select(group('provider/model-A — high','75',true));

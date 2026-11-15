@@ -52,7 +52,8 @@ class CCostUnavailableTests(unittest.TestCase):
             self.assertEqual("0", display["ccost"])
             self.assertIn("Claude Sonnet 4 has no listed reference price in the available GitHub Copilot", display["ccost_unavailable_help"])
             self.assertIn("Display zero is not proof of zero", display["ccost_unavailable_help"])
-            self.assertIn("Claude Sonnet 4", display["cost_detail_help"])
+            self.assertIn("• github-copilot/claude-sonnet-4 — default (unknown) — (N/A)", display["cost_detail_help"])
+            self.assertNotIn("no listed reference price", display["cost_detail_help"])
 
     def test_identity_missing_rate_usage_and_catalog_are_not_list_absence(self):
         prices = self.prices()

@@ -318,9 +318,10 @@ const WatchView = (() => {
   }
   function promptDetails(item, highlight) {
     const prompt = item?.prompt;
-    const start = (prompt?.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`) +
-      '\n' + costGroups(prompt) + '\n\nDuration: ';
+    const groups = (prompt?.prompt_number == null ? '' : `Prompt #${prompt.prompt_number}\n`) + costGroups(prompt);
     const duration = display(item, 'watch_duration_ms');
+    if (!duration || duration === 'N/A') return groups;
+    const start = groups + '\n\nDuration: ';
     return highlight && duration !== 'N/A' ? ContextHelp.runningDuration(start, duration, '') : start + duration;
   }
   function promptRole(prompt) {
@@ -438,9 +439,8 @@ const WatchView = (() => {
       this.summary = el('div', undefined, 'watch-session-summary');
       const contextLine = contextParts(this);
       this.costLabel = el('span'); this.costStatus = el('span');
-      this.costHelp = ContextHelp.value(this.costLabel, () => ReportView.costHelp(this.summaryValue?.cost ||
-        (this.summaryValue?.state === 'unavailable' ? {} : null), 'known_ccost') ||
-        'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.');
+      this.costHelp = ContextHelp.value(this.costLabel, () =>
+        ReportView.sessionCostHelp(this.summaryValue?.cost, this.summaryValue));
       const costLine = el('div'); costLine.append(el('span', 'Total CCost: '), this.costHelp, this.costStatus);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);

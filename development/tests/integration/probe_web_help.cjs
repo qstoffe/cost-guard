@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--numeric-tables','--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
+   assert.ok(scope === undefined || ['--cost-tooltips','--numeric-tables','--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -113,7 +113,16 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-     await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+       if(scope==='--cost-tooltips') {
+         phase='compact-cost-groups';
+         await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         await require('./probe_cost_groups.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+           limitations:['Synthetic source-qualified data in headless Full Running and actual Mini PiP; Full Earlier intentionally absent, not tested. No physical desktop proof.']};
+         return;
+       }
        if(scope==='--numeric-tables') {
          await require('./probe_numeric_tables.cjs')({command,evaluate,until,owner,mini,checks,layouts});
          assert.deepEqual(errors,[]);
@@ -293,7 +302,7 @@ async function main() {
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
     const retainedHelp=await focus(mini,'.mini-prompts tr[data-id="root"] td:nth-child(3) .mini-cost-value');
-     assert.match(retainedHelp,/Prompt #[\s\S]*Main Model:[\s\S]*Sub Agent 1:[\s\S]*Duration:/);
+     assert.match(retainedHelp,/Prompt #[\s\S]*Session Models:\n• [\s\S]*Sub Agents:\n• [\s\S]*Duration:/);
     assert.doesNotMatch(retainedHelp,/Source evidence:/);
     assert.match(await focus(mini,'.mini-prompts tr[data-id="root"] .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+: Keep completed literally/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
