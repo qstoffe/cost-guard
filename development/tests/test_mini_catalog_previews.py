@@ -86,6 +86,9 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         _, catalog, observation = observed_catalog(3, indexed=True)
         first = catalog.previews()[0]
         key = first.session_id
+        catalog.rows[key] = replace(catalog.rows[key], complete=False, ccost=Decimal(0))
+        self.assertEqual(first.total_ccost, catalog.previews()[0].total_ccost,
+            "an incomplete scalar refresh cannot replace qualified Total with a fabricated zero")
         catalog.observe(None, unavailable=True)
         catalog.index_failed()
         self.assertEqual(first, catalog.previews()[0], "temporary gaps retain qualified same-source values")
@@ -98,6 +101,17 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertTrue(all(item.total_ccost is None for item in catalog.previews()))
         catalog.observe(replace(changed, sessions=(), roots=()))
         self.assertEqual((), catalog.previews())
+
+    def test_unqualified_zero_is_loading_and_dependency_changes_drop_last_good_total(self):
+        _, catalog, _ = observed_catalog(1, indexed=True)
+        key = "root-0000"
+        catalog.rows[key] = replace(catalog.rows[key], complete=False, ccost=Decimal(0))
+        self.assertIsNone(catalog.previews()[0].total_ccost)
+        catalog.rows[key] = replace(catalog.rows[key], complete=True)
+        self.assertEqual(Decimal(0), catalog.previews()[0].total_ccost, "qualified zero is real data")
+        catalog.valid.clear()
+        catalog.dependencies = "new-prices"
+        self.assertIsNone(catalog.previews()[0].total_ccost)
 
     def test_event_activity_correction_and_ties_use_shared_current_index(self):
         _, catalog, observation = observed_catalog(3, indexed=True)

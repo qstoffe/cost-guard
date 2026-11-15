@@ -115,6 +115,7 @@ class SessionCatalog:
         self.orders = OrderedDict()
         self.discovery = {}
         self.discovery_sequence = 0
+        self.preview_totals = {}
 
     def enable_warm(self, enabled=True):
         with self.lock:
@@ -701,6 +702,9 @@ class SessionCatalog:
                 return ()
             excluded = set(excluded) | self.active
             now = self.clock_ms()
+            def total_scope(key):
+                return (self.revisions.get(key), self.roots[key].provenance,
+                    self.last_observation.source_epoch, self.dependencies, self.timezone_id)
             def candidate(key):
                 row = self.rows.get(key)
                 current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
@@ -709,11 +713,17 @@ class SessionCatalog:
                     return None
                 at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
                 at = at if type(at) is int and 0 < at <= now else None
+                scope = total_scope(key)
+                previous = None if self.failures.get(key, (None, False))[1] else self.preview_totals.get(key)
+                total = (row.ccost if current and row is not None and row.complete else
+                    previous[1] if previous is not None and previous[0] == scope else None)
                 return SessionPreview(key, self.roots[key].title or "Untitled session", at,
                     "events" if self._activity_current(key) else "catalog",
-                    row.ccost if current and row is not None else None,
-                    bool(current and row and row.complete))
+                    total, total is not None)
             # O(N log 5), bounded output/memory; no full-history sort or capture.
-            return tuple(nsmallest(limit, (value for key in self.roots
+            selected = tuple(nsmallest(limit, (value for key in self.roots
                 if (value := candidate(key)) is not None),
                 key=lambda value: (-(value.activity_ms or 0), value.session_id)))
+            self.preview_totals = {value.session_id: (total_scope(value.session_id), value.total_ccost)
+                for value in selected if value.total_ccost is not None}
+            return selected
