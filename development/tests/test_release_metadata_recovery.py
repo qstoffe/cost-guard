@@ -124,7 +124,7 @@ class FieldRegressionTests(unittest.TestCase):
             self.assertEqual("unavailable", state["health"])
             self.assertEqual("dns_failure", state["sources"]["models.dev"]["last_error"]["code"])
             self.assertEqual(NOW + 60_000, state["next_retry_ms"])
-            log_text = "".join(p.read_text(encoding="utf-8") for p in (root / "logs/errors").glob("*.log"))
+            log_text = "".join(p.read_text(encoding="utf-8") for p in (root / "development/logs/errors").glob("*.log"))
             self.assertNotIn("secret", log_text)
             self.assertEqual("failure_started", recent_events(root)[0]["event"])
 
@@ -304,7 +304,7 @@ class MetadataStateMigrationTests(unittest.TestCase):
             repository = CacheRepository(database)
             catalog = PricingCatalog(models=(model("GPT-Test", date="2025-01-01"),), retrieved_at_ms=NOW)
             repository.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(catalog), algorithm_version="pricing-1")
-            old_logs = {p: p.read_bytes() for p in (root / "logs/errors").glob("*.log")}
+            old_logs = {p: p.read_bytes() for p in (root / "development/logs/errors").glob("*.log")}
             old_legacy = legacy.read_bytes()
 
             migrated = MetadataHealthStore(root)
@@ -380,8 +380,8 @@ class MetadataStateMigrationTests(unittest.TestCase):
                 os.utime(path, (old, old))
             RuntimeErrors(root).cleanup()
             self.assertTrue(all(path.is_file() for path in state_paths))
-            errors = next((root / "logs/errors").glob("*.log"))
-            recovery = next((root / "logs/recovery").glob("*.log"))
+            errors = next((root / "development/logs/errors").glob("*.log"))
+            recovery = next((root / "development/logs/recovery").glob("*.log"))
             self.assertNotIn('"event": "recovered"', errors.read_text(encoding="utf-8"))
             self.assertIn('"event": "recovered"', recovery.read_text(encoding="utf-8"))
             for path in (errors, recovery):
@@ -390,12 +390,12 @@ class MetadataStateMigrationTests(unittest.TestCase):
             create_bundle(bundle, root=root, json_bytes=b"{}", text_bytes=b"ok")
             with ZipFile(bundle) as archive:
                 self.assertEqual((root / STATE_FILE).read_bytes(), archive.read("state/model-metadata.json"))
-                self.assertIn("logs/recovery/model-metadata.json", archive.namelist())
+                self.assertNotIn("logs/recovery/model-metadata.json", archive.namelist())
                 self.assertIn("logs/errors/" + errors.name, archive.namelist())
                 self.assertIn("logs/recovery/" + recovery.name, archive.namelist())
             self.assertTrue(all(path.is_file() for path in state_paths))
-            self.assertFalse(errors.exists())
-            self.assertFalse(recovery.exists())
+            self.assertTrue(errors.exists())
+            self.assertTrue(recovery.exists())
 
     def test_healthy_state_is_not_an_error_or_a_recovery_event(self):
         with tempfile.TemporaryDirectory() as tmp:

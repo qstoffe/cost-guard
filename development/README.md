@@ -18,6 +18,18 @@ Source-local areas:
 - `tests/policies/`: machine-read validation policies; do not silently raise limits.
 - `tools/`: development checks and diagnostics implementation.
 - `user-tools/`: human-facing diagnostics launchers.
+- `logs/`: ignored, on-demand runtime errors, crashes, recovery events and
+  `diagnostics/cost-guard-diagnostics.zip`; never included in package copies.
+
+Quiet maintenance starts 60 seconds after Web readiness or Legacy presentation,
+then attempts retention once per day, independently of cache/source readiness.
+Only recognized, unchanged regular files strictly older than 30 days are removed
+from this tree and legacy root `logs/` / `diagnostics/`. Active recovery state,
+unrecognized files, links and uncertain/in-flight ZIP staging survive. Bundling
+does not prune recent logs or historic ZIPs. ZIP `logs/` members remain readable,
+with distinct legacy prefixes and duplicate contents omitted. Custom Diagnostics
+output stays caller-owned. Managed Web lock/auth/lifecycle/diagnostics and its
+private error logs remain in per-user application data, outside this contract.
 
 `repository.json` retains source release settings and the private backlog locator.
 `applied-contract.json` identifies the adopted installed development contract.

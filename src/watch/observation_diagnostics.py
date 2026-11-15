@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from src.version import DISPLAY_VERSION
+from src.log_paths import log_root, read_events
 
-FILE = Path(__file__).resolve().parents[2] / "logs" / "recovery" / "watch-observations.json"
+FILE = log_root(Path(__file__).resolve().parents[2]) / "recovery" / "watch-observations.json"
 _COUNT_KEYS = ("sessions", "roots", "active_metadata", "hydrated_roots", "startup_quiet_roots",
                "sampled_prompts", "older_completed", "visible_prompts", "running_prompts")
 _REASONS = frozenset(("visible", "no_sessions", "no_roots", "no_sampled_prompts", "no_eligible_prompts"))
@@ -34,7 +35,7 @@ def _label(value: object, allowed: frozenset[str]) -> str | None:
 def recent_events(now_ms: int | None = None) -> list[dict[str, object]]:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     try:
-        raw = json.loads(FILE.read_text(encoding="utf-8"))
+        raw = json.loads(read_events(FILE))
     except (OSError, ValueError, UnicodeError):
         return []
     if not isinstance(raw, list):

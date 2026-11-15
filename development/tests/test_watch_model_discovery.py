@@ -253,7 +253,7 @@ class OptionalNoticeCacheTests(unittest.TestCase):
                 self.assertEqual("1970-01-01T01:00:01.000Z", repository.get_or_create_model_first_seen_at(
                     "github-copilot/fresh", "later"))
                 self.assertEqual(1, provider.calls, "cache recovery must not fetch models")
-                logs = "".join(p.read_text(encoding="utf-8") for p in (root / "logs/errors").glob("*.log"))
+                logs = "".join(p.read_text(encoding="utf-8") for p in (root / "development/logs/errors").glob("*.log"))
                 self.assertNotIn("private path/token", logs)
                 self.assertIn("SQLite code: 778", logs)
                 self.assertIn(f"Cache phase: {phase}", logs)
@@ -279,7 +279,7 @@ class OptionalNoticeCacheTests(unittest.TestCase):
                 self.assertEqual("unavailable", watch.diagnostics(now)["notice_cache"]["status"])
                 faults.phase = "read"
                 watch.refresh(watch.diagnostics(now)["notice_cache"]["next_retry_ms"])
-            logs = "".join(p.read_text(encoding="utf-8") for p in (root / "logs/errors").glob("*.log"))
+            logs = "".join(p.read_text(encoding="utf-8") for p in (root / "development/logs/errors").glob("*.log"))
             self.assertIn("Failure changed.", logs)
             self.assertEqual(2, logs.count("Severity: recoverable"))
             self.assertLess(len(logs), 10_000)

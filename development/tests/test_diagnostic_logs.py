@@ -13,10 +13,10 @@ from src.sources import connectivity_events as recovery_events
 
 
 class DiagnosticLogsTests(unittest.TestCase):
-    def test_archive_and_prune_only_quiet_unchanged_owned_logs(self):
+    def test_archive_retains_recent_logs_and_unowned_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            folder = root / "logs" / "errors"
+            folder = root / "development/logs" / "errors"
             folder.mkdir(parents=True)
             old = folder / "cost-guard-errors-2026-10-08.log"
             old.write_bytes(b"Cost Guard: v80.16\n")
@@ -27,8 +27,8 @@ class DiagnosticLogsTests(unittest.TestCase):
             bundle = root / "diagnostics" / "bundle.zip"
             report = create_bundle(bundle, root=root, json_bytes=b"{}", text_bytes=b"ok")
             self.assertEqual(1, report["archived_logs"])
-            self.assertEqual(1, report["removed_logs"])
-            self.assertFalse(old.exists())
+            self.assertEqual(0, report["removed_logs"])
+            self.assertTrue(old.exists())
             self.assertTrue(unowned.exists())
             with ZipFile(bundle) as archive:
                 self.assertIn("logs/errors/cost-guard-errors-2026-10-08.log", archive.namelist())
@@ -61,7 +61,7 @@ class DiagnosticLogsTests(unittest.TestCase):
                 create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"ok")
             self.assertTrue(file.exists())
 
-    def test_single_latest_zip_replaces_old_packages(self):
+    def test_single_latest_zip_does_not_prune_young_historic_packages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             destination = root / "diagnostics" / "cost-guard-diagnostics.zip"
@@ -69,9 +69,9 @@ class DiagnosticLogsTests(unittest.TestCase):
             previous = destination.parent / "cost-guard-diagnostics-20261008-150806.zip"
             previous.write_bytes(b"previous")
             create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"first")
-            self.assertFalse(previous.exists())
+            self.assertTrue(previous.exists())
             create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"second")
-            self.assertEqual([destination], list(destination.parent.glob("*.zip")))
+            self.assertEqual({destination, previous}, set(destination.parent.glob("*.zip")))
             with ZipFile(destination) as archive:
                 self.assertEqual(b"second", archive.read("summary.txt"))
 
