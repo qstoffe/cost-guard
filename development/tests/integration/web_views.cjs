@@ -234,8 +234,8 @@ async function main() {
   vm.runInContext('views.delete("retained-unit-fixture")', context);
   navigate('models');
   assert.equal(ids.result.textContent, frozenModels, 'confirmed credits restores existing display tokens');
-  navigate('sessions');
-   await until(() => ids.result.textContent.includes('1–25 of 55'));
+   navigate('sessions?period=all');
+    await until(() => ids.result.textContent.includes('1–25 of 55'));
   assert.match(ids.result.textContent, /1–25 of 55/);
   assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
     const next = all(ids.result, 'button').find(node => node.textContent === 'Next');
@@ -324,7 +324,7 @@ async function main() {
   for (const hash of ['reports', 'reports?date=2026-03-29', 'reports?date=2026-03-01:2026-03-29',
       'reports?date=2026-02-30', 'reports?date=%ZZ&sort=ccost&offset=50']) {
     navigate(hash);
-    await until(() => ids.result.textContent.includes('1–25 of 55') && location.hash.includes('period=today'));
+    await until(() => ids.result.textContent.includes('1–25 of 54') && location.hash.includes('period=today'));
     assert.equal(location.hash, '#/sessions?period=today&sort=activity&direction=-1', 'retired scope is discarded, not applied to Sessions');
     assert.equal(ids.heading.textContent, 'Sessions');
     assert.equal(ids.content.focused, true, 'redirect target receives keyboard focus');
@@ -335,8 +335,8 @@ async function main() {
     assert.equal(vm.runInContext('current.request', context), null);
   }
   assert.equal(vm.runInContext('[...views.values()].some(state => state.section === "reports")', context), false);
-  navigate('sessions?limit=3');
-   await until(() => ids.result.textContent.includes('1–25 of 55'));
+   navigate('sessions?limit=3');
+    await until(() => ids.result.textContent.includes('1–25 of 54'));
    assert.equal(all(ids['scope-controls'], 'form').length, 0, 'obsolete limits cannot truncate the live catalog');
    navigate('token-mix');
    assert.equal(ids.refresh.hidden, true, 'automatic first load has no Load action');
@@ -388,7 +388,7 @@ async function main() {
   assert.equal(cmp('-0.010', '-0.009'), -1);
   assert.equal(cmp('1.00', '1'), 0);
   navigate('sessions');
-    await until(() => ids.result.textContent.includes('1–25 of 55'));
+    await until(() => ids.result.textContent.includes('1–25 of 54'));
   const beforeFilter = requests;
    assert.equal(all(ids.result, 'input').length, 0, 'catalog has no page-only presentation filter');
     assert.equal(all(ids.result, 'tbody')[0].children.length, 25);

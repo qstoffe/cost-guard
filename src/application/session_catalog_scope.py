@@ -27,6 +27,7 @@ class CatalogEpoch:
     sort: str
     direction: int
     window: CatalogWindow
+    provisional: bool = False
 
 
 def catalog_window(period, timezone_id, now_ms):
@@ -36,8 +37,38 @@ def catalog_window(period, timezone_id, now_ms):
 
 
 def population(roots, activity_index, window):
+    """Metadata admits candidates, not final prompt-based day membership.
+
+    Do not exclude a valid prompt because a source's modification clock is in
+    the future. Actual event timestamps are checked against both window bounds.
+    """
     if window.period == "all":
         return tuple(roots)
     left = bisect_left(activity_index, (max(1, window.start_ms),))
-    right = bisect_left(activity_index, (window.end_ms,))
-    return tuple(key for _, key in activity_index[left:right])
+    return tuple(key for _, key in activity_index[left:])
+
+
+def candidate_population(roots, metadata, metadata_index, rows, hints, window):
+    candidates = population(roots, metadata_index, window)
+    if window.period == 'all':
+        return candidates
+    extra = hints | {key for key, row in rows.items() if in_window(row.last_activity_ms, window)}
+    extra.update(key for key in roots if not metadata.get(key))
+    return tuple(dict.fromkeys((*candidates, *sorted(extra & roots.keys()))))
+
+
+def in_window(at, window):
+    return type(at) is int and max(1, window.start_ms or 1) <= at < window.end_ms
+
+
+def event_members(candidates, window, rows, activity_current):
+    """Partial/retained evidence cannot establish a current-revision exclusion."""
+    return tuple(key for key in candidates if window.period == 'all'
+                 or not activity_current(key) or in_window(rows[key].last_activity_ms, window))
+
+
+def provisional_order(rows, metadata):
+    """Unknown clocks have discovery hints only, never displayed event times."""
+    unknown = sorted((row for row in rows if row.last_activity_ms is None),
+        key=lambda row: (-(metadata.get(row.session_id) or 0), row.session_id))
+    return tuple(unknown) + tuple(row for row in rows if row.last_activity_ms is not None)

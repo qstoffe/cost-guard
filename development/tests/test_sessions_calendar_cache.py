@@ -74,10 +74,12 @@ class SessionsCalendarCacheTests(unittest.TestCase):
         first = catalog.page(period="7-days")
         self.assertEqual(source.load_count, 0)
         self.assertEqual(len(first["view"]["session_usage"]), 25)
-        self.assertFalse(first["pending_sort"])
+        self.assertTrue(first["pending_sort"])
+        self.assertTrue(first["membership_pending"])
         cold_ms = (time.perf_counter() - started) * 1000
         # Use real acquisition for the visited page, not all 5,000 histories.
         page = catalog.page(token=first["token"], offset=75, epoch=first["epoch"], period="7-days")
+        self.assertEqual(page["order_state"], "provisional")
         for _ in range(7):
             catalog.tick(service)
         self.assertEqual(source.load_count, 25)

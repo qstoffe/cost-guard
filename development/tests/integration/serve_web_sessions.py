@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 import time
 import unittest
 from uuid import uuid4
@@ -64,6 +64,8 @@ class FixtureRuntime:
         self.unavailable = False
         self.scalar_hold = False
         self.live_root = None
+        self.parity = False
+        self.observation_lock = Lock()
         self.detail_mode = None
         self.detail_capture = DetailCapture(run_owned_fixture, no_progress_seconds=3)
         self.detail_pool = ThreadPoolExecutor(max_workers=1)
@@ -76,26 +78,40 @@ class FixtureRuntime:
 
     def run(self):
         while not self.stopping.is_set():
-            observation = observe_catalog(self.service.source, include_archived_revisions=True)
-            self.catalog.observe(observation, unavailable=self.unavailable)
-            if self.live_root and not self.unavailable:
-                root = self.service.source.snapshots[self.live_root].root
-                capture, _ = capture_rows(self.service, root)
-                self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
-            if self.detail_mode is None:
-                self.details.tick(self.service, unavailable=self.unavailable)
-            elif self.detail_future is None or self.detail_future.done():
-                if self.detail_future is not None:
-                    self.detail_future.result()
-                self.detail_future = self.detail_pool.submit(self.detail_capture.capture,
-                    self.details, self.service.source, dict(detail_test=self.detail_mode,
-                        detail_snapshots=dict(self.service.source.snapshots)), self.service.now_ms,
-                    unavailable=self.unavailable)
-            if not self.scalar_hold and self.catalog.needed():
-                self.catalog.tick(self.service)
-            view = project_live(summary_watch(), "UTC").to_json()
-            self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms))
+            with self.observation_lock:
+                self.observe()
             self.stopping.wait(.25)
+
+    def observe(self):
+        observation = observe_catalog(self.service.source, include_archived_revisions=True)
+        self.catalog.observe(observation, unavailable=self.unavailable)
+        if self.live_root and not self.unavailable:
+            root = self.service.source.snapshots[self.live_root].root
+            capture, _ = capture_rows(self.service, root)
+            self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
+        if self.detail_mode is None:
+            self.details.tick(self.service, unavailable=self.unavailable)
+        elif self.detail_future is None or self.detail_future.done():
+            if self.detail_future is not None:
+                self.detail_future.result()
+            self.detail_future = self.detail_pool.submit(self.detail_capture.capture,
+                self.details, self.service.source, dict(detail_test=self.detail_mode,
+                    detail_snapshots=dict(self.service.source.snapshots)), self.service.now_ms,
+                unavailable=self.unavailable)
+        if not self.scalar_hold and self.catalog.needed():
+            self.catalog.tick(self.service)
+        frame = summary_watch()
+        if self.parity:
+            from src.watch.models import WatchCard, WatchRow
+            snapshot = self.service.source.snapshots["root-0000"]
+            capture, _ = capture_rows(self.service, snapshot.root, fresh=snapshot)
+            card = WatchCard(snapshot.root.session_id, snapshot.root.title, "",
+                tuple(WatchRow(snapshot.root.session_id, snapshot.root.title, row) for row in capture.rows),
+                state="observed", observed_at_ms=self.service.now_ms)
+            frame = replace(frame, now_ms=self.service.now_ms, active_cards=(), history_cards=(card,),
+                recent_finished_cards=())
+        view = project_live(frame, self.service.timezone_id).to_json()
+        self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms))
 
     def close(self):
         self.stopping.set()
@@ -134,6 +150,7 @@ def main():
     owner = unittest.TestCase()
     source = SyntheticMonthSource(120, 1, month_start_ms=1000)
     source.snapshots["root-0000"] = SyntheticMonthSource(1, 1001, month_start_ms=1000, running_roots=1).snapshots["root-0000"]
+    source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
     service = report_service(owner, source, now_ms=10_000_000)
     jobs = CaptureJobs()
     host = WebHost(config, jobs=jobs)
@@ -145,7 +162,34 @@ def main():
         for line in sys.stdin:
             command = json.loads(line)["command"]
             if command == "arrive":
-                source.snapshots["root-0120"] = make_root_snapshot(120, 1, month_start_ms=1000)
+                source.snapshots["root-0120"] = replace(make_root_snapshot(120, 1, month_start_ms=1000), complete=True)
+            elif command == "parity-observe":
+                print(json.dumps(dict(ok=True, source_instance="synthetic-month",
+                    roots=len(source.snapshots), history_reads=source.load_count,
+                    metrics=dict(host.live.catalog.metrics))), flush=True)
+                continue
+            elif command.startswith("parity-"):
+                from development.tests.fixtures.catalog_prompt_activity import finished_snapshot, at
+                service.now_ms = at("02:00:00")
+                service.config["timezone"] = "UTC"
+                if command == "parity-source":
+                    source.snapshots = {"root-0000": finished_snapshot()}
+                elif command == "parity-new-prompt":
+                    source.snapshots["root-0000"] = replace(finished_snapshot(finished=at("01:52:00")),
+                        source_revision=command)
+                else:
+                    snapshot = source.snapshots["root-0000"]
+                    root = replace(snapshot.root, updated_at_ms=at("01:59:00"),
+                        archived_at_ms=at("01:52:00") if command == "parity-archive" else None)
+                    sessions = (root,)
+                    if command == "parity-child-metadata":
+                        sessions += (replace(root, session_id="child", parent_session_id=root.session_id),)
+                    source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=sessions,
+                        source_revision=command)
+                host.live.parity = True
+                host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True),
+                    timezone_id=service.timezone_id)
+                host.live.scalar_hold = False
             elif command.startswith("detail-values-"):
                 from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
                 from src.domain import TokenUsage
@@ -191,17 +235,22 @@ def main():
                 samples = SyntheticMonthSource(5000, 1, month_start_ms=now - 730 * day)
                 values = {}
                 for index, ((key, snapshot), activity) in enumerate(zip(samples.snapshots.items(), activities)):
-                    if index == 2:
-                        snapshot = make_root_snapshot(index, 2, month_start_ms=now - 730 * day)
+                    snapshot = make_root_snapshot(index, 2 if index == 2 else 1,
+                        month_start_ms=activity - (1300 if index == 2 else 300) - index * 60_000)
                     root = replace(snapshot.root, updated_at_ms=activity)
                     events = tuple(replace(event, metadata={**event.metadata,
                         "variant": "high" if index == 1 or index == 2 and number else "default"})
                         for number, event in enumerate(snapshot.events))
                     values[key] = replace(snapshot, root=root, sessions=(root,), events=events,
                         source_revision=f"period-{index}", complete=True)
-                source.snapshots = values
-                host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
-                host.live.scalar_hold = False
+                with host.live.observation_lock:
+                    source.snapshots = values
+                    # This scenario starts from a cold 5,000-root catalog, not
+                    # 4,880 live arrivals in the preceding scenario's source.
+                    host.live.catalog = SessionCatalog(clock_ms=lambda: service.now_ms,
+                        timezone_id=service.timezone_id)
+                    host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                    host.live.scalar_hold = False
             elif command == "period-empty":
                 service.now_ms += 2 * 86_400_000
             elif command in ('detail-blocked', 'detail-recover', 'detail-progress', 'detail-delayed'):
@@ -232,13 +281,16 @@ def main():
                 with catalog.lock:
                     if command == 'catalog-clear':
                         catalog.valid.clear()
+                        catalog.activity_valid.clear()
                     if command in ('catalog-partial', 'catalog-index'):
                         for number, (key, root) in enumerate(catalog.roots.items()):
                             if command == 'catalog-partial' and number >= 428:
                                 break
                             catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
-                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
+                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number,
+                                last_activity_ms=catalog.activity[key])
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
+                            catalog.activity_valid[key] = catalog.revisions[key]
                             catalog.failures.pop(key, None)
                             catalog.failure_counts.pop(key, None)
                             catalog.failure_reasons.pop(key, None)
@@ -246,10 +298,12 @@ def main():
                         keys = sorted(catalog.roots, reverse=True)[25:50]
                         for key in keys:
                             catalog.valid.pop(key, None)
+                            catalog.activity_valid.pop(key, None)
                     if command == 'catalog-page-four-partial':
                         keys = sorted(catalog.roots, reverse=True)[75:100]
                         for key in keys[13:]:
                             catalog.valid.pop(key, None)
+                            catalog.activity_valid.pop(key, None)
                             catalog.failures[key] = catalog.revisions[key], False
                             catalog.failure_counts[key] = 5
                             catalog.failure_reasons[key] = 'connection_timeout'
@@ -257,12 +311,15 @@ def main():
                         for key in [key for key in catalog.roots if key not in catalog.valid and key != 'root-0000'][:20]:
                             number = int(key.split('-')[1])
                             catalog.rows[key] = SessionUsageRow(key, catalog.roots[key].title, f'Model {number:04}', False,
-                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
+                                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number,
+                                last_activity_ms=catalog.activity[key])
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
+                            catalog.activity_valid[key] = catalog.revisions[key]
             elif command in ("fail", "recover"):
                 host.live.unavailable = command == "fail"
             elif command == "end":
-                source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1002, month_start_ms=1000), source_revision="ended")
+                source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1002, month_start_ms=1000),
+                    source_revision="ended", complete=True)
             elif command in ("hold-captures", "resume-captures"):
                 jobs.hold = command == "hold-captures"
             elif command in ("live-cold", "live-progress", "live-finish", "live-resume"):

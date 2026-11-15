@@ -65,7 +65,12 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('current.catalog.poll()');
   await until('current.catalog.data.period==="today" && !current.catalog.operation && !current.catalog.busy');
   await evaluate(`location.hash='#/sessions?period=today&sort=activity&direction=-1'`);
-  await until('current.catalog.data.sort==="activity" && !current.catalog.busy');
+   await until('current.catalog.data.sort==="activity" && !current.catalog.busy');
+   // All/name expands discovery cheaply. All/activity intentionally needs every
+   // event key and is covered by source-counted bounded-index tests, not a false
+   // instantaneous metadata order.
+   await evaluate(`location.hash='#/sessions?period=today&sort=name&direction=1'`);
+   await until('current.catalog.data.sort==="name" && !current.catalog.operation && !current.catalog.busy');
   await command('Emulation.setTouchEmulationEnabled',{enabled:true});
   const point = await evaluate(`(()=>{const b=current.catalog.periodButtons[4].button;b.scrollIntoView();
     const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -107,7 +112,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('period-empty');
   await evaluate('current.catalog.load()');
   await until('current.catalog.data.total===0');
-  assert.match(await evaluate('current.catalog.label.textContent'),/No sessions in Today/);
+  assert.match(await evaluate('current.catalog.label.textContent'),/No confirmed matches among catalog candidates in Today/);
   assert.equal(await evaluate('current.catalog.periodButtons.every(({button})=>button.isConnected)'),true);
   checks.push('empty Today retains the useful five-button selector without auto-expanding history');
   return {checks,layouts};

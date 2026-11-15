@@ -123,6 +123,7 @@ class WebViewTests(unittest.TestCase):
             # Existing empty session differs from missing catalog entry.
             empty = source.snapshots["root-0001"]
             source.snapshots["root-0001"] = replace(empty, messages=(), parts=(), events=(), invocations=())
+            source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
             # Analysis cold-start belongs to the report/performance tests. Warm
             # the dependency cache before the VM's fixed 5s UI assertions.
             # Full large-month analysis remains in the performance owner tests.
@@ -153,7 +154,7 @@ class WebViewTests(unittest.TestCase):
                     if request.session_id == "root-0000" and len(source.snapshots["root-0000"].events) == 151:
                         # New events arrive after capture. Already-published result must stay frozen.
                         source.snapshots["root-0000"] = replace(make_root_snapshot(0, 152, month_start_ms=1000),
-                            source_revision="inserted-after-snapshot")
+                            source_revision="inserted-after-snapshot", complete=True)
                     self.results[key] = dict(id=key, status="failed" if result["error"] else "complete",
                         result=result, error=None, progress={"phase": "finalizing"})
 

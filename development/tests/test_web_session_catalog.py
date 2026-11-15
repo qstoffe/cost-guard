@@ -215,18 +215,18 @@ class SessionCatalogTests(unittest.TestCase):
 
     def test_visible_second_page_finishes_during_quiet_background_delay_without_retry(self):
         self.catalog.enable_warm()
-        first = self.catalog.page()
+        first = self.catalog.page(sort="name")
         self.catalog.interest(first['token'], True)
         for _ in range(13):
             self.catalog.tick(self.service)
-        self.assertEqual(25, self.catalog.page(token=first['token'])['page_ready'])
+        self.assertEqual(25, self.catalog.page(token=first['token'], sort="name")['page_ready'])
         self.catalog.interest(first['token'], False)
         self.catalog.tick(self.service)
         quiet_due = self.catalog.background_due
         self.assertEqual(900, quiet_due)
 
         # A quick visit followed by navigation away is not completed warming.
-        second = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'])
+        second = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'], sort="name")
         self.catalog.interest(first['token'], False)
         self.clock = 240
         self.assertEqual(0, second['page_ready'])
@@ -238,7 +238,7 @@ class SessionCatalogTests(unittest.TestCase):
         for _ in range(7):
             self.assertTrue(self.catalog.needed())
             self.catalog.tick(self.service)
-        ready = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'])
+        ready = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'], sort="name")
 
         self.assertEqual(25, ready['page_ready'])
         self.assertTrue(all(row['metric_state'] == 'ready' for row in ready['view']['session_usage']))
@@ -635,7 +635,8 @@ class SessionCatalogTests(unittest.TestCase):
             number = int(root.session_id.split('-')[1])
             metrics['cache_hits'] += 1
             return SessionUsageRow(root.session_id, root.title, f'Model {number:04}', False,
-                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number), revision
+                Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number,
+                last_activity_ms=1000 + number * 60_000), revision
         started = time.perf_counter()
         with patch('src.application.session_catalog.session_summary', side_effect=summary) as acquire:
             for batch in range(805):

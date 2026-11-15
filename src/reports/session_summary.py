@@ -8,18 +8,20 @@ from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.context import ContextEpochs
 from src.analysis.session_context import session_context_observation
 from src.analysis.session_cost import reconcile_session_cost
+from src.analysis.session_activity import activity_fields
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
 from src.domain.effort import EffortEvidence
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
 from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
+from src.sources.errors import SourceUnavailableError
 from .models import SessionUsageRow
 from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-9"
+ALGORITHM = "session-summary-10"
 NAMESPACE = "session-summary"
 
 
@@ -51,13 +53,14 @@ def summary_key(service, root):
     provenance = root.provenance
     return dependency_signature((ALGORITHM, EFFORT_REVISION, provenance.source_type, provenance.source_generation,
         provenance.source_instance, root.session_id, service._dependencies(service._load_catalog()),
-        service._load_comparison_catalog().diagnostic_signature))
+        service._load_comparison_catalog().diagnostic_signature, getattr(service.source, "observation_epoch", None)))
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
+    epoch = getattr(service.source, "observation_epoch", None)
     key = summary_key(service, root)
     try:
         cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
@@ -107,11 +110,14 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                 raise ValueError("invalid_reference_issues")
             values["ccost_unavailable"] = issues
             row = SessionUsageRow(**values)
-            if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
+            if (getattr(service.source, "observation_epoch", None) == epoch
+                    and row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
                     and all(value.is_finite() and value >= 0 for value in (row.main_ccost, row.subagent_ccost))
                     and row.main_ccost + row.subagent_ccost == row.ccost
                     and isinstance(row.title, str) and isinstance(row.model, str)
-                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending"))
+                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending", "context_qualified", "effort_details_complete", "effort_qualified", "effort_pending", "activity_qualified"))
+                    and row.activity_qualified
+                    and (row.last_activity_ms is None or type(row.last_activity_ms) is int and row.last_activity_ms > 0)
                     and row.context_qualified
                     and (row.context_tokens is None or type(row.context_tokens) is int and row.context_tokens >= 0)
                     and isinstance(row.context_detail, str) and len(row.context_detail) <= 128
@@ -140,12 +146,15 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     stage('projecting_summary')
     row = service._session_rows((item,), catalog_models=True)[0]
     cost = reconcile_session_cost(service.cache_repository, item.snapshot, service._load_comparison_catalog())
-    row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=cost.groups)
+    row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=cost.groups,
+                  **activity_fields(item))
+    if getattr(service.source, "observation_epoch", None) != epoch:
+        raise SourceUnavailableError("Source registration changed during session summary acquisition")
     actual = item.bundle.source_revision
     identity_values = dependencies(item.bundle.trace_entries)
     if on_dependencies is not None:
         on_dependencies(identity_values)
-    if item.bundle.cacheable and not row.running and row.context_qualified:
+    if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = identity_values
