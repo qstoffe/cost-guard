@@ -179,7 +179,8 @@ class SessionQuotaTests(unittest.TestCase):
         unused = self.usage(evidence, self.accounts((scoped,)))["accounts"][0]["quotas"][0]
         ambiguous = self.usage(evidence, self.accounts(refs=(self.ref, replace(self.ref, account_id="other"))))
         unknown_model = replace(evidence, contributions=(replace(evidence.contributions[0], model=None),))
-        unpriced = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D(0), complete=False),))
+        native_unpriced = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D(0), complete=False),))
+        unpriced = replace(native_unpriced, contributions=(replace(native_unpriced.contributions[0], native=()),))
 
         self.assertEqual(("zero", "0%"), (unused["contribution"], unused["percent"]))
         self.assertEqual(["unknown", "unknown"],
@@ -187,6 +188,8 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertEqual("unknown", self.usage(unknown_model, self.accounts((scoped,)))
             ["accounts"][0]["quotas"][0]["contribution"])
         self.assertEqual("unknown", self.usage(unpriced, self.accounts())["accounts"][0]["quotas"][0]["contribution"])
+        self.assertEqual("positive", self.usage(native_unpriced, self.accounts())["accounts"][0]["quotas"][0]["contribution"],
+            "positive native consumption proves membership even without reference pricing")
         self.assertEqual("positive", self.usage(evidence, self.accounts((replace(self.monthly, unlimited=True),)))
             ["accounts"][0]["quotas"][0]["contribution"])
 
