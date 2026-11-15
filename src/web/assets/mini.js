@@ -477,13 +477,14 @@ const MiniWatch = (() => {
     constructor(owner, button, feedback, returnToWatch, measureFactory = () => new OpeningMeasure(owner)) {
       this.owner = owner; this.button = button; this.feedback = feedback; this.returnToWatch = returnToWatch;
       this.window = null; this.view = null; this.pending = null; this.ended = false;
+      this.failure = '';
       this.publication = null; this.healthState = {kind: 'starting'}; this.receivedAt = 0;
       this.observations = new Observations();
       this.placement = null; this.opened = false; this.instance = null;
       this.appearance = owner.matchMedia('(prefers-color-scheme: dark)');
       this.themeChanged = () => this.syncTheme(); this.themeProperties = [];
       this.reason = unavailable(owner);
-      this.measure = measureFactory();
+      this.measure = this.reason ? null : measureFactory();
       this.measure?.loaded?.then(() => this.sync());
       button.addEventListener('click', () => this.toggle());
       owner.addEventListener('pagehide', () => { this.ended = true; this.close(); this.measure?.close(); });
@@ -494,14 +495,22 @@ const MiniWatch = (() => {
       if (win && (win.closed || this.owner.documentPictureInPicture.window !== win)) this.release(win);
       this.button.textContent = `Mini Watch: ${this.window ? 'On' : 'Off'}`;
       this.button.setAttribute('aria-pressed', this.window ? 'true' : 'false');
-      this.button.disabled = Boolean(this.reason) || !this.placement || !this.measure?.ready;
-      if (this.reason) this.feedback.textContent = this.reason;
-      else if (!this.placement) this.feedback.textContent = 'Mini Watch settings unavailable. Open Settings to retry.';
-      else if (!this.measure?.ready) this.feedback.textContent = 'Preparing Mini Watch layout…';
+      // Keep unavailable controls keyboard-discoverable. Normal preparation is quiet.
+      this.button.setAttribute('aria-disabled', String(Boolean(this.reason) || !this.placement ||
+        !this.measure?.ready || Boolean(this.healthState.terminal)));
+      const message = this.reason || (!this.placement ? 'Mini Watch settings unavailable. Open Settings to retry.' :
+        this.measure?.failed ? 'Mini Watch styles could not load. Reload Cost Guard to retry.' :
+        this.healthState.terminal ? 'Host unavailable. Reopen Cost Guard to retry Mini Watch.' : this.failure);
+      ReportView.text(this.feedback, message);
+      this.button.title = message;
     }
     release(win) {
       if (this.window !== win) return;
       this.window = this.view = null;
+      if (this.pending?.window === win) {
+        const request = this.pending; this.pending = null;
+        request.cancelled = true; request.cancelStyles?.();
+      }
       win.clearInterval(this.timer);
       this.demand?.close(); this.demand = null;
       this.appearance.removeEventListener('change', this.themeChanged);
@@ -518,18 +527,39 @@ const MiniWatch = (() => {
       if (this.pending) this.pending.cancelled = true;
       const win = this.window;
       if (win) { this.release(win); win.close(); }
-      this.feedback.textContent = '';
+      this.failure = '';
       this.sync();
+    }
+    loadStyles(doc, request) {
+      return new Promise((resolve, reject) => {
+        const links = [], cleanup = () => {
+          for (const [link, loaded, failed] of links) {
+            link.removeEventListener('load', loaded); link.removeEventListener('error', failed);
+          }
+          request.cancelStyles = null;
+        };
+        request.cancelStyles = () => { cleanup(); resolve(false); };
+        let remaining = 2;
+        for (const name of ['app.css', 'mini.css']) {
+          const link = doc.createElement('link'); link.rel = 'stylesheet';
+          link.href = new URL('/' + name, this.owner.location.href).href;
+          const loaded = () => { if (!--remaining) { cleanup(); resolve(true); } };
+          const failed = () => { cleanup(); reject(new Error('Mini Watch stylesheet unavailable')); };
+          links.push([link, loaded, failed]);
+          link.addEventListener('load', loaded); link.addEventListener('error', failed);
+          doc.head.append(link);
+        }
+      });
     }
     async toggle() {
       this.sync();
-      if (this.reason || this.ended || !this.placement || !this.measure?.ready) return;
+      if (this.reason || this.ended || !this.placement || !this.measure?.ready || this.healthState.terminal) return;
       if (this.window) { this.close(); return; }
       if (this.pending) {
-        this.pending.cancelled = true; this.feedback.textContent = 'Opening cancelled.'; return;
+        this.pending.cancelled = !this.pending.cancelled; return;
       }
       const request = {cancelled: false}; this.pending = request;
-      this.feedback.textContent = 'Opening Mini Watch…';
+      this.failure = ''; this.sync();
       let win = null;
       try {
         // Synchronous real-layout measurement BEFORE requestWindow consumes activation.
@@ -541,10 +571,11 @@ const MiniWatch = (() => {
         win = await this.owner.documentPictureInPicture.requestWindow({...dimensions,
           preferInitialWindowPlacement: !this.opened || this.placement === 'standard' || size === 'fit-on-open'});
         if (instance === this.instance) this.opened = true;
-        if (request.cancelled || this.ended || win.closed || this.owner.documentPictureInPicture.window !== win) {
+        if (request.cancelled || this.ended || instance !== this.instance || win.closed ||
+            this.owner.documentPictureInPicture.window !== win) {
           win.close(); return;
         }
-        this.window = win;
+        this.window = win; request.window = win;
         win.addEventListener('pagehide', () => { this.release(win); this.sync(); }, {once: true});
         const doc = win.document; doc.title = 'Mini Watch · Cost Guard'; doc.documentElement.lang = 'en';
         doc.documentElement.dataset.miniSize = size;
@@ -552,19 +583,16 @@ const MiniWatch = (() => {
         this.appearance.addEventListener('change', this.themeChanged);
         const icon = doc.createElement('link'); icon.rel = 'icon'; icon.type = 'image/x-icon';
         icon.href = new URL('/favicon-cg1.ico', this.owner.location.href).href; doc.head.append(icon);
-        const styles = [];
-        for (const name of ['app.css', 'mini.css']) {
-          const link = doc.createElement('link'); link.rel = 'stylesheet';
-          link.href = new URL('/' + name, this.owner.location.href).href;
-          styles.push(new Promise((resolve, reject) => {
-            link.addEventListener('load', resolve, {once:true});
-            link.addEventListener('error', reject, {once:true});
-          }));
-          doc.head.append(link);
-        }
+        const shell = doc.createElement('p'); shell.className = 'mini-opening';
+        shell.setAttribute('role', 'status'); shell.textContent = 'Loading Mini Watch…';
+        doc.body.replaceChildren(shell); this.sync();
+        // The inert sizing document already loaded these exact same-origin rules.
+        // Construct sheets in the new document's realm: no inline-style CSP bypass,
+        // refetch, second Live owner, or unstyled sensitive first layout.
+        const styled = this.measure.styleDocument?.(doc);
         // Avoid an unstyled first layout creating a vertical scrollbar which then
         // steals the measured header width and keeps itself alive through wrapping.
-        await Promise.all(styles);
+        if (!styled && !await this.loadStyles(doc, request)) return;
         if (typeof ControlFocus !== 'undefined') ControlFocus.install(doc);
         if (request.cancelled || this.ended || win.closed || this.window !== win) { this.release(win); win.close(); return; }
         this.view = new View(doc, () => {
@@ -576,19 +604,20 @@ const MiniWatch = (() => {
         if (this.demandFactory) { this.demand = this.demandFactory(win); this.demand.update(); }
         // A visible PiP document owns this freshness timer, not a hidden main rAF.
         this.timer = win.setInterval(() => { this.sync(); this.render(); }, 5000);
-        this.render(); this.feedback.textContent = '';
+        this.render();
         win.requestAnimationFrame(() => {
           if (this.window !== win || win.closed) return;
           this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
             innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
           if (size === 'fit-on-open' && (this.view.fitHeight() > win.outerHeight + 2 ||
               headerWidth(this.view, true) > this.view.root.getBoundingClientRect().width + 1))
-            this.feedback.textContent = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
+            { this.failure = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.'; this.sync(); }
         });
       } catch (_) {
+        const cancelled = request.cancelled;
         if (win) { this.release(win); win.close(); }
-        this.feedback.textContent = 'Mini Watch could not open. Check browser support, policy and user-activation restrictions; click to retry.';
-      } finally { this.pending = null; this.sync(); }
+        if (!cancelled) this.failure = 'Mini Watch could not open. Check browser support, policy and user-activation restrictions; click to retry.';
+      } finally { if (this.pending === request) this.pending = null; this.sync(); }
     }
     update(value) {
       // Progress events and repeated HTTP snapshots may contain the same retained
@@ -607,12 +636,16 @@ const MiniWatch = (() => {
     health(value) {
       const wasWritable = this.healthState.writable;
       this.healthState = value;
-      if (value.terminal) { this.demand?.close(false); this.demand = null; this.demandFactory = null; }
+      if (value.terminal) {
+        if (this.pending) this.close();
+        this.demand?.close(false); this.demand = null; this.demandFactory = null;
+      }
       else if (wasWritable !== value.writable) this.demand?.update();
       this.sync(); this.render();
     }
     settings(values, instance) {
       if (instance && instance !== this.instance) {
+        if (this.pending) this.close();
         if (this.instance) { this.demand?.close(false); this.demand = null; this.demandFactory = null; }
         this.instance = instance; this.opened = false;
         this.publication = null; this.observations = new Observations();
@@ -621,7 +654,7 @@ const MiniWatch = (() => {
       if (values) {
         this.placement = values.miniWatchPlacement;
         this.size = values.miniWatchSize || 'fit-on-open';
-        this.feedback.textContent = '';
+        this.failure = '';
       }
       this.syncTheme(); this.sync(); this.render();
     }
@@ -666,7 +699,23 @@ const MiniWatch = (() => {
         link.href = new URL('/' + name, owner.location.href).href;
         link.addEventListener('load', () => resolve(true), {once:true});
         link.addEventListener('error', () => resolve(false), {once:true}); shadow.append(link);
-      }))).then(values => { this.ready = values.every(Boolean); });
+      }))).then(values => {
+        this.ready = values.every(Boolean); this.failed = !this.ready;
+        if (this.ready) {
+          try { this.styles = [...shadow.querySelectorAll('link')].map(link =>
+            [...link.sheet.cssRules].map(rule => rule.cssText).join('\n')); }
+          catch (_) { /* Unavailable CSSOM uses ordinary same-origin links. */ }
+        }
+      });
+    }
+    styleDocument(doc) {
+      if (!this.styles) return false;
+      try {
+        const sheets = this.styles.map(css => {
+          const sheet = new doc.defaultView.CSSStyleSheet(); sheet.replaceSync(css); return sheet;
+        });
+        doc.adoptedStyleSheets = sheets; return true;
+      } catch (_) { return false; } // Native support/refusal retains the link fallback.
     }
     defaultContentWidth() {
       return Math.max(headerWidth(this.view, true),

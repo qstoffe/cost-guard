@@ -6,7 +6,9 @@ async function main() {
   assert.ok(path.isAbsolute(browser)&&path.isAbsolute(output));await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(path.dirname(output),'mini-browser-'));
   const config=await fs.mkdtemp(path.join(path.dirname(output),'mini-config-'));
-  const server=spawn('py',['-3','development/tests/integration/serve_mini_watch.py',config],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+   const server=spawn(process.env.COST_GUARD_TEST_PYTHON||'py',
+     [...(process.env.COST_GUARD_TEST_PYTHON?[]:['-3']),'development/tests/integration/serve_mini_watch.py',config],
+     {windowsHide:true,stdio:['pipe','pipe','pipe']});
   const lines=readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const launch=JSON.parse((await lines.next()).value); // Capability URL stays in memory.
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
@@ -60,7 +62,24 @@ async function main() {
       if(await evaluate('!!document.querySelector(".mini-watch")',false,a.sessionId))return a.sessionId;}throw new Error('No PiP target');};
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
-    const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+     if(scope==='opening-baseline-only'||scope==='opening-only'||scope==='all') {
+       await require('./probe_mini_opening.cjs')({evaluate,until,checks:evidence.checks,layouts:evidence.layouts,
+         baseline:scope==='opening-baseline-only'});
+       if(scope!=='all') {evidence.outcome='PASS';return;}
+     }
+     if(scope==='header-only'||scope==='all') {
+       await require('./probe_watch_header.cjs')({evaluate,until,command,sessionId,layouts:evidence.layouts,checks:evidence.checks,
+         capture:async label=>{
+           const image=await command('Page.captureScreenshot',{format:'png'},sessionId);
+           await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));
+         }});
+       if(scope==='header-only') {evidence.outcome='PASS';return;}
+     }
+     if(scope==='opening-races-only') {
+       await require('./probe_mini_opening_races.cjs')({evaluate,until,fixture,command,sessionId,checks:evidence.checks});
+       evidence.outcome='PASS';return;
+     }
     if(scope==='dashboard-only'||scope==='all') {
       await require('./probe_watch_dashboard.cjs')({evaluate,until,command,sessionId,open,close,checks:evidence.checks});
       if(scope==='dashboard-only') {evidence.outcome='PASS';return;}

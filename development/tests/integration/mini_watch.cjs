@@ -64,7 +64,7 @@ function setup() {
   const button = new Node('button'), feedback = new Node('span');
   const controller = new Controller(owner, button, feedback, () => returned++, () => ({ready:true,
     read: () => ({width:628,height:500}), close: () => {}}));
-  assert.equal(button.disabled,true,'no placement assumption before confirmed settings');
+  assert.equal(button.attributes['aria-disabled'],'true','no placement assumption; unavailable button remains focusable');
   controller.settings({miniWatchPlacement:'remember-last'},'fixture-host');
   return {owner, api, button, feedback, controller, calls: () => calls, focused: () => focused, returned: () => returned,
     opened: value => {api.window = value; resolve(value);}, reject: () => reject(new Error('denied'))};
@@ -75,7 +75,7 @@ function setup() {
   controller.update(input); controller.health({kind: 'connected'});
   const first = controller.toggle();
   assert.equal(button.textContent, 'Mini Watch: Off', 'pending is not On');
-  await controller.toggle(); await controller.toggle();
+   await controller.toggle();
   assert.equal(test.calls(), 1, 'rapid clicks never duplicate in-flight windows');
   const cancelled = win(); test.opened(cancelled); await first;
   assert.equal(cancelled.closed, true); assert.equal(button.textContent, 'Mini Watch: Off');
@@ -405,14 +405,35 @@ function setup() {
   const late = win(); pendingClose.opened(late); await promise; assert.equal(late.closed, true);
   for (const outcome of ['load','error','close']) {
     const waiting=setup(), child=win();child.deferStyles=true;
-    const opening=waiting.controller.toggle();waiting.opened(child);await Promise.resolve();
+    const opening=waiting.controller.toggle();waiting.opened(child);await new Promise(setImmediate);
     assert.equal(waiting.controller.view,null,'never render unstyled content into the narrow viewport');
+    assert.equal(child.document.body.textContent,'Loading Mini Watch…',JSON.stringify({
+      feedback:waiting.feedback.textContent,closed:child.closed,pending:!!waiting.controller.pending}));
+    assert.equal(waiting.feedback.textContent,'','ordinary loading is not parent narration');
     if(outcome==='close')waiting.controller.close();
     child.document.head.children.filter(n=>n.rel==='stylesheet').forEach(n=>n.fire(outcome==='error'?'error':'load'));
     await opening;
     if(outcome==='load')assert.ok(waiting.controller.view);
     else {assert.equal(child.closed,true);assert.equal(waiting.controller.view,null);}
     waiting.controller.close();
+  }
+  const triple=setup(), tripleOpening=triple.controller.toggle();
+  await triple.controller.toggle();await triple.controller.toggle();
+  const tripleChild=win();triple.opened(tripleChild);await tripleOpening;
+  assert.equal(tripleChild.closed,false,'latest On intent survives On/Off/On before native resolution');
+  assert.equal(triple.calls(),1);triple.controller.close();
+  for(const action of ['native-close','parent-close','identity']) {
+    const waiting=setup(), stale=win();stale.deferStyles=true;
+    const opening=waiting.controller.toggle();waiting.opened(stale);await new Promise(setImmediate);
+    const links=stale.document.head.children.filter(n=>n.rel==='stylesheet');
+    if(action==='native-close'){stale.close();stale.fire('pagehide');}
+    else if(action==='identity')waiting.controller.settings(null,'replacement-host');
+    else waiting.owner.fire('pagehide');
+    await opening;
+    assert.equal(waiting.controller.pending,null,'close retires styles without waiting for network');
+    assert.equal(waiting.controller.view,null);assert.equal(stale.timers.size,0);
+    assert.ok(links.every(n=>n.events.load.length===0&&n.events.error.length===0),'retired stylesheet listeners released');
+    links.forEach(n=>n.fire('load'));assert.equal(waiting.controller.view,null,'late CSS cannot attach stale data');
   }
   const boundary = setup(); boundary.controller.settings({miniWatchPlacement:'remember-last'},'host-1');
   for (const [identity,initial] of [['host-1',true],['host-1',false],['host-2',true],['host-2',false]]) {
@@ -446,6 +467,11 @@ function setup() {
     active_cards:value.view.active_cards.map((card,index)=>index ? card : {...card,observed_at_ms:card.observed_at_ms+1})};
   lane.update(value);
   assert.equal(lane.observations.delayed(now),true,'another focal prompt cannot hide an unobserved retained card');
+  // Recover every other lane before isolating the remaining stale Daily clock.
+  value.view = {...value.view,
+    active_cards:value.view.active_cards.map(card=>({...card,observed_at_ms:card.observed_at_ms+1})),
+    accounts:{...value.view.accounts,accounts:value.view.accounts.accounts.map(item=>
+      ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+2}}))}};
   now++; value.view.now_ms++; lane.update(value);
   assert.equal(lane.observations.delayed(now),true,'healthy prompt publications do not reset the daily failure clock');
   value.view = {...value.view,daily_state:'observed',daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1}};
@@ -456,6 +482,7 @@ function setup() {
   lane.update(value);
   assert.equal(lane.observations.view.active_cards.length,2,'partial reads do not erase other retained prompt rows');
   assert.equal(lane.observations.view.active_cards[0].title,changed.title,'valid per-card corrections still apply');
+  vm.runInContext('ReportView.setUnit("credits")', context);
   const initialTest = setup(), initial = initialTest.controller;
   initial.update({state:'recovering',view:null});
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
@@ -469,7 +496,8 @@ function setup() {
       owner => {owner.top = {};}, owner => {owner.document.permissionsPolicy = {allowsFeature: () => false};}]) {
     const item = setup(); change(item.owner);
     const disabled = new Controller(item.owner, item.button, item.feedback, () => {});
-    assert.equal(item.button.disabled, true); assert.ok(item.feedback.textContent); await disabled.toggle(); assert.equal(item.calls(), 0);
+    assert.equal(item.button.attributes['aria-disabled'], 'true'); assert.ok(item.feedback.textContent);
+    assert.equal(item.button.title,item.feedback.textContent);await disabled.toggle(); assert.equal(item.calls(), 0);
   }
   console.log('Mini Watch VM: lifecycle/races, units/theme, native callbacks, fresh/retained states and independent DOM passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

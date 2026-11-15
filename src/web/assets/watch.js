@@ -576,8 +576,8 @@ const WatchView = (() => {
       this.accounts = this.accountCards.root; this.cards = new Map();
       this.daily = el('section', undefined, 'watch-daily');
       this.daily.setAttribute('aria-label', 'CCost Today');
-      this.band = el('div', undefined, 'watch-daily-band'); this.band.append(this.daily);
-      this.root.append(this.band, this.empty, this.active, this.accounts);
+      this.band = el('header', undefined, 'watch-daily-band'); this.band.append(this.daily, this.accounts);
+      this.root.append(this.band, this.empty, this.active);
     }
     attach(parent) {
       ReportView.syncUnits(this.root);

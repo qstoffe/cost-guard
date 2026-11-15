@@ -283,8 +283,6 @@ function show(state) {
     } else if (liveValue?.view) {
       state.miniControls = miniWatch?.button.parentNode;
       ReportView.renderLive(output, liveValue, state);
-      const width = miniWatch?.defaultContentWidth();
-      if (width && state.watch) state.watch.accounts.style.maxWidth = width + 'px';
     } else {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
       output.replaceChildren();

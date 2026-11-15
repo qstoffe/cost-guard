@@ -30,9 +30,9 @@ const watch=context.state.watch,card=[...watch.cards.values()][0],row=card.body.
 assert.equal(watch.history,undefined);assert.equal(watch.earlier,undefined);
 assert.equal(watch.cards.size,input.view.active_cards.length);
 assert.equal(watch.root.children[0],watch.band);
-assert.deepEqual(watch.band.children,[watch.daily,controls]);
+assert.deepEqual(watch.band.children,[watch.daily,watch.accounts,controls]);
 assert.equal(controls.children[0],toggle);
-assert.equal(watch.root.children.at(-1),watch.accounts);
+assert.equal(watch.root.children.at(-1),watch.active);
 assert.equal(watch.accounts.className,'mini-accounts');
 assert.equal(row.children[2].textContent,'#37'+input.view.active_cards[0].rows[0].prompt.preview);
 assert.equal(row.attributes['aria-label'],'Prompt 37 · Running');
