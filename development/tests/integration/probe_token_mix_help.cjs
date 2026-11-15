@@ -51,7 +51,7 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       current.tokenMix.update(value);})()`);
     const text = await focus();
     if (state==='complete' || state==='empty') assert.doesNotMatch(text,/Partial pricing:/);
-    assert.doesNotMatch(await evaluate(`current.tokenMix.summary.textContent`),/N\/A|Partial|\\?|unavailable/);
+    assert.doesNotMatch(await evaluate(`current.tokenMix.summary.textContent`),/N\/A|Partial|\?|unavailable/);
     if (state==='empty') assert.match(await evaluate(`current.tokenMix.root.textContent`),/No available historical usage/);
   }
   assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('.help-value,.help-label,[title],[tabindex]').length`),0);
