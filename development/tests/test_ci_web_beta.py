@@ -324,6 +324,19 @@ class CiEvidenceTests(unittest.TestCase):
                 self.assertEqual('quick', evidence['extended_browser']['selection'])
                 self.assertEqual('NOT RUN', evidence['extended_browser']['outcome'])
 
+    def test_token_mix_retains_rendered_probe_but_real_cadence_is_manual_only(self):
+        from development.tests.integration import ci_token_mix
+
+        for event in ('pull_request', 'push', 'workflow_dispatch', ''):
+            with self.subTest(event=event), patch.dict('os.environ', {'GITHUB_EVENT_NAME': event}):
+                command = ci_token_mix.browser_command('chromium', Path('token-mix.json'))
+
+            expected = ['node', 'development/tests/integration/probe_token_mix.cjs',
+                        'chromium', 'token-mix.json']
+            if event == 'workflow_dispatch':
+                expected.append('--wall-clock')
+            self.assertEqual(expected, command)
+
     def test_manual_browser_full_runs_both_deep_checks_in_order(self):
         from development.tests.integration import ci_browser_web
         browser, evidence, calls = object(), {}, []
