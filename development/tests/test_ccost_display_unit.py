@@ -71,7 +71,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
                      ["--ccost-unit", "usd", "--ccost-unit", "credits"]):
             with self.assertRaises(CliUsageError):
                 parse_command(args)
-        result = subprocess.run([sys.executable, "cost-guard.py", "--ccost-unit", "invalid"],
+        result = subprocess.run([sys.executable, "src/entrypoints/desktop.py", "--ccost-unit", "invalid"],
                                 cwd=ROOT, capture_output=True, timeout=10)
         self.assertEqual(2, result.returncode)
         self.assertIn(b"--ccost-unit credits|usd", result.stdout)

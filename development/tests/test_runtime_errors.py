@@ -22,7 +22,7 @@ from src.watch.observers import LiveEventPump
 from src.version import DISPLAY_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
-ENTRY = runpy.run_path(str(ROOT / "cost-guard.py"))
+ENTRY = runpy.run_path(str(ROOT / "src/entrypoints/desktop.py"))
 
 
 def fail(kind=TypeError):

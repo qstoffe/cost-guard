@@ -6,12 +6,8 @@
     "baseline": "v80.71",
     "metadataPaths": ["src/version.py"],
     "presentation": {
-      "historyFormat": "date",
-      "historyMaxBytes": 32768,
-      "olderSummaryMaxBytes": 4096,
       "bindings": [
-        {"path": "src/version.py", "kind": "python-version-date"},
-        {"path": "README.md", "kind": "readme-version", "heading": "## Current version"}
+        {"path": "src/version.py", "kind": "python-version-date"}
       ]
     }
   },

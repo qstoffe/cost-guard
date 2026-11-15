@@ -81,7 +81,7 @@ def probe():
                 raise RuntimeError("probe_snapshot_changed")
             detail_status = "acquired_frozen"
             # Capture private report text, emit only the exit outcome, never prompts/IDs.
-            cli = subprocess.run([sys.executable, "cost-guard.py", session_id], cwd=ROOT,
+            cli = subprocess.run([sys.executable, "src/entrypoints/cli.py", session_id], cwd=ROOT,
                 capture_output=True, timeout=125)
             if cli.returncode:
                 raise RuntimeError("probe_cli_failed")

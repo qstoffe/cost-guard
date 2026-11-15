@@ -22,3 +22,18 @@ Source-local areas:
 `repository.json` retains source release settings and the private backlog locator.
 `applied-contract.json` identifies the adopted installed development contract.
 Contract Sync changes no product behavior, release policy or backlog counters.
+
+Executable boundaries live in `src/entrypoints/`: `desktop.py` routes ordinary
+desktop startup, `web.py` owns managed/developer Web dispatch, and `cli.py` is the
+explicit Legacy terminal entry. Each supports direct execution from any working
+directory; `python -m src.entrypoints.<mode>` works from the installation root.
+Keep user-facing Windows/macOS launchers at their existing paths. Launcher tests
+use disposable installs and redirected/hosted-only harnesses, not workstation UI.
+
+`src/version.py` owns the functional version and release date. Validate runtime
+version output with `python development/tools/validate_package.py --working-tree`
+and run all registered regressions with
+`python development/tools/run_tests.py --suite full`. README is a tiny Web quick
+start, not a version binding. Git retains release history; no prose history or
+root documentation tree is shipped. The validator rejects retired root wrappers
+and documentation while retaining package/privacy, import and size gates.

@@ -34,7 +34,7 @@ cg_find_python || {
 }
 # Stop the display-only row before Python can print a multi-line failure.
 stop_activity
-"$PYTHON" -u "$CG_ROOT/cost-guard-web.py" --launch-macos
+"$PYTHON" -u "$CG_ROOT/src/entrypoints/web.py" --launch-macos
 RESULT=$?
 stop_activity
 if [[ $RESULT -ne 0 && -t 0 && -t 1 ]]; then read -r '?Press Return to close…'; fi

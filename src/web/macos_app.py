@@ -16,7 +16,7 @@ from .instance_state import _private, _safe
 from .process_identity import InstanceConflict
 
 SOURCES = ("macos/launcher.applescript", "macos/Cost-Guard-Web.command", "src/python_discovery.sh",
-           "cost-guard-web.py", "src/web/macos_app.py", "src/web/macos_launch.py",
+           "src/entrypoints/web.py", "src/web/macos_app.py", "src/web/macos_launch.py",
            "src/web/native_macos.py", "src/web/macos_status.py", "src/web/objc_bridge.py")
 
 

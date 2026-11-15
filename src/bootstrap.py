@@ -185,7 +185,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except CliUsageError as exc:
         _print_error("Cost Guard - Argument error", str(exc))
         print()
-        print("Run 'python cost-guard.py --help' for usage.")
+        print("Run 'python src/entrypoints/cli.py --help' for usage.")
         return 2
 
     try:

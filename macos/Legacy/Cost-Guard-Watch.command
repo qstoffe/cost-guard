@@ -17,4 +17,4 @@ cg_find_python || {
   exit 1
 }
 
-exec "$PYTHON" "$CG_ROOT/cost-guard-cli.py" --watch
+exec "$PYTHON" "$CG_ROOT/src/entrypoints/cli.py" --watch

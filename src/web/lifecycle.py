@@ -120,7 +120,7 @@ def stop_existing(store, state, *, grace=GRACE_SECONDS):
 def spawn_detached(root, store, nonce, gui_module):
     if gui_module not in GUI_MODULES:
         raise InstanceConflict("gui_unavailable")
-    entry = Path(root).resolve(strict=True) / "cost-guard-web.py"
+    entry = Path(root).resolve(strict=True) / "src/entrypoints/web.py"
     executable = Path(sys.executable)
     if os.name == "nt":
         # DETACHED_PROCESS hides the host's console, not multiprocessing children

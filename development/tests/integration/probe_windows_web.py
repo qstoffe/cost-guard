@@ -219,7 +219,6 @@ def source_zip_probe():
             shutil.copytree(ROOT / name, snapshot / name, ignore=shutil.ignore_patterns("__pycache__"))
         (snapshot / "config").mkdir()
         shutil.copy2(ROOT / "config/default-config.jsonc", snapshot / "config/default-config.jsonc")
-        shutil.copy2(ROOT / "cost-guard-web.py", snapshot / "cost-guard-web.py")
         store = InstanceStore(snapshot)
         try:
             os.startfile(snapshot / "windows/Cost-Guard-Web.cmd")
@@ -280,7 +279,7 @@ def watch_and_detached_probe():
     with tempfile.TemporaryFile() as output:
         environment = os.environ.copy()
         environment["PYTHONIOENCODING"] = "utf-8"
-        child = subprocess.Popen([sys.executable, "cost-guard.py", "--watch"], cwd=ROOT,
+        child = subprocess.Popen([sys.executable, "src/entrypoints/cli.py", "--watch"], cwd=ROOT,
                                  stdin=subprocess.DEVNULL, stdout=output, stderr=output,
                                  env=environment, creationflags=subprocess.CREATE_NO_WINDOW)
         try:

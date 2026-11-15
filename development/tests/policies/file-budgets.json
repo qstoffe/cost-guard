@@ -1,22 +1,13 @@
 {
   "schemaVersion": 1,
   "limits": {
-    "rootEntrypoint": {
+    "entrypoint": {
       "designBytes": 4096,
       "hardBytes": 8192
     },
     "rootReadme": {
       "designBytes": 24576,
       "warningBytes": 32768
-    },
-    "versionHistory": {
-      "warningBytes": 32768,
-      "majorMaxBullets": 10,
-      "maxExplicitMajors": 5,
-      "summaryMaxBytes": 4096
-    },
-    "webUserGuide": {
-      "warningBytes": 65536
     },
     "defaultConfig": {
       "designBytes": 24576,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from datetime import date
 import json
 import os
 import re
@@ -25,15 +26,11 @@ else:
 REQUIRED_FILES = {
     ".gitignore",
     "LICENSE",
-    "cost-guard.py",
-    "cost-guard-cli.py",
-    "cost-guard-web.py",
+    "src/entrypoints/__init__.py",
+    "src/entrypoints/desktop.py",
+    "src/entrypoints/cli.py",
+    "src/entrypoints/web.py",
     "README.md",
-    "docs/usage-and-cost.md",
-    "docs/images/cost-guard-watch.png",
-    "docs/images/cost-guard-report.png",
-    "docs/images/cost-guard-token-mix.png",
-    "VERSION_HISTORY.md",
     "config/default-config.jsonc",
     "src/__init__.py",
     "src/bootstrap.py",
@@ -86,6 +83,7 @@ PUBLIC_LAUNCHERS = {
 }
 
 FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", ".vs", "data"}
+RETIRED_TOP_LEVEL = {"docs", "VERSION_HISTORY.md", "cost-guard.py", "cost-guard-cli.py", "cost-guard-web.py"}
 FORBIDDEN_NAMES = {"auth.json", ".env", "credentials.json"}
 TEXT_SUFFIXES = {".md", ".txt", ".json", ".jsonc", ".py", ".cmd", ".command", ".applescript", ".ps1", ".sh", ".toml", ".yaml", ".yml"}
 
@@ -140,21 +138,16 @@ def iter_package_files(root: Path) -> Iterable[Path]:
 
 def file_kind(root: Path, path: Path) -> str:
     rp = rel(root, path)
-    if rp == "cost-guard.py":
-        return "rootEntrypoint"
+    if rp.startswith("src/entrypoints/") and path.suffix == ".py":
+        return "entrypoint"
     if rp == "README.md":
         return "rootReadme"
-    if rp == "VERSION_HISTORY.md":
-        return "versionHistory"
-    if rp == "docs/web-beta.md":
-        return "webUserGuide"  # Product prose only; never agent instructions/references.
     if rp == "config/default-config.jsonc":
         return "defaultConfig"
     if path.suffix == ".py":
         return "pythonModule"
-    if rp.startswith("docs/images/") and path.suffix == ".png":
-        # Static documentation images are binary assets, not otherText.
-        # Retain the existing universal file cap; no text budget is raised.
+    if path.suffix in {".png", ".ico"}:
+        # Runtime binary assets retain the universal cap, not a prose budget.
         return "universalFile"
     return "otherText"
 
@@ -173,6 +166,12 @@ def check_required_layout(root: Path, results: Results) -> None:
     for name in sorted(FORBIDDEN_TOP_LEVEL):
         if (root / name).exists():
             results.fail("runtime artifact", f"forbidden packaged top-level path: {name}")
+
+    for name in sorted(RETIRED_TOP_LEVEL):
+        if (root / name).exists():
+            results.fail("retired layout", f"retired top-level path must not ship: {name}")
+    for path in root.glob("*.py"):
+        results.fail("retired layout", f"root Python entrypoints must live under src/: {path.name}")
 
     for path in root.rglob("*"):
         if path.name in FORBIDDEN_NAMES:
@@ -324,15 +323,27 @@ def check_version_consistency(root: Path, results: Results) -> None:
     if not re.fullmatch(r"\d+\.\d+", version):
         results.fail("version consistency", f"VERSION must have MAJOR.MINOR only: {version!r}")
         return
-    display = f"v{version}"
-    readme = (root / "README.md").read_text(encoding="utf-8")
-    history = (root / "VERSION_HISTORY.md").read_text(encoding="utf-8")
-    if display not in readme:
-        results.fail("version consistency", f"README.md does not mention {display}")
-    first_heading = next((line for line in history.splitlines() if line.startswith("## v")), "")
-    if not first_heading.startswith(f"## {display}"):
-        results.fail("version consistency", f"first version-history heading is not {display}: {first_heading!r}")
-    results.ok(f"version consistency checked for {display}")
+    tree = ast.parse((root / "src/version.py").read_text(encoding="utf-8"))
+    release_date = next((node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                         and any(isinstance(target, ast.Name) and target.id == "RELEASE_DATE" for target in node.targets)
+                         and isinstance(node.value, ast.Constant)), None)
+    try:
+        if not isinstance(release_date, str) or date.fromisoformat(release_date).isoformat() != release_date:
+            raise ValueError("not an ISO calendar date")
+    except ValueError:
+        results.fail("version consistency", "RELEASE_DATE must be a valid YYYY-MM-DD calendar date")
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    for entry in ("desktop", "cli"):
+        proc = subprocess.run([sys.executable, str(root / f"src/entrypoints/{entry}.py"), "--version"],
+                              cwd=root.parent, env=env, capture_output=True, text=True, timeout=20)
+        if proc.returncode != 0 or proc.stdout.strip() != f"Cost Guard v{version}":
+            results.fail("version consistency", f"{entry} --version does not match src/version.py")
+    code = "from src.version import DISPLAY_VERSION, RELEASE_DATE; print(DISPLAY_VERSION); print(RELEASE_DATE)"
+    proc = subprocess.run([sys.executable, "-c", code], cwd=root, env=env,
+                          capture_output=True, text=True, timeout=20)
+    if proc.returncode != 0 or proc.stdout.splitlines() != [f"v{version}", release_date]:
+        results.fail("version consistency", "runtime/UI display metadata does not match literal version/date")
+    results.ok(f"runtime version/date consistency checked for v{version}")
 
 
 @lru_cache(maxsize=None)
@@ -350,7 +361,7 @@ def imported_modules(path: Path, root: Path) -> frozenset[str]:
 
 
 def check_entrypoint(root: Path, results: Results) -> None:
-    path = root / "cost-guard.py"
+    path = root / "src/entrypoints/desktop.py"
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except Exception:
@@ -358,11 +369,11 @@ def check_entrypoint(root: Path, results: Results) -> None:
     # Only the thin guarded import/status seam is allowed, never business logic.
     definitions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
     if any(not isinstance(node, ast.FunctionDef) or node.name not in {"run", "start"} for node in definitions):
-        results.fail("entry-point architecture", "cost-guard.py may define only run/start failure-boundary functions")
+        results.fail("entry-point architecture", "desktop entry may define only run/start failure-boundary functions")
     imports = imported_modules(path, root)
     disallowed = sorted(m for m in imports if m not in {"src.product_entry", "src.runtime_errors", "pathlib", "sys"})
     if disallowed:
-        results.fail("entry-point architecture", f"cost-guard.py may import only the minimal process boundary/bootstrap, found {disallowed}")
+        results.fail("entry-point architecture", f"desktop entry may import only the minimal process boundary/bootstrap, found {disallowed}")
     if any(isinstance(node, ast.ImportFrom) and node.module in {"src.bootstrap", "src.product_entry"} for node in tree.body):
         results.fail("entry-point architecture", "bootstrap import must occur inside the guarded application callback")
     runtime = root / "src/runtime_errors.py"
@@ -455,64 +466,6 @@ def check_architecture_imports(root: Path, results: Results) -> None:
             if module == "development" or module.startswith("development."):
                 results.fail("runtime architecture", f"{rel(root, path)} imports development-only code {module}")
     results.ok("absolute/relative/nested architecture import boundaries checked")
-
-
-def check_history_bounds(root: Path, results: Results) -> None:
-    budgets = load_json(root / "development/tests/policies/file-budgets.json", results, "history budgets")
-    if not budgets:
-        return
-    spec = budgets["limits"]["versionHistory"]
-    lines = (root / "VERSION_HISTORY.md").read_text(encoding="utf-8").splitlines()
-    version = parse_version_constant(root, results)
-    if not version or not re.fullmatch(r"\d+\.\d+", version):
-        return
-    major, minor = map(int, version.split("."))
-    # Structure, not prose: mentions of versions/RCs in summary sentences are legal.
-    headings = []
-    for index, line in enumerate(lines):
-        match = re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", line)
-        if match:
-            headings.append((index, len(match[1]), match[2]))
-    releases = []
-    summaries = []
-    in_summary = False
-    attempt_pattern = re.compile(r"\b(?:RC[ -]*\d+|release[ -]candidate|implementation[ -]attempt|stabili[sz]ation)\b", re.I)
-    for position, (start, level, title) in enumerate(headings):
-        release = re.match(r"^v(\d+)\.(\d+)\b", title, re.I)
-        summary = title.startswith("Earlier ")
-        if attempt_pattern.search(title):
-            results.fail("version history", f"implementation/RC entry heading is not permanent product history: {title}")
-        if release:
-            releases.append((int(release[1]), int(release[2])))
-            if level != 2 or in_summary or not re.match(r"^v\d+\.\d+(?:\s|$)", title, re.I):
-                results.fail("version history", f"release entries must be MAJOR.MINOR H2 headings before summaries: {title}")
-        elif summary:
-            in_summary = True
-            summaries.append(title)
-            if level != 2:
-                results.fail("version history", f"summary must be an H2 section: {title}")
-        elif in_summary or level == 2:
-            results.fail("version history", f"unexpected history section; older detail belongs in a flat summary: {title}")
-        if release or summary:
-            # H2 section boundaries include subordinate headings so bullet limits cannot be bypassed.
-            end = next((index for index, depth, _ in headings[position + 1:] if depth <= 2), len(lines))
-            body = lines[start + 1:end]
-            bullets = [line for line in body if re.match(r"^\s*[-*+]\s+", line)]
-            if len(bullets) > spec["majorMaxBullets"]:
-                results.fail("version history", f"{title} has {len(bullets)} bullets > {spec['majorMaxBullets']}")
-            if summary and len("\n".join(body).encode("utf-8")) > spec["summaryMaxBytes"]:
-                results.fail("version history", f"{title} exceeds the bounded summary size ({spec['summaryMaxBytes']} bytes)")
-    expected = [(major, number) for number in range(minor, max(-1, minor - spec["maxExplicitMajors"]), -1)]
-    if releases != expected:
-        results.fail("version history", f"expanded entries must be the latest {len(expected)} releases in numeric descending order: {expected}; got {releases}")
-    expected_summaries = [f"Earlier v{major} history"] if expected[-1][1] > 0 else []
-    if (
-        summaries[:len(expected_summaries)] != expected_summaries
-        or len(summaries) != len(expected_summaries) + 1
-        or not re.fullmatch(r"Earlier versions(?: \([^)]+\))?", summaries[-1] if summaries else "")
-    ):
-        results.fail("version history", "older history must end with bounded generation/earlier-version summaries")
-    results.ok("version-history release structure and bounded summaries checked")
 
 
 def validate(root: Path) -> Results:

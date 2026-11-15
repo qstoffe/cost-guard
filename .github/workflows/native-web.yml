@@ -7,7 +7,7 @@ on:
   pull_request:
     branches: [main]
     paths: &native-paths
-      - '*cost-guard*.py'
+      - 'src/entrypoints/**'
       - 'windows/**'
       - 'macos/**'
       - 'config/**'

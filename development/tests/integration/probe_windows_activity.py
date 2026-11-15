@@ -47,7 +47,8 @@ def capture(code):
         script.write_text(source, encoding='utf-8-sig')
         # Slow BOTH discovery and startup, exercising the same production animator.
         (root / 'sitecustomize.py').write_text('import time; time.sleep(1.5)\n')
-        (root / 'cost-guard-web.py').write_text(f'''
+        (root / 'src/entrypoints').mkdir()
+        (root / 'src/entrypoints/web.py').write_text(f'''
 import time
 for stage in ('Checking safe configuration', 'Waiting for host readiness', 'Opening your default browser'):
     print('Cost Guard startup: ' + stage + ' (1.0s elapsed)', flush=True)

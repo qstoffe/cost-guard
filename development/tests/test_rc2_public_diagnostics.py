@@ -69,7 +69,7 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertNotIn("/b %costguard_shell%", text)
         self.assertIn("-Mode report", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
-        self.assertIn("cost-guard-cli.py", driver)
+        self.assertIn("src/entrypoints/cli.py", driver)
         self.assertIn("Find-CostGuardPython", driver)
         self.assertIn("python_discovery.ps1", driver)
 
@@ -120,7 +120,7 @@ class LauncherPlacementTests(unittest.TestCase):
 class MacOSLauncherTests(unittest.TestCase):
     def test_macos_launchers_exist_are_executable_and_relative(self) -> None:
         expected = {
-            "macos/Legacy/Cost-Guard.command": "cost-guard-cli.py",
+            "macos/Legacy/Cost-Guard.command": "src/entrypoints/cli.py",
             "macos/Legacy/Cost-Guard-Watch.command": "--watch",
             "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command": "/development/tools/collect_diagnostics.py",
         }
