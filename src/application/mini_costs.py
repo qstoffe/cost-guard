@@ -40,8 +40,8 @@ def mini_cost_tokens(values):
         models.append((label, f"{part['model']} — {part['effort']}"))
         amounts.append(cost)
         evidence.append(ready)
-    if values.get("mini_missing_agents", 0) and ("Sub Agents", "N/A — N/A") not in models:
-        models.append(("Sub Agents", "N/A — N/A"))
+    if values.get("mini_missing_agents", 0):
+        models.append(("Sub Agents", "Request usage unavailable"))
         amounts.append("N/A")
         evidence.append(False)
     # Share model/effort text between units. The browser only joins prepared
