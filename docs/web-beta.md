@@ -1282,7 +1282,7 @@ never add them together. Unknown duration/recurrence, inactive/expired/stale dat
 incompatible reference units, contradictory native data or no usable priced sample show **?**
 with the actual reason in help (including missing period history or ambiguous accounts).
 A positive same-window priced subtotal remains useful when other requests lack prices:
-Capacity help keeps a short partial pricing/attribution warning. Raw CCost and native
+canonical pricing/attribution warnings remain available outside Accounts Capacity help. Raw CCost and native
 fraction, not rounded display text, determine period and Monthly Capacity; partial pricing
 alone never suppresses those estimates. Proven native monthly windows have only their own Capacity line;
 eligibility follows normalized source-period facts, not the displayed label.
@@ -1290,8 +1290,9 @@ Shared CSS grid slots align each ordinal quota track and divider across peers on
 same responsive row. A native monthly quota gets one empty, aria-hidden, noninteractive
 comparison slot only beside a nonmonthly quota at that level. Missing quota tails are
 empty grid cells, not phantom labels/bars/accessibility nodes. Wrapped rows align independently;
-lone/single-column cards stay compact. Known↔unknown changes update permanent text/help
-targets without replacing bars; period and membership changes recompute the slots.
+lone/single-column cards stay compact. Known↔unknown changes update text and eligible help
+without replacing bars; native amounts remove the old help owner and popup, and period
+and membership changes recompute the slots.
 Accounts retains its full-size card contract; Watch and Mini share the compact
 presenter, not Accounts' detailed capacity/pace layout.
 The bar is followed by a tightly adjacent reset and applicable canonical
@@ -1307,14 +1308,19 @@ Mini and CLI pacing are unchanged. No routine rolling/fixed boilerplate appears.
 account/window/model costs include pre-Watch native-month history, never Today/30-day
 substitutions. Unavailable reference costs show **(?)**; confirmed empty windows
 show Used **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
-remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
-on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
-reset and concise partial/uncertain-attribution warnings without raw source/observation logs.
-Each Capacity label and value share one intrinsic help target with its normally
-formatted raw amount, not the rounded visible estimate or a calculation essay.
-Native Used/Remaining/reset facts belong to the separate usage summary, not Capacity.
-The native summary remains a help target even when Capacity is unknown.
-Account CCost Today label and number explain daily scope and real attribution notes.
+remain distinct. Accounts Today retains daily scope without an estimate suffix; its
+help is exactly **This account's reference cost for the local calendar day.**
+The native Used/Remaining summary and parenthesized period CCost have no hover,
+focus or touch help targets. Bars keep native accessible labels and values, and
+the separate reset-date help is unchanged.
+Source-qualified native/direct Capacity and Unlimited have no redundant help.
+Estimated Capacity and Monthly Capacity retain one intrinsic help target containing
+only **Capacity: ~amount** or **Monthly Capacity: ~amount**, in the current unit with
+normal raw-amount precision, not a calculation essay or pricing/attribution disclaimer.
+Unknown Capacity retains the actual supported reason, including
+**No verified active recurring quota window.** for an unstarted recurring period.
+Underlying completeness, attribution and independently displayed account warnings
+are unchanged. Help eligibility updates live without inert focus stops or stale popups.
 Copilot's verified reference Used and Remaining use one provider snapshot and sum to
 Capacity internally; independent OpenCode-observed period cost can differ.
 For percentage-only quotas Capacity/Remaining are extrapolations, not

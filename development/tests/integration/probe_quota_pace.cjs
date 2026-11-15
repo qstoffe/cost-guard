@@ -1,12 +1,12 @@
 // Actual shared-card DOM: local unit switches must not fetch or replace pace/card nodes.
 const assert = require('node:assert/strict');
 module.exports = async ({evaluate,navigate,checks}) => {
-  for (const route of ['accounts','watch']) {
+  for (const route of ['accounts']) {
     await navigate(route);
     await evaluate(`window.paceCard=document.querySelector('.watch-subscription');
       window.paceRows=[...paceCard.querySelector('.watch-primary-details').children].slice(1);
       window.paceBar=paceCard.querySelector('progress');window.paceBefore=JSON.stringify(liveValue.view.accounts);
-      window.paceFetches=probeFetches;window.paceFocus=paceCard.querySelector('.watch-quota-capacity span');paceFocus.focus();`);
+      window.paceFetches=probeFetches;window.paceFocus=paceCard.querySelector('.watch-primary-details .help-value');paceFocus.focus();`);
     for (const theme of ['classic','web']) for (const unit of ['credits','usd','credits']) {
       await evaluate(`document.documentElement.dataset.theme='${theme}';ReportView.setUnit('${unit}',document.getElementById('result'));`);
       const result = await evaluate(`({text:paceRows.map(n=>n.textContent),
@@ -23,5 +23,5 @@ module.exports = async ({evaluate,navigate,checks}) => {
   }
   await evaluate(`document.documentElement.dataset.theme='web';ReportView.setUnit('usd',document.getElementById('result'));`);
   await navigate('accounts');
-  checks.push('Reference pace on both routes/themes: local USD/Credits toggles retain card/pace/bar/focus/raw values with zero fetches');
+  checks.push('Accounts reference pace across themes: local USD/Credits toggles retain card/pace/bar/reset-focus/raw values with zero fetches');
 };

@@ -21,7 +21,7 @@ module.exports = (vm, context, seed, helpText) => {
       roots.forEach((root, index) => {
         assert.match(root.textContent, new RegExp('CCost Today: ' + (amount === '—' ? '0' : amount)));
         const card = root.querySelectorAll('h4')[0].parentNode;
-        assert.match(helpText(card.children[1].children[0]), new RegExp('Current local day: ' + amount));
+        assert.equal(helpText(card.children[1].children[0]),"This account's reference cost for the local calendar day.");
         assert.equal(card.querySelectorAll('h4')[0].querySelectorAll('a')[0], targets[index]);
       });
       assert.doesNotMatch(context.todayWatch.accounts.textContent,/CCost Today:/,'Watch has one page-level daily band, not large account cards');

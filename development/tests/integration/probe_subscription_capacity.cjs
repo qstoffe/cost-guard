@@ -1,6 +1,6 @@
 // Shared-card semantic slots and actual ordinal progress coordinates, not text-height guesses.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises');
-module.exports = async ({command, evaluate, until, sessionId, navigate, checks, layouts, output, baseline = false, browserZoom = 1}) => {
+module.exports = async ({command, evaluate, until, sessionId, navigate, checks, layouts, output, baseline = false, browserZoom = 1, skipMatrix = false}) => {
   await evaluate(`window.capacityOriginal=structuredClone(liveValue.view);window.capacityCase=structuredClone(capacityOriginal);
     window.capacityUpdate=AccountCards.View.prototype.update;
     AccountCards.View.prototype.update=function(){return capacityUpdate.call(this,capacityCase)};
@@ -53,11 +53,14 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
         spacers:[...card.querySelectorAll('.watch-capacity-spacer')].map(n=>({text:n.textContent,
           hidden:n.getAttribute('aria-hidden'),focus:n.tabIndex,children:n.children.length,help:n.classList.contains('help-value')})),
         progress:[...card.querySelectorAll('progress')].map(p=>({value:p.value,label:p.getAttribute('aria-label'),text:p.getAttribute('aria-valuetext')})),
-        lines:[...card.querySelectorAll('.watch-quota-capacity,.watch-monthly-capacity')].map(n=>n.textContent)};
+         summaries:[...card.querySelectorAll('.watch-quota-summary')].map(n=>({
+           help:n.querySelectorAll('.help-value,[tabindex],[aria-describedby],[title]').length})),
+         lines:[...card.querySelectorAll('.watch-quota-capacity,.watch-monthly-capacity')].map(n=>n.textContent),
+         help:[...card.querySelectorAll('.watch-quota-capacity,.watch-monthly-capacity')].map(n=>Boolean(n.querySelector('.help-value')))};
     }))()`);
   };
   const help = async (all = false) => {
-    const selector='#result .watch-quota-summary > .help-value:first-child,#result .watch-quota-capacity .help-value,#result .watch-monthly-capacity .help-value';
+     const selector='#result .watch-quota-capacity .help-value,#result .watch-monthly-capacity .help-value';
     const count = await evaluate(`document.querySelectorAll('${selector}').length`), result=[];
     const indices=all?Array.from({length:count},(_,index)=>index):
       [...new Set([0,1,2,count-3,count-2,count-1])].filter(index=>index>=0&&index<count);
@@ -66,15 +69,15 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
       await until(`document.querySelector('#context-help')?.matches(':popover-open')`);
       const {text,kind}=await evaluate(`({text:document.querySelector('#context-help').textContent,kind:document.activeElement.parentElement.className})`);
       assert.doesNotMatch(text,/rolling ·|account scope|Native Used:[\s\S]*Capacity:/);
-      if(kind.includes('summary'))assert.doesNotMatch(text,/Capacity|CCost|÷|pricing/);
-      else assert.doesNotMatch(text,/Native Used:|Native Remaining:/);
+       assert.doesNotMatch(text,/Native Used:|Native Remaining:|Partial pricing \/ attribution\.|Account attribution uncertain\./);
+       if(/^(Monthly )?Capacity: ~/.test(text))assert.doesNotMatch(text,/[\r\n]/);
       result.push(text);
       await evaluate(`document.activeElement.blur()`);
     }
     return result;
   };
   const scenarios=baseline?['mixed']:['mixed','single-monthly','all-monthly','period-change','unknown','recovered','unknown-again','reorder','missing','unlimited','stale'];
-  for(const width of baseline?[1920]:[360,800,1280,1920]) for(const zoom of baseline?[1]:[1,1.25]) for(const theme of baseline?['light']:['classic','classic-dark','light','dark']) {
+  for(const width of skipMatrix?[]:baseline?[1920]:[360,800,1280,1920]) for(const zoom of baseline?[1]:[1,1.25]) for(const theme of baseline?['light']:['classic','classic-dark','light','dark']) {
     // Device emulation dimensions are pre-page-zoom; keep the actual CSS viewport
     // at the requested matrix width when the disposable profile uses native zoom.
     await command('Emulation.setDeviceMetricsOverride',{width:Math.round(width*browserZoom),height:1400,deviceScaleFactor:1,mobile:false},sessionId);
@@ -85,7 +88,7 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
       await navigate('accounts');await evaluate(`current.accounts.update(capacityCase);window.scrollTo(0,0)`);
       const accounts=await fingerprint();
       const expected=await evaluate(`capacityCase.accounts.accounts.map(item=>[item.primary,...item.secondary].map(slot=>({
-        monthly:slot.quota.ccost_reference.monthly_applicable,unlimited:slot.quota.unlimited,
+         monthly:slot.quota.ccost_reference.monthly_applicable,unlimited:slot.quota.unlimited,native:slot.quota.ccost_reference.basis==='native',
         unknown:capacityCase.quota_stale||slot.quota.ccost_reference.capacity==null})))`);
       if(width===1920&&zoom===1&&theme==='light'&&scenario==='mixed'&&output){
         const image=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true},sessionId);
@@ -109,10 +112,12 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
         card.dividers.forEach((y,level)=>{
           for(const peer of peers.filter(peer=>peer.dividers[level]!=null))assert.ok(Math.abs(y-peer.dividers[level])<1,'divider slots align');
         });
-        assert.equal(card.lines.length,expected[index].reduce((sum,slot)=>sum+1+Number(slot.monthly),0));
+         assert.equal(card.lines.length,expected[index].reduce((sum,slot)=>sum+1+Number(slot.monthly),0));
+         assert.ok(card.summaries.every(summary=>summary.help===0),'no usage or period-cost help/focus targets at any ordinal');
         assert.ok(card.lines.every(line=>!/: (N\/A|—|\s*$|~\?)/.test(line)),'unknown values are question marks, not suppressed');
         let line=0;
-        for(const slot of expected[index]){
+         for(const slot of expected[index]){
+           assert.equal(card.help[line],!slot.unlimited && (slot.unknown || !slot.native),'only estimates and unknown ordinary capacities have help');
           if(slot.unknown)assert.ok(card.lines[line].endsWith(': '+(slot.unlimited?'Unlimited':'?')));
           if(slot.monthly&&slot.unknown)assert.ok(card.lines[line+1].endsWith(': ?'));
           line+=1+Number(slot.monthly);
@@ -122,13 +127,8 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
       const accountHelp=baseline?[]:await help(allHelp);
       if(!baseline){
         await navigate('watch');await evaluate(`current.watch.update({state:'running',view:capacityCase})`);
-        const watch=await fingerprint(),strip=values=>values.map(({top,height,tracks,dividers,...facts})=>facts);
-        assert.deepEqual(strip(watch),strip(accounts),'same shared text, slots, progress ARIA and state on both routes');
-        watch.forEach(card=>card.tracks.forEach((track,level)=>{
-          for(const peer of watch.filter(peer=>Math.abs(peer.top-card.top)<1&&peer.tracks[level]))
-            assert.ok(Math.abs(track.y-peer.tracks[level].y)<1,'Full Watch ordinal tracks align');
-        }));
-        assert.deepEqual(await help(allHelp),accountHelp,'same Usage/Capacity/Monthly explanations');
+         assert.deepEqual(await fingerprint(),[],'Watch remains compact, not detailed Accounts cards');
+         assert.equal(await evaluate(`current.watch.accounts.querySelectorAll('li').length`),expected.length);
         assert.equal(await evaluate(`document.documentElement.scrollWidth>innerWidth`),false,'no horizontal overflow');
       }
       const viewport=await evaluate(`({width:innerWidth,dpr:devicePixelRatio,scale:visualViewport.scale})`);
@@ -143,16 +143,27 @@ module.exports = async ({command, evaluate, until, sessionId, navigate, checks, 
       window.capacityCard=document.querySelectorAll('.watch-subscription')[1];
       window.capacityBar=capacityCard.querySelector('progress');window.capacityHelp=capacityCard.querySelector('.watch-quota-capacity span');
       capacityHelp.focus();`);
-    for(const scenario of ['unknown','recovered','unknown-again','period-change','mixed']){
+     for(const scenario of ['unknown','recovered','unknown-again']){
       await evaluate(`capacityBuild('${scenario}');current.accounts.update(capacityCase)`);await settle();
       assert.deepEqual(await evaluate(`({bar:capacityBar===capacityCard.querySelector('progress'),focus:document.activeElement===capacityHelp,
         help:document.querySelector('#context-help').matches(':popover-open')})`),{bar:true,focus:true,help:true});
-    }
+     }
+     // Unknown -> ratio -> native removes the old owner and popup, then unknown
+     // restores a fresh owner without replacing the progress bar.
+     await evaluate(`capacityBuild('period-change');current.accounts.update(capacityCase)`);await settle();
+     assert.deepEqual(await evaluate(`({bar:capacityBar===capacityCard.querySelector('progress'),
+       connected:capacityHelp.isConnected,help:capacityCard.querySelector(':scope > .watch-quota-capacity .help-value'),
+       open:document.querySelector('#context-help').matches(':popover-open'),aria:capacityHelp.getAttribute('aria-describedby')})`),
+       {bar:true,connected:false,help:null,open:false,aria:null});
+     await evaluate(`capacityBuild('unknown');current.accounts.update(capacityCase);
+       capacityCard.querySelector('.watch-quota-capacity .help-value').focus()`);
+     await until(`document.querySelector('#context-help').matches(':popover-open')`);
   }
   await evaluate(`document.documentElement.style.zoom='';document.documentElement.dataset.theme='web'`);
   await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},sessionId);
   await navigate('accounts');await evaluate(`AccountCards.View.prototype.update=capacityUpdate;delete window.capacityUpdate;
     current.accounts.update(capacityOriginal)`);await settle();
-  checks.push(baseline?'Before-change mixed known/unknown screenshot and ordinal DOM coordinates captured':
-    'Permanent unknown Capacity rows, 0–4 secondary quotas, actual ordinal progress/divider coordinates and route parity; mixed/single/all-monthly/period/value/order/missing/unlimited/stale transitions at 360/800/1280/1920, 100/125% CSS zoom, Classic/Web light/dark; stable progress/focus/open help');
+  checks.push(skipMatrix?'Post-matrix Capacity owner lifecycle: connected progress, native popup/ARIA/focus owner removal and unknown recovery':
+    baseline?'Before-change mixed known/unknown screenshot and ordinal DOM coordinates captured':
+     'Accounts-only help, permanent unknown Capacity rows, 0–4 secondary quotas, ordinal progress/divider coordinates and compact Watch isolation; mixed/single/all-monthly/period/value/order/missing/unlimited/stale transitions at 360/800/1280/1920, 100/125% CSS zoom, Classic/Web light/dark; stable progress and eligible open help, native owner removal');
 };

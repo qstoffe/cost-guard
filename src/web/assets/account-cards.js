@@ -26,21 +26,42 @@ const AccountCards = (() => {
     const quota = () => value().quota, view = () => ReportView.quotaView(quota(), value());
     const amount = monthly => !monthly && quota().unlimited ? 'Unlimited' :
       current() && ReportView.capacityKnown(quota(), monthly) ? display(quota(), monthly ? 'monthly_capacity' : 'ccost_capacity') : '?';
-    const help = monthly => current() ? ReportView.quotaCapacityHelp(quota(), monthly) :
-      'Reference CCost unavailable for a stale or unavailable observation.';
+    const help = monthly => {
+      if (!current()) return 'Reference CCost unavailable for a stale or unavailable observation.';
+      if (quota().unlimited && !monthly) return '';
+      if (ReportView.capacityKnown(quota(), monthly)) {
+        // Basis is source-qualified by the projection, not inferred from provider or text.
+        if (!monthly && quota().ccost_reference.basis === 'native') return '';
+        if (monthly || quota().ccost_reference.basis === 'ratio')
+          return ReportView.quotaCapacityHelp(quota(), monthly).split('\n')[0];
+      }
+      return ReportView.quotaCapacityHelp(quota(), monthly);
+    };
+    function capacityLine(monthly) {
+      const line = el('div', undefined, monthly ? 'watch-monthly-capacity metric-value' : 'watch-quota-capacity metric-value');
+      const text = () => {
+        const label = monthly ? 'Monthly Capacity' : display(quota(), 'capacity_label');
+        return (label === 'N/A' ? 'Capacity' : label) + ': ' + amount(monthly);
+      };
+      let available;
+      ReportView.bind(line, () => {
+        const needed = Boolean(help(monthly));
+        if (available === needed) return;
+        // Replace only the help owner when eligibility changes. Detached owners
+        // cannot leave a popup, ARIA reference or inert keyboard stop behind.
+        if (line.firstChild) ContextHelp.dismiss(line.firstChild);
+        const value = el('span', text);
+        if (needed) ContextHelp.value(value, () => help(monthly));
+        line.replaceChildren(value);
+        available = needed;
+      });
+      return line;
+    }
     const summary = () => quota().unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
-    const label = el('div'); label.append(ContextHelp.value(el('span', () => `${ReportView.quotaLabel(quota())} · ${summary()}`),
-      () => ReportView.quotaUsageHelp(quota()) + (current() ? '' : '\nQuota observation is stale or unavailable.')));
+    const label = el('div'); label.append(el('span', () => `${ReportView.quotaLabel(quota())} · ${summary()}`));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
-    label.append(ReportView.estimateValue(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'),
-      quota, () => 'ccost_' + view().mode));
-    const capacity = el('div', undefined, 'watch-quota-capacity metric-value');
-    capacity.append(ContextHelp.value(el('span', () => {
-      const label = display(quota(), 'capacity_label');
-      return (label === 'N/A' ? 'Capacity' : label) + ': ' + amount(false);
-    }), () => help(false)));
-    const monthly = el('div', undefined, 'watch-monthly-capacity metric-value');
-    monthly.append(ContextHelp.value(el('span', () => 'Monthly Capacity: ' + amount(true)), () => help(true)));
+    label.append(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'));
+    const capacity = capacityLine(false), monthly = capacityLine(true);
     const spacer = el('div', undefined, 'watch-capacity-spacer'); spacer.setAttribute('aria-hidden', 'true');
     if (quota().quota_display?.used.note || quota().quota_display?.remaining.note)
       label.append(el('span', () => view().note ? ' · ' + view().note : '', 'warning'));
@@ -129,7 +150,7 @@ const AccountCards = (() => {
       cost.append(ContextHelp.value(el('span', () => {
         const today = item().ccost_scopes.find(scope => scope.name === 'today');
         return `CCost Today: ${display(today?.cost, 'account_ccost')}`;
-      }), () => 'This account’s reference cost in your configured local day.' + (item().today_note ? '\n' + item().today_note : '')));
+      }), "This account's reference cost for the local calendar day."));
       const primary = el('div', undefined, 'watch-primary-details');
       quotaDetails(primary, () => item().primary);
       const track = quotaTrack(() => item().primary, () => this.capacityCurrent);
