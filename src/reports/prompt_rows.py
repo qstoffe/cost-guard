@@ -19,6 +19,7 @@ from src.domain.model_identity import catalog_display_name
 from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection
+from .model_details import has_model_details, linked_agents
 from .prompt_costs import prompt_cost_parts
 from .semantics import input_context_above_price_threshold, prompt_has_additional_model
 
@@ -194,9 +195,8 @@ class PromptRowProjector:
             subagent_estimated=not subagent.complete or any(
                 agent.state not in {"usage-observed", "not-executed"} for agent in record.agent_coverage),
             has_additional_model=prompt_has_additional_model(record),
-            linked_agent_count=len(set(record.linked_session_ids) |
-                {entry.session_id for entry in record.entries[record.root_entry_count:]
-                  if entry.session_id != record.session_id}),
+            linked_agent_count=len(linked_agents(record)),
+            has_model_details=has_model_details(record.entries, len(linked_agents(record))),
             agent_coverage=record.agent_coverage,
             cost_parts=prompt_cost_parts(record, catalog),
             recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'

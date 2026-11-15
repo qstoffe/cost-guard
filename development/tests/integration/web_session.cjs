@@ -6,6 +6,7 @@ class Node {
   set textContent(value) { this.text = String(value); this.replaceChildren(); }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   get parentNode() { return this.parent; }
+  get firstChild() { return this.children[0]; }
   get isConnected() { return Boolean(this.parent); }
   append(...children) { for (const child of children) { child.remove(); this.children.push(child); child.parent = this; } }
   replaceChildren(...children) { for (const child of this.children) child.parent = null; this.children = []; this.append(...children); }
@@ -456,7 +457,7 @@ async function main() {
      assert.equal(durationHeader.th.children[0].tag,'button','Duration sorting remains present');
      assert.ok(durationHeader.th.children[0].events.focus,'Duration header help remains present');
      document.activeElement=link;
-     const multiple={...known,model:'Main Model',multiple_models:true,contributor_models:['alpha/model','beta/model'],contributor_models_complete:false,
+      const multiple={...known,model:'Main Model',multiple_models:true,has_model_details:true,contributor_models:['alpha/model','beta/model'],contributor_models_complete:false,
       display:{ccost:'1.25?',duration_ms:'3s',model_help:'alpha/model\nbeta/model\nObserved so far; contributing model coverage may be incomplete.'},prompt_count:2};
      catalog.update({...catalogData,total:1,view:{session_usage:[multiple]}});
      assert.equal(liveRow.children[2].textContent, 'Main Model*');

@@ -68,6 +68,11 @@ def retain_pending_metrics(row, previous):
     if row.model_pending and row.model == "N/A":
         for name in ("model", "multiple_models", "contributor_models", "main_models", "subagent_models"):
             fields[name] = getattr(previous, name)
+    if not row.contributor_models_complete and previous.has_model_details:
+        fields["has_model_details"] = True
+        if row.linked_agent_count < previous.linked_agent_count:
+            fields["linked_agent_count"] = previous.linked_agent_count
+            fields["subagent_models"] = previous.subagent_models
     if (row.effort_pending or not row.effort_qualified) and row.effort_key is None:
         for name in ("effort", "effort_key", "effort_contributors", "effort_details_complete"):
             fields[name] = getattr(previous, name)

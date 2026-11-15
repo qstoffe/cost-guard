@@ -33,14 +33,14 @@ def shift_times(value, offset):
             shift_times(child, offset)
 
 
-def native_tree(child_model=SOL, *, multiple=False, older_astra=False):
+def native_tree(child_model=SOL, *, multiple=False, older_astra=False, child_effort="max", day_offset=3 * DAY_MS):
     with incident_source() as (source, server):
         root = server.messages['ses_current']
         child = server.messages['ses_current_child']
         for message in (*root, *child):
             if message['type'] == 'assistant':
                 message['model'].update(id=SOL if message in root else child_model,
-                                        variant='high' if message in root else 'max')
+                                        variant='high' if message in root else child_effort)
         if multiple:
             child[1]['time']['completed'] = 3500
             child.extend((assistant('ca-repeat', 3510, 3550, model=child_model),
@@ -49,7 +49,7 @@ def native_tree(child_model=SOL, *, multiple=False, older_astra=False):
                 if message['type'] == 'assistant':
                     message['model']['variant'] = 'max'
             child[2]['finish'] = 'tool-calls'
-        shift_times(server.messages, 3 * DAY_MS)
+        shift_times(server.messages, day_offset)
         if older_astra:
             # Available child history outside the current initiating prompt.
             old = assistant('old-astra', 3400, 3800, model=ASTRA)

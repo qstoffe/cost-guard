@@ -241,6 +241,24 @@ def main():
                 with host.live.details.lock:
                     if "root" in host.live.details.histories:
                         host.live.details.histories["root"]["due"] = 0
+            elif command.startswith("model-details-"):
+                from development.tests.fixtures.model_details import scoped_snapshot
+                with host.live.observation_lock:
+                    if command == "model-details-source":
+                        cases = ("one", "child-same", "child-effort", "child-model", "main-models",
+                                 "main-efforts", "separate-efforts", "running-child", "unknown-main")
+                        source.snapshots = {f"details-{case}": scoped_snapshot(case, f"details-{case}") for case in cases}
+                        from development.tests.fixtures.model_subagent_history import native_tree
+                        for name, effort in (("native-same", "high"), ("native-effort", "max")):
+                            source.snapshots[f"details-{name}"] = scoped_snapshot(name, f"details-{name}",
+                                native_tree(child_effort=effort, day_offset=0))
+                    else:
+                        case = command.removeprefix("model-details-")
+                        source.snapshots["details-child-same"] = scoped_snapshot(case, "details-child-same")
+                    host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                    with host.live.details.lock:
+                        for history in host.live.details.histories.values():
+                            history["due"] = 0
             elif command in ("models-source", "models-update"):
                 from development.tests.fixtures.sessions_models import models_source
                 models_source(source, updated=command == "models-update")

@@ -6,6 +6,7 @@ from src.analysis.valuation import unique_usage
 from src.domain.effort import EffortEvidence
 from src.domain.model_identity import catalog_display_name
 from src.domain.session_tree import root_by_session
+from .model_details import executed as _executed, model_identity as _identity, has_model_details, linked_agents, selected_effort
 
 LIMIT = 64
 
@@ -16,19 +17,6 @@ class SessionModel:
     model: str
     catalog_model: str = ""
     efforts: tuple[EffortEvidence, ...] = ()
-
-
-def _identity(entry):
-    provider, model = entry.model.provider, entry.model.recorded_model
-    if (provider and model and len(provider) <= 128 and len(f"{provider}/{model}") <= 256
-            and provider.isprintable() and model.isprintable() and model != "N/A"):
-        return provider, model
-    return None
-
-
-def _executed(entry):
-    # A failed zero-usage selection alone does not establish a dispatched model.
-    return not entry.error_name or entry.tokens.total > 0 or entry.reported_cost > 0
 
 
 def model_fields(item, catalog):
@@ -42,6 +30,10 @@ def model_fields(item, catalog):
     ancestry = root_by_session(snapshot.sessions) if snapshot is not None else {}
     linked = {sid for prompt in item.bundle.prompts for sid in prompt.linked_session_ids}
     entries = sorted(unique_usage(item.bundle.trace_entries), key=lambda e: (e.completed_at_ms, e.sort_order))
+    scoped = [entry for entry in entries if entry.session_id == root
+              or ancestry.get(entry.session_id) == root or entry.session_id in linked]
+    agents = {sid for prompt in item.bundle.prompts for sid in linked_agents(prompt)}
+    agents.update(entry.session_id for entry in scoped if entry.session_id != root and _executed(entry))
     groups = {"main": {}, "subagent": {}}
     identities, accepted = set(), set()
     complete = bool(snapshot is not None and snapshot.complete
@@ -107,6 +99,7 @@ def model_fields(item, catalog):
             for (provider, model), (ref, efforts) in groups[role].items())
 
     return dict(model=model, multiple_models=len(identities) > 1,
+        has_model_details=has_model_details(scoped, len(agents)), linked_agent_count=len(agents),
         contributor_models=tuple(sorted(f"{provider}/{model}" for provider, model in accepted)),
         contributor_models_complete=complete, main_models=parts("main"), subagent_models=parts("subagent"),
         model_pending=latest is None and any(p.in_progress for p in prompts))
@@ -140,4 +133,8 @@ def valid_models(values):
             union.add(identity)
     return (tuple(sorted(union)) == values["contributor_models"]
         and values["multiple_models"] == (len(union) > 1)
+        and type(values["linked_agent_count"]) is int and values["linked_agent_count"] >= 0
+        and values["has_model_details"] == bool(values["linked_agent_count"] or len(union) > 1 or len({
+            selected_effort(e.selected) for role in ("main_models", "subagent_models")
+            for part in values[role] for e in part.efforts if selected_effort(e.selected) is not None}) > 1)
         and (values["model"] == "N/A" or bool(values["main_models"])))

@@ -460,7 +460,7 @@ const SessionsCatalog = (() => {
           'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
-        const texts = [(value.model || 'N/A') + (value.multiple_models && value.model && value.model !== 'N/A' ? '*' : ''),
+        const texts = [(value.model || 'N/A') + (value.has_model_details ? '*' : ''),
           () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
           () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];
         row.metrics.forEach((node, index) => {

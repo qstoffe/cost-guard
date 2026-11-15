@@ -15,9 +15,18 @@ async function main() {
   let serverError = ''; server.stderr.on('data', bytes => serverError += bytes.toString());
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return JSON.parse((await lines.next()).value);};
-  const child = spawn(browser, ['--headless=new', ...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+   let extensionArgs = ['--disable-extensions'];
+   if (mode === '--model-details') {
+     const extension = path.join(profile, 'zoom-extension');
+     await fs.mkdir(extension);
+     await fs.writeFile(path.join(extension, 'manifest.json'), JSON.stringify({manifest_version:3,
+       name:'Owned synthetic model details zoom',version:'1.0',permissions:['tabs'],background:{service_worker:'worker.js'}}));
+     await fs.writeFile(path.join(extension, 'worker.js'), 'chrome.runtime.onInstalled.addListener(() => {});');
+     extensionArgs = ['--disable-extensions-except='+extension, '--load-extension='+extension];
+   }
+   const child = spawn(browser, ['--headless=new', ...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
     '--screen-info={1920x1080}',
-    '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+     '--no-first-run', '--no-default-browser-check', ...extensionArgs,
     '--disable-background-networking', '--remote-debugging-pipe', '--user-data-dir='+profile, 'about:blank'],
     {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
   const browserExit = new Promise(resolve => child.once('exit',resolve));
@@ -72,7 +81,30 @@ async function main() {
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
-         await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+          if (mode === '--model-details') {
+            const targets = await command('Target.getTargets');
+            const worker = targets.targetInfos.find(target=>target.type==='service_worker' && target.url.endsWith('/worker.js'));
+            assert.ok(worker,'Owned zoom extension service worker must exist');
+            const {sessionId:workerSession} = await command('Target.attachToTarget',{targetId:worker.targetId,flatten:true});
+            const zoom = async factor => {
+              const result = await command('Runtime.evaluate',{expression:`(async()=>{
+                const tabs=await chrome.tabs.query({});
+                const tab=tabs.find(tab=>tab.url?.startsWith(${JSON.stringify(new URL(launch.url).origin)}));
+                if(!tab)throw new Error('owned_zoom_tab_missing');
+                await chrome.tabs.setZoom(tab.id,${factor});return chrome.tabs.getZoom(tab.id);
+              })()`,awaitPromise:true,returnByValue:true},workerSession);
+              assert.equal(result.exceptionDetails,undefined,JSON.stringify(result.exceptionDetails));
+              assert.equal(result.result.value,factor);
+            };
+            const details = await require('../fixtures/model_details_browser.cjs')({evaluate,until,fixture,zoom,
+              command:(method,params)=>command(method,params,sessionId)});
+            checks.push(...details.checks); layouts.push(...details.layouts);
+            assert.deepEqual(errors,[]);
+            evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+              personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify(evidence));return;
+          }
            if (mode === '--calm-ui') {
             assert.equal(await evaluate('document.hidden'),false,'foreground recovery case requires a visible headless tab');
             await require('../fixtures/calm_ui_browser.cjs')({evaluate, until, fixture, checks, layouts,

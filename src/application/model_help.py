@@ -49,6 +49,8 @@ def session_model_help(item):
             sections.append(heading + "\n" + "\n".join(lines))
     if not item.main_models:
         sections.insert(0, "No attributable executed main-thread model is available.")
+    if item.linked_agent_count and not item.subagent_models:
+        sections.append("Sub-agents used in session\n• Linked subagent work; model and effort not yet reported.")
     if omitted:
         sections.append("Additional model details omitted at the bounded help limit.")
     if not item.contributor_models_complete or omitted:
