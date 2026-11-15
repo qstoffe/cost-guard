@@ -34,6 +34,7 @@ on:
       - 'development/tests/test_web_lifecycle.py'
       - 'development/tests/test_web_browser_links.py'
       - 'development/tests/fixtures/**'
+      - '!development/tests/fixtures/calm_ui_browser.cjs'
       - 'development/tests/integration/ci_native_web.py'
       - 'development/tests/integration/probe_windows_web.py'
       - '.github/workflows/*.yml'

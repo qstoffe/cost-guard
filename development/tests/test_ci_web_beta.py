@@ -56,6 +56,8 @@ class CiEvidenceTests(unittest.TestCase):
                 ('windows/Legacy/Cost-Guard.cmd', True),
                 ('development/tests/test_windows_web.py', True),
                 ('development/tests/fixtures/web_reports.py', True),
+                ('development/tests/fixtures/windows_shell.py', True),
+                ('development/tests/fixtures/package_copy.py', True),
                 ('development/tests/integration/ci_native_web.py', True),
                 ('development/tools/run_tests.py', True),
                 ('.github/workflows/native-web.yml', True),
@@ -63,6 +65,7 @@ class CiEvidenceTests(unittest.TestCase):
                 ('src/application/benchmark.py', False), ('src/web/assets/mini.js', False),
                 ('src/web/assets/app.css', False), ('src/web/settings.py', False),
                 ('development/tests/test_ai_stats_rates.py', False),
+                ('development/tests/fixtures/calm_ui_browser.cjs', False),
                 ('development/journal/test-health.md', False)):
             with self.subTest(path=path):
                 selected = False
