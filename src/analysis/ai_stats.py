@@ -9,6 +9,7 @@ from .ai_stats_rates import HourlyRates, hourly_rates
 from .ai_stats_responses import response_rows
 from .ai_stats_buckets import model_key
 from .ai_stats_models import model_costs, model_time, observed_tokens, standings
+from .ai_stats_subagents import child_requests
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
 DAY_MS = 24 * HOUR_MS
@@ -32,6 +33,8 @@ class StatsRoot:
     source_complete: bool = True
     responses: tuple = ()
     activity: tuple = ()
+    session_parents: tuple = ()
+    source_instance: str = ''
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +227,7 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
     owner = {entry.session_id: root for root in roots for entry in root.entries}
     values, guessed = _request_costs(entries, valuation)
     cost_podium, average_podium = model_costs(roots, entries, values, key)
+    children, child_values, ancestry_unknown = child_requests(roots, entries, values)
     reasons = tuple(code for code, present in (
         ('source-incomplete', not source_complete), ('unpriced-requests', guessed),
         ('missing-token-usage', any(not USAGE_FIELDS <= set(e.tokens.known_fields) for e in entries)),
@@ -237,6 +241,7 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
             costs[root.session_id] = Decimal('.003')
     total = sum(costs.values(), Decimal(0))
     cost_status = 'partial' if reasons else 'complete'
+    child_reasons = reasons + (('unknown-subagent-ancestry',) if ancestry_unknown else ())
     rate = total * HOUR_MS / duration if duration else Decimal(0)
     average = total / len(costs) if costs else Decimal(0)
     expensive = min(costs, key=lambda sid: (-costs[sid], sid)) if costs else None
@@ -247,7 +252,9 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
          Stat('average-cost', average, cost_status, reasons=reasons, podium=average_podium),
          Stat('expensive-session', costs[expensive] if root else Decimal(0), cost_status,
               root.session_id if root else None, root.title if root else '',
-              reasons=reasons))
+              reasons=reasons),
+         Stat('subagent-cost', sum(child_values, Decimal(0)), 'partial' if child_reasons else 'complete',
+              reasons=child_reasons, podium=standings(children, child_values, key)))
 
 
 def _token_metrics(roots, entries, complete, start, now, key):

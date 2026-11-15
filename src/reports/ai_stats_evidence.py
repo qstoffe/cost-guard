@@ -24,6 +24,7 @@ def payload(bundle, reference, snapshot, config, *, now=None):
     if now is None:
         now = max((e.completed_at_ms for e in bundle.trace_entries), default=0)
     return dict(usage=encode(bundle, reference), intervals=intervals,
+                session_parents=[(s.session_id, s.parent_session_id) for s in snapshot.sessions],
                 responses=encode_responses(bundle, snapshot, now),
                 complete=snapshot.complete,
                 matched=encode_run(project_run(snapshot, bundle, reference, config)),
@@ -43,12 +44,19 @@ def decoded(value, root, source=None, *, now=None):
                 or type(running) is not bool):
             raise ValueError('invalid_timing')
     matched = decode_run(value['matched'])
+    parents = value.get('session_parents', [])
+    if (not isinstance(parents, (list, tuple)) or any(
+            not isinstance(pair, (list, tuple)) or len(pair) != 2 or not isinstance(pair[0], str)
+            or pair[1] is not None and not isinstance(pair[1], str) for pair in parents)):
+        raise ValueError('invalid_ancestry')
     if matched is not None and matched.session_id != root.session_id:
         raise ValueError('invalid_match_root')
     return StatsRoot(root.session_id, root.title, tuple(e for e, _p, _c in facts),
                      tuple(tuple(pair) for pair in intervals), value['pending'], value['complete'],
                       decode_responses(value['responses'], facts, now),
-                      decode_activity(value['responses'], facts)), facts, matched
+                      decode_activity(value['responses'], facts),
+                      tuple(tuple(pair) for pair in parents),
+                      getattr(getattr(root, 'provenance', None), 'source_instance', '')), facts, matched
 
 
 def coverage_key(root):

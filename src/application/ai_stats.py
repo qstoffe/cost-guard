@@ -7,6 +7,7 @@ from src.numbers import ccost_amount, ccost_unit
 COPY = {
     'hourly-rate': ('Budget build. Dangerous potential.', 'Standard-issue silicon. Surprisingly functional.', 'Premium silicon has expensive tastes.'),
     'total-cost': ('The token furnace is on vacation.', 'The ledger has a side quest.', 'The token furnace demands tribute.'),
+    'subagent-cost': ('The helpers are on a snack break.', 'The boss delegated. The bots sent the bill.', 'The silicon helpers have expensive taste.'),
     'working-time': ('The silicon crew took a nap.', 'A short shift for the silicon crew.', 'Silicon overtime. No coffee required.'),
     'average-cost': ('Tiny adventures. Tiny tab.', 'A modest toll at the gate.', 'Every conversation has a cover charge.'),
     'expensive-session': ('A boss fight on a budget.', 'One quest kept the receipt.', 'That boss fight came with a receipt.'),
@@ -16,6 +17,7 @@ COPY = {
     'parallel': ('One lane. Very civilized.', 'A small party of silicon.', 'A miniature parallel universe.'),
 }
 THRESHOLDS = {'hourly-rate': (Decimal('.3'), 3), 'total-cost': (Decimal('.1'), 20),
+    'subagent-cost': (Decimal('.001'), 20),
     'average-cost': (Decimal('.1'), 2), 'expensive-session': (Decimal('.1'), 10),
     'working-time': (1, 8 * 3_600_000), 'longest-session': (600_000, 3_600_000),
     'busiest-day': (600_000, 8 * 3_600_000), 'streak': (1, 7), 'parallel': (2, 3)}
@@ -142,7 +144,7 @@ def stat_tokens(values):
         line = COPY[metric][0 if value < low else 2 if value >= high else 1]
         if metric == 'parallel' and not value:
             line = 'The parallel universe is on vacation.'
-    if metric in {'hourly-rate', 'total-cost', 'average-cost', 'expensive-session'}:
+    if metric in {'hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session'}:
         text = ccost_amount(value) + ('' if ccost_unit() == 'usd' else ' CCost')
         if metric == 'hourly-rate':
             text += '/h'

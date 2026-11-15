@@ -21,7 +21,7 @@ module.exports = async ({evaluate,checks}) => {
     const tokenCards=cards.filter(c=>['total-tokens','token-rate'].includes(c.dataset.metric));
      const tokens=tokenCards.map(c=>c.textContent);ReportView.setUnit('usd',parent);
      const unitIndependent=tokenCards.every((c,i)=>c.textContent===tokens[i]);ReportView.setUnit('credits',parent);
-     const knownCosts=Object.fromEntries(cards.filter(c=>['hourly-rate','total-cost','average-cost','expensive-session'].includes(c.dataset.metric))
+     const knownCosts=Object.fromEntries(cards.filter(c=>['hourly-rate','total-cost','subagent-cost','average-cost','expensive-session'].includes(c.dataset.metric))
        .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')].map(n=>n.textContent)]));
      state.result=partial;view.update(state);
      const qualifiedRetention=${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};
@@ -49,6 +49,6 @@ module.exports = async ({evaluate,checks}) => {
      assert.equal(value,true,key+': '+JSON.stringify(result.coldState));
    assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
-    'AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
-   checks.push('twelve stable shells: cold/new-scope N/A, exact same-scope retained CCost and Loading-only noncost cards; quiet polls, ready commit, truthful failure, token unit independence');
+     'AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
+   checks.push('thirteen stable shells: cold/new-scope N/A, exact same-scope retained CCost and Loading-only noncost cards; quiet polls, ready commit, truthful failure, token unit independence');
 };

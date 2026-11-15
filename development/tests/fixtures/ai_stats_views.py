@@ -30,8 +30,9 @@ def evidence_views():
 
     now = int(time.time() * 1000)
     at = now - 3_600_000
-    entry = TraceEntry('root', 'prompt', 'message', None, at, 0,
-                       ModelRef('synthetic', 'model'), None, TokenUsage(input=4, output=100))
+    entry = TraceEntry('child', 'prompt', 'message', None, at, 0,
+                       ModelRef('synthetic', 'model'), None, TokenUsage(input=4, output=100),
+                       root_session_id='root', parent_session_id='root')
     root = StatsRoot('root', 'Synthetic record', (entry,), ((at, 3_600_000, False),),
                      responses=(ResponseCall(entry, 1000),), activity=(ModelActivity(entry, at - 1000, 1000),))
     missing = replace(root, entries=(replace(entry, tokens=TokenUsage(input=4, known_fields=())),))
@@ -106,7 +107,7 @@ def stats_result(request):
                 cache_repository=CacheRepository(database), config={'timezone': 'UTC'}, now_ms=now, progress=progress)
 
         result = ReportApplication(factory).execute(request).to_json()
-        # Keep the baseline at twelve cards; optional matched facts have separate probes.
+        # Keep the baseline at thirteen cards; optional matched facts have separate probes.
         for period in result['view']['ai_stats']:
             period['matched'] = None
         return result

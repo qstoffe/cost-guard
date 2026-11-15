@@ -50,7 +50,7 @@ class StatsResumeTests(unittest.TestCase):
 
         for report in (first, second):
             self.assertEqual(5, len(report.ai_stats))
-            self.assertTrue(all(len(row.metrics) == 12 and all(m.value is not None for m in row.metrics if m.metric != 'token-rate')
+            self.assertTrue(all(len(row.metrics) == 13 and all(m.value is not None for m in row.metrics if m.metric != 'token-rate')
                                 for row in report.ai_stats))
         self.assertFalse(first.ai_stats_work['scopes']['7-days']['ready'])
         self.assertGreater(first.ai_stats[1].metrics[1].value, 0)
@@ -58,6 +58,25 @@ class StatsResumeTests(unittest.TestCase):
         self.assertEqual(5, loads)
         self.assertEqual(loads, self.source.load_count)
         self.assertEqual(canonical.ai_stats, final.ai_stats)
+
+    def test_child_ancestry_and_subtotals_survive_slices_and_warm_compact_reprojection(self):
+        source = SyntheticMonthSource(5, 3, month_start_ms=NOW - DAY, children_per_root=1)
+        self.source.snapshots = {sid: replace(s, complete=True) for sid, s in source.snapshots.items()}
+
+        self.build(2)
+        self.build(2)
+        final = self.build(2, 'all')
+        loads = self.source.load_count
+        with patch.object(self.source, 'load_session_snapshot', side_effect=AssertionError('warm history hydration')):
+            warm = self.build(scope='all')
+
+        self.assertEqual(5, loads)
+        self.assertEqual(final.ai_stats, warm.ai_stats)
+        for row in final.ai_stats:
+            metrics = {m.metric: m for m in row.metrics}
+            self.assertEqual(metrics['total-cost'].value / 2, metrics['subagent-cost'].value)
+            if metrics['subagent-cost'].value:
+                self.assertEqual(metrics['subagent-cost'].value, metrics['subagent-cost'].podium[0].value)
 
     def test_stale_inactive_metadata_never_excludes_recent_requests_or_overlap(self):
         for sid, snapshot in tuple(self.source.snapshots.items()):

@@ -14,6 +14,8 @@ from development.tests.fixtures.watch_runtime import MutableSource
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analyze_with_cache
 from src.analysis.causal import trace_entries
+from src.analysis.ai_stats import period_stats
+from src.reports.ai_stats_evidence import payload, decoded
 from src.analysis.session_cost import reconcile_session_cost
 from src.analysis.valuation import comparison_cost
 from src.application.live_projection import project_live
@@ -50,6 +52,23 @@ class SubagentAttributionTests(unittest.TestCase):
         self.assertEqual(1, row.linked_agent_count)
         self.assertEqual((25, 25, 25, 25), row.token_mix_percent)
         self.assertEqual((("subagent", 1),), observe_tools(snapshot, "u1").tool_counts)
+        compact = payload(bundle, prices, snapshot, {}, now=20_000)
+        # JSON persistence must preserve physical root/child provenance, not prompt text.
+        import json
+        restored, _facts, _matched = decoded(json.loads(json.dumps(compact)), snapshot.root)
+        stats = period_stats((restored,), prices.reference_valuation, period='all',
+                             start=None, now=20_000, zone='UTC')
+        amounts = {m.metric: m for m in stats.metrics}
+        self.assertEqual((D(224), D(102)),
+                         (amounts['total-cost'].value, amounts['subagent-cost'].value))
+        self.assertEqual(row.ccost, amounts['total-cost'].value)
+        self.assertEqual((('ses_current', None), ('ses_current_child', 'ses_current')),
+                         restored.session_parents)
+        legacy = dict(compact)
+        del legacy['session_parents']
+        old, _facts, _matched = decoded(legacy, snapshot.root)
+        self.assertEqual(D(102), next(m.value for m in period_stats((old,), prices.reference_valuation,
+            period='all', start=None, now=20_000, zone='UTC').metrics if m.metric == 'subagent-cost'))
 
     def project(self, snapshot, prices=None):
         prices = prices or catalog()

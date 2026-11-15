@@ -38,7 +38,7 @@ def metrics(roots, *, start=None, now=None, zone='UTC', valuation=None, complete
 
 
 class AIStatsAnalysisTests(unittest.TestCase):
-    def test_empty_period_has_twelve_playful_zeros_without_fabricated_records(self):
+    def test_empty_period_has_thirteen_playful_zeros_without_fabricated_records(self):
         result = metrics(())
 
         for key in result:
@@ -131,7 +131,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
 
         result = metrics((a, b))
 
-        self.assertEqual(12, len(result))
+        self.assertEqual(13, len(result))
         self.assertEqual(Decimal(18), result['total-cost'].value)
         self.assertEqual(3 * HOUR_MS, result['working-time'].value)
         self.assertEqual(Decimal(6), result['hourly-rate'].value)
@@ -292,7 +292,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
             podium = changed.ai_stats[-1].metrics[-1].podium
             self.assertEqual((30, 3 if delay == 1 else 600, 3),
                              (podium[0].output_tokens, podium[0].duration_ms, podium[0].sampled_calls))
-            self.assertTrue(all(len(row.metrics) == 12 for row in changed.ai_stats))
+            self.assertTrue(all(len(row.metrics) == 13 for row in changed.ai_stats))
 
     def test_source_warning_or_migration_gap_exposes_only_safe_metric_reasons(self):
         original, _source = self.original(1)
@@ -339,7 +339,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
                 break
             time.sleep(.02)
         self.assertEqual('complete', job['status'], job.get('error'))
-        self.assertEqual(12, len(job['result']['view']['ai_stats'][0]['metrics']))
+        self.assertEqual(13, len(job['result']['view']['ai_stats'][0]['metrics']))
 
     @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
     def test_cached_view_policy_exact_ttl_and_one_hour_edges(self):

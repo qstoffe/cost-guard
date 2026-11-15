@@ -11,6 +11,7 @@ const AIStatsView = (() => {
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
+    ['subagent-cost', '🦾', 'Subagent Cost', 'The boss delegated. The bots sent the bill.'],
     ['total-tokens', '🍿', 'Total Tokens', 'The robots have eaten the entire context buffet.'],
     ['token-rate', '🍽️', 'Token Consumption Rate', 'The silicon sprinters are racing for snacks.'],
     ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock.\n\nOverlapping calls share the same clock time.'],
@@ -24,8 +25,8 @@ const AIStatsView = (() => {
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
   const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
-  const costMetrics = new Set(['hourly-rate', 'total-cost', 'average-cost', 'expensive-session']);
-  const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'working-time', 'average-cost']);
+  const costMetrics = new Set(['hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session']);
+  const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
@@ -106,7 +107,7 @@ const AIStatsView = (() => {
       }
       this.content = e('div');
       this.grid = e('div', undefined, 'ai-stats-groups');
-      for (const [name, items] of [['Overview', definitions.slice(0, 6)], ['Fun Facts', definitions.slice(6)]]) {
+      for (const [name, items] of [['Overview', definitions.slice(0, 7)], ['Fun Facts', definitions.slice(7)]]) {
         const section = e('section', undefined, 'ai-stats-section'), grid = e('div', undefined, 'ai-stats-grid');
         section.append(e('h3', name), grid); this.grid.append(section);
         for (const [key, icon, title, help] of items) {
@@ -203,7 +204,8 @@ const AIStatsView = (() => {
         if (costMetrics.has(metric.metric)) {
           metric = this.costs.select(metric, [state.result.source?.identity, state.result.source?.generation,
             row.period, row.start_ms, metric.metric,
-            metric.metric === 'expensive-session' ? metric.session_id : null], 'value', !metric.reasons?.length, metric.value,
+            metric.metric === 'expensive-session' ? metric.session_id : null], 'value',
+            metric.metric === 'subagent-cost' || !metric.reasons?.length, metric.value,
             ['value', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help']);
         }
         const card = this.cards.get(metric.metric);

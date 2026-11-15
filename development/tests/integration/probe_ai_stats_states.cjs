@@ -88,7 +88,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       metric:card.dataset.metric,value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
       state:!!card.querySelector('.ai-stat-state')}))`);
     const expected=item.result.view.ai_stats[0].metrics;
-    assert.equal(rendered.length,12);
+    assert.equal(rendered.length,13);
     rendered.forEach(card=>{
       const metric=expected.find(m=>m.metric===card.metric);
       if (!['hourly-rate','token-rate'].includes(card.metric)) assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
