@@ -813,7 +813,7 @@ class SharedEvidenceTests(unittest.TestCase):
                     self.assertEqual(1, value['source']['omitted_roots'])
                     self.assertEqual(5, len(value['view']['ai_stats']))
                     for row in value['view']['ai_stats']:
-                        self.assertEqual(12, len(row['metrics']))
+                        self.assertEqual(13, len(row['metrics']))
                         for metric in row['metrics']:
                             self.assertEqual('0', str(metric['value']))
                             if metric['metric'] in {'hourly-rate', 'total-cost', 'average-cost', 'expensive-session'}:

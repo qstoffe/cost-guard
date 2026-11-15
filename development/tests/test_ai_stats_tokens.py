@@ -65,6 +65,7 @@ class TokenTrafficTests(unittest.TestCase):
 
         self.assertEqual(31, metrics['total-tokens'].value)
         self.assertIsNone(metrics['token-rate'].rates)
+        self.assertEqual(0, metrics['subagent-cost'].value, 'different session names alone prove no ancestry')
 
     def test_missing_categories_pending_gaps_and_unknown_completion_are_not_evidenced_zero(self):
         now = epoch('2026-11-12T12:00:00+00:00')

@@ -80,13 +80,13 @@ async function main() {
     await until(`current?.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`location.hash`),'#/ai-stats');
     assert.equal(await evaluate(`current.period`),'30-days');
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),12);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),13);
     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.ai-stats-periods button')].map(b=>b.textContent)`),
       ['Today','7 days','30 days','This month','All time']);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-view img').length`),0);
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
-    checks.push('automatic default, retired-route alias, twelve cards, five exact periods, safe real record links, no healthy toolbar');
+    checks.push('automatic default, retired-route alias, thirteen cards, five exact periods, safe real record links, no healthy toolbar');
     if(process.argv.includes('--actual-zoom')) {
       const zoom=await require('./probe_ai_stats_zoom.cjs')({command,evaluate,until,fixture,tab,checks,config});
       assert.deepEqual(errors,[]);
@@ -116,8 +116,8 @@ async function main() {
           headings:document.querySelectorAll('.ai-stat h4 .help-trigger').length,
           foreground:getComputedStyle(document.querySelector('[aria-pressed="true"]')).color,
           background:getComputedStyle(document.querySelector('[aria-pressed="true"]')).backgroundColor}; })()`);
-      assert.equal(layout.count,12); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
-      assert.equal(layout.headings,12);
+      assert.equal(layout.count,13); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
+      assert.equal(layout.headings,13);
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
@@ -131,7 +131,7 @@ async function main() {
     await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='all')`);
     checks.push('period and unit changes reuse scope without acquisition; lazy All time completes');
     const ax=await command('Accessibility.getFullAXTree',{},tab);
-    for(const name of ['AI Hourly Rate','Total AI Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session',
+    for(const name of ['AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session',
       'Most Expensive Session','Longest Session','Busiest Day','Night Owl','Coding Streak','Peak Parallel Sessions'])
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
@@ -164,7 +164,7 @@ async function main() {
     await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},tab);
     await until(`current.period==='30-days'`);
     await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
-    checks.push('all twelve AX names, intrinsic title help, Tab/Shift-Tab traversal, Enter/Space activation, emulated touch period activation, Escape');
+    checks.push('all thirteen AX names, intrinsic title help, Tab/Shift-Tab traversal, Enter/Space activation, emulated touch period activation, Escape');
     await fixture('stats-hold-all');
     await evaluate(`selectStats(current,'all'); void acquire(current)`);
     await until(`current.loading && !!current.active`);
@@ -232,12 +232,12 @@ async function main() {
     await require('./probe_model_attribution.cjs')({evaluate,until,fixture,checks});
     await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && !current.loading`);
     await evaluate(`window.__failureCosts=Object.fromEntries([...document.querySelectorAll('.ai-stat')]
-      .filter(c=>['hourly-rate','total-cost','average-cost','expensive-session'].includes(c.dataset.metric))
+      .filter(c=>['hourly-rate','total-cost','subagent-cost','average-cost','expensive-session'].includes(c.dataset.metric))
       .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')].map(n=>n.textContent)]));
       window.__savedStats=current.result; current.result=null; current.statsResults.clear();
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),4,'only CCost amount shells remain during failure');
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),5,'only CCost amount shells remain during failure');
     assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,
       JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
         metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
@@ -252,7 +252,7 @@ async function main() {
       assert.equal(await evaluate(`notice.textContent==='' && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
     }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);
-    await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===12`);
+    await until(`!current.failed && !current.loading && current.result && document.querySelectorAll('.ai-stat-value').length===13`);
     checks.push('passive failure stays silent with exact qualified CCost retained and Loading-only noncost cards; no Retry/toolbar; automatic lifecycle restores genuine results');
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;
@@ -270,6 +270,9 @@ async function main() {
       'Production slice/priority/two-tab browser proof uses fixed synthetic history with valid coverage after repricing; real-source acquisition is separate.',
       'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'
     ],runtimeErrors:errors,productionCleanup};
+  } catch(error) {
+    evidence.diagnostic=error.stack;
+    throw error;
   } finally {
     try {
       server.stdin.write('{"command":"stop"}\n');

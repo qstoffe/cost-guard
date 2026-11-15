@@ -108,7 +108,7 @@ def check_rates(result):
             assert display['rate_help'].endswith('(Total CCost ÷ active AI hours)')
         metrics = {m['metric']: m for m in row['metrics']}
         tokens, traffic = metrics['total-tokens'], metrics['token-rate']
-        assert len(metrics) == 12 and int(tokens['exact_value']) == tokens['value']
+        assert len(metrics) == 13 and int(tokens['exact_value']) == tokens['value']
         assert 'rates' not in traffic
         assert 'display_units' not in tokens and 'display_units' not in traffic
         assert len(traffic['podium']) <= 3

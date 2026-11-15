@@ -138,8 +138,8 @@ class StatsAcquisition:
     def _retain(self, sid, value, volatile):
         previous = self.evidence.get(sid)
         if previous:
-            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals) + len(previous[0][0].activity)
-        self.fact_count += len(value[0].entries) + len(value[0].intervals) + len(value[0].activity)
+            self.fact_count -= self._facts(previous[0][0])
+        self.fact_count += self._facts(value[0])
         if self.fact_count > MAX_FACTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
         self.evidence[sid] = value, volatile
@@ -147,8 +147,12 @@ class StatsAcquisition:
     def _discard(self, sid):
         previous = self.evidence.pop(sid, None)
         if previous:
-            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals) + len(previous[0][0].activity)
+            self.fact_count -= self._facts(previous[0][0])
         self.service._acquisition.revisions.pop(sid, None)
+
+    @staticmethod
+    def _facts(root):
+        return len(root.entries) + len(root.intervals) + len(root.activity) + len(root.session_parents)
 
     def _batch(self, roots):
         service = self.service

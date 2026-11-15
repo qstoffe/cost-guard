@@ -47,6 +47,7 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
   const measure = async label => {
     const layout = await evaluate(`(${inspect.toString()})()`);
     textLayouts.push({label,...layout});
+    assert.ok(layout.count === 13 || layout.count === 14, label + ': all standard cards present');
     assert.deepEqual(layout.issues, [], label + ': text/link regions must fit: ' + JSON.stringify(layout));
     assert.equal(layout.pageOverflow, false, label + ': page overflow');
     assert.equal(layout.equalRows, true, label + ': sibling heights');
@@ -131,11 +132,11 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
     await evaluate(`current.result=__statsStress; current.period=__statsStress.view.ai_stats[0].period;
       __statsStress.view.ai_stats[0].matched.metric='${metric}'; current.stats.update(current);`);
     await measure('optional matched card ' + metric);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),13);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),14);
     assert.equal(await evaluate(`current.stats.extra.lastChild.hash`),'#/comparisons');
   }
   await evaluate(`selectStats(current,__statsPeriod)`);
-  assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),12);
+  assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),13);
   checks.push('actual text ranges, clipping ancestors and separate rows; long/short/unbroken titles, dates, large values, unknown/partial/empty, optional facts, five periods, units, fonts, 100/125/150/200% text scaling');
 };
 

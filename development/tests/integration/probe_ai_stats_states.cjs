@@ -88,7 +88,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       metric:card.dataset.metric,value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
       state:!!card.querySelector('.ai-stat-state')}))`);
     const expected=item.result.view.ai_stats[0].metrics;
-    assert.equal(rendered.length,12);
+    assert.equal(rendered.length,13);
     rendered.forEach(card=>{
       const metric=expected.find(m=>m.metric===card.metric);
       if (!['hourly-rate','token-rate'].includes(card.metric)) assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
@@ -109,9 +109,11 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
      assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),forbidden);
     assert.equal(await evaluate(`document.getElementById('report-updating')`),null);
-    for (const affected of theme==='classic' && unit==='credits' ? [0,1,4,5,6,7,8,9,10,11] : [0]) {
+    for (const affected of theme==='classic' && unit==='credits' ?
+        ['hourly-rate','total-cost','subagent-cost','working-time','average-cost','expensive-session',
+          'longest-session','busiest-day','night-owl','streak','parallel'] : ['hourly-rate']) {
       await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
-        document.querySelectorAll('.ai-stat h4 button')[${affected}].focus();`);
+        document.querySelector('[data-metric="${affected}"] h4 button').focus();`);
       await until(`!document.getElementById('context-help').hidden`);
       assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),forbidden);
       await escape();

@@ -21,6 +21,54 @@ from src.reports.models import ReportKind, ReportProjection
 class ModelStandingsTests(unittest.TestCase):
     NOW = epoch('2026-11-12T12:00:00+00:00')
 
+    def test_subagent_cost_uses_own_model_effort_and_shared_unrounded_valuation_once(self):
+        main = replace(self.request('root', 'main', 'gpt-6.1-sol', TokenUsage(output=10), variant='high'),
+                       root_session_id='root', model=ModelRef('route', 'gpt-6.1-sol', 'GPT-6 Sol'))
+        child = replace(self.request('child', 'child', 'gpt-6.1-sol', TokenUsage(output=90), variant='max'),
+                        root_session_id='root', parent_session_id='root', model=main.model)
+        root = StatsRoot('root', 'Root', (main, child), ())
+        valuations = []
+        def price(model, tokens):
+            valuations.append((model, tokens))
+            return Decimal(tokens.output)
+
+        row = period_stats((root,), price, period='all', start=None, now=self.NOW, zone='UTC')
+        metrics = {m.metric: m for m in row.metrics}
+        dto = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,))).to_json()
+        card = next(m for m in dto['ai_stats'][0]['metrics'] if m['metric'] == 'subagent-cost')
+
+        self.assertEqual(2, len(valuations), 'one existing valuation per physical request, no second pipeline')
+        self.assertEqual(Decimal(100), metrics['total-cost'].value)
+        self.assertEqual(Decimal(90), metrics['subagent-cost'].value)
+        self.assertEqual((('Max', Decimal(90)),), metrics['subagent-cost'].podium[0].by_effort)
+        self.assertEqual('route/GPT-6 Sol\n\nBy Effort:\n• Max — 90 CCost', card['podium'][0]['model_help'])
+        self.assertEqual('$0.90', card['display_units']['usd']['value'])
+        self.assertEqual('route/GPT-6 Sol\n\nBy Effort:\n• Max — $0.90',
+                         card['podium'][0]['display_units']['usd']['model_help'])
+
+    def test_child_medals_include_fourth_place_in_total_and_merge_only_child_routes_and_efforts(self):
+        main = self.request('root', 'main', 'claude-sonnet-5-5', TokenUsage(output=99), variant='high')
+        calls = tuple(replace(self.request('child-' + str(i), str(i), model, TokenUsage(output=amount),
+                            provider=provider, variant=effort),
+                            root_session_id='root', parent_session_id='root' if i != 2 else 'child-0')
+                      for i, (model, amount, provider, effort) in enumerate((
+                          ('claude-sonnet-5-5', 10, 'claude-agent', 'default'),
+                          ('claude-sonnet-5-5', 20, 'claude-code', 'high'),
+                          ('claude-sonnet-5-5', 30, 'github-copilot', 'default'),
+                          ('b', 40, 'route', 'low'), ('c', 40, 'route', 'max'), ('d', 5, 'route', None))))
+        root = StatsRoot('root', 'Root', (main, *calls), ())
+
+        row = period_stats((root,), lambda _m, t: Decimal(t.output) / 100, period='all',
+                           start=None, now=self.NOW, zone='UTC')
+        metrics = {m.metric: m for m in row.metrics}
+        child = metrics['subagent-cost']
+
+        self.assertEqual(Decimal('1.45'), child.value)
+        self.assertEqual(Decimal('2.44'), metrics['total-cost'].value)
+        self.assertEqual(['Claude Sonnet 5.5', 'b', 'c'], [r.model for r in child.podium])
+        self.assertEqual('claude-agent + claude-code + github-copilot', child.podium[0].provider)
+        self.assertEqual((('Default', Decimal('.4')), ('High', Decimal('.2'))), child.podium[0].by_effort)
+
     def request(self, sid, message, model, tokens, *, age=1000, variant=None, provider='route'):
         return replace(entry(sid, self.NOW - age, tokens, message=message),
                        model=ModelRef(provider, model), variant=variant)

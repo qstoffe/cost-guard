@@ -1,7 +1,7 @@
 // Canonical synthetic identity/effort cases rendered by the shipped help/DOM lifecycle.
 module.exports = async ({command,evaluate,until,cases,tab,checks}) => {
   const assert=require('node:assert/strict');
-  const metrics=['total-cost','total-tokens','token-rate','working-time','average-cost'];
+  const metrics=['total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost'];
   const forbidden=/unverified|Catalog modelID|source-qualified|signature-|synthetic-scope|sampled calls|known categories|observed tokens|default \(/i;
   const escape=async()=>{
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
@@ -26,7 +26,7 @@ module.exports = async ({command,evaluate,until,cases,tab,checks}) => {
       await evaluate(`window.__friendlyFocus=document.activeElement;current.stats.update(current)`);
       assert.equal(await evaluate(`document.activeElement===__friendlyFocus`),true);
       await evaluate(`ReportView.setUnit('usd',output)`);
-      if(['total-cost','average-cost'].includes(metric))
+      if(['total-cost','subagent-cost','average-cost'].includes(metric))
         assert.match(await evaluate(`document.getElementById('context-help').textContent`),/— \$/);
       else assert.equal(await evaluate(`document.getElementById('context-help').textContent`),copy);
       await evaluate(`ReportView.setUnit('credits',output)`);
@@ -46,7 +46,7 @@ module.exports = async ({command,evaluate,until,cases,tab,checks}) => {
     await escape();
   }
   // Real headless pointer hover and emulated touch on a model help owner.
-  const selector='[data-metric="total-cost"] .ai-stat-model';
+  const selector='[data-metric="subagent-cost"] .ai-stat-model';
   await evaluate(`document.activeElement.blur();document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
     document.querySelector('${selector}').scrollIntoView({block:'center'})`);
   const point=await evaluate(`(() => {const r=document.querySelector('${selector}').getBoundingClientRect();
@@ -62,5 +62,5 @@ module.exports = async ({command,evaluate,until,cases,tab,checks}) => {
   await until(`!document.getElementById('context-help').hidden`);
   assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),forbidden);
   await escape(); await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
-  checks.push('all five actual DOM/model help owners: aliases merged, unknown family friendly, explicit releases separate, selected Default once, metric values, currency switching, no debug prose, retained keyboard focus, real hover/emulated touch; all title help inspected');
+  checks.push('all six actual DOM/model help owners: aliases merged, unknown family friendly, explicit releases separate, selected Default once, metric values, currency switching, no debug prose, retained keyboard focus, real Subagent Cost hover/emulated touch; all title help inspected');
 };

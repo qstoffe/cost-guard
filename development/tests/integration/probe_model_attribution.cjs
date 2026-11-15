@@ -38,11 +38,21 @@ module.exports = async ({evaluate,until,fixture,checks}) => {
             .find(n=>n.textContent==='GPT-6.1 Sol').focus()`);
         await until(`!document.getElementById('context-help').hidden`);
         assert.equal(await evaluate(`document.getElementById('context-help').textContent`),sol.model_help);
+        const subagent=view.ai_stats.find(r=>r.period===item.period).metrics.find(m=>m.metric==='subagent-cost');
+        const childLabels=item.name==='different'?['GPT Astra']:expected;
+        assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-metric="subagent-cost"] .ai-stat-model')]
+          .map(n=>n.textContent).sort()`),childLabels);
+        assert.ok(subagent.podium.every(row=>/• Max/.test(row.model_help) && !/• High/.test(row.model_help)));
+        await evaluate(`document.querySelector('[data-metric="subagent-cost"] .ai-stat-model').focus()`);
+        await until(`!document.getElementById('context-help').hidden`);
+        assert.equal(await evaluate(`document.getElementById('context-help').textContent`),subagent.podium[0].model_help);
+        assert.equal(await evaluate(`document.querySelector('[data-metric="subagent-cost"] .ai-stat-value').textContent`),
+          subagent.display.value);
       }
     }
     await evaluate(`current.result=${JSON.stringify(saved)};
       current.period=${JSON.stringify(section==='token-mix'?'all':'30-days')};
       current.${section==='token-mix'?'tokenMix.update(current.result)':'stats.update(current)'};`);
   }
-  checks.push('native V2 Sol High/Sol Max, actual Astra child, Today versus 7 days, unavailable-current-model history and child logical Prompts/Calls rendered in Token Mix and five AI Stats podiums');
+  checks.push('native V2 Sol High/Sol Max, actual Astra child, Today versus 7 days, unavailable-current-model history and child logical Prompts/Calls rendered in Token Mix and six AI Stats podiums; Subagent Cost excludes main High in visible model help');
 };
