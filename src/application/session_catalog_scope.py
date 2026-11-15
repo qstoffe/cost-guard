@@ -17,8 +17,7 @@ class CatalogWindow:
 
     @property
     def identity(self):
-        # Calendar windows can reuse an unchanged membership/order within the
-        # same day/month. Rolling windows issue a new, exact cutoff snapshot.
+        # Calendar cutoffs stay stable within the same configured-local date.
         return self.period, self.timezone_id, self.start_ms
 
 

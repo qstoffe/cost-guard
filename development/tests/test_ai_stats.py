@@ -187,14 +187,14 @@ class AIStatsAnalysisTests(unittest.TestCase):
                           date(2026, 3, 30): HOUR_MS // 2}, days)
         self.assertEqual(3 * HOUR_MS, night)
 
-    def test_windows_31_day_month_timezone_and_rolling_edges(self):
+    def test_windows_31_day_month_timezone_and_calendar_edges(self):
         now = epoch('2026-10-31T22:30:00+00:00')
         local = dict(windows('Europe/Stockholm', now))
         utc = dict(windows('UTC', now))
         self.assertLess(local['month'], local['30-days'])
         self.assertNotEqual(local['today'], utc['today'])
-        self.assertEqual(7 * DAY_MS, now - local['7-days'])
-        self.assertEqual(30 * DAY_MS, now - local['30-days'])
+        self.assertEqual(epoch('2026-10-24T22:00:00+00:00'), local['7-days'])
+        self.assertEqual(epoch('2026-10-01T22:00:00+00:00'), local['30-days'])
 
     def test_shared_observation_reuses_only_identical_populations_and_keeps_period_clipping(self):
         from src.analysis.active_hour import deduplicated_requests

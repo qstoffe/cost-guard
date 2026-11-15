@@ -7,6 +7,39 @@ const ReportView = (() => {
   let quotaMode = 'used';
   let timezone = null;
   function setTimezone(value) { timezone = value; }
+  const headerHelp = {
+    model: '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.',
+    sessionCost: 'The entire session’s reference cost, including attributed linked subagents.',
+    context: 'Estimated context for this session, in tokens.'
+  };
+  function activityHelp(value, zone, now = Date.now()) {
+    if (!Number.isSafeInteger(value) || value <= 0 || typeof zone !== 'string') return 'Activity time unavailable.';
+    try {
+      const format = new Intl.DateTimeFormat('en-GB', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+        second: '2-digit', hourCycle: 'h23', timeZoneName: 'longOffset', weekday: 'long'});
+      const parts = time => Object.fromEntries(format.formatToParts(time).map(part => [part.type, part.value]));
+      const at = parts(value), today = parts(now);
+      const ordinal = fields => Date.UTC(Number(fields.year), Number(fields.month) - 1, Number(fields.day)) / 86400000;
+      const age = ordinal(today) - ordinal(at);
+      const relative = age === 0 ? 'Today' : age === 1 ? 'Yesterday' : age >= 2 && age <= 6 ? at.weekday : '';
+      return `${at.year}-${at.month}-${at.day} ${at.hour}:${at.minute}:${at.second}.${String(value % 1000).padStart(3, '0')} ${at.timeZoneName} (${zone})${relative ? ' · ' + relative : ''}`;
+    } catch (_) { return 'Activity time unavailable.'; }
+  }
+  function costGroups(value, session = false) {
+    const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
+    if (!Array.isArray(models) || !Array.isArray(amounts)) {
+      const label = session ? 'Session Model 1' : 'Main Model';
+      return `${label}: N/A — N/A\n${label} CCost: ${display(null, 'ccost')}`;
+    }
+    return models.map(([label, model], index) =>
+      `${label}: ${model}\n${label} CCost: ${amounts[index] ?? display(null, 'ccost')}`).join('\n\n');
+  }
+  function sessionCostHelp(cost, summary) {
+    return costGroups(cost, true) + '\n\nDuration: ' +
+      (Number.isFinite(summary?.duration_ms) ? display(summary, 'duration_ms') : 'Loading…') +
+      (cost?.complete === false ? '\nPartial cost coverage; unavailable usage is not zero.' : '');
+  }
   function timestamp(value, zone = timezone) {
     if (!Number.isSafeInteger(value) || value < 0 || typeof zone !== 'string') return 'N/A';
     try {
@@ -805,5 +838,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

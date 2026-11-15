@@ -132,7 +132,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
       // A negative hover assertion spans more than the shared 600ms help delay.
       await evaluate('new Promise(resolve=>miniWatch.window.setTimeout(resolve,700))');
        assert.equal(await evaluate(`${panel}.matches(':popover-open')`),true);
-        assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s$/);
+        assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s\nPartial cost coverage; unavailable usage is not zero\.$/);
       }
       await evaluate('durationRow.cells[3].firstChild.focus()');
       if(input!=='touch')for(const type of ['mousePressed','mouseReleased'])await command('Input.dispatchMouseEvent',{
@@ -142,7 +142,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
       for(const type of ['touchStart','touchEnd'])await command('Input.dispatchTouchEvent',{
         type,touchPoints:type==='touchStart'?[{x:total.x,y:total.y,id:1,radiusX:1,radiusY:1,force:1}]:[]},pip);
       await until(`${panel}.matches(':popover-open')`);
-      assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s$/);
+      assert.match(await evaluate(`${panel}.textContent`),/^Session Model 1: N\/A[\s\S]*Duration: 2m 3s\nPartial cost coverage; unavailable usage is not zero\.$/);
       assert.equal(await evaluate(`durationRow.cells[3].firstChild.getAttribute('aria-describedby')`),'context-help');
       }
        assert.equal(await evaluate('durationRow.cells[3].firstChild.tabIndex'),0);

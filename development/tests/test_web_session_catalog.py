@@ -606,19 +606,22 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertGreater(self.catalog.generation, before)
         self.assertEqual(self.catalog.page(sort='model')['progress']['completed'], 119)
 
-    def test_repeated_transient_failures_terminate_but_shared_retry_can_recover(self):
+    def test_repeated_transient_failures_keep_pending_with_capped_backoff_and_recover(self):
         self.catalog.page(sort='ccost')
         self.catalog.tick(self.service)
         self.index()
         self.catalog.valid.pop('root-0000')
         with patch('src.application.session_catalog.session_summary', side_effect=SourceUnavailableError('private')):
-            for attempt in range(3):
-                self.clock += 31
+            for attempt in range(6):
+                self.clock += 121
                 self.catalog.tick(self.service)
                 page = self.catalog.page(sort='ccost')
-                self.assertEqual(page['progress']['status'], 'failed' if attempt == 2 else 'pending')
-        self.assertEqual(page['progress']['metrics']['retries'], 2)
-        self.clock += 31
+                self.assertEqual(page['progress']['status'], 'pending')
+                self.assertTrue(page['progress']['retryable'])
+                self.assertEqual(page['progress']['completed'], 119)
+                self.assertFalse(self.catalog._eligible('root-0000'))
+        self.assertEqual(page['progress']['metrics']['retries'], 5)
+        self.clock += 121
         self.catalog.tick(self.service)
         self.assertFalse(self.catalog.page(sort='ccost')['pending_sort'])
 
@@ -766,13 +769,15 @@ class SessionCatalogTests(unittest.TestCase):
         def partial(service, root, revision, **kwargs):
             return replace(self.catalog.rows[key], context_detail='Partial source.'), revision
         with patch('src.application.session_catalog.session_summary', side_effect=partial):
-            for attempt in range(3):
-                self.clock += 31
+            for attempt in range(4):
+                self.clock += 121
+                self.catalog.page(token=page['token'], sort='ctx')
                 self.catalog.tick(self.service)
         failed = self.catalog.page(token=page['token'], sort='ctx')
-        self.assertEqual(failed['progress']['status'], 'failed')
+        self.assertEqual(failed['progress']['status'], 'pending')
+        self.assertTrue(failed['progress']['retryable'])
         self.assertEqual(failed['progress']['reason'], 'partial_source_context')
-        self.clock += 31
+        self.clock += 121
         self.catalog.tick(self.service)
         self.assertFalse(self.catalog.page(token=page['token'], sort='ctx')['pending_sort'])
 

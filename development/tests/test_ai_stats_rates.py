@@ -88,18 +88,19 @@ class AIStatsRateTests(unittest.TestCase):
                 self.assertEqual('60 CCost/h', dto['display']['active_rate'])
                 self.assertEqual(Decimal('480') if expected_workdays else 0, rates.robot_period)
 
-    def test_dst_rolling_slots_month_to_date_and_year_rollover_preserve_cost_windows(self):
+    def test_dst_calendar_slots_month_to_date_and_year_rollover_preserve_cost_windows(self):
         for stamp in ('2026-03-29T20:00:00+00:00', '2026-10-25T20:00:00+00:00',
                       '2027-01-01T00:30:00+00:00'):
             now = epoch(stamp)
-            root = evidence(now - 7 * DAY_MS, 1, 840)
+            cutoff = dict(windows('Europe/Stockholm', now))['7-days']
+            root = evidence(cutoff, 1, 840)
             for period, days in (('today', 1), ('7-days', 7), ('30-days', 30),
                                  ('month', int(stamp[8:10]))):
                 stats, _dto = calculate((root,), now, period)
                 self.assertEqual(days * 24, stats.metrics[0].rates.calendar_hours)
                 self.assertEqual(dict(windows('Europe/Stockholm', now))[period], stats.start_ms)
             week, _dto = calculate((root,), now)
-            excluded, _dto = calculate((replace(root, entries=(replace(root.entries[0], completed_at_ms=now - 7 * DAY_MS - 1),)),), now)
+            excluded, _dto = calculate((replace(root, entries=(replace(root.entries[0], completed_at_ms=cutoff - 1),)),), now)
             self.assertEqual(Decimal('840'), week.metrics[1].value)
             self.assertEqual(0, excluded.metrics[1].value)
 

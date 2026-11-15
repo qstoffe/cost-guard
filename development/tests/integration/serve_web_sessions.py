@@ -223,10 +223,20 @@ def main():
                             catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
                                 Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number)
                             catalog.valid[key] = catalog.revisions[key], catalog.clock()
+                            catalog.failures.pop(key, None)
+                            catalog.failure_counts.pop(key, None)
+                            catalog.failure_reasons.pop(key, None)
                     if command == 'catalog-page-cold':
                         keys = sorted(catalog.roots, reverse=True)[25:50]
                         for key in keys:
                             catalog.valid.pop(key, None)
+                    if command == 'catalog-page-four-partial':
+                        keys = sorted(catalog.roots, reverse=True)[75:100]
+                        for key in keys[13:]:
+                            catalog.valid.pop(key, None)
+                            catalog.failures[key] = catalog.revisions[key], False
+                            catalog.failure_counts[key] = 5
+                            catalog.failure_reasons[key] = 'connection_timeout'
                     if command == 'catalog-churn':
                         for key in [key for key in catalog.roots if key not in catalog.valid and key != 'root-0000'][:20]:
                             number = int(key.split('-')[1])

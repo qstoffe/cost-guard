@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v81.59 - 2026-11-15
+
+- Sessions, Token Mix and AI Stats share inclusive configured-local calendar windows: today plus the previous six or 29 dates, stable until midnight and correct across DST.
+- Sessions reuses source/revision/dependency-qualified scalar keys and bounded cached ordering. Historical keys do not expire with elapsed minutes; offscreen running roots do not trigger continuous global rehydration. Older page membership remains pinned under new activity.
+- Navigation recovers automatically with capped backoff through temporary source/transport failures and stalls. Cancel retains the last valid page; terminal authorization/identity/request errors still stop. Cold metadata and previously valid rows stay visible with honest pending progress; passive polls preserve controls/focus.
+- Direct first/last and neighboring numbered pages complement Previous/Next. The seven columns omit Effort, use Ctx casing, share Watch Model and Mini Total/Ctx help, and expose configured-local exact activity timestamps with Today/Yesterday/recent weekday help. Effort source facts remain available.
+
 ## v81.58 - 2026-11-14
 
 - Web Watch shows positively running prompts only, with CCost Today/prompts and the one existing Mini toggle at the top, then shared compact subscriptions capped to Mini's default content width. Sessions and Mini retain their independent history; Accounts retains full quota cards.

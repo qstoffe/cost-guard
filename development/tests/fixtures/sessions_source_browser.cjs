@@ -14,7 +14,7 @@ module.exports = async ({evaluate, until}) => {
         revalidating:value.progress.revalidating,running_rows:value.view.session_usage.filter(row=>row.running).length,
         controller:sourceCatalog.generation,token_same:args[1].token===value.token,
         epoch_same:args[1].epoch===value.epoch,aborted:args[2]?.aborted??false});return value;};
-    sourceCatalog.headers[4].th.querySelector('button').click()`);
+    sourceCatalog.headers[3].th.querySelector('button').click()`);
   await until('sourceCatalog.sort==="ccost"');
   const started = Date.now(), samples=[];
   while (Date.now()-started<135000) {

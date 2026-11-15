@@ -20,8 +20,8 @@ module.exports = async ({vm, context, Node, timers}) => {
   const view = context.navigation;
   new Node('main').append(view.root); view.attached = true; view.token = previous.token;
   view.update(previous);
-  assert.equal(view.headers.length,8); assert.equal(view.headers[7].name,'CTX');
-  assert.equal(view.body.children[0].metrics[5].textContent,'172k');
+   assert.equal(view.headers.length,7); assert.equal(view.headers[6].name,'Ctx');
+   assert.equal(view.body.children[0].metrics[4].textContent,'172k');
   const retained = view.body.children[0];
   view.next.focus();
    view.configure(new URLSearchParams('sort=ctx&direction=1'));
@@ -40,7 +40,7 @@ module.exports = async ({vm, context, Node, timers}) => {
   const progress = (completed, generation=1, total=3217) => ({...previous,pending_sort:true,
     progress:{generation,phase:'index',status:'pending',completed,total}});
   view.update(progress(428));
-  assert.equal(view.pan.hidden,true); assert.equal(view.pager.hidden,true);
+   assert.equal(view.pan.hidden,false); assert.equal(view.pager.hidden,false);
   assert.equal(view.loader.bar.max,100); assert.equal(view.loader.bar.value,13);
   const bar = view.loader.bar, heading = view.task, count = view.count;
   for (let generation=2;generation<=22;generation++) {
@@ -48,7 +48,7 @@ module.exports = async ({vm, context, Node, timers}) => {
     assert.equal(view.operation.failed,false,'ordinary source generations cannot exhaust navigation');
     assert.equal(view.task,heading); assert.equal(view.count,count); assert.equal(view.loader.bar,bar);
   }
-  assert.equal(view.task.textContent,'Sorting sessions by CTX');
+   assert.equal(view.task.textContent,'Sorting sessions by Ctx');
   assert.equal(view.count.textContent,'Indexed 450 of 3,217 sessions');
   const operation = view.operation;
   view.configure(new URLSearchParams('sort=ctx&direction=1'));
@@ -63,10 +63,10 @@ module.exports = async ({vm, context, Node, timers}) => {
   view.update({...progress(50,23),progress:{...progress(50,23).progress,work:{active:true,stage:'reading_summary',sequence:1}}});
   assert.equal(view.operation.failed,false,'an owned bounded slow source read is not a no-work stall');
   assert.match(view.loader.stage.textContent,/Reading session summary/);
-  view.update(progress(50,23)); assert.equal(view.operation.failed,true);
-  assert.equal(view.retry.hidden,false); assert.equal(view.pan.hidden,true);
+   view.update(progress(50,23)); assert.equal(view.operation.failed,false);
+   assert.equal(view.retry,undefined); assert.equal(view.pan.hidden,false);
   view.configure(new URLSearchParams('sort=ctx&direction=1'));
-  assert.equal(view.operation.failed,true,'a redundant hash notification cannot erase the error');
+   assert.equal(view.operation.failed,false,'a redundant hash notification retains recoverable intent');
   assert.match(view.loader.stage.textContent,/no_source_progress/);
   view.cancelNavigation(); await new Promise(setImmediate);
   view.configure(new URLSearchParams('sort=activity&direction=-1&offset=100&epoch=pinned'));
@@ -75,9 +75,12 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(view.task.textContent,'Loading Sessions page 5');
   assert.equal(view.count.textContent,'Prepared 4 of 17 sessions');
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
-  assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/http_auth_failure/);
-  view.cancelNavigation(); await new Promise(setImmediate);
-  assert.equal(view.offset,25); assert.equal(view.body.children[0],retained);
+   assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/http_auth_failure/);
+   const authCalls = calls.length; await view.poll();
+   assert.equal(calls.length,authCalls,'terminal authority failure cannot keep retrying');
+   view.cancelNavigation(); await new Promise(setImmediate);
+   assert.equal(view.offset,25); assert.equal(view.body.children[0],retained);
+   view.terminal=false; // The following independent scenarios model a newly authorized host/view.
   view.configure(new URLSearchParams('sort=duration&direction=1'));
   view.update({...previous,sort:'duration',direction:1,offset:0,pending_sort:false});
   assert.equal(view.operation,null); assert.equal(view.loader.root.hidden,true);
@@ -88,20 +91,23 @@ module.exports = async ({vm, context, Node, timers}) => {
     return request.action ? {} : new Promise(resolve => { releaseTimeout = resolve; });
   };
   view.configure(new URLSearchParams('sort=model&direction=1'));
-  const stalled = view.load();
-  timers.get(view.requestDeadline)();
-  assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/request_timeout/);
+   const stalled = view.load();
+   timers.get(view.requestDeadline)();
+   await stalled;
+   assert.equal(view.operation.failed,false); assert.match(view.loader.stage.textContent,/request_timeout/);
+   assert.ok(view.retryDelay>=1000 && view.retryDelay<=30000);
   const beforeLate = calls.length;
   releaseTimeout({...previous,sort:'model',direction:1,offset:0}); await stalled;
   assert.equal(view.data.sort,'duration','a timed-out response is retired, not applied later');
   const lateCalls = calls.slice(beforeLate);
   assert.equal(lateCalls.some(request => !request.action && request.sort === 'model'),false,
     'a failed operation must not reinstate expensive sort demand');
-  assert.ok(lateCalls.some(request => request.action === 'interest' && request.token === previous.token && !request.visible));
+   assert.equal(view.operation.failed,false,'timeout retains authorized automatic recovery');
   view.api = async (_, request) => { if (request.action) return {}; throw new Error('host_identity_changed'); };
   view.configure(new URLSearchParams('sort=model&direction=1')); await view.load();
   assert.equal(view.operation.failed,true); assert.match(view.loader.stage.textContent,/host_identity_changed/);
-  assert.equal(view.data.sort,'duration');
+   assert.equal(view.data.sort,'duration');
+   view.terminal=false;
   let expired = true;
   view.api = async (_, request) => {
     if (request.action) return {};

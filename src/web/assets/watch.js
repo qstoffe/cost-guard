@@ -314,13 +314,7 @@ const WatchView = (() => {
     text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
   }
   function costGroups(value, session = false) {
-    const models = display(value, 'mini_cost_models'), amounts = display(value, 'mini_cost_amounts');
-    if (!Array.isArray(models) || !Array.isArray(amounts)) {
-      const label = session ? 'Session Model 1' : 'Main Model';
-      return `${label}: N/A — N/A\n${label} CCost: ${display(null, 'ccost')}`;
-    }
-    return models.map(([label, model], index) =>
-      `${label}: ${model}\n${label} CCost: ${amounts[index] ?? display(null, 'ccost')}`).join('\n\n');
+    return ReportView.costGroups(value, session);
   }
   function promptDetails(item, highlight) {
     const prompt = item?.prompt;
@@ -337,7 +331,7 @@ const WatchView = (() => {
     ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
     ['Duration', 'Time spent on this prompt.'],
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
-    ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.'],
+    ['Model', ReportView.headerHelp.model],
     ['Effort', 'How much reasoning the model was asked to do.'],
     ['CCost', 'Reference cost of this prompt, including attributed linked subagent calls.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],

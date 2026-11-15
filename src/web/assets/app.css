@@ -295,7 +295,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 [data-section="ai-stats"] main, [data-section="token-mix"] main { padding-top: .65rem; }
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
-.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(6, max-content); }
+.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(5, max-content); }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
   width: max-content; min-width: 0; max-width: 100%; }
 .session-detail > .sessions-table-pan { width: fit-content; max-width: 100%; }
@@ -313,9 +313,17 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .page-navigation > span { text-align: center; min-width: 0; }
 .page-navigation > button:first-child { justify-self: start; }
 .page-navigation > button:last-child { justify-self: end; }
+.sessions-catalog .page-navigation { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.sessions-catalog .page-navigation > span { grid-column: 1 / -1; grid-row: 1; }
+.sessions-page-numbers { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: center; gap: .3rem; }
+.sessions-page-numbers button { min-width: 2.2em; }
+.sessions-page-numbers [aria-current="page"] { font-weight: bold; outline: 2px solid currentColor; outline-offset: -2px; }
+.sessions-page-numbers .page-gap { padding-inline: .2rem; min-width: 0; flex: none; }
 @media (max-width: 45rem) {
   .page-navigation { grid-template-columns: 1fr 1fr; }
   .page-navigation > span { grid-column: 1 / -1; grid-row: 1; }
+  .sessions-catalog .page-navigation { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .sessions-catalog .page-navigation > span { grid-column: 1 / -1; }
 }
 .session-detail > .warning { min-height: 1.5rem; }
 .session-detail:has(> .report-loading:not([hidden])) { display: flex; flex-direction: column; min-height: calc(100dvh - 12rem); }
