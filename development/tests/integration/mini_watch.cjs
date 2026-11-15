@@ -496,8 +496,9 @@ function setup() {
       owner => {owner.top = {};}, owner => {owner.document.permissionsPolicy = {allowsFeature: () => false};}]) {
     const item = setup(); change(item.owner);
     const disabled = new Controller(item.owner, item.button, item.feedback, () => {});
-    assert.equal(item.button.attributes['aria-disabled'], 'true'); assert.ok(item.feedback.textContent);
-    assert.equal(item.button.title,item.feedback.textContent);await disabled.toggle(); assert.equal(item.calls(), 0);
+    assert.equal(item.button.attributes['aria-disabled'], 'true'); assert.equal(item.feedback.textContent,'');
+    assert.equal(item.button.title,'');await disabled.toggle(); assert.equal(item.calls(), 0);
+    assert.equal(item.feedback.textContent,'Could not open Mini Watch. Try again.');
   }
   console.log('Mini Watch VM: lifecycle/races, units/theme, native callbacks, fresh/retained states and independent DOM passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

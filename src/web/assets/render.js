@@ -478,7 +478,7 @@ const ReportView = (() => {
       input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
-    checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\n\nIf availability cannot be checked, show the full catalog.');
+    checkbox('Show all Copilot-priced models', 'all', 'Show the full priced catalog instead of the available-model list.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
     tools.append(prices, filters); root.append(tools);
     const scroll = element('div', undefined, 'overview-models');
@@ -758,7 +758,7 @@ const ReportView = (() => {
         row.incoming_context_ccost, row.extra_ccost, row.token_mix_percent?.join('/')]);
   }
   function hourlySummary(value) {
-    return `Reference cost per active hour: ${display(value, 'rate')} · ${value.status} · CCost ${display(value, 'known_ccost')} · Active execution ${display(value, 'duration_ms')}`;
+    return `Reference cost per active hour: ${display(value, 'rate')} · Active execution ${display(value, 'duration_ms')}`;
   }
   function historyWarning(result) {
     if (result?.source?.status !== 'partial') return '';

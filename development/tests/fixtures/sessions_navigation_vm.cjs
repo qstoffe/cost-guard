@@ -88,11 +88,11 @@ module.exports = async ({vm, context, Node, timers}) => {
   view.update({...progress(50,23),progress:{...progress(50,23).progress,work:{active:true,stage:'reading_summary',sequence:1}}});
   assert.equal(view.operation.failed,false,'an owned bounded slow source read is not a no-work stall');
    assert.equal(view.status.textContent,'Sorting sessions by Ctx · 50 of 3,217 sessions');
-   view.update(progress(50,23)); assert.equal(view.operation.failed,false);
+    view.update(progress(50,23)); assert.equal(view.operation.failed,true);
    assert.equal(view.retry,undefined); assert.equal(view.pan.hidden,false);
   view.configure(new URLSearchParams('sort=ctx&direction=1'));
-   assert.equal(view.operation.failed,false,'a redundant hash notification retains recoverable intent');
-   assert.match(view.status.textContent,/Loading paused\. Retrying/);
+    assert.equal(view.operation.failed,true,'a redundant hash notification cannot fabricate a new user retry');
+    assert.equal(view.status.textContent,'Sorting sessions by Ctx. Could not load. Reopen Sessions to try again.');
   await restorePrevious();
   const pageFive = view.pageButtons.get(5);
   pageFive.focus();
@@ -109,7 +109,7 @@ module.exports = async ({vm, context, Node, timers}) => {
    assert.equal(view.status.textContent,'Loading Sessions page 5 · 4 of 17 sessions');
   assert.equal(view.operation.completed,4);
   view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
-    assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Access unavailable/);
+     assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Check your access, then reopen Sessions\.$/);
    assert.doesNotMatch(view.status.textContent,/Cancel/);
    assert.equal(view.operation.pending,false);
    labelOnlyPager();

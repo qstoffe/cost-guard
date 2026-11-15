@@ -428,7 +428,8 @@ async function main() {
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   for (const account of input.overview.view.accounts_quotas.accounts) {
     assert.ok(ids.result.textContent.includes(account.observation.label));
-    assert.ok(ids.result.textContent.includes(account.observation.availability));
+    if (['restricted','exhausted'].includes(account.observation.availability))
+      assert.ok(ids.result.textContent.includes(account.observation.availability));
     if (account.billed_today != null) {
       assert.ok(ids.result.textContent.includes('Billed today: ' + account.display.billed_today));
     }
@@ -445,7 +446,7 @@ async function main() {
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   assert.match(ids.result.textContent, /First/);
   assert.match(ids.result.textContent, /Second/);
-  assert.match(ids.result.textContent, /Unsupported authentication method/);
+  assert.doesNotMatch(ids.result.textContent, /Unsupported authentication method/);
   assert.doesNotMatch(ids.result.textContent, /unsupported_auth_method/);
   assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): —/);
   assert.match(ids.result.textContent, /25% used/);
