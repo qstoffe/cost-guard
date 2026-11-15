@@ -20,7 +20,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(view.earlierToggle,undefined);assert.equal(view.historyBody,undefined);
   const headers=view.body.parentNode.querySelectorAll('th');
   assert.deepEqual(headers.map(n=>n.textContent),['Activity','Session','CCost','Total','Ctx']);
-  assert.equal(helpText(headers[0].children[0]),'• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.');
+   assert.equal(helpText(headers[0].children[0]),'• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.\n• While prompt details load, shows session activity.');
   assert.equal(helpText(headers[1].children[0]),'The name of the session.');
   assert.equal(helpText(headers[2].children[0]),"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
   assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');

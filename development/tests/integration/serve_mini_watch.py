@@ -98,6 +98,11 @@ def main():
                       420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)
+        preview_fixture = None
+        if sys.argv[2:] == ['--catalog-previews']:
+            from development.tests.fixtures.catalog_previews import CatalogPreviewFixture
+            preview_fixture = CatalogPreviewFixture(root, now)
+            host.live = preview_fixture
         frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
             day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
         # Synthetic quota observations stay current when the probe runs later.
@@ -176,6 +181,16 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command.startswith("preview-") and preview_fixture is not None:
+                    action = command.removeprefix("preview-")
+                    if action == "warm":
+                        preview_fixture.warm()
+                    if action == "upgrade":
+                        preview_fixture.upgrade()
+                    if action != "counts":
+                        publish(value=preview_fixture.frame(frame, running=2 if action == "two-running" else 0))
+                    print(json.dumps(dict(ok=True, **preview_fixture.counts())), flush=True)
+                    continue
                 if command == "deny-pip":
                     host.server.pip_denied = True
                     print('{"ok":true}', flush=True)

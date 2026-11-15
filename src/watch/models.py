@@ -153,6 +153,17 @@ class WatchCard:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionPreview:
+    """Catalog facts only; no prompt identity, lifecycle or next-context claim."""
+    session_id: str
+    title: str
+    activity_ms: int | None = None
+    activity_origin: str = "catalog"
+    total_ccost: Decimal | None = None
+    complete: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RunningPrompts:
     """One coherent canonical running population, never visible-card totals."""
     count: int | None = None
@@ -191,6 +202,8 @@ class WatchProjection:
     active_cards: tuple[WatchCard, ...] = ()
     history_cards: tuple[WatchCard, ...] = ()
     recent_finished_cards: tuple[WatchCard, ...] = ()
+    earlier_previews: tuple[SessionPreview, ...] = ()
+    earlier_cards: tuple[WatchCard, ...] = ()
     cards_state: str | None = None
     history_state: str = "loading"
     history_scope: str = ""
