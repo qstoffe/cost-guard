@@ -7,7 +7,7 @@ import unittest
 from development.tests.fixtures.claude_alias import DesktopSource, snapshot, catalog
 from development.tests.fixtures.session_snapshots import make_snapshot, one_request
 from src.analysis import analyze_snapshot
-from src.analysis.ai_stats_responses import ResponseCall, podium
+from src.analysis.ai_stats_responses import ResponseCall, response_rows
 from src.application.ai_stats import response_tokens
 from src.application.comparisons import run
 from src.application.display import with_display
@@ -62,20 +62,20 @@ class RecordedModelHelpTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid_match_fields'):
             decode_run(old)
 
-    def test_podium_help_retains_sampled_alias_without_changing_weighted_speed(self):
+    def test_stats_keeps_sampled_alias_internally_but_uses_friendly_effort_help(self):
         source = DesktopSource((snapshot(),))
         saved = source.load_session_snapshot('root-0000')
         bundle = analyze_snapshot(saved, tracked_provider=None)
         entry = bundle.trace_entries[0]
         roots = (SimpleNamespace(responses=(ResponseCall(entry, 1000),)),)
 
-        rows = podium(roots, (entry,), None, entry.completed_at_ms)
+        rows = response_rows(roots, (entry,), None, entry.completed_at_ms)
         wire = response_tokens(rows[0])
 
         self.assertEqual(Decimal(50), rows[0].tokens_per_second)
-        self.assertIn('claude-agent/sonnet', wire['model_help'])
-        self.assertIn('Catalog modelID: claude-sonnet-5-5', wire['model_help'])
-        self.assertIn('historic executed version unconfirmed', wire['model_help'])
+        self.assertEqual(('sonnet',), rows[0].recorded_models)
+        self.assertEqual('claude-agent/Claude Sonnet 5.5\n\nBy Effort:\n• Default — 50 tok/s', wire['model_help'])
+        self.assertNotIn('Catalog modelID', wire['model_help'])
 
     def test_compaction_help_uses_its_own_recorded_model_not_the_main_prompt(self):
         saved = make_snapshot()

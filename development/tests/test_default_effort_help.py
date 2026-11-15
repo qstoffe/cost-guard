@@ -9,7 +9,7 @@ import unittest
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.pricing_catalog import catalog
 from src.analysis import analyze_snapshot
-from src.analysis.ai_stats_responses import ResponseCall, podium
+from src.analysis.ai_stats_responses import ResponseCall, response_rows
 from src.analysis.effort_defaults import DEFAULTS, request_effort
 from src.analysis.model_identity import encode_model, decode_model, dependencies
 from src.application.ai_stats import response_tokens
@@ -211,14 +211,16 @@ class DefaultEffortHelpTests(unittest.TestCase):
         self.assertEqual("High", explicit_wire["display"]["effort_help"])
         self.assertNotIn("default (", explicit_wire["display"]["model_detail_help"])
 
-    def test_podium_keeps_label_and_sample_math_but_adds_default_to_help(self):
+    def test_stats_keeps_sample_math_and_selected_default_without_effective_level(self):
         _, bundle, _, _ = projected_snapshot()
         entry = replace(bundle.trace_entries[0], model=ModelRef("anthropic", "claude-opus-5-5"),
                         variant="default", selected_effort=None)
-        rows = podium((SimpleNamespace(responses=(ResponseCall(entry, 1000),)),), (entry,), None, entry.completed_at_ms)
+        rows = response_rows((SimpleNamespace(responses=(ResponseCall(entry, 1000),)),), (entry,), None, entry.completed_at_ms)
         tokens = response_tokens(rows[0])
-        self.assertEqual("claude-opus-5-5", tokens["label"])
-        self.assertIn("default (medium)", tokens["model_help"])
+        self.assertEqual("Claude Opus 5.5", tokens["label"])
+        self.assertIn("\n\nBy Effort:\n• Default — ", tokens["model_help"])
+        self.assertNotIn("default (medium)", tokens["model_help"])
+        self.assertEqual("medium", rows[0].effort_evidence[0].effective)
         self.assertNotIn("*", tokens["model_help"])
         self.assertEqual(entry.tokens.output + entry.tokens.reasoning, rows[0].tokens_per_second)
 
