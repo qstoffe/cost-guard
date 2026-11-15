@@ -250,13 +250,14 @@ section > label input { min-width: 0; }
 .token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }
 .token-mix-summary > div { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .token-mix-summary > div > span { color: var(--muted); width: fit-content; }
+.token-mix-summary strong { width: fit-content; }
 .token-mix-status { color: var(--muted); font-size: .85rem; }
 .token-mix-section { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .token-mix-pan { overflow-x: auto; scrollbar-color: var(--control-line) var(--surface); }
 .token-mix-table { width: max-content; min-width: 100%; }
 .token-mix-table th, .token-mix-table td { padding: .45rem .6rem; white-space: nowrap; }
-.token-mix-table th:first-child, .token-mix-table td:first-child {
-  width: 100%; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal;
+.token-mix-table th:last-child, .token-mix-table td:last-child {
+  width: 100%; text-align: right;
 }
 .token-mix-table th button { width: auto; }
 .token-mix-section:first-of-type .token-mix-table :is(th, td):nth-child(2) { text-align: left; }

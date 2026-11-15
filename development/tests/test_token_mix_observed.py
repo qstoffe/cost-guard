@@ -68,10 +68,12 @@ class ObservedMixTests(unittest.TestCase):
             for name, label, amount in zip(('input', 'cache', 'write', 'output'),
                                            ('Input', 'Cached input', 'Cache write', 'Output'), expected):
                 self.assertEqual(f'{label} CCost: {amount}', dto['display_units'][unit][f'mix_{name}_cost_help'])
+                self.assertEqual(amount, dto['display_units'][unit][f'mix_{name}_cost_value'])
         self.assertEqual('2', dto['display']['mix_total_cost'])
         self.assertEqual('$0.02', dto['display_units']['usd']['mix_total_cost'])
         zero = project(self.report([TokenUsage()], models=[ModelRef('x', 'unpriced')])).to_json()['token_mix']
         self.assertEqual('Input CCost: 0 Credits', zero['display']['mix_input_cost_help'])
+        self.assertEqual('0 Credits', zero['display']['mix_input_cost_value'])
 
     def test_huge_counts_balance_exactly_without_float_and_keep_zero_categories_zero(self):
         report = self.report([TokenUsage(input=10**100 + 1, cache_read=10**100,

@@ -59,7 +59,7 @@ async function main() {
     const rows=await evaluate(`current.result.view.model_token_mix`);
     assert.equal(rows.length,65);
     const numericCells=await evaluate(`(() => {
-      const shares=[...current.tokenMix.summary.querySelectorAll('strong > span:first-child')].map(s=>s.textContent.split(' · ')[0]);
+      const shares=[...current.tokenMix.summary.querySelectorAll('strong')].map(s=>s.textContent);
       for(const [index,table] of [...document.querySelectorAll('.token-mix-table')].entries())
         for(const row of table.tBodies[0].rows) shares.push(...[...row.cells].slice(index===0?5:4,index===0?9:8).map(c=>c.textContent));
       return shares;
@@ -148,7 +148,8 @@ async function main() {
       globalThis.retainedButton=document.querySelector('.token-mix-table th button'); retainedButton.focus();
       document.querySelector('.token-mix-pan').scrollLeft=200; window.scrollTo(0,500);
       globalThis.retainedX=document.querySelector('.token-mix-pan').scrollLeft; globalThis.retainedY=window.scrollY;
-      globalThis.oldValue=current.tokenMix.summary.textContent`);
+      globalThis.oldValue=current.tokenMix.summary.textContent;
+      globalThis.oldCost=ReportView.display(current.result.view.token_mix,'mix_output_cost_value')`);
     assert.ok(await evaluate(`retainedX>0`),'refresh proof starts with a genuinely panned narrow table');
     if(cadence!=='--wall-clock') await evaluate(`current.checkedAt=Date.now()-300001; scheduleCachedReport()`);
     await until(`current.loading`,cadence==='--wall-clock'?315000:15000);
@@ -158,13 +159,18 @@ async function main() {
     await until(`!current.loading && current.result.sequence===2`);
     const retained=await evaluate(`({root:current.tokenMix.root===retainedRoot,rows:retainedRows.every(row=>row.isConnected),
       focus:document.activeElement===retainedButton,x:document.querySelector('.token-mix-pan').scrollLeft,expectedX:retainedX,
-      y:window.scrollY,expectedY:retainedY,changed:current.tokenMix.summary.textContent!==oldValue})`);
+      y:window.scrollY,expectedY:retainedY,
+      changed:ReportView.display(current.result.view.token_mix,'mix_output_cost_value')!==oldCost,
+      shares:current.tokenMix.metrics.every((node,index)=>node.textContent===ReportView.display(current.result.view.token_mix,
+        'mix_'+['input','cache','write','output'][index]+'_share'))})`);
     evidence.retained=retained;
     assert.ok(retained.root && retained.rows && retained.focus && retained.x===retained.expectedX &&
-      retained.y===retained.expectedY && retained.changed,'quiet coherent replacement '+JSON.stringify(retained));
+      retained.y===retained.expectedY && retained.changed && retained.shares,'quiet coherent replacement '+JSON.stringify(retained));
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
     await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
     await require('./probe_token_mix_periods.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_summary.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_width.cjs')({evaluate,command,tab,checks});
     await evaluate(`(()=>{const value=structuredClone(current.result);
       value.view.model_token_mix[0].model=value.view.model_token_mix[1].model='Same display name';
       current.tokenMix.update(value);})()`);

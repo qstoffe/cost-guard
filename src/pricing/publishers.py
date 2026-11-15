@@ -1,5 +1,5 @@
 """Conservative manufacturer identity from catalog metadata, never account routes."""
-from src.domain import ModelPricing
+from src.domain import ModelPricing, ModelRef
 from .catalog import PricingCatalog
 
 _ALIASES = {
@@ -27,3 +27,10 @@ def model_publisher(model: ModelPricing | None) -> str | None:
 
 def publisher_for(catalog: PricingCatalog, model_id: str) -> str | None:
     return model_publisher(catalog.resolve_reference(model_id))
+
+
+def token_mix_publisher(model: ModelRef, matched: ModelPricing | None) -> str | None:
+    """Web history only: manufacturer knowledge never supplies a rate or release."""
+    if matched is not None:
+        return model_publisher(matched)  # Retain catalog authority, including unresolved conflicts.
+    return {"openai": "OpenAI", "claude-agent": "Anthropic"}.get(model.provider)

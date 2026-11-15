@@ -14,7 +14,7 @@ from src.analysis.ai_stats import windows
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity, unverified_alias
-from src.pricing.publishers import model_publisher
+from src.pricing.publishers import model_publisher, token_mix_publisher
 
 from .migration_notice import migration_gap_notes
 from .models import ModelTokenMixProjection, PublisherTokenMixProjection, ReportKind, ReportProjection
@@ -127,7 +127,9 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         return None if unverified_alias(model.model, model.provider) else reference.resolve_reference(model.model)
 
     def publisher_key(model):
-        return model_publisher(catalog_model(model)) or "Unknown / unverified"
+        matched = catalog_model(model)
+        publisher = token_mix_publisher(model, matched) if scope is not None else model_publisher(matched)
+        return publisher or "Unknown / unverified"
 
     for group in groups:
         matched = catalog_model(group.model)
@@ -137,8 +139,12 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
             group.model.recorded_model if unverified_alias(group.model.model, group.model.provider) else
             group.model.display_name or group.model.recorded_model)
         key = _model_key(group.model)
+        # Model groups can span routes. Never infer their manufacturer from the
+        # last request; publisher aggregates below still use each request's facts.
+        manufacturers = {publisher_key(entry.model) for entry in by_model[key]}
+        publisher = next(iter(manufacturers)) if len(manufacturers) == 1 else "Unknown / unverified"
         rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix,
-            model_publisher(matched) or "—", key, observed_totals(by_model[key]), web_name))
+            "—" if publisher == "Unknown / unverified" else publisher, key, observed_totals(by_model[key]), web_name))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
     shown_keys = {_model_key(group.model) for group in groups}
