@@ -91,20 +91,15 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     assert.equal(rendered.length,13);
     rendered.forEach(card=>{
       const metric=expected.find(m=>m.metric===card.metric);
-      if (!['hourly-rate','token-rate'].includes(card.metric)) assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
+      if (card.metric!=='token-rate') assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
       assert.equal(card.trait,metric.display.trait);
       assert.equal(card.state,false);
        assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
     });
-    const rates=await evaluate(`[...document.querySelector('[data-metric="hourly-rate"]').querySelectorAll('.ai-stat-rate')].map(row=>({
-      label:row.getAttribute('aria-label'),value:row.querySelector('.ai-stat-rate-value').textContent}))`);
-    assert.deepEqual(rates.map(row=>row.label),['Calendar average','Workday average','Active AI average']);
-    assert.deepEqual(rates.map(row=>row.value),['calendar_rate','workday_rate','active_rate'].map(key=>
-      expected[0].display_units?.[unit]?.[key] || expected[0].display[key]));
-    if (item.name==='three-rates') assert.deepEqual(rates.map(row=>row.value),unit==='credits' ?
-      ['5 CCost/h','21 CCost/h','30 CCost/h'] : ['$0.05/h','$0.21/h','$0.30/h']);
-    if (item.name==='faster-robot') assert.equal(rates[2].value,unit==='credits'?'120 CCost/h':'$1.20/h');
-    if (item.name==='no-workdays') assert.equal(rates[1].value,'No workdays');
+    const hourly=rendered.find(card=>card.metric==='hourly-rate');
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate').length`),0);
+    if (item.name==='three-rates') assert.equal(hourly.value,unit==='credits'?'30 CCost/h':'$0.30/h');
+    if (item.name==='faster-robot') assert.equal(hourly.value,unit==='credits'?'120 CCost/h':'$1.20/h');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
      assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),forbidden);
@@ -120,7 +115,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     }
     const ax=await command('Accessibility.getFullAXTree',{},tab);
     assert.doesNotMatch(ax.nodes.filter(node=>!node.ignored).map(node=>[node.name?.value,node.description?.value].join(' ')).join('\n'),/vault|PRIVATE_SOURCE/);
-    states.push({case:item.name,theme,unit,rendered,rates});
+    states.push({case:item.name,theme,unit,rendered});
   }
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.period='all'; current.stats.update(current);
     document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
@@ -129,7 +124,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='unknown-duration').result)};
     current.stats.update(current); ReportView.setUnit('credits',output);`);
   assert.equal(await evaluate(`document.activeElement===__focusedStat`),true);
-   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hourly appetite when it's actually working/);
+   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Overlapping work counts once/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
    checks.push('standing best-effort/never Unavailable policy: every ready card across empty/sparse/partial/estimated canonical cases; both units/three themes; focused heading retained');

@@ -50,7 +50,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
             self.assertTrue(display['trait'])
             if key in ('total-tokens', 'token-rate'):
                 continue
-            self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
+            self.assertEqual({'value', 'trait', 'rate_help'}
                              if key == 'hourly-rate' else {'value', 'trait'}, set(display))
             self.assertIsNone(item.session_id)
             self.assertEqual('', item.detail)
@@ -75,7 +75,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
                 self.assertEqual((value, status), (item.value, item.status))
                 self.assertIn(reason, item.reasons)
                 display = stat_tokens(asdict(item))
-                self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
+                self.assertEqual({'value', 'trait', 'rate_help'}
                                  if key == 'hourly-rate' else {'value', 'trait'}, set(display))
                 self.assertTrue(display['trait'])
                 self.assertNotIn('Loading', str(display))
@@ -404,8 +404,10 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         self.assertIn('$', metric['display_units']['usd']['value'])
         self.assertIn('trait', metric['display'])
         hourly = result['view']['ai_stats'][0]['metrics'][0]
-        self.assertIn('calendar_rate', hourly['display'])
-        self.assertIn('active_rate', hourly['display_units']['usd'])
+        self.assertIn('rate_help', hourly['display'])
+        self.assertNotIn('calendar_rate', hourly['display'])
+        self.assertIn('podium', hourly)
+        self.assertIn('value', hourly['display_units']['usd'])
         self.assertEqual(24, hourly['rates']['calendar_hours'])
         with self.assertRaises(ValueError):
             parse_report({'kind': 'token-mix', 'stats_scope': 'all'})

@@ -15,7 +15,7 @@ async function main(){
   S.observe(state,work(20,20,true,[{period:'7-days'}])); assert.ok(state.percent<100,'legacy rows are not fun-policy results');
   const metrics=['hourly-rate','total-cost','subagent-cost','working-time','average-cost','expensive-session',
     'longest-session','busiest-day','night-owl','streak','parallel','total-tokens','token-rate'].map(metric=>({metric,value:metric==='token-rate'?'0':'12',exact_value:'12',
-      podium:[],display:{value:'12',trait:'synthetic',calendar_rate:'1',workday_rate:'2',active_rate:'3',rate_help:'synthetic',token_help:'synthetic',response_help:'synthetic'}}));
+      podium:[],display:{value:'12',trait:'synthetic',rate_help:'synthetic',token_help:'synthetic',response_help:'synthetic'}}));
   const accepted={observed_at_ms:100,view:{kind:'ai-stats',ai_stats_policy:'fun-5-buckets',
     ai_stats:[{period:'7-days',metrics}],ai_stats_work:{scopes:{'7-days':{ready:true}}}}};
   S.remember(state,accepted);

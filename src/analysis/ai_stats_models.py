@@ -80,7 +80,7 @@ def model_costs(roots, entries, values, key=model_key):
                     for name, (amount, sessions, evidence, efforts) in groups.items()}))
 
 
-def model_time(roots, entries, start, now, union, key=model_key):
+def activity_groups(roots, entries, start, now, key=model_key):
     # All attributable calls, NOT the bounded throughput sample. Canonical clone
     # survivors may borrow only the exact same physical request's interval.
     activity = [a for root in roots for a in root.activity]
@@ -90,16 +90,33 @@ def model_time(roots, entries, start, now, union, key=model_key):
     groups = {}
     for entry in entries:
         fact = exact.get(call_key(entry), clones.get((entry.source_instance, billing_request_fingerprint(entry))))
-        if fact is None or not entry.model.recorded_model or entry.completed_at_ms <= 0:
+        if not entry.model.recorded_model:
             continue
-        left, right = max(start or 1, fact.start_ms), min(now, fact.start_ms + fact.duration_ms)
-        if right > left:
-            pairs, evidence, efforts = groups.setdefault(key(entry), ([], [], {}))
-            pairs.append((left, right))
-            evidence.append(entry)
-            efforts.setdefault(selected_effort(entry), []).append((left, right))
+        pair = None
+        if (fact is not None and type(fact.start_ms) is int and fact.start_ms > 0
+                and type(fact.duration_ms) is int and fact.duration_ms > 0
+                and fact.start_ms + fact.duration_ms <= entry.completed_at_ms <= now
+                and not entry.error_name and entry.finish_reason not in ('error', 'aborted')):
+            left, right = max(start or 1, fact.start_ms), min(now, fact.start_ms + fact.duration_ms)
+            if right > left:
+                pair = left, right
+        # Retain missing timing too: rates must qualify the whole cost population,
+        # not divide every request's cost by one conveniently timed response.
+        groups.setdefault(key(entry), []).append((entry, pair))
+    return groups
+
+
+def model_time(groups, union):
     def duration(pairs):
         return sum(b - a for a, b in union(pairs))
-    return ranked({name: (duration(pairs), evidence,
+    prepared = {}
+    for name, rows in groups.items():
+        pairs, evidence, efforts = [], [], {}
+        for entry, pair in rows:
+            if pair is not None:
+                pairs.append(pair)
+                evidence.append(entry)
+                efforts.setdefault(selected_effort(entry), []).append(pair)
+        prepared[name] = (duration(pairs), evidence,
                           {effort: duration(intervals) for effort, intervals in efforts.items()})
-                   for name, (pairs, evidence, efforts) in groups.items()})
+    return ranked(prepared)

@@ -121,7 +121,7 @@ async function main() {
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
-    checks.push('Classic/Web light/dark, 360/800/1280/1920px, three rate rows, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
+    checks.push('Classic/Web light/dark, 360/800/1280/1920px, standard hourly headline/podium, equal column widths, no page overflow or nested scrolling');
     await evaluate(`window.__root=current.stats.root; window.__cards=[...document.querySelectorAll('.ai-stat')];
       window.__observation=current.result.observed_at_ms; selectStats(current,'today'); selectStats(current,'7-days'); selectStats(current,'30-days');`);
     assert.equal(await evaluate(`current.result.observed_at_ms===__observation && !current.loading && __cards.every((c,i)=>c===document.querySelectorAll('.ai-stat')[i])`),true);
@@ -137,11 +137,11 @@ async function main() {
     await evaluate(`document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
       document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Active AI average:/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Average cost across all AI work/);
     await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
       ReportView.setUnit('usd',output);`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),3);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),0);
     await evaluate(`ReportView.setUnit('credits',output)`);
     assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);

@@ -18,7 +18,7 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
       count ? `${count===3?200:count===2?250:100} tok/s` : 'No races yet. The podium is polished.');
     assert.equal(await evaluate(`document.querySelectorAll('[data-metric="token-rate"] .ai-stat-rate').length`),0);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-sample').length`),0);
-    for(const metric of ['total-tokens','total-cost','subagent-cost','working-time','average-cost']) {
+    for(const metric of ['hourly-rate','total-tokens','total-cost','subagent-cost','working-time','average-cost']) {
       assert.equal(await evaluate(`document.querySelectorAll('[data-metric="${metric}"] .ai-stat-racer').length`),count,metric);
       assert.ok(await evaluate(`!!document.querySelector('[data-metric="${metric}"] .ai-stat-value').textContent`));
     }
@@ -46,7 +46,7 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   await evaluate(`ReportView.setUnit('usd',output)`);
   assert.ok(await evaluate(`[...document.querySelectorAll('[data-metric="total-cost"] .ai-stat-speed')].every(n=>n.textContent.startsWith('$'))`));
   await evaluate(`ReportView.setUnit('credits',output)`);
-  for(const metric of ['total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost']) {
+  for(const metric of ['hourly-rate','total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost']) {
     assert.equal(await evaluate(`(() => {const c=document.querySelector('[data-metric="${metric}"]');
       return [...c.querySelectorAll('.ai-stat-racer')].every(r=>{
         const model=r.querySelector('.ai-stat-model').getBoundingClientRect(),amount=r.querySelector('.ai-stat-speed').getBoundingClientRect();
@@ -61,5 +61,5 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},tab);
   await require('./probe_ai_stats_friendly.cjs')({command,evaluate,until,cases,tab,checks});
   await evaluate(`current.result=${JSON.stringify(original)};current.period=${JSON.stringify(period)};current.stats.update(current);`);
-  checks.push('six shared canonical 0/1/2/3 medal lists, retained large totals, compact short names, no sample rows, units, model keyboard help and retained focus/nodes');
+  checks.push('seven shared canonical 0/1/2/3 medal lists, retained large totals, compact short names, no sample rows, units, model keyboard help and retained focus/nodes');
 };

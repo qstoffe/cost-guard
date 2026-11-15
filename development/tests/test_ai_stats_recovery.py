@@ -157,10 +157,11 @@ class ObservedStatsTests(unittest.TestCase):
 
             self.assertEqual('fun-5-buckets', dto['ai_stats_policy'])
             self.assertEqual(13, len(stats.metrics))
+            self.assertEqual((), stats.metrics[0].podium, 'session-time guesses never become model-rate evidence')
             for metric in dto['ai_stats'][0]['metrics'][:10]:
                 self.assertTrue(Decimal(metric['value']).is_finite())
                 self.assertGreaterEqual(Decimal(metric['value']), 0)
-                self.assertEqual({'value', 'trait', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help'}
+                self.assertEqual({'value', 'trait', 'rate_help'}
                                  if metric['metric'] == 'hourly-rate' else {'value', 'trait'}, set(metric['display']))
                 for unit in ('usd', 'credits'):
                     text = metric.get('display_units', {}).get(unit, metric['display'])['value']
@@ -173,7 +174,7 @@ class ObservedStatsTests(unittest.TestCase):
             self.assertGreaterEqual(stats.metrics[2].value, HOUR)
             self.assertEqual(stats.metrics[0].value * 8, stats.metrics[0].rates.robot_day)
 
-    def test_zero_active_duration_preserves_calendar_cost_without_inventing_active_basis(self):
+    def test_zero_active_duration_preserves_cost_without_inventing_rate_or_medals(self):
         measured_zero = replace(root('zero', NOW - HOUR, 24), intervals=((NOW - HOUR, 0, False),))
 
         values = calculate((measured_zero,))
@@ -183,10 +184,10 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertEqual(24, values['total-cost'].value)
         self.assertEqual(0, values['working-time'].value)
         self.assertEqual((1, 0, 0), (hourly.rates.calendar_rate, hourly.rates.active_rate, hourly.rates.robot_day))
-        self.assertEqual('No workdays', tokens['workday_rate'])
-        self.assertEqual('0 CCost/h', tokens['active_rate'])
-        self.assertIn("hourly snack break hasn't started", tokens['rate_help'])
-        self.assertNotIn('replacement', tokens['rate_help'])
+        self.assertEqual('0 CCost/h', tokens['value'])
+        self.assertEqual((), hourly.podium)
+        self.assertNotRegex(str(tokens), r'Calendar|Workday|replacement')
+        self.assertIn('Overlapping work counts once', tokens['rate_help'])
 
     def test_unanchored_or_extreme_history_never_invents_records_or_nonfinite_values(self):
         unanchored = StatsRoot('real', 'Real record', (), ((0, None, False), (-1, -1, False)))

@@ -8,7 +8,7 @@ module.exports = async ({evaluate,checks}) => {
     const cards=[...parent.querySelectorAll('.ai-stat')];
     const pending=()=>${require('../fixtures/stats_pending.cjs')('.ai-stat','parent')};
      const cold=pending(), coldState=cards.map(c=>({metric:c.dataset.metric,text:c.textContent,
-       values:[...c.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')].map(n=>n.textContent),
+        values:[...c.querySelectorAll('.ai-stat-value')].map(n=>n.textContent),
        children:c.childNodes.length})),
        before=cards.map(c=>({width:c.getBoundingClientRect().width,height:c.getBoundingClientRect().height}));
     const partial=structuredClone(original);partial.view.ai_stats_work.scopes['30-days'].ready=false;
@@ -22,7 +22,7 @@ module.exports = async ({evaluate,checks}) => {
      const tokens=tokenCards.map(c=>c.textContent);ReportView.setUnit('usd',parent);
      const unitIndependent=tokenCards.every((c,i)=>c.textContent===tokens[i]);ReportView.setUnit('credits',parent);
      const knownCosts=Object.fromEntries(cards.filter(c=>['hourly-rate','total-cost','subagent-cost','average-cost','expensive-session'].includes(c.dataset.metric))
-       .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')].map(n=>n.textContent)]));
+        .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-value')].map(n=>n.textContent)]));
      state.result=partial;view.update(state);
      const qualifiedRetention=${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};
      state.result=original;view.update(state);
@@ -30,7 +30,7 @@ module.exports = async ({evaluate,checks}) => {
     const retained=cards.every((c,i)=>c.firstChild===nodes[i]);
     state.period='all';state.result={...original,view:{...original.view,
       ai_stats_work:{scopes:{all:{ready:false}}}}};view.update(state);const switched=pending();
-     let failed=true, cases=0;
+      let failed=true, cases=0, firstFailure=null;
      const invalid=structuredClone(original);invalid.view.ai_stats_policy='fun-2-tokens';
      const malformed=structuredClone(original);malformed.view.ai_stats[0].metrics=[];
      state.period='30-days';state.result=original;view.update(state);
@@ -38,7 +38,11 @@ module.exports = async ({evaluate,checks}) => {
        for(const failedAttempt of [false,true]) for(const interrupted of [false,true])
          for(const loading of [false,true]) for(const phase of ['queued','deferred','parked','backoff','source_starting']) {
            Object.assign(state,{period:'30-days',result,failed:failedAttempt,interrupted,loading,phase});
-            view.update(state);failed &&= ${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};cases++;
+             view.update(state);
+             const retainedCase=${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};
+             if(!retainedCase && !firstFailure) firstFailure={cases,scope:view.readyScope,
+               values:cards.map(c=>[c.dataset.metric,c.textContent]),knownCosts};
+             failed &&=retainedCase;cases++;
          }
     state.failed=false;state.result=original;state.period='30-days';view.update(state);
      const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
@@ -46,20 +50,23 @@ module.exports = async ({evaluate,checks}) => {
      const unsupported=structuredClone(original);
      for(const row of unsupported.view.ai_stats) for(const metric of row.metrics) {
        for(const display of [metric.display,...Object.values(metric.display_units||{})])
-         for(const key of ['value','calendar_rate','workday_rate','active_rate']) display[key]='N/A';
+          display.value='N/A';
        metric.detail='Not Applicable';metric.display.trait='N/A';metric.podium=[];
        if(metric.metric==='token-rate')metric.value='0';
      }
      const neutralView=new AIStatsView.View(()=>{});
      neutralView.update({period:'30-days',result:unsupported});
      const neutral=!/N\\/A|Not Applicable/i.test(neutralView.root.textContent) &&
-       [...neutralView.root.querySelectorAll('.ai-stat-value:not(.ai-stat-rates),.ai-stat-rate-value')].every(n=>n.textContent==='—');
+        [...neutralView.root.querySelectorAll('.ai-stat-value')].every(n=>n.textContent==='—');
+      const hourly=parent.querySelector('[data-metric="hourly-rate"]');
+      const standardHourly=hourly.querySelector('.ai-stat-value').tagName==='P' &&
+        hourly.querySelectorAll('.ai-stat-value').length===1 && !hourly.querySelector('.ai-stat-rate');
      state.result=null;state.statsIdentity='invalidated';view.update(state);
      const invalidated=pending();
-     parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,qualifiedRetention,neutral,invalidated,order,cases,coldState};
+      parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,qualifiedRetention,neutral,invalidated,standardHourly,order,cases,coldState,firstFailure};
   })()`);
-   for(const [key,value] of Object.entries(result)) if(!['order','cases','coldState'].includes(key))
-     assert.equal(value,true,key+': '+JSON.stringify(result.coldState));
+   for(const [key,value] of Object.entries(result)) if(!['order','cases','coldState','firstFailure'].includes(key))
+      assert.equal(value,true,key+': '+JSON.stringify(result.firstFailure||result.coldState));
    assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
      'AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);

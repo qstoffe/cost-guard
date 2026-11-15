@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from .active_hour import HOUR_MS, USAGE_FIELDS, deduplicated_requests
-from .ai_stats_rates import HourlyRates, hourly_rates
+from .ai_stats_rates import HourlyRates, hourly_rates, model_hourly_rates
 from .ai_stats_responses import response_rows
 from .ai_stats_buckets import model_key
-from .ai_stats_models import model_costs, model_time, observed_tokens, standings
+from .ai_stats_models import activity_groups, model_costs, model_time, observed_tokens, standings
 from .ai_stats_subagents import child_requests
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
@@ -223,7 +223,7 @@ def _request_costs(entries, valuation):
     return values, guessed
 
 
-def _cost_metrics(roots, entries, valuation, source_complete, duration, time_reasons, per_root, key):
+def _cost_metrics(roots, entries, valuation, source_complete, duration, time_reasons, per_root, key, activity):
     owner = {entry.session_id: root for root in roots for entry in root.entries}
     values, guessed = _request_costs(entries, valuation)
     cost_podium, average_podium = model_costs(roots, entries, values, key)
@@ -247,7 +247,8 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
     expensive = min(costs, key=lambda sid: (-costs[sid], sid)) if costs else None
     root = next((root for root in roots if root.session_id == expensive), None)
     rate_reasons = tuple(dict.fromkeys((*reasons, *time_reasons)))
-    return (Stat('hourly-rate', min(Decimal('1e9'), rate), cost_status, reasons=rate_reasons),
+    return (Stat('hourly-rate', rate, cost_status, reasons=rate_reasons,
+                 podium=model_hourly_rates(activity, entries, values, union)),
          Stat('total-cost', total, cost_status, reasons=reasons, podium=cost_podium),
          Stat('average-cost', average, cost_status, reasons=reasons, podium=average_podium),
          Stat('expensive-session', costs[expensive] if root else Decimal(0), cost_status,
@@ -310,7 +311,8 @@ class StatsObservation:
         complete = source_complete and all(root.source_complete for root in roots)
         per_root, unknown, provisional = _timing(roots, start, self.now, self)
         duration, _status, reasons, timed = _time_metrics(roots, per_root, unknown, provisional, self.zone, complete)
-        cost = _cost_metrics(roots, entries, self.valuation, complete, duration, reasons, per_root, self.model_key)
+        activity = activity_groups(roots, entries, start, self.now, self.model_key)
+        cost = _cost_metrics(roots, entries, self.valuation, complete, duration, reasons, per_root, self.model_key, activity)
         # Original positive evidence only: no session metadata, epoch or guessed age.
         stamps = [entry.completed_at_ms for entry in entries if 0 < entry.completed_at_ms <= self.now]
         stamps.extend(left for root in roots for left, _duration, _running in root.intervals
@@ -318,7 +320,7 @@ class StatsObservation:
         rates = hourly_rates(cost[1].value, duration, period=period, now=self.now, zone=self.zone,
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
         metrics = (replace(cost[0], rates=rates), cost[1],
-            replace(timed[0], podium=model_time(roots, entries, start, self.now, union, self.model_key)),
+            replace(timed[0], podium=model_time(activity, union)),
             *cost[2:], *timed[1:], *_token_metrics(roots, entries, complete, start, self.now, self.model_key))
         return StatsPeriod(period, start, self.now, metrics)
 

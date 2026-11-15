@@ -160,8 +160,10 @@ class ModelStandingsTests(unittest.TestCase):
         self.assertEqual(2500, metrics['working-time'].value)
         self.assertEqual(1000, metrics['working-time'].podium[0].value)
         self.assertEqual(10, metrics['total-tokens'].podium[0].value)
+        self.assertEqual(3600, metrics['hourly-rate'].podium[0].value)
         all_time = period_stats((root,), lambda *_: Decimal(1), period='all', start=None, now=self.NOW, zone='UTC')
         self.assertEqual(40000, next(m for m in all_time.metrics if m.metric == 'working-time').podium[0].value)
+        self.assertEqual(3600, all_time.metrics[0].podium[0].value, 'all forty request costs / all forty seconds')
 
     def test_unique_catalog_label_fallback_collision_and_model_identity_not_effort(self):
         from development.tests.fixtures.report_runtime import FakePricingProvider
@@ -223,6 +225,8 @@ class ModelStandingsTests(unittest.TestCase):
                   400: Decimal('.0089'), 50: Decimal('.0001')}
         observation = StatsObservation(roots, lambda _model, tokens: prices[tokens.total], now=self.NOW, zone='UTC')
         expected = {
+            'hourly-rate': (Decimal('.0170') * 3600000 / 7000,
+                (('High', Decimal('12.06')), ('Default', Decimal('2.1')), ('Low', Decimal('.36')))),
             'total-cost': (Decimal('.0170'), (('High', Decimal('.0134')), ('Default', Decimal('.0035')), ('Low', Decimal('.0001')))),
             'total-tokens': (1140, (('High', 620), ('Default', 470), ('Low', 50))),
             'working-time': (7000, (('Default', 6000), ('High', 4000), ('Low', 1000))),
@@ -248,7 +252,7 @@ class ModelStandingsTests(unittest.TestCase):
                 self.assertRegex(row['model_help'], r'^claude-agent/Claude Sonnet 5\.5\n\nBy Effort:\n• ')
                 self.assertEqual(1, row['model_help'].count('• Default'))
                 self.assertNotRegex(row['model_help'], r'unverified|signature|catalog|observed|sampled|\(medium\)')
-                if card['metric'] in ('total-cost', 'average-cost'):
+                if card['metric'] in ('hourly-rate', 'total-cost', 'average-cost'):
                     self.assertIn('$', row['display_units']['usd']['model_help'])
                     self.assertIn('CCost', row['display']['model_help'])
                 else:

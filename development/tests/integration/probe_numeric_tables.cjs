@@ -129,8 +129,8 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
       const metrics=names.map(metric=>({metric,value:metric==='token-rate'?'0':'125',exact_value:'125',reasons:[],podium:[],
         display:{value:'125 CCost',trait:'Fixture',token_help:'125 tokens',response_help:'No response sample',
-          calendar_rate:'125 CCost/h',workday_rate:'125 CCost/h',active_rate:'125 CCost/h',rate_help:'Fixture rates'},
-        display_units:{usd:{value:'$1.25',calendar_rate:'$1.25/h',workday_rate:'$1.25/h',active_rate:'$1.25/h'}}}));
+          rate_help:'Fixture rates'},
+        display_units:{usd:{value:'$1.25'}}}));
       numericStatsState={period:'today',result:{source:{identity:'stats-${unit}',generation:'v2'},view:{
         kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-5-buckets',ai_stats_work:{scopes:{today:{ready:true}}},
         ai_stats:[{period:'today',start_ms:1000,metrics}]}}};
@@ -151,9 +151,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       'Loading…','pending period cannot inherit another period');
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-tokens').value.textContent`),'Loading…');
     assert.equal(await evaluate(owner,`[...numericStats.cards.values()].every(card=>
-      card.card.querySelector('h4') && (card.rates.size ?
-        [...card.rates.values()].every(value=>value.textContent==='Loading…') :
-        card.value.textContent==='Loading…'))`),true,
+      card.card.querySelector('h4') && card.value.textContent==='Loading…')`),true,
       'pending period retains every heading and uniformly unresolved values');
   }
   checks.push('AI Stats actual DOM: cold and pending periods retain all headings with uniform Loading…, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');

@@ -4,10 +4,8 @@
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
-  const idleRateHelp = 'The robots have three ways to split the snack bill.\n\n' +
-    'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))\n\n' +
-    "Workday average: The robot's office calendar is taking a nap. (Total CCost ÷ (workdays × 8))\n\n" +
-    "Active AI average: The silicon's hourly snack break hasn't started. (Total CCost ÷ active AI hours)";
+  const idleRateHelp = 'Average cost across all AI work: total CCost for every model ÷ total active AI hours. ' +
+    'Overlapping work counts once. Individual models can have higher or lower hourly rates.';
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
     ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
@@ -24,9 +22,8 @@ const AIStatsView = (() => {
     ['parallel', '🔀', 'Peak Parallel Sessions', 'The biggest robot party running at once.']
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
-  const rateRows = [['calendar_rate', 'Calendar average'], ['workday_rate', 'Workday average'], ['active_rate', 'Active AI average']];
   const costMetrics = new Set(['hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session']);
-  const podiumMetrics = new Set(['token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
+  const podiumMetrics = new Set(['hourly-rate', 'token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
   const face = value => typeof value === 'string' ? value.replace(/\b(?:N\/A|Not Applicable)\b/gi, '—') : value;
   function valid(result) {
     const rows = result?.view?.ai_stats;
@@ -37,11 +34,12 @@ const AIStatsView = (() => {
           typeof metric.display?.value === 'string' && typeof metric.display?.trait === 'string' &&
           (key !== 'total-tokens' || /^\d+$/.test(metric.exact_value) && typeof metric.display.token_help === 'string') &&
           ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
-            (key !== 'hourly-rate' || [...rateRows.map(([id]) => id), 'rate_help'].every(id =>
-              typeof (metric.display_units?.[unit]?.[id] ?? metric.display[id]) === 'string'))) &&
+             (key !== 'hourly-rate' ||
+               typeof (metric.display_units?.[unit]?.rate_help ?? metric.display.rate_help) === 'string')) &&
            (!podiumMetrics.has(key) || Array.isArray(metric.podium) && metric.podium.length <= 3 &&
              metric.podium.every(row => typeof row.label === 'string' && typeof row.model_help === 'string' &&
-               (key === 'token-rate' || Number.isFinite(Number(row.podium_value)) && Number(row.podium_value) > 0) &&
+                (key === 'token-rate' || Number.isFinite(Number(row.podium_value)) &&
+                  (key === 'hourly-rate' ? Number(row.podium_value) >= 0 : Number(row.podium_value) > 0)) &&
                ['usd', 'credits'].every(unit => typeof (row.display_units?.[unit]?.amount ?? row.display?.amount ?? row.speed) === 'string'))) &&
            (key !== 'token-rate' ||
               typeof metric.display.response_help === 'string' &&
@@ -115,21 +113,12 @@ const AIStatsView = (() => {
           const card = e('article', undefined, 'ai-stat'), heading = e('h4');
           card.dataset.metric = key;
           const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
-          const retained = {metric: null, rates: new Map(), podium: []};
-          const hasRates = key === 'hourly-rate', hasPodium = podiumMetrics.has(key), response = key === 'token-rate';
-          const helpButton = ContextHelp.button(title, () => retained.metric && (hasRates || response || key === 'total-tokens') ?
-            ReportView.display(retained.metric, hasRates ? 'rate_help' : response ? 'response_help' : 'token_help') : help);
+          const retained = {metric: null, podium: []};
+          const hourly = key === 'hourly-rate', hasPodium = podiumMetrics.has(key), response = key === 'token-rate';
+          const helpButton = ContextHelp.button(title, () => retained.metric && (hourly || response || key === 'total-tokens') ?
+            ReportView.display(retained.metric, hourly ? 'rate_help' : response ? 'response_help' : 'token_help') : help);
           heading.append(symbol, helpButton);
-          const value = e(hasRates ? 'div' : 'p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
-          if (hasRates) {
-            value.classList.add('ai-stat-rates');
-            for (const [id, label] of rateRows) {
-              const row = e('div', undefined, 'ai-stat-rate'), amount = e('span', '', 'ai-stat-rate-value');
-              row.setAttribute('role', 'group'); row.setAttribute('aria-label', label);
-              row.append(e('span', label, 'ai-stat-rate-label'), amount); value.append(row);
-              retained.rates.set(id, amount);
-            }
-          }
+          const value = e('p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
           const podium = e('div', undefined, 'ai-stat-podium');
           if (hasPodium) {
             if (response) card.classList.add('ai-stat-response');
@@ -166,10 +155,13 @@ const AIStatsView = (() => {
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;
-      if (state.result?.source) this.sourceIdentity = JSON.stringify([
-        state.result.source.identity, state.result.source.generation, state.result.view.timezone_id]);
+      if (state.result?.source) {
+        this.sourceIdentity = JSON.stringify([
+          state.result.source.identity, state.result.source.generation, state.result.view.timezone_id]);
+        this.timezone = state.result.view.timezone_id;
+      }
       const identity = state.statsIdentity ?? this.sourceIdentity;
-      const day = ReportView.timestamp(Date.now(), state.result?.view.timezone_id).slice(0, 10);
+      const day = ReportView.timestamp(Date.now(), state.result?.view.timezone_id ?? this.timezone).slice(0, 10);
       const scope = JSON.stringify([identity, state.period,
         state.period === 'all' ? null : state.period === 'month' ? day.slice(0, 7) : day]);
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
@@ -181,9 +173,7 @@ const AIStatsView = (() => {
         const message = 'Loading…';
         for (const item of this.cards.values()) {
           item.metric = null;
-          if (item.rates.size) {
-            for (const node of item.rates.values()) ReportView.text(node, message);
-          } else ReportView.text(item.value, message);
+          ReportView.text(item.value, message);
           ReportView.text(item.detail, ''); ReportView.text(item.trait, '');
           if (item.podiumNode.firstChild) item.podiumNode.replaceChildren();
         }
@@ -199,14 +189,12 @@ const AIStatsView = (() => {
             row.period, row.start_ms, metric.metric,
             metric.metric === 'expensive-session' ? metric.session_id : null], 'value',
             metric.metric === 'subagent-cost' || !metric.reasons?.length, metric.value,
-            ['value', 'calendar_rate', 'workday_rate', 'active_rate', 'rate_help']);
+            ['value', 'rate_help']);
         }
         const card = this.cards.get(metric.metric);
         if (costMetrics.has(metric.metric)) card.costScope = scope;
         card.metric = metric;
-        if (card.rates.size) {
-          for (const [id, node] of card.rates) ReportView.text(node, () => face(ReportView.display(metric, id)));
-        } else ReportView.text(card.value, () => face(ReportView.display(metric, 'value')));
+        ReportView.text(card.value, () => face(ReportView.display(metric, 'value')));
         if (card.podium.length) {
           if (metric.podium.length) {
             for (const [index, item] of card.podium.entries()) {
