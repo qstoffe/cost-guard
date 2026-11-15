@@ -95,10 +95,12 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
     targetsBefore.sort(),'parent pagehide cannot leave an orphan native PiP');
   assert.equal(await evaluate(`miniWatch.button.getAttribute('aria-disabled')`),'true');
   assert.equal(await evaluate(`miniWatch.button.disabled`),false,'policy-disabled control remains keyboard discoverable');
-  assert.match(await evaluate('miniWatch.button.title'),/policy/);
+  assert.equal(await evaluate('miniWatch.button.title'),'');
+  assert.equal(await evaluate('miniWatch.feedback.textContent'),'');
   assert.equal(await evaluate(`document.permissionsPolicy?.allowsFeature('picture-in-picture') ??
     document.featurePolicy.allowsFeature('picture-in-picture')`),false);
   await evaluate('miniWatch.button.click()',true);
   assert.equal(await evaluate('miniWatch.window'),null,'actual header policy prevents a native request');
+  assert.equal(await evaluate('miniWatch.feedback.textContent'),'Could not open Mini Watch. Try again.');
   checks.push('Native delayed-resolution On/Off/On, native X, host identity, held/failed CSS, theme/route return, parent reload while opening, missing publication, one stream/no unhandled rejection, native user-activation rejection, actual Permissions-Policy disablement and focusable error description');
 };

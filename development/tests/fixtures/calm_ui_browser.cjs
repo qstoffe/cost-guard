@@ -69,7 +69,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       const values=[];for(const node of [...output.querySelectorAll('.help-value,.help-button')].slice(0,6)){
         node.focus();ContextHelp.refresh(node);const panel=document.getElementById('context-help');
         if(panel?.matches(':popover-open'))values.push(panel.innerText)}
-      ContextHelp.dismiss();return values})()`);
+      ContextHelp.dismiss(output);return values})()`);
     helps.forEach(text=>assert.doesNotMatch(text,forbidden,route+' visible popover'));
     const ax = await command('Accessibility.getFullAXTree');
     assert.ok(!ax.nodes.some(node=>!node.ignored && forbidden.test(node.name?.value || '')),route+' AX tree');
