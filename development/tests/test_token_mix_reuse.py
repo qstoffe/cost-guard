@@ -109,6 +109,36 @@ class TokenMixReuseTests(unittest.TestCase):
         self.assertEqual(8, source.load_count)
         self.assertEqual(2, service.model_availability_source.calls)
 
+    def test_same_root_ids_and_revisions_in_a_new_source_instance_cannot_reuse_old_facts(self):
+        original, source = self.service()
+        original.build_token_mix_history(scope='all')
+        for sid, snapshot in list(source.snapshots.items()):
+            root = replace(snapshot.root,
+                provenance=replace(snapshot.root.provenance, source_instance='new-source-instance'))
+            source.snapshots[sid] = replace(snapshot, root=root, sessions=(root,))
+        service = self.fresh(original)
+
+        with patch.object(service.cache_repository, 'get_many', wraps=service.cache_repository.get_many) as reads:
+            report = service.build_token_mix_history(scope='7-days')
+
+        self.assertEqual(8, len(reads.call_args.args[1]))
+        self.assertEqual(16, source.load_count)
+        self.assertEqual(24, report.token_mix.request_count)
+        self.assertEqual(0, source.metrics.counts.get('token_mix_ephemeral_hits', 0))
+
+    def test_active_roots_are_not_transferred_as_stable_facts(self):
+        source = SyntheticMonthSource(3, 2, month_start_ms=START, running_roots=1)
+        original = report_service(self, source)
+        original.cache_token_mix_history = True
+        original.build_token_mix_history(scope='all')
+        service = self.fresh(original)
+
+        service.build_token_mix_history(scope='7-days')
+
+        self.assertNotIn('root-0000', service.token_mix_reuse['roots'])
+        self.assertEqual(4, source.load_count)
+        self.assertEqual(2, source.metrics.counts['token_mix_ephemeral_hits'])
+
     def test_failed_validation_does_not_publish_new_evidence_and_recovers(self):
         service, source = self.service()
         service.build_token_mix_history(scope='all')

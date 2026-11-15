@@ -10,17 +10,8 @@ def main():
     root = Path(__file__).resolve().parents[3]
     if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise SystemExit('Requires a disposable standard GitHub-hosted runner.')
-    if os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
-        difference = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
-                                    cwd=root, capture_output=True, text=True)
-        if difference.returncode:
-            raise RuntimeError('Affected-owner lookup failed: ' + difference.stderr[-4000:])
-        changed = difference.stdout.splitlines()
-        owners = {'src/application/projection.py', 'src/application/display.py', 'src/reports/models.py',
-                  'src/web/jobs.py', 'src/web/composition.py', 'src/web/report_control.py', 'src/web/assets/app.css'}
-        if not any('token_mix' in path or 'token-mix' in path or path in owners for path in changed):
-            print('Token Mix-specific probe not applicable: no affected owner or probe changed.')
-            return
+    # The existing common workflow owns affected-source admission. Do not add a
+    # second checkout/Git gate that can prevent the required browser evidence.
     from playwright.sync_api import sync_playwright
     output = root / 'ci-results/token-mix.json'
     output.parent.mkdir(parents=True, exist_ok=True)
