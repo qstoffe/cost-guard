@@ -329,12 +329,12 @@ const WatchView = (() => {
   }
   const columns = [
     ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
-    ['Duration', 'Time spent on this prompt.'],
+    ['Duration', ReportView.headerHelp.duration],
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
     ['Model', ReportView.headerHelp.model],
     ['Effort', 'How much reasoning the model was asked to do.'],
     ['CCost', 'Reference cost of this prompt, including attributed linked subagent calls.'],
-    ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
+    ['Calls', ReportView.headerHelp.calls],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],
     ['Δ Ctx', 'For a running prompt, current session Context minus this prompt’s incoming context.\nA negative value means it shrank; this is not the total size.']

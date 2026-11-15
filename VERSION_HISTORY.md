@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.61 - 2026-11-15
+
+- Session Detail orders the complete history table and its existing totals footer before one shared Watch Context line, then Tool Calls/Skills. Context price warnings and disclosure state retain their existing semantics; no separate Total CCost summary is added.
+- Model, Calls and Duration help match the finalized Watch presentation, including source-backed model/effort attribution and compact provider/model/effort request counts. Effort cells retain their values without a help target.
+- Detail-only display authority scopes qualified prompt Token Mix and independently accepted footer metrics to source/session/dependency epochs and pinned revisions. Pending refresh retains accepted displays; complete corrected withdrawal and source/auth loss clear them. Cold pending mix says Loading, never running. Footer cells/help targets and selected text stay connected; canonical accounting, billing and other views are unchanged.
+
 ## v81.60 - 2026-11-15
 
 - Sessions extracts each sort value once per row instead of once per comparison. Stable value sorting preserves ascending session IDs for equal values in either direction and keeps unknown values last.

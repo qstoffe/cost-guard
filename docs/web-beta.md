@@ -83,7 +83,7 @@ without changing the visible Model/Effort cells. Each request/contributor uses i
 own evidence: recorded request first, current location-qualified OpenCode
 configuration/package estimate next, then reviewed official vendor defaults.
 Unsupported evidence says **`default (unknown)`**; explicit efforts stay unchanged.
-Only help directly on an **Effort value** in Full Watch, Session detail or
+Only help directly on an **Effort value** in Full Watch or
 Comparisons adds `*` and one short source-sensitive explanation. Documentation and
 current-configuration estimates are not proof of a historical run. Model, CCost,
 Calls, Mini and AI Stats podium help have no default footnote. Generic headers,
@@ -975,9 +975,15 @@ Source-generation changes include routine running activity and do not exhaust a 
 
 ## Complete live session history
 
-Both normal and legacy `/live` links open the same live page; the legacy URL replaces its history entry. **Show all sessions**, the real title, full selectable **Session ID**, and Watch's shared canonical **Context:** line precede one unframed table. The line uses the same session continuation estimator, triangle/octagon severity, price impact and contextual help as Watch; unknown is N/A, never a guessed warning. No redundant total-cost/rate summary or mode buttons remain.
+Both normal and legacy `/live` links open the same live page; the legacy URL replaces its history entry. **Show all sessions**, the real title and full selectable **Session ID** precede one unframed table. Watch's single shared canonical **Context:** line sits immediately below that table and its **Complete session** footer, before Tool Calls/Skills. It uses the same session continuation estimator, triangle/octagon severity, price impact and contextual help as Watch; unknown is N/A, never a guessed warning. No redundant total-cost/rate summary or mode buttons remain.
 
 Every observed prompt appears oldest to newest, with no 50-row cap or user-facing pagination. Prompt alone flexes/ellipsizes; other columns keep intrinsic widths. The document scrolls vertically. Clock, actual **[RUNNING]**, number and preview share one line; running ink is yellow across all cells, reverting to theme foreground after canonical completion. Model/Effort use structured main-prompt evidence. Shared heading help covers all ten columns; prompt clock and CCost expose useful conditional detail. **Complete session** remains the aligned canonical whole-session footer, not a sum of fetched rows.
+
+Model, Calls and Duration help match Full Watch's Running Prompts. Model help preserves recorded main/linked-subagent model and effort evidence, including unknown attribution; Calls groups real model requests by provider/model/effort, not tool calls. Effort values and header help remain, but Effort cells have no tooltip or focusable help target. Duration has no redundant value tooltip.
+
+Prompt Token Mix starts with **Loading…** while pending, never “running”. Once a qualified I/C/W/O percentage exists, benign same-prompt refreshes retain it until a newer qualified observation is ready. The existing Complete session footer independently retains Calls, Duration, CCost, incoming/extra shares and aggregate mix through partial refreshes. New authoritative values may increase, decrease or become verified zero. Stable footer cells keep open help, focus, selection and scroll through normal updates and unit changes.
+
+These are bounded view-owned display observations, not new accounting or completion evidence. A retained-value/update or transport-error status explains temporary reuse. Source/session/dependency epoch changes, supported complete evidence withdrawal and authorization/identity loss clear incompatible trusted displays, including focused values. Unknown source facts remain unknown; no extra history acquisition or browser-side token/cost arithmetic is introduced.
 
 Since v81.33, request-model hover/focus/touch help shows the **recorded provider/model**
 (for example `claude-agent/sonnet`, not a friendly-name/bracket duplicate). Friendly

@@ -14,6 +14,7 @@ from src.sources.errors import SourceError, SessionExportError
 
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
+from .session_values import INVALID_REASONS, value_authority
 
 
 class SessionDetails:
@@ -40,6 +41,7 @@ class SessionDetails:
                 raise RuntimeError("detail_busy")
             entry = self.histories.setdefault(session_id, dict(history=ActivityHistory(), result=None, activity=None,
                 revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
+                value_authority=None,
                 row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
                 acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                     queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None))
@@ -214,7 +216,8 @@ class SessionDetails:
     @staticmethod
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
-                                              "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit", "activity")}
+                                              "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit", "activity",
+                                              "value_authority")}
 
     def activity_page(self, token, revision, offset):
         with self.lock:
@@ -248,9 +251,11 @@ class SessionDetails:
             expired = entry.get('validated') is None or not 0 <= self.clock() - entry['validated'] <= 3600
             pending = pending or expired
             acquisition = self.acquisition_status(entry)
+            invalidated = acquisition["reason"] in INVALID_REASONS
         report = capture["result"]
         if pending or report is None:
-            return dict(state=capture["state"], pending=pending, result=None, acquisition=acquisition)
+            return dict(state=capture["state"], pending=pending, result=None, acquisition=acquisition,
+                        values_invalidated=invalidated)
         block = report.prompt_blocks[0]
         rows = block.rows
         stale = revision is not None and revision != capture["revision"]
@@ -266,7 +271,13 @@ class SessionDetails:
             row["id"] = identity((block.session_id, row["event_id"], row["is_compaction"]))
             row["last_observed_at_ms"] = capture["row_observations"].get(row["event_id"])
             row["retained"] = row["event_id"] in capture["omitted_ids"]
+        authority = capture["value_authority"]
+        if authority is not None:
+            authority = {**authority, "rows": {row["event_id"]: authority["rows"].get(row["event_id"])
+                for row in view["prompt_blocks"][0]["rows"]}}
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
+            values_invalidated=invalidated,
+            value_authority=authority,
             **(dict(activity=activity_summary(capture["activity"])) if not chunk else {}),
             offset=offset, total=len(rows), pending=False, mode=lease["mode"],
             **(dict(acquisition=acquisition) if acquisition['phase'] == 'failed' and lease['frozen'] is None else {}),
@@ -299,6 +310,7 @@ def acquire_detail(service, history, key, *, unavailable=False):
             metadata=dict(timezone_id=service.timezone_id,
                 ccost_display_unit=service.config.get('ccostDisplayUnit', 'credits'),
                 activity=history.activity_for(source, report.prompt_blocks[0].rows),
+                value_authority=value_authority(history, source),
                 observed_at_ms=service.now_ms, row_observations=history.row_observations,
                 omitted_ids=history.omitted_ids, export_identity=export_identity))
     except SourceError as error:

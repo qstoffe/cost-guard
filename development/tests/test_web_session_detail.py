@@ -19,7 +19,7 @@ from src.application.session_detail import SessionDetails
 from src.analysis.causal import _root_timeline, prompt_parent_ids
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
-from src.domain import EventKind
+from src.domain import EventKind, TokenUsage
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.sources.selection import SourceSelection
 from src.web.http import LoopbackServer
@@ -320,6 +320,60 @@ class SessionDetailTests(unittest.TestCase):
         block = self.details.page(token, 0)["result"]["view"]["prompt_blocks"][0]
         self.assertFalse(block["comparison_cost_complete"])
         self.assertTrue(any(row["unresolved_cost"] for row in block["rows"]))
+
+    def test_detail_help_reuses_final_watch_request_groups_and_model_details(self):
+        from src.application.live_projection import card_row
+        from src.application.display import with_display
+        from src.reports.watch_capture import capture_rows
+        from src.watch.models import WatchRow
+
+        source = FakeSource(make_uncompacted_snapshot())
+        service = self.service(source)
+        token = self.details.open("root", "live")
+        self.tick(service)
+        detail = self.details.page(token, 0, begin=True)["result"]["view"]["prompt_blocks"][0]
+        capture, _ = capture_rows(service, source.snapshot.root)
+        watch = {row.event_id: with_display(card_row(WatchRow("root", "Root", row), self.now),
+            "UTC").to_json()["prompt"] for row in capture.rows}
+
+        for row in detail["rows"]:
+            self.assertEqual(watch[row["event_id"]]["watch_calls_help"], row["watch_calls_help"])
+            self.assertEqual(watch[row["event_id"]]["display"]["model_detail_help"],
+                             row["display"]["model_detail_help"])
+        self.assertIn("calls", detail["rows"][0]["watch_calls_help"])
+
+    def test_display_authority_scope_partial_correction_and_pinned_pages(self):
+        source = FakeSource(make_uncompacted_snapshot(running=True))
+        service = self.service(source)
+        token = self.details.open("root", "live")
+        self.tick(service)
+        first = self.details.page(token, 0, begin=True)
+        authority = first["value_authority"]
+        self.assertEqual("known", authority["rows"]["u_next"])
+        self.assertEqual("known", authority["totals"]["total_calls"])
+        self.assertNotIn("instance-v1", authority["scope"])
+        original = source.snapshot
+        source.snapshot = replace(original, complete=False, source_revision="partial")
+        self.tick(service)
+        partial = self.details.page(token, 0, begin=True)
+        self.assertEqual(authority["scope"], partial["value_authority"]["scope"])
+        self.assertEqual("pending", partial["value_authority"]["totals"]["total_calls"])
+        pinned = partial["revision"]
+        changed = tuple(replace(item, tokens=TokenUsage(input=20, known_fields=("input",)))
+            if item.invocation_id == "i_next" else item for item in original.invocations)
+        source.snapshot = replace(original, invocations=changed, source_revision="corrected-usage")
+        self.tick(service)
+        chunk = self.details.page(token, 0, pinned, chunk=True)
+        self.assertEqual(pinned, chunk["revision"])
+        self.assertEqual(partial["value_authority"], chunk["value_authority"])
+        corrected = self.details.page(token, 0, begin=True)
+        self.assertEqual("invalidated", corrected["value_authority"]["rows"]["u_next"])
+        self.assertEqual("invalidated", corrected["value_authority"]["totals"]["total_mix_text"])
+        source.observation_epoch = "replacement"
+        self.tick(service)
+        self.assertNotEqual(authority["scope"], self.details.page(token, 0)["value_authority"]["scope"])
+        self.details.failed("http_auth_failure")
+        self.assertTrue(self.details.page(token, 0)["values_invalidated"])
 
     def test_index_windows_match_existing_strict_same_timestamp_semantics(self):
         snapshot = make_snapshot()
