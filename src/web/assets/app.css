@@ -53,23 +53,23 @@
 [data-section="watch"] #mini-watch-controls { display: flex; align-items: center; justify-self: end; }
 .watch-view { container-type: inline-size; }
 .watch-daily-band { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 26rem) minmax(0, 1fr);
-  align-items: center; gap: 1rem 1.5rem; padding: .4rem 0 .9rem; margin-bottom: .9rem;
-  border-bottom: 1px solid var(--line); background: none; }
+  align-items: center; gap: 1rem 1.5rem; padding: .4rem 0 .5rem; margin-bottom: .9rem;
+  background: none; }
 .watch-daily-band > * { min-width: 0; }
-.watch-daily-band .watch-daily { display: grid; grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline; gap: 0 .65rem; margin: 0; padding: 0; border: 0; background: none;
+.watch-daily-band .watch-daily { display: grid; grid-template-columns: minmax(0, 1fr);
+  justify-self: start; justify-items: center; text-align: center; max-width: 100%;
+  align-items: center; gap: .15rem; margin: 0; padding: 0; border: 0; background: none;
   font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .watch-daily-band .watch-daily strong { color: var(--muted); font-size: .8rem; font-weight: 600; }
 .watch-daily-band .watch-daily .metric-value { font-size: 1.5rem; line-height: 1.3; font-weight: 650; }
-.watch-daily-band .watch-daily > :last-child { grid-column: 2; color: var(--muted); font-size: .8rem; }
-.watch-daily-band .mini-accounts { width: 100%; box-sizing: border-box; min-height: 0; padding: 0; }
+.watch-daily-band .watch-daily > :last-child { color: var(--muted); font-size: .8rem; }
+.watch-daily-band .mini-accounts { width: fit-content; max-width: 100%; justify-self: center;
+  box-sizing: border-box; min-height: 0; padding: 0; }
 .watch-daily-band .mini-accounts li { min-height: 0; padding: .25rem 0; }
-.watch-daily-band .mini-accounts progress { width: min(100%, 14rem); height: .45rem; margin: .3rem auto 0; }
+.watch-daily-band .mini-accounts progress { width: min(100%, 14rem); height: .45rem; margin: .3rem 0 0; }
 @container (max-width: 64rem) {
   .watch-daily-band { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-  .watch-daily-band .watch-daily { justify-self: start; max-width: 100%; }
-  .watch-daily-band .mini-accounts { width: min(100%, 26rem); }
-  .watch-daily-band .mini-accounts progress { margin-inline: 0; }
+  .watch-daily-band .mini-accounts { max-width: min(100%, 26rem); }
   [data-section="watch"] .watch-daily-band #mini-watch-controls { justify-self: start; }
 }
 .mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem;
