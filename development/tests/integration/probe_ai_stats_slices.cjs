@@ -51,6 +51,13 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     await evaluate(`selectStats(current,'30-days')`, tab);
     await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='30-days')`, tab);
     assert.equal(await evaluate(`current.period`, tab), '30-days');
+    assert.equal(await evaluate(`(() => {
+      const card=document.querySelector('[data-metric="hourly-rate"]');
+      return card.querySelectorAll('.ai-stat-value').length===1 &&
+        card.querySelector('.ai-stat-value').tagName==='P' &&
+        !card.querySelector('.ai-stat-rate') && /\\/h$/.test(card.querySelector('.ai-stat-value').textContent) &&
+        card.querySelectorAll('.ai-stat-racer').length<=3;
+    })()`, tab), true, 'production-slice publication uses the standard hourly card');
     await command('Page.bringToFront', {}, peer);
     await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='30-days')`, peer);
     server.stdin.write('{"command":"stats-slices-status"}\n');

@@ -23,38 +23,20 @@ THRESHOLDS = {'hourly-rate': (Decimal('.3'), 3), 'total-cost': (Decimal('.1'), 2
     'busiest-day': (600_000, 8 * 3_600_000), 'streak': (1, 7), 'parallel': (2, 3)}
 
 
-def number(value):
+def number(value, *, cap=Decimal('1e12')):
     try:
         result = Decimal(value) if value is not None else Decimal(0)
-        return min(Decimal('1e12'), max(Decimal(0), result)) if result.is_finite() else Decimal(0)
+        if not result.is_finite():
+            return Decimal(0)
+        result = max(Decimal(0), result)
+        return min(cap, result) if cap is not None else result
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(0)
 
 
 def rate_tokens(raw, reasons=()):
-    rates = dict(raw.fields) if hasattr(raw, 'fields') else raw
-    def amount(key):
-        return ccost_amount(number(rates[key])) + ('' if ccost_unit() == 'usd' else ' CCost')
-    calendar = amount('calendar_rate') + '/h'
-    workday = amount('workday_rate') + '/h' if rates['workdays'] else 'No workdays'
-    active = amount('active_rate') + '/h'
-    workday_help = ('The same robot bill, squeezed into ordinary office hours.'
-        if rates['workdays'] else "The robot's office calendar is taking a nap.")
-    rate = number(rates['active_rate'])
-    active_help = "The silicon's hourly appetite when it's actually working."
-    if not number(rates['active_hours']) or not number(rates['total']) or not rate:
-        active_help = "The silicon's hourly snack break hasn't started."
-    # Playful intensity tiers use raw reference Credits, not wages or rounded currency.
-    elif not reasons:
-        if rate < 10:
-            active_help = 'The silicon nibbles through its hourly snack budget.'
-        elif rate >= 100:
-            active_help = 'The silicon orders the deluxe hourly buffet.'
-    help_text = 'The robots have three ways to split the snack bill.\n\n' + '\n\n'.join((
-        'Calendar average: The robot keeps a budget even while you sleep. (Total CCost ÷ (calendar days × 24))',
-        f'Workday average: {workday_help} (Total CCost ÷ (workdays × 8))',
-        f'Active AI average: {active_help} (Total CCost ÷ active AI hours)'))
-    return {'calendar_rate': calendar, 'workday_rate': workday, 'active_rate': active, 'rate_help': help_text}
+    return {'rate_help': 'Average cost across all AI work: total CCost for every model ÷ total active AI hours. '
+            'Overlapping work counts once. Individual models can have higher or lower hourly rates.'}
 
 
 def compact_volume(value):
@@ -92,7 +74,8 @@ def effort_amount(value, metric):
         return compact_volume(value) + ' tokens'
     if metric == 'working-time':
         return duration_text(value)
-    return ccost_amount(number(value)) + ('' if ccost_unit() == 'usd' else ' CCost')
+    amount = ccost_amount(number(value, cap=None) if metric == 'hourly-rate' else number(value))
+    return amount + ('' if ccost_unit() == 'usd' else ' CCost') + ('/h' if metric == 'hourly-rate' else '')
 
 
 def model_tooltip(provider, model, efforts, metric):
@@ -119,7 +102,8 @@ def standing_tokens(row, metric):
 def stat_tokens(values):
     if 'podium_metric' in values:
         metric, value = values['podium_metric'], values['podium_value']
-        amount = (compact_volume(value) if metric == 'total-tokens' else duration_text(value)
+        amount = (effort_amount(value, metric) if metric == 'hourly-rate' else
+                  compact_volume(value) if metric == 'total-tokens' else duration_text(value)
                   if metric == 'working-time' else ccost_amount(number(value)) +
                   ('' if ccost_unit() == 'usd' else ' CCost'))
         efforts = [dict(item.fields) for item in values.get('by_effort', ())]
@@ -129,7 +113,8 @@ def stat_tokens(values):
         return {}
     if values['metric'] in ('total-tokens', 'token-rate'):
         return traffic_tokens(values)
-    metric, value = values['metric'], number(values['value'])
+    metric = values['metric']
+    value = number(values['value'], cap=None) if metric == 'hourly-rate' else number(values['value'])
     if metric in ('original-thinker', 'match-speed-gap'):
         return {'value': 'Original Thinker' if metric == 'original-thinker' else f'{Decimal(value):.1f}×',
                 'trait': 'One of a kind. In this period, at least.' if metric == 'original-thinker' else

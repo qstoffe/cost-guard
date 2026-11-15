@@ -49,7 +49,8 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks,config}) => {
             current.stats.update(current);`);
           const geometry=await evaluate(`({width:innerWidth,dpr:devicePixelRatio,...(${inspect.toString()})()})`);
           assert.equal(geometry.count,13,'seven Overview and six Fun Facts cards at actual browser zoom');
-          assert.equal(await evaluate(`document.querySelectorAll('[data-metric="subagent-cost"] .ai-stat-racer').length`),count);
+           assert.equal(await evaluate(`document.querySelectorAll('[data-metric="subagent-cost"] .ai-stat-racer').length`),count);
+           assert.equal(await evaluate(`document.querySelectorAll('[data-metric="hourly-rate"] .ai-stat-racer').length`),count);
           assert.deepEqual(geometry.issues,[],JSON.stringify({width,zoom,theme,count,long,geometry}));
           assert.equal(geometry.pageOverflow,false);
           assert.equal(geometry.equalRows,true);

@@ -87,7 +87,7 @@ def ai_stat(value):
     base = fields(value, 'metric value status session_id session_title detail reasons')
     if value.metric == 'total-tokens':
         base = ObjectValue(base.fields + (('exact_value', str(value.value)),))
-    if value.metric in ('token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost'):
+    if value.metric in ('hourly-rate', 'token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost'):
         from .ai_stats import response_tokens, standing_tokens
         prepared = []
         for row in value.podium:

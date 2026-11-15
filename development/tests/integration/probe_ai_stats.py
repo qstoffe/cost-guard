@@ -99,13 +99,13 @@ def check_rates(result):
         assert (Decimal(rates['workday_rate']) if rates['workday_rate'] is not None else None) == (
             total / rates['workday_hours'] if rates['workday_hours'] else None)
         for unit in ('credits', 'usd'):
-            for key in ('calendar_rate', 'workday_rate', 'active_rate', 'rate_help'):
+            for key in ('value', 'rate_help'):
                 assert isinstance(hourly.get('display_units', {}).get(unit, {}).get(key, hourly['display'].get(key)), str)
             display = {**hourly['display'], **hourly['display_units'][unit]}
-            expected = ccost_amount(min(Decimal('1e12'), active), unit=unit) + (' CCost/h' if unit == 'credits' else '/h')
-            assert display['active_rate'] == expected
-            assert len(display['rate_help'].split('\n\n')) == 3
-            assert display['rate_help'].endswith('(Total CCost ÷ active AI hours)')
+            expected = ccost_amount(active, unit=unit) + (' CCost/h' if unit == 'credits' else '/h')
+            assert display['value'] == expected
+            assert 'Overlapping work counts once' in display['rate_help']
+            assert 'Calendar' not in str(display) and 'Workday' not in str(display)
         metrics = {m['metric']: m for m in row['metrics']}
         tokens, traffic = metrics['total-tokens'], metrics['token-rate']
         assert len(metrics) == 13 and int(tokens['exact_value']) == tokens['value']

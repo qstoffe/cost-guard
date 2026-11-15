@@ -4,7 +4,7 @@ module.exports = (selector, root = 'document', expectedCosts = 'null') => `(() =
   const cost=new Set(['hourly-rate','total-cost','subagent-cost','average-cost','expensive-session']);
   const expected=${expectedCosts};
   return cards.length===13 && cards.every(card => {
-    const values=[...card.querySelectorAll('.ai-stat-rate-value,.ai-stat-value:not(.ai-stat-rates)')]
+    const values=[...card.querySelectorAll('.ai-stat-value')]
       .map(value=>value.textContent);
     return values.length>0 && !!card.querySelector('h4') && !!card.querySelector('.ai-stat-icon') &&
       !/N\\/A|Not Applicable/i.test(card.textContent) &&

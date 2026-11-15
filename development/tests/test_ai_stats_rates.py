@@ -1,222 +1,243 @@
-"""Independent calendar denominators, active intensity and both-unit projection oracles."""
+"""Independent request-cost/union-time oracles for the standard hourly-rate card."""
 from dataclasses import replace
 from decimal import Decimal
 import unittest
 
 from development.tests.fixtures.active_hour import epoch
-from development.tests.fixtures.compact_reports import report_service
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats, windows
+from development.tests.test_ai_stats_tokens import entry
 from src.analysis.active_hour import HOUR_MS
-from src.analysis.models import TraceEntry
+from src.analysis.ai_stats import StatsRoot, period_stats, windows
+from src.analysis.ai_stats_models import ModelActivity
 from src.application.projection import project
-from src.application.ai_stats import rate_tokens
 from src.domain import ModelRef, TokenUsage
-from src.reports import ReportKind, ReportRequest
-from src.reports.models import ReportProjection
+from src.reports.models import ReportKind, ReportProjection
+
+NOW = epoch('2026-11-16T12:00:00+00:00')
 
 
-def evidence(at, hours, credits):
-    entry = TraceEntry('root', 'prompt', 'request', None, at, 0,
-        ModelRef('synthetic', 'model'), None, TokenUsage(input=credits))
-    return StatsRoot('root', 'Synthetic', (entry,), ((at, hours * HOUR_MS, False),))
+def request(name, start, duration, cost, effort=None, provider='route', sid='root'):
+    fact = replace(entry(sid, start + duration, TokenUsage(input=cost), message=name),
+                   model=ModelRef(provider, name.split(':')[0]), variant=effort)
+    return fact, ModelActivity(fact, start, duration)
 
 
-def calculate(roots, now, period='7-days', calendar='SE', zone='Europe/Stockholm', valuation=None):
-    stats = period_stats(roots, valuation or (lambda _model, tokens: Decimal(tokens.input)),
-        period=period, start=dict(windows(zone, now))[period], now=now, zone=zone, workday_calendar=calendar)
-    dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()
-    return stats, dto['ai_stats'][0]['metrics'][0]
+def root(calls, **kwargs):
+    return StatsRoot('root', 'Synthetic', tuple(e for e, _ in calls),
+                     ((NOW - HOUR_MS, HOUR_MS, False),),
+                     activity=tuple(a for _, a in calls if a is not None), **kwargs)
+
+
+def calculate(roots, now=NOW, period='all', zone='UTC', valuation=None):
+    row = period_stats(roots, valuation or (lambda _m, t: Decimal(t.input)),
+        period=period, start=dict(windows(zone, now))[period], now=now, zone=zone)
+    card = row.metrics[0]
+    dto = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,))).to_json()
+    return card, dto['ai_stats'][0]['metrics'][0]
 
 
 class AIStatsRateTests(unittest.TestCase):
-    def test_three_way_example_preserves_active_rate_and_prepares_both_units(self):
-        now = epoch('2026-11-08T20:00:00+00:00')
-        root = evidence(epoch('2026-11-02T06:00:00+00:00'), 28, 840)
+    def test_threshold_matrix_in_every_period_and_final_medals_are_rate_ordered(self):
+        for primary in range(5):
+            for short in range(5):
+                calls = [request('p' + str(i), NOW - 120000, 60000, i + 1) for i in range(primary)]
+                calls += [request('s' + str(i), NOW - 10000, 10000, i + 10) for i in range(short)]
+                # Every short is faster than every primary; fillers can win gold.
+                primaries = ['p' + str(i) for i in reversed(range(primary))]
+                shorts = ['s' + str(i) for i in reversed(range(short))]
+                expected = primaries[:3] if primary >= 3 else shorts[:3 - primary] + primaries
+                for period in ('today', '7-days', '30-days', 'month', 'all'):
+                    with self.subTest(primary=primary, short=short, period=period):
+                        card, dto = calculate((root(calls),), period=period)
+                        self.assertEqual(expected, [r.model for r in card.podium])
+                        self.assertEqual(expected, [r['label'] for r in dto['podium']])
 
-        stats, dto = calculate((root,), now)
+    def test_exact_minute_boundaries_and_zero_cost_are_eligible(self):
+        calls = [request(name, NOW - 120000, duration, cost)
+                 for name, duration, cost in (('short', 59999, 1000), ('exact', 60000, 1),
+                                             ('over', 60001, 1), ('free', 60000, 0))]
 
-        rate = stats.metrics[0]
-        self.assertEqual((Decimal('30'), Decimal('840'), 28 * HOUR_MS),
-                         tuple(m.value for m in stats.metrics[:3]))
-        self.assertEqual((7, 5, 168, 40, 28), (rate.rates.calendar_days, rate.rates.workdays,
-            rate.rates.calendar_hours, rate.rates.workday_hours, rate.rates.active_hours))
-        self.assertEqual((Decimal('5'), Decimal('21'), Decimal('240'), Decimal('1200')),
-            (rate.rates.calendar_rate, rate.rates.workday_rate, rate.rates.robot_day, rate.rates.robot_period))
-        self.assertEqual(('5 CCost/h', '21 CCost/h', '30 CCost/h'),
-            tuple(dto['display'][key] for key in ('calendar_rate', 'workday_rate', 'active_rate')))
-        self.assertEqual(('$0.05/h', '$0.21/h', '$0.30/h'),
-            tuple(dto['display_units']['usd'][key] for key in ('calendar_rate', 'workday_rate', 'active_rate')))
-        self.assertIn("hourly appetite when it's actually working", dto['display']['rate_help'])
-        self.assertNotIn('rate_help', dto['display_units']['usd'])
-        self.assertEqual('30', dto['rates']['active_rate'])
-        faster, faster_dto = calculate((replace(root, intervals=((root.intervals[0][0], 7 * HOUR_MS, False),)),), now)
-        self.assertEqual((Decimal('5'), Decimal('21'), Decimal('120')),
-            (faster.metrics[0].rates.calendar_rate, faster.metrics[0].rates.workday_rate, faster.metrics[0].rates.active_rate))
-        self.assertEqual('120 CCost/h', faster_dto['display']['active_rate'])
+        card, dto = calculate((root(calls),))
 
-    def test_christmas_and_weekend_only_calendar_change_workdays_not_active_intensity(self):
-        now = epoch('2026-12-27T20:00:00+00:00')
-        root = evidence(epoch('2026-12-21T06:00:00+00:00'), 32, 960)
+        self.assertEqual(['exact', 'over', 'free'], [r.model for r in card.podium])
+        self.assertEqual(Decimal(60), card.podium[0].value)
+        self.assertEqual(Decimal(3600000) / 60001, card.podium[1].value)
+        self.assertEqual(0, card.podium[2].value)
+        self.assertEqual('0 CCost/h', dto['podium'][2]['display']['amount'])
+        self.assertEqual('$0.00/h', dto['podium'][2]['display_units']['usd']['amount'])
 
-        holiday, holiday_dto = calculate((root,), now)
-        weekdays, weekdays_dto = calculate((root,), now, calendar='')
+    def test_many_short_intervals_union_qualifies_but_overlapping_calls_do_not(self):
+        calls = [request('many:' + str(i), NOW - 100000 + i * 10000, 10000, 1) for i in range(6)]
+        calls += [request('overlap:' + str(i), NOW - 100000, 40000, 100) for i in range(3)]
+        calls += [request(name, NOW - 100000, 60000, 1) for name in ('other-a', 'other-b')]
 
-        se, plain = holiday.metrics[0].rates, weekdays.metrics[0].rates
-        self.assertEqual((4, Decimal('30'), Decimal('240'), Decimal('960')),
-                         (se.workdays, se.workday_rate, se.robot_day, se.robot_period))
-        self.assertEqual((5, Decimal('24'), Decimal('240'), Decimal('1200')),
-                         (plain.workdays, plain.workday_rate, plain.robot_day, plain.robot_period))
-        self.assertEqual(Decimal('960') / 168, se.calendar_rate)
-        self.assertEqual(se.calendar_rate, plain.calendar_rate)
-        self.assertEqual(('30 CCost/h', '24 CCost/h'),
-            (holiday_dto['display']['workday_rate'], weekdays_dto['display']['workday_rate']))
-        for key in ('calendar_rate', 'active_rate'):
-            self.assertEqual(holiday_dto['display'][key], weekdays_dto['display'][key])
+        card, _dto = calculate((root(calls),))
 
-    def test_today_is_nominal_even_in_morning_and_weekend_keeps_active_rate(self):
-        for day, expected_workdays in (('2026-11-09', 1), ('2026-11-07', 0), ('2026-12-25', 0)):
-            with self.subTest(day=day):
-                root = evidence(epoch(day + 'T03:00:00+00:00'), 4, 240)
-                stats, dto = calculate((root,), epoch(day + 'T08:00:00+00:00'), 'today')
+        self.assertEqual(['many', 'other-a', 'other-b'], [r.model for r in card.podium])
+        self.assertEqual(360, card.podium[0].value, 'six calls, one minute, six CCost')
 
-                rates = stats.metrics[0].rates
-                self.assertEqual((1, expected_workdays, Decimal('10'), Decimal('480')),
-                    (rates.calendar_days, rates.workdays, rates.calendar_rate, rates.robot_day))
-                self.assertEqual(Decimal('30') if expected_workdays else None, rates.workday_rate)
-                self.assertEqual('30 CCost/h' if expected_workdays else 'No workdays', dto['display']['workday_rate'])
-                self.assertEqual('60 CCost/h', dto['display']['active_rate'])
-                self.assertEqual(Decimal('480') if expected_workdays else 0, rates.robot_period)
+    def test_global_headline_model_and_effort_unions_are_independent_with_shared_prices(self):
+        calls = [request('a:high', NOW - 120000, 60000, 2, 'high'),
+                 request('a:max', NOW - 90000, 60000, 3, 'max', 'second-route', 'child'),
+                 request('a:default', NOW - 61000, 1000, 1, 'default'),
+                 request('b', NOW - 120000, 60000, 1)]
+        calls[1] = (replace(calls[1][0], parent_session_id='root', root_session_id='root'), calls[1][1])
+        valuations = []
+        def price(model, tokens):
+            valuations.append((model.provider, tokens.input))
+            return Decimal(tokens.input)
+        roots = (root(calls),)
 
-    def test_dst_calendar_slots_month_to_date_and_year_rollover_preserve_cost_windows(self):
+        card, dto = calculate(roots, valuation=price)
+
+        self.assertEqual(4, len(valuations), 'one canonical valuation per request')
+        self.assertEqual(7, card.value, 'seven CCost / one global session hour')
+        self.assertEqual(7, card.rates.active_rate)
+        self.assertEqual(['a', 'b'], [r.model for r in card.podium])
+        self.assertEqual(240, card.podium[0].value, 'six CCost / 90 unioned seconds')
+        self.assertEqual(60, card.podium[1].value)
+        self.assertEqual((('Default', Decimal(3600)), ('Max', Decimal(180)), ('High', Decimal(120))),
+                         card.podium[0].by_effort)
+        self.assertEqual('route + second-route', card.podium[0].provider)
+        medal = dto['podium'][0]
+        self.assertEqual('route + second-route/a\n\nBy Effort:\n• Default — 3600 CCost/h'
+                         '\n• Max — 180 CCost/h\n• High — 120 CCost/h', medal['model_help'])
+        self.assertEqual('$2.40/h', medal['display_units']['usd']['amount'])
+        self.assertIn('• Default — $36.00/h', medal['display_units']['usd']['model_help'])
+        self.assertEqual('7 CCost/h', dto['display']['value'])
+        self.assertIn('every model ÷ total active AI hours', dto['display']['rate_help'])
+        self.assertIn('higher or lower', dto['display']['rate_help'])
+        self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Active AI average')
+
+    def test_incomplete_timing_omits_whole_model_not_just_untimed_cost(self):
+        timed = request('partial:timed', NOW - 2000, 1000, 1)
+        untimed, _activity = request('partial:untimed', NOW - 2000, 1000, 1000, 'max')
+        good = request('good', NOW - 2000, 1000, 1)
+        roots = (root((timed, (untimed, None), good), source_complete=False, cost_pending=True),)
+
+        card, _dto = calculate(roots)
+
+        self.assertEqual(['good'], [r.model for r in card.podium])
+        self.assertEqual(1002, card.value)
+        self.assertIn('source-incomplete', card.reasons)
+
+    def test_simultaneous_models_keep_global_union_headline_even_with_untimed_cost(self):
+        first = request('a', NOW - 120000, 120000, 2)
+        second = request('b', NOW - 60000, 60000, 3, sid='parallel')
+        untimed, _ = request('untimed', NOW - 1000, 1000, 5)
+        roots = (replace(root((first, (untimed, None))), intervals=((NOW - 120000, 120000, False),)),
+                 StatsRoot('parallel', 'Parallel', (second[0],), ((NOW - 60000, 60000, False),),
+                           activity=(second[1],)))
+
+        card, _dto = calculate(roots)
+
+        self.assertEqual(300, card.value, 'ten CCost / two global unioned minutes, not three summed minutes')
+        self.assertEqual(['b', 'a'], [r.model for r in card.podium])
+        self.assertEqual([Decimal(180), Decimal(60)], [r.value for r in card.podium])
+        self.assertEqual(300, card.rates.active_rate, 'unsupported medal still contributes headline cost')
+
+    def test_invalid_failed_cancelled_future_and_foreign_timing_cannot_supply_rates(self):
+        good, activity = request('model', NOW - 2000, 1000, 1)
+        variants = [(good, None), (good, replace(activity, duration_ms=0)),
+                    (good, replace(activity, duration_ms=-1)),
+                    (good, replace(activity, start_ms=0)),
+                    (good, replace(activity, duration_ms=2001)),
+                    (replace(good, error_name='failed'), activity),
+                    (replace(good, finish_reason='aborted'), activity),
+                    (replace(good, completed_at_ms=0), activity),
+                    (replace(good, completed_at_ms=NOW + 1), activity),
+                    (replace(good, source_instance='foreign'), activity)]
+        for fact, timing in variants:
+            with self.subTest(fact=fact, timing=timing):
+                card, _dto = calculate((root(((fact, timing),)),))
+                self.assertEqual((), card.podium)
+
+    def test_clone_survivor_borrows_only_same_source_physical_interval(self):
+        fact, activity = request('model', NOW - 10000, 10000, 2)
+        clone = replace(fact, session_id='z-clone')
+        roots = (root(((fact, None),)), StatsRoot('z-clone', 'Clone', (clone,), (),
+                 activity=(replace(activity, entry=clone),)))
+
+        card, _dto = calculate(roots)
+        foreign, _dto = calculate((roots[0], replace(roots[1], activity=(
+            replace(activity, entry=replace(clone, source_instance='foreign')),))))
+
+        self.assertEqual(2, card.value)
+        self.assertEqual(720, card.podium[0].value)
+        self.assertEqual((), foreign.podium)
+
+    def test_completion_owns_cost_and_clipped_execution_owns_time_at_local_and_dst_boundaries(self):
         for stamp in ('2026-03-29T20:00:00+00:00', '2026-10-25T20:00:00+00:00',
                       '2027-01-01T00:30:00+00:00'):
             now = epoch(stamp)
-            cutoff = dict(windows('Europe/Stockholm', now))['7-days']
-            root = evidence(cutoff, 1, 840)
-            for period, days in (('today', 1), ('7-days', 7), ('30-days', 30),
-                                 ('month', int(stamp[8:10]))):
-                stats, _dto = calculate((root,), now, period)
-                self.assertEqual(days * 24, stats.metrics[0].rates.calendar_hours)
-                self.assertEqual(dict(windows('Europe/Stockholm', now))[period], stats.start_ms)
-            week, _dto = calculate((root,), now)
-            excluded, _dto = calculate((replace(root, entries=(replace(root.entries[0], completed_at_ms=cutoff - 1),)),), now)
-            self.assertEqual(Decimal('840'), week.metrics[1].value)
-            self.assertEqual(0, excluded.metrics[1].value)
+            for period, cutoff in windows('Europe/Stockholm', now):
+                if cutoff is None:
+                    continue
+                crossing = request('crossing', cutoff - 30000, 60000, 2)
+                excluded = request('old', cutoff - 60001, 60000, 999)
+                at_edge = request('edge', cutoff - 60000, 60000, 3)
+                roots = (root((crossing, excluded, at_edge)),)
+                with self.subTest(stamp=stamp, period=period):
+                    card, _dto = calculate(roots, now, period, 'Europe/Stockholm')
+                    self.assertEqual(5, card.rates.total, 'inclusive completion boundary, no cost proration')
+                    self.assertEqual(['crossing'], [r.model for r in card.podium])
+                    self.assertEqual(240, card.podium[0].value, 'full two CCost / clipped 30 seconds')
 
-    def test_all_time_includes_cost_free_gaps_and_local_request_or_activity_beginning(self):
-        now = epoch('2026-11-09T12:00:00+00:00')
-        root = evidence(epoch('2026-10-31T23:30:00+00:00'), 1, 240)
-        stats, _dto = calculate((root,), now, 'all')
-        self.assertEqual((9, 6), (stats.metrics[0].rates.calendar_days, stats.metrics[0].rates.workdays))
-        earlier_request = replace(root.entries[0], completed_at_ms=epoch('2026-10-30T23:30:00+00:00'))
-        requests, _dto = calculate((replace(root, entries=(earlier_request,), intervals=()),), now, 'all')
-        self.assertEqual(10, requests.metrics[0].rates.calendar_days)
-        empty, dto = calculate((), now, 'all')
-        self.assertEqual((0, 0, 0, None), (empty.metrics[0].rates.calendar_days, empty.metrics[0].rates.workdays,
-            empty.metrics[0].rates.calendar_rate, empty.metrics[0].rates.workday_rate))
-        self.assertEqual('No workdays', dto['display']['workday_rate'])
+    def test_unrounded_sorting_effort_ties_and_raw_headline_have_no_internal_cap(self):
+        calls = [request('z:high', NOW - 1000, 1000, 1, 'high'),
+                 request('z:default', NOW - 1000, 1000, 1, 'default'),
+                 request('a', NOW - 1000, 1000, 1)]
+        prices = iter((Decimal('.01000000000001'), Decimal(0), Decimal('.01000000000000')))
 
-    def test_report_threads_configured_calendar_through_warm_cached_evidence(self):
-        now = epoch('2026-12-27T20:00:00+00:00')
-        source = SyntheticMonthSource(1, 1, month_start_ms=now - DAY_MS)
-        service = report_service(self, source, now_ms=now)
-        service.config.update(timezone='Europe/Stockholm', workdayCalendar='SE')
-        se = service.build(ReportRequest(ReportKind.AI_STATS)).ai_stats[1].metrics[0].rates
-        service.config['workdayCalendar'] = ''
-        plain = service.build(ReportRequest(ReportKind.AI_STATS)).ai_stats[1].metrics[0].rates
-        self.assertEqual((4, 5), (se.workdays, plain.workdays))
-        self.assertEqual(se.robot_day, plain.robot_day)
+        card, _dto = calculate((root(calls),), valuation=lambda *_: next(prices))
 
-    def test_tiny_positive_active_time_keeps_raw_intensity_with_compact_formula(self):
-        now = epoch('2026-11-09T12:00:00+00:00')
-        root = evidence(now - HOUR_MS, 1, 1)
-        root = replace(root, intervals=((now - HOUR_MS, 1, False),))
+        self.assertEqual(['z', 'a'], [r.model for r in card.podium])
+        self.assertEqual((('High', Decimal('36.000000000036')), ('Default', Decimal(0))),
+                         card.podium[0].by_effort)
+        tied, _dto = calculate((root(calls),), valuation=lambda *_: Decimal(0))
+        self.assertEqual(['a', 'z'], [r.model for r in tied.podium])
+        self.assertEqual((('Default', Decimal(0)), ('High', Decimal(0))), tied.podium[1].by_effort)
+        tiny = replace(root((request('expensive', NOW - 1, 1, 1000000),)),
+                       intervals=((NOW - 1, 1, False),))
+        huge, dto = calculate((tiny,))
+        self.assertEqual(Decimal('3600000000000'), huge.value)
+        self.assertEqual(huge.value, huge.rates.active_rate)
+        self.assertEqual('3600000000000 CCost/h', dto['display']['value'])
+        self.assertEqual('$36000000000.00/h', dto['display_units']['usd']['value'])
 
-        stats, dto = calculate((root,), now, 'today')
+    def test_best_effort_costs_share_total_cost_values_without_timing_guesses(self):
+        fact, activity = request('unknown', NOW - 10000, 10000, 100)
+        fact = replace(fact, tokens=TokenUsage(input=100, known_fields=('input',)))
+        observed = root(((fact, replace(activity, entry=fact)),))
 
-        self.assertEqual(3_600_000, stats.metrics[0].rates.active_rate)
-        self.assertEqual('3600000 CCost/h', dto['display']['active_rate'])
-        self.assertIn('deluxe hourly buffet', dto['display']['rate_help'])
-        self.assertTrue(dto['display']['rate_help'].endswith('(Total CCost ÷ active AI hours)'))
+        card, _dto = calculate((observed,), valuation=lambda *_: None)
 
-    def test_copy_tiers_use_unrounded_active_credits_and_leave_trait_unchanged(self):
-        now = epoch('2026-11-09T12:00:00+00:00')
-        for rate, punchline in (('0', "hasn't started"), ('0.0001', 'nibbles'),
-                ('9.9999', 'nibbles'), ('10', 'hourly appetite'), ('99.9999', 'hourly appetite'),
-                ('100', 'buffet'), ('100.0001', 'buffet')):
-            with self.subTest(rate=rate):
-                root = evidence(now - HOUR_MS, 1, 1)
+        self.assertEqual(Decimal('.0033'), card.rates.total)
+        self.assertEqual(Decimal('1.188'), card.podium[0].value)
+        self.assertEqual((('Default', Decimal('1.188')),), card.podium[0].by_effort)
+        self.assertIn('unpriced-requests', card.reasons)
 
-                stats, dto = calculate((root,), now, 'today', valuation=lambda *_: Decimal(rate))
+    def test_empty_and_no_duration_preserve_safe_headline_and_no_podium(self):
+        for roots in ((), (replace(root((request('untimed', NOW - 1000, 1000, 24),)),
+                                  intervals=((NOW - 1000, 0, False),), activity=()),)):
+            card, dto = calculate(roots)
+            self.assertEqual(0, card.value)
+            self.assertEqual((), card.podium)
+            self.assertEqual('0 CCost/h', dto['display']['value'])
+            self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Unavailable')
 
-                self.assertEqual(Decimal(rate), stats.metrics[0].rates.active_rate)
-                self.assertEqual(Decimal(rate), stats.metrics[0].value)
-                self.assertIn(punchline, dto['display']['rate_help'])
-                self.assertNotIn('rate_help', dto['display_units']['usd'])
-                self.assertEqual('Budget build. Dangerous potential.' if Decimal(rate) < Decimal('.3') else
-                    'Premium silicon has expensive tastes.' if Decimal(rate) >= 3 else
-                    'Standard-issue silicon. Surprisingly functional.', dto['display']['trait'])
+    def test_legacy_calendar_shift_scalars_remain_compatible_but_not_presented(self):
+        at = epoch('2026-11-02T06:00:00+00:00')
+        fact, _activity = request('model', at, HOUR_MS, 840)
+        observed = replace(root(((fact, None),)), intervals=((at, 28 * HOUR_MS, False),))
 
-    def test_all_periods_both_units_have_three_short_plain_text_paragraphs(self):
-        now = epoch('2026-11-09T12:00:00+00:00')
-        root = evidence(now - HOUR_MS, 1, 4)
-        for period in ('today', '7-days', '30-days', 'month', 'all'):
-            _stats, dto = calculate((root,), now, period)
-            for unit in ('credits', 'usd'):
-                display = {**dto['display'], **dto['display_units'][unit]}
-                paragraphs = display['rate_help'].split('\n\n')
-                self.assertEqual('The robots have three ways to split the snack bill.', paragraphs.pop(0))
-                self.assertEqual(3, len(paragraphs))
-                formulas = ('(Total CCost ÷ (calendar days × 24))', '(Total CCost ÷ (workdays × 8))',
-                            '(Total CCost ÷ active AI hours)')
-                for paragraph, label, formula in zip(paragraphs,
-                        ('Calendar average:', 'Workday average:', 'Active AI average:'), formulas):
-                    self.assertTrue(paragraph.startswith(label))
-                    self.assertEqual(paragraph.strip(), paragraph)
-                    self.assertNotIn('\n', paragraph)
-                    sentence, _formula = paragraph.rsplit(' (', 1)
-                    self.assertEqual(1, sentence.count('.'))
-                    self.assertTrue(paragraph.endswith(formula))
-                    self.assertLessEqual(len(paragraph.split()), 25)
-                self.assertNotRegex(display['rate_help'], r'shift|salary|replacement|weekend|holiday|DST|Partial|Unavailable|Estimated')
+        card, dto = calculate((observed,), epoch('2026-11-08T20:00:00+00:00'), '7-days',
+                              'Europe/Stockholm')
 
-    def test_missing_or_weak_basis_uses_neutral_active_copy_without_status_prose(self):
-        raw = dict(calendar_rate=1, workday_rate=3, workdays=1, active_rate=1, total=24, active_hours=24)
-        for reasons in (('unknown-duration',), ('missing-price',), ('source-incomplete',), ('running-executions',)):
-            self.assertIn('hourly appetite', rate_tokens(raw, reasons)['rate_help'])
-        for missing in ('active_hours', 'total', 'active_rate'):
-            self.assertIn("hasn't started", rate_tokens({**raw, missing: None})['rate_help'])
-        no_workdays = rate_tokens({**raw, 'workdays': 0, 'workday_rate': None})
-        self.assertEqual('No workdays', no_workdays['workday_rate'])
-        self.assertIn('office calendar is taking a nap', no_workdays['rate_help'])
-        self.assertIn('nibbles', no_workdays['rate_help'])
-
-    def test_two_hours_and_one_minute_use_elapsed_union_not_agent_duration_sum(self):
-        now = epoch('2026-11-09T12:00:00+00:00')
-        for duration, expected in ((2 * HOUR_MS, '50 CCost/h'), (60_000, '6000 CCost/h')):
-            with self.subTest(duration=duration):
-                at = now - duration
-                first = evidence(at, 1, 40)
-                first = replace(first, intervals=((at, duration, False),))
-                second = evidence(at, 1, 60)
-                second = replace(second, session_id='parallel',
-                    entries=(replace(second.entries[0], session_id='parallel'),),
-                    intervals=((at, duration, False),))
-
-                stats, dto = calculate((first, second), now, 'today')
-
-                self.assertEqual(duration, stats.metrics[2].value)
-                self.assertEqual(100, stats.metrics[1].value)
-                self.assertEqual(expected, dto['display']['active_rate'])
-
-    def test_display_uses_raw_active_rate_not_rounded_shift_or_capped_metric(self):
-        raw = dict(calendar_rate=1, workday_rate=3, workdays=1,
-            active_rate=Decimal('50.000000001'), robot_day=Decimal('400'), total=100, active_hours=2)
-
-        display = rate_tokens(raw)
-
-        self.assertEqual('51 CCost/h', display['active_rate'])
+        self.assertEqual((7, 5, 168, 40, 28), (card.rates.calendar_days, card.rates.workdays,
+            card.rates.calendar_hours, card.rates.workday_hours, card.rates.active_hours))
+        self.assertEqual((Decimal(5), Decimal(21), Decimal(30)),
+                         (card.rates.calendar_rate, card.rates.workday_rate, card.rates.active_rate))
+        self.assertEqual({'value', 'trait', 'rate_help'}, set(dto['display']))
 
 
 if __name__ == '__main__':

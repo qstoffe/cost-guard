@@ -63,9 +63,8 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
          metric.display.value=index%2 ? '0' : '12345678901234567890';
          metric.display_units={credits:{...metric.display,value:index%2 ? '0' : '12345678901234567890 credits'},
            usd:{...metric.display,value:index%2 ? '0' : '$123456789012345678.90'}};
-         if(metric.metric==='hourly-rate') for(const unit of ['credits','usd'])
-          for(const key of ['calendar_rate','workday_rate','active_rate'])
-            metric.display_units[unit][key]=(unit==='usd'?'$':'')+'123456789012345678.90'+
+          if(metric.metric==='hourly-rate') for(const unit of ['credits','usd'])
+            metric.display_units[unit].value=(unit==='usd'?'$':'')+'123456789012345678.90'+
               (unit==='credits'?' CCost':'')+'/h';
         metric.detail=metric.metric==='busiest-day' ? 'September 30, 2026' : '';
         for(const [rank,model] of (metric.podium||[]).entries())
