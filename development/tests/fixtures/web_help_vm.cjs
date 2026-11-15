@@ -25,6 +25,8 @@ module.exports = function loadHelp(vm, context) {
   doc.createElement = tag => { const node = original(tag); node.ownerDocument = doc; node.style ||= {setProperty() {}}; return node; };
   doc.body ||= doc.createElement('body');
   context.window ||= {}; context.window.clearTimeout ||= clearTimeout; context.window.setTimeout ||= setTimeout;
+  context.window.addEventListener ||= () => {};
+  context.window.matchMedia ||= () => ({addEventListener(){},removeEventListener(){}});
   vm.runInContext(fs.readFileSync('src/web/assets/help.js','utf8'), context);
   return target => {
     const focus = target.events?.focus || target.listeners?.focus;

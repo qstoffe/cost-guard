@@ -43,22 +43,39 @@ async function main() {
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000')", context);
   const view = context.view; view.attached = true;
   page.quota_usage={scope:'same-source',accounts:[{observation:{id:'safe',provider_id:'synthetic',label:'Synthetic Plan'},
-    quotas:[{id:'five',label:'5-hour',percent:'~235%'},{id:'model',label:'Special',scope:'model',model_id:'special',percent:'0%'}]}]};
+    quotas:[{id:'five',label:'5-hour',contribution:'positive',percent:'~235%'},
+      {id:'model',label:'Special',scope:'model',model_id:'special',contribution:'zero',percent:'0%'}]},
+    {observation:{id:'unused',provider_id:'openai',label:'Unused'},quotas:[
+      {id:'weekly',label:'weekly',contribution:'unknown',percent:'—'}]}]};
   new Node('main').append(view.root);
   await view.load();
   assert.equal(view.root.children.at(-1),view.quotaUsage.root,'summary follows all existing activity');
   assert.equal(view.root.children.at(-2),view.activity.root);
   const quotaCard=view.quotaUsage.grid.children[0],quotaRow=quotaCard.children[1];
   assert.match(quotaRow.textContent,/~235%/);
+  assert.equal(view.quotaUsage.grid.children.length,1,'no unused account DOM or links');
+  assert.equal(quotaCard.children.length,2,'zero model quota has no DOM slot');
+  assert.equal(quotaCard.children[0].tag,'h3','account is subordinate to the section h2');
   page.quota_usage.accounts[0].quotas[0].percent='~117.5%';
   await view.load();
   assert.equal(view.quotaUsage.grid.children[0],quotaCard);
   assert.equal(quotaCard.children[1],quotaRow);
-  assert.equal(quotaRow.textContent,'5-hour · ~117.5%','same-revision capacity update must not be skipped');
+  assert.equal(quotaRow.textContent,'5-hour~117.5%','same-revision capacity update must not be skipped');
   // Unit switching exercises the bound production heading and ordinary rows.
   vm.runInContext("ReportView.setUnit('usd');ReportView.syncUnits(view.root)",context);
-  assert.equal(quotaRow.textContent,'5-hour · ~117.5%');
+  assert.equal(quotaRow.textContent,'5-hour~117.5%');
   vm.runInContext("ReportView.setUnit('credits');ReportView.syncUnits(view.root)",context);
+  const quotaValue=page.quota_usage; page.quota_usage=null; await view.load();
+  assert.equal(view.quotaUsage.grid.children[0],quotaCard,'pending quota refresh retains the last usable card');
+  page.quota_usage=quotaValue;
+  const tiny={id:'tiny',label:'weekly GPT-6',contribution:'positive',percent:'~0%'};
+  quotaValue.accounts[0].quotas.push(tiny); await view.load();
+  assert.equal(quotaCard.children[2].children[0].textContent,'Weekly GPT-6');
+  assert.equal(quotaCard.children[2].children[1].textContent,'~0%','typed positive wins over rounded text');
+  tiny.percent='—'; await view.load();
+  assert.equal(quotaCard.children[2].children[1].textContent,'—','positive membership survives unknown capacity');
+  tiny.contribution='zero'; await view.load();
+  assert.equal(quotaCard.children.length,2);
   assert.equal(view.body.children.length, 100);
   assert.equal(view.body.children[0].children.length, 10);
   assert.match(view.root.textContent, /Show all sessions/);

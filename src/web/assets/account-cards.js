@@ -117,7 +117,7 @@ const AccountCards = (() => {
   }
   class Subscription {
     constructor() {
-      this.root = el('section', undefined, 'account-card watch-subscription');
+      this.root = el('section', undefined, 'account-card account-subscription watch-subscription');
     }
     align(extras, rows) {
       let row = 3; // Account heading and Today precede the ordered quota slots.
@@ -338,24 +338,27 @@ const AccountCards = (() => {
     constructor() {
       this.root = el('section', undefined, 'session-quota-usage');
       this.root.setAttribute('aria-label', 'Session Quota Usage');
-      this.grid = el('div', undefined, 'account-grid session-quota-grid');
+      this.grid = el('div', undefined, 'account-grid watch-account-grid session-quota-grid');
       this.root.append(el('h2', 'Session Quota Usage'), this.grid);
       this.cards = new Map(); this.root.hidden = true;
+      physicalWidth(this.root, () => {});
     }
     update(value) {
       if (!value || this.scope !== value.scope) {
         this.cards.clear(); this.grid.replaceChildren();
       }
       this.scope = value?.scope;
-      this.root.hidden = !value?.accounts?.length;
+      const accounts = (value?.accounts || []).map(item => ({...item,
+        quotas: item.quotas.filter(quota => quota.contribution === 'positive')})).filter(item => item.quotas.length);
+      this.root.hidden = !accounts.length;
       const wanted = new Set();
-      for (const item of value?.accounts || []) {
+      for (const item of accounts) {
         const key = JSON.stringify([item.observation.provider_id, item.observation.id]);
         wanted.add(key);
         let card = this.cards.get(key);
         if (!card) {
-          card = {root: el('section', undefined, 'account-card'), rows: new Map(), value: item};
-          card.heading = ReportView.accountHeading(() => card.value.observation);
+          card = {root: el('section', undefined, 'account-card account-subscription'), rows: new Map(), value: item};
+          card.heading = ReportView.accountHeading(() => card.value.observation, 'h3');
           card.root.append(card.heading); this.cards.set(key, card);
         }
         card.value = item;
@@ -363,17 +366,22 @@ const AccountCards = (() => {
         for (const [id, node] of card.rows) if (!rows.has(id)) { node.remove(); card.rows.delete(id); }
         item.quotas.forEach((quota, index) => {
           let line = card.rows.get(quota.id);
-          if (!line) { line = el('p', undefined, 'metric-value session-quota-row'); card.rows.set(quota.id, line); }
+          if (!line) {
+            line = el('p', undefined, 'metric-value session-quota-row');
+            line.append(el('span'), el('span')); card.rows.set(quota.id, line);
+          }
           const suffix = quota.scope === 'model' && quota.model_id &&
             !quota.label.toLowerCase().includes(quota.model_id.toLowerCase()) ? ` · ${quota.model_id}` : '';
-          ReportView.text(line, `${quota.label}${suffix} · ${quota.percent}`);
+          const label = quota.label.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
+          ReportView.text(line.children[0], `${label}${suffix}`);
+          ReportView.text(line.children[1], quota.percent);
           if (card.root.children[index + 1] !== line)
             card.root.insertBefore(line, card.root.children[index + 1] || null);
         });
         ReportView.syncUnits(card.heading);
       }
       for (const [key, card] of this.cards) if (!wanted.has(key)) { card.root.remove(); this.cards.delete(key); }
-      (value?.accounts || []).forEach((item, index) => {
+      accounts.forEach((item, index) => {
         const node = this.cards.get(JSON.stringify([item.observation.provider_id, item.observation.id])).root;
         if (this.grid.children[index] !== node) this.grid.insertBefore(node, this.grid.children[index] || null);
       });

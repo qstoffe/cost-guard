@@ -1,12 +1,13 @@
 'use strict';
 const assert = require('node:assert/strict');
-module.exports = async ({evaluate,until,fixture,command}) => {
+module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}) => {
   const checks=[],layouts=[];
   await fixture('quota-source');
   await evaluate(`location.hash='#/sessions/root'`);
   await until(`current.detail?.quotaUsage?.grid.textContent.includes('~235%')`);
   assert.deepEqual(await evaluate(`[...current.detail.quotaUsage.grid.querySelectorAll('.session-quota-row')].map(n=>n.textContent)`),
-    ['Monthly · 10%','5-hour · ~235%','Special · 0%','Weekly · —']);
+    ['Monthly10%','5-hour~235%']);
+  assert.equal(await evaluate(`current.detail.quotaUsage.cards.size`),1);
   assert.equal(await evaluate(`current.detail.root.lastElementChild===current.detail.quotaUsage.root &&
     current.detail.quotaUsage.root.previousElementSibling===current.detail.activity.root`),true);
   await evaluate(`window.quotaNode=current.detail.quotaUsage.grid.firstChild;
@@ -24,9 +25,9 @@ module.exports = async ({evaluate,until,fixture,command}) => {
     current.detail.body===originalBody && current.detail.status.hidden`),true);
   for (const unit of ['usd','credits']) {
     await evaluate(`ReportView.setUnit('${unit}');ReportView.syncUnits(current.detail.root)`);
-    assert.equal(await evaluate('quotaRow.textContent'),'5-hour · ~117.5%');
+    assert.equal(await evaluate('quotaRow.textContent'),'5-hour~117.5%');
   }
-  checks.push('native exact 7/70; ratio >100%; scoped-model zero; unknown; downstream placement; live capacity changes on unchanged history; unit independence; stable DOM and quiet status');
+   checks.push('native exact 7/70; ratio >100%; unused model/account omitted; title-cased labels; downstream placement; live capacity changes on unchanged history; unit independence; stable DOM and quiet status');
   for (const page of ['accounts','watch','ai-stats']) {
     await evaluate(`location.hash='#/${page}'`);
     await until(`current.section==='${page}'`);
@@ -64,7 +65,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
     const geometry=await evaluate(`(() => {const root=current.detail.quotaUsage.root;const r=root.getBoundingClientRect();
       return {overflow:document.documentElement.scrollWidth>innerWidth+1,contentWidth:r.width,
       cards:root.querySelectorAll('.account-card').length,color:getComputedStyle(quotaRow).color};})()`);
-    assert.equal(geometry.overflow,false);assert.ok(geometry.contentWidth>0);assert.equal(geometry.cards,2);
+     assert.equal(geometry.overflow,false);assert.ok(geometry.contentWidth>0);assert.equal(geometry.cards,1);
     layouts.push({theme,width,...geometry});
   }
   await evaluate(`quotaNode.querySelector('a').focus();window.savedFocus=document.activeElement`);
@@ -73,18 +74,21 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   await until(`current.detail===originalDetail && current.detail.token`);
   assert.equal(await evaluate(`document.activeElement===savedFocus`),true);
   await fixture('quota-remove');
-  await until(`current.detail.quotaUsage.cards.size===1`);
+   await until(`current.detail.quotaUsage.cards.size===0 && current.detail.quotaUsage.root.hidden`);
   assert.doesNotMatch(await evaluate(`current.detail.quotaUsage.grid.textContent`),/account 1/);
   checks.push('320/360/1280 light/dark/Classic no overflow; focused heading survives round trip; removed account disappears without source reread');
   await command('Page.reload');
   await until(`typeof current!=='undefined' && current?.detail?.id==='root' && current.detail.data &&
-    current.detail.quotaUsage.cards.size===1`);
+     current.detail.quotaUsage.cards.size===0 && current.detail.quotaUsage.root.hidden`);
   assert.equal(await evaluate(`document.querySelector('nav a[href^="#/sessions"]').getAttribute('href')`),'#/sessions/root');
   await evaluate(`connectionStatus('Synthetic authentication expiry',
     {kind:'authorization_required',terminal:true,writable:false})`);
   assert.equal(await evaluate(`!current.detail.data && current.detail.quotaUsage.root.hidden &&
     current.detail.quotaUsage.cards.size===0 && !current.detail.token`),true);
-  checks.push('explicit-detail reload reopens the route/lease; terminal authentication loss clears retained table/quota values and lease');
+   checks.push('explicit-detail reload reopens the route/lease; terminal authentication loss clears retained table/quota values and lease');
+   await fixture('quota-source');
+   const matrix=await require('./session_quota_layout_browser.cjs')({evaluate,until,command,browser,targetId,origin});
+   checks.push(...matrix.checks);layouts.push(...matrix.layouts);
   return {checks,layouts,measurements:{history_reads_before_capacity:before.history_reads,
     history_reads_after_capacity:after.history_reads}};
 };

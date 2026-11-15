@@ -263,8 +263,8 @@ const ReportView = (() => {
       return accountDestinations.get('claude-code');
     return accountDestinations.get(obs.provider_id);
   }
-  function accountHeading(observation) {
-    const heading = element('h4'); let label, name, linked;
+  function accountHeading(observation, level = 'h4') {
+    const heading = element(level); let label, name, linked;
     bind(heading, () => {
       const obs = observation(), href = accountDestination(obs);
       if (!label || linked !== Boolean(href)) {

@@ -103,6 +103,7 @@ async function main() {
           }
              if (mode === '--detail-quota') {
                const details = await require('../fixtures/session_quota_browser.cjs')({evaluate, until, fixture,
+                 browser,targetId,origin:new URL(launch.url).origin,
                  command:(method, params) => command(method, params, sessionId)});
                checks.push(...details.checks); layouts.push(...details.layouts);
                assert.deepEqual(errors, []);

@@ -157,6 +157,57 @@ class SessionQuotaTests(unittest.TestCase):
         mixed, _ = self.evidence(replace(snapshot, invocations=(first, second)))
         self.assertEqual("~571.4%", self.percent(mixed, self.accounts()))
 
+    def test_contribution_membership_uses_raw_usage_not_capacity_or_formatted_percent(self):
+        evidence, _ = self.evidence()
+        tiny = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D("1e-20")),))
+        missing = replace(self.monthly, limit=D(0), used=D(0), remaining=D(0))
+
+        normal = self.usage(tiny, self.accounts())["accounts"][0]["quotas"][0]
+        unknown = self.usage(tiny, self.accounts((missing,)))["accounts"][0]["quotas"][0]
+        partial = self.usage(replace(tiny, complete=False), self.accounts())["accounts"][0]["quotas"][0]
+
+        self.assertEqual("positive", normal["contribution"])
+        self.assertNotEqual("~0%", normal["percent"])
+        self.assertEqual(("positive", "—"), (unknown["contribution"], unknown["percent"]))
+        self.assertEqual(("positive", "—"), (partial["contribution"], partial["percent"]))
+        self.assertEqual("positive", self.usage(evidence, self.accounts(), stale=True)
+            ["accounts"][0]["quotas"][0]["contribution"])
+
+    def test_zero_unknown_and_model_membership_remain_distinct_from_display(self):
+        evidence, _ = self.evidence()
+        scoped = replace(self.monthly, scope="model", model_id="special")
+        unused = self.usage(evidence, self.accounts((scoped,)))["accounts"][0]["quotas"][0]
+        ambiguous = self.usage(evidence, self.accounts(refs=(self.ref, replace(self.ref, account_id="other"))))
+        unknown_model = replace(evidence, contributions=(replace(evidence.contributions[0], model=None),))
+        native_unpriced = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D(0), complete=False),))
+        unpriced = replace(native_unpriced, contributions=(replace(native_unpriced.contributions[0], native=()),))
+
+        self.assertEqual(("zero", "0%"), (unused["contribution"], unused["percent"]))
+        self.assertEqual(["unknown", "unknown"],
+            [card["quotas"][0]["contribution"] for card in ambiguous["accounts"]])
+        self.assertEqual("unknown", self.usage(unknown_model, self.accounts((scoped,)))
+            ["accounts"][0]["quotas"][0]["contribution"])
+        self.assertEqual("unknown", self.usage(unpriced, self.accounts())["accounts"][0]["quotas"][0]["contribution"])
+        self.assertEqual("positive", self.usage(native_unpriced, self.accounts())["accounts"][0]["quotas"][0]["contribution"],
+            "positive native consumption proves membership even without reference pricing")
+        self.assertEqual("positive", self.usage(evidence, self.accounts((replace(self.monthly, unlimited=True),)))
+            ["accounts"][0]["quotas"][0]["contribution"])
+
+    def test_proven_account_and_native_zero_never_cross_assign_cards(self):
+        snapshot = one_request(running=False)
+        request = replace(snapshot.invocations[0], account_ref=self.ref,
+            cost=CostObservation(D(0), "AI credits", CostKind.PROVIDER_REPORTED))
+        zero, _ = self.evidence(replace(snapshot, invocations=(request,)))
+        positive, _ = self.evidence(replace(snapshot, invocations=(replace(request,
+            cost=CostObservation(D(7), "AI credits", CostKind.PROVIDER_REPORTED)),)))
+        refs = (self.ref, replace(self.ref, account_id="other"), replace(self.ref, provider_id="openai"))
+
+        native_zero = self.usage(zero, self.accounts())["accounts"][0]["quotas"][0]
+        cards = self.usage(positive, self.accounts(refs=refs))["accounts"]
+
+        self.assertEqual(("zero", "0%"), (native_zero["contribution"], native_zero["percent"]))
+        self.assertEqual(["positive", "zero", "zero"], [card["quotas"][0]["contribution"] for card in cards])
+
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_shipped_navigation_memory_controller(self):
         result = subprocess.run(["node", "development/tests/fixtures/session_return_vm.cjs"],
