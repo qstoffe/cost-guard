@@ -22,7 +22,7 @@ Private development access is not required to build, test or run Cost Guard.
 
 ## Quick start
 
-Use **current `main`** (v81.61, 2026-11-15), the supported distribution.
+Use **current `main`** (v81.62, 2026-11-15), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -384,7 +384,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.61 (2026-11-15):** Session Detail places Context below the complete history table, shares Watch's Model/Calls/Duration help and removes Effort cell help. Source-qualified Token Mix and independent Complete session totals survive background refresh without replacing footer controls; corrections and source/authorization changes invalidate old display observations.
+**v81.62 (2026-11-15):** Accounts cards simplify CCost Today help, remove Used/Remaining and period-cost popups, and show Capacity help only for estimates or genuine unknown reasons. Native amounts, quota calculations, reset help and compact Watch/Mini remain unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

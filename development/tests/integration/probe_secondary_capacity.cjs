@@ -4,7 +4,7 @@ module.exports=async({command,evaluate,fixture,until,navigate,sessionId,checks})
   await fixture('secondary-capacity-partial');
   await until(`document.querySelectorAll('#result .watch-subscription').length===1`);
   const quotas=`[liveValue.view.accounts.accounts[0].primary.quota,...liveValue.view.accounts.accounts[0].secondary.map(s=>s.quota)]`;
-  for(const route of ['accounts','watch']) {
+  for(const route of ['accounts']) {
     await navigate(route);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
@@ -25,22 +25,20 @@ module.exports=async({command,evaluate,fixture,until,navigate,sessionId,checks})
         assert.ok(observed.lines[2*i+1].endsWith(observed.display[i].monthly_capacity));
       }
       await evaluate(`capacityRows[2].querySelector('span').focus()`);
-      await until(`document.getElementById('context-help').textContent.includes('1020 ÷ 0.07')`);
-      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/1020 ÷ 0\.07 = 14571\.42857142857142857142857 Credits[\s\S]*unpriced usage may make this low/);
-      assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),/Native Used|Native Remaining/);
+      await until(`document.getElementById('context-help').matches(':popover-open')`);
+      assert.equal(await evaluate(`document.getElementById('context-help').textContent`),
+        unit==='credits'?'Capacity: ~14572 Credits':'Capacity: ~$145.71');
       await evaluate(`capacityRows[3].querySelector('span').focus()`);
-      await until(`document.getElementById('context-help').textContent.includes('30 days ÷ 604800 seconds')`);
-      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/^Monthly Capacity: ~/);
+      assert.equal(await evaluate(`document.getElementById('context-help').textContent`),
+        unit==='credits'?'Monthly Capacity: ~62449 Credits':'Monthly Capacity: ~$624.49');
     }
     await evaluate(`capacityRows[2].querySelector('span').focus()`);
     await fixture('secondary-capacity-complete');
     await until(`(${quotas})[1].period_ccost.cost.complete`);
-    await until(`document.getElementById('context-help').textContent.includes('1020 ÷ 0.07')&&!document.getElementById('context-help').textContent.includes('unpriced')`);
-    assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),/unpriced/);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent`),'Capacity: ~$145.71');
     await fixture('secondary-capacity-raw');
     await until(`(${quotas})[1].remaining_fraction==='0.9301'`);
-    await until(`document.getElementById('context-help').textContent.includes('1020 ÷ 0.0699')`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/1020 ÷ 0\.0699/);
+    await until(`document.getElementById('context-help').textContent==='Capacity: ~$145.92'`);
     await fixture('secondary-capacity-history');
     await until(`(${quotas})[1].ccost_reference.capacity===null`);
     await until(`document.getElementById('context-help').textContent.includes('waiting for complete period history')`);
@@ -57,10 +55,10 @@ module.exports=async({command,evaluate,fixture,until,navigate,sessionId,checks})
     const box=await evaluate(`(()=>{const r=capacityRows[2].querySelector('span').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
     await evaluate(`document.activeElement.blur()`);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',...box},sessionId);
-    await until(`!document.getElementById('context-help').hidden&&document.getElementById('context-help').textContent.includes('unpriced usage')`);
+    await until(`!document.getElementById('context-help').hidden&&document.getElementById('context-help').textContent==='Capacity: ~$145.71'`);
     await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[box]},sessionId);
     await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},sessionId);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Estimate from priced requests/);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent`),'Capacity: ~$145.71');
   }
-  checks.push('Accounts/Full Watch: independent primary/secondary/later raw Capacity and 30-day estimates; partial→complete, raw fraction, missing history/reset, Credits/USD × Used/Remaining, retained rows/focus, hidden hover/touch');
+  checks.push('Accounts: exact primary/secondary/later short Capacity and 30-day help; partial→complete, raw fraction, missing history/reset, Credits/USD × Used/Remaining, retained rows/focus, hidden hover/touch');
 };

@@ -34,9 +34,11 @@ module.exports=(vm,context,sample,helpText)=>{
     savedRows=lines(card);savedBar=card.querySelectorAll('progress')[0];
     assert.equal(card.children.some(n=>n.className==='watch-capacity-spacer'),false);
     assert.match(card.children[2].textContent,/^Weekly Mixed CASE/);
-    const usage=helpText(card.children[2].children[0]);
-    assert.match(usage,/^Used: [^\n]+\nRemaining: [^\n]+\nReset /);
-    assert.doesNotMatch(usage,/Capacity|CCost|÷|rolling|scope|pricing/i);
+    for(const summary of [card.children[2],secondary.children[1]])for(const target of summary.children){
+      assert.equal(target.events.focus,undefined);
+      assert.notEqual(target.tabIndex,0,'no inert summary or period-cost focus stop');
+    }
+    assert.equal(helpText(card.children[1].children[0]),"This account's reference cost for the local calendar day.");
     assert.equal(card.querySelectorAll('progress')[0].attributes['aria-label'],'Weekly Mixed CASE remaining');
     assert.match(secondary.children[1].textContent,/^5-hour/);
     assert.equal(secondary.children[0].className,'watch-quota-divider');
@@ -46,8 +48,17 @@ module.exports=(vm,context,sample,helpText)=>{
       const help=helpText(line.children[0]);
       assert.doesNotMatch(help,/Native Used|Native Remaining|rolling|scope/);
       assert.match(help,phase==='unknown'?/No positive same-window reference CCost sample/:/^(Monthly )?Capacity: ~/);
-      if(phase==='known')assert.doesNotMatch(help,/÷|×|Unrounded|estimate|Observed|Provider-reported/i);
+      if(phase==='known')assert.doesNotMatch(help,/[\r\n]|÷|×|Unrounded|estimate|Observed|Provider-reported|attribution|pricing/i);
     }
+  }
+  // Native eligibility comes from the projection, not provider, label or amount.
+  for(const phase of ['unknown','ratio','native','unknown']) {
+    quotas[0].ccost_reference={...known[0],basis:phase,capacity:phase==='unknown'?null:known[0].capacity};
+    draw();
+    const line=lines(context.capacityPage.grid.children[0])[0],target=line.children[0];
+    assert.equal(target.events.focus===undefined,phase==='native');
+    assert.equal(target.tabIndex===0,phase!=='native');
+    assert.equal(context.capacityPage.grid.children[0].querySelectorAll('progress')[0],savedBar);
   }
   context.capacityView.accounts.accounts.push({...structuredClone(source),observation:{...source.observation,id:'second'}});
   draw();assert.equal(context.capacityPage.grid.children.length,2);

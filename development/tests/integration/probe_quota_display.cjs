@@ -2,6 +2,8 @@
 const assert = require('node:assert/strict');
 module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layouts,fixture,navigate}) => {
   const route = async section => {
+    // Detailed quotas now belong only to Accounts; Watch is independently compact.
+    if(section==='watch')section='accounts';
     if(navigate) await navigate(section);
     else { await evaluate(`location.hash='#/${section}'`); await until(`document.body.dataset.section==='${section}'`); }
   };
@@ -13,7 +15,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
     assert.equal(await evaluate(`document.activeElement.id`),id);
   };
   const initial = await evaluate(`(() => {window.quotaProbe={source:JSON.stringify(liveValue.view.accounts),
-    bar:miniWatch.view.accounts.querySelector('progress'),cost:views.get('#/watch')?.watch?.accounts.querySelector('.watch-period-cost')};
+    bar:miniWatch.view.accounts.querySelector('progress'),cost:views.get('#/accounts')?.accounts?.root.querySelector('.watch-period-cost')};
     return {streams:probeStreams,mini:miniWatch.view.accounts.children[0].textContent};})()`);
   assert.match(initial.mini,/8.4% used \(2088\)/);
   await change('quota-display','remaining');
@@ -84,7 +86,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
      const amount = unit==='usd' ? (mode==='used'?'$30.00':'$70.00') : (mode==='used'?'3000':'7000');
      const secondary = unit==='usd' ? (mode==='used'?'$6.00':'$14.00') : (mode==='used'?'600':'1400');
      const percent = mode==='used'?'30%':'70%', capacity=unit==='usd'?'$100.00':'10000';
-     for (const section of ['accounts','watch']) {
+     for (const section of ['accounts']) {
        await route(section);
        const rendered = await evaluate(`(() => {const card=document.querySelector('.watch-subscription');return {
          labels:[...card.querySelectorAll('.watch-quota-summary')].map(n=>n.textContent),

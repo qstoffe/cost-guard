@@ -91,11 +91,17 @@ async function main() {
       width:node.getBoundingClientRect().width,rows:getComputedStyle(node).gridTemplateRows}))`);
     const accountsCards = await fingerprint();
     await navigate('watch');
-    assert.deepEqual(await fingerprint(),accountsCards,'identical publication produces identical card markup and geometry');
+    assert.equal(await evaluate(`document.querySelectorAll('#result .watch-subscription').length`),0);
+    assert.equal(await evaluate(`document.querySelectorAll('#result .mini-accounts > li').length`),6);
     await navigate('accounts');
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
-    checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    checks.push('Compact Watch / detailed Accounts, retained navigation, one SSE and no route report jobs');
+    if(process.argv.includes('--help-only')) {
+      await require('./probe_accounts_help.cjs')({command,evaluate,until,sessionId,navigate,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0};return;
+    }
     if(process.argv.includes('--midnight')) {
       await require('./probe_account_today.cjs')({evaluate,fixture,until,navigate,checks});
       assert.deepEqual(errors,[]);
@@ -144,7 +150,7 @@ async function main() {
     await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'})))()`);
     checks.push('Explicit Credits reference pace survives a real Settings save and page reload');
     await evaluate(`window.savedCard=document.querySelector('.watch-subscription');window.savedBar=savedCard.querySelector('progress');
-      window.savedHelp=savedCard.querySelector('.watch-quota-capacity span');savedHelp.focus();
+      window.savedHelp=savedCard.querySelector('.watch-primary-details .help-value');savedHelp.focus();
       window.savedText=savedCard.querySelector('h4 a > span').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
       window.mutations=0;window.observer=new MutationObserver(events=>mutations+=events.filter(e=>e.type==='childList').length);
       observer.observe(document.querySelector('.watch-account-grid'),{subtree:true,childList:true});`);
@@ -157,7 +163,9 @@ async function main() {
     await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'}));
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'remaining'}));})()`);
     assert.match(await evaluate(`savedCard.querySelector('.watch-quota-summary').textContent`), /remaining.*\$/);
-    assert.equal(await evaluate(`document.getElementById('context-help').textContent`), 'Capacity: $250.00');
+    assert.equal(await evaluate(`savedCard.querySelector('.watch-quota-capacity .help-value')`),null);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent`),
+      await evaluate(`ReportView.display(liveValue.view.accounts.accounts[0].primary.quota,'reset_at_ms')`));
     assert.equal(await evaluate('document.activeElement===savedHelp'),true);
     for (const width of [1200,360]) for (const theme of ['classic','light','dark']) {
       await command('Emulation.setDeviceMetricsOverride', {width,height:800,deviceScaleFactor:1.5,mobile:false},sessionId);
@@ -173,7 +181,8 @@ async function main() {
       await fs.writeFile(output.replace(/\.json$/,'')+`-${theme}-${width}.png`,Buffer.from(image.data,'base64'));
     }
     checks.push('Unchanged ticks preserve nodes/focus/selection/help; live unit/mode/theme, DPR/narrow/reduced-motion layouts');
-    if(!quotaOnly) await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom});
+    if(!quotaOnly) await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts,output,browserZoom,
+      skipMatrix:process.argv.includes('--post-capacity')});
     await navigate('watch');
     await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'}));
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'used'}));})()`);

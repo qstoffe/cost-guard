@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.62 - 2026-11-15
+
+- Accounts CCost Today help is exactly “This account's reference cost for the local calendar day.” Used/Remaining summaries and parenthesized period CCost have no help or keyboard stops at any quota level.
+- Source-qualified native Capacity and unlimited amounts have no redundant help. Estimated Capacity/Monthly Capacity help retains only the label and approximate, normally formatted amount; unknown Capacity keeps its source reason. Refresh removes obsolete help owners without replacing quota bars.
+- Quota calculations, provenance/diagnostic warnings, reset help, compact Watch/Mini and other pages remain unchanged.
+
 ## v81.61 - 2026-11-15
 
 - Session Detail orders the complete history table and its existing totals footer before one shared Watch Context line, then Tool Calls/Skills. Context price warnings and disclosure state retain their existing semantics; no separate Total CCost summary is added.
