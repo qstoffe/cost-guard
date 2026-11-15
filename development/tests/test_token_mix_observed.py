@@ -104,7 +104,8 @@ class ObservedMixTests(unittest.TestCase):
         report = self.report([TokenUsage(input=1), TokenUsage(output=1)],
             models=[ModelRef('route', 'ambiguous', 'Recorded Alias'), ModelRef('route', 'absent', 'Original Generation')],
             reference=catalog)
-        self.assertEqual({'Recorded Alias', 'Original Generation'}, {row.model for row in report.model_token_mix})
+        self.assertEqual({'Recorded Alias', 'Original Generation'},
+                         {row['model'] for row in project(report).to_json()['model_token_mix']})
         self.assertEqual({'—'}, {row.publisher for row in report.model_token_mix})
 
 

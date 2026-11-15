@@ -127,15 +127,18 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         return None if unverified_alias(model.model, model.provider) else reference.resolve_reference(model.model)
 
     def publisher_key(model):
-        return model_publisher(catalog_model(model)) or "—"
+        return model_publisher(catalog_model(model)) or "Unknown / unverified"
 
     for group in groups:
         matched = catalog_model(group.model)
-        name = (matched.model.display_name or matched.model.model) if matched else (
+        name = (group.model.display_name if group.model.resolution and group.model.display_name else
+                reference.display_name(group.model.model, group.model.provider, exact=True))
+        web_name = (matched.model.display_name or matched.model.model) if matched else (
+            group.model.recorded_model if unverified_alias(group.model.model, group.model.provider) else
             group.model.display_name or group.model.recorded_model)
         key = _model_key(group.model)
         rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix,
-            publisher_key(group.model), key, observed_totals(by_model[key])))
+            model_publisher(matched) or "—", key, observed_totals(by_model[key]), web_name))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
     shown_keys = {_model_key(group.model) for group in groups}

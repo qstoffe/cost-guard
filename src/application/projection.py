@@ -246,11 +246,12 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         token_mix=token_mix(report.token_mix, category_help=report.kind is ReportKind.TOKEN_MIX,
                             observed=report.token_mix_observed_totals),
         token_mix_period=record(**report.token_mix_period) if report.token_mix_period else None,
-        model_token_mix=tuple(record(model=item.model, publisher=item.publisher, identity=identity((item.identity,)),
+        model_token_mix=tuple(record(model=item.web_model or item.model, publisher=item.publisher, identity=identity((item.identity,)),
             prompts=item.prompts, calls=item.calls,
             mix=token_mix(item.mix, category_help=True, observed=item.observed_totals))
             for item in report.model_token_mix),
-        publisher_token_mix=tuple(record(publisher=item.publisher, prompts=item.prompts, calls=item.calls,
+        publisher_token_mix=tuple(record(publisher="—" if item.publisher == "Unknown / unverified" else item.publisher,
+            prompts=item.prompts, calls=item.calls,
             mix=token_mix(item.mix, category_help=True, observed=item.observed_totals))
             for item in report.publisher_token_mix),
     ), timezone_id, ccost_display_unit=ccost_display_unit)

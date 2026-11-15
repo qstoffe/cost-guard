@@ -148,7 +148,11 @@ const TokenMixView = (() => {
       ContextHelp.refresh(this.title);
       this.metrics.forEach(value => ReportView.syncUnits(value));
       const view = result.view;
-      this.status.textContent = view.model_token_mix.length ? '' : 'No available historical usage.';
+      const operational = (view.source_warnings || []).filter(text => text.startsWith('ERROR:'));
+      if ((view.source_warnings || []).some(text => text.startsWith('⚠ Could not verify currently selectable')))
+        operational.push('Model availability service unavailable.');
+      this.status.textContent = [view.model_token_mix.length ? '' : 'No available historical usage.',
+        ...operational].filter(Boolean).join(' ');
       this.status.hidden = !this.status.textContent;
       this.models.update(view.model_token_mix); this.publishers.update(view.publisher_token_mix);
     }

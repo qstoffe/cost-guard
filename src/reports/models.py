@@ -237,7 +237,8 @@ class ModelTokenMixProjection:
     mix: TokenMix
     publisher: str = "—"
     identity: str = ""
-    observed_totals: tuple[int, int, int, int] = (0, 0, 0, 0)
+    observed_totals: tuple[int, int, int, int] | None = None
+    web_model: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,7 +247,7 @@ class PublisherTokenMixProjection:
     prompts: int
     calls: int
     mix: TokenMix
-    observed_totals: tuple[int, int, int, int] = (0, 0, 0, 0)
+    observed_totals: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -38,9 +38,9 @@ for (const [kind, result] of Object.entries(input)) {
   } else {
      const metrics = ['Prompts', 'Calls', 'Tokens', 'Input %', 'Cached input %',
        'Cache write %', 'Output %', 'Total CCost ↓'];
-     assert.deepEqual(all(output, 'th').map(node => node.textContent), ['Model', ...metrics, 'Publisher', ...metrics]);
+      assert.deepEqual(all(output, 'th').map(node => node.textContent), ['Publisher', 'Model', ...metrics, 'Publisher', ...metrics]);
      const mix = result.view.model_token_mix[0].mix;
-     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
+      assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(4).map(cell => cell.textContent),
         ['total_tokens', ...['input', 'cache', 'write', 'output'].map(key => key + '_share'), 'total_cost'].map(key => mix.display['mix_' + key]));
      assert.ok(output.textContent.indexOf('Total Token Mix') < output.textContent.indexOf('Token Mix % by model'));
      assert.ok(output.textContent.indexOf('Token Mix % by model') < output.textContent.indexOf('Token Mix % by publisher'));
@@ -64,7 +64,7 @@ for (const [kind, result] of Object.entries(input)) {
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, block.display_units.usd.total_ccost);
   } else {
     const mix = result.view.model_token_mix[0].mix;
-    assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
+     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(4).map(cell => cell.textContent),
        ['total_tokens', ...['input', 'cache', 'write', 'output'].map(key => key + '_share'), 'total_cost'].map(key => mix.display_units?.usd?.['mix_' + key] ?? mix.display['mix_' + key]));
   }
   vm.runInContext('ReportView.setUnit("credits", output)', context);
@@ -90,17 +90,18 @@ const sorted = JSON.parse(JSON.stringify(input['token-mix']));
 const base = sorted.view.model_token_mix[0];
 sorted.view.model_token_mix = [
   ['larger', '9007199254740993', '9007199.3B'],
-  ['unknown', null, 'N/A'],
+  ['unknown', '0', '0'],
   ['smaller', '9007199254740992', '9007199.3B'],
   ['partial', '999999', '1M']
-].map(([model, raw, label]) => ({...base, model, mix: {...base.mix,
-   total_tokens: null, known_total_tokens: raw, display: {...base.mix.display, mix_total_tokens: label}}}));
+].map(([model, raw, label]) => ({...base, model, identity:model, mix: {...base.mix,
+   total_tokens: null, known_total_tokens: raw, observed_total_tokens:raw, observed_totals:[raw,'0','0','0'],
+   display: {...base.mix.display, mix_total_tokens: label}}}));
 context.result = sorted;
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "token-mix"})', context);
-const header = all(output, 'th')[3].children[0];
+const header = all(output, 'th')[4].children[0];
 header.events.click();
-const names = () => all(output, 'tbody')[0].children.map(row => row.children[0].textContent);
-assert.deepEqual(names(), ['partial', 'smaller', 'larger', 'unknown']);
+const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].textContent);
+assert.deepEqual(names(), ['unknown', 'partial', 'smaller', 'larger']);
 header.events.click();
 assert.deepEqual(names(), ['larger', 'smaller', 'partial', 'unknown']);
 assert.ok(all(output, 'div').some(node => node.className === 'token-mix-pan' && node.tabIndex === 0));
@@ -126,6 +127,7 @@ console.log('PASS complete payload validation rejects malformed overview or eith
 const partial = JSON.parse(JSON.stringify(input['token-mix']));
 const partialMix = mix => ({...mix, cost_complete: false, priced_requests: 1, request_count: 3,
   exact_total_tokens: null, known_total_tokens: '842000',
+  observed_total_tokens:'842000', observed_totals:['842000','0','0','0'],
   display: {...mix.display, mix_total_tokens: '842K', mix_input_cost: '12.34'},
   display_units: {usd: {mix_input_cost: '$0.12'}}});
 partial.view.token_mix = partialMix(partial.view.token_mix);
@@ -139,7 +141,7 @@ const title = all(output, 'h2')[0];
 assert.doesNotMatch(output.textContent, /Partial|\?|Incomplete token telemetry/);
 assert.ok(output.textContent.includes('842K'));
 assert.equal(context.mixView.status.hidden, true);
-assert.match(helpText(title), /842,000 known recorded tokens for the selected period\n2026-03-29 00:00:00.000 GMT\+01:00 – 2026-03-29 03:30:00.000 GMT\+02:00/);
+assert.match(helpText(title), /^842,000 recorded tokens for the selected period\n2026-03-29 00:00 – 2026-03-29 03:30$/);
 assert.doesNotMatch(helpText(title), /CLI|Observed|Partial pricing|CCost|Deleted/);
 vm.runInContext('ReportView.setUnit("usd", output)', context);
 assert.ok(output.textContent.includes('$0.12')); assert.doesNotMatch(output.textContent, /Partial|\?/);

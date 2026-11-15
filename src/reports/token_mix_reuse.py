@@ -23,6 +23,7 @@ def signature(service, reference):
 
 def qualified(value, key):
     return (isinstance(value, dict) and value.get('signature') == key
+            and isinstance(value.get('created'), (int, float)) and isinstance(value.get('roots'), dict)
             and 0 <= time.monotonic() - value.get('created', 0) < MAX_AGE)
 
 
