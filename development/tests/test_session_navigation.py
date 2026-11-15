@@ -333,6 +333,53 @@ class SessionNavigationTests(unittest.TestCase):
         self.assertTrue(pending['pending_sort'])
         self.assertEqual(pending['progress']['completed'], 0)
 
+    def test_visible_renewal_then_300_second_boundary_and_independent_hidden_lease(self):
+        self.setup_catalog(26)
+        visible = self.request()
+        hidden = self.request()
+        for clock in (240, 480):
+            self.clock = clock
+            self.assertEqual(self.request(visible)['token'], visible['token'])
+        with self.assertRaisesRegex(KeyError, 'catalog_expired'):
+            self.request(hidden)
+        self.clock = 780
+        self.assertEqual(self.request(visible)['token'], visible['token'], 'exactly 300 seconds remains valid')
+        self.clock = 1081
+        with self.assertRaisesRegex(KeyError, 'catalog_expired'):
+            self.request(visible)
+        reopened = self.request()
+        self.assertNotEqual(reopened['token'], visible['token'])
+        self.assertEqual((reopened['offset'], reopened['total']), (0, 26))
+
+    def test_warm_page_actions_reuse_real_summaries_and_only_changed_root_reacquires(self):
+        self.setup_catalog(51)
+        self.source.snapshots = {key: replace(snapshot, complete=True)
+                                 for key, snapshot in self.source.snapshots.items()}
+        self.observe()
+        first = self.request(navigation=1)
+        for _ in range(13):
+            self.catalog.tick(self.service)
+        ready = self.request(first, navigation=1)
+        self.assertFalse(ready['pending_sort'])
+        self.assertEqual(self.source.load_count, 51)
+        reads = self.source.load_count
+        epoch, applied = ready['epoch'], 1
+        for sequence, offset in enumerate((25, 0, 25, 0), start=2):
+            page = self.request(first, offset=offset, epoch=epoch if offset else None,
+                navigation=sequence, applied=applied)
+            self.assertEqual(page['offset'], offset)
+            self.assertEqual(page['progress']['status'], 'ready')
+            self.assertEqual(len(page['view']['session_usage']), 25)
+            epoch, applied = page['epoch'], sequence
+        self.assertEqual(self.source.load_count, reads)
+        self.request(first, applied=applied)
+        snapshot = self.source.snapshots['root-0000']
+        self.source.snapshots['root-0000'] = replace(snapshot, source_revision='changed')
+        self.observe()
+        self.clock += 6
+        self.catalog.tick(self.service)
+        self.assertEqual(self.source.load_count - reads, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -32,7 +32,29 @@ module.exports = async ({vm, context, Node, timers}) => {
   const singlePage = context.singlePage;
   singlePage.update({...previous,total:1,offset:0});
   labelOnlyPager(singlePage);
-  assert.equal(singlePage.previous.disabled,true); assert.equal(singlePage.next.disabled,true);
+   assert.equal(singlePage.previous.disabled,true); assert.equal(singlePage.next.disabled,true);
+   // Expiry must retire stale destinations before awaiting the new lease.
+   vm.runInContext('globalThis.idleCatalog = new SessionsCatalog.View(navigationApi)', context);
+   const idle = context.idleCatalog, latest = {...previous,offset:0,total:26};
+   idle.configure(new URLSearchParams('period=today&sort=activity&direction=-1'));
+   idle.attached = true; idle.token = latest.token; idle.update(latest);
+   let reopen, expireIdle = true;
+   idle.api = async (_, request) => {
+     if (request.action) return {};
+     if (expireIdle) { expireIdle=false; throw new Error('catalog_expired'); }
+     return new Promise(resolve => { reopen=resolve; });
+   };
+   const reopening = idle.load(); await new Promise(setImmediate);
+   assert.equal(idle.recovering,true); assert.equal(idle.busy,true);
+   assert.equal(idle.next.disabled,true,'invalid old-lease destination is inert during reopen HTTP');
+   assert.equal(idle.pageButtons.get(2).disabled,true);
+   assert.equal(idle.status.hidden,true);
+   const idleHash = context.location.hash;
+   idle.next.events.click(); assert.equal(context.location.hash,idleHash);
+   reopen({...latest,token:'new-idle',epoch:'new-idle-epoch'}); await reopening;
+   assert.equal(idle.recovering,false); assert.equal(idle.busy,false);
+   assert.equal(idle.next.disabled,false); assert.equal(idle.pageButtons.get(2).disabled,false);
+   assert.equal(idle.operation,null); idle.detach();
   const start = (params, button = null) => {
     view.navigateTo('#/sessions?' + params, button, button ? 'page' : null);
     view.configure(new URLSearchParams(params));
