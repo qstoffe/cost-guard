@@ -63,6 +63,8 @@ class FixtureRuntime:
         self.catalog = SessionCatalog(clock_ms=lambda: self.service.now_ms, timezone_id=self.service.timezone_id)
         self.unavailable = False
         self.scalar_hold = False
+        self.catalog_clock_offset = 0
+        self.catalog.clock = lambda: time.monotonic() + self.catalog_clock_offset
         self.live_root = None
         self.parity = False
         self.quota_fixture = None
@@ -317,6 +319,12 @@ def main():
                     active=lane.process is not None, metrics=lane.last_metrics,
                     entries=[dict(key=key, **host.live.details.acquisition_status(entry))
                         for key, entry in host.live.details.histories.items()])), flush=True)
+                continue
+            elif command.startswith('catalog-idle-'):
+                from development.tests.fixtures.sessions_idle import configure
+                with host.live.observation_lock:
+                    result = configure(host.live, command)
+                print(json.dumps(result), flush=True)
                 continue
             elif command.startswith('catalog-'):
                 host.live.scalar_hold = True

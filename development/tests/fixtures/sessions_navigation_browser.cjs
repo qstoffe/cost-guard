@@ -149,7 +149,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.operation && !current.catalog.operation.failed && current.catalog.retryDelay>0');
   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
   assert.equal(await evaluate('current.catalog.pan.hidden'),false);
-   assert.match(await evaluate('current.catalog.status.textContent'),/Sorting sessions by Ctx.*Loading paused\. Retrying/);
+   assert.match(await evaluate('current.catalog.status.textContent'),/^Sorting sessions by Ctx/);
+   assert.doesNotMatch(await evaluate('current.catalog.status.textContent'),/paused|Retrying|source_unavailable/);
   await fixture('recover'); await fixture('catalog-index');
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
   await evaluate('current.catalog.poll()');

@@ -184,6 +184,9 @@ const SessionsCatalog = (() => {
           // latest, preserving sort intent. One reopen per poll, never a loop.
           this.interest(false);
           this.token = null; this.appliedNavigation = null; this.epoch = null; this.offset = 0; this.recovering = true;
+          // Old destinations belong to the rejected lease. Retire them before
+          // awaiting the replacement, not only after that request settles.
+          this.pagerBusy();
           data = await request();
         }
         if (!this.attached || generation !== this.generation) {

@@ -72,7 +72,12 @@ async function main() {
      const until=async (expression, timeoutMs=30000) => {
        const end=Date.now()+timeoutMs;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
-      const state=await evaluate(mode==='--calm-ui' ?
+       const state=await evaluate(mode==='--catalog-idle-only' ?
+         `JSON.stringify({hidden:document.hidden,section:current?.section,offset:current?.catalog?.offset,
+           applied:current?.catalog?.data?.offset,total:current?.catalog?.data?.total,busy:current?.catalog?.busy,
+           recovering:current?.catalog?.recovering,operation:current?.catalog?.operation,
+           reply:current?.catalog?.idleReply?.progress,requests:window.idleRequests,expiries:window.idleExpiries})` :
+         mode==='--calm-ui' ?
         `JSON.stringify({section:current?.section,hidden:document.hidden,detailTotal:current?.detail?.data?.total,detailBusy:current?.detail?.busy})` :
         'document.body.innerText');
       lastExpression=expression;
@@ -186,7 +191,16 @@ async function main() {
               inference_calls:0,personal_profile:false,desktop_effects:false};
             console.log(JSON.stringify({outcome:evidence.outcome,checks,measurements:details.measurements})); return;
           }
-         if (['--periods-only', '--catalog-navigation-only', '--calendar-cache-only', '--catalog-banner-only', '--catalog-cohort-only'].includes(mode)) {
+          if (mode === '--catalog-idle-only') {
+            const details = await require('../fixtures/sessions_idle_browser.cjs')({evaluate, until, fixture, targetId,
+              command:(method, params) => command(method, params, sessionId), browserCommand:command});
+            checks.push(...details.checks);
+            assert.deepEqual(errors, []);
+            evidence = {outcome:'PASS',browser:version.product,...details,inference_calls:0,
+              personal_profile:false,desktop_effects:false};
+            console.log(JSON.stringify(evidence)); return;
+          }
+          if (['--periods-only', '--catalog-navigation-only', '--calendar-cache-only', '--catalog-banner-only', '--catalog-cohort-only'].includes(mode)) {
            const details = await require(mode === '--periods-only' ? '../fixtures/sessions_periods_browser.cjs' :
              mode === '--catalog-cohort-only' ? '../fixtures/sessions_cohort_browser.cjs' :
             mode === '--catalog-banner-only' ? '../fixtures/sessions_banner_browser.cjs' :
