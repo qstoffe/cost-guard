@@ -125,7 +125,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
       'N/A');
     await evaluate(owner,`(() => {
-      const names=['hourly-rate','total-cost','total-tokens','token-rate','working-time','average-cost',
+      const names=['hourly-rate','total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost',
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
       const metrics=names.map(metric=>({metric,value:metric==='token-rate'?'0':'125',exact_value:'125',reasons:[],podium:[],
         display:{value:'125 CCost',trait:'Fixture',token_help:'125 tokens',response_help:'No response sample',
