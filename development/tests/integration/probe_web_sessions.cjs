@@ -326,10 +326,17 @@ async function main() {
            assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[10,9]);
        }
        if (route==='sessions') await until('current.catalog?.data?.total===121');
-       if (route==='sessions/root-0000') {
-         await until('current.detail?.data?.total===1002');
-         await evaluate(`document.querySelector('.session-preview').textContent='A deliberately lengthy prompt preview that should grow on spacious displays but yield to real numeric columns on smaller screens'`);
-       }
+        if (route==='sessions/root-0000') {
+          await until('current.detail?.data?.total===1002');
+          await evaluate(`document.querySelector('.session-preview').textContent='A deliberately lengthy prompt preview that should grow on spacious displays but yield to real numeric columns on smaller screens'`);
+        }
+        if (route==='sessions') {
+          await until('!current.catalog.busy && !current.catalog.operation');
+          // This matrix intentionally injects huge totals/running rows below.
+          // Retire only this synthetic view's poll so real replies cannot replace
+          // the controlled frame while its computed geometry/colors are asserted.
+          await evaluate('current.catalog.retire()');
+        }
        for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
          await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
          await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
