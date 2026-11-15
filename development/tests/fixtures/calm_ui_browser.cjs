@@ -88,6 +88,9 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   await until('miniWatch?.measure?.ready && miniWatch.placement');
   await evaluate('miniWatch.toggle()',true);
   await until('miniWatch.view && !miniWatch.pending');
+  // Opening's clamp outcome is assigned in the child document's next frame,
+  // after pending clears. Settle that explicit outcome before testing health.
+  await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))');
   const openingFeedback=await evaluate('miniWatch.feedback.textContent');
   await evaluate(`miniWatch.health({kind:'offline'});miniWatch.sync()`);
   assert.equal(await evaluate(`miniWatch.view.health.hidden`),true);
