@@ -55,7 +55,8 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       .find(row=>row.cells[1].textContent.includes('model ${name}')).cells[5].firstElementChild;
       partialCategory.focus()`);
     if (name==='63') {
-      assert.equal(await evaluate('partialCategory.textContent'),'N/A','unpriced category is not zero');
+      assert.match(await evaluate('partialCategory.textContent'),/^\d+(?:\.\d+)?%$/,'known token share remains independent of pricing');
+      assert.equal(await evaluate('partialCategory.closest("tr").cells[9].textContent'),'N/A','unpriced cost is not zero');
       assert.equal(await evaluate(`${help}?.matches(':popover-open') || false`),false,'no diagnostic caveat replaces missing cost');
     } else {
       await until(`${help}?.matches(':popover-open')`);

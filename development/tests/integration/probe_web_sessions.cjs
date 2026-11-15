@@ -16,6 +16,7 @@ async function main() {
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return JSON.parse((await lines.next()).value);};
   const child = spawn(browser, ['--headless=new', ...(process.env.COST_GUARD_CI_BROWSER==='1'?['--no-sandbox']:[]),
+    '--screen-info={1920x1080}',
     '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--disable-background-networking', '--remote-debugging-pipe', '--user-data-dir='+profile, 'about:blank'],
     {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});

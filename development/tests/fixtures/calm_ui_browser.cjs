@@ -79,8 +79,10 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   await until('miniWatch?.measure?.ready && miniWatch.placement');
   await evaluate('miniWatch.toggle()',true);
   await until('miniWatch.view && !miniWatch.pending');
+  const openingFeedback=await evaluate('miniWatch.feedback.textContent');
   await evaluate(`miniWatch.health({kind:'offline'});miniWatch.sync()`);
-  assert.equal(await evaluate(`miniWatch.view.health.hidden && miniWatch.feedback.textContent===''`),true);
+  assert.equal(await evaluate(`miniWatch.view.health.hidden`),true);
+  assert.equal(await evaluate('miniWatch.feedback.textContent'),openingFeedback,'passive health cannot add or rewrite an explicit opening outcome');
   assert.doesNotMatch(await evaluate('miniWatch.window.document.body.innerText'),/source-qualified|worker failed|connection_timeout/i);
   await evaluate('miniWatch.close()');
   checks.push('native headless Mini document opens from explicit gesture and has no passive offline notice');
