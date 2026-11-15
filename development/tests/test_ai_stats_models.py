@@ -221,6 +221,9 @@ class ModelStandingsTests(unittest.TestCase):
         self.assertEqual('Claude Sonnet (version unverified)', catalog.display_name('sonnet', 'claude-agent', exact=True))
         self.assertIsNone(catalog.reference_valuation(alias, TokenUsage(output=100)))
         self.assertEqual('sonnet', alias.recorded_model)
+        conflicting_hint = ModelRef('claude-agent', 'claude-sonnet-5-5', 'Claude Sonnet 5.5',
+            resolution=ModelResolution('claude-sonnet-4-6', 'source', 'signature'))
+        self.assertEqual('Claude Sonnet 4.6', friendly_model(conflicting_hint, PricingCatalog(())))
 
     def test_alias_sampling_is_one_32_call_cohort_before_effort_and_headline_math(self):
         calls = tuple(ResponseCall(replace(self.request('root', str(i), 'alias', TokenUsage(output=100 + i),

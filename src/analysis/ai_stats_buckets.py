@@ -48,7 +48,8 @@ def friendly_model(model, catalog=None):
                 return catalog_label(latest, catalog)
     if alias and identity == recorded:
         return alias.removesuffix(' (version unverified)')
-    label = catalog_display_name(model.provider, model.display_name) if model.display_name else identity
+    label = (recorded if model.resolution and not alias else
+             catalog_display_name(model.provider, model.display_name) if model.display_name else identity)
     # Unknown selections get a compact family/name, never source scope or hashes.
     return readable_model(label)
 
