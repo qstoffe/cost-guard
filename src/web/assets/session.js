@@ -79,7 +79,9 @@ const SessionDetail = (() => {
     ContextHelp.value(preview, value.preview || value.label || 'Prompt');
     label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
-      () => [ReportView.costHelp(value), ReportView.display(value, 'cost_detail_help')].filter(text => text && text !== 'N/A').join('\n\n'));
+      () => (value.prompt_number == null ? '' : `Prompt #${value.prompt_number}\n`) +
+        ReportView.costGroups(value) + (Number.isFinite(value.duration_ms) ?
+          '\n\nDuration: ' + ReportView.display(value, 'duration_ms') : ''));
     const modelName = value.watch_model || value.model_effort || 'N/A';
     const model = ContextHelp.value(el('span', modelName + (value.linked_agent_count ? '*' : '')),
        () => ReportView.display(value, 'model_detail_help'));
@@ -413,7 +415,8 @@ const SessionDetail = (() => {
         ReportView.text(node, () => index === 3 && authority?.totals?.total_ccost === 'pending' &&
           !this.values.totals.has('total_ccost') ? 'Loading…' : value(index));
         if (index === 3) ContextHelp.value(node, () => ReportView.display(this.footerBlock, 'session_cost_help') +
-          (this.values.retained ? '\nPreviously verified display observation; current values are updating.' : ''));
+          (Number.isFinite(this.footerBlock.duration_ms) ?
+            '\n\nDuration: ' + ReportView.display(this.footerBlock, 'duration_ms') : ''));
         if (!node.parentNode) cell.append(node);
         if (!cell.parentNode) this.footer.append(cell);
       }

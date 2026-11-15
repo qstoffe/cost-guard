@@ -152,6 +152,7 @@ class SessionPromptBlock:
     ccost_unavailable: tuple[ReferenceCostIssue, ...] = ()
     other_ccost: Decimal = Decimal(0)
     other_calls: int = 0
+    cost_groups: tuple[SessionCostGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

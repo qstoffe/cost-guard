@@ -108,8 +108,8 @@ class RecordedModelHelpTests(unittest.TestCase):
 
         self.assertEqual((0, (), Decimal(0)), (row.calls, row.cost_parts, row.ccost))
         self.assertIn('Recorded selection: claude-agent/claude-haiku-4-5-20251001', wire['display']['model_detail_help'])
-        self.assertIn('Usage unavailable; cost unknown', wire['display']['cost_detail_help'])
-        self.assertIn('empty observed subtotal', wire['display']['cost_detail_help'])
+        self.assertEqual('Session Models:\n• N/A — N/A — (N/A)', wire['display']['cost_detail_help'])
+        self.assertNotIn('Recorded selection:', wire['display']['cost_detail_help'])
         self.assertNotIn('github-copilot', wire['display']['model_detail_help'])
         self.assertNotIn('other-provider', wire['display']['model_detail_help'])
         zero = replace(messages[-1], tokens=TokenUsage())

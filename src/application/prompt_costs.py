@@ -1,11 +1,10 @@
 """Bounded Web prompt-detail export and unit-aware copy; no pricing or acquisition."""
 from decimal import Decimal
 
-from src.numbers import ccost_amount
 from src.domain.effort import bounded_evidence
 from .contracts import record
 from .model_help import request_model_help
-from .reference_cost import issue_records, unavailable_help
+from .reference_cost import issue_records
 from .effort_help import evidence_record, evidence_help
 from .mini_costs import mini_groups
 
@@ -118,7 +117,7 @@ def detail_tokens(values):
     if detail is None:
         return {}
     detail = dict(detail.fields)
-    sections, models, calls, main_models, efforts = [], [], [], [], []
+    models, calls, main_models, efforts = [], [], [], []
     for part in detail["parts"]:
         part = dict(part.fields)
         owner = "Main prompt" if part["role"] == "main" else f"Subagent {part['agent']}"
@@ -139,48 +138,16 @@ def detail_tokens(values):
         if part['role'] == 'subagents':
             main_models.append(models[-1])
         calls.append(f"{call_heading}: {part['calls']}" + ('\n' + note if note else ''))
-        subtotal_text = ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"])
-        lines = [heading] + ([note] if note else [])
-        if part["role"] == "subagents":
-            count = str(part["prompt_count"]) if part["prompts_complete"] else (
-                f"at least {part['prompt_count']} observed (incomplete boundaries)" if part["prompt_count"] else
-                "N/A — prompt boundaries unrecorded")
-            lines.append("• Number of prompts: " + count)
-        if not part["priced_requests"]:
-            sections.append("\n".join(lines) + "\n" + unavailable_help(part.get("ccost_unavailable", ())) + "\n"
-                + "\n".join(f"• {label}: {ccost_amount(None)}" for label in ("Input", "Cached input", "Cache write", "Output"))
-                + "\nSubtotal: " + subtotal_text)
-            continue
-        for label, amount in zip(("Input", "Cached input", "Cache write", "Output"), part["categories"]):
-            lines.append(f"• {label}: {ccost_amount(None if amount is None else Decimal(amount))}")
-        lines.append(f"Calls: {part['calls']} · Subtotal: {subtotal_text}")
-        if any(amount is None for amount in part["categories"]):
-            lines.append("Some category amounts are unavailable; subtotal includes known priced usage.")
-        if not part["complete"]:
-            lines.append("Partial pricing/usage — only known contributions are included.")
-        sections.append("\n".join(lines))
-    for total in detail.get("agent_totals", ()):
-        total = dict(total.fields)
-        if total["groups"] > 1:
-            owner = "Main prompt" if total["agent"] == 0 else f"Subagent {total['agent']}"
-            sections.append(owner + " total (all own request groups): " +
-                ccost_amount(Decimal(total["known_ccost"]), unresolved=not total["complete"]))
     if detail["omitted_parts"]:
         note = f"{detail['omitted_parts']} additional role/model/effort groups not shown"
-        sections.append(note + "\nKnown subtotal: " + ccost_amount(Decimal(detail["omitted_ccost"]),
-            unresolved=not detail["omitted_complete"]))
         models.append(note + f" ({detail['model_count']} distinct models overall)")
         calls.append(note + f": {detail.get('omitted_calls', 0)} calls")
-    linked = detail["linked_agent_count"]
     if not detail['parts'] and values.get('recorded_selections'):
         selection = '\n'.join('Recorded selection: ' + value for value in values['recorded_selections'])
         selection += '\nUsage unavailable; cost unknown. Selection is not executed-model or contribution proof.'
         models.append(selection)
         main_models.append(selection)
         calls.append(selection + '\nNo request usage recorded; no model calls inferred.')
-        sections.append(selection + '\nThe displayed aggregate is an empty observed subtotal, not known zero consumption.')
-    if not detail["parts"] and values.get("calls", 0):
-        sections.append("Detailed request attribution unavailable; no per-model costs can be established.")
     for agent in detail.get("missing_agents", ()):
         agent = dict(agent.fields)
         state = {"not-executed": "No model request recorded in complete child history.",
@@ -189,29 +156,18 @@ def detail_tokens(values):
                 agent["state"], "Request usage unavailable; model/effort unknown.")
         note = f"Subagent {agent['agent']} — {state}"
         models.append(note)
-        sections.append(note + "\nCCost: " + ccost_amount(None) +
-                        (" (no recorded execution)" if agent["state"] == "not-executed" else ""))
     if detail.get("omitted_agents"):
         note = f"{detail['omitted_agents']} additional linked agents without request evidence not shown."
         models.append(note)
-        sections.append(note)
     # Legacy/custom rows may carry only a count. Never invent private identities.
     if detail.get("agents_without_usage") and not detail.get("missing_agents"):
         note = f"{detail['agents_without_usage']} additional linked agents — request usage unavailable; cost unknown."
         models.append(note)
-        sections.append(note)
     model_help = "\n\n".join(models)
-    if sections:
-        total = values.get("ccost")
-        sections.append("Total CCost: " + ccost_amount(None if total is None else Decimal(total),
-             unresolved=values.get("unresolved_cost", False)) + "\nAmounts are independently rounded.")
-        if values.get("unresolved_cost"):
-            sections.append("Partial cost coverage — known priced subtotal only; unavailable usage is not zero.")
     if calls:
         calls.append(("Total Calls: " if detail["calls_complete"] else "Observed Calls (incomplete request evidence): ")
             + str(detail["observed_calls"]))
-    return {"cost_detail_help": "\n\n".join(sections),
-            "model_detail_help": model_help,
+    return {"model_detail_help": model_help,
             "main_model_help": '\n\n'.join(dict.fromkeys(main_models)) or 'Main model identity unrecorded',
             "effort_help": '\n\n'.join(dict.fromkeys(efforts)) or values.get("watch_effort") or "N/A",
             "effort_tooltip": '\n'.join(dict.fromkeys(

@@ -57,18 +57,9 @@ def amount_tokens(values):
             unresolved = values.get(flag, False)
         tokens[key] = ccost_amount(decimal(values[key]), unresolved=unresolved)
     if "main_ccost" in values and "subagent_ccost" in values and ("prompt_count" in values or "known_ccost" in values):
-        tokens["session_cost_help"] = (f"Whole root session tree\nAll main requests: {ccost_amount(decimal(values['main_ccost']))}"
-            f"\nAll linked subagent requests: {ccost_amount(decimal(values['subagent_ccost']))}"
-            f"\nTotal CCost: {tokens.get('ccost', tokens.get('known_ccost'))}" +
-            ("\nPartial cost coverage; unavailable usage is not zero." if not values.get("complete", True) else "") +
-            "\nReference valuation, not actual billing. Amounts are independently rounded.")
+        tokens["session_cost_help"] = "Session Models:\n• N/A — N/A — (N/A)"
     if "total_ccost" in values and "other_ccost" in values:
-        tokens["session_cost_help"] = (f"Whole root session tree\nAll main requests: {tokens['total_main_ccost']}"
-            f"\nAll linked subagent requests: {tokens['total_subagent_ccost']}"
-            f"\nOutside prompt/compaction rows: {ccost_amount(decimal(values['other_ccost']))} ({values['other_calls']} calls)"
-            f"\nTotal CCost: {tokens['total_ccost']}" +
-            ("\nPartial cost coverage; unavailable usage is not zero." if not values.get("comparison_cost_complete", True) else "") +
-            "\nReference valuation, not actual billing. Amounts are independently rounded.")
+        tokens["session_cost_help"] = "Session Models:\n• N/A — N/A — (N/A)"
     for key in ("billed_cost", "billed_today", "billed_month", "remaining_money", "limit_money"):
         if key in values:
             tokens[key] = money(decimal(values[key]))

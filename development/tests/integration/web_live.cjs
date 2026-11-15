@@ -74,7 +74,7 @@ async function tokenMix(context, frames, helpText) {
         observedComponents.set(key, d[key]);
       return observedComponents.get(key) ?? d[key];
     };
-    assert.match(help,/Main Model:[\s\S]*Duration:/);
+    assert.match(help,/Session Models:\n• [\s\S]*Duration:/);
     assert.doesNotMatch(help,/Incoming Context CCost|Extra CCost|Total CCost/);
     return help;
   };

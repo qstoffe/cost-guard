@@ -10,7 +10,6 @@ from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_
 from src.application.live_projection import project_live
 from src.domain import EventKind, ModelInvocation, ModelRef, NormalizedEvent, TokenUsage
 from src.domain.model_identity import ModelResolution
-from src.numbers import ccost_amount
 from src.reports.prompt_rows import PromptRowProjector
 from src.watch.models import WatchCard, WatchProjection, WatchRow
 
@@ -68,10 +67,10 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(row.ccost, sum(item.known_ccost for item in row.cost_parts))
         for kind in ("active_cards", "history_cards"):
             prompt = wire[kind][0]["rows"][0]["prompt"]
-            self.assertIn("Main prompt — github-copilot/gpt-test · default (high) / High",
+            self.assertIn("Session Models:\n• github-copilot/gpt-test — High — (242 Credits)",
                           prompt["display"]["cost_detail_help"])
-            self.assertIn("Subagent 1 — github-copilot/claude-test · Low", prompt["display"]["cost_detail_help"])
-            self.assertIn("• Cached input: $0.04", prompt["display_units"]["usd"]["cost_detail_help"])
+            self.assertIn("Sub Agents:\n• github-copilot/claude-test — Low — (324 Credits)", prompt["display"]["cost_detail_help"])
+            self.assertIn("• github-copilot/claude-test — Low — ($3.24)", prompt["display_units"]["usd"]["cost_detail_help"])
             self.assertIn("github-copilot/claude-test", prompt["display"]["model_detail_help"])
             self.assertEqual(str(row.ccost), prompt["ccost"])
 
@@ -90,7 +89,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertIn("github-copilot/claude-test · Low", help_text)
         self.assertNotIn("*", help_text)
         cost_help = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"]
-        self.assertIn("Total CCost: " + ccost_amount(row.ccost), cost_help)
+        self.assertIn("Session Models:\n• github-copilot/claude-test — Low — (<0.1 Credits)", cost_help)
+        self.assertNotIn("Sub Agents:", cost_help)
         self.assertIn("Total Calls: " + str(row.calls),
             self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["calls_help"])
 
@@ -108,8 +108,8 @@ class PromptCostDetailTests(unittest.TestCase):
         displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertTrue(waiting.unresolved_cost)
         self.assertIn("Subagent 1 — Request usage unavailable; model/effort unknown", displayed["model_detail_help"])
-        self.assertIn("CCost: 0", displayed["cost_detail_help"])
-        self.assertIn("Partial cost coverage", displayed["cost_detail_help"])
+        self.assertIn("Sub Agents:\n• N/A — N/A — (N/A)", displayed["cost_detail_help"])
+        self.assertNotIn("Partial cost coverage", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
         self.assertIn("Subagent 1 — github-copilot/gpt-test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
         self.assertEqual("cu", record.entries[-1].logical_prompt_id)
@@ -125,11 +125,9 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertTrue(row.unresolved_cost)
         self.assertEqual((None,) * 4, row.cost_parts[0].categories)
         self.assertEqual(0, row.cost_parts[1].priced_requests)
-        self.assertIn("• Output: 0", help_text)
-        self.assertIn("Some category amounts are unavailable; subtotal includes known priced usage.", help_text)
-        self.assertIn("Reference price data cannot currently be checked", help_text)
-        self.assertNotIn("has no listed reference price", help_text)
-        self.assertIn("Total CCost: <0.1", help_text)
+        self.assertIn("github-copilot/gpt-test — default (unknown) — (<0.1 Credits)", help_text)
+        self.assertIn("github-copilot/unpriced — default (unknown) — (N/A)", help_text)
+        self.assertNotRegex(help_text, r"Partial|Subtotal|Output:|Reference price|Total CCost")
 
     def test_tiers_and_live_corrections_reconcile_unrounded_not_displayed_shares(self):
         snapshot = make_uncompacted_snapshot(running=True)
@@ -190,8 +188,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(1, row.linked_agent_count)
         self.assertEqual((1, 1), tuple(part.agent for part in child_parts))
         self.assertEqual(D(20), next(part.known_ccost for part in child_parts if part.model_id == "claude-test"))
-        self.assertIn("Subagent 1 — github-copilot/claude-test · High", text)
-        self.assertIn("Subagent 1 total (all own request groups): 21", text)
+        self.assertIn("• github-copilot/claude-test — High — (20 Credits)", text)
+        self.assertNotIn("total (all own request groups)", text)
         self.assertEqual(row.ccost, sum(part.known_ccost for part in row.cost_parts))
 
     def test_bounded_export_preserves_honest_omitted_count_and_subtotal(self):
@@ -206,7 +204,8 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(24, len(prompt["cost_detail"]["parts"]))
         self.assertEqual(6, prompt["cost_detail"]["omitted_parts"])
         self.assertEqual(original.known_ccost * 6, D(prompt["cost_detail"]["omitted_ccost"]))
-        self.assertIn("6 additional role/model/effort groups not shown", prompt["display"]["cost_detail_help"])
+        self.assertNotIn("not shown", prompt["display"]["cost_detail_help"])
+        self.assertEqual(2, prompt["display"]["cost_detail_help"].count("• "))
         self.assertEqual(original.calls * 6, prompt["cost_detail"]["omitted_calls"])
         self.assertIn(f"not shown: {original.calls * 6} calls", prompt["display"]["calls_help"])
 
@@ -222,8 +221,9 @@ class PromptCostDetailTests(unittest.TestCase):
         row = replace(row, cost_parts=(*row.cost_parts, unknown), linked_agent_count=2)
         displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertIn("another-provider/gpt-test", displayed["model_detail_help"])
-        self.assertIn("— another-provider/gpt-test", displayed["cost_detail_help"])
-        self.assertIn("• Input: 0", displayed["cost_detail_help"])
+        self.assertIn("• another-provider/gpt-test", displayed["cost_detail_help"])
+        self.assertIn("— (1 Credits)", displayed["cost_detail_help"])
+        self.assertIsNone(unknown.categories[0])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
         empty = self.wire(replace(row, calls=0, ccost=D(0), cost_parts=(), linked_agent_count=0))
         self.assertEqual("", empty["active_cards"][0]["rows"][0]["prompt"]["display"]["calls_help"])
@@ -232,7 +232,7 @@ class PromptCostDetailTests(unittest.TestCase):
         tokens = missing["active_cards"][0]["rows"][0]["prompt"]["display"]
         self.assertIn("Unrecorded model", tokens["model_detail_help"])
         self.assertNotIn("another-provider", tokens["model_detail_help"])
-        self.assertIn("Unrecorded model", tokens["cost_detail_help"])
+        self.assertIn("• N/A — default (unknown) — (1 Credits)", tokens["cost_detail_help"])
 
     def test_distinct_request_price_tiers_never_pool_their_rates(self):
         snapshot = make_uncompacted_snapshot()
@@ -264,9 +264,9 @@ class PromptCostDetailTests(unittest.TestCase):
 
         self.assertEqual((1, 3, 2, True), tuple(group[key] for key in ("agent_count", "calls", "prompt_count", "prompts_complete")))
         help_text = wire["display"]["cost_detail_help"]
-        self.assertEqual(1, help_text.count("Number of prompts:"))
-        self.assertIn("• Number of prompts: 2\n• Input:", help_text)
-        self.assertIn("• Number of prompts: 2\n• Input: $", wire["display_units"]["usd"]["cost_detail_help"])
+        self.assertNotIn("Number of prompts:", help_text)
+        self.assertIn("Sub Agents:\n• github-copilot/gpt-test", help_text)
+        self.assertIn("— ($", wire["display_units"]["usd"]["cost_detail_help"])
         self.assertNotIn("prompt_ids", str(wire))
         self.assertNotIn("cu2", str(wire))
         self.assertNotIn("private prompt", str(wire))
@@ -310,10 +310,12 @@ class PromptCostDetailTests(unittest.TestCase):
         snapshot = make_uncompacted_snapshot()
         extra = replace(snapshot.invocations[1], invocation_id="unknown", message_id="unknown-reply", initiating_event_id=None)
         row = self.project(replace(snapshot, invocations=(*snapshot.invocations, extra)))
-        text = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"]
-        self.assertIn("Number of prompts: at least 1 observed (incomplete boundaries)", text)
+        def children(value):
+            parts = self.wire(value)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"]
+            return [part for part in parts if part["role"] == "subagents"]
+        self.assertEqual((1, False), (children(row)[0]["prompt_count"], children(row)[0]["prompts_complete"]))
         missing = self.project(replace(snapshot, events=tuple(e for e in snapshot.events if e.session_id != "child")))
-        self.assertIn("Number of prompts: N/A", self.wire(missing)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"])
+        self.assertEqual((0, False), (children(missing)[0]["prompt_count"], children(missing)[0]["prompts_complete"]))
 
         # Two simultaneous prompts cannot safely own the same synthetic continuation.
         first = NormalizedEvent("first", "child", EventKind.SUBTASK, 1210, prov("child", "first"))
@@ -321,7 +323,7 @@ class PromptCostDetailTests(unittest.TestCase):
         continuation = replace(first, event_id="continuation", kind=EventKind.SYNTHETIC_CONTINUATION, created_at_ms=1220)
         ambiguous = self.project(replace(snapshot, events=(*snapshot.events, first, second, continuation),
             invocations=tuple(replace(i, initiating_event_id="continuation") if i.session_id == "child" else i for i in snapshot.invocations)))
-        self.assertIn("Number of prompts: N/A", self.wire(ambiguous)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"])
+        self.assertEqual((0, False), (children(ambiguous)[0]["prompt_count"], children(ambiguous)[0]["prompts_complete"]))
 
     def test_child_synthetic_continuation_resolves_to_one_prompt_not_another_call(self):
         snapshot = make_uncompacted_snapshot()

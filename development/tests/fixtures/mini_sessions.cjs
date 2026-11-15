@@ -150,7 +150,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     const target=rows()[0].children[3].children[0];
     assert.equal(target.className,'mini-cost-value help-value');assert.equal(target.tabIndex,0);
     assert.equal(target.attributes.title,undefined);assert.ok(target.events.focus&&target.events.pointerenter);
-      assert.equal(rows()[0].totalCostHelp,'Session Model 1: N/A — N/A\nSession Model 1 CCost: 0\n\nDuration: Loading…');
+      assert.equal(rows()[0].totalCostHelp,'Session Models:\n• N/A — N/A — (N/A)');
   }
   // Source-corrected whole-session subtotals never replace the representative cost.
   const partial=card('subtotal',500,true),summary=partial.session_summary;

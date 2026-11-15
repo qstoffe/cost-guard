@@ -45,7 +45,8 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
       const prompt = card.value.rows[index].prompt, d = {...prompt.display, ...prompt.display_units[unit]};
       if (!expected[index]) { assert.ok(!target.className?.includes('help-value')); continue; }
       const help = helpText(target);
-      assert.match(help,/Main Model:[\s\S]*fixture\/main[\s\S]*Sub Agent[\s\S]*fixture\/child-a[\s\S]*Sub Agent[\s\S]*fixture\/child-b[\s\S]*Duration:/);
+      assert.match(help,/Session Models:\n• fixture\/main[\s\S]*Sub Agents:\n• fixture\/child-a[\s\S]*\n• fixture\/child-b[\s\S]*Duration:/);
+      assert.doesNotMatch(help,/Partial cost coverage|CCost:|Subtotal:|Model \d|Sub Agent \d/);
       assert.doesNotMatch(help,/Incoming Context CCost|Extra CCost|Total CCost|Number of prompts/);
       assert.ok(target.events.focus && target.events.click && target.events.pointerenter);
       if (expected[index] === 'N/A') assert.match(help, /CCost cannot be calculated/);

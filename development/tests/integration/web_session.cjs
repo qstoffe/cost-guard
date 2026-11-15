@@ -407,8 +407,20 @@ async function main() {
     assert.ok(!catalog.body.children[0].children[1].textContent.includes('[RUNNING]'));
     assert.equal(catalog.body.children[0].children[1],selected,'status changes preserve selected title DOM');
     selected=null;
-    const liveRow=catalog.body.children[0], link=liveRow.children[1].children[0], model=liveRow.children[2].children[0];
-    document.activeElement=link;
+     const liveRow=catalog.body.children[0], link=liveRow.children[1].children[0], model=liveRow.children[2].children[0];
+     const duration=liveRow.children[5].children[0];
+     for(const state of ['pending','retained','ready','unavailable','ready']) {
+       catalog.update({...catalogData,total:1,view:{session_usage:[{...known,metric_state:state}]}});
+       assert.equal(liveRow.children[5].children[0],duration);
+       assert.ok(!duration.className.includes('help-value'));
+       assert.equal(duration.events.focus,undefined);
+       assert.equal(duration.attributes['aria-describedby'],undefined);
+       assert.equal(duration.tabIndex,undefined);
+     }
+     const durationHeader=catalog.headers.find(header=>header.key==='duration');
+     assert.equal(durationHeader.th.children[0].tag,'button','Duration sorting remains present');
+     assert.ok(durationHeader.th.children[0].events.focus,'Duration header help remains present');
+     document.activeElement=link;
      const multiple={...known,model:'Main Model',multiple_models:true,contributor_models:['alpha/model','beta/model'],contributor_models_complete:false,
       display:{ccost:'1.25?',duration_ms:'3s',model_help:'alpha/model\nbeta/model\nObserved so far; contributing model coverage may be incomplete.'},prompt_count:2};
      catalog.update({...catalogData,total:1,view:{session_usage:[multiple]}});

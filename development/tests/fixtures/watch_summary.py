@@ -127,9 +127,10 @@ def many_cost_groups(frame):
     card = frame.active_cards[0]
     row = card.rows[0]
     original = row.prompt.cost_parts[0]
-    parts = tuple(replace(original, agent=index, session_id=f"agent-{index}",
+    parts = tuple(replace(original, agent=0 if index < 2 else index - 1, session_id=f"agent-{index}",
+        provider_id="fixture" if index % 2 == 0 else "second", model_id=f"model-{index % 3}",
         variant=f"effort-{index}", effort=f"Effort {index}") for index in range(30))
-    prompt = replace(row.prompt, cost_parts=parts, linked_agent_count=29,
+    prompt = replace(row.prompt, cost_parts=parts, linked_agent_count=28,
         calls=60, ccost=D(750), incoming_context_ccost=D(8), extra_ccost=D(742))
     return replace(frame, active_cards=(replace(card, rows=(replace(row, prompt=prompt),)),))
 

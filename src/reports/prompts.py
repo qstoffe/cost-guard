@@ -8,6 +8,7 @@ from typing import Mapping, Sequence
 from src.analysis.context import ContextEpochs, context_composition, estimate_next_context
 from src.analysis.models import RootAnalysisBundle
 from src.analysis.duration import accumulated_duration
+from src.analysis.session_cost import session_cost_groups
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import EventKind, SessionSnapshot
 from src.domain.progress import observe_work
@@ -83,6 +84,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
     billed = (sum((row.billed_cost for row in rows), Decimal(0))
               if all(row.billed_cost is not None for row in rows) else None)
     other_ccost, other_calls = Decimal(0), 0
+    cost_groups = ()
     if lifetime:
         entries = unique_usage(projector.bundle.trace_entries)
         catalog = projector.catalog
@@ -99,6 +101,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         total_ccost, total_calls = valuation.known_ccost, valuation.observed_requests
         billed = billed_spend(entries)
         complete = valuation.complete and projector.bundle.usage_coverage_complete
+        cost_groups = session_cost_groups(entries, session_id, catalog)
     breakdown_known = all(row.breakdown_known for row in prompt_rows) if prompt_rows else True
     ictx_text, extra_text = _diagnostic_cost_shares(diagnostic_parts)
     mix = mix_percent(mix_values)
@@ -118,6 +121,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         total_calls=total_calls,
         other_ccost=other_ccost,
         other_calls=other_calls,
+        cost_groups=cost_groups,
         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows),
         total_ictx_cost_text=ictx_text,
         total_extra_cost_text=extra_text,

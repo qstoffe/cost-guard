@@ -444,12 +444,12 @@ const SessionsCatalog = (() => {
           });
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
+            if (key === 'duration') return node;
             ContextHelp.value(node, () => {
               const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
               if (key === 'ccost' && !current.has_summary && !current.indexed && state !== 'retained')
                 return state === 'pending' ? 'Session cost is awaiting source observation.' : 'Session cost unavailable.';
-              if (key === 'ccost') return ReportView.sessionCostHelp(current, current) +
-                (state === 'retained' ? '\nRetained source observation; refresh pending.' : '');
+              if (key === 'ccost') return ReportView.sessionCostHelp(current, current);
               if (key === 'ctx') return [current.context_tokens == null ? '' : `${current.context_tokens.toLocaleString()} estimated tokens.`,
                 current.context_detail, state === 'retained' ? 'Retained from an earlier source observation; refresh pending.' :
                   state === 'pending' ? 'Source work is pending.' : state === 'unavailable' ? 'Source context unavailable.' : ''].filter(Boolean).join('\n');
@@ -477,7 +477,8 @@ const SessionsCatalog = (() => {
             (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A')) ||
             (key === 'ctx' && state === 'pending' && value.context_tokens == null));
           ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
-          node.className = 'help-value' + (missing || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
+          node.className = (key === 'duration' ? '' : 'help-value') +
+            (missing || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
           if (key === 'ctx' && state === 'retained') node.setAttribute('aria-label', `Retained context: ${node.textContent}`);
           else node.removeAttribute('aria-label');
           if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');

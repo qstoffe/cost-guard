@@ -14,6 +14,7 @@ from src.application.contracts import record
 from src.application.display import with_display, web_quota_reset
 from src.application.live_projection import project_live
 from src.application.mini_costs import mini_groups
+from src.application.projection import block as project_block
 from src.cache import CacheDatabase, CacheRepository
 from src.domain.effort import EffortEvidence
 from src.reports.prompt_costs import PromptCostPart
@@ -23,8 +24,7 @@ from src.watch.models import WatchCard, WatchProjection, WatchRow
 
 class MiniTooltipTests(unittest.TestCase):
     def help_text(self, display):
-        return "\n\n".join(f"{label}: {model}\n{label} CCost: {amount}"
-            for (label, model), amount in zip(display["mini_cost_models"], display["mini_cost_amounts"]))
+        return display.get("session_cost_help", display.get("cost_detail_help"))
 
     def test_recursive_prompt_and_whole_session_groups_use_all_unrounded_requests_once(self):
         with recursive_source() as (source, _server):
@@ -53,7 +53,7 @@ class MiniTooltipTests(unittest.TestCase):
         self.assertEqual(D(509), sum(D(group["known_ccost"]) for group in prompt_groups))
         # Five individual descendants collapse to three provider/model/effort
         # combinations. The Full Watch identity breakdown stays individual.
-        self.assertEqual(5, prompt["display"]["cost_detail_help"].count("• Number of prompts:"))
+        self.assertEqual(5, sum(part["role"] == "subagents" for part in prompt["cost_detail"]["parts"]))
         self.assertLess(len(prompt_groups), len(prompt["cost_detail"]["parts"]))
         for value in (prompt, total):
             self.assertNotIn("mini_cost_groups", value, "presentation inputs must not duplicate wire costs")
@@ -64,11 +64,19 @@ class MiniTooltipTests(unittest.TestCase):
                 self.assertNotIn("mini_cost_models", overlay, "unit-invariant labels must be shared")
                 text = self.help_text({**value["display"], **overlay})
                 self.assertNotRegex(text, r"Calls:|Effort:|Linked subagents|Total CCost|ses_")
-                self.assertIn("Sub Agent 1:", text)
-                self.assertIn("CCost: ", text)
+                self.assertIn("Sub Agents:\n• ", text)
+                self.assertNotRegex(text, r"CCost:|Partial cost coverage|Subtotal:|Model \d")
                 self.assertIn(" Credits" if unit == "credits" else "$", text)
-        self.assertIn("Session Model 1:", self.help_text(total["display"]))
+        self.assertIn("Session Models:\n• ", self.help_text(total["display"]))
         self.assertIsNone(total["duration_ms"], "cost capture has no canonical session duration")
+        detail = with_display(project_block(block, details=True)).to_json()
+        self.assertEqual(total["display"]["session_cost_help"], detail["display"]["session_cost_help"])
+        self.assertEqual(prompt["display"]["cost_detail_help"], detail["rows"][0]["display"]["cost_detail_help"])
+        self.assertEqual(D(672), sum(group.known_ccost for group in block.cost_groups))
+        self.assertNotEqual(prompt["display"]["cost_detail_help"], total["display"]["session_cost_help"])
+        for value in (detail, *detail["rows"]):
+            text = str(value["display"]) + str(value.get("display_units"))
+            self.assertNotRegex(text, r"Partial cost coverage|Partial pricing/usage|Amounts are independently rounded")
 
     def test_sum_before_rounding_preserves_effort_provider_version_and_partial_unknown(self):
         base = PromptCostPart("root", 0, "provider", "model-v1", "high", "", "high",
@@ -86,11 +94,34 @@ class MiniTooltipTests(unittest.TestCase):
         self.assertEqual("0.98", shared["known_ccost"])
         self.assertEqual(5, len(groups))
         text = self.help_text(dto["display"])
-        self.assertIn("CCost: 1.0 Credits", text)
+        self.assertIn("— (1.0 Credits)", text)
         self.assertIn("— default (high)", text)
-        self.assertIn("CCost: 0 Credits", text)
-        self.assertIn("CCost: 0.5 Credits", text)
-        self.assertNotIn("\n\nMain Model CCost", text, "group lines must be consecutive")
+        self.assertIn("• other/model-v1 — high — (N/A)", text)
+        self.assertIn("— (0.5 Credits)", text)
+        self.assertNotIn("CCost:", text)
+
+    def test_exact_sections_units_zero_and_missing_slots_preserve_raw_qualifications(self):
+        base = PromptCostPart("root", 0, "provider", "a", "high", "", "High",
+            1, D("125"), 1, True, (D(0),) * 4)
+        parts = (base, replace(base, model_id="b", effort="Default (High)", known_ccost=D(14)),
+            replace(base, session_id="child1", agent=1, model_id="c", effort="Medium", known_ccost=D(28)),
+            replace(base, session_id="child2", agent=2, model_id="c", effort="Medium", known_ccost=D(2)),
+            replace(base, agent=3, model_id="c", effort="Low", known_ccost=D(0)),
+            replace(base, agent=4, provider_id="", model_id="", effort="", known_ccost=D(0),
+                priced_requests=0, complete=False))
+        grouped = mini_groups(parts)
+
+        wire = with_display(record(mini_cost_groups=grouped, mini_missing_agents=2)).to_json()
+
+        self.assertEqual("Session Models:\n• provider/a — High — (125 Credits)\n"
+            "• provider/b — Default (High) — (14 Credits)\n\nSub Agents:\n"
+            "• N/A — N/A — (N/A)\n• provider/c — Low — (0 Credits)\n"
+            "• provider/c — Medium — (30 Credits)",
+            wire["display"]["cost_detail_help"])
+        self.assertIn("• provider/c — Medium — ($0.30)", wire["display_units"]["usd"]["cost_detail_help"])
+        self.assertEqual(D(169), sum(D(group.to_json()["known_ccost"]) for group in grouped))
+        unknown = next(group.to_json() for group in grouped if group.to_json()["model"] == "N/A")
+        self.assertFalse(unknown["complete"])
 
     def test_mini_reset_uses_one_local_calendar_without_changing_full_watch(self):
         def ms(value):
