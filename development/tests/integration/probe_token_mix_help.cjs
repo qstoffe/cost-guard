@@ -54,7 +54,8 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     assert.doesNotMatch(await evaluate(`current.tokenMix.summary.textContent`),/N\/A|Partial|\?|unavailable/);
     if (state==='empty') assert.match(await evaluate(`current.tokenMix.root.textContent`),/No available historical usage/);
   }
-  assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('.help-value,.help-label,[title],[tabindex]').length`),0);
+  assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('strong.help-value[tabindex="0"]').length`),4);
+  assert.equal(await evaluate(`current.tokenMix.summary.querySelectorAll('div > span.help-value,.help-label,[title]').length`),0);
   await evaluate(`current.tokenMix.update(originalMix);current.tokenMix.title.scrollIntoView({block:'center'});current.tokenMix.title.blur()`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape'},tab);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},tab);

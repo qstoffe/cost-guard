@@ -59,7 +59,7 @@ async function main() {
     const rows=await evaluate(`current.result.view.model_token_mix`);
     assert.equal(rows.length,65);
     const numericCells=await evaluate(`(() => {
-      const shares=[...current.tokenMix.summary.querySelectorAll('strong > span:first-child')].map(s=>s.textContent.split(' · ')[0]);
+      const shares=[...current.tokenMix.summary.querySelectorAll('strong')].map(s=>s.textContent);
       for(const [index,table] of [...document.querySelectorAll('.token-mix-table')].entries())
         for(const row of table.tBodies[0].rows) shares.push(...[...row.cells].slice(index===0?5:4,index===0?9:8).map(c=>c.textContent));
       return shares;
@@ -165,6 +165,8 @@ async function main() {
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
     await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
     await require('./probe_token_mix_periods.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_summary.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_width.cjs')({evaluate,command,tab,checks});
     await evaluate(`(()=>{const value=structuredClone(current.result);
       value.view.model_token_mix[0].model=value.view.model_token_mix[1].model='Same display name';
       current.tokenMix.update(value);})()`);

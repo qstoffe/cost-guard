@@ -125,11 +125,9 @@ const TokenMixView = (() => {
       ContextHelp.value(this.title, () => this.result ? titleHelp(this.result) : '');
       this.summary = e('div', undefined, 'token-mix-summary');
       this.metrics = categories.map((key, index) => {
-        const group = e('div'), label = e('span', names[index]), value = e('strong'), share = e('span'), cost = e('span');
-        const costKey = 'mix_' + key + '_cost';
-        ReportView.text(share, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') + ' · ' : '0%');
-        ReportView.text(cost, () => this.result ? display(this.result.view.token_mix, costKey) : '');
-        value.append(share, cost);
+        const group = e('div'), label = e('span', names[index]), value = e('strong');
+        ReportView.text(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') : '0%');
+        ContextHelp.value(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_cost_value') : '');
         group.append(label, value); this.summary.append(group); return value;
       });
       this.status = e('p', '', 'token-mix-status'); this.status.setAttribute('role', 'status');

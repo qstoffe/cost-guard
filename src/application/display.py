@@ -331,6 +331,7 @@ def history_tokens(values, timezone_id, *, times=None):
                 amount = decimal(costs[index]) if priced else Decimal(0)
                 exact = (ccost_amount(amount) if ccost_unit() == 'usd' else
                          f"{amount.to_integral_value(rounding=ROUND_HALF_UP):f} Credits")
+                tokens["mix_" + name + "_cost_value"] = exact
                 tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {exact}"
         tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
