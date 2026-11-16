@@ -28,6 +28,40 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebDisplayTests(unittest.TestCase):
+    def test_synthetic_source_tiny_cost_survives_prompt_session_daily_and_account_projection(self):
+        from development.tests.fixtures.ccost_unavailable import unavailable_frames
+        from development.tests.fixtures.watch_summary import summary_watch
+        for mode in ("tiny", "tiny-partial"):
+            wire = unavailable_frames(summary_watch())[mode]
+            card = wire["active_cards"][0]
+            prompt = card["rows"][0]["prompt"]
+            session = card["session_summary"]["cost"]
+            daily = wire["daily_usage"]
+            account = wire["accounts"]["accounts"][0]["ccost_scopes"][0]["cost"]
+            for value, raw_key, token_key in ((prompt, "ccost", "ccost"),
+                    (session, "known_ccost", "account_ccost"), (daily["total"], "known_ccost", "known_ccost"),
+                    (account, "known_ccost", "account_ccost")):
+                self.assertEqual(Decimal("0.001"), Decimal(value[raw_key]), (mode, raw_key))
+                self.assertEqual("<0.1", value["display"][token_key])
+                self.assertEqual("<$0.01", value["display_units"]["usd"][token_key])
+            self.assertEqual("<0.1", daily["display"]["daily_ccost"])
+            self.assertEqual("<$0.01", daily["display_units"]["usd"]["daily_ccost"])
+            self.assertEqual(mode == "tiny", session["complete"])
+
+    def test_tiny_positive_categories_help_and_totals_share_both_unit_tokens(self):
+        source = record(totals=(1, 0, 0, 1), shares=(50, 0, 0, 50),
+                        costs=(Decimal("0.001"), Decimal(0), Decimal(0), Decimal("0.099")),
+                        category_cost_help=True, total_tokens=2)
+        for unit, tiny, total, suffix in (("credits", "<0.1", "0.1", " Credits"),
+                                          ("usd", "<$0.01", "<$0.01", "")):
+            dto = with_display(source, ccost_display_unit=unit).to_json()
+            self.assertEqual(source.to_json(), {key: dto[key] for key, _ in source.fields})
+            self.assertEqual(tiny, dto["display"]["mix_input_cost"])
+            self.assertEqual(tiny + suffix, dto["display"]["mix_input_cost_value"])
+            self.assertEqual("Input CCost: " + tiny + suffix, dto["display"]["mix_input_cost_help"])
+            self.assertEqual(total, dto["display"]["mix_total_cost"])
+            self.assertEqual(tiny, dto["display_units"][unit]["mix_input_cost"])
+
     def test_shipped_web_dates_have_no_implicit_locale_or_browser_zone_formatters(self):
         assets = ROOT / 'src/web/assets'
         for path in assets.glob('*.js'):

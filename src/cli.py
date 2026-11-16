@@ -86,7 +86,7 @@ or credits deducted. Non-Copilot subscription usage can have positive CCost.
 Naked amounts round upward; Token Mix % parentheses are CCost; ? marks partial
 pricing. Model rates are CCost/M. Actual billed/account money stays monetary.
 USD display uses $ plus two decimals, not billing; small positive CCost can
-round to $0.00. Native quotas, catalog rates and Relative CCost are unchanged.
+display as <$0.01 below one cent. Native quotas, catalog rates and Relative CCost are unchanged.
 Remaining AI credits round downward; quantities never use thousands separators.
 """
 

@@ -326,10 +326,9 @@ def history_tokens(values, timezone_id, *, times=None):
             tokens["mix_" + name + "_cost"] = cost
             if values.get('category_cost_help'):
                 amount = decimal(costs[index]) if priced else Decimal(0)
-                exact = (ccost_amount(amount) if ccost_unit() == 'usd' else
-                         f"{amount.to_integral_value(rounding=ROUND_HALF_UP):f} Credits")
-                tokens["mix_" + name + "_cost_value"] = exact
-                tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {exact}"
+                shown = ccost_amount(amount) + ("" if ccost_unit() == "usd" else " Credits")
+                tokens["mix_" + name + "_cost_value"] = shown
+                tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {shown}"
         tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")

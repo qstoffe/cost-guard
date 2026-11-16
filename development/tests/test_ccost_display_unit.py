@@ -31,8 +31,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class CCostDisplayUnitTests(unittest.TestCase):
     def test_usd_goldens_preserve_exact_raw_values_and_unknowns(self):
-        cases = [(None, "N/A"), ("0", "$0.00"), ("0.000001", "$0.00"),
-                 ("0.5", "$0.01"), ("1", "$0.01"), ("395", "$3.95"),
+        cases = [(None, "N/A"), ("0", "$0.00"), ("0.000001", "<$0.01"),
+                 ("0.5", "<$0.01"), ("1", "$0.01"), ("395", "$3.95"),
                  ("10742", "$107.42"), ("-395", "$-3.95"), ("-0.01", "$0.00"),
                  ("123456789012345678901234567890", "$1234567890123456789012345678.90")]
         for raw, expected in cases:
@@ -48,7 +48,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
 
     def test_render_scope_is_nested_exception_safe_and_thread_local(self):
         with ccost_display("usd"):
-            self.assertEqual("$0.00–$3.95", ccost_range(Decimal("0.01"), Decimal(395)))
+            self.assertEqual("<$0.01–$3.95", ccost_range(Decimal("0.01"), Decimal(395)))
             self.assertEqual("0", ccost_amount(Decimal(0), unit="credits"))
             with self.assertRaises(RuntimeError):
                 with ccost_display("credits"):
@@ -133,7 +133,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
             self.assertIn(dto["rows"][0]["prompt"]["display"]["ccost"], stream.getvalue())
             self.assertIn("$1234567.89", stream.getvalue())
             self.assertEqual("$3.95", dto["rows"][0]["prompt"]["display"]["incoming_context_ccost"])
-            self.assertEqual("$0.00", dto["rows"][0]["prompt"]["display"]["extra_ccost"])
+            self.assertEqual("<$0.01", dto["rows"][0]["prompt"]["display"]["extra_ccost"])
 
     def test_native_quotas_billing_residual_rates_and_relative_cost_stay_independent(self):
         value = record(known_ccost=Decimal(395), observed_requests=1, priced_requests=1,
@@ -159,7 +159,7 @@ class CCostDisplayUnitTests(unittest.TestCase):
         service.config["ccostDisplayUnit"] = "usd"
         usd = service.build(request)
         self.assertEqual(credits.prompt_blocks, usd.prompt_blocks)
-        self.assertTrue(usd.notes[0].startswith("CCost for range: $"))
+        self.assertTrue(usd.notes[0].startswith("CCost for range: <$0.01"))
         self.assertNotEqual(credits.notes[0], usd.notes[0])
 
     def test_empty_watch_has_explicit_zero_dollars_without_changing_unknowns(self):

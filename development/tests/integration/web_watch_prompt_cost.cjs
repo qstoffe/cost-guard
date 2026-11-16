@@ -24,7 +24,7 @@ vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.ren
 const cards = [...context.state.watch.cards.values()];
 assert.equal(cards.length, 1, 'completed history has no second Watch table');
 const credits = ['1250', '12', '100', '0', 'N/A', '2', '0', '<0.1', '<0.1', '12', '12', '0', 'N/A', '0', '0', '<0.1'];
-const usd = ['$12.50', '$0.12', '$1.00', '$0.00', 'N/A', '$0.01', '$0.00', '$0.00', '$0.00', '$0.12', '$0.12', '$0.00', 'N/A', '$0.00', '$0.00', '$0.00'];
+const usd = ['$12.50', '$0.12', '$1.00', '$0.00', 'N/A', '$0.01', '$0.00', '<$0.01', '<$0.01', '$0.12', '$0.12', '$0.00', 'N/A', '$0.00', '$0.00', '<$0.01'];
 const canonical = JSON.stringify(input);
 for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', credits]]) {
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);

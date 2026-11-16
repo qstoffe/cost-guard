@@ -91,6 +91,10 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
   // Genuine response-header policy denial, not a mocked requestWindow rejection.
   await fixture('deny-pip');await command('Page.reload',{},sessionId);
   await until(`typeof miniWatch!=='undefined'&&miniWatch.reason.includes('policy')`);
+  // Constructor policy state is synchronous; initial settings can still clear
+  // failure until bootstrap has applied placement and connected the host.
+  await until(`csrf && hostState.kind==='connected' &&
+    current.section==='watch' && miniWatch.placement!==null`);
   assert.deepEqual((await command('Target.getTargets')).targetInfos.filter(t=>t.type==='page').map(t=>t.targetId).sort(),
     targetsBefore.sort(),'parent pagehide cannot leave an orphan native PiP');
   assert.equal(await evaluate(`miniWatch.button.getAttribute('aria-disabled')`),'true');
@@ -99,7 +103,9 @@ module.exports=async({evaluate,until,fixture,command,sessionId,checks})=>{
   assert.equal(await evaluate('miniWatch.feedback.textContent'),'');
   assert.equal(await evaluate(`document.permissionsPolicy?.allowsFeature('picture-in-picture') ??
     document.featurePolicy.allowsFeature('picture-in-picture')`),false);
-  await evaluate('miniWatch.button.click()',true);
+  assert.equal(await evaluate(`(() => {
+    miniWatch.button.click();return miniWatch.feedback.textContent;
+  })()`,true),'Could not open Mini Watch. Try again.','policy feedback is synchronous after bootstrap');
   assert.equal(await evaluate('miniWatch.window'),null,'actual header policy prevents a native request');
   assert.equal(await evaluate('miniWatch.feedback.textContent'),'Could not open Mini Watch. Try again.');
   checks.push('Native delayed-resolution On/Off/On, native X, host identity, held/failed CSS, theme/route return, parent reload while opening, missing publication, one stream/no unhandled rejection, native user-activation rejection, actual Permissions-Policy disablement and focusable error description');

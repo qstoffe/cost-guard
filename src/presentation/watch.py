@@ -577,7 +577,7 @@ class WatchRenderer:
     def _render_frame(self, projection: WatchProjection) -> None:
         self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
         if ccost_unit() == "usd":
-            self._write("CCost: reference USD, not billing; 100 credits = $1.00; small positive values can round to $0.00.")
+            self._write("CCost: reference USD, not billing; 100 credits = $1.00; positive values below one cent display as <$0.01.")
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
         width = self._content_width()

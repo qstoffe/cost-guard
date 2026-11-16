@@ -126,7 +126,7 @@ class WebQuotaPaceTests(unittest.TestCase):
 
     def test_remaining_rounding_zero_tiny_values_and_no_workdays(self):
         for remaining, days, credits, usd in ((D(0), 1, '0', '$0.00'),
-                (D('.001'), 1, '<0.1', '$0.00'), (D('.99'), 1, '0.9', '$0.01'),
+                (D('.001'), 1, '<0.1', '<$0.01'), (D('.99'), 1, '0.9', '<$0.01'),
                 (D('1.99'), 1, '1', '$0.02'), (D('100.01'), 3, '33', '$0.33')):
             quota = QuotaComponent('Monthly', 'fixed', remaining=remaining, limit=D(20000),
                 unit='AI credits', reset_at_ms=NOW + days * 86400000)
