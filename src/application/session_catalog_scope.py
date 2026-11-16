@@ -76,12 +76,16 @@ def row_in_window(row, window):
         and type(row.prompt_started_ms) is int and 0 < row.prompt_started_ms < window.end_ms)
 
 
+def activity_time(row):
+    return row.last_activity_ms if row.last_activity_ms is not None else row.prompt_started_ms
+
+
 def provisional_order(rows, metadata):
     """Unknown clocks have discovery hints only, never displayed event times."""
     live = tuple(row for row in rows if row.running)
-    unknown = sorted((row for row in rows if not row.running and row.last_activity_ms is None),
+    unknown = sorted((row for row in rows if not row.running and activity_time(row) is None),
         key=lambda row: (-(metadata.get(row.session_id) or 0), row.session_id))
-    return live + tuple(unknown) + tuple(row for row in rows if not row.running and row.last_activity_ms is not None)
+    return live + tuple(unknown) + tuple(row for row in rows if not row.running and activity_time(row) is not None)
 
 
 def retained_positions(rows, positions, display):
