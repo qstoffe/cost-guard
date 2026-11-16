@@ -21,7 +21,7 @@ from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-13"
+ALGORITHM = "session-summary-14"
 NAMESPACE = "session-summary"
 
 
@@ -95,6 +95,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             for role in ("main_ccost", "subagent_ccost"):
                 values[role] = Decimal(values[role])
             values["contributor_models"] = tuple(values["contributor_models"])
+            values["linked_model_selections"] = tuple(values["linked_model_selections"])
             for role in ("main_models", "subagent_models"):
                 values[role] = decode_models(values[role])
             if not valid_models(values):

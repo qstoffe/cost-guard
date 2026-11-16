@@ -14,9 +14,11 @@ const ReportView = (() => {
     sessionCost: 'The entire session’s reference cost, including attributed linked subagents.',
     context: 'Estimated context for this session, in tokens.'
   };
-  function activityHelp(value, zone, running = false) {
+  function activityHelp(value, zone, running = false, started = null) {
     const label = Number.isSafeInteger(value) && value > 0 ? timestamp(value, zone) : 'N/A';
-    if (label === 'N/A') return 'Activity time unavailable.';
+    if (label === 'N/A') return Number.isSafeInteger(started) && started > 0 ?
+      'Started: ' + timestamp(started, zone) + '\nCompletion unverified. Sorted by the recorded prompt start, not a finish.' :
+      'Activity time unavailable.';
     return label + (running === true ? '\n* Running sessions appear first, regardless of sorting.' : '');
   }
   function costGroups(value, session = false) {
@@ -24,11 +26,13 @@ const ReportView = (() => {
     if (!Array.isArray(models) || !Array.isArray(amounts)) {
       return 'No model usage recorded';
     }
-    return ['Session Models', 'Sub Agents'].map(label => {
+    const groups = ['Session Models', 'Sub Agents'].map(label => {
       const bullets = models.flatMap(([kind, model], index) => kind === label ?
         [`• ${model} — (${amounts[index] ?? 'N/A'})`] : []);
       return bullets.length ? label + ':\n' + bullets.join('\n') : '';
     }).filter(Boolean).join('\n\n') || 'No model usage recorded';
+    const coverage = display(value, 'mini_cost_coverage_help');
+    return groups + (coverage && coverage !== 'N/A' ? '\n\n' + coverage : '');
   }
   function sessionCostHelp(cost, summary) {
     return costGroups(cost, true) + (Number.isFinite(summary?.duration_ms) ?

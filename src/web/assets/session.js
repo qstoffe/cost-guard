@@ -402,7 +402,9 @@ const SessionDetail = (() => {
           updateModel(model, value);
           ContextHelp.refresh(model);
         }
-        if (withdrawn) ContextHelp.dismiss(row);
+        // Unavailable Token Mix is not withdrawn Model identity. In particular,
+        // zero-token/scripted requests remain valid stationary help targets.
+        if (data.value_authority?.rows?.[value.event_id] === 'invalidated') ContextHelp.dismiss(row);
         if (row.signature !== signature && protectedRow) this.pendingRender = true;
         if (row.signature !== signature && !protectedRow) {
           const content = cells(value, () => row.modelValue);

@@ -36,7 +36,8 @@ def effort_sort(key):
 
 
 def sort_value(row, key):
-    return {"activity": row.last_activity_ms, "name": row.title.casefold(),
+    return {"activity": row.last_activity_ms if row.last_activity_ms is not None else row.prompt_started_ms,
+        "name": row.title.casefold(),
         "model": (row.model if row.model != "N/A" else row.selected_display_model).casefold() or None,
         "effort": effort_sort(row.effort_key),
         "ccost": row.ccost if row.complete else None, "prompts": row.prompt_count,
@@ -501,6 +502,8 @@ class SessionCatalog:
                 activity = None
             rows.append(replace(value, title=root.title or "Untitled session",
                 last_activity_ms=activity if type(activity) is int and 0 < activity <= now else None,
+                prompt_started_ms=value.prompt_started_ms if type(value.prompt_started_ms) is int
+                    and 0 < value.prompt_started_ms <= now else None,
                 running=running, archived=root.archived_at_ms is not None))
         return rows
 

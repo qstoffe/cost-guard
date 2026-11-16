@@ -116,7 +116,8 @@ class MiniTooltipTests(unittest.TestCase):
         self.assertEqual("Session Models:\n• provider/a — High — (125 Credits)\n"
             "• provider/b — Default (High) — (14 Credits)\n\nSub Agents:\n"
             "• N/A — N/A — (N/A)\n• provider/c — Low — (0 Credits)\n"
-            "• provider/c — Medium — (30 Credits)",
+            "• provider/c — Medium — (30 Credits)\n\nLinked child usage/cost unverified. "
+            "Shown reference CCost covers observed usage, not a proven zero upstream bill.",
             wire["display"]["cost_detail_help"])
         self.assertIn("• provider/c — Medium — ($0.30)", wire["display_units"]["usd"]["cost_detail_help"])
         self.assertEqual(D(169), sum(D(group.to_json()["known_ccost"]) for group in grouped))

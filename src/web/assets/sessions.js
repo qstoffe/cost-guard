@@ -321,7 +321,9 @@ const SessionsCatalog = (() => {
         if (row.value.running && !running) {
           row.value = {...row.value, running: false,
             last_activity_ms: value && !value.running ? value.last_activity_ms : null};
-          ReportView.text(row.activity, ReportView.timestamp(row.value.last_activity_ms, this.renderTimezone));
+          ReportView.text(row.activity, row.value.last_activity_ms == null && row.value.prompt_started_ms != null ?
+            'Start · ' + ReportView.timestamp(row.value.prompt_started_ms, this.renderTimezone) :
+            ReportView.timestamp(row.value.last_activity_ms, this.renderTimezone));
           ContextHelp.refresh(row.activity);
         }
       }
@@ -451,7 +453,8 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-           ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone, row.value.running));
+            ContextHelp.value(row.activity, () => ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone,
+              row.value.running, row.value.prompt_started_ms));
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             if (['duration', 'prompts'].includes(key)) return node;
@@ -469,7 +472,9 @@ const SessionsCatalog = (() => {
         }
         row.className = value.running ? 'session-running' : '';
         ReportView.text(row.activity, value.last_activity_ms == null && value.activity_state === 'pending' ?
-          'Loading…' : ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
+          'Loading…' : value.last_activity_ms == null && value.prompt_started_ms != null ?
+            'Start · ' + ReportView.timestamp(value.prompt_started_ms, this.renderTimezone) :
+            ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
         const texts = [(value.model !== 'N/A' && value.model || value.selected_display_model || 'N/A') + (value.has_model_details ? '*' : ''),

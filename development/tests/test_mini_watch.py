@@ -116,6 +116,8 @@ class MiniWatchTests(unittest.TestCase):
                 with self.subTest(delta=delta, kind=kind):
                     item = wire[kind][0]["rows"][0]
                     self.assertEqual("Bounded representative hint", item["prompt"]["preview"])
+                    self.assertEqual("", item["prompt"]["model_display_help"],
+                        "ordinary observed contributors keep compact Activity help")
                     self.assertEqual(23, item["prompt"]["prompt_number"])
                     self.assertEqual(token, item["live_context"]["display"]["watch_delta_context_tokens"])
                     self.assertEqual("17k", item["live_context"]["display"]["watch_next_context_tokens"])
