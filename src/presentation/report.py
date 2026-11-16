@@ -424,7 +424,7 @@ class ReportRenderer:
 
     def _render(self, report: ReportProjection, *, include_header: bool) -> None:
         if self.config.get("ccostDisplayUnit") == "usd":
-            self._prose("CCost: reference USD, not billing; 100 credits = $1.00. Small positive values can round to $0.00.")
+            self._prose("CCost: reference USD, not billing; 100 credits = $1.00. Positive values below one cent display as <$0.01.")
         if include_header:
             self._write(f"# {PRODUCT_NAME} {DISPLAY_VERSION} ({RELEASE_DATE}) — Source: OpenCode {report.source_label}")
         if report.kind in {ReportKind.SESSION, ReportKind.DATE, ReportKind.TOKEN_MIX}:

@@ -53,6 +53,8 @@ def ccost_amount(value: Decimal | None, *, unresolved: bool = False, unit: str |
     if value is None:
         value = Decimal(0)
     if (unit or ccost_unit()) == "usd":
+        if Decimal(0) < value < Decimal(1):
+            return "<$0.01"
         with localcontext() as context:
             context.prec = max(context.prec, len(value.as_tuple().digits) + 4, value.adjusted() + 5)
             dollars = (value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

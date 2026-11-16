@@ -76,7 +76,7 @@ class QuotaEstimateTests(unittest.TestCase):
                 ('949.1234567890123456789012345', '950 Credits', '$9.49'),
                 ('0', '0 Credits', '$0.00'), ('-0', '0 Credits', '$0.00'),
                 ('.000001', '<1 Credits', '<$0.01'), ('.25', '<1 Credits', '<$0.01'),
-                ('.5', '<1 Credits', '$0.01'), ('.99', '<1 Credits', '$0.01'),
+                ('.5', '<1 Credits', '<$0.01'), ('.99', '<1 Credits', '<$0.01'),
                 ('1', '1 Credits', '$0.01'), ('1.01', '2 Credits', '$0.01'),
                 ('1E80', '1' + '0' * 80 + ' Credits', '$1' + '0' * 78 + '.00')):
             for unit, expected in (('credits', credits), ('usd', dollars)):

@@ -266,7 +266,7 @@ class PromptCostDetailTests(unittest.TestCase):
         help_text = wire["display"]["cost_detail_help"]
         self.assertNotIn("Number of prompts:", help_text)
         self.assertIn("Sub Agents:\n• github-copilot/gpt-test", help_text)
-        self.assertIn("— ($", wire["display_units"]["usd"]["cost_detail_help"])
+        self.assertIn("— (<$0.01)", wire["display_units"]["usd"]["cost_detail_help"])
         self.assertNotIn("prompt_ids", str(wire))
         self.assertNotIn("cu2", str(wire))
         self.assertNotIn("private prompt", str(wire))

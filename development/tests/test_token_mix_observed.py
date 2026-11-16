@@ -54,7 +54,7 @@ class ObservedMixTests(unittest.TestCase):
                 self.assertEqual(['0%'] * 4,
                     [dto['display'][f'mix_{name}_share'] for name in ('input', 'cache', 'write', 'output')])
 
-    def test_known_costs_survive_unpriced_calls_and_help_rounds_once_half_up(self):
+    def test_known_costs_survive_unpriced_calls_and_help_uses_standard_amounts(self):
         report = self.report([TokenUsage(input=1), TokenUsage(output=1)],
                             models=[ModelRef('x', 'gpt-test'), ModelRef('x', 'unpriced')])
 
@@ -63,8 +63,8 @@ class ObservedMixTests(unittest.TestCase):
         self.assertFalse(report.token_mix.cost_complete)
         self.assertEqual(1, report.token_mix.priced_requests)
         self.assertEqual('1.501', dto['total_cost'])
-        for unit, expected in [('credits', ['0 Credits', '1 Credits', '1 Credits', '0 Credits']),
-                               ('usd', ['$0.00', '$0.01', '$0.01', '$0.00'])]:
+        for unit, expected in [('credits', ['0.5 Credits', '0.5 Credits', '0.6 Credits', '<0.1 Credits']),
+                               ('usd', ['<$0.01', '<$0.01', '<$0.01', '<$0.01'])]:
             for name, label, amount in zip(('input', 'cache', 'write', 'output'),
                                            ('Input', 'Cached input', 'Cache write', 'Output'), expected):
                 self.assertEqual(f'{label} CCost: {amount}', dto['display_units'][unit][f'mix_{name}_cost_help'])

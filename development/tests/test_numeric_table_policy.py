@@ -70,7 +70,7 @@ class NumericTablePolicyTests(unittest.TestCase):
         flags = dict(unresolved_cost=True, complete=False, comparison_cost_complete=False,
                      main_estimated=True, subagent_estimated=True,
                      total_main_estimated=True, total_subagent_estimated=True)
-        for raw, credits, usd in (("123.001", "124", "$1.23"), ("0.001", "<0.1", "$0.00")):
+        for raw, credits, usd in (("123.001", "124", "$1.23"), ("0.001", "<0.1", "<$0.01")):
             source = record(**dict.fromkeys(keys, Decimal(raw)), **flags)
             for unit, expected in (("credits", credits), ("usd", usd)):
                 with self.subTest(raw=raw, unit=unit):
@@ -115,7 +115,7 @@ class NumericTablePolicyTests(unittest.TestCase):
             self.assertEqual(zero, ccost_amount(Decimal(0), unit=unit))
             self.assertEqual(zero, ccost_amount(None, unit=unit))
             self.assertEqual(zero, ccost_amount(Decimal(0), unresolved=True, unit=unit))
-        self.assertEqual("$0.00", ccost_amount(Decimal("0.001"), unresolved=True, unit="usd"))
+        self.assertEqual("<$0.01", ccost_amount(Decimal("0.001"), unresolved=True, unit="usd"))
         self.assertEqual("842K", token_volume(None, 842_000))
         self.assertEqual("0", token_volume(None, 0))
         self.assertEqual("N/A", token_volume(None, None))

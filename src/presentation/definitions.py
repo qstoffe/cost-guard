@@ -55,7 +55,7 @@ def definition_lines(label: str, sentences: Sequence[Sentence], width: int, styl
 
 def ccost_sentences() -> tuple[str, ...]:
     return (
-        ("CCost displays reference USD: 100 credits = $1.00; small positive values can round to $0.00."
+        ("CCost displays reference USD: 100 credits = $1.00; positive values below one cent display as <$0.01."
          if ccost_unit() == "usd" else "1 CCost equals 1 Copilot AI credit."),
         "Flat-rate accounts use Copilot's published token rates, not the billed cost.",
         "Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.",

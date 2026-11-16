@@ -4,6 +4,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
   const full = '.watch-active tbody td:nth-child(6) .help-value';
   const prompt = '.mini-prompts tbody td:nth-child(3) .mini-cost-value';
   const total = '.mini-prompts tbody td:nth-child(4) .mini-cost-value';
+  await require('./probe_tiny_ccost.cjs')({command,evaluate,until,owner,mini,checks,layouts,full,prompt,total});
   for (const unit of ['credits','usd']) {
     for (const mode of ['mixed','zero','absent','mixed']) {
       await evaluate(owner,`(() => {
@@ -29,7 +30,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         if(mode==='absent') assert.equal(text,selector===total ? unit==='usd'?'$0.00':'0' : 'N/A',`${unit} ${mode} ${selector}`);
         else if(mode==='zero') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
         else {
-          assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
+          assert.match(text,unit==='usd'?/^<?\$\d/:/^[<\d]/);
           assert.doesNotMatch(text,/\?|Partial /);
         }
         layouts.push({unit,mode,surface:id===mini?'Mini':'Full',selector,text});
@@ -111,7 +112,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         .map(selector=>document.querySelector(selector).textContent)`);
       for(const text of cells) {
         if(mode==='absent') assert.equal(text,'N/A',`${unit} ${mode} Sessions/detail/footer`);
-        else assert.match(text,unit==='usd'?/^\$\d/:/^[<\d]/);
+        else assert.match(text,unit==='usd'?/^<?\$\d/:/^[<\d]/);
         assert.doesNotMatch(text,/\?|Partial /);
       }
       layouts.push({unit,mode,surface:'Sessions/detail/footer',cells});

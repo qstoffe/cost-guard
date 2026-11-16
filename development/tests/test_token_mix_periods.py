@@ -114,8 +114,8 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertEqual(3, report.token_mix.request_count)
         self.assertEqual(instant(stamps[1]), report.token_mix_period['start_ms'])
         help_text = project(report).to_json()['token_mix']['display_units']
-        self.assertEqual('Input CCost: 0 Credits', help_text['credits']['mix_input_cost_help'])
-        self.assertEqual('Input CCost: $0.00', help_text['usd']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: 0.4 Credits', help_text['credits']['mix_input_cost_help'])
+        self.assertEqual('Input CCost: <$0.01', help_text['usd']['mix_input_cost_help'])
 
     def test_http_scope_identity_and_defaults_are_page_specific(self):
         self.assertEqual('all', parse_report({'kind': 'token-mix'}).token_mix_scope)

@@ -119,7 +119,7 @@ class ModelStandingsTests(unittest.TestCase):
                          dto['total-tokens']['podium'][0]['model_help'])
         cost = dto['total-cost']['podium'][0]
         self.assertIn('CCost', cost['display']['amount'])
-        self.assertTrue(cost['display_units']['usd']['amount'].startswith('$'))
+        self.assertEqual('<$0.01', cost['display_units']['usd']['amount'])
 
     def test_combined_effort_pool_single_cap_versions_and_weighted_rate(self):
         calls = tuple(ResponseCall(self.request('root', str(i), 'release-1',

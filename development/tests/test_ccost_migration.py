@@ -137,6 +137,20 @@ class CCostDomainTests(unittest.TestCase):
 
 
 class NumericSemanticsTests(unittest.TestCase):
+    def test_reference_amount_inequalities_compare_original_decimal_before_rounding(self):
+        cases = (("0", "0", "$0.00"), ("1e-100", "<0.1", "<$0.01"),
+                 ("0.000001", "<0.1", "<$0.01"), ("0.099999", "<0.1", "<$0.01"),
+                 ("0.1", "0.1", "<$0.01"), ("0.100001", "0.2", "<$0.01"),
+                 ("0.9", "0.9", "<$0.01"), ("0.999999", "1.0", "<$0.01"),
+                 ("1", "1", "$0.01"), ("1.000001", "2", "$0.01"),
+                 ("1.5", "2", "$0.02"), ("123", "123", "$1.23"),
+                 ("-0.12", "-0.1", "$0.00"), ("-123", "-123.0", "$-1.23"))
+        for raw, credits, usd in cases:
+            for unit, expected in (("credits", credits), ("usd", usd)):
+                with self.subTest(raw=raw, unit=unit):
+                    self.assertEqual(expected, ccost_amount(D(raw), unit=unit))
+                    self.assertEqual(expected, ccost_amount(D(raw), unresolved=True, unit=unit))
+
     def test_presentation_and_tool_format_specs_never_request_grouping(self):
         files = (*ROOT.joinpath("src").rglob("*.py"), *ROOT.joinpath("development/tools").glob("*.py"))
         for path in files:
