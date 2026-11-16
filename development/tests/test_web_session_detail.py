@@ -480,6 +480,19 @@ class SessionDetailTests(unittest.TestCase):
         self.assertFalse(block["total_extra_ccost_complete"])
         self.assertIsNone(block["total_token_mix_percent"])
 
+    def test_known_reasoning_cost_survives_missing_output_without_qualifying_full_mix(self):
+        snapshot = one_request(running=False, usage=TokenUsage(input=30, reasoning=5,
+                               known_fields=("input", "cache_read", "cache_write")))
+        token = self.details.open("root", "live")
+
+        self.tick(self.service(FakeSource(snapshot)))
+        block = self.details.page(token, 0)["result"]["view"]["prompt_blocks"][0]
+
+        self.assertEqual(D(".003"), D(block["total_incoming_context_ccost"]))
+        self.assertEqual(D(".002"), D(block["total_extra_ccost"]))
+        self.assertFalse(block["total_extra_ccost_complete"])
+        self.assertIsNone(block["total_token_mix_percent"])
+
     def test_index_windows_match_existing_strict_same_timestamp_semantics(self):
         snapshot = make_snapshot()
         sample = snapshot.events[0]

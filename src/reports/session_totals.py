@@ -41,7 +41,7 @@ def session_totals(bundle, catalog):
             supported = name in known and (parts is not None or
                 set(MIX_FIELDS[:3]) <= known and entry.tokens.total == 0)
             complete[component] &= supported
-            if supported:
+            if supported or name == "output" and entry.tokens.reasoning > 0 and parts is not None:
                 amounts[component] += parts[index] if parts is not None else Decimal(0)
                 observed[component] = True
     return dict(
