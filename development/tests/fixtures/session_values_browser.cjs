@@ -52,7 +52,9 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('mix().textContent===originalMix'),true);
   await fixture('recover');
   await fixture('detail-values-epoch');
-  await until('detail.data.value_authority.scope!==scope');
+  // The exhausted source-unavailable attempt owns a 30s automatic cooldown;
+  // allow that existing lane plus the ordinary 5s detail poll to recover.
+  await until('detail.data.value_authority.scope!==scope', 60000);
   assert.equal(await evaluate('footerCells[3]!==detail.footer.cells[3]'),true);
   checks.push('real HTTP full→partial→complete corrected withdrawal→recovery→outage→source epoch; qualified mix/footer retention, invalidation, stable footer nodes and Tool Calls expansion');
   // Stop only the fixture view timer; the following cases deliberately supply
