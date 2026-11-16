@@ -389,8 +389,8 @@ const SessionsCatalog = (() => {
       this.rows(values);
       if (completed) ContextHelp.refresh(this.root);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
-      this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + data.size, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` :
-        data.state === 'observed' ? `No confirmed matches among catalog candidates in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable';
+      ReportView.text(this.label, data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + data.size, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` :
+        data.state === 'observed' ? `No confirmed matches among catalog candidates in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable');
       const link = (node, offset, enabled) => {
         node.destination = enabled ? destination(offset, data.epoch, data.sort, data.direction, data.period) : null;
       };

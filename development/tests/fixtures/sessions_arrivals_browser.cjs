@@ -60,10 +60,14 @@ module.exports = async ({evaluate, until, fixture}) => {
     getSelection().toString()===arrivalSelection && Math.abs(scrollY-arrivalScroll)<2 &&
     document.querySelector("#context-help").matches(":popover-open")`),true);
   assert.equal(await evaluate('current.catalog.body.children.length'),25);
+  await evaluate(`window.arrivalLabelChanges=0;
+    new MutationObserver(records=>arrivalLabelChanges+=records.length)
+      .observe(current.catalog.label,{childList:true,characterData:true,subtree:true});`);
   const before = await evaluate('arrivalRequests.length');
   await evaluate('new Promise(resolve=>setTimeout(resolve,6200))');
   const after = await evaluate('arrivalRequests.length');
   assert.ok(after-before<=2,'unchanged Live clock publications do not produce HTTP churn');
+  assert.equal(await evaluate('arrivalLabelChanges'),0,'unchanged polite pager text is not rewritten/announced');
   const source = await fixture('arrival-observe');
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
     'title and five Loading cells; Watch-qualified running top/yellow; in-place real summary hydration',

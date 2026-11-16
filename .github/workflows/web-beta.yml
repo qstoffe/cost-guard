@@ -120,11 +120,11 @@ jobs:
           from playwright.sync_api import sync_playwright
           with sync_playwright() as playwright:
               browser = playwright.chromium.executable_path
-           for mode in ("sessions-return", "fast-arrivals"):
-               subprocess.run(["node", "development/tests/integration/probe_web_sessions.cjs",
-                               browser, str(Path("ci-results/" + mode + ".json").resolve()), "--" + mode],
-                              env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable},
-                              timeout=210, check=True)
+          for mode in ("sessions-return", "fast-arrivals"):
+              subprocess.run(["node", "development/tests/integration/probe_web_sessions.cjs",
+                              browser, str(Path("ci-results/" + mode + ".json").resolve()), "--" + mode],
+                             env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable},
+                             timeout=210, check=True)
           PY
       # Ordinary affected-source coverage keeps one real 61s hold per document.
       # Manual Full retains all twelve holds and the mixed/control diagnostics.
