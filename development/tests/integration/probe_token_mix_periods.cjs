@@ -33,7 +33,7 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     assert.equal(await evaluate(`current.tokenMix.selector.querySelector('[aria-pressed="true"]').textContent`),
       {today:'Today','7-days':'7 days','30-days':'30 days',month:'This month',all:'All time'}[period]);
     assert.equal(await evaluate(`JSON.stringify([current.tokenMix.models.sort,current.tokenMix.publishers.sort])===mixSort`),true);
-    assert.match(await evaluate(`ReportView.display(current.result.view.token_mix,'mix_input_cost_help')`),/^Input CCost: \$\d+\.\d{2}$/,'period does not change the unit');
+    assert.match(await evaluate(`ReportView.display(current.result.view.token_mix,'mix_input_cost_help')`),/^Input CCost: (?:<\$0\.01|\$\d+\.\d{2})$/,'period does not change the unit');
   }
   // Supersede a slow in-flight scope; its eventual completion must never win.
   await evaluate(`selectTokenMix(current,'today');selectTokenMix(current,'month')`);
@@ -46,7 +46,8 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
     await evaluate(`ReportView.setUnit('${unit}',current.tokenMix.root);document.activeElement?.blur();
       document.querySelectorAll('.token-mix-table')[${table}].tBodies[0].rows[0].cells[${col+(table===0?1:0)}].firstElementChild.focus()`);
     await until(`${help}?.matches(':popover-open')`);
-    assert.match(await evaluate(`${help}.textContent`),new RegExp(`^${['Input','Cached input','Cache write','Output'][col-4]} CCost: `+(unit==='usd'?'\\$\\d+\\.\\d{2}':'\\d+ Credits')+'$'));
+    assert.match(await evaluate(`${help}.textContent`),new RegExp(`^${['Input','Cached input','Cache write','Output'][col-4]} CCost: `+
+      (unit==='usd'?'(?:<\\$0\\.01|\\$\\d+\\.\\d{2})':'(?:<0\\.1|\\d+(?:\\.\\d)?) Credits')+'$'));
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
   }
   for (const name of ['63','64']) {
@@ -60,7 +61,7 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       assert.equal(await evaluate(`${help}?.matches(':popover-open') || false`),false,'no diagnostic caveat replaces missing cost');
     } else {
       await until(`${help}?.matches(':popover-open')`);
-      assert.match(await evaluate(`${help}.textContent`),/^Input CCost: \d+ Credits$/,'known input retains its independently priced amount');
+      assert.equal(await evaluate(`${help}.textContent`),'Input CCost: <0.1 Credits','known input retains its independently priced tiny amount');
     }
     assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`),/Partial|\?|not zero/);
   }

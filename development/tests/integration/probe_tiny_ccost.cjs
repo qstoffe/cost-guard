@@ -44,7 +44,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts,full,p
           assert.ok(facts.width>0 && facts.fits,JSON.stringify(facts));
           if(index===1 || index===2) assert.equal(facts.aria,
             (index===1?'Prompt':'Whole-session')+' reference CCost: '+expected);
-          layouts.push({mode,theme,scheme,width,unit,surface:index,...facts});
+          layouts.push({mode,theme,scheme,viewportWidth:width,unit,surface:index,...facts});
         }
         assert.equal(await evaluate(owner,'miniWatch.view.dailyAmount.textContent'),expected);
         assert.ok((await evaluate(owner,'current.watch.daily.textContent')).includes(expected));
