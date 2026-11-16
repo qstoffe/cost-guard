@@ -56,14 +56,17 @@ module.exports = async function sessionLoading({evaluate, until, command}) {
           width:b.width,height:actual.height,sharedHeight:expected.height,animation:actual.animationName,
           overflow:document.documentElement.scrollWidth>innerWidth+1,warning:!view.status.hidden,
           live:view.loader.status.getAttribute('aria-live'),busyAncestor:root.closest('[aria-busy=true]')!==null,
-          back:view.root.querySelector('a').textContent};
+          back:view.back.textContent,backLabel:view.back.getAttribute('aria-label'),
+          backFits:[...view.back.getClientRects()].every(rect=>rect.left>=0 && rect.right<=innerWidth+1)};
         reference.root.remove();return result;})()`);
       assert.equal(facts.max,100); assert.equal(facts.value,0); assert.equal(facts.explicit,true); assert.equal(facts.stable,true);
       assert.ok(facts.centerX<2); assert.ok(facts.centerY<3); assert.ok(facts.width>100);
       assert.equal(facts.height,facts.sharedHeight); assert.equal(facts.animation,'none');
       assert.equal(facts.overflow,false); assert.equal(facts.warning,false); assert.equal(facts.live,'polite');
       assert.equal(facts.busyAncestor,false,'history busy state cannot suppress stage announcements');
-      assert.equal(facts.back,'Show all sessions'); layouts.push({theme,scheme,width,zoom,...facts});
+      assert.equal(facts.back,'↩ Back to Show All Sessions');
+      assert.equal(facts.backLabel,'Back to Show All Sessions'); assert.equal(facts.backFits,true);
+      layouts.push({theme,scheme,width,zoom,...facts});
     }
   checks.push('48 real Chromium layouts: Classic/Web light/dark, 360/768/1366/1920, 100/125/150%, reduced motion; centered stable determinate shared style');
   await evaluate(`(async()=>{document.body.style.zoom=1;
@@ -111,11 +114,12 @@ module.exports = async function sessionLoading({evaluate, until, command}) {
   await command('Page.navigateToHistoryEntry',{entryId:(await command('Page.getNavigationHistory')).entries.at(-2).id});
   await until('current.detail?.data?.total===1001');
   assert.equal(await evaluate('current.detail.loader.root.hidden'),true);
+  const returnHref = await evaluate('current.detail.back.getAttribute("href")');
   const touch = await evaluate(`(()=>{const r=current.detail.root.querySelector('a').getBoundingClientRect();
     return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[touch]});
   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await until('location.hash==="#/sessions"');
+  await until(`location.hash===${JSON.stringify(returnHref)}`);
   checks.push('mouse hover / keyboard / emulated touch Show all sessions and real browser Back; no stuck busy state');
   return {checks,layouts};
 };
