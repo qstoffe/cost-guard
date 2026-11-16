@@ -566,6 +566,12 @@ function navigate() {
     current.detail = new SessionDetail.View(api, match[1]);
     current.message = '';
   }
+  if (match && current.detail) {
+    // Origin belongs to this history entry, not a cached detail or global preference.
+    // Reload/Back/Forward retain it; Watch, pasted URLs and new tabs do not inherit it.
+    const origin = history.state?.sessionsReturn;
+    current.detail.back.href = origin?.detail === location.hash ? origin.list : '#/sessions';
+  }
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
     current.catalog ||= new SessionsCatalog.View(api);
     current.catalog.configure(route.params);
@@ -644,6 +650,17 @@ async function connect() {
 refresh.addEventListener('click', () => {
   if (!hostState.writable) return;
    if (current?.request) { current.actionRequested = true; acquire(current); }
+});
+output.addEventListener('click', event => {
+  const link = event.target.closest?.('a.session-name');
+  if (!current?.catalog || !link || event.defaultPrevented || event.button !== 0 ||
+      event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+  const detail = link.getAttribute('href');
+  if (!/^#\/sessions\/[A-Za-z0-9_-]{1,200}$/.test(detail)) return;
+  event.preventDefault();
+  // Push one ordinary entry, carrying only canonical filters (never offset/epoch/data).
+  history.pushState({sessionsReturn: {detail, list: current.catalog.firstPageDestination()}}, '', detail);
+  navigate(); // pushState does not emit hashchange; native Back/Forward still does.
 });
 window.addEventListener('hashchange', () => {
   // Pasting into an already-open unauthorized tab can be same-document navigation.

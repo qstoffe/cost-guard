@@ -107,7 +107,7 @@ const SessionDetail = (() => {
     constructor(api, id) {
       Object.assign(this, {api, id, token: null, data: null, busy: false, attached: false, generation: 0});
       this.root = el('div', undefined, 'session-detail'); this.root.setAttribute('aria-label', 'Session detail');
-      const back = el('a', 'Show all sessions'); back.href = '#/sessions';
+      const back = this.back = el('a', 'Show all sessions'); back.href = '#/sessions';
       this.heading = el('h1');
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;

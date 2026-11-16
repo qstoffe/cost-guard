@@ -85,9 +85,30 @@ async function main() {
      };
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
-     await command('Page.navigate',{url:launch.url},sessionId);
-          await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-          if (mode === '--model-details') {
+      await command('Page.navigate',{url:launch.url},sessionId);
+           await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+           if (mode === '--sessions-return') {
+             const newTab = async hash => {
+               const {targetId:other} = await command('Target.createTarget',{url:new URL(launch.url).origin+'/'+hash});
+               const {sessionId:otherSession} = await command('Target.attachToTarget',{targetId:other,flatten:true});
+               try {
+                 for (let attempt=0;attempt<200;attempt++) {
+                   const value = await command('Runtime.evaluate',{expression:
+                     'typeof current !== "undefined" && current?.detail?.back.getAttribute("href")',returnByValue:true},otherSession);
+                   if (value.result?.value) return value.result.value;
+                   await new Promise(resolve=>setTimeout(resolve,50));
+                 }
+                 throw new Error('new-tab detail timeout');
+               } finally { await command('Target.closeTarget',{targetId:other}); }
+             };
+             checks.push(...await require('../fixtures/sessions_return_browser.cjs')({evaluate,until,fixture,newTab,
+               command:(method,params)=>command(method,params,sessionId)}));
+             assert.deepEqual(errors, []);
+             evidence = {outcome:'PASS',browser:version.product,checks,inference_calls:0,
+               personal_profile:false,desktop_effects:false};
+             console.log(JSON.stringify(evidence)); return;
+           }
+           if (mode === '--model-details') {
             const targets = await command('Target.getTargets');
             const worker = targets.targetInfos.find(target=>target.type==='service_worker' && target.url.endsWith('/worker.js'));
             assert.ok(worker,'Owned zoom extension service worker must exist');
