@@ -14,13 +14,49 @@ from src.watch.card_workers import CardResult
 from src.reports.watch_capture import capture_rows
 
 
+def _today_snapshot(snapshot, rank, now):
+    # Keep this one-prompt browser seam in today's UTC window, even at midnight.
+    # Integer slots keep metadata and qualified activity ordering identical.
+    budget = min(3_600_000, now % 86_400_000)
+    unit = min(1000, budget // 26)
+    base = now - budget + rank * unit
+    if unit < 10:
+        # A zero-slot user/assistant tie changes causal attempt selection. At the
+        # boundary, let the prompt start just before today and finish exactly now.
+        unit, base = 10, now - 3
+    original = snapshot.root.created_at_ms
+
+    def retime(at):
+        return None if at is None else base + (at - original) * unit // 1000
+
+    def part(value):
+        return replace(value, created_at_ms=retime(value.created_at_ms),
+                       updated_at_ms=retime(value.updated_at_ms))
+
+    root = replace(snapshot.root, created_at_ms=base,
+                   updated_at_ms=min(now, retime(snapshot.root.updated_at_ms)))
+    return replace(snapshot, root=root, sessions=(root,),
+        messages=tuple(replace(value, created_at_ms=retime(value.created_at_ms),
+            completed_at_ms=retime(value.completed_at_ms),
+            parts=tuple(part(item) for item in value.parts)) for value in snapshot.messages),
+        parts=tuple(part(value) for value in snapshot.parts),
+        events=tuple(replace(value, created_at_ms=retime(value.created_at_ms))
+                     for value in snapshot.events),
+        invocations=tuple(replace(value, created_at_ms=retime(value.created_at_ms),
+            completed_at_ms=retime(value.completed_at_ms)) for value in snapshot.invocations))
+
+
 class CatalogPreviewFixture:
     def __init__(self, root, now):
         self.now = now
         self.source = SyntheticMonthSource(3217, 1, month_start_ms=now - 365 * 86400000,
             today_roots=25, now_ms=now)
-        self.source.snapshots = {key: replace(value, complete=True, root=replace(value.root, active=False))
-            for key, value in self.source.snapshots.items()}
+        for index, (key, value) in enumerate(self.source.snapshots.items()):
+            if index >= 3192:
+                value = _today_snapshot(value, index - 3192, now)
+            root_session = replace(value.root, active=False)
+            self.source.snapshots[key] = replace(value, complete=True,
+                root=root_session, sessions=(root_session,))
         self.observation = observe_catalog(self.source, include_archived_revisions=True)
         self.catalog = SessionCatalog(clock_ms=lambda: now)
         self.catalog.observe(self.observation)
