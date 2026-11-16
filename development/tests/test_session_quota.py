@@ -133,6 +133,22 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertNotIn("instance-v1", wire)
         self.assertNotIn("native", wire)
 
+    def test_retained_evidence_recovers_on_same_snapshot_without_capacity_or_revision_change(self):
+        snapshot = one_request(running=False)
+        history = SimpleNamespace(snapshot=snapshot, retained=True)
+        quota = replace(self.monthly, label="Weekly", period="rolling", duration_seconds=604800,
+                        reference_ccost_capacity=D(70))
+        accounts = self.accounts((quota,))
+        partial = session_quota_evidence(history, self.service)
+        self.assertEqual("—", self.percent(partial, accounts))
+
+        history.retained = False
+        recovered = session_quota_evidence(history, self.service)
+
+        self.assertEqual("~42.9%", self.percent(recovered, accounts))
+        self.assertTrue(recovered.complete)
+        self.assertIs(recovered, session_quota_evidence(history, self.service))
+
     def test_overlapping_quotas_alias_route_deduplication_and_partial_native_units(self):
         snapshot = one_request(running=False)
         ref = replace(self.ref, provider_id="openai")

@@ -45,7 +45,8 @@ def session_quota_evidence(history, service):
     if snapshot is None:
         return None
     cached = getattr(history, "quota_evidence", None)
-    signature = (snapshot, service._load_comparison_catalog().diagnostic_signature, source_scope(service.source))
+    signature = (snapshot, history.retained,
+                 service._load_comparison_catalog().diagnostic_signature, source_scope(service.source))
     if getattr(history, "quota_signature", None) == signature:
         return cached
     catalog = service._load_comparison_catalog()

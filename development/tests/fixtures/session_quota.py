@@ -22,12 +22,13 @@ def configure(runtime, command):
     capacity = value.known_ccost / D("2.35") * (2 if command == "quota-capacity" else 1)
     monthly = QuotaComponent("monthly", period="fixed", limit=D(70), used=D(7), remaining=D(63),
         unit="AI credits", reset_at_ms=service.now_ms + 86_400_000, status="available")
-    five = QuotaComponent("5-hour", period="rolling", remaining_fraction=D(".8"),
-        duration_seconds=18000, reset_at_ms=service.now_ms + 1000, status="available")
-    model = replace(five, label="Special", scope="model", model_id="special",
+    weekly = QuotaComponent("weekly", period="rolling", remaining_fraction=D(".8"),
+        duration_seconds=604800, reset_at_ms=service.now_ms + 1000, status="available")
+    model = replace(weekly, label="Special", scope="model", model_id="special",
                     reference_ccost_capacity=D(100))
-    account = AccountSnapshot(ref, service.now_ms, "GitHub Copilot", plan="Plan", quotas=(monthly, five, model))
-    periods = tuple(QuotaPeriodProjection(q, ComparisonCost(capacity * D(".2"), 1, 1), None)
+    account = AccountSnapshot(ref, service.now_ms, "GitHub Copilot", plan="Plan", quotas=(monthly, weekly, model))
+    periods = tuple(QuotaPeriodProjection(q,
+                     None if q is weekly and command == "quota-source" else ComparisonCost(capacity * D(".2"), 1, 1), None)
                     for q in account.quotas)
     second = AccountSnapshot(AccountRef("synthetic-detail", "claude-code", "second"),
         service.now_ms, "Claude", quotas=(QuotaComponent("Weekly"),))

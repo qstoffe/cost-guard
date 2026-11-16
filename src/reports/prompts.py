@@ -18,6 +18,7 @@ from src.pricing.catalog import PricingCatalog
 from .models import PromptProjection, SessionPromptBlock
 from .prompt_rows import PromptRowProjector, ThresholdMultiplier, mix_known, mix_percent
 from .watch_context import card_context
+from .session_totals import session_totals
 
 
 def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpochs,
@@ -150,6 +151,8 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         rate_provisional=any(row.in_progress for row in rows),
         session_context=card_context(projector, session_id, projector.threshold_multiplier),
         billed_cost=billed,
+        **(session_totals(projector.bundle, projector.catalog)
+           if lifetime and projector.snapshot_running_metrics else {}),
     )
 
 

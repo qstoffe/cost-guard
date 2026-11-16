@@ -51,7 +51,11 @@ def value_authority(history, source):
         total_ictx_cost_text=state(block.total_ictx_cost_text.endswith("%"), corrected=bool(withdrawn)),
         total_extra_cost_text=state(block.total_extra_cost_text.endswith("%"), corrected=bool(withdrawn)),
         total_mix_text=state(bool(block.total_mix_text) and block.total_mix_text != "N/A",
-                             corrected=bool(withdrawn)),
+                              corrected=bool(withdrawn)),
+        total_incoming_context_ccost=state(block.total_incoming_context_ccost_complete,
+                                           corrected=bool(withdrawn)),
+        total_extra_ccost=state(block.total_extra_ccost_complete, corrected=bool(withdrawn)),
+        total_token_mix_percent=state(block.total_token_mix_percent is not None, corrected=bool(withdrawn)),
     )
     rows = {row.event_id: ("invalidated" if withdrawn and row.token_mix_percent is None else
         "known" if row.token_mix_percent is not None and authoritative else
