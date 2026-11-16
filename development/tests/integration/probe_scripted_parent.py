@@ -3,6 +3,7 @@ import argparse
 from dataclasses import replace
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -79,7 +80,8 @@ def main():
                 target = page.locator(selector)
                 expect(target).to_have_text("Scripted*", timeout=30000)
                 if view == "sessions":
-                    expect(page.locator(".sessions-table tbody tr:first-child td:first-child")).to_contain_text("Start ·", timeout=30000)
+                    expect(page.locator(".sessions-table tbody tr:first-child td:first-child")).to_have_text(
+                        re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}\*"), timeout=30000)
                 page.mouse.move(1, 1)
                 target.hover()
                 panel = page.locator("#context-help")

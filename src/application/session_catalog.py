@@ -22,7 +22,7 @@ from src.watch.models import SessionPreview
 from .projection import project
 from .session_navigation import Navigation
 from .session_catalog_scope import (
-    CatalogEpoch, PAGE_SIZE, catalog_window, candidate_population, event_members, provisional_order, in_window, retained_positions,
+    CatalogEpoch, PAGE_SIZE, activity_time, catalog_window, candidate_population, event_members, provisional_order, in_window, retained_positions,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -36,7 +36,7 @@ def effort_sort(key):
 
 
 def sort_value(row, key):
-    return {"activity": row.last_activity_ms if row.last_activity_ms is not None else row.prompt_started_ms,
+    return {"activity": activity_time(row),
         "name": row.title.casefold(),
         "model": (row.model if row.model != "N/A" else row.selected_display_model).casefold() or None,
         "effort": effort_sort(row.effort_key),
@@ -606,10 +606,10 @@ class SessionCatalog:
                 if not offset:
                     window, candidates = nav.window, tuple(nav.roots)
             display_rows = {row.session_id: row for row in self._rows(candidates)} if not offset else {}
-            qualified = lambda key: ((sort == 'name' or self._key_current(key, sort)
-                or not offset and display_rows[key].running)
+            qualified = lambda key: (not offset and display_rows[key].running or (
+                (sort == 'name' or self._key_current(key, sort))
                 and (period == 'all' and sort != 'activity' or self._activity_current(key))
-                and (key not in self.active or self._activity_current(key)))
+                and (key not in self.active or self._activity_current(key))))
             indexed = sum(qualified(key) for key in candidates)
             pending = indexed != len(candidates)
             if nav is not None and navigation is not None and not offset:
@@ -741,6 +741,14 @@ class SessionCatalog:
                 facts = nav.facts if nav is not None and navigation is not None else dict(snapshot.facts)
                 if key in facts:
                     row['snapshot_revision'] = facts[key][1]
+                    if facts[key][1] is None:
+                        # Frozen running order is not proof of current metrics.
+                        row['snapshot_semantics'] = 'qualified-running-lifecycle; retained-scalars'
+                        row['indexed'] = False
+                        row['metric_state'] = 'retained' if row['has_summary'] else 'pending'
+                        row['metric_states'] = {name: 'retained' if state == 'ready' else state
+                            for name, state in row['metric_states'].items()}
+                        continue
                     row['snapshot_semantics'] = 'independently-qualified-navigation-facts'
                     row['metric_state'] = 'snapshot'
                     row['metric_states'] = dict.fromkeys(row['metric_states'], 'snapshot')

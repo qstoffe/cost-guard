@@ -9,7 +9,8 @@ async function main() {
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
   const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
    const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']),
-     mode === '--fast-arrivals' ? 'development/tests/integration/serve_web_arrivals.py' : 'development/tests/integration/serve_web_sessions.py',
+      mode === '--warm-sorts' ? 'development/tests/integration/serve_web_warm_sorts.py' :
+      mode === '--fast-arrivals' ? 'development/tests/integration/serve_web_arrivals.py' : 'development/tests/integration/serve_web_sessions.py',
     ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
@@ -91,7 +92,15 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
       await command('Page.navigate',{url:launch.url},sessionId);
            await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-            if (mode === '--fast-arrivals') {
+             if (mode === '--warm-sorts') {
+               const details=await require('../fixtures/sessions_warm_sorts_browser.cjs')({evaluate,until,fixture,
+                 command:(method,params)=>command(method,params,sessionId)});
+               assert.deepEqual(errors,[]);
+               evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,
+                 personal_profile:false,desktop_effects:false};
+               console.log(JSON.stringify(evidence));return;
+             }
+             if (mode === '--fast-arrivals') {
               const details=await require('../fixtures/sessions_arrivals_browser.cjs')({evaluate,until,fixture});
               assert.deepEqual(errors,[]);
               evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,

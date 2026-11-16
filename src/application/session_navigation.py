@@ -33,7 +33,11 @@ class Navigation:
             if key in self.facts:
                 continue
             row = catalog._rows((key,))[0]
-            if not (row.running or sort == 'name' or catalog._key_current(key, sort)) or not catalog._activity_current(key):
+            # Fresh source-qualified lifecycle/start fixes running-first order and
+            # period membership independently of mutable scalar revision keys.
+            # Candidate/active booleans alone never set row.running.
+            if not row.running and (not (sort == 'name' or catalog._key_current(key, sort))
+                                    or not catalog._activity_current(key)):
                 continue
             if self.window.period == 'all':
                 member = True
@@ -52,7 +56,7 @@ class Navigation:
             self.facts[key] = (replace(row, title=root.title or "Untitled session",
                                       last_activity_ms=at if type(at) is int and 0 < at <= catalog.clock_ms() else None,
                                       archived=root.archived_at_ms is not None),
-                               catalog.revisions[key], member)
+                               catalog.revisions[key] if catalog._current(key) else None, member)
             self.authorities[key] = tuple(catalog.model_dependencies.get(key, ()))
 
     @property

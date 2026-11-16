@@ -339,7 +339,7 @@ const SessionsCatalog = (() => {
           row.value = {...row.value, running: false,
             last_activity_ms: value && !value.running ? value.last_activity_ms : null};
           ReportView.text(row.activity, row.value.last_activity_ms == null && row.value.prompt_started_ms != null ?
-            'Start · ' + ReportView.timestamp(row.value.prompt_started_ms, this.renderTimezone) :
+            ReportView.timestamp(row.value.prompt_started_ms, this.renderTimezone) + '*' :
             ReportView.timestamp(row.value.last_activity_ms, this.renderTimezone));
           ContextHelp.refresh(row.activity);
         }
@@ -497,7 +497,7 @@ const SessionsCatalog = (() => {
         row.className = value.running ? 'session-running' : '';
         ReportView.text(row.activity, value.last_activity_ms == null && value.activity_state === 'pending' ?
           'Loading…' : value.last_activity_ms == null && value.prompt_started_ms != null ?
-            'Start · ' + ReportView.timestamp(value.prompt_started_ms, this.renderTimezone) :
+            ReportView.timestamp(value.prompt_started_ms, this.renderTimezone) + '*' :
             ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');

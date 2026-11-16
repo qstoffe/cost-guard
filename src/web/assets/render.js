@@ -17,7 +17,7 @@ const ReportView = (() => {
   function activityHelp(value, zone, running = false, started = null) {
     const label = Number.isSafeInteger(value) && value > 0 ? timestamp(value, zone) : 'N/A';
     if (label === 'N/A') return Number.isSafeInteger(started) && started > 0 ?
-      'Started: ' + timestamp(started, zone) + '\nCompletion unverified. Sorted by the recorded prompt start, not a finish.' :
+      timestamp(started, zone) + '\nCompletion unverified. Showing recorded prompt start, not finish.' :
       'Activity time unavailable.';
     return label + (running === true ? '\n* Running sessions appear first, regardless of sorting.' : '');
   }
