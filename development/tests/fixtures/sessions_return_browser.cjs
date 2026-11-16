@@ -5,6 +5,12 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
   const catalog = (period, offset = 0) => until(`current?.catalog?.data?.period===${JSON.stringify(period)} &&
     current.catalog.data.offset===${offset} && !current.catalog.busy && !current.catalog.operation`);
   const detail = () => until('!!current?.detail?.data && !current.detail.busy');
+  const reloadDetail = async () => {
+    await evaluate('window.returnBeforeReload=true');
+    await command('Page.reload');
+    // Wait for this document's replacement, not the independent SSE writable state.
+    await until('window.returnBeforeReload!==true && typeof csrf!=="undefined" && !!csrf && typeof current!=="undefined" && !!current?.detail?.data && !current.detail.busy');
+  };
   const backLink = () => evaluate('current.detail.back.getAttribute("href")');
   const recordRequests = `window.returnRequests=[];window.returnFetch=fetch;
     window.fetch=(url,options)=>{if(url==='/api/sessions' && options?.body){
@@ -18,8 +24,8 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
   await fixture('catalog-index');
   // Actual period/sort/page controls and anchors; retain existing keyboard help.
   for (const [period, total, sort, direction, offset] of [
-    ['today',30,'activity',-1,0], ['30-days',120,'activity',-1,0],
-    ['all',5000,'name',1,0], ['month',70,'name',-1,0], ['7-days',70,'name',-1,25]
+    ['today',30,'activity',-1,0], ['30-days',120,'activity',-1,25],
+    ['all',5000,'name',1,25], ['month',70,'name',-1,0], ['7-days',70,'name',-1,25]
   ]) {
     await evaluate(`current.catalog.periodButtons.find(item=>item.key===${JSON.stringify(period)}).button.click()`);
     await catalog(period);
@@ -53,20 +59,48 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
     assert.equal(await evaluate('location.hash'), sessionHash);
     assert.equal(await evaluate('history.length'), previousLength + 1, 'one entry, no unexpected history jumps');
     assert.equal(await backLink(), expected);
+    assert.deepEqual(await evaluate(`({
+      text:current.detail.back.textContent,
+      tag:current.detail.back.tagName,
+      tabIndex:current.detail.back.tabIndex,
+      nested:current.detail.back.querySelectorAll('a,button,input,[tabindex]').length,
+      title:current.detail.back.getAttribute('title')
+    })`), {text:'↩ Back to Show All Sessions',tag:'A',tabIndex:0,nested:0,title:null});
+    const accessibility = await command('Accessibility.getFullAXTree');
+    assert.equal(accessibility.nodes.filter(node=>!node.ignored && node.role?.value==='link' &&
+      node.name?.value==='Back to Show All Sessions').length, 1, 'one native link with no spoken arrow');
     assert.deepEqual(await evaluate('history.state'), {sessionsReturn:{detail:sessionHash,list:expected}});
     if (offset) {
       await evaluate('history.back()'); await catalog(period, offset);
       assert.equal(await evaluate('location.hash'), listHash, 'native Back retains the pinned original page');
       await evaluate('history.forward()'); await detail();
       assert.equal(await backLink(), expected);
-      await command('Page.reload');
-      await until('typeof csrf !== "undefined" && csrf && hostState.writable');
-      await detail();
+      await reloadDetail();
       await evaluate(recordRequests);
       assert.equal(await backLink(), expected, 'reload retains only this entry origin');
       assert.equal(await newTab(sessionHash), '#/sessions', 'same URL in a new tab has no list origin');
     }
-    await evaluate('window.returnRequests.length=0;current.detail.back.click()');
+    await evaluate('window.returnRequests.length=0;current.detail.back.focus();current.detail.back.scrollIntoView()');
+    if (period === '30-days') {
+      await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,modifiers:8});
+      await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,modifiers:8});
+      assert.equal(await evaluate('document.activeElement===current.detail.back'), true);
+      assert.equal(await evaluate('current.detail.back.matches(":focus-visible")'), true);
+      await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    } else {
+      const point = await evaluate(`(()=>{const r=current.detail.back.getBoundingClientRect();
+        return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+      if (period === 'all') {
+        await command('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[point]});
+        await command('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+      } else {
+        await command('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...point});
+        await command('Input.dispatchMouseEvent', {type:'mouseReleased',button:'left',clickCount:1,...point});
+      }
+    }
     await catalog(period);
     assert.equal(await evaluate('location.hash'), expected);
     assert.equal(await evaluate('current.catalog.data.total'), total);
@@ -84,14 +118,13 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
   await evaluate(`location.hash=${JSON.stringify(known)}`);
   await detail();
   assert.equal(await backLink(), '#/sessions');
-  await command('Page.reload');
-  await until('typeof csrf !== "undefined" && csrf && hostState.writable');
-  await detail();
+  await reloadDetail();
   assert.equal(await backLink(), '#/sessions', 'direct entry reload cannot invent origin');
   await evaluate('current.detail.back.click()');
   await catalog('today');
   await evaluate(`current.catalog.periodButtons.find(item=>item.key==='30-days').button.click()`);
   await catalog('30-days');
   checks.push('native Back/Forward, reload, new-tab URL, reused detail from Watch/direct navigation and subsequent period changes');
+  checks.push('curved-arrow visible label, exact arrow-free accessibility name, one native tab stop, keyboard focus, Enter/pointer/touch return');
   return checks;
 };
