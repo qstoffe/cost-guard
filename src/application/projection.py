@@ -111,7 +111,9 @@ def block(value, *, source_complete=True, details=False):
         total_mix_text current_context_tokens next_context_tokens next_context_cached_ccost
         next_context_fresh_ccost next_context_warning event_id duration_ms total_main_ccost total_subagent_ccost
         total_breakdown_known total_has_cost_breakdown total_main_estimated total_subagent_estimated
-        comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier other_ccost other_calls""")
+        comparison_cost_complete billed_cost next_context_warning_severity next_context_cost_multiplier other_ccost other_calls
+        total_incoming_context_ccost total_extra_ccost total_incoming_context_ccost_complete
+        total_extra_ccost_complete total_token_mix_percent""")
     return ObjectValue(base.fields + (
         ("mini_session_cost", True),
         ("mini_cost_groups", mini_groups(value.cost_groups, complete=value.comparison_cost_complete)),

@@ -55,10 +55,11 @@ const SessionDetail = (() => {
       });
       for (const key of this.mixes.keys()) if (!wanted.has(key)) this.mixes.delete(key);
       let result = {...block, rows};
-      for (const key of ['total_calls', 'duration_ms', 'total_ccost', 'total_ictx_cost_text',
-        'total_extra_cost_text', 'total_mix_text']) {
+      for (const key of ['total_calls', 'duration_ms', 'total_ccost', 'total_incoming_context_ccost',
+        'total_extra_ccost', 'total_token_mix_percent']) {
         result = this.select(result, key, authority?.totals?.[key], this.totals);
-        if (authority?.totals?.[key] === 'pending' && !this.totals.has(key)) {
+        if (authority?.totals?.[key] === 'pending' && !this.totals.has(key) &&
+            !['total_incoming_context_ccost', 'total_extra_ccost'].includes(key)) {
           result = {...result, [key]: 'Loading…', display: {...result.display, [key]: 'Loading…'},
             display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
               [unit, {...result.display_units?.[unit], [key]: 'Loading…'}]))};
@@ -211,11 +212,17 @@ const SessionDetail = (() => {
         if (this.data?.activity?.scope && data.activity?.scope !== this.data.activity.scope) {
           this.activity.update(null); this.activityLimit = 25; this.data.activity = null;
         }
-        if (this.data?.revision === data.revision && (this.data.activity?.failures?.length || 0) >=
+        // Qualification can recover without changing the immutable report.
+        // Do not pin a pending footer merely because its raw rows are identical.
+        const sameValues = JSON.stringify(this.data?.value_authority?.totals) ===
+          JSON.stringify(data.value_authority?.totals) &&
+          Object.entries(data.value_authority?.rows || {}).every(([id, state]) =>
+            this.data?.value_authority?.rows?.[id] === state);
+        if (this.data?.revision === data.revision && sameValues && (this.data.activity?.failures?.length || 0) >=
             Math.min(this.activityLimit, data.activity?.total || 0)) {
           if (this.pendingRender) this.update(this.data); return;
         }
-        const initial = this.data?.revision === data.revision ?
+        const initial = this.data?.revision === data.revision && sameValues ?
           this.data.result.view.prompt_blocks[0].rows : data.result.view?.prompt_blocks?.[0]?.rows;
         if (!data.revision || data.offset !== 0 || !Number.isSafeInteger(data.total) || data.total < 0 ||
             !Array.isArray(initial) || initial.length > data.total) throw new Error('inconsistent_history');
@@ -427,7 +434,9 @@ const SessionDetail = (() => {
         const row = this.footerBlock;
         return ['Complete session', '', '', ReportView.display(row, 'total_ccost'),
           String(row.total_calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), '—',
-          row.total_ictx_cost_text || 'N/A', row.total_extra_cost_text || 'N/A', row.total_mix_text || 'N/A'][index];
+          ReportView.display(row, 'total_incoming_context_ccost'), ReportView.display(row, 'total_extra_ccost'),
+          Array.isArray(row.total_token_mix_percent) ? row.total_token_mix_percent.join('/') :
+            row.total_token_mix_percent === 'Loading…' ? 'Loading…' : 'N/A'][index];
       };
       for (let index = 0; index < 10; index++) {
         const cell = this.footer.children[index] || el('td'), node = cell.children[0] || el('span');

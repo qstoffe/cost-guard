@@ -67,6 +67,7 @@ const ReportView = (() => {
   const costKeys = new Set(['ccost', 'known_ccost', 'account_ccost', 'daily_ccost', 'total_ccost',
     'run_ccost', 'main_ccost', 'subagent_ccost', 'total_main_ccost', 'total_subagent_ccost',
     'incoming_context_ccost', 'extra_ccost', 'next_context_cached_ccost', 'next_context_fresh_ccost',
+    'total_incoming_context_ccost', 'total_extra_ccost',
     'watch_next_context_cached_ccost', 'watch_next_context_fresh_ccost']);
   const display = (row, key) => {
     // Identity and cost-group help have independent evidence and ownership.

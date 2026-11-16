@@ -4,9 +4,9 @@ module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}
   const checks=[],layouts=[];
   await fixture('quota-source');
   await evaluate(`location.hash='#/sessions/root'`);
-  await until(`current.detail?.quotaUsage?.grid.textContent.includes('~235%')`);
+   await until(`current.detail?.quotaUsage?.grid.textContent.includes('Weekly')`);
   assert.deepEqual(await evaluate(`[...current.detail.quotaUsage.grid.querySelectorAll('.session-quota-row')].map(n=>n.textContent)`),
-    ['Monthly10%','5-hour~235%']);
+    ['Monthly10%','Weekly—']);
   assert.equal(await evaluate(`current.detail.quotaUsage.cards.size`),1);
   assert.equal(await evaluate(`current.detail.root.lastElementChild===current.detail.quotaUsage.root &&
     current.detail.quotaUsage.root.previousElementSibling===current.detail.activity.root`),true);
@@ -15,6 +15,10 @@ module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}
     window.originalDetail=current.detail;window.originalBody=current.detail.body;
     window.originalRevision=current.detail.data.revision;`);
   const before=await fixture('quota-observe');
+  await fixture('quota-ready');
+  await until(`quotaRow.textContent.includes('~235%')`);
+  assert.equal((await fixture('quota-observe')).history_reads,before.history_reads,
+    'a newly available Weekly denominator does not reread history');
   await fixture('quota-capacity');
   await until(`quotaRow.textContent.includes('~117.5%')`);
   const after=await fixture('quota-observe');
@@ -25,9 +29,9 @@ module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}
     current.detail.body===originalBody && current.detail.status.hidden`),true);
   for (const unit of ['usd','credits']) {
     await evaluate(`ReportView.setUnit('${unit}');ReportView.syncUnits(current.detail.root)`);
-    assert.equal(await evaluate('quotaRow.textContent'),'5-hour~117.5%');
+    assert.equal(await evaluate('quotaRow.textContent'),'Weekly~117.5%');
   }
-   checks.push('native exact 7/70; ratio >100%; unused model/account omitted; title-cased labels; downstream placement; live capacity changes on unchanged history; unit independence; stable DOM and quiet status');
+   checks.push('native exact 7/70; Weekly unknown→ratio >100%→capacity correction on unchanged history; unused model/account omitted; title-cased labels; downstream placement; unit independence; stable DOM and quiet status');
   for (const page of ['accounts','watch','ai-stats']) {
     await evaluate(`location.hash='#/${page}'`);
     await until(`current.section==='${page}'`);

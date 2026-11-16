@@ -36,6 +36,7 @@ def amount_tokens(values):
         tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]))
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
+                "total_incoming_context_ccost", "total_extra_ccost",
                 "next_context_cached_ccost", "next_context_fresh_ccost",
                 "watch_next_context_cached_ccost", "watch_next_context_fresh_ccost"):
         if key not in values:

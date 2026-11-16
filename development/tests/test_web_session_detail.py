@@ -1,5 +1,6 @@
 """Complete session paging, report parity and shared live observation contracts."""
 from dataclasses import replace
+from decimal import Decimal as D
 import json
 import http.client
 from pathlib import Path
@@ -12,15 +13,17 @@ from unittest.mock import patch
 import unittest
 
 from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
-from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
+from development.tests.fixtures.session_snapshots import history, make_snapshot, make_uncompacted_snapshot, one_request
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.application.projection import project
 from src.application.session_detail import SessionDetails
 from src.analysis.causal import _root_timeline, prompt_parent_ids
+from src.analysis import analyze_snapshot
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
-from src.domain import EventKind, TokenUsage
+from src.domain import EventKind, ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest, ReportService
+from src.reports.session_totals import session_totals
 from src.sources.selection import SourceSelection
 from src.web.http import LoopbackServer
 
@@ -374,6 +377,121 @@ class SessionDetailTests(unittest.TestCase):
         self.assertNotEqual(authority["scope"], self.details.page(token, 0)["value_authority"]["scope"])
         self.details.failed("http_auth_failure")
         self.assertTrue(self.details.page(token, 0)["values_invalidated"])
+
+    def test_three_prompt_physical_totals_are_numeric_costs_and_weighted_raw_mix(self):
+        snapshot = history(((1000, 2000), (3000, 4000), (5000, 6000)))
+        usage = (TokenUsage(input=1_000_000, cache_read=2_000_000, output=1_000_000),
+                 TokenUsage(input=3_000_000, cache_write=1_000_000, output=1_000_000),
+                 TokenUsage(input=5_000_000, output=2_000_000, reasoning=1_000_000))
+        requests = tuple(replace(item, tokens=tokens) for item, tokens in zip(snapshot.invocations, usage))
+        source = FakeSource(replace(snapshot, invocations=(*requests, requests[0])))
+        token = self.details.open("root", "live")
+
+        self.tick(self.service(source))
+        page = self.details.page(token, 0, begin=True)
+        block = page["result"]["view"]["prompt_blocks"][0]
+
+        self.assertEqual(3, block["total_calls"], "physical duplicate is not a fourth call")
+        self.assertEqual(D(3020), D(block["total_ccost"]))
+        self.assertEqual(D(1020), D(block["total_incoming_context_ccost"]))
+        self.assertEqual(D(2000), D(block["total_extra_ccost"]))
+        self.assertEqual([53, 12, 6, 29], block["total_token_mix_percent"])
+        self.assertEqual("1020", block["display_units"]["credits"]["total_incoming_context_ccost"])
+        self.assertEqual("$10.20", block["display_units"]["usd"]["total_incoming_context_ccost"])
+        self.assertEqual("$20.00", block["display_units"]["usd"]["total_extra_ccost"])
+        self.assertEqual("known", page["value_authority"]["totals"]["total_token_mix_percent"])
+
+    def test_whole_tree_cost_components_include_children_continuation_and_compaction_once(self):
+        source = FakeSource(make_snapshot(running=True))
+        token = self.details.open("root", "live")
+
+        self.tick(self.service(source))
+        block = self.details.page(token, 0)["result"]["view"]["prompt_blocks"][0]
+
+        self.assertEqual(5, block["total_calls"])
+        self.assertEqual(D(".00723"), D(block["total_incoming_context_ccost"]))
+        self.assertEqual(D(".0098"), D(block["total_extra_ccost"]))
+        self.assertEqual(D(block["total_ccost"]),
+                         D(block["total_incoming_context_ccost"]) + D(block["total_extra_ccost"]))
+        self.assertEqual([82, 2, 2, 14], block["total_token_mix_percent"])
+
+    def test_component_qualification_is_independent_of_output_mix_and_unpriced_calls(self):
+        for kind in ("missing-output", "missing-input", "unpriced", "zero"):
+            with self.subTest(kind=kind):
+                snapshot = one_request(running=False)
+                request = snapshot.invocations[0]
+                if kind == "unpriced":
+                    request = replace(request, model=ModelRef("provider", "unpriced"))
+                else:
+                    usage = {"missing-output": TokenUsage(input=30, known_fields=("input", "cache_read", "cache_write")),
+                             "missing-input": TokenUsage(output=4, known_fields=("output",)),
+                             "zero": TokenUsage()}[kind]
+                    request = replace(request, tokens=usage)
+                self.details = SessionDetails(clock=lambda: self.clock)
+                token = self.details.open("root", "live")
+
+                self.tick(self.service(FakeSource(replace(snapshot, invocations=(request,)))))
+                page = self.details.page(token, 0)
+                block = page["result"]["view"]["prompt_blocks"][0]
+
+                if kind == "missing-output":
+                    self.assertEqual(D(".003"), D(block["total_incoming_context_ccost"]))
+                    self.assertEqual("known", page["value_authority"]["totals"]["total_incoming_context_ccost"])
+                    self.assertIsNone(block["total_extra_ccost"])
+                if kind in {"missing-output", "missing-input", "zero"}:
+                    self.assertIsNone(block["total_token_mix_percent"])
+                if kind == "missing-input":
+                    self.assertIsNone(block["total_incoming_context_ccost"])
+                    self.assertEqual(D(".0016"), D(block["total_extra_ccost"]))
+                if kind == "unpriced":
+                    self.assertIsNone(block["total_incoming_context_ccost"])
+                    self.assertIsNone(block["total_extra_ccost"])
+                    self.assertEqual([88, 0, 0, 12], block["total_token_mix_percent"])
+                if kind == "zero":
+                    self.assertEqual("known", page["value_authority"]["totals"]["total_extra_ccost"])
+                if kind in {"unpriced", "zero"}:
+                    self.assertEqual("0", block["display_units"]["credits"]["total_extra_ccost"])
+                    self.assertEqual("$0.00", block["display_units"]["usd"]["total_incoming_context_ccost"])
+
+    def test_unattributed_usage_keeps_tree_mix_and_extra_without_inventing_incoming_context(self):
+        snapshot = one_request(running=False,
+                               usage=TokenUsage(input=165, cache_read=165, cache_write=670, output=0))
+        service = self.service(FakeSource(snapshot))
+        bundle = replace(analyze_snapshot(snapshot, now_ms=self.now), prompts=(), compactions=())
+
+        totals = session_totals(bundle, service._load_comparison_catalog())
+
+        self.assertEqual(D(0), totals["total_incoming_context_ccost"])
+        self.assertEqual(D(".08515"), totals["total_extra_ccost"])
+        self.assertEqual((17, 16, 67, 0), totals["total_token_mix_percent"])
+
+    def test_one_unqualified_prompt_preserves_known_cost_subtotals_without_fabricating_mix(self):
+        snapshot = history(((1000, 2000), (3000, 4000), (5000, 6000)))
+        requests = (*snapshot.invocations[:2],
+                    replace(snapshot.invocations[2], tokens=TokenUsage(known_fields=())))
+        token = self.details.open("root", "live")
+
+        self.tick(self.service(FakeSource(replace(snapshot, invocations=requests))))
+        block = self.details.page(token, 0)["result"]["view"]["prompt_blocks"][0]
+
+        self.assertEqual(D(".006"), D(block["total_incoming_context_ccost"]))
+        self.assertEqual(D(".0032"), D(block["total_extra_ccost"]))
+        self.assertFalse(block["total_incoming_context_ccost_complete"])
+        self.assertFalse(block["total_extra_ccost_complete"])
+        self.assertIsNone(block["total_token_mix_percent"])
+
+    def test_known_reasoning_cost_survives_missing_output_without_qualifying_full_mix(self):
+        snapshot = one_request(running=False, usage=TokenUsage(input=30, reasoning=5,
+                               known_fields=("input", "cache_read", "cache_write")))
+        token = self.details.open("root", "live")
+
+        self.tick(self.service(FakeSource(snapshot)))
+        block = self.details.page(token, 0)["result"]["view"]["prompt_blocks"][0]
+
+        self.assertEqual(D(".003"), D(block["total_incoming_context_ccost"]))
+        self.assertEqual(D(".002"), D(block["total_extra_ccost"]))
+        self.assertFalse(block["total_extra_ccost_complete"])
+        self.assertIsNone(block["total_token_mix_percent"])
 
     def test_index_windows_match_existing_strict_same_timestamp_semantics(self):
         snapshot = make_snapshot()

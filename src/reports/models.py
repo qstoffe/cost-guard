@@ -154,6 +154,11 @@ class SessionPromptBlock:
     other_ccost: Decimal = Decimal(0)
     other_calls: int = 0
     cost_groups: tuple[SessionCostGroup, ...] = ()
+    total_incoming_context_ccost: Decimal | None = None
+    total_extra_ccost: Decimal | None = None
+    total_incoming_context_ccost_complete: bool = False
+    total_extra_ccost_complete: bool = False
+    total_token_mix_percent: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

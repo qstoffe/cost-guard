@@ -1,11 +1,14 @@
 """Catalog-first Mini publication without rich history, browser leases or IO."""
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
 
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.catalog_previews import CatalogPreviewFixture
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.test_watch_cards import ManualWorkers
 from src.application.live_projection import project_live
@@ -38,6 +41,52 @@ def observed_catalog(count, *, indexed=False):
 
 
 class MiniCatalogPreviewTests(unittest.TestCase):
+    def test_browser_fixture_warms_only_today_slice_even_at_utc_midnight(self):
+        midnight = int(datetime(2026, 11, 16, tzinfo=timezone.utc).timestamp() * 1000)
+        for elapsed in (0, 13, 259, 260, 15 * 60_000, 12 * 3_600_000):
+            now = midnight + elapsed
+            with self.subTest(elapsed=elapsed), tempfile.TemporaryDirectory() as directory:
+                fixture = CatalogPreviewFixture(Path(directory), now)
+                self.addCleanup(fixture.close)
+                cold = fixture.catalog.page(period="today")
+                previews = fixture.catalog.previews()
+                self.assertEqual(25, cold["total"])
+                self.assertEqual(0, fixture.source.load_count)
+                self.assertTrue(all(item.total_ccost is None for item in previews))
+
+                warm = fixture.warm()
+
+                self.assertEqual((25, 25), (warm["total"], warm["indexed"]))
+                self.assertEqual(25, fixture.source.load_count)
+                qualified = fixture.catalog.previews()
+                self.assertEqual([item.session_id for item in previews],
+                                 [item.session_id for item in qualified])
+                self.assertEqual([Decimal("0.014200")] * 5,
+                                 [item.total_ccost for item in qualified])
+                self.assertTrue(all(item.activity_ms is not None for item in qualified))
+                for index in range(3192, 3217):
+                    snapshot = fixture.source.snapshots[f"root-{index:04d}"]
+                    root = snapshot.root
+                    self.assertEqual((root,), snapshot.sessions)
+                    times = [root.created_at_ms, root.updated_at_ms]
+                    for message in snapshot.messages:
+                        times.append(message.created_at_ms)
+                        if message.completed_at_ms is not None:
+                            self.assertLessEqual(message.created_at_ms, message.completed_at_ms)
+                            times.append(message.completed_at_ms)
+                        for part in message.parts:
+                            self.assertIn(part, snapshot.parts)
+                    for part in snapshot.parts:
+                        self.assertLessEqual(part.created_at_ms, part.updated_at_ms)
+                        times.extend((part.created_at_ms, part.updated_at_ms))
+                    times.extend(event.created_at_ms for event in snapshot.events)
+                    for invocation in snapshot.invocations:
+                        self.assertLessEqual(invocation.created_at_ms, invocation.completed_at_ms)
+                        self.assertGreaterEqual(invocation.completed_at_ms, midnight)
+                        times.extend((invocation.created_at_ms, invocation.completed_at_ms))
+                    self.assertTrue(all(midnight - 3 <= at <= now for at in times))
+                    self.assertTrue(all(root.created_at_ms <= at <= root.updated_at_ms for at in times))
+
     def test_qualified_sessions_first_page_reaches_next_publication_with_history_blocked(self):
         source, catalog, observation = observed_catalog(3217, indexed=True)
         page = catalog.page(period="all", sort="activity")

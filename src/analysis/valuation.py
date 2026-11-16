@@ -34,6 +34,11 @@ class ComparisonCost:
         return self.known_ccost if self.complete else None
 
 
+def physical_usage_key(entry: TraceEntry) -> tuple | None:
+    return ((entry.source_instance, entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
+            if entry.invocation_id else None)
+
+
 def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
     """Retain independent calls within a tree; clone matching is cross-tree only.
 
@@ -43,10 +48,10 @@ def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
     """
     physical, legacy = {}, []
     for entry in entries:
-        if not entry.invocation_id:
+        key = physical_usage_key(entry)
+        if key is None:
             legacy.append(entry)
             continue
-        key = (entry.source_instance, entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
         previous = physical.get(key)
         if previous is not None:
             # Prefer complete telemetry over a partial capture; equally complete

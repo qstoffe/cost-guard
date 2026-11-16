@@ -8,7 +8,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   const block = data.result.view.prompt_blocks[0];
   block.rows = [block.rows[0]]; const row = block.rows[0];
   row.in_progress = true; row.event_id = 'live-prompt'; row.id = 'live-row';
-  const keys = ['total_calls','duration_ms','total_ccost','total_ictx_cost_text','total_extra_cost_text','total_mix_text'];
+  const keys = ['total_calls','duration_ms','total_ccost','total_incoming_context_ccost','total_extra_ccost','total_token_mix_percent'];
   data.value_authority = {scope:'source/session/epoch', totals:Object.fromEntries(keys.map(key=>[key,'pending'])),
     rows:{'live-prompt':'pending'}};
   row.token_mix_percent = null; row.display.token_mix_percent = 'running - consider ABORT';
@@ -22,15 +22,16 @@ module.exports = ({vm, context, Node, input, document}) => {
   assert.equal(view.footer.children[4].textContent, 'Loading…');
   row.token_mix_percent = [2,96,1,1]; row.display.token_mix_percent = '2/96/1/1';
   block.total_calls=42; block.duration_ms=9000; block.total_ccost='12';
-  block.total_ictx_cost_text='70%'; block.total_extra_cost_text='30%'; block.total_mix_text='2/96/1/1';
+  block.total_incoming_context_ccost='70'; block.total_extra_ccost='30'; block.total_token_mix_percent=[2,96,1,1];
   block.display.duration_ms='9s'; block.display.total_ccost='12';
-  block.display_units={credits:{total_ccost:'12'},usd:{total_ccost:'$1.20'}};
+  block.display_units={credits:{total_ccost:'12',total_incoming_context_ccost:'70',total_extra_ccost:'30'},
+    usd:{total_ccost:'$1.20',total_incoming_context_ccost:'$0.70',total_extra_ccost:'$0.30'}};
   data.value_authority.totals=Object.fromEntries(keys.map(key=>[key,'known']));
   data.value_authority.rows['live-prompt']='known';
   view.update(data);
   const cells=[...view.footer.children], targets=cells.map(cell=>cell.children[0]), before=cells.map(cell=>cell.textContent);
   assert.equal(mix(), '2/96/1/1');
-  assert.deepEqual(before.slice(3), ['12','42','9s','—','70%','30%','2/96/1/1']);
+  assert.deepEqual(before.slice(3), ['12','42','9s','—','70','30','2/96/1/1']);
   const raw=JSON.stringify(data);
   for (let poll=0;poll<5;poll++) view.update(data);
   assert.equal(JSON.stringify(data),raw);
@@ -41,7 +42,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   data.value_authority.rows['live-prompt']='pending';
   data.value_authority.totals=Object.fromEntries(keys.map(key=>[key,'pending']));
   Object.assign(block,{total_calls:null,duration_ms:null,total_ccost:'0',
-    total_ictx_cost_text:'N/A',total_extra_cost_text:'N/A',total_mix_text:'N/A'});
+    total_incoming_context_ccost:null,total_extra_ccost:null,total_token_mix_percent:null});
   block.display.duration_ms='N/A'; block.display.total_ccost='0';
   block.display_units={credits:{total_ccost:'0'},usd:{total_ccost:'$0.00'}};
    for(let poll=0;poll<5;poll++) {
@@ -55,6 +56,8 @@ module.exports = ({vm, context, Node, input, document}) => {
   assert.equal(document.body.children.at(-1),help);
   vm.runInContext('ReportView.setUnit("usd", stable.root)',context);
   assert.equal(cells[3].textContent,'$1.20');
+  assert.equal(cells[7].textContent,'$0.70');
+  assert.equal(cells[8].textContent,'$0.30');
   vm.runInContext('ReportView.setUnit("credits", stable.root)',context);
   document.activeElement=null;
   // Independent field qualification and authoritative decreases/zero are replacements.
@@ -74,7 +77,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   assert.equal(mix(),'Loading…','no cross-prompt reuse');
   data.value_authority.scope='other-source';view.update(data);
   assert.equal(cells[5].parentNode,null,'incompatible source clears even protected old cells');
-  assert.equal(view.footer.children[7].textContent,'Loading…','source switch clears prior ratio');
+  assert.notEqual(view.footer.children[7].textContent,'70','source switch clears prior component');
   view.invalidateValues();
   assert.equal(view.body.children.length,0);assert.equal(view.footer.children.length,0);
   assert.equal(view.values.mixes.size,0);assert.equal(view.values.totals.size,0);
