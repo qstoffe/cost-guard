@@ -144,6 +144,17 @@ const SessionsCatalog = (() => {
       if (this.userAction?.destination !== location.hash) this.userAction = null;
       this.interest(false); this.retire();
     }
+    wake(hint) {
+      if (typeof hint !== 'string' || !hint || hint === this.liveHint) return;
+      this.liveHint = hint;
+      if (!this.attached || document.hidden || this.offset !== 0 || this.terminal || this.operation?.failed) return;
+      const pending = this.wakePending; this.wakePending = true;
+      // Explicit navigation owns the request/cohort. Keep one trailing wake,
+      // never cancel or restart an action or an in-flight passive request.
+      if (pending || this.busy || this.operation || this.retryDelay) return;
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.poll(), 100);
+    }
     async poll() {
       if (!this.attached || this.busy || this.terminal || this.operation?.failed) return;
       clearTimeout(this.timer);
@@ -151,11 +162,13 @@ const SessionsCatalog = (() => {
       const generation = this.generation;
       await this.load();
       if (generation === this.generation && this.attached && !this.terminal && !this.operation?.failed)
-        this.timer = setTimeout(() => this.poll(), this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 : 5000));
+        this.timer = setTimeout(() => this.poll(), this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
+          this.wakePending && this.offset === 0 ? 100 : 5000));
     }
     async load() {
       if (this.busy || this.terminal) return;
       this.busy = true; this.rerun = false;
+      if (!this.operation) this.wakePending = false;
       this.pagerBusy();
       const generation = this.generation;
       const flight = {controller: new AbortController()}; this.flight = flight;
@@ -172,6 +185,7 @@ const SessionsCatalog = (() => {
       try {
         const request = () => Promise.race([this.api('/api/sessions', {token: this.token, offset: this.offset,
           epoch: this.epoch, sort: this.sort, direction: this.direction, period: this.period,
+          passive: !this.operation && this.offset === 0,
           navigation: this.operation?.navigation || null, applied: this.appliedNavigation || null,
           cancelled: this.cancelledNavigation || null}, flight.controller.signal), deadline]);
         let data;
@@ -196,7 +210,7 @@ const SessionsCatalog = (() => {
             epoch: this.epoch, sort: this.sort, direction: this.direction, period: this.period}).catch(() => {});
           return;
         }
-        if (data.period !== this.period || !data.pending_sort &&
+        if (data.period !== this.period || (!data.pending_sort || data.passive) &&
           (data.sort !== this.sort || data.direction !== this.direction || data.offset !== this.offset)) {
           throw new Error('catalog_response_mismatch');
         }
@@ -218,7 +232,10 @@ const SessionsCatalog = (() => {
           if (terminal) this.failNavigation(error.message);
           else this.waitNavigation(flight.timedOut ? 'request_timeout' : error.message);
         }
-        else this.setStatus();
+        else {
+          this.retryDelay = Math.min(30000, (this.retryDelay || 2500) * 2);
+          this.setStatus();
+        }
         if (error.message === 'catalog_expired') {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
@@ -329,7 +346,10 @@ const SessionsCatalog = (() => {
       }
       // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
-      if (this.pendingNavigation(data) || data.pending_sort) {
+      const provisional = !this.operation && this.offset === 0 && data.offset === 0 && data.passive &&
+        data.state === 'observed' && data.order_state === 'provisional' &&
+        data.period === this.period && data.sort === this.sort && data.direction === this.direction;
+      if (this.pendingNavigation(data) || data.pending_sort && !provisional) {
         if (!this.operation) this.setStatus();
         // A pending page is not applied: keep the last qualified rows with their
         // actual pager/order. Only cold entry has no valid page to retain.
@@ -441,8 +461,12 @@ const SessionsCatalog = (() => {
       this.costs ||= new ReportView.CostDisplay();
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(values.map(row => row.session_id));
-      const keepOrder = protectedNode(this.body);
-      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id) && !protectedNode(row)) row.remove();
+      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id)) {
+        // A genuine backend eviction is not a focus-pinned extra table row.
+        const removedFocus = row.contains(document.activeElement);
+        ContextHelp.dismiss?.(row); row.remove();
+        if (removedFocus) this.pan.focus?.({preventScroll: true});
+      }
       values.forEach((value, index) => {
         value = this.costs.select(value, [this.data?.source?.identity, this.data?.source?.generation, value.session_id]);
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
@@ -495,8 +519,26 @@ const SessionsCatalog = (() => {
           else node.removeAttribute('aria-busy');
         });
         ContextHelp.refresh(row);
-        if (!keepOrder && this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
-        else if (!row.parentNode) this.body.append(row);
+        if (this.body.children[index] !== row) {
+          const before = this.body.children[index] || null;
+          if (row.parentNode && this.body.moveBefore) this.body.moveBefore(row, before);
+          else {
+            // Older engines can preserve a protected target by moving the
+            // intervening nodes around it rather than detaching that target.
+            while (row.parentNode === this.body && protectedNode(row) &&
+              this.body.children[index] !== row && !protectedNode(this.body.children[index])) {
+              this.body.insertBefore(this.body.children[index], row.nextSibling);
+            }
+            if (this.body.children[index] !== row) {
+              const active = document.activeElement, selection = window.getSelection?.();
+              const range = selection && !selection.isCollapsed ?
+                [selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset] : null;
+              this.body.insertBefore(row, this.body.children[index] || null);
+              if (active && this.body.contains(active) && document.activeElement !== active) active.focus?.({preventScroll: true});
+              if (range && this.body.contains(range[0]) && this.body.contains(range[2])) selection.setBaseAndExtent?.(...range);
+            }
+          }
+        }
       });
     }
   }

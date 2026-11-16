@@ -197,5 +197,6 @@ module.exports = async ({vm, context, Node, timers}) => {
     view.update(progress(50,23));
     assert.equal(view.operation.failed,true,'90s without admitted progress ends the explicit action truthfully');
     assert.match(view.status.textContent,/Could not load\. Reopen Sessions to try again\./);
-    view.detach();
+     view.detach();
+     await require('./sessions_wake_vm.cjs')({vm, context, Node, timers});
 };

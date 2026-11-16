@@ -47,9 +47,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('document.getElementById("context-help")?.matches(":popover-open")');
   assert.equal(await evaluate('document.getElementById("context-help").textContent'),expectedHelp);
   checks.push('page-two running overflow; one activity-only star; source metadata/part churn keeps start and order; exact focus/touch tooltip');
+  await evaluate('window.evictedRunning=current.catalog.body.rows[0];evictedRunning.activity.focus({preventScroll:true})');
   await fixture('running-finish');
-  await evaluate('current.catalog.body.rows[0].activity.blur();current.catalog.load()');
+  await evaluate('current.catalog.load()');
   await until('!current.catalog.body.querySelector(\'[data-id="root-0025"]\')');
+  assert.equal(await evaluate('evictedRunning.isConnected'),false);
+  assert.equal(await evaluate('document.activeElement===current.catalog.pan'),true);
+  assert.equal(await evaluate('current.catalog.body.rows.length'),25);
+  assert.deepEqual(await ids(),await evaluate('current.catalog.data.view.session_usage.map(row=>row.session_id)'));
+  assert.equal(await evaluate('document.getElementById("context-help").hidden'),true);
   await route('activity',-1);
   await evaluate('current.catalog.next.click()');
   await until('current.catalog.data.offset===25 && !current.catalog.operation && !current.catalog.busy');

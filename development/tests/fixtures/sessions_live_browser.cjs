@@ -2,8 +2,11 @@
 const assert = require('node:assert/strict');
 module.exports = async function sessionsLive({evaluate, until, fixture, command}) {
   const checks = [], layouts = [];
-  await fixture('live-cold');
   await evaluate("location.hash='#/sessions'");
+  await until('current?.catalog?.data?.total===120 && !current.catalog.operation');
+  // Introduce a cold row into an applied page, not into a pending initial
+  // navigation (whose eventual application deliberately restores focus).
+  await fixture('live-cold');
   await until('current?.catalog?.data?.view.session_usage[0]?.session_id === "root-0121"');
   const row = 'document.querySelector("tr[data-id=root-0121]")';
   assert.equal(await evaluate(`${row}.querySelector('a').getAttribute('href')`),'#/sessions/root-0121');
@@ -26,8 +29,12 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
 
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
-  await until('document.querySelector("#context-help")?.textContent.includes("other-provider/gpt-test")');
-  assert.match(await evaluate('document.querySelector("#context-help").textContent'),/github-copilot\/gpt-test[\s\S]*other-provider\/gpt-test[\s\S]*Observed so far/);
+  await until('document.querySelector("#context-help")?.textContent.includes("other-provider/GPT Test")');
+  assert.equal(await evaluate('document.querySelector("#context-help").textContent'),
+    'GPT Test\n\nMain models\n• github-copilot/GPT Test · default (unknown)\n• other-provider/GPT Test · default (unknown)');
+  assert.deepEqual(await evaluate(`${row}.value.contributor_models`),['github-copilot/gpt-test','other-provider/gpt-test']);
+  assert.equal(await evaluate(`${row}.value.contributor_models_complete`),false);
+  assert.match(await evaluate(`${row}.value.model_help`),/Observed so far/);
   await evaluate(`window.keptModel=${row}.cells[2].firstChild; window.scrollTo(0,100);
     const range=document.createRange();range.selectNodeContents(keptLink.lastChild);getSelection().removeAllRanges();getSelection().addRange(range);
     window.selectedText=getSelection().toString();window.oldScroll=scrollY;`);
@@ -37,6 +44,8 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   assert.equal(await evaluate('getSelection().toString()===selectedText && Math.abs(scrollY-oldScroll)<2'),true);
   assert.equal(await evaluate('document.querySelector("#context-help").matches(":popover-open")'),true);
   assert.doesNotMatch(await evaluate('document.querySelector("#context-help").textContent'),/Observed so far/);
+  await until(`${row}.value.contributor_models_complete===true`);
+  assert.doesNotMatch(await evaluate(`${row}.value.model_help`),/Observed so far/);
   const ended=await evaluate(`[...${row}.cells].slice(3).map(cell=>cell.textContent)`);
   await until(`current.catalog.busy === false`);
   await evaluate('current.catalog.load()');
@@ -53,7 +62,7 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[bounds]});
   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   await until('document.querySelector("#context-help")?.matches(":popover-open")');
-  assert.equal(await evaluate('document.querySelectorAll("[title],td .help-trigger").length'),0);
+  assert.equal(await evaluate('current.catalog.root.querySelectorAll("[title],td .help-trigger").length'),0);
   checks.push('shared text-target mouse hover/leave, touch pin and Escape; no native or duplicate help');
   await fixture('fail');
   await until('current.catalog.data.state === "source_unavailable"');

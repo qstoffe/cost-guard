@@ -144,6 +144,123 @@ class SessionPeriodTests(unittest.TestCase):
         self.assertIsNone(rows["root-0003"]["last_activity_ms"])
         self.assertEqual(rows["root-0005"]["last_activity_ms"], self.now - DAY)
 
+    def test_passive_arrivals_keep_requested_order_and_qualified_running_priority(self):
+        source, catalog = self.catalog([self.now - 1000] * 26)
+        self.qualify(catalog)
+        first = catalog.page(sort="ccost", direction=1)
+        snapshot = make_root_snapshot(26, 1, month_start_ms=self.now - 26 * 60_000 - 1000)
+        source.snapshots[snapshot.root.session_id] = snapshot
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        running = source.snapshots["root-0025"].root
+        catalog.observe_prompts(((running, True, 0, "real-prompt", self.now - 100),))
+
+        latest = catalog_page(catalog, dict(token=first["token"], passive=True))
+        self.assertTrue(latest["pending_sort"])
+        self.assertEqual(latest["view"]["session_usage"][0]["session_id"], "root-0025")
+        arrival = latest["view"]["session_usage"][1]
+        self.assertEqual((arrival["session_id"], arrival["title"], arrival["metric_state"]),
+                         ("root-0026", snapshot.root.title, "pending"))
+        self.assertIsNone(arrival["last_activity_ms"])
+        frozen = catalog.page(token=first["token"], sort="ccost", direction=1,
+                              offset=25, epoch=first["epoch"])
+        self.assertEqual(frozen["total"], 26)
+        self.assertEqual(frozen["view"]["session_usage"][0]["session_id"], "root-0025")
+        for sort in SORTS:
+            for direction in (-1, 1):
+                page = catalog.page(token=first["token"], sort=sort, direction=direction, passive=True)
+                self.assertEqual((page["sort"], page["direction"], page["offset"]), (sort, direction, 0))
+                ids = [row["session_id"] for row in page["view"]["session_usage"]]
+                self.assertEqual(ids[0], "root-0025")
+                self.assertEqual(len(ids), 25)
+                if (sort, direction) != ("activity", -1):
+                    self.assertNotIn("root-0026", ids)
+        self.assertEqual(source.load_count, 0, "passive pages and hints never acquire source history")
+
+    def test_live_hint_deduplicates_publications_not_source_or_prompt_changes(self):
+        source, catalog = self.catalog([self.now - 1000])
+        hint = catalog.live_hint()
+        for _ in range(10):
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.assertEqual(catalog.live_hint(), hint)
+        root = source.snapshots["root-0000"].root
+        catalog.observe_prompts(((root, True, 0, "", None),))
+        self.assertEqual(catalog.live_hint(), hint, "active without a prompt is not running proof")
+        catalog.observe_prompts(((root, True, 0, "prompt", self.now - 100),))
+        running_hint = catalog.live_hint()
+        self.assertNotEqual(running_hint, hint)
+        self.clock += 1
+        catalog.observe_prompts(((root, True, 0, "prompt", self.now - 100),))
+        self.assertEqual(catalog.live_hint(), running_hint, "capture age is not a new prompt")
+        catalog.observe_prompts(())
+        self.assertNotEqual(catalog.live_hint(), running_hint)
+        hint = catalog.live_hint()
+        self.qualify(catalog)
+        catalog.generation += 1  # Pricing/scalar work is deliberately not a wake source.
+        self.assertEqual(catalog.live_hint(), hint)
+        source.snapshots["root-0000"] = replace(source.snapshots["root-0000"], source_revision="changed")
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.assertNotEqual(catalog.live_hint(), hint)
+        hint = catalog.live_hint()
+        source.observation_epoch = "replacement-native-epoch"
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.assertNotEqual(catalog.live_hint(), hint)
+        self.assertNotEqual(SessionCatalog().live_hint(), catalog.live_hint(), "owner replacement cannot alias hints")
+
+    def test_passive_request_cannot_bypass_navigation_or_request_validation(self):
+        _, catalog = self.catalog([self.now - 1000] * 26)
+        for value in (dict(passive=1), dict(passive=True, navigation=1), dict(passive=True, offset=25)):
+            with self.assertRaisesRegex(ValueError, "invalid_request"):
+                catalog_page(catalog, value)
+        first = catalog.page(sort="ccost", navigation=1)
+        held = catalog.page(token=first["token"], sort="ccost", passive=True)
+        self.assertFalse(held["passive"], "unacknowledged navigation still owns the lease")
+        self.assertTrue(held["pending_sort"])
+
+    def test_unresolved_issued_position_is_provisional_not_sort_or_membership_proof(self):
+        source, catalog = self.catalog([self.now - 1000] * 26)
+        self.qualify(catalog)
+        first = catalog.page(sort="ccost", direction=1)
+        original = [row["session_id"] for row in first["view"]["session_usage"]]
+        source.snapshots["root-0000"] = replace(source.snapshots["root-0000"], source_revision="hot")
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+        held = catalog.page(token=first["token"], sort="ccost", direction=1, passive=True)
+
+        self.assertEqual([row["session_id"] for row in held["view"]["session_usage"]], original)
+        self.assertEqual((held["indexed"], held["total"], held["order_state"]), (25, 26, "provisional"))
+        self.assertEqual(held["view"]["session_usage"][0]["metric_states"]["ccost"], "retained")
+        self.assertNotIn("snapshot_revision", held["view"]["session_usage"][0])
+        catalog.rows["root-0000"] = replace(catalog.rows["root-0000"], ccost=Decimal(99))
+        catalog.valid["root-0000"] = catalog.revisions["root-0000"], self.clock
+        catalog.activity_valid["root-0000"] = catalog.revisions["root-0000"]
+        ready = catalog.page(token=first["token"], sort="ccost", direction=1, passive=True)
+        self.assertFalse(ready["pending_sort"])
+        self.assertNotIn("root-0000", [row["session_id"] for row in ready["view"]["session_usage"]])
+        self.assertEqual(source.load_count, 0)
+
+    def test_old_position_never_overrides_retraction_exclusion_or_source_authority(self):
+        for change in ("retraction", "period", "source", "provenance"):
+            with self.subTest(change=change):
+                source, catalog = self.catalog([self.now - 1000] * 26)
+                self.qualify(catalog)
+                first = catalog.page(sort="ccost", direction=1)
+                snapshot = source.snapshots["root-0000"]
+                if change == "retraction":
+                    del source.snapshots["root-0000"]
+                else:
+                    if change == "source":
+                        source.observation_epoch = "new-source"
+                    if change == "provenance":
+                        root = replace(snapshot.root, provenance=replace(snapshot.root.provenance, source_instance="new"))
+                        snapshot = replace(snapshot, root=root, sessions=(root,))
+                    source.snapshots["root-0000"] = replace(snapshot, source_revision="changed")
+                catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                if change == "period":
+                    catalog.rows["root-0000"] = replace(catalog.rows["root-0000"], last_activity_ms=self.now - 10 * DAY)
+                    catalog.activity_valid["root-0000"] = catalog.revisions["root-0000"]
+                page = catalog.page(token=first["token"], sort="ccost", direction=1, passive=True)
+                self.assertNotIn("root-0000", [row["session_id"] for row in page["view"]["session_usage"]])
+
     def test_stockholm_dst_day_month_year_and_exact_calendar_boundaries(self):
         for date, hours in (("2026-03-29", 23), ("2026-10-25", 25)):
             day = local_date_range(date, "Europe/Stockholm")

@@ -621,6 +621,7 @@ async function connect() {
         liveValue = value?.view || !liveValue?.view ? value : {...value,
           view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
         miniWatch?.update(liveValue);
+        current?.catalog?.wake(value?.catalog_hint);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
             if (current?.active === job.id && !ReportLoading.sections.includes(current.section)) {

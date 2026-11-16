@@ -27,10 +27,14 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.equal(first.rows[0].session_id,'root-0000');
   assert.equal(first.rows[0].metric_states.ccost,'snapshot');
   assert.equal((await fixture('catalog-navigation-observe')).arrivals_qualified,0);
-  // Existing focused help exposes snapshot semantics outside the simple banner.
+  // Snapshot truth is structured evidence, not an obsolete technical tooltip.
   await evaluate('current.catalog.body.rows[0].cells[3].querySelector("span").focus()');
-  await until('document.getElementById("context-help")?.textContent.includes("Navigation snapshot")');
+  await until('document.getElementById("context-help")?.textContent==="No model usage recorded\\n\\nDuration: 0s"');
   await load(); // Acknowledge actual application; no second poller.
+  assert.equal(await evaluate('current.catalog.body.children.length'),25);
+  assert.deepEqual(await evaluate('[...current.catalog.body.children].map(row=>row.dataset.id)'),
+    await evaluate('current.catalog.data.view.session_usage.map(row=>row.session_id)'));
+  assert.equal(await evaluate('document.activeElement===current.catalog.body.rows[0].cells[3].querySelector("span")'),true);
   await fixture('catalog-navigation-resume');
   await until('current.catalog.data.total===326 && !current.catalog.busy',60000);
   assert.equal(await evaluate('current.catalog.status.hidden'),true);
