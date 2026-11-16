@@ -79,7 +79,9 @@ async function main() {
   assert.equal(quotaCard.children.length,2);
   assert.equal(view.body.children.length, 100);
   assert.equal(view.body.children[0].children.length, 10);
-  assert.match(view.root.textContent, /Show all sessions/);
+  assert.equal(view.back.textContent, '↩ Back to Show All Sessions');
+  assert.equal(view.back.getAttribute('aria-label'), 'Back to Show All Sessions');
+  assert.equal(view.back.href, '#/sessions');
   assert.match(view.root.textContent, /Session ID: root-0000/);
   assert.match(view.footer.textContent, /Complete session/);
   assert.equal(view.footer.children.length, 10);
