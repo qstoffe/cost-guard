@@ -69,8 +69,7 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
     assert.equal(await evaluate(id,`document.querySelectorAll('.help-cue').length`),0,'no standalone question-mark help icons');
   }
   async function matrix() {
-    await evaluate(owner,`document.querySelector('.watch-earlier').open=true`);
-    const selectors=[[owner,'.watch-active th:nth-child(3) button'],[owner,'.watch-history th:first-child button'],
+    const selectors=[[owner,'.watch-active th:nth-child(3) button'],[owner,'.watch-active th:first-child button'],
       [mini,'.mini-prompts > table th:first-child button'],[mini,'.mini-prompts > table th:nth-child(3) button']];
     for (const theme of ['classic','light','dark']) for (const [width,zoom] of [[1280,1],[360,1.5]]) {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},owner);
@@ -82,10 +81,10 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
       for (const [id,selector] of selectors) layouts.push({case:'text-only-header',theme,width,zoom,document:id===owner?'watch':'mini',...await target(id,selector)});
       await audit(owner);await audit(mini);
     }
-    await evaluate(owner,`document.documentElement.style.zoom='';document.querySelector('.watch-earlier').open=false;miniWatch.window.resizeTo(560,400)`,true);
+    await evaluate(owner,`document.documentElement.style.zoom='';miniWatch.window.resizeTo(560,400)`,true);
     await evaluate(mini,`document.documentElement.style.zoom='';document.querySelector('.mini-prompts').scrollTop=0`);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
-    checks.push('Both full Watch and Mini Running/Earlier: text-sized hitboxes, no underline/help cursor/text/cell highlight in padding, bounded text-to-padding exit, panel transfer, re-entry and rapid document exit; Classic/Web light/dark, narrow and 150% zoom');
+    checks.push('Current Full Watch and Mini headers: text-sized hitboxes, no underline/help cursor/text/cell highlight in padding, bounded text-to-padding exit, panel transfer, re-entry and rapid document exit; Classic/Web light/dark, narrow and 150% zoom');
   }
   return {matrix,target,audit};
 };

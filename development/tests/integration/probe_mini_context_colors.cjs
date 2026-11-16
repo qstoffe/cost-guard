@@ -81,14 +81,18 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
         {type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27},pip);};
       const dismiss=async()=>{await key('Escape');await evaluate('colorRow.cells[4].blur()');
         await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pip);};
-      const point=await evaluate(`(()=>{const r=colorRow.cells[4].getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
       await dismiss();await key('Tab');await evaluate('colorRow.cells[3].firstChild.focus()');await key('Tab');
       assert.equal(await evaluate(`${panel}?.matches(':popover-open')`),true);
       assert.equal(await evaluate(`${panel}.textContent`),help);
       await dismiss();
+      // Native Tab may scroll the table. Aim the original single arrival at
+      // the current cell, not coordinates captured before keyboard traversal.
+      const point=await evaluate(`(()=>{const n=colorRow.cells[4];n.scrollIntoView({block:'nearest'});
+        const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
       await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pip);
       await evaluate('new Promise(resolve=>setTimeout(resolve,700))');
-      assert.equal(await evaluate(`${panel}.textContent`),help);assert.equal(await evaluate(`${panel}.matches(':popover-open')`),true);
+      assert.equal(await evaluate(`${panel}.textContent`),help);
+      assert.equal(await evaluate(`${panel}.matches(':popover-open')`),true,'current native cell must own delayed hover');
       await dismiss();
       for(const type of ['touchStart','touchEnd'])await command('Input.dispatchTouchEvent',
         {type,touchPoints:type==='touchStart'?[{...point,id:1,radiusX:1,radiusY:1,force:1}]:[]},pip);
