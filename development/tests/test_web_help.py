@@ -9,6 +9,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class WebHelpTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node is optional VM tooling")
+    def test_native_touch_pacing_keeps_single_input_and_waits_only_after_successful_end(self):
+        result = subprocess.run(
+            [shutil.which("node"), "development/tests/integration/native_touch_test.cjs"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=15,
+        )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node is optional VM tooling")
     def test_shared_help_handles_focus_pointer_escape_touch_updates_and_documents(self):
         result = subprocess.run(
             [shutil.which("node"), "development/tests/integration/web_help.cjs"],

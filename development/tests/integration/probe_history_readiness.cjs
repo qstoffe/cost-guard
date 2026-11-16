@@ -18,7 +18,7 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
     assert.equal(await evaluate(`[...miniWatch.view.promptRows.keys()].filter(id=>id.startsWith('proof-')).length`),0);
     assert.doesNotMatch(await ax(sessionId),/Loading earlier sessions|Latest sample/);
     for (const session of [pip]) {
-      const names = await ax(session); assert.match(names,/Loading earlier sessions…/);
+      const names = await ax(session); assert.doesNotMatch(names,/Loading earlier sessions|Latest sample/);
       assert.doesNotMatch(names,/checked|4\/12/);
       assert.doesNotMatch(names,/Latest sample/);
     }
@@ -40,5 +40,5 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
     'background proof publications never resize the popup');
   await fixture('proof-switch'); await until(`liveValue.view.history_scope==='other-source'`); await loading();
   await close();
-  checks.push('Actual Watch/Mini DOM and accessibility: no Web history, Mini loading without counters/four fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
+  checks.push('Actual Watch/Mini DOM and accessibility: no Web history, quiet Mini loading/four fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
 };

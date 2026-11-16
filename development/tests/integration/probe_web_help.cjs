@@ -29,10 +29,11 @@ async function main() {
       else if (value.method==='Runtime.exceptionThrown') errors.push(value.params.exceptionDetails.text);
     }
   });
-  const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{
+   const settleTouch=process.env.COST_GUARD_UNPACED_TOUCH!=='1';
+   const command=require('./native_touch.cjs').nativeTouch((method,params={},sessionId)=>new Promise((resolve,reject)=>{
     const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout: '+method));},15000);
     pending.set(id,{resolve,reject,timer});child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');
-  });
+   }),settleTouch);
   const evaluate=async (sessionId,expression,userGesture=false)=>{
     const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture},sessionId);
     if(value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails)); return value.result.value;
@@ -67,17 +68,25 @@ async function main() {
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===${scope==='--effort-defaults'?5:2}`);
     await evaluate(owner,`location.hash='#/watch'`);
       await until(owner,`current?.watch?.cards.size>0`);
-      if(scope==='--promotion-help'||scope==='--promotion-isolation') {
-        try {
+       if(scope==='--promotion-help'||scope==='--promotion-isolation') {
+         let promotionFailure;
+         try {
           await require('./probe_promotion_help.cjs')({command,owner,checks,layouts,trace:true,
             isolate:scope==='--promotion-isolation',stableTouch:['stable-touch','touch'].includes(replay),
             input:['mouse','touch'].includes(replay)?replay:'mixed',
             run:expression=>evaluate(owner,expression),ready:expression=>until(owner,expression)});
-        } finally {
-          await evaluate(owner,`connectionStatus('Authentication expired. Use a fresh launcher link.',{kind:'authorization_required',terminal:true,writable:false})`);
-          assert.equal(await evaluate(owner,`!document.getElementById('host-state').hidden && document.getElementById('host-state').textContent.includes('Authentication expired')`),true);
-          layouts.push({route:'terminal-authorization',actionable:true});
-        }
+         } catch(error) { promotionFailure=error; }
+         try {
+           await evaluate(owner,`connectionStatus('Authentication expired. Use a fresh launcher link.',{kind:'authorization_required',terminal:true,writable:false})`);
+           assert.equal(await evaluate(owner,`!document.getElementById('host-state').hidden &&
+             document.getElementById('host-message').textContent==='Reopen Cost Guard from the launcher to reconnect.' &&
+             document.getElementById('host-state').dataset.kind==='authorization_required'`),true);
+           layouts.push({route:'terminal-authorization',actionable:true});
+         } catch(error) {
+           if(!promotionFailure)throw error;
+           layouts.push({route:'terminal-authorization',outcome:'FAIL',reason:error.message});
+         }
+         if(promotionFailure)throw promotionFailure;
         assert.deepEqual(errors,[]);
         evidence={outcome:'PASS',browser:version.product,scope,checks,layouts,errors,
           limitations:['Canonical synthetic Models fixture; headless native mixed input, not physical desktop proof.']};
@@ -356,8 +365,9 @@ async function main() {
       probeCase:error.probeCase,observation:error.observation};
     evidence={outcome:'FAIL',reason:error.message,diagnostic,checks,layouts};
     throw error;
-  } finally {
-    clearTimeout(deadline);
+   } finally {
+     clearTimeout(deadline);
+     evidence.touchSettleMs=settleTouch?250:0;
     await fs.writeFile(output,JSON.stringify(evidence,null,2));
     await command('Browser.close').catch(()=>{});if(child.exitCode===null)child.kill();
     server.stdin.end();await new Promise(resolve=>server.once('exit',resolve));

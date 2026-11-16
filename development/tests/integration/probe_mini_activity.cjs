@@ -14,7 +14,8 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await until(`miniWatch.view.promptRows.has('earlier-0')`);
   await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['—','Unknown finish time'],['23:47','2026-11-05 23:47'],['00:08','2026-11-06 00:08']]);
+    ['—','Unknown finish time\nStarted: 1970-01-01 01:00\nCompletion unverified.'],
+    ['23:47','2026-11-05 23:47'],['00:08','2026-11-06 00:08']]);
   assert.ok((await values()).every(row=>row.columns===5 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Activity','Session','CCost','Total','Ctx']);

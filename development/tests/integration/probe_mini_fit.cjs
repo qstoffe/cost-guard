@@ -29,12 +29,14 @@ async function main() {
     const value=JSON.parse(buffer.slice(0,index));buffer=buffer.slice(index+1);const item=pending.get(value.id);
     if(item){clearTimeout(item.timer);pending.delete(value.id);value.error?item.reject(new Error(JSON.stringify(value.error))):item.resolve(value.result);}
   }});
-   const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++sequence;
+    const settleTouch=process.env.COST_GUARD_UNPACED_TOUCH!=='1';
+    const command=require('./native_touch.cjs').nativeTouch((method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++sequence;
      if(browserExit){reject(new Error('Browser exited: '+JSON.stringify(browserExit)));return;}
     const timer=setTimeout(()=>reject(new Error('CDP timeout '+method)),15000);pending.set(id,{resolve,reject,timer});
-    child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');});
+     child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');}),settleTouch);
   const deadline=setTimeout(()=>{child.kill();server.kill();},240000);
-    const evidence={outcome:'FAIL',phase:'browser-start',scale,zoom,scrollbars,layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
+     const evidence={outcome:'FAIL',phase:'browser-start',scale,zoom,scrollbars,touchSettleMs:settleTouch?250:0,
+       layouts:[],checks:[],limitations:['Headless native PiP, not physical desktop/work-area proof.']};
   try {
     evidence.browser=await command('Browser.getVersion');
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
@@ -205,7 +207,8 @@ async function main() {
     assert.deepEqual(await evaluate('({local:localStorage.length,session:sessionStorage.length})'),{local:0,session:0});
     evidence.checks.push('Pointer/Enter/Space/touch bounded height-only Fit, immediate help dismissal, both sizing modes, narrow horizontal panning, remembered manual-size reopen, one SSE/no geometry storage');
     evidence.outcome='PASS';
-   }catch(error){evidence.error=String(error.stack||error);evidence.diagnostic={browserExit,browserErrors};throw error;}
+    }catch(error){evidence.error=String(error.stack||error);evidence.diagnostic={
+      browserExit,browserErrors,probeCase:error.probeCase,observation:error.observation};throw error;}
   finally{await fs.writeFile(output,JSON.stringify(evidence,null,2));clearTimeout(deadline);try{await command('Browser.close');}catch(_){}
     child.kill();server.stdin.end();for(const item of pending.values())clearTimeout(item.timer);}
 }
