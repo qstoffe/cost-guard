@@ -107,8 +107,10 @@ jobs:
           if summary.get("outcome") != "PASS":
               raise SystemExit("Calm UI evidence did not pass")
           PY
-      - name: Sessions detail return filters and native browser history
-        if: ${{ !cancelled() }}
+      # Ordinary smoke retains rendered session history and browser Back/Forward.
+      # Deep return/filter/arrival journeys remain available in manual Full.
+      - name: Sessions detail return filters and arrival journeys (manual Full)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
         env:
           COST_GUARD_CI_BROWSER: '1'
         run: |

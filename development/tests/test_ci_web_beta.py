@@ -66,6 +66,9 @@ class CiEvidenceTests(unittest.TestCase):
                 ('src/web/assets/app.css', False), ('src/web/settings.py', False),
                 ('development/tests/test_ai_stats_rates.py', False),
                 ('development/tests/fixtures/calm_ui_browser.cjs', False),
+                ('development/tests/fixtures/sessions_return_browser.cjs', False),
+                ('development/tests/fixtures/sessions_arrivals_browser.cjs', False),
+                ('development/tests/fixtures/mini_sessions.cjs', False),
                 ('development/journal/test-health.md', False)):
             with self.subTest(path=path):
                 selected = False
@@ -73,6 +76,32 @@ class CiEvidenceTests(unittest.TestCase):
                     if fnmatch.fnmatchcase(path, pattern.lstrip('!')):
                         selected = not pattern.startswith('!')
                 self.assertEqual(expected, selected)
+
+    def test_deep_sessions_workflow_keeps_both_journeys_on_manual_full(self):
+        workflow = (ci_web_beta.ROOT / '.github/workflows/web-beta.yml').read_text()
+        steps = re.split(r'(?m)^      - name: ', workflow)
+        sessions = [step for step in steps if 'for mode in ("sessions-return", "fast-arrivals")' in step]
+        self.assertEqual(1, len(sessions))
+        step = sessions[0]
+        self.assertRegex(step, r"if: \$\{\{ !cancelled\(\) && github.event_name == 'workflow_dispatch' \}\}")
+        # Execute the actual embedded Python with synthetic subprocess/browser
+        # boundaries: both retained modes run and the first failure stops delivery.
+        script = step.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        script = '\n'.join(line[10:] for line in script.splitlines())
+        binding = SimpleNamespace(sync_playwright=lambda: contextlib.nullcontext(
+            SimpleNamespace(chromium=SimpleNamespace(executable_path='chromium'))))
+        for failed in (False, True):
+            with self.subTest(failed=failed), \
+                    patch.dict('sys.modules', {'playwright.sync_api': binding}), \
+                    patch('subprocess.run', side_effect=RuntimeError('synthetic') if failed else None) as run:
+                if failed:
+                    with self.assertRaisesRegex(RuntimeError, 'synthetic'):
+                        exec(compile(script, 'sessions-workflow', 'exec'), {})
+                else:
+                    exec(compile(script, 'sessions-workflow', 'exec'), {})
+            self.assertEqual(['--sessions-return'] if failed else ['--sessions-return', '--fast-arrivals'],
+                             [call.args[0][-1] for call in run.call_args_list])
+            self.assertTrue(all(call.kwargs['check'] for call in run.call_args_list))
 
     def test_quick_foundation_and_full_integration_are_disjoint_without_lost_registration(self):
         full = run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS
