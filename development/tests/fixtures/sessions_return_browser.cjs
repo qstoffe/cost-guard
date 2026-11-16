@@ -6,13 +6,17 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
     current.catalog.data.offset===${offset} && !current.catalog.busy && !current.catalog.operation`);
   const detail = () => until('!!current?.detail?.data && !current.detail.busy');
   const backLink = () => evaluate('current.detail.back.getAttribute("href")');
-  await fixture('period-source');
-  await evaluate(`window.returnRequests=[];window.returnFetch=fetch;
+  const recordRequests = `window.returnRequests=[];window.returnFetch=fetch;
     window.fetch=(url,options)=>{if(url==='/api/sessions' && options?.body){
       const value=JSON.parse(options.body);if(!value.action)returnRequests.push(value);}
-      return returnFetch(url,options);};location.hash='#/sessions'`);
+      return returnFetch(url,options);};`;
+  await fixture('period-source');
+  await evaluate(recordRequests + `location.hash='#/sessions'`);
   await catalog('today');
-  // Actual period/sort/page controls and anchors, including a keyboard activation.
+  // Seed scalar keys using the existing fixture command. This is navigation
+  // evidence, not a 5,000-root cold-index throughput benchmark.
+  await fixture('catalog-index');
+  // Actual period/sort/page controls and anchors; retain existing keyboard help.
   for (const [period, total, sort, direction, offset] of [
     ['today',30,'activity',-1,0], ['30-days',120,'activity',-1,0],
     ['all',5000,'name',1,0], ['month',70,'name',-1,0], ['7-days',70,'name',-1,25]
@@ -32,9 +36,18 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
     const previousLength = await evaluate('history.length');
     const sessionHash = await evaluate(`current.catalog.body.querySelector('a.session-name').getAttribute('href')`);
     if (period === 'all') {
-      await evaluate(`current.catalog.body.querySelector('a.session-name').focus()`);
-      await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
+      await command('Emulation.setFocusEmulationEnabled', {enabled:true});
+      await evaluate(`current.catalog.body.querySelector('a.session-name').focus();
+        window.returnClick=null;document.addEventListener('click',event=>{
+          returnClick={button:event.button,prevented:event.defaultPrevented,target:event.target.tagName};
+        },{once:true,capture:true})`);
+      assert.equal(await evaluate(`document.activeElement.matches('a.session-name')`), true);
+      await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
       await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      assert.equal(await evaluate('location.hash'), listHash, 'Enter retains the existing title-help action');
+      assert.equal(await evaluate(`document.activeElement.matches('a.session-name')`), true);
+      assert.equal(await evaluate('window.returnClick'), null, 'help must not dispatch an unintended navigation');
+      await evaluate(`current.catalog.body.querySelector('a.session-name').click()`);
     } else await evaluate(`current.catalog.body.querySelector('a.session-name span:last-child').click()`);
     await detail();
     assert.equal(await evaluate('location.hash'), sessionHash);
@@ -49,6 +62,7 @@ module.exports = async ({evaluate, until, fixture, command, newTab}) => {
       await command('Page.reload');
       await until('typeof csrf !== "undefined" && csrf && hostState.writable');
       await detail();
+      await evaluate(recordRequests);
       assert.equal(await backLink(), expected, 'reload retains only this entry origin');
       assert.equal(await newTab(sessionHash), '#/sessions', 'same URL in a new tab has no list origin');
     }
