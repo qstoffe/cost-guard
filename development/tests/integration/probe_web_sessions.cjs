@@ -455,12 +455,19 @@ async function main() {
         }
         if (route==='sessions') {
           await until('!current.catalog.busy && !current.catalog.operation');
-          // This matrix intentionally injects huge totals/running rows below.
-          // Retire only this synthetic view's poll so real replies cannot replace
-          // the controlled frame while its computed geometry/colors are asserted.
-          await evaluate('current.catalog.retire()');
-        }
-       for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
+           // Health callbacks may reattach this catalog. Isolate only its
+           // transport while synthetic rows settle through real CSS transitions.
+           await command('Network.enable',{},sessionId);
+           await command('Network.setBlockedURLs',{urls:[new URL('/api/sessions',launch.url).href]},sessionId);
+           await evaluate(`(() => {
+             window.pagerCatalog=current.catalog;
+             window.pagerParent=pagerCatalog.root.parentNode;
+             window.pagerOriginal=null;
+             pagerCatalog.detach();
+           })()`);
+         }
+       try {
+        for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
          await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
          await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
          await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.body.style.zoom=${zoom}`);
@@ -496,15 +503,38 @@ async function main() {
              const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
                const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] '),
                  labelOnly:[...bar.querySelectorAll('button')].every(b=>!b.children.length && b.childNodes.length===1 && b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy'))};
-              current.catalog.update(pagerOriginal);return result;})()`);
+               current.catalog.update(pagerOriginal);window.pagerOriginal=null;return result;})()`);
              assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
-             assert.equal(pager.labelOnly,true,'all pager states use only meaningful text, never a reserved spinner slot');
+              assert.equal(pager.labelOnly,true,'all pager states use only meaningful text, never a reserved spinner slot');
+         }
+        }
+       } catch(error) {
+         if(route==='sessions') evidence.catalogIsolation=await evaluate(`(() => {
+           const row=pagerCatalog.body.firstElementChild;
+           return {attached:pagerCatalog.attached,busy:pagerCatalog.busy,
+             running:row?.value.running,className:row?.className,
+             colors:[...row.querySelectorAll('td,a,span,button')].map(node=>({
+               tag:node.tagName,className:node.className,color:getComputedStyle(node).color}))};
+         })()`);
+         throw error;
+       } finally {
+         if (route==='sessions') {
+           try {
+             await evaluate(`(() => {
+               try {if(pagerOriginal) pagerCatalog.update(pagerOriginal);}
+               finally {window.pagerOriginal=null;pagerCatalog.detach();}
+             })()`);
+           } finally {
+             await command('Network.setBlockedURLs',{urls:[]},sessionId);
+             await evaluate('pagerCatalog.attach(pagerParent)');
+           }
          }
        }
      }
       checks.push('watch-sessions-detail-models-ten/nine-column-token-mix-parity-three-themes-four-widths-two-zooms');
      assert.deepEqual(errors,[]);
-    evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
+     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
+       synthetic_catalog_transport_isolated:true,
       inference_calls:0,personal_profile:false,desktop_effects:false};
   } catch (error) {
     const bounded = value => String(value ?? '').replace(/https?:\/\/[^\s"'<>]+/g, '[url]').slice(0, 2500);
