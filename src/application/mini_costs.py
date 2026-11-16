@@ -52,5 +52,10 @@ def mini_cost_tokens(values):
         if bullets:
             sections.append(label + ":\n" + "\n".join(bullets))
     key = "session_cost_help" if values.get("mini_session_cost") else "cost_detail_help"
+    coverage = ("Linked child usage/cost unverified. Shown reference CCost covers observed usage, "
+        "not a proven zero upstream bill.") if values.get("mini_missing_agents", 0) else ""
+    help_text = "\n\n".join(sections) or "No model usage recorded"
+    if coverage:
+        help_text += "\n\n" + coverage
     return {"mini_cost_models": tuple(models), "mini_cost_amounts": tuple(amounts),
-            "mini_cost_ready": tuple(evidence), key: "\n\n".join(sections) or "No model usage recorded"}
+            "mini_cost_ready": tuple(evidence), "mini_cost_coverage_help": coverage, key: help_text}

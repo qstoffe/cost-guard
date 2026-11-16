@@ -83,6 +83,21 @@ async function main() {
   assert.match(view.root.textContent, /Session ID: root-0000/);
   assert.match(view.footer.textContent, /Complete session/);
   assert.equal(view.footer.children.length, 10);
+  // Metric availability is not Model invalidation: zero-token/scripted rows
+  // must not close an actively read Model surface on an ordinary refresh.
+  const modelNode = view.body.children[0].children[1].firstChild;
+  modelNode.events.focus();
+  const modelPanel = document.body.children.at(-1);
+  assert.equal(modelPanel.hidden, false);
+  const unavailable = JSON.parse(JSON.stringify(page));
+  const eventId = unavailable.result.view.prompt_blocks[0].rows[0].event_id;
+  unavailable.value_authority = {...unavailable.value_authority,
+    rows: {...unavailable.value_authority?.rows, [eventId]: 'unavailable'}};
+  view.update(unavailable);
+  assert.equal(view.body.children[0].children[1].firstChild, modelNode);
+  assert.equal(modelPanel.hidden, false, 'unavailable Token Mix does not dismiss Model help');
+  modelNode.events.blur();
+  view.update(page);
   assert.ok(!/Freeze|Snapshot|Go to row|Refresh|Token Mix order/.test(view.root.textContent));
   const row = view.body.children[10], cell = row.children[0];
   page = input.changed;

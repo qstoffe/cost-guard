@@ -9,6 +9,7 @@ from src.domain.model_identity import catalog_display_name
 from src.domain.session_tree import root_by_session
 from .model_details import executed as _executed, model_identity as _identity, has_model_details, linked_agents, selected_effort
 from .prompt_selection import selected_model, selection_name, selection_variant
+from .linked_selections import linked_selections
 
 LIMIT = 64
 
@@ -37,6 +38,11 @@ def model_fields(item, catalog):
               or ancestry.get(entry.session_id) == root or entry.session_id in linked]
     agents = {sid for prompt in item.bundle.prompts for sid in linked_agents(prompt)}
     agents.update(entry.session_id for entry in scoped if entry.session_id != root and _executed(entry))
+    covered = {agent.session_id for prompt in item.bundle.prompts for agent in prompt.agent_coverage
+               if agent.state in {"usage-observed", "not-executed"}}
+    uncertain = {agent.session_id for prompt in item.bundle.prompts for agent in prompt.agent_coverage
+                 if agent.state not in {"usage-observed", "not-executed"}}
+    covered.update(entry.session_id for entry in scoped if entry.session_id != root and _executed(entry))
     groups = {"main": {}, "subagent": {}}
     identities, accepted = set(), set()
     complete = bool(snapshot is not None and snapshot.complete
@@ -119,7 +125,10 @@ def model_fields(item, catalog):
         selected_display_model=selection_name(selection, catalog) if selection else "",
         selected_model_id=f"{selection.provider}/{selection.recorded_model}" if selection else "",
         selected_effort=variant if selection else "",
+        linked_model_selections=linked_selections(snapshot, prompts, catalog, item.bundle.source_revision)
+            if snapshot is not None and snapshot.root.provenance == item.session.provenance else (),
         has_model_details=has_model_details(scoped, len(agents)), linked_agent_count=len(agents),
+        unverified_agent_count=len((agents - covered) | uncertain),
         contributor_models=tuple(sorted(f"{provider}/{model}" for provider, model in accepted)),
         contributor_models_complete=complete, main_models=parts("main"), subagent_models=parts("subagent"),
         model_pending=latest is None and selection is None and any(p.in_progress for p in prompts))
@@ -135,6 +144,10 @@ def valid_models(values):
     selection = values["selected_display_model"]
     identity = values["selected_model_id"]
     effort = values["selected_effort"]
+    linked = values["linked_model_selections"]
+    if (not isinstance(linked, tuple) or len(linked) > 24 or len(set(linked)) != len(linked)
+            or any(not isinstance(text, str) or not text or len(text) > 768 or not text.isprintable() for text in linked)):
+        return False
     if (any(not isinstance(text, str) or len(text) > limit or text and not text.isprintable()
             for text, limit in ((selection, 256), (identity, 256), (effort, 64)))
             or bool(selection) != bool(identity)
@@ -165,6 +178,8 @@ def valid_models(values):
     return (tuple(sorted(union)) == values["contributor_models"]
         and values["multiple_models"] == (len(union) > 1)
         and type(values["linked_agent_count"]) is int and values["linked_agent_count"] >= 0
+        and type(values["unverified_agent_count"]) is int
+        and 0 <= values["unverified_agent_count"] <= values["linked_agent_count"]
         and values["has_model_details"] == bool(values["linked_agent_count"] or len(union) > 1 or len({
             selected_effort(e.selected) for role in ("main_models", "subagent_models")
             for part in values[role] for e in part.efforts if selected_effort(e.selected) is not None}) > 1)

@@ -22,6 +22,7 @@ from .models import PromptProjection
 from .model_details import has_model_details, linked_agents
 from .prompt_costs import prompt_cost_parts
 from .prompt_selection import selected_model, selection_name, selection_variant
+from .linked_selections import linked_selections, selection_index
 from .semantics import input_context_above_price_threshold, prompt_has_additional_model
 
 ThresholdMultiplier = Callable[[str, int], Decimal | None]
@@ -105,6 +106,7 @@ class PromptRowProjector:
         self.timeline = {state.event_id: state
                          for state in build_context_timeline(snapshot, bundle, catalog, self.epochs)}
         self.replies = prompt_replies(snapshot)
+        self.selection_index = selection_index(snapshot, bundle.source_revision)
         thresholds = config.get("thresholds") if isinstance(config.get("thresholds"), Mapping) else {}
         self.approach = float(thresholds.get("nextIctxPriceThresholdWarningPercent", 75))
         self.running_warning_ccost = Decimal(str(config.get("runningPromptWarningCCost", 1800)))
@@ -207,6 +209,8 @@ class PromptRowProjector:
             linked_agent_count=len(linked_agents(record)),
             has_model_details=has_model_details(record.entries, len(linked_agents(record))),
             agent_coverage=record.agent_coverage,
+            linked_model_selections=linked_selections(self.snapshot, (record,), catalog, self.bundle.source_revision,
+                index=self.selection_index),
             cost_parts=prompt_cost_parts(record, catalog),
              recorded_selections=tuple(sorted({f'{message.model.provider}/{message.model.recorded_model}'
                  for message in self.replies.get((record.session_id, record.prompt_id), ())

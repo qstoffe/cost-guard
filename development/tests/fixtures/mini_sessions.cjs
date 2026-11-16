@@ -2,10 +2,12 @@
 const assert = require('node:assert/strict');
 module.exports = function sessionTable(vm, context, controller, view, input, helpText) {
   const saved = structuredClone(input.view), base = saved.active_cards[0];
+  const modelHelp = 'Main prompt — fixture/Main Model · High';
+  const activityHelp = clock => clock + '\n\n' + modelHelp;
   const card = (id, at, running=false) => ({...structuredClone(base),session_id:id,title:'Same display title',focal_id:running?id:'',
     rows:[{...structuredClone(base.rows[0]),live_context:{display:{watch_next_context_tokens:'17'}},
        prompt:{...structuredClone(base.rows[0].prompt),preview:'',event_id:id,at_ms:at,in_progress:running,
-        completed_successfully:!running,completed_at_ms:running?null:at,
+        completed_successfully:!running,completed_at_ms:running?null:at,model_display_help:modelHelp,
         display:{ccost:'49',clock:'12:34',start_date_time:'2026-10-25 02:30 +0200',
           mini_start_date_time:'2026-10-25 02:30',mini_finished_date_time:'2026-10-25 02:30',
           finished_clock:'23:47',finished_date_time:'2026-10-25 02:30 +0100'}}}],
@@ -58,13 +60,13 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.ok(rows().every(row=>row.className===''),'successful cold history is neutral');
   assert.match(retained.attributes['aria-label'],/Completed/,'neutral history retains its outcome');
   assert.equal(retained.children[4].textContent,'900','historical context uses session summary, not stale prompt');
-  assert.equal(time.textContent,'23:47');assert.equal(helpText(time),'2026-10-25 02:30');
+  assert.equal(time.textContent,'23:47');assert.equal(helpText(time),activityHelp('2026-10-25 02:30'));
   const resumed=card('h4',300,true);show([resumed],history);
   assert.equal(view.promptRows.get('h4'),retained,'history promotes in the same keyed row');assert.equal(ids().at(-1),'h4');
    assert.equal(retained.children[4].textContent,'17');assert.equal(time.textContent,'▶ 12:34');
    assert.equal(time.children[0].attributes['aria-hidden'],'true');assert.equal(time.children[0].tabIndex,undefined);
    assert.deepEqual(time.children[0].events,{});assert.equal(time.tabIndex,0);
-  assert.equal(helpText(time),'2026-10-25 02:30');
+  assert.equal(helpText(time),activityHelp('2026-10-25 02:30'));
   const concurrent=Array.from({length:10},(_,i)=>{const value=card('h4',301+i,true);value.focal_id=value.rows[0].prompt.event_id='p'+i;
     value.rows[0].prompt.prompt_number=100+i;value.rows[0].prompt.display_units={};value.rows[0].prompt.display.ccost=String(i);return value;});
   show(concurrent,history);assert.equal(rows().length,5);assert.equal(view.promptRows.get('h4'),retained);
@@ -115,7 +117,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
      show([corrected],history);assert.equal(time.textContent,'12:34','terminal evidence forbids a play cue even with a contradictory running flag');
    }
    const unknownStart=structuredClone(resumed);unknownStart.rows[0].prompt.at_ms=null;
-   show([unknownStart],history);assert.equal(time.textContent,'▶ —');assert.equal(helpText(time),'Unknown start time');
+   show([unknownStart],history);assert.equal(time.textContent,'▶ —');assert.equal(helpText(time),activityHelp('Unknown start time'));
    const stale=structuredClone(input);stale.view.now_ms=saved.now_ms-1;
    show(ended,history);controller.update(stale);controller.render();
    assert.equal(time.textContent,'23:47','older SSE publication cannot revive the running cue');
@@ -130,7 +132,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.deepEqual(ids(),history.map(c=>c.session_id),'older grace cannot displace a newer history winner');
   const unknown=card('unknown',0);unknown.rows[0].prompt.completed_at_ms=null;
   show([],[unknown,...history.slice(1)]);assert.equal(ids()[0],'unknown');
-  assert.equal(rows()[0].children[0].textContent,'—');assert.equal(helpText(rows()[0].children[0].children[0]),'Unknown finish time');
+  assert.equal(rows()[0].children[0].textContent,'—');assert.equal(helpText(rows()[0].children[0].children[0]),activityHelp('Unknown finish time'));
   for(const state of ['loading','unavailable']) {
     show([resumed],history,state);assert.deepEqual(ids(),['h4']);
     assert.doesNotMatch(view.body.textContent,/Loading earlier|Unable to load/);

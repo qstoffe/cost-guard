@@ -10,7 +10,8 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
     Object.assign(value.rows[0].prompt, {event_id:id, at_ms:at - day, completed_at_ms:at,
       in_progress:false, execution_unverified:false, aborted:false, has_error:false, completed_successfully:true}, flags);
     Object.assign(value.rows[0].prompt.display, {clock:'02:30', finished_clock:'02:30', start_date_time:local, finished_date_time:local,
-      mini_start_date_time:local.slice(0,16),mini_finished_date_time:local.slice(0,16)});
+      mini_start_date_time:local.slice(0,16),mini_finished_date_time:local.slice(0,16),
+      date_time:new Date(value.rows[0].prompt.at_ms).toISOString().slice(0,16).replace('T',' ')});
     return value;
   };
   const show = (active, history = []) => {
@@ -62,7 +63,9 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
   zone('UTC'); clock.set(now);
   for (const at of [null, undefined, NaN, -1, Infinity, '1000']) {
     show([card('unknown', now, {completed_at_ms:at})]);
-    assert.equal(time('unknown'), '—'); assert.equal(view.promptRows.get('unknown').activityHelp, 'Unknown finish time');
+    assert.equal(time('unknown'), '—');
+    assert.equal(view.promptRows.get('unknown').activityHelp,
+      'Unknown finish time\nStarted: 2026-11-09 00:00\nCompletion unverified.');
   }
   show([card('future', now + day)]); assert.equal(time('future'), '02:30');
   const old = Array.from({length:5}, (_, i) => ({...card('old' + i, now - (800 - i * 100) * day), focal_id:''}));

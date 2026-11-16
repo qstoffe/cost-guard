@@ -11,7 +11,7 @@ import sqlite3
 from .cache import ANALYSIS_ALGORITHM_VERSION, dependency_signature
 from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
-from .coverage import snapshot_coverage_complete
+from .coverage import snapshot_coverage_complete, child_coverage
 from .effort_defaults import request_effort
 from src.domain.effort import EffortEvidence
 from src.domain.reference_cost import bounded_issues
@@ -48,6 +48,7 @@ class SessionCost:
     main_ccost: Decimal | None = None
     subagent_ccost: Decimal | None = None
     groups: tuple[SessionCostGroup, ...] = ()
+    unverified_agent_count: int = 0
 
 
 def session_cost_source_key(snapshot):
@@ -168,4 +169,7 @@ def reconcile_session_cost(repository, snapshot, catalog):
     return SessionCost(coverage, snapshot_coverage_complete(snapshot, entries), available, len(entries), valued, written,
         snapshot.source_revision, catalog.diagnostic_signature, main, total - main,
         tuple(SessionCostGroup(agent, provider, model, (selected,), (effort,), amount, count, complete)
-              for (agent, provider, model, selected, effort), (amount, count, complete) in groups.items()))
+              for (agent, provider, model, selected, effort), (amount, count, complete) in groups.items()),
+        sum(agent.state not in {"usage-observed", "not-executed"} for agent in child_coverage(snapshot,
+            tuple(session.session_id for session in snapshot.sessions if session.session_id != snapshot.root.session_id),
+            snapshot.messages, entries)))

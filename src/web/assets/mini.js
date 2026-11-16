@@ -486,6 +486,9 @@ const MiniWatch = (() => {
         text(time.children[0], verifiedRunning ? '▶ ' : '');
         text(time.children[1], activityLabel(prompt, running, now, today));
         row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
+        if (!known && !running && Number.isSafeInteger(prompt?.at_ms) && prompt.at_ms > 0)
+          row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
+        if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;
         this.drawCost(row, card, prompt, catalog);
         text(row.children[4], context); wanted.push(row);
       }

@@ -116,6 +116,8 @@ def block(value, *, source_complete=True, details=False):
         total_extra_ccost_complete total_token_mix_percent""")
     return ObjectValue(base.fields + (
         ("mini_session_cost", True),
+        ("mini_missing_agents", len({agent.session_id for row in value.rows for agent in row.agent_coverage
+            if agent.state not in {"usage-observed", "not-executed"}})),
         ("mini_cost_groups", mini_groups(value.cost_groups, complete=value.comparison_cost_complete)),
         ("rows", tuple(prompt(row, details=details) for row in value.rows)),
         ("ccost_unavailable", issue_records(value.ccost_unavailable)),
@@ -232,11 +234,11 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(ObjectValue(fields(item, "session_id title model selected_display_model multiple_models has_model_details linked_agent_count ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
+        session_usage=tuple(ObjectValue(fields(item, "session_id title model selected_display_model multiple_models has_model_details linked_agent_count ccost main_ccost subagent_ccost prompt_count complete duration_ms archived running last_activity_ms prompt_started_ms contributor_models contributor_models_complete context_tokens context_detail effort").fields +
             (("model_help", session_model_help(item)), ("model_display_help", session_display_help(item)),
               ("effort_help", session_effort_help(item)),
               ("mini_session_cost", True), ("mini_cost_groups", mini_groups(item.cost_groups, complete=item.complete)),
-              ("mini_missing_agents", int(bool(item.linked_agent_count and not any(part.agent for part in item.cost_groups)))),
+               ("mini_missing_agents", item.unverified_agent_count),
              ("ccost_unavailable", issue_records(item.ccost_unavailable))))
             for item in report.session_usage),
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,

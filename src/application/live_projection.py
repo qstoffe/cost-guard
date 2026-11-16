@@ -8,6 +8,7 @@ from .watch_accounts import watch_account
 from .prompt_costs import cost_detail, mini_cost_detail, watch_calls
 from .mini_costs import mini_groups
 from .reference_cost import issue_records
+from .model_help import prompt_display_help
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
@@ -26,6 +27,12 @@ def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
         ("comparison_cost", comparison(row.prompt.comparison_cost)),
         ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt)),
          *mini_cost_detail(row.prompt)))
+    # Ordinary Activity stays a compact timestamp. Explain identity here when
+    # linked selection/coverage cannot establish an executed child contributor.
+    selection_help = bool(row.prompt.linked_model_selections) or any(
+        agent.state not in {"usage-observed", "not-executed"} for agent in row.prompt.agent_coverage)
+    projected = ObjectValue(projected.fields + (
+        ("model_display_help", prompt_display_help(row.prompt) if selection_help else ""),))
     projected = ObjectValue(projected.fields + (("watch_calls_help", watch_calls(row.prompt)),))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
@@ -79,6 +86,7 @@ def card(value, now_ms):
                 ccost_unavailable=issue_records(cost.total.unavailable),
                 complete=cost.total.complete and cost.source_complete,
                 mini_session_cost=True, mini_cost_groups=mini_groups(cost.groups, complete=cost.source_complete),
+                mini_missing_agents=cost.unverified_agent_count,
                 # This cost observation has no authoritative session execution
                 # interval. Never substitute the focal prompt's elapsed time.
                 duration_ms=None,
