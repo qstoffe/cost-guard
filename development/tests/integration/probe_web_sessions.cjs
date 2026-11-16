@@ -8,7 +8,8 @@ async function main() {
   const profile = await fs.mkdtemp(path.join(directory, 'sessions-browser-'));
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
   const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
-  const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']), 'development/tests/integration/serve_web_sessions.py',
+   const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']),
+     mode === '--fast-arrivals' ? 'development/tests/integration/serve_web_arrivals.py' : 'development/tests/integration/serve_web_sessions.py',
     ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
@@ -72,7 +73,10 @@ async function main() {
      const until=async (expression, timeoutMs=30000) => {
        const end=Date.now()+timeoutMs;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
-       const state=await evaluate(mode==='--catalog-idle-only' ?
+       const state=await evaluate(mode==='--live-only' ?
+          `JSON.stringify({focus:document.activeElement?.outerHTML,help:document.querySelector('#context-help')?.textContent,
+            row:document.querySelector('tr[data-id=root-0121]')?.value})` :
+          mode==='--catalog-idle-only' ?
          `JSON.stringify({hidden:document.hidden,section:current?.section,offset:current?.catalog?.offset,
            applied:current?.catalog?.data?.offset,total:current?.catalog?.data?.total,busy:current?.catalog?.busy,
            recovering:current?.catalog?.recovering,operation:current?.catalog?.operation,
@@ -87,7 +91,14 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
       await command('Page.navigate',{url:launch.url},sessionId);
            await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-           if (mode === '--sessions-return') {
+            if (mode === '--fast-arrivals') {
+              const details=await require('../fixtures/sessions_arrivals_browser.cjs')({evaluate,until,fixture});
+              assert.deepEqual(errors,[]);
+              evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,
+                personal_profile:false,desktop_effects:false};
+              console.log(JSON.stringify(evidence));return;
+            }
+            if (mode === '--sessions-return') {
              const newTab = async hash => {
                const {targetId:other} = await command('Target.createTarget',{url:new URL(launch.url).origin+'/'+hash});
                const {sessionId:otherSession} = await command('Target.attachToTarget',{targetId:other,flatten:true});

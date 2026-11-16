@@ -82,3 +82,12 @@ def provisional_order(rows, metadata):
     unknown = sorted((row for row in rows if not row.running and row.last_activity_ms is None),
         key=lambda row: (-(metadata.get(row.session_id) or 0), row.session_id))
     return live + tuple(unknown) + tuple(row for row in rows if not row.running and row.last_activity_ms is not None)
+
+
+def retained_positions(rows, positions, display):
+    """Old issued positions are display-only while their current keys are pending."""
+    live = tuple(row for row in rows if row.running)
+    ordinary = [row for row in rows if not row.running]
+    for key, position in positions.items():
+        ordinary.insert(min(position, len(ordinary)), display[key])
+    return live + tuple(ordinary)

@@ -126,7 +126,8 @@ class FixtureRuntime:
             frame = replace(frame, now_ms=self.service.now_ms, active_cards=(), history_cards=(card,),
                 recent_finished_cards=())
         view = project_live(frame, self.service.timezone_id).to_json()
-        self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms))
+        self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms,
+            catalog_hint=self.catalog.live_hint()))
 
     def close(self):
         self.stopping.set()

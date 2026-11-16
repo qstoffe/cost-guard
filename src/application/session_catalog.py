@@ -22,7 +22,7 @@ from src.watch.models import SessionPreview
 from .projection import project
 from .session_navigation import Navigation
 from .session_catalog_scope import (
-    CatalogEpoch, PAGE_SIZE, catalog_window, candidate_population, event_members, provisional_order, in_window,
+    CatalogEpoch, PAGE_SIZE, catalog_window, candidate_population, event_members, provisional_order, in_window, retained_positions,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -126,6 +126,14 @@ class SessionCatalog:
         self.discovery = {}
         self.discovery_sequence = 0
         self.preview_totals = {}
+        self.wake_identity = uuid4().hex
+        self.wake_revision = 0
+        self.prompt_signal = frozenset()
+
+    def live_hint(self):
+        """Constant-size wake hint, not row/membership or scalar-value proof."""
+        with self.lock:
+            return f"{self.wake_identity}:{self.wake_revision}"
 
     def enable_warm(self, enabled=True):
         with self.lock:
@@ -200,11 +208,15 @@ class SessionCatalog:
                     self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
+                if self.state != "source_unavailable":
+                    self.wake_revision += 1
                 self.state = "source_unavailable"
                 return
             if observation is self.last_observation:
                 return  # Publishing the same old catalog cannot renew source age.
-            if self.last_observation and self.last_observation.source_epoch != observation.source_epoch:
+            source_changed = bool(self.last_observation
+                and self.last_observation.source_epoch != observation.source_epoch)
+            if source_changed:
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'watch_activity', 'model_dependencies', 'orders'):
@@ -229,7 +241,7 @@ class SessionCatalog:
             self.activity = root_activity(observation.sessions)
             self.activity_index = tuple(sorted((at, key) for key, at in self.activity.items()
                 if key in self.roots and type(at) is int and at > 0))
-            self.active = observation.live_candidates
+            previous_active, self.active = self.active, observation.live_candidates
             previous_revisions = self.revisions
             self.revisions = dict(observation.revisions)
             self.changed_roots.intersection_update(self.roots)
@@ -237,10 +249,12 @@ class SessionCatalog:
                 if key in previous_revisions and previous_revisions[key] != self.revisions.get(key))
             if self.observed is not None:
                 self.changed_roots.update(self.roots.keys() - previous_roots.keys())
-            if (tuple(previous_roots) != tuple(self.roots) or any(
+            if (source_changed or self.state != "observed" or previous_active != self.active
+                    or tuple(previous_roots) != tuple(self.roots) or any(
                     key not in previous_roots or previous_roots[key] != root
                     for key, root in self.roots.items()) or previous_revisions != self.revisions):
                 self.generation += 1
+                self.wake_revision += 1
             self.rows = {key: row for key, row in self.rows.items() if key in self.roots}
             self.valid = {key: value for key, value in self.valid.items()
                            if key in self.roots and value[0] == self.revisions.get(key)
@@ -276,6 +290,12 @@ class SessionCatalog:
                 for root, running, age, prompt_id, start in evidence if 0 <= age <= 15
                 and root.session_id in self.roots
                 and root.provenance == self.roots[root.session_id].provenance}
+            signal = frozenset((key, value[1], value[2], value[3]) for key, value in self.watch_activity.items()
+                if isinstance(value[2], str) and value[2] and type(value[3]) is int
+                and 0 < value[3] <= self.clock_ms())
+            if signal != self.prompt_signal:
+                self.wake_revision += 1
+                self.prompt_signal = signal
 
     def _running(self, key, fallback):
         if self.state != "observed" or key not in self.roots:
@@ -534,7 +554,7 @@ class SessionCatalog:
                       'queued' if pending or completed < len(keys) else 'ready'))
 
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today",
-             navigation=None, applied=None, cancelled=None):
+             navigation=None, applied=None, cancelled=None, passive=False):
         with self.lock:
             window, candidates = self._population(period)
             self._expire()
@@ -595,12 +615,28 @@ class SessionCatalog:
             if nav is not None and navigation is not None and not offset:
                 indexed, pending = len(nav.facts), bool(nav.pending)
             if offset == 0:
-                applied = "activity" if pending else sort
-                order = -1 if pending else direction
-                cache_key = window.identity, applied, order, pending
+                live_page = passive and navigation is None and nav is None
+                applied = "activity" if pending and not live_page else sort
+                order = -1 if pending and not live_page else direction
+                cache_key = window.identity, applied, order, pending, live_page
                 members = event_members(candidates, window, display_rows, self._activity_current)
-                signature = tuple((key, self.roots[key].title, self.activity.get(key), display_rows[key])
-                                  for key in members)
+                latest = next(reversed(lease["epochs"]), None)
+                previous = lease["epochs"].get(latest)
+                positions = {}
+                if live_page and pending and (sort, direction) != ("activity", -1):
+                    # Unknown nonrunning positions cannot be promoted in another
+                    # sort. Retain issued positions, not false current-key proof.
+                    # Source/provenance changes clear epochs in observe().
+                    if (previous and (previous.sort, previous.direction) == (sort, direction)
+                            and previous.window.identity == window.identity):
+                        allowed = set(members)
+                        positions = {row.session_id: index for index, row in enumerate(
+                            row for row in previous.rows if not row.running)
+                            if row.session_id in allowed and not display_rows[row.session_id].running
+                            and not qualified(row.session_id)}
+                    members = tuple(key for key in members if display_rows[key].running or qualified(key))
+                signature = (tuple((key, self.roots[key].title, self.activity.get(key), display_rows[key])
+                                   for key in (*members, *positions)), tuple(positions.items()))
                 cached = self.orders.get(cache_key)
                 if nav is not None and navigation is not None and not pending:
                     rows = ordered(nav.rows, sort, direction)
@@ -608,14 +644,14 @@ class SessionCatalog:
                     rows = cached[1]
                 else:
                     rows = ordered((display_rows[key] for key in members), applied, order)
-                    if pending:
+                    if pending and (applied, order) == ("activity", -1):
                         rows = provisional_order(rows, self.activity)
+                    elif positions:
+                        rows = retained_positions(rows, positions, display_rows)
                 self.orders[cache_key] = signature, rows
                 self.orders.move_to_end(cache_key)
                 while len(self.orders) > 32:
                     self.orders.popitem(last=False)
-                latest = next(reversed(lease["epochs"]), None)
-                previous = lease["epochs"].get(latest)
                 if (previous is not None and (previous.sort, previous.direction) == (applied, order)
                         and previous.provisional == pending
                         and previous.window.identity == window.identity and tuple(
@@ -722,6 +758,7 @@ class SessionCatalog:
                 if not nav.pending and not progress['reason']:
                     progress['status'] = 'ready'
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=PAGE_SIZE,
+                passive=bool(passive and not offset and navigation is None and nav is None),
                 candidate_scope='source_catalog_metadata',
                 membership_pending=lease["epochs"][epoch].provisional,
                 order_state='provisional' if lease["epochs"][epoch].provisional else 'verified',
