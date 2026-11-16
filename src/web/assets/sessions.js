@@ -129,6 +129,7 @@ const SessionsCatalog = (() => {
       for (const {key, button} of this.periodButtons) button.setAttribute('aria-pressed', String(key === this.period));
     }
     rememberedDestination() { return destination(this.offset || 0, this.epoch || this.data?.epoch, this.sort || 'activity', this.direction || -1, this.period || 'today'); }
+    firstPageDestination() { return destination(0, null, this.sort, this.direction, this.period); }
     attach(parent) {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;

@@ -2,6 +2,15 @@
 const assert = require('node:assert/strict');
 module.exports = async ({vm, context, Node, timers}) => {
   const document = context.document;
+  for (const period of ['today','7-days','30-days','month','all'])
+    for (const sort of ['activity','name','model','ccost','prompts','duration','ctx'])
+      for (const direction of [-1,1]) {
+        const filters = {period,sort,direction,offset:75,epoch:'frozen'};
+        context.returnFilters = filters;
+        const target = vm.runInContext('SessionsCatalog.View.prototype.firstPageDestination.call(returnFilters)',context);
+        assert.equal(target,`#/sessions?period=${period}&sort=${sort}&direction=${direction}`,
+          'detail return preserves every supported filter, never the old page/epoch');
+      }
   Node.prototype.focus = function() { document.activeElement = this; };
   const calls = [];
   const row = {session_id:'previous',title:'Previous',indexed:true,has_summary:true,metric_state:'ready',
