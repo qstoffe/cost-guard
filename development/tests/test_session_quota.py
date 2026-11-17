@@ -237,12 +237,14 @@ class SessionQuotaTests(unittest.TestCase):
         first = row(evidence, self.accounts((quota,), period_cost=ComparisonCost(D(200), 1, 1)))
         retained = row(replace(evidence, complete=False), self.accounts((quota,)))
         corrected = row(evidence, self.accounts((quota,), period_cost=ComparisonCost(D(100), 1, 1)))
+        repriced = row(replace(evidence, pricing="new-price-basis"), self.accounts((quota,)))
         reset = row(evidence, self.accounts((replace(quota, reset_at_ms=300_000),)))
 
         self.assertEqual(("~3%", "estimated"), (first["percent"], first["state"]))
         self.assertEqual("~3%", retained["percent"])
         self.assertIn("Retained same-window", retained["reason"])
         self.assertEqual("~6%", corrected["percent"])
+        self.assertEqual("?", repriced["percent"], "a retained denominator cannot bridge reference repricing")
         self.assertEqual(("?", "impossible"), (reset["percent"], reset["state"]))
         unknown = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D(0),
                           native=(), complete=False),))

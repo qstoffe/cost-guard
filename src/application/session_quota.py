@@ -38,6 +38,7 @@ class SessionQuotaEvidence:
     source: tuple
     complete: bool
     contributions: tuple[Contribution, ...]
+    pricing: str = ""
 
 
 def session_quota_evidence(history, service):
@@ -75,7 +76,7 @@ def session_quota_evidence(history, service):
     evidence = SessionQuotaEvidence(source_scope(service.source),
         snapshot_coverage_complete(snapshot, entries) and not history.retained,
         tuple(Contribution(*key, amount, complete, tuple(native.items()), count)
-              for key, (amount, complete, native, count) in groups.items()))
+              for key, (amount, complete, native, count) in groups.items()), repr(catalog.diagnostic_signature))
     history.quota_signature, history.quota_evidence = signature, evidence
     return evidence
 
@@ -227,7 +228,7 @@ def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False, capa
             period = next((p for p in item.quota_periods if p.quota is quota), None)
             values = dict(quota_record(quota, period.cost if period else None,
                 provider_id=native.ref.provider_id, availability=native.availability).fields)
-            key = (source, native.key, index, quota.label, quota.scope, quota.model_id,
+            key = (source, evidence.pricing, native.key, index, quota.label, quota.scope, quota.model_id,
                    quota.unit, quota.limit, quota.reset_at_ms, quota.duration_seconds, quota.period)
             wanted.add(key)
             reference = quota_reference(values, now_ms, cache, key)
