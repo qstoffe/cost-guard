@@ -11,11 +11,32 @@ from development.tests.fixtures.claude_alias import catalog as model_catalog
 from src.analysis import analyze_snapshot
 from src.analysis.context import ContextEpochs, build_context_timeline
 from src.domain import ModelRef
-from src.reports.prompt_rows import PromptRowProjector
+from src.reports.prompt_rows import PromptRowProjector, mix_percent
 from src.reports.prompts import build_prompt_block
 
 
 class PromptProjectionTests(unittest.TestCase):
+    def test_mix_rounding_preserves_zero_categories_and_total_without_negative_output(self):
+        self.assertEqual((17, 17, 66, 0), mix_percent((1, 1, 4, 0)))
+        self.assertIsNone(mix_percent((0, 0, 0, 0)))
+        for values in ((1, 1, 1, 1), (0, 98, 1, 1), (1, 0, 0, 99999)):
+            result = mix_percent(values)
+            self.assertEqual(100, sum(result))
+            self.assertTrue(all(value >= 0 for value in result))
+
+    def test_positive_priced_subtotal_does_not_prove_missing_zero_category_and_recovers(self):
+        entry = self.record.entries[0]
+        partial = replace(self.record, entries=(replace(entry,
+            tokens=replace(entry.tokens, cache_write=0, known_fields=("input", "output", "cache_read"))),))
+        complete = replace(partial, entries=(replace(partial.entries[0],
+            tokens=replace(partial.entries[0].tokens,
+                known_fields=("input", "output", "cache_read", "cache_write"))),))
+        missing = self.projector().prompt(partial)
+        recovered = self.projector().prompt(complete)
+        self.assertGreater(missing.ccost, 0)
+        self.assertIsNone(missing.token_mix_percent)
+        self.assertEqual(100, sum(recovered.token_mix_percent))
+        self.assertEqual(0, recovered.token_mix_percent[2])
     def test_assistant_bound_attempt_overrides_saved_choice_without_borrowing_its_effort(self):
         saved = quick_aborts(assistant_model=True)
         messages = tuple(replace(message, model=ModelRef("other-provider", "own-attempt"), variant=None)

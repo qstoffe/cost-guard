@@ -10,7 +10,7 @@ async function main() {
   const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
    const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']),
       mode === '--warm-sorts' ? 'development/tests/integration/serve_web_warm_sorts.py' :
-      mode === '--fast-arrivals' ? 'development/tests/integration/serve_web_arrivals.py' : 'development/tests/integration/serve_web_sessions.py',
+       ['--fast-arrivals','--detail-updates'].includes(mode) ? 'development/tests/integration/serve_web_arrivals.py' : 'development/tests/integration/serve_web_sessions.py',
     ['--catalog-real-churn','--catalog-real-recovery'].includes(mode) ? '--real-source' : config],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit',resolve));
@@ -105,8 +105,16 @@ async function main() {
               assert.deepEqual(errors,[]);
               evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,
                 personal_profile:false,desktop_effects:false};
-              console.log(JSON.stringify(evidence));return;
-            }
+               console.log(JSON.stringify(evidence));return;
+             }
+             if (mode === '--detail-updates') {
+               const details=await require('../fixtures/session_updates_browser.cjs')({evaluate,until,fixture,
+                 command:(method,params)=>command(method,params,sessionId)});
+               assert.deepEqual(errors,[]);
+               evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,
+                 personal_profile:false,desktop_effects:false};
+               console.log(JSON.stringify(evidence));return;
+             }
             if (mode === '--sessions-return') {
              const newTab = async hash => {
                const {targetId:other} = await command('Target.createTarget',{url:new URL(launch.url).origin+'/'+hash});

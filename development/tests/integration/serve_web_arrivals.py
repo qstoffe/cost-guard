@@ -37,12 +37,17 @@ class ControlledCatalog(SessionCatalog):
         super().__init__()
         self.hold = True
         self.observations = {}
+        self.revision_times = {}
 
     def tick(self, service):
         if not self.hold:
             super().tick(service)
 
     def observe(self, observation, **kwargs):
+        if observation is not None:
+            for key, revision in observation.revisions.items():
+                if self.revisions.get(key) != revision:
+                    self.revision_times[key] = int(time.time() * 1000)
         super().observe(observation, **kwargs)
         for key in self.roots:
             self.observations.setdefault(key, {}).setdefault("title_ms", int(time.time() * 1000))
@@ -100,7 +105,39 @@ def main():
             command = json.loads(line)["command"]
             if command == "stop":
                 break
-            if command == "arrival-seed":
+            if command.startswith("detail-update"):
+                count = 10 if command == "detail-update-burst" else 1
+                for _ in range(count):
+                    owner.active_update(owner.update_ordinal + 1)
+                print(json.dumps(dict(ok=True, ordinal=owner.update_ordinal,
+                    event_ms=int(time.time() * 1000))), flush=True)
+                continue
+            elif command == "detail-telemetry":
+                with owner.lock:
+                    sid = "ses_fixture_00000"
+                    request = owner.messages[sid][-1]
+                    request["tokens"]["cache"].pop("write", None)
+                    request["finish"] = "stop"
+                    request["time"]["completed"] = int(time.time() * 1000)
+                    owner.active = {}
+                    next(row for row in owner.sessions if row["id"] == sid)["time"]["updated"] += 1
+                    owner.events.append(dict(type="message.updated", data=dict(sessionID=sid)))
+            elif command == "detail-telemetry-recover":
+                with owner.lock:
+                    sid = "ses_fixture_00000"
+                    owner.messages[sid][-1]["tokens"]["cache"]["write"] = 0
+                    next(row for row in owner.sessions if row["id"] == sid)["time"]["updated"] += 1
+                    owner.events.append(dict(type="message.updated", data=dict(sessionID=sid)))
+            elif command == "detail-metrics":
+                details = host.live.details
+                with details.lock:
+                    entries = {key: dict(generation=entry["generation"], due=entry["due"],
+                        validated=entry.get("validated"), phase=entry["acquisition"]["phase"])
+                        for key, entry in details.histories.items()}
+                print(json.dumps(dict(ok=True, entries=entries, source=owner.snapshot(),
+                    revision_times=catalog.revision_times, observations=catalog.observations)), flush=True)
+                continue
+            elif command == "arrival-seed":
                 with catalog.lock:
                     for key, root in catalog.roots.items():
                         catalog.rows[key] = SessionUsageRow(key, root.title, "GPT Test", False, Decimal("1"), 1,

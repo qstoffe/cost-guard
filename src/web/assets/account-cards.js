@@ -349,7 +349,7 @@ const AccountCards = (() => {
       }
       this.scope = value?.scope;
       const accounts = (value?.accounts || []).map(item => ({...item,
-        quotas: item.quotas.filter(quota => quota.contribution === 'positive')})).filter(item => item.quotas.length);
+        quotas: item.quotas.filter(quota => quota.contribution !== 'zero')})).filter(item => item.quotas.length);
       this.root.hidden = !accounts.length;
       const wanted = new Set();
       for (const item of accounts) {
@@ -375,6 +375,8 @@ const AccountCards = (() => {
           const label = quota.label.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
           ReportView.text(line.children[0], `${label}${suffix}`);
           ReportView.text(line.children[1], quota.percent);
+          ContextHelp.value(line.children[1], quota.reason || 'Session-equivalent consumption, not account total Used.');
+          ContextHelp.refresh(line.children[1]);
           if (card.root.children[index + 1] !== line)
             card.root.insertBefore(line, card.root.children[index + 1] || null);
         });

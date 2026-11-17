@@ -66,7 +66,7 @@ module.exports = async ({evaluate,until,command,browser,targetId,origin}) => {
     await evaluate(`window.layoutUsage=new AccountCards.SessionUsage();document.body.append(layoutUsage.root);
       window.layoutValue={scope:'synthetic-layout',accounts:Array.from({length:4},(_,index)=>({
         observation:{...quotaValue.accounts[0].observation,id:'layout-'+index,label:'Long account GPT-6 · subscription '+index},
-        quotas:Array.from({length:index+1},(_,n)=>({id:'q'+n,label:'weekly GPT-6',percent:n?'—':'~0%',contribution:'positive'}))}))};
+         quotas:Array.from({length:index+1},(_,n)=>({id:'q'+n,label:'weekly GPT-6',percent:n?'?':'~0.001%',contribution:'positive'}))}))};
       layoutUsage.update(layoutValue)`);
     assert.equal(await evaluate(`layoutUsage.cards.size===4 &&
       layoutUsage.root.querySelectorAll('.session-quota-row').length===10 &&

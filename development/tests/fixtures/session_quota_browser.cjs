@@ -6,7 +6,7 @@ module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}
   await evaluate(`location.hash='#/sessions/root'`);
    await until(`current.detail?.quotaUsage?.grid.textContent.includes('Weekly')`);
   assert.deepEqual(await evaluate(`[...current.detail.quotaUsage.grid.querySelectorAll('.session-quota-row')].map(n=>n.textContent)`),
-    ['Monthly10%','Weekly—']);
+     ['Monthly10%','Weekly?']);
   assert.equal(await evaluate(`current.detail.quotaUsage.cards.size`),1);
   assert.equal(await evaluate(`current.detail.root.lastElementChild===current.detail.quotaUsage.root &&
     current.detail.quotaUsage.root.previousElementSibling===current.detail.activity.root`),true);

@@ -59,7 +59,7 @@ class SessionQuotaTests(unittest.TestCase):
         other, _ = self.evidence(replace(snapshot, invocations=(usd,)))
         self.assertEqual("~42.9%", self.percent(other, self.accounts()), "reference amount 30 is not a native debit")
         arbitrary_fee = replace(self.monthly, unit="USD", limit=None)
-        self.assertEqual("—", self.percent(other, self.accounts((arbitrary_fee,))))
+        self.assertEqual("?", self.percent(other, self.accounts((arbitrary_fee,))))
 
     def test_ratio_raw_precision_long_session_all_windows_children_compaction_and_price_cache(self):
         quota = QuotaComponent("5-hour", period="rolling", duration_seconds=18000, reset_at_ms=200_000,
@@ -80,7 +80,7 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertEqual(valued, self.valuation.call_count, "quota refresh projects aggregates only")
         self.assertEqual("~117.5%", self.percent(evidence, self.accounts((quota,),
             period_cost=ComparisonCost(D(400), 1, 1))))
-        self.assertEqual("—", self.percent(evidence, self.accounts((replace(quota, reset_at_ms=NOW),),
+        self.assertEqual("?", self.percent(evidence, self.accounts((replace(quota, reset_at_ms=NOW),),
             period_cost=period_cost)))
 
     def test_unique_route_estimate_ambiguous_accounts_explicit_identity_and_foreign_account(self):
@@ -88,7 +88,7 @@ class SessionQuotaTests(unittest.TestCase):
         second = replace(self.ref, account_id="another")
         self.assertEqual("~42.9%", self.percent(evidence, self.accounts()))
         ambiguous = self.usage(evidence, self.accounts(refs=(self.ref, second)))
-        self.assertEqual(["—", "—"], [card["quotas"][0]["percent"] for card in ambiguous["accounts"]])
+        self.assertEqual(["?", "?"], [card["quotas"][0]["percent"] for card in ambiguous["accounts"]])
         snapshot = one_request(running=False)
         invocation = replace(snapshot.invocations[0], account_ref=self.ref)
         proven, _ = self.evidence(replace(snapshot, invocations=(invocation,)))
@@ -109,7 +109,7 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertEqual("~42.9%", self.percent(matched, self.accounts((scoped,))))
         unknown, _ = self.evidence(replace(snapshot, invocations=(replace(invocation,
             model=ModelRef("github-copilot", "")),)))
-        self.assertEqual("—", self.percent(unknown, self.accounts((scoped,))))
+        self.assertEqual("?", self.percent(unknown, self.accounts((scoped,))))
         publisher, _ = self.evidence(replace(snapshot, invocations=(replace(invocation,
             model=ModelRef("openai", "special")),)))
         self.assertEqual("0%", self.percent(publisher, self.accounts((scoped,))))
@@ -117,21 +117,21 @@ class SessionQuotaTests(unittest.TestCase):
     def test_partial_unpriced_missing_capacity_unlimited_stale_and_source_isolation(self):
         snapshot = one_request(running=False)
         evidence, _ = self.evidence(replace(snapshot, complete=False))
-        self.assertEqual("—", self.percent(evidence, self.accounts()))
+        self.assertEqual("~42.9%", self.percent(evidence, self.accounts()))
         complete, _ = self.evidence(snapshot)
-        self.assertEqual("—", self.percent(complete, self.accounts(availability="stale")))
-        self.assertEqual("—", self.percent(complete, self.accounts(), stale=True))
+        self.assertEqual("~42.9%", self.percent(complete, self.accounts(availability="stale")))
+        self.assertEqual("~42.9%", self.percent(complete, self.accounts(), stale=True))
         self.assertEqual("Unlimited", self.percent(complete, self.accounts((replace(self.monthly, unlimited=True),))))
         self.assertIsNone(session_quota_usage(complete, self.accounts(), ("foreign", "source", "epoch"), NOW))
         self.valuation.side_effect = lambda *_: None
         unpriced, _ = self.evidence(snapshot)
-        self.assertEqual("—", self.percent(unpriced, self.accounts()))
+        self.assertEqual("?", self.percent(unpriced, self.accounts()))
         missing = replace(self.monthly, limit=D(0), used=D(0), remaining=D(0))
-        self.assertEqual("—", self.percent(complete, self.accounts((missing,))))
+        self.assertEqual("?", self.percent(complete, self.accounts((missing,))))
         wire = json.dumps(self.usage(complete, self.accounts()))
         self.assertNotIn("synthetic-account", wire)
         self.assertNotIn("instance-v1", wire)
-        self.assertNotIn("native", wire)
+        self.assertNotIn("account_key", wire)
 
     def test_retained_evidence_recovers_on_same_snapshot_without_capacity_or_revision_change(self):
         snapshot = one_request(running=False)
@@ -140,7 +140,7 @@ class SessionQuotaTests(unittest.TestCase):
                         reference_ccost_capacity=D(70))
         accounts = self.accounts((quota,))
         partial = session_quota_evidence(history, self.service)
-        self.assertEqual("—", self.percent(partial, accounts))
+        self.assertEqual("~42.9%", self.percent(partial, accounts))
 
         history.retained = False
         recovered = session_quota_evidence(history, self.service)
@@ -184,8 +184,9 @@ class SessionQuotaTests(unittest.TestCase):
 
         self.assertEqual("positive", normal["contribution"])
         self.assertNotEqual("~0%", normal["percent"])
-        self.assertEqual(("positive", "—"), (unknown["contribution"], unknown["percent"]))
-        self.assertEqual(("positive", "—"), (partial["contribution"], partial["percent"]))
+        self.assertEqual(("positive", "?"), (unknown["contribution"], unknown["percent"]))
+        self.assertTrue(partial["percent"].startswith("~"))
+        self.assertEqual("estimated", partial["state"])
         self.assertEqual("positive", self.usage(evidence, self.accounts(), stale=True)
             ["accounts"][0]["quotas"][0]["contribution"])
 
@@ -223,6 +224,34 @@ class SessionQuotaTests(unittest.TestCase):
 
         self.assertEqual(("zero", "0%"), (native_zero["contribution"], native_zero["percent"]))
         self.assertEqual(["positive", "zero", "zero"], [card["quotas"][0]["contribution"] for card in cards])
+
+    def test_partial_usage_states_and_retained_capacity_reset_are_independent_and_correctable(self):
+        evidence, _ = self.evidence()
+        quota = replace(self.monthly, label="Weekly", period="rolling", duration_seconds=604800,
+                        unit=None, limit=None, used=None, remaining=None, remaining_fraction=D(".8"))
+        cache = {}
+        def row(value, accounts):
+            return session_quota_usage(value, accounts, source_scope(self.source), NOW,
+                capacity_cache=cache)["accounts"][0]["quotas"][0]
+
+        first = row(evidence, self.accounts((quota,), period_cost=ComparisonCost(D(200), 1, 1)))
+        retained = row(replace(evidence, complete=False), self.accounts((quota,)))
+        corrected = row(evidence, self.accounts((quota,), period_cost=ComparisonCost(D(100), 1, 1)))
+        reset = row(evidence, self.accounts((replace(quota, reset_at_ms=300_000),)))
+
+        self.assertEqual(("~3%", "estimated"), (first["percent"], first["state"]))
+        self.assertEqual("~3%", retained["percent"])
+        self.assertIn("Retained same-window", retained["reason"])
+        self.assertEqual("~6%", corrected["percent"])
+        self.assertEqual(("?", "impossible"), (reset["percent"], reset["state"]))
+        unknown = replace(evidence, contributions=(replace(evidence.contributions[0], amount=D(0),
+                          native=(), complete=False),))
+        pending = row(replace(unknown, complete=False), self.accounts())
+        impossible = row(unknown, self.accounts())
+        recovered = row(evidence, self.accounts())
+        self.assertEqual(("Loading…", "pending"), (pending["percent"], pending["state"]))
+        self.assertEqual(("?", "impossible"), (impossible["percent"], impossible["state"]))
+        self.assertEqual("~42.9%", recovered["percent"])
 
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_shipped_navigation_memory_controller(self):

@@ -134,37 +134,77 @@ def quota_contribution(evidence, native, quota, candidates) -> Literal["positive
 
 
 def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
+    def result(percent, state, reason):
+        return dict(percent=percent, state=state, reason=reason)
+
     if quota.unlimited:
-        return "Unlimited"
+        return result("Unlimited", "verified", "No finite quota limit.")
     capacity = reference.get("capacity")
-    if stale or not evidence.complete or not reference.get("current") or not reference.get("coherent"):
-        return "—"
     eligible, estimated, uncertain = quota_contributions(evidence, native, quota, candidates)
-    if uncertain:
-        return "—"
-    estimated = estimated or reference["basis"] == "ratio"
+    if not reference.get("coherent") or quota.window_active is False:
+        return result("?", "impossible", "No coherent compatible quota capacity/window.")
+    if quota_contribution(evidence, native, quota, candidates) == "zero":
+        return result("0%", "verified", "Qualified zero session consumption for this quota.")
+    if uncertain and not eligible:
+        return result("?", "impossible", "Session consumption cannot be allocated to this account/model.")
+    estimated = (estimated or stale or uncertain or not evidence.complete or
+                 not reference.get("current") or reference.get("retained") or
+                 not all(part.complete for part in eligible))
     # A native same-unit per-request observation is exact only with proven
     # account identity. Reference valuation is not a native provider debit.
     unit = (quota.unit or "").casefold()
-    direct = bool(unit) and quota.limit is not None and quota.limit > 0
+    direct = bool(eligible and unit) and quota.limit is not None and quota.limit > 0
     native_amount = Decimal(0)
     for part in eligible:
         amount, count = dict(part.native).get(unit, (Decimal(0), 0))
         direct = direct and part.account_key == native.key and count == part.requests
         native_amount += amount
     if direct:
-        return percentage(native_amount, quota.limit, False)
+        if native_amount == 0 and not evidence.complete:
+            return result("Loading…", "pending", "Recorded portion is zero; complete usage is still pending.")
+        return result(percentage(native_amount, quota.limit, bool(estimated)),
+            "estimated" if estimated else "verified",
+            "Recorded same-unit session debit / matching quota limit." +
+            (" Observed portion only; attribution, coverage or freshness is uncertain." if estimated else ""))
     if capacity is None or capacity <= 0:
-        return "—"
-    if not eligible:
-        return "0%"
-    if not all(part.complete for part in eligible):
-        return "—"
-    return percentage(sum((part.amount for part in eligible), Decimal(0)), capacity,
-                      estimated or reference["basis"] == "native")
+        return result("?", "impossible", "No compatible reference quota capacity is available.")
+    amount = sum((part.amount for part in eligible), Decimal(0))
+    if amount <= 0:
+        return result("Loading…" if not evidence.complete else "?",
+            "pending" if not evidence.complete else "impossible",
+            "No usable priced session consumption yet; token/pricing evidence is missing.")
+    return result(percentage(amount, capacity, True), "estimated",
+        "Observed attributed reference CCost / compatible reference capacity; not a native debit or bill." +
+        (" Partial usage/attribution; observed portion only." if estimated else "") +
+        (" Retained same-window capacity sample." if reference.get("retained") else ""))
 
 
-def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False):
+def quota_reference(values, now_ms, cache, key):
+    """Session-only estimate: reuse coherent samples within the identical window."""
+    reference = quota_ccost_values(values, now_ms)
+    compatible = (values.get("origin") == "provider_native" and values.get("window_active") is not False
+        and values.get("status") not in {"blocked", "invalid", "paused"}
+        and (values.get("reset_at_ms") is None or values["reset_at_ms"] > now_ms)
+        and not (values.get("reset_at_ms") is not None and values.get("duration_seconds")
+                 and now_ms < values["reset_at_ms"] - values["duration_seconds"] * 1000))
+    if not compatible:
+        cache.pop(key, None)
+        return {**reference, "capacity": None, "coherent": False}
+    if not reference.get("current"):
+        # A stale sample is not current/exact. Re-evaluate only its existing raw
+        # facts, never another quota or an expired/reset window.
+        sample = quota_ccost_values({**values, "availability": "available", "status": "available"}, now_ms)
+        reference = {**sample, "current": False, "retained": True}
+    if reference.get("capacity") is not None and reference.get("coherent"):
+        cache[key] = reference["capacity"]
+    elif reference.get("coherent") and key in cache:
+        reference = {**reference, "capacity": cache[key], "retained": True}
+    else:
+        cache.pop(key, None)
+    return reference
+
+
+def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False, capacity_cache=None):
     if evidence is None or accounts is None or evidence.source != source:
         return None
     candidates = {}
@@ -173,6 +213,8 @@ def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False):
             candidates.setdefault(route, []).append(item.account.key)
     candidates = {route: tuple(keys) for route, keys in candidates.items()}
     cards = []
+    cache = capacity_cache if capacity_cache is not None else {}
+    wanted = set()
     for item in accounts.accounts:
         native = item.account
         observation = dict(dict(account(item).fields)["observation"].fields)
@@ -182,10 +224,15 @@ def session_quota_usage(evidence, accounts, source, now_ms, *, stale=False):
             period = next((p for p in item.quota_periods if p.quota is quota), None)
             values = dict(quota_record(quota, period.cost if period else None,
                 provider_id=native.ref.provider_id, availability=native.availability).fields)
-            reference = quota_ccost_values(values, now_ms)
+            key = (source, native.key, index, quota.label, quota.scope, quota.model_id,
+                   quota.unit, quota.limit, quota.reset_at_ms, quota.duration_seconds, quota.period)
+            wanted.add(key)
+            reference = quota_reference(values, now_ms, cache, key)
             rows.append(dict(id=identity((index, quota.label, quota.scope, quota.model_id)),
                 label=quota.label, scope=quota.scope, model_id=quota.model_id,
                 contribution=quota_contribution(evidence, native, quota, candidates),
-                percent=quota_share(evidence, native, quota, reference, candidates, stale=stale)))
+                **quota_share(evidence, native, quota, reference, candidates, stale=stale)))
         cards.append(dict(observation=safe, quotas=rows))
+    for key in set(cache) - wanted:
+        del cache[key]
     return dict(scope=identity(evidence.source), accounts=cards)

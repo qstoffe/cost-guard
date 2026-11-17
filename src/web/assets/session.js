@@ -46,7 +46,8 @@ const SessionDetail = (() => {
         let value = this.select(row, 'token_mix_percent', state === 'known' && !valid ? 'unavailable' : state, cache);
         if (!Array.isArray(value.token_mix_percent) || value.token_mix_percent.length !== 4 ||
             state === 'pending' && !cache.has('token_mix_percent')) {
-          const token = row.in_progress || authority?.rows?.[row.event_id] === 'pending' ? 'Loading…' : 'N/A';
+          const token = state !== 'invalidated' && (row.in_progress || state === 'pending') ? 'Loading…' :
+            row.calls > 0 ? '?' : 'N/A';
           value = {...value, display: {...value.display, token_mix_percent: token},
             display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
               [unit, {...value.display_units?.[unit], token_mix_percent: token}]))};
@@ -101,7 +102,11 @@ const SessionDetail = (() => {
     return [label, model, effort, cost,
       calls, ReportView.display(value, 'duration_ms'),
       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
-      ReportView.costValue(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
+       ReportView.costValue(value, 'extra_ccost'), ContextHelp.value(
+         el('span', ReportView.display(value, 'token_mix_percent')),
+         'Token percentages use recorded Input / Cached input / Cache write / Output counts. ' +
+         'Loading…: acquisition pending. ?: recorded token breakdown unavailable or incomplete; ' +
+         'CCost can reflect only the known priced portion. N/A: no nonzero token mix.')];
   }
   class View {
     constructor(api, id) {
@@ -155,14 +160,27 @@ const SessionDetail = (() => {
       const token = this.token; this.token = null;
       if (token) this.api('/api/detail', {action: 'close', token}).catch(() => {});
     }
+    wake(hints) {
+      const hint = hints?.find(item => item.session_id === this.id)?.hint;
+      if (!hint || hint === this.liveHint) return;
+      this.liveHint = hint;
+      if (!document.hidden) this.poll();
+    }
+    catchUp() {
+      if (!this.attached || document.hidden) return;
+      this.revalidate = true; this.poll();
+    }
     async poll() {
-      if (!this.attached || this.busy) return;
+      if (!this.attached) return;
+      if (this.busy) { this.trailing = true; return; }
       clearTimeout(this.timer);
       if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
+      this.trailing = false;
       const generation = this.generation;
       this.pendingLoad = this.load();
       await this.pendingLoad;
-      if (this.attached) this.timer = setTimeout(() => this.poll(), generation === this.generation ? (this.waiting ? 500 : 5000) : 0);
+      if (this.attached) this.timer = setTimeout(() => this.poll(),
+        this.trailing || generation !== this.generation ? 0 : this.waiting ? 500 : 5000);
     }
     async retrySource() {
       if (this.retry.disabled || !this.token) return;
@@ -193,6 +211,11 @@ const SessionDetail = (() => {
           const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
           if (!this.attached || generation !== this.generation) { this.api('/api/detail', {action: 'close', token: opened}).catch(() => {}); return; }
           this.token = opened;
+        }
+        if (this.revalidate) {
+          this.revalidate = false;
+          await this.api('/api/detail', {action: 'wake', token: this.token});
+          if (!this.attached || generation !== this.generation) return;
         }
         let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
         if (!this.attached || generation !== this.generation) return;
@@ -439,7 +462,7 @@ const SessionDetail = (() => {
           String(row.total_calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), '—',
           ReportView.display(row, 'total_incoming_context_ccost'), ReportView.display(row, 'total_extra_ccost'),
           Array.isArray(row.total_token_mix_percent) ? row.total_token_mix_percent.join('/') :
-            row.total_token_mix_percent === 'Loading…' ? 'Loading…' : 'N/A'][index];
+             row.total_token_mix_percent === 'Loading…' ? 'Loading…' : row.total_calls > 0 ? '?' : 'N/A'][index];
       };
       for (let index = 0; index < 10; index++) {
         const cell = this.footer.children[index] || el('td'), node = cell.children[0] || el('span');
@@ -447,7 +470,10 @@ const SessionDetail = (() => {
           !this.values.totals.has('total_ccost') ? 'Loading…' : value(index));
         if (index === 3) ContextHelp.value(node, () => ReportView.display(this.footerBlock, 'session_cost_help') +
           (Number.isFinite(this.footerBlock.duration_ms) ?
-            '\n\nDuration: ' + ReportView.display(this.footerBlock, 'duration_ms') : ''));
+             '\n\nDuration: ' + ReportView.display(this.footerBlock, 'duration_ms') : ''));
+        if (index === 9) ContextHelp.value(node,
+          'Complete-session token mix uses raw recorded counts, not an average of prompt percentages. ' +
+          '?: the recorded breakdown is incomplete or has no positive denominator. Loading…: acquisition pending.');
         if (!node.parentNode) cell.append(node);
         if (!cell.parentNode) this.footer.append(cell);
       }

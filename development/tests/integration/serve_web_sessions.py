@@ -91,6 +91,8 @@ class FixtureRuntime:
     def observe(self):
         observation = observe_catalog(self.service.source, include_archived_revisions=True)
         self.catalog.observe(observation, unavailable=self.unavailable)
+        if not self.unavailable:
+            self.details.observe_source(observation)
         if self.live_root and not self.unavailable:
             root = self.service.source.snapshots[self.live_root].root
             capture, _ = capture_rows(self.service, root)
@@ -127,7 +129,7 @@ class FixtureRuntime:
                 recent_finished_cards=())
         view = project_live(frame, self.service.timezone_id).to_json()
         self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms,
-            catalog_hint=self.catalog.live_hint()))
+            catalog_hint=self.catalog.live_hint(), detail_hints=self.details.live_hints()))
 
     def close(self):
         self.stopping.set()
