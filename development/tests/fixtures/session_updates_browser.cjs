@@ -54,7 +54,7 @@ module.exports = async ({evaluate,until,fixture,command,targetId}) => {
   await evaluate(`window.releaseRead=null;{const api=detail.api;window.holdRead=true;
     detail.api=async(...args)=>{if(holdRead && args[1]?.action==='begin'){
       holdRead=false;await new Promise(resolve=>releaseRead=resolve);}return api(...args);};
-    detail.poll();}`);
+    void detail.poll();}`);
   await until(`typeof releaseRead==='function'`);
   await fixture('detail-update-burst');
   await fixture('detail-update-burst');

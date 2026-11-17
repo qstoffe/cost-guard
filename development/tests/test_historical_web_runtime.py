@@ -29,8 +29,9 @@ const source = fs.readFileSync('development/tests/fixtures/session_updates_brows
 const expression = source.match(/await evaluate\(`(window\.releaseRead[\s\S]*?)`\);/)[1];
 const context = vm.createContext({});
 vm.runInContext(`window=globalThis;const api='application-api';
-  detail={api:async()=>{},poll(){window.polled=true;}}`,context);
-vm.runInContext(expression,context);
+  detail={api:async()=>{},poll(){window.polled=true;return new Promise(()=>{});}}`,context);
+const result = vm.runInContext(expression,context);
+assert.equal(result,undefined,'CDP awaitPromise must not wait on the deliberately held read');
 assert.equal(context.polled,true);
 assert.equal(vm.runInContext('api',context),'application-api');
 assert.equal(typeof context.detail.api,'function');
