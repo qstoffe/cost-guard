@@ -21,6 +21,41 @@ from development.tests.integration.benchmark_web_runtime import backend_journey,
 
 
 class HistoricalWebRuntimeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'optional JS runtime unavailable')
+    def test_detail_inflight_probe_does_not_redeclare_application_api_binding(self):
+        script = r"""
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+const source = fs.readFileSync('development/tests/fixtures/session_updates_browser.cjs','utf8');
+const expression = source.match(/await evaluate\(`(window\.releaseRead[\s\S]*?)`\);/)[1];
+const context = vm.createContext({});
+vm.runInContext(`window=globalThis;const api='application-api';
+  detail={api:async()=>{},poll(){window.polled=true;return new Promise(()=>{});}}`,context);
+const result = vm.runInContext(expression,context);
+assert.equal(result,undefined,'CDP awaitPromise must not wait on the deliberately held read');
+assert.equal(context.polled,true);
+assert.equal(vm.runInContext('api',context),'application-api');
+assert.equal(typeof context.detail.api,'function');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_active_burst_preserves_user_request_order_when_wall_clock_does_not_advance(self):
+        now = 1_800_000_000_000
+        source = WireHistory(1, 1, now, 0)
+        with patch('development.tests.fixtures.historical_web_source.time.time', return_value=now / 1000):
+            for ordinal in range(31):
+                source.active_update(ordinal)
+
+        messages = source.messages['ses_fixture_00000']
+        created = [message['time']['created'] for message in messages]
+        self.assertTrue(all(left < right for left, right in zip(created, created[1:])))
+        self.assertEqual(32, sum(message['type'] == 'user' for message in messages))
+        self.assertTrue(all(message['time']['created'] <= message['time']['completed']
+            for message in messages[:-1] if message['type'] == 'assistant'))
+        self.assertEqual(created[-1], source.sessions[0]['time']['updated'])
+
     def test_retention_mix_has_real_old_and_recent_execution_not_only_old_metadata(self):
         now = 1_800_000_000_000
         fixture = WireHistory(120, 2, now, 0, 'retention-mix')

@@ -35,11 +35,55 @@ class SessionDetails:
         self.histories = OrderedDict()
         self.leases = OrderedDict()
         self.quota_context = None
+        self.quota_capacities = {}
 
     def observe_accounts(self, accounts, source, now_ms, *, stale=False):
         # One shared Live observation; no IO and no table/history revaluation.
         with self.lock:
             self.quota_context = accounts, source, now_ms, stale
+
+    def observe_source(self, observation):
+        """Selected-root revision hints only; no source reads or timer evidence."""
+        if observation is None:
+            return
+        with self.lock:
+            for key, entry in self.histories.items():
+                if not self._active(key):
+                    continue
+                revision = observation.revisions.get(key)
+                if revision is None:
+                    continue
+                signal = observation.source_epoch, revision
+                if entry.get('source_signal') == signal:
+                    continue
+                previous = entry.get('source_signal')
+                entry['source_signal'] = signal
+                if previous is not None:
+                    self._wake(entry)
+
+    def _wake(self, entry):
+        # Hints never reset retry budgets, cooldowns or terminal errors.
+        if entry['acquisition']['reason'] is not None or entry['acquisition']['phase'] in {'failed', 'retrying'}:
+            return
+        entry['wake'] = True
+        entry['due'] = min(entry['due'], self.clock())
+
+    def wake(self, token):
+        with self.lock:
+            lease = self.leases.get(token)
+            if lease is None:
+                raise KeyError('detail_expired')
+            lease['touched'] = self.clock()
+            if lease['mode'] == 'live':
+                entry = self.histories[lease['session_id']]
+                if self.clock() - entry.get('requested_at', -float('inf')) >= 1:
+                    entry['requested_at'] = self.clock()
+                    self._wake(entry)
+
+    def live_hints(self):
+        with self.lock:
+            return [dict(session_id=key, hint=identity((entry.get('source_signal'), entry['generation'])))
+                for key, entry in self.histories.items() if self._active(key)]
 
     def open(self, session_id, mode):
         with self.lock:
@@ -63,7 +107,7 @@ class SessionDetails:
                  acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                     queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None,
                 retry_windows=0, retry_at=None, attempt_leases=()))
-            if entry['acquisition']['phase'] != 'failed':
+            if entry['acquisition']['phase'] not in {'failed', 'retrying'}:
                 entry["due"] = 0
             token = uuid4().hex
             self.leases[token] = dict(session_id=session_id, mode=mode, frozen=None,
@@ -76,6 +120,7 @@ class SessionDetails:
             self.leases.clear()
             self.histories.clear()
             self.quota_context = None
+            self.quota_capacities.clear()
 
     def freeze(self, token):
         with self.lock:
@@ -146,6 +191,7 @@ class SessionDetails:
             self.histories.move_to_end(key)
             attempt = uuid4().hex
             entry['attempt'] = attempt
+            entry['wake'] = False
             entry['attempt_leases'] = tuple(token for token, lease in self.leases.items()
                 if lease['session_id'] == key and self.clock() - lease['touched'] <= 300)
             entry['acquisition'] = dict(phase='selecting', reason=None, percent=3, attempt_id=attempt,
@@ -215,7 +261,7 @@ class SessionDetails:
                 entry['state'] = outcome['state']
                 status.update(phase='ready', reason=None, attempts=0, percent=70,
                     phase_completed=None, phase_total=None)
-                entry['due'] = self.clock() + 5
+                entry['due'] = self.clock() + (0 if entry.get('wake') else 5)
             entry['generation'] += 1
 
     def acquisition_status(self, entry):
@@ -336,7 +382,9 @@ class SessionDetails:
         usage = None
         if quota_context is not None and not invalidated and not chunk:
             accounts, source, now_ms, quota_stale = quota_context
-            usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms, stale=quota_stale)
+            with self.lock:
+                usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms,
+                    stale=quota_stale or acquisition['phase'] == 'failed', capacity_cache=self.quota_capacities)
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
             **(dict(quota_usage=usage) if not chunk else {}),
             values_invalidated=invalidated,

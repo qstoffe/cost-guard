@@ -47,14 +47,14 @@ async function main() {
     quotas:[{id:'five',label:'5-hour',contribution:'positive',percent:'~235%'},
       {id:'model',label:'Special',scope:'model',model_id:'special',contribution:'zero',percent:'0%'}]},
     {observation:{id:'unused',provider_id:'openai',label:'Unused'},quotas:[
-      {id:'weekly',label:'weekly',contribution:'unknown',percent:'—'}]}]};
+       {id:'weekly',label:'weekly',contribution:'unknown',percent:'?',reason:'Account allocation unavailable'}]}]};
   new Node('main').append(view.root);
   await view.load();
   assert.equal(view.root.children.at(-1),view.quotaUsage.root,'summary follows all existing activity');
   assert.equal(view.root.children.at(-2),view.activity.root);
   const quotaCard=view.quotaUsage.grid.children[0],quotaRow=quotaCard.children[1];
   assert.match(quotaRow.textContent,/~235%/);
-  assert.equal(view.quotaUsage.grid.children.length,1,'no unused account DOM or links');
+   assert.equal(view.quotaUsage.grid.children.length,2,'unallocatable accounts explain their unknown share');
   assert.equal(quotaCard.children.length,2,'zero model quota has no DOM slot');
   assert.equal(quotaCard.children[0].tag,'h3','account is subordinate to the section h2');
   page.quota_usage.accounts[0].quotas[0].percent='~117.5%';
@@ -73,8 +73,8 @@ async function main() {
   quotaValue.accounts[0].quotas.push(tiny); await view.load();
   assert.equal(quotaCard.children[2].children[0].textContent,'Weekly GPT-6');
   assert.equal(quotaCard.children[2].children[1].textContent,'~0%','typed positive wins over rounded text');
-  tiny.percent='—'; await view.load();
-  assert.equal(quotaCard.children[2].children[1].textContent,'—','positive membership survives unknown capacity');
+   tiny.percent='?'; await view.load();
+   assert.equal(quotaCard.children[2].children[1].textContent,'?','positive membership survives unknown capacity');
   tiny.contribution='zero'; await view.load();
   assert.equal(quotaCard.children.length,2);
   assert.equal(view.body.children.length, 100);

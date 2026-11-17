@@ -72,6 +72,9 @@ class WireHistory:
                 raise RuntimeError('nonsequential_fixture_update')
             sid, now = 'ses_fixture_00000', int(time.time() * 1000)
             messages = deepcopy(self.messages[sid])
+            # Burst commands can share a wall-clock millisecond. Preserve the
+            # user → assistant → next user sequence used by native history sort.
+            now = max(now, messages[-1]['time']['created'] + 2)
             if self.update_ordinal >= 0:
                 messages[-1]['finish'] = 'stop'
                 messages[-1]['time']['completed'] = now - 1

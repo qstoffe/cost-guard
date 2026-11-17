@@ -35,6 +35,12 @@ def mix_percent(values: tuple[int, int, int, int]) -> tuple[int, int, int, int] 
     raw = [Decimal(value) * Decimal(100) / Decimal(total) for value in values]
     rounded = [int(value.to_integral_value(rounding="ROUND_HALF_UP")) for value in raw]
     rounded[-1] += 100 - sum(rounded)
+    if any(value < 0 or count == 0 and value != 0 for count, value in zip(values, rounded)):
+        # Preserve established rounding unless its residual invents a nonzero
+        # zero category or negative Output; then apportion largest remainders.
+        rounded = [int(value) for value in raw]
+        for index in sorted(range(4), key=lambda index: raw[index] - rounded[index], reverse=True)[:100 - sum(rounded)]:
+            rounded[index] += 1
     return tuple(rounded)  # type: ignore[return-value]
 
 

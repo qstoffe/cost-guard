@@ -42,7 +42,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('window.revision=detail.data.revision');
   await fixture('detail-values-correction');
   await until('detail.data.revision !== revision && detail.data.value_authority.rows.u_next === "invalidated"');
-  assert.equal(await evaluate('mix().textContent'),'Loading…');
+   assert.equal(await evaluate('mix().textContent'),'?');
   await fixture('detail-values-source');
   await until('detail.data.value_authority.rows.u_next === "known"');
   await fixture('fail');

@@ -118,6 +118,7 @@ class LiveRuntime:
                 frame.now_ms, stale=frame.quota_stale or not verified)
         self.publish("live", record(state=driver.source_state,
              catalog_hint=self.catalog.live_hint(),
+             detail_hints=tuple(record(**hint) for hint in self.details.live_hints()),
             source_generation=generation if verified and generation in {"v1", "v2"} else "unknown",
             source_observed_at_ms=driver.observed_at_ms,
             error_code=driver.error.code.value if driver.error else None,

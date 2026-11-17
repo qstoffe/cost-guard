@@ -120,6 +120,7 @@ function connectionStatus(message, state = {}) {
     'registration_unreadable', 'unsupported_schema', 'unsupported_version', 'registration_invalid']
     .includes(hostState.sourceError);
   if (hostState.sourceBlocked) hostState.writable = false;
+  if (!wasWritable && hostState.writable) current?.detail?.catchUp();
   if (sourceNotice) {
     sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
     sourceNoticeGeometry();
@@ -622,6 +623,7 @@ async function connect() {
           view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
         miniWatch?.update(liveValue);
         current?.catalog?.wake(value?.catalog_hint);
+        current?.detail?.wake(value?.detail_hints);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
             if (current?.active === job.id && !ReportLoading.sections.includes(current.section)) {
@@ -675,6 +677,7 @@ window.addEventListener('hashchange', () => {
   navigate();
 });
 window.addEventListener('pageshow', () => liveConnection?.resync());
+window.addEventListener('focus', () => current?.detail?.catchUp());
 if (sessionsNav) {
   sessionsNav.addEventListener('click', event => {
     if (rememberedSession || event.button > 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -689,7 +692,7 @@ document.addEventListener('visibilitychange', () => {
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
-    current?.catalog?.poll(); current?.detail?.poll();
+    current?.catalog?.poll(); current?.detail?.catchUp();
     enterCachedReport(current);
     firstReport();
   }

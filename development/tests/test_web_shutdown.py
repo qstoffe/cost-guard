@@ -248,7 +248,8 @@ class WebShutdownTests(unittest.TestCase):
                     while time.monotonic() < until and (len(clients) < 3 or host.jobs.snapshot(key)['progress']['phase'] != 'history'):
                         time.sleep(.01)
                     self.assertGreaterEqual(len(clients), 3, 'history, card and detail lanes entered')
-                    self.assertEqual('running', host.jobs.snapshot(key)['status'])
+                    self.assertEqual('running', host.jobs.snapshot(key)['status'],
+                        ''.join(traceback.format_exception(host.live.failure)) if host.live.failure else '')
                     self.assertEqual('history', host.jobs.snapshot(key)['progress']['phase'])
                 started = time.monotonic()
                 closing.start()

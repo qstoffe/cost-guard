@@ -81,6 +81,57 @@ class DetailLivenessTests(unittest.TestCase):
         self.source.source_instance = 'synthetic-detail'
         self.service = report_service(self, self.source, now_ms=100_000_000)
 
+    def test_material_root_hints_coalesce_and_do_not_capture_unrelated_or_identical_frames(self):
+        from src.watch.observers import observe_catalog
+        from dataclasses import replace
+        now = [0]
+        details = SessionDetails(clock=lambda: now[0])
+        token = details.open('root-0000', 'live')
+        peer = details.open('root-0001', 'live')
+        observation = observe_catalog(self.source)
+        details.observe_source(observation)
+        details.tick(self.service)
+        details.tick(self.service)
+        loads = self.source.load_count
+        initial = details.live_hints()
+        for _ in range(100):
+            details.observe_source(replace(observation, revisions={**observation.revisions, 'unrelated': 'new'}))
+            details.tick(self.service)
+        self.assertEqual(loads, self.source.load_count)
+        self.assertEqual(initial, details.live_hints())
+
+        changed = replace(observation, revisions={**observation.revisions, 'root-0000': 'changed'})
+        details.observe_source(changed)
+        key, attempt, history = details.claim()
+        self.assertEqual('root-0000', key)
+        from src.application.session_detail import acquire_detail
+        outcome = acquire_detail(self.service, history, key)
+        details.observe_source(replace(changed, revisions={**changed.revisions, 'root-0000': 'later'}))
+        details.finish(key, attempt, outcome)
+        self.assertEqual('root-0000', details.claim()[0], 'one trailing source revalidation survives inflight work')
+        self.assertIsNone(details.claim(), 'no parallel capture for the same selected root')
+        self.assertIsNotNone(details.page(token, 0)['result'])
+        self.assertIsNotNone(details.page(peer, 0)['result'])
+
+    def test_return_wakes_are_bounded_and_do_not_bypass_retry_or_terminal_state(self):
+        now = [0]
+        details = SessionDetails(clock=lambda: now[0])
+        token = details.open('root-0000', 'live')
+        details.tick(self.service)
+        for _ in range(100):
+            details.wake(token)
+        key, attempt, _ = details.claim()
+        details.finish(key, attempt, dict(error='connection_reset'))
+        now[0] = 1
+        details.wake(token)
+        self.assertIsNone(details.claim(), 'return cannot bypass retry delay')
+        now[0] = 5
+        key, attempt, _ = details.claim()
+        details.finish(key, attempt, dict(error='http_auth_failure', terminal=True))
+        now[0] = 200
+        details.wake(token)
+        self.assertIsNone(details.claim(), 'hints cannot reset authentication failure')
+
     def test_unavailable_factory_and_unexpected_analysis_have_typed_finite_outcomes(self):
         token = self.details.open('root-0000', 'live')
         self.details.tick(None, unavailable=True)

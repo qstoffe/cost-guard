@@ -71,7 +71,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   data.value_authority.rows['live-prompt']='known';view.update(data);assert.equal(mix(),'0/98/1/1');
   row.in_progress=false;view.update(data);assert.equal(mix(),'0/98/1/1');
   row.token_mix_percent=null;data.value_authority.rows['live-prompt']='invalidated';view.update(data);
-  assert.equal(mix(),'N/A','supported withdrawal clears even a terminal value');
+   assert.equal(mix(),'?','supported withdrawal explains missing recorded token evidence');
   row.id='new-prompt';row.event_id='new-prompt';row.in_progress=true;
   data.value_authority.rows={'new-prompt':'pending'};view.update(data);
   assert.equal(mix(),'Loading…','no cross-prompt reuse');

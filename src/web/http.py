@@ -467,12 +467,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                         or not 0 <= value["offset"] <= 2**53):
                     raise ValueError()
                 result = owner.activity_page(value["token"], value["revision"], value["offset"])
-            elif action in ("page", "begin", "chunk", "freeze", "close", "retry") and isinstance(value.get("token"), str):
-                if action in ("freeze", "close", "retry") and set(value) == {"action", "token"}:
+            elif action in ("page", "begin", "chunk", "freeze", "close", "retry", "wake") and isinstance(value.get("token"), str):
+                if action in ("freeze", "close", "retry", "wake") and set(value) == {"action", "token"}:
                     if action == "freeze":
                         owner.freeze(value["token"])
                     elif action == 'retry':
                         owner.retry(value['token'])
+                    elif action == 'wake':
+                        owner.wake(value['token'])
                     else:
                         owner.close(value["token"])
                     result = {"state": action}

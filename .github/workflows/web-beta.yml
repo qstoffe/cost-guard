@@ -107,6 +107,31 @@ jobs:
           if summary.get("outcome") != "PASS":
               raise SystemExit("Calm UI evidence did not pass")
           PY
+      - name: Selected detail native live, quota and token recovery journeys
+        if: ${{ !cancelled() }}
+        env:
+          COST_GUARD_CI_BROWSER: '1'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.executable_path
+          for mode in ("detail-updates", "detail-quota", "detail-values"):
+              output = Path("ci-results/" + mode + ".json").resolve()
+              result = subprocess.run(["node", "development/tests/integration/probe_web_sessions.cjs",
+                  browser, str(output), "--" + mode],
+                  env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable}, timeout=210, check=False)
+              evidence = json.loads(output.read_text(encoding="utf-8"))
+              print("::notice title=" + mode + "::" + json.dumps(evidence).replace("%", "%25").replace("\n", "%0A"))
+              result.check_returncode()
+              if evidence.get("outcome") != "PASS":
+                  raise SystemExit(mode + " did not pass")
+          PY
       # Ordinary smoke retains rendered session history and browser Back/Forward.
       # Deep return/filter/arrival journeys remain available in manual Full.
       - name: Sessions detail return filters and arrival journeys (manual Full)
