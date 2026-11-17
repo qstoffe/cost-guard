@@ -406,7 +406,8 @@ class SessionCatalogTests(unittest.TestCase):
                 service_factory=lambda now: make_service(tmp, self.source, now_ms=now)[2])
             owner.catalog_observation = observe_catalog(self.source, include_archived_revisions=True)
             self.catalog.page()
-            details = SimpleNamespace(lock=Lock(), leases={"owned": {}}, tick=lambda *args, **kwargs: captured.set())
+            details = SimpleNamespace(lock=Lock(), leases={"owned": {}},
+                observe_source=lambda observation: None, tick=lambda *args, **kwargs: captured.set())
             def blocked(service):
                 entered.set()
                 if not released.wait(3):
