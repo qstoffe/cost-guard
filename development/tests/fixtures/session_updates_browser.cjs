@@ -51,10 +51,10 @@ module.exports = async ({evaluate,until,fixture,command,targetId}) => {
   await until(`detail.data.total===12`,10000);
   measurements.push({return_to_ten_prompt_catchup_ms:await evaluate(`Date.now()-returnAt`)});
   // Cross 25-row transfer boundaries; a return during a held request must trail.
-  await evaluate(`window.releaseRead=null;const api=detail.api;window.holdRead=true;
+  await evaluate(`window.releaseRead=null;{const api=detail.api;window.holdRead=true;
     detail.api=async(...args)=>{if(holdRead && args[1]?.action==='begin'){
       holdRead=false;await new Promise(resolve=>releaseRead=resolve);}return api(...args);};
-    detail.poll();`);
+    detail.poll();}`);
   await until(`typeof releaseRead==='function'`);
   await fixture('detail-update-burst');
   await fixture('detail-update-burst');
