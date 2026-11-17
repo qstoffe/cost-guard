@@ -252,6 +252,8 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertEqual(("Loading…", "pending"), (pending["percent"], pending["state"]))
         self.assertEqual(("?", "impossible"), (impossible["percent"], impossible["state"]))
         self.assertEqual("~42.9%", recovered["percent"])
+        outage = self.usage(replace(unknown, complete=False), self.accounts(), stale=True)["accounts"][0]["quotas"][0]
+        self.assertEqual(("?", "impossible"), (outage["percent"], outage["state"]))
 
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_shipped_navigation_memory_controller(self):

@@ -1,6 +1,6 @@
 // Native V2 wire → shared Watch owner → authenticated SSE → canonical detail DOM.
 const assert = require('node:assert/strict');
-module.exports = async ({evaluate,until,fixture,command}) => {
+module.exports = async ({evaluate,until,fixture,command,targetId}) => {
   const checks=[],measurements=[];
   await evaluate(`location.hash='#/sessions/ses_fixture_00000'`);
   await until(`current?.detail?.data?.total===1`);
@@ -11,9 +11,13 @@ module.exports = async ({evaluate,until,fixture,command}) => {
       try{return await originalApi(...args);}finally{detailFlights--;}};
     window.paints=[];const update=detail.update.bind(detail);
     detail.update=value=>{update(value);paints.push({at:Date.now(),total:value.total});};
-    window.liveCallback=detail.wake.bind(detail);detail.wake=hints=>{sseMessages++;liveCallback(hints);};`);
+    window.liveCallback=detail.wake.bind(detail);detail.wake=hints=>{sseMessages++;
+      if(!window.watchAt && liveValue?.view?.active_cards?.some(c=>c.session_id===detail.id &&
+        c.rows.some(r=>r.prompt.in_progress)))window.watchAt=Date.now();
+      liveCallback(hints);};`);
   const event=await fixture('detail-update');
   await until(`detail.data.total===2 && detail.body.lastChild.classList.contains('session-running')`,10000);
+  await until(`Number.isFinite(window.watchAt)`);
   const metrics=await fixture('detail-metrics');
   const paint=await evaluate(`paints.find(p=>p.total===2).at`);
   assert.ok(paint-event.event_ms<4500,'no mandatory full five-second timer cycle');
@@ -22,6 +26,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   measurements.push({event_to_canonical_paint_ms:paint-event.event_ms,
     event_to_owner_revision_ms:metrics.revision_times.ses_fixture_00000-event.event_ms,
     watch_running_observation_ms:metrics.observations.ses_fixture_00000?.running_ms,
+    event_to_watch_browser_observation_ms:await evaluate('watchAt')-event.event_ms,
     canonical_paint_ms:paint});
   await fixture('detail-telemetry');
   await until(`!detail.body.lastChild.classList.contains('session-running') &&
@@ -34,14 +39,15 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   await until(`/^\\d+\\/\\d+\\/\\d+\\/\\d+$/.test(detail.body.lastChild.cells[9].textContent)`);
   assert.equal(await evaluate(`detail.data.result.view.prompt_blocks[0].rows.at(-1).token_mix_percent.reduce((a,b)=>a+b)===100`),true);
   checks.push('native running arrival and terminal update; positive CCost/missing cache-write counter explains ?; explicit zero telemetry recovers numeric 100% mix automatically');
-  // A separate headless target hides the tested tab without workstation interaction.
-  // The probe supplies only this target session, so use the page visibility override
-  // on the owned document to deterministically exercise browser scheduling policy.
-  await evaluate(`Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
-    document.dispatchEvent(new Event('visibilitychange'))`);
+  // Real browser visibility in the disposable headless profile, never workstation focus.
+  const {targetId:other}=await command('Target.createTarget',{url:'about:blank'});
+  await command('Target.activateTarget',{targetId:other});
+  await until(`document.hidden`);
   await fixture('detail-update-burst');
-  await evaluate(`Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
-    window.returnAt=Date.now();document.dispatchEvent(new Event('visibilitychange'))`);
+  await evaluate(`window.returnAt=Date.now()`);
+  await command('Target.activateTarget',{targetId});
+  await until(`!document.hidden`);
+  await command('Target.closeTarget',{targetId:other});
   await until(`detail.data.total===12`,10000);
   measurements.push({return_to_ten_prompt_catchup_ms:await evaluate(`Date.now()-returnAt`)});
   // Cross 25-row transfer boundaries; a return during a held request must trail.
@@ -67,5 +73,5 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   measurements.push({http_calls:await evaluate('detailRequests'),sse_messages:await evaluate('sseMessages'),
     maximum_browser_flights:await evaluate('maxDetailFlights'),source_requests:after.source.requests});
   checks.push('ten-prompt visibility catchup; inflight return coalescing; 32 keyed rows/chunks and footer; unchanged row DOM; unrelated source events bounded; one browser flight');
-  return {checks,measurements,limitations:['Visibility scheduling uses an owned-document hidden override, not proof of OS background-tab throttling. No personal incident record was supplied.']};
+  return {checks,measurements,limitations:['Headless disposable-profile visibility is not physical OS background-window proof. No personal incident record was supplied.']};
 };

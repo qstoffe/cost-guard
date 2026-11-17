@@ -384,7 +384,7 @@ class SessionDetails:
             accounts, source, now_ms, quota_stale = quota_context
             with self.lock:
                 usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms,
-                    stale=quota_stale, capacity_cache=self.quota_capacities)
+                    stale=quota_stale or acquisition['phase'] == 'failed', capacity_cache=self.quota_capacities)
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
             **(dict(quota_usage=usage) if not chunk else {}),
             values_invalidated=invalidated,

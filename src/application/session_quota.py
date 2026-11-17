@@ -161,7 +161,9 @@ def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
         native_amount += amount
     if direct:
         if native_amount == 0 and not evidence.complete:
-            return result("Loading…", "pending", "Recorded portion is zero; complete usage is still pending.")
+            pending = not stale and reference.get("current")
+            return result("Loading…" if pending else "?", "pending" if pending else "impossible",
+                "Recorded portion is zero; complete usage has not been established.")
         return result(percentage(native_amount, quota.limit, bool(estimated)),
             "estimated" if estimated else "verified",
             "Recorded same-unit session debit / matching quota limit." +
@@ -170,8 +172,9 @@ def quota_share(evidence, native, quota, reference, candidates, *, stale=False):
         return result("?", "impossible", "No compatible reference quota capacity is available.")
     amount = sum((part.amount for part in eligible), Decimal(0))
     if amount <= 0:
-        return result("Loading…" if not evidence.complete else "?",
-            "pending" if not evidence.complete else "impossible",
+        pending = not evidence.complete and not stale and reference.get("current")
+        return result("Loading…" if pending else "?",
+            "pending" if pending else "impossible",
             "No usable priced session consumption yet; token/pricing evidence is missing.")
     return result(percentage(amount, capacity, True), "estimated",
         "Observed attributed reference CCost / compatible reference capacity; not a native debit or bill." +

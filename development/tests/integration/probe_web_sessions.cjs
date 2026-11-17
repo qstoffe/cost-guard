@@ -108,7 +108,7 @@ async function main() {
                console.log(JSON.stringify(evidence));return;
              }
              if (mode === '--detail-updates') {
-               const details=await require('../fixtures/session_updates_browser.cjs')({evaluate,until,fixture,
+               const details=await require('../fixtures/session_updates_browser.cjs')({evaluate,until,fixture,targetId,
                  command:(method,params)=>command(method,params,sessionId)});
                assert.deepEqual(errors,[]);
                evidence={outcome:'PASS',browser:version.product,...details,inference_calls:0,
