@@ -257,6 +257,30 @@ class SessionQuotaTests(unittest.TestCase):
         outage = self.usage(replace(unknown, complete=False), self.accounts(), stale=True)["accounts"][0]["quotas"][0]
         self.assertEqual(("?", "impossible"), (outage["percent"], outage["state"]))
 
+    def test_two_contributing_accounts_keep_independent_native_and_reference_periods(self):
+        second = replace(self.ref, account_id="second-subscription")
+        snapshot = one_request(running=False)
+        first = replace(snapshot.invocations[0], account_ref=self.ref,
+            cost=CostObservation(D(7), "AI credits", CostKind.PROVIDER_REPORTED))
+        other = replace(first, invocation_id="second-physical-request", account_ref=second, cost=None)
+        evidence, _ = self.evidence(replace(snapshot, invocations=(first, other)))
+        accounts = self.accounts(refs=(self.ref, second))
+        weekly = QuotaComponent("Weekly", period="rolling", duration_seconds=604800,
+            reset_at_ms=200_000, reference_ccost_capacity=D(100), status="available")
+        second_card = replace(accounts.accounts[1],
+            account=replace(accounts.accounts[1].account, quotas=(weekly,)),
+            quota_periods=(QuotaPeriodProjection(weekly, None, None),))
+        accounts = replace(accounts, accounts=(accounts.accounts[0], second_card))
+
+        result = self.usage(evidence, accounts)
+        missing = replace(second_card, account=replace(second_card.account,
+            quotas=(replace(weekly, reference_ccost_capacity=None),)), quota_periods=())
+        degraded = self.usage(evidence, replace(accounts, accounts=(accounts.accounts[0], missing)))
+
+        self.assertEqual(["10%", "~30%"], [item["quotas"][0]["percent"] for item in result["accounts"]])
+        self.assertEqual(["verified", "estimated"], [item["quotas"][0]["state"] for item in result["accounts"]])
+        self.assertEqual(["10%", "?"], [item["quotas"][0]["percent"] for item in degraded["accounts"]])
+
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_shipped_navigation_memory_controller(self):
         result = subprocess.run(["node", "development/tests/fixtures/session_return_vm.cjs"],

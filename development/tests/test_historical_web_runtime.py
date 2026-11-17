@@ -21,6 +21,21 @@ from development.tests.integration.benchmark_web_runtime import backend_journey,
 
 
 class HistoricalWebRuntimeTests(unittest.TestCase):
+    def test_active_burst_preserves_user_request_order_when_wall_clock_does_not_advance(self):
+        now = 1_800_000_000_000
+        source = WireHistory(1, 1, now, 0)
+        with patch('development.tests.fixtures.historical_web_source.time.time', return_value=now / 1000):
+            for ordinal in range(31):
+                source.active_update(ordinal)
+
+        messages = source.messages['ses_fixture_00000']
+        created = [message['time']['created'] for message in messages]
+        self.assertTrue(all(left < right for left, right in zip(created, created[1:])))
+        self.assertEqual(32, sum(message['type'] == 'user' for message in messages))
+        self.assertTrue(all(message['time']['created'] <= message['time']['completed']
+            for message in messages[:-1] if message['type'] == 'assistant'))
+        self.assertEqual(created[-1], source.sessions[0]['time']['updated'])
+
     def test_retention_mix_has_real_old_and_recent_execution_not_only_old_metadata(self):
         now = 1_800_000_000_000
         fixture = WireHistory(120, 2, now, 0, 'retention-mix')
