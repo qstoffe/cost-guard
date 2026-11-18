@@ -19,6 +19,7 @@ from development.tests.fixtures.quick_aborts import quick_aborts
 from development.tests.fixtures.claude_alias import service as model_service
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
+from src.analysis.session_cost import NAMESPACE as COST_CHECKPOINT, reconcile_session_cost
 from src.application.session_catalog import SessionCatalog, SORTS
 from src.domain import ContextBoundary, ModelRef
 from src.reports.models import SessionUsageRow
@@ -362,6 +363,25 @@ class SessionCatalogTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "cache_miss"):
                     session_summary(restarted, root, revision)
 
+    def test_cold_summary_keeps_canonical_groups_without_checkpoint_io(self):
+        source = SyntheticMonthSource(1, 2, month_start_ms=1000, children_per_root=1)
+        root = source.snapshots["root-0000"].root
+        snapshot = source.snapshots[root.session_id]
+        requests = tuple(replace(entry, model=ModelRef("github-copilot", "unpriced-fixture"))
+                         if entry.session_id != root.session_id else entry for entry in snapshot.invocations)
+        snapshot = replace(snapshot, complete=True, invocations=requests)
+        source.snapshots[root.session_id] = snapshot
+        service = report_service(self, source)
+        with (patch.object(service.cache_repository, 'get', wraps=service.cache_repository.get) as read,
+              patch.object(service.cache_repository, 'put', wraps=service.cache_repository.put) as write):
+            row, _ = session_summary(service, root, snapshot.source_revision)
+
+        self.assertNotIn(COST_CHECKPOINT, [call.args[0] for call in (*read.call_args_list, *write.call_args_list)])
+        canonical = reconcile_session_cost(service.cache_repository, snapshot, service._load_comparison_catalog())
+        self.assertEqual(row.cost_groups, canonical.groups)
+        self.assertEqual({(group.agent, group.complete) for group in row.cost_groups}, {(0, True), (1, False)})
+        self.assertFalse(row.complete)
+
     def test_idle_catalog_reuses_epoch_and_slice_stops_after_slow_root(self):
         first = self.catalog.page()
         self.assertEqual(self.catalog.page(token=first["token"])["epoch"], first["epoch"])
@@ -407,7 +427,8 @@ class SessionCatalogTests(unittest.TestCase):
             owner.catalog_observation = observe_catalog(self.source, include_archived_revisions=True)
             self.catalog.page()
             details = SimpleNamespace(lock=Lock(), leases={"owned": {}},
-                observe_source=lambda observation: None, tick=lambda *args, **kwargs: captured.set())
+                observe_source=lambda observation, cards, *, unavailable: None,
+                tick=lambda *args, **kwargs: captured.set())
             def blocked(service):
                 entered.set()
                 if not released.wait(3):

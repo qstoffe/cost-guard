@@ -7,7 +7,7 @@ from src.analysis.cache import dependency_signature
 from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.context import ContextEpochs
 from src.analysis.session_context import session_context_observation
-from src.analysis.session_cost import reconcile_session_cost
+from src.analysis.session_cost import session_cost_groups
 from src.analysis.session_activity import activity_fields
 from src.analysis.model_identity import dependencies, payload_current, current
 from src.domain import ModelRef
@@ -154,8 +154,11 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     item = service._analyze(root, detail=True, force_fresh=active)
     stage('projecting_summary')
     row = service._session_rows((item,), catalog_models=True)[0]
-    cost = reconcile_session_cost(service.cache_repository, item.snapshot, service._load_comparison_catalog())
-    row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=cost.groups,
+    # This lane already projects a complete scalar row and persists it below.
+    # Do not also rebuild and checkpoint the incremental Watch/detail ledger
+    # just to obtain its presentation groups.
+    groups = session_cost_groups(item.bundle.trace_entries, root.session_id, service._load_comparison_catalog())
+    row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=groups,
                   **activity_fields(item, on_activity=on_activity))
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")

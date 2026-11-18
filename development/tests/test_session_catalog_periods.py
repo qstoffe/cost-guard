@@ -45,6 +45,72 @@ class SessionPeriodTests(unittest.TestCase):
             catalog.valid[key] = catalog.revisions[key], self.clock
             catalog.activity_valid[key] = catalog.revisions[key]
 
+    def test_larger_explicit_period_gets_bounded_extra_admission_per_slice(self):
+        source, catalog = self.catalog([self.now - 1000] * 2 + [self.now - 3 * DAY] * 26)
+        service = report_service(self, source, now_ms=self.now)
+        today = catalog.page()
+        catalog.tick(service)
+        request = dict(token=today['token'], period='7-days', navigation=1)
+        catalog.page(**request)
+
+        catalog.tick(service)
+        progress = catalog.page(**request)
+
+        self.assertEqual((progress['progress']['completed'], progress['progress']['total']), (14, 28))
+        self.assertTrue(progress['pending_sort'])
+        self.assertEqual(source.load_count, 14, "Today facts must not be reread")
+        for _ in range(2):
+            catalog.tick(service)
+        ready = catalog.page(**request)
+        self.assertEqual((ready['order_state'], ready['total'], ready['size']), ('verified', 28, 25))
+        self.assertEqual(source.load_count, 28)
+
+    def test_slow_expansion_keeps_four_root_ceiling_and_hidden_or_superseded_expansion_yields(self):
+        for reason in ('slow', 'hidden', 'superseded'):
+            with self.subTest(reason=reason):
+                self.clock = 0
+                source, catalog = self.catalog([self.now - 1000] * 2 + [self.now - 3 * DAY] * 26)
+                service = report_service(self, source, now_ms=self.now)
+                today = catalog.page()
+                catalog.tick(service)
+                token = today['token']
+                catalog.page(token=token, period='7-days', navigation=1)
+                other = catalog.page(period='7-days', passive=True)
+                load = source.load_session_snapshot
+
+                def during_read(key):
+                    value = load(key)
+                    if reason == 'slow':
+                        self.clock += .12
+                    if source.load_count == 6:
+                        if reason == 'hidden':
+                            catalog.interest(token, False)
+                        if reason == 'superseded':
+                            catalog.page(token=token, period='7-days', sort='ccost', navigation=2)
+                    return value
+
+                with patch.object(source, 'load_session_snapshot', side_effect=during_read):
+                    catalog.tick(service)
+
+                self.assertEqual(source.load_count, 6)
+                self.assertTrue(catalog.needed(), "other visible demand still uses the original budget")
+                self.assertTrue(catalog.page(token=other['token'], period='7-days', passive=True)['pending_sort'])
+
+    def test_expansion_retains_fair_turns_for_older_work_in_another_tab(self):
+        source, catalog = self.catalog([self.now - 20 * DAY] * 4 + [self.now - 1000] * 2
+                                       + [self.now - 3 * DAY] * 26)
+        service = report_service(self, source, now_ms=self.now)
+        today = catalog.page()
+        catalog.tick(service)
+        catalog.page(token=today['token'], period='7-days', navigation=1)
+        catalog.page(period='all', passive=True)
+
+        catalog.tick(service)
+
+        self.assertEqual(source.load_count, 14)
+        self.assertIn('root-0000', catalog.rows, "the oldest-work turn must survive expansion priority")
+        self.assertEqual(len(catalog.leases[today['token']]['navigation'].facts), 13)
+
     def test_cold_5000_root_sorts_hydrate_only_thirty_today_then_reuse_and_revise(self):
         activities = ([self.now - 1000] * 30 + [self.now - 3 * DAY] * 40 +
                       [self.now - 20 * DAY] * 50 + [self.now - (31 + index % 699) * DAY for index in range(4880)])

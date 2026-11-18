@@ -14,6 +14,7 @@ class Navigation:
     facts: dict = field(default_factory=dict)
     authorities: dict = field(default_factory=dict)
     invalid: bool = False
+    expanded_period: bool = False
 
     def check(self, catalog, window):
         # Revision advancement is deliberately NOT an invalidation. Identity,
