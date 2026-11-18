@@ -27,6 +27,10 @@ from .session_catalog_scope import (
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
+PASSIVE_ATTEMPTS = 4
+INTERACTIVE_ATTEMPTS = 12
+INTERACTIVE_ADMISSION_SECONDS = 0.35
+
 
 def effort_sort(key):
     if key is None:
@@ -327,35 +331,41 @@ class SessionCatalog:
         if failure and failure[1]:
             return False  # Unsupported/auth failures require changed source evidence.
         delay = min(120, 30 * 2 ** min(2, self.failure_counts.get(key, 1) - 1)) if failure else 5
-        visible = any(self._browsing(lease) and key in lease.get('visible', ()) for lease in self.leases.values())
+        if self.clock() - self.attempted.get(key, -100) < delay:
+            return False
         navigation_pending = any(self._browsing(lease) and lease.get('navigation') is not None
+            and not lease['navigation'].invalid
             and key in lease['navigation'].roots and key not in lease['navigation'].facts
             for lease in self.leases.values())
-        return (self.clock() - self.attempted.get(key, -100) >= delay
-                 and (navigation_pending or not self._current(key) or (key in self.active or self.rows[key].running)
-                     or not self.rows[key].context_qualified and self._requested(key, 'ctx')
+        return (navigation_pending or not self._current(key) or (key in self.active or self.rows[key].running)
+                      or not self.rows[key].context_qualified and self._requested(key, 'ctx')
                       or not self.rows[key].effort_qualified and self._requested(key, 'effort')
                       or not self._activity_current(key) and any(self._browsing(lease)
                           and key in lease.get('candidates', ()) and (
                               lease.get('sort') == 'activity' or lease.get('period') != 'all')
-                          for lease in self.leases.values())))
+                          for lease in self.leases.values()))
 
     def _requested(self, key, sort):
         return any(lease.get('sort') == sort and self._browsing(lease)
             and key in lease.get('candidates', ()) for lease in self.leases.values())
 
-    def _candidate(self):
+    def _candidate(self, *, extension=False):
         # Only requested rows, or scoped scalar keys required by a requested
         # metric/activity sort or final period membership. Pinned navigation
         # acquires only visible rows; HTTP reads never acquire history.
         candidates = [key for key in self._targets() if self._eligible(key)]
         if not candidates:
             return None
+        navigations = [lease['navigation'] for lease in self.leases.values() if self._browsing(lease)
+            and lease.get('navigation') is not None and not lease['navigation'].invalid]
+        if extension and not any(nav.expanded_period and any(
+                key in nav.roots and key not in nav.facts for key in candidates) for nav in navigations):
+            return None
         self.turn += 1
-        pending = {key for lease in self.leases.values() if self._browsing(lease)
-            and lease.get('navigation') is not None for key in lease['navigation'].pending}
-        if self.turn % 8 and pending.intersection(candidates):
-            return min(pending.intersection(candidates),
+        pending = {key for nav in navigations for key in nav.pending}
+        priority = pending.intersection(candidates)
+        if self.turn % 8 and priority:
+            return min(priority,
                        key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
         visible = dict.fromkeys(key for lease in sorted(self.leases.values(), key=lambda item: -item["touched"])
                                 if self._browsing(lease) for key in lease.get("visible", ()))
@@ -399,11 +409,17 @@ class SessionCatalog:
             if changed:
                 self._invalidate_navigation(changed)
                 self.generation += 1
-        for _ in range(4):
+        for number in range(INTERACTIVE_ATTEMPTS):
+            extension = number >= PASSIVE_ATTEMPTS
+            # Spend the extra budget only while there is eligible expanded
+            # navigation demand. The next root rechecks interest/cancellation;
+            # slow transport and passive work keep their original admission cap.
+            if extension and self.clock() - start >= INTERACTIVE_ADMISSION_SECONDS:
+                break
             with self.lock:
                 if self.state != "observed":
                     return
-                key = self._candidate()
+                key = self._candidate(extension=extension)
                 if key is None:
                     break
                 root, revision = self.roots[key], self.revisions.get(key)
@@ -415,6 +431,7 @@ class SessionCatalog:
                 retrying = key in self.failures
                 navigations = [lease['navigation'] for lease in self.leases.values()
                     if self._browsing(lease) and lease.get('navigation') is not None
+                    and not lease['navigation'].invalid
                     and key in lease['navigation'].roots and key not in lease['navigation'].facts]
                 memberships = {}
                 windows = {nav.window for nav in navigations if nav.window.period != 'all'}
@@ -592,9 +609,14 @@ class SessionCatalog:
                         nav_window = snapshot.window
                     else:
                         keys, nav_window = candidates, window
+                    previous_period = lease.get('period')
+                    previous_start = (catalog_window(previous_period, self.timezone_id, window.end_ms - 1).start_ms
+                        if previous_period is not None and previous_period != period and not offset else None)
                     nav = Navigation(navigation, intent, nav_window,
                         {key: self.roots[key] for key in keys}, self.last_observation.source_epoch
-                        if self.last_observation else None)
+                        if self.last_observation else None,
+                        expanded_period=previous_start is not None and (
+                            nav_window.start_ms is None or nav_window.start_ms < previous_start))
                     if offset and snapshot.facts:
                         nav.facts.update((key, fact) for key, fact in snapshot.facts if key in nav.roots)
                     lease.update(navigation=nav, navigation_sequence=navigation)
