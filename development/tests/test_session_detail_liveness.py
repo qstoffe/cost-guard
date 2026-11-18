@@ -132,6 +132,58 @@ class DetailLivenessTests(unittest.TestCase):
         details.wake(token)
         self.assertIsNone(details.claim(), 'hints cannot reset authentication failure')
 
+    def test_only_qualified_selected_activity_acknowledges_held_owner_work(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
+        from src.watch.observers import observe_catalog
+
+        details = self.details
+        key = 'root-0000'
+        token = details.open(key, 'live')
+        frozen = details.open(key, 'snapshot')
+        peer = details.open('root-0001', 'live')
+        observation = observe_catalog(self.source)
+        details.observe_source(observation)
+        details.tick(self.service)
+        details.tick(self.service)
+        details.freeze(frozen)
+        first = details.page(token, 0, begin=True)
+        entry = details.histories[key]
+        snapshot = entry['history'].snapshot
+        rows = entry['result'].prompt_blocks[0].rows
+        new_row = replace(rows[-1], event_id='new-prompt')
+        card = SimpleNamespace(snapshot=replace(snapshot, source_revision='changed'), generation=2,
+            verified_generation=2, source_status=SimpleNamespace(failed_at=None))
+        card.capture = SimpleNamespace(rows=rows, observed_ids={row.event_id for row in rows},
+            authoritative=True, retained=False, observed_at_ms=entry['observed_at_ms'])
+        changed = replace(observation, revisions={**observation.revisions, key: 'changed'})
+        details.observe_source(changed, {key: card})
+        self.assertIsNone(details.page(token, 0, begin=True)['activity_refresh'], 'generic revision is not proof')
+        claimed_key, attempt, _ = details.claim()
+        self.assertEqual(key, claimed_key)
+        card.capture.rows = (*rows, new_row)
+        card.capture.observed_at_ms += 1
+        card.capture.observed_ids.add(new_row.event_id)
+        card.verified_generation = 1
+        details.observe_source(changed, {key: card})
+        self.assertIsNone(details.page(token, 0, begin=True)['activity_refresh'], 'stale Watch capture')
+        card.verified_generation = 2
+        details.observe_source(changed, {key: card})
+        pending = details.page(token, 0, begin=True)
+        self.assertEqual('pending', pending['activity_refresh'])
+        self.assertEqual((first['revision'], first['total']), (pending['revision'], pending['total']))
+        self.assertIsNone(details.page(frozen, 0, begin=True)['activity_refresh'])
+        self.assertIsNone(details.page(peer, 0, begin=True)['activity_refresh'])
+        hint, loads = details.live_hints(), self.source.load_count
+        for _ in range(100):
+            details.observe_source(changed, {key: card})
+        self.assertEqual(hint, details.live_hints())
+        self.assertEqual(loads, self.source.load_count)
+        details.finish(key, attempt, dict(error='connection_reset'))
+        self.assertEqual('unavailable', details.page(token, 0, begin=True)['activity_refresh'])
+        details.observe_source(replace(changed, source_epoch='replacement'), {key: card})
+        self.assertIsNone(details.page(token, 0, begin=True)['activity_refresh'])
+
     def test_unavailable_factory_and_unexpected_analysis_have_typed_finite_outcomes(self):
         token = self.details.open('root-0000', 'live')
         self.details.tick(None, unavailable=True)

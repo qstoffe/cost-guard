@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
-from threading import Thread
+from threading import Event, Thread, current_thread
 import time
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -20,6 +20,7 @@ from development.tests.fixtures.historical_web_source import FixtureServer, Wire
 from development.tests.fixtures.pricing_catalog import catalog as prices
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from src.application.session_catalog import SessionCatalog
+from src.application.session_detail import SessionDetails
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import ModelRef
@@ -67,6 +68,26 @@ class Prices:
                                            for i in (1, 2)))
 
 
+class MeasuredDetails(SessionDetails):
+    def __init__(self):
+        super().__init__()
+        self.started = self.published = 0
+        self.started_ms = self.published_ms = None
+
+    def claim(self, **kwargs):
+        result = super().claim(**kwargs)
+        if result is not None:
+            self.started += 1
+            self.started_ms = int(time.time() * 1000)
+        return result
+
+    def finish(self, key, attempt, outcome):
+        super().finish(key, attempt, outcome)
+        if not outcome.get('error'):
+            self.published += 1
+            self.published_ms = int(time.time() * 1000)
+
+
 def main():
     config_root = Path(sys.argv[1])
     config_root.mkdir(parents=True, exist_ok=True)
@@ -81,12 +102,24 @@ def main():
     database = CacheDatabase(config_root)
     database.initialize()
     config = dict(load_configuration(ROOT).values, timezone="UTC", watchStartupEarlierSessions=0)
+    detail_gate = Event()
+    detail_gate.set()
 
     def service(now):
         source = OpenCodeV2Source(registration)
-        return ReportService(selection=SourceSelection(source, "v2", (), source.probe()),
+        report = ReportService(selection=SourceSelection(source, "v2", (), source.probe()),
             pricing_provider=Prices(), account_provider=None, account_providers=(),
             cache_repository=CacheRepository(database), config=config, now_ms=now)
+        if current_thread().name.startswith('cost-guard-detail'):
+            root = report.root_for_session
+
+            def gated_root(key):
+                if not detail_gate.wait(15):
+                    raise TimeoutError('fixture detail gate not released')
+                return root(key)
+
+            report.root_for_session = gated_root
+        return report
 
     def driver():
         reports = service(int(time.time() * 1000))
@@ -96,6 +129,7 @@ def main():
     host = WebHost(config_root, live_factory=driver, jobs=HelpAuditJobs())
     catalog = ControlledCatalog()
     host.live.catalog = catalog
+    host.live.details = MeasuredDetails()
     host.start()
     host.publish_ready()
     print(json.dumps(dict(url=host.browser_url())), flush=True)
@@ -105,7 +139,17 @@ def main():
             command = json.loads(line)["command"]
             if command == "stop":
                 break
-            if command.startswith("detail-update"):
+            if command == 'detail-hold':
+                detail_gate.clear()
+            elif command == 'detail-release':
+                detail_gate.set()
+            elif command == 'detail-metadata':
+                with owner.lock:
+                    item = next(row for row in owner.sessions if row['id'] == 'ses_fixture_00000')
+                    item['title'] = 'Renamed fixture session'
+                    item['time']['updated'] += 1
+                    owner.events.append(dict(type='session.updated', data=dict(sessionID=item['id'])))
+            elif command.startswith("detail-update"):
                 count = 10 if command == "detail-update-burst" else 1
                 for _ in range(count):
                     owner.active_update(owner.update_ordinal + 1)
@@ -135,6 +179,8 @@ def main():
                         validated=entry.get("validated"), phase=entry["acquisition"]["phase"])
                         for key, entry in details.histories.items()}
                 print(json.dumps(dict(ok=True, entries=entries, source=owner.snapshot(),
+                    owner=dict(started=details.started, published=details.published,
+                        started_ms=details.started_ms, published_ms=details.published_ms),
                     revision_times=catalog.revision_times, observations=catalog.observations)), flush=True)
                 continue
             elif command == "arrival-seed":
@@ -184,6 +230,7 @@ def main():
                 continue
             print(json.dumps(dict(ok=True)), flush=True)
     finally:
+        detail_gate.set()
         host.close()
         owner.stopping.set()
         server.shutdown()

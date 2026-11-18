@@ -30,6 +30,8 @@ module.exports = async ({vm, context, Node, input, document, delays}) => {
     assert.equal(view.loader.root.hidden, true);
     assert.equal(view.scroll.attributes['aria-busy'], 'false');
     assert.equal(view.body.children[0], row);
+    assert.equal(view.activityFeedback.children.length, 0);
+    assert.equal(view.activityAnnouncement.textContent, '');
   };
   silent();
   for (const pending of [
@@ -84,6 +86,22 @@ module.exports = async ({vm, context, Node, input, document, delays}) => {
   await view.poll(); silent();
   assert.equal(view.body.children.length, 101);
   assert.match(view.body.children.at(-1).textContent, /\[RUNNING\]/);
+  const runningFooter = view.footer.textContent;
+  response.activity_refresh = 'pending';
+  await view.poll();
+  const acknowledgement = view.activityFeedback.firstChild;
+  assert.match(acknowledgement.textContent, /Checking any running prompts/);
+  for (let cycle = 0; cycle < 30; cycle++) await view.poll();
+  assert.equal(view.activityFeedback.children.length, 1);
+  assert.equal(view.activityFeedback.firstChild, acknowledgement);
+  assert.equal(view.body.children.length, 101);
+  assert.equal(view.footer.textContent, runningFooter);
+  failure = 'offline';
+  await view.poll();
+  assert.equal(view.activityFeedback.firstChild, acknowledgement);
+  assert.match(view.activityAnnouncement.textContent, /Running status may be out of date/);
+  failure = null;
+  response.activity_refresh = null;
   response.result.view.prompt_blocks[0].rows.at(-1).in_progress = false;
   response.revision = 'quiet-completed';
   await view.poll(); silent();

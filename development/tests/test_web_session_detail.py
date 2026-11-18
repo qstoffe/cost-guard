@@ -194,6 +194,7 @@ class SessionDetailTests(unittest.TestCase):
         token = self.details.open("root-0000", "live")
         self.tick(service)
         first = self.details.page(token, 0, begin=True)
+        self.assertEqual(first['revision'], first['activity_revision'])
         source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1001, month_start_ms=1000), source_revision="new")
         self.tick(service)
         ids = []
@@ -201,10 +202,13 @@ class SessionDetailTests(unittest.TestCase):
             page = self.details.page(token, offset, first["revision"], chunk=True)
             self.assertEqual(page["revision"], first["revision"])
             self.assertEqual(page["total"], 1000)
+            self.assertNotIn('activity_refresh', page)
             self.assertLess(len(json.dumps(page)), 200_000)
             ids.extend(row["id"] for row in page["result"]["view"]["prompt_blocks"][0]["rows"])
         self.assertEqual(len(set(ids)), 1000)
-        self.assertEqual(self.details.page(token, 0, begin=True)["total"], 1001)
+        latest = self.details.page(token, 0, begin=True)
+        self.assertEqual(latest['total'], 1001)
+        self.assertNotEqual(first['activity_revision'], latest['activity_revision'])
 
     def test_authenticated_http_detail_admission_paging_and_freeze(self):
         from src.web.observations import WebObservations
@@ -248,6 +252,7 @@ class SessionDetailTests(unittest.TestCase):
             self.assertEqual(page["offset"], 50)
             self.assertEqual(post({"action": "freeze", "token": token})[0], 200)
             _, pinned, _ = post({"action": "begin", "token": token, "offset": 0})
+            self.assertIsNone(pinned['activity_refresh'])
             status, activity, _ = post({"action": "activity", "token": token,
                                        "revision": pinned["revision"], "offset": 0})
             self.assertEqual((200, 0, []), (status, activity["total"], activity["failures"]))
