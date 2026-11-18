@@ -143,8 +143,9 @@ const SessionDetail = (() => {
       this.values = new Values();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.status, this.retry, this.loader.root,
-        scroll, this.activityAnnouncement, this.context.root, this.activity.root);
+        scroll, this.context.root, this.activity.root);
       if (this.quotaUsage) this.root.append(this.quotaUsage.root);
+      this.root.append(this.activityAnnouncement);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
     }
