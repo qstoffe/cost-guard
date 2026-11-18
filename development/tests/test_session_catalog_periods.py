@@ -371,6 +371,28 @@ class SessionPeriodTests(unittest.TestCase):
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         self.assertEqual(catalog.page(token=page["token"])["total"], 1)
 
+    def test_verified_older_page_keeps_snapshot_and_counts_live_qualification_without_population(self):
+        source, catalog = self.catalog([self.now - 1000] * 51)
+        self.qualify(catalog)
+        options = dict(period="7-days", sort="ccost", direction=1)
+        first = catalog_page(catalog, dict(options, navigation=1))
+        older = dict(options, token=first["token"], offset=25, epoch=first["epoch"])
+        off_page = source.snapshots["root-0000"]
+        source.snapshots["root-0000"] = replace(off_page, source_revision="changed")
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+        with patch.object(catalog, "_population", side_effect=AssertionError("older page rescans live scope")):
+            explicit = catalog_page(catalog, dict(older, applied=1, navigation=2))
+            pinned = catalog_page(catalog, dict(older, applied=2))
+
+        for page in (explicit, pinned):
+            self.assertEqual((page["indexed"], page["available"], page["total"]), (50, 51, 51))
+            self.assertFalse(page["pending_sort"])
+            rows = page["view"]["session_usage"]
+            self.assertEqual([row["session_id"] for row in rows], [f"root-{i:04d}" for i in range(25, 50)])
+            self.assertTrue(all(row["metric_state"] == "snapshot" and row["snapshot_revision"] for row in rows))
+        self.assertEqual(source.load_count, 0)
+
     def test_period_and_direction_qualified_epochs_and_independent_lease_union(self):
         _, catalog = self.catalog([self.now - 1000] * 30 + [self.now - 3 * DAY] * 40)
         first = catalog.page(sort="ccost")
