@@ -88,7 +88,7 @@ class SessionDetails:
             return
         # A capture for the already-reconciled source revision is not new work.
         # Compare once per Watch observation and canonical activity version.
-        if signal == entry.get('reconciled_signal'):
+        if signal[1] == entry.get('captured_source_revision'):
             return
         observed = (signal, card.capture.observed_at_ms, entry.get('activity_revision'))
         if observed == entry.get('watch_activity_observation'):
@@ -297,7 +297,9 @@ class SessionDetails:
                 entry['export_identity'] = None
             else:
                 report = outcome['report']
+                previous_scope = (entry['activity'] or {}).get('scope')
                 entry['history'] = outcome['history']
+                entry['captured_source_revision'] = entry['history'].revision
                 if outcome['changed']:
                     entry['result'] = report
                     entry['revision'] = uuid4().hex
@@ -306,11 +308,10 @@ class SessionDetails:
                         entry['prompt_activity'] = activity
                         entry['activity_revision'] = entry['revision']
                 entry.update(outcome['metadata'])
-                signal = entry.get('attempt_signal')
-                if signal is not None and signal[1] == entry['history'].revision:
-                    entry['reconciled_signal'] = signal
-                    if entry.get('activity_signal') == signal:
-                        entry['activity_signal'] = None
+                signal = entry.get('activity_signal')
+                if signal and (signal[1] == entry['captured_source_revision']
+                        or previous_scope != (entry['activity'] or {}).get('scope')):
+                    entry['activity_signal'] = None
                 entry['validated'] = self.clock()
                 if entry['retry_windows']:
                     LOG.info("detail_recovered windows=%s", entry['retry_windows'])
@@ -327,7 +328,7 @@ class SessionDetails:
         age = max(0, self.clock() - status['changed_at'])
         # A stopped/uninitialized owner must not leave an eternal unadmitted bar.
         if (entry['attempt'] is None and ((status['phase'] == 'queued' and age >= 120)
-                or (entry.get('activity_signal') and entry.get('wake') and status['phase'] == 'ready'
+                or (entry.get('activity_signal') and status['phase'] == 'ready'
                     and self.clock() - entry['activity_queued_at'] >= 120))):
             status.update(phase='failed', reason='detail_not_admitted')
             self._schedule(entry)
@@ -417,10 +418,10 @@ class SessionDetails:
             acquisition = self.acquisition_status(entry)
             invalidated = acquisition["reason"] in INVALID_REASONS
             activity_refresh = None
-            if begin and lease['mode'] == 'live' and entry.get('activity_signal'):
+            if begin and not pending and lease['mode'] == 'live' and entry.get('activity_signal'):
                 if entry.get('source_unavailable') or acquisition['reason']:
                     activity_refresh = 'unavailable'
-                elif entry['attempt'] is not None or entry.get('wake'):
+                else:
                     activity_refresh = 'pending'
             quota_context = self.quota_context
         report = capture["result"]
