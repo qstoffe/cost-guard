@@ -317,12 +317,13 @@ function setup() {
   input.view.accounts.accounts = [...accountItems].reverse(); controller.update(input);
   assert.equal(view.accounts.children.at(-1),retained,'provider-aware account key survives reorder');
   input.view.accounts.accounts = accountItems; controller.update(input);
-  const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
-  const savedQuota = primary.quota;
+   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
+   const savedQuota = primary.quota;
+   const beforePartialPricing = retained.helpText;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   primary.quota = {...savedQuota,display_units:{},display:{...savedQuota.display,ccost_brief:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(2088\)/,'provider Used does not depend on partial OpenCode pricing');
-  assert.equal(retained.helpText.split('\n').length, 2, 'attribution prose is not repeated in Mini help');
+   assert.equal(retained.helpText, beforePartialPricing, 'attribution prose is not repeated in Mini help');
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
   const quota = {...primary.quota}, saved = {...primary};
