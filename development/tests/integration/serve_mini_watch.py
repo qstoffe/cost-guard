@@ -361,8 +361,9 @@ def main():
                         "source_observed_at_ms": int(time.time() * 1000)})
                 elif command == 'quota-authoritative':
                     publish(value=authoritative_allowances(frame))
-                elif command in {'quota-estimates', 'quota-estimates-update'}:
-                    publish(value=estimated_allowances(frame, Decimal(653) if command.endswith('update') else Decimal(613)))
+                elif command in {'quota-estimates', 'quota-estimates-update', 'quota-compact-reset'}:
+                    publish(value=estimated_allowances(frame, Decimal(613 if command == 'quota-estimates' else 653),
+                        renewed=command == 'quota-compact-reset'))
                 elif command in {"quota-idle", "quota-ratio"}:
                     base_account = frame.quota.accounts[0]
                     idle_window = command == 'quota-idle'

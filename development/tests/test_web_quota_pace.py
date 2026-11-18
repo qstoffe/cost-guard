@@ -107,6 +107,15 @@ class WebQuotaPaceTests(unittest.TestCase):
         self.assertEqual('ratio', wire['ccost_pace']['capacity_basis'])
         self.assertIn('Partial pricing / attribution.', wire['display']['capacity_help'])
 
+    def test_reference_capacity_without_native_calendar_does_not_supply_watch_pace(self):
+        quota = QuotaComponent('Monthly', 'fixed', used=D(20), limit=D(100), remaining=D(80),
+            unit='messages', reference_ccost_capacity=D(1000), reset_at_ms=NOW + 86400000)
+
+        wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, None, None)), now_ms=NOW).to_json()['quota']
+
+        self.assertEqual('1000', wire['display']['ccost_capacity'])
+        self.assertIsNone(wire['ccost_pace'])
+
     def test_verified_native_reference_mapping_drives_pace_without_observed_cost(self):
         quota = QuotaComponent('Monthly', 'fixed', used=D(3), limit=D(10), remaining=D(7), unit='messages',
             reference_ccost_capacity=D('10000.01'), reset_at_ms=NOW + 3 * 86400000)

@@ -108,14 +108,17 @@ def authoritative_allowances(frame):
     return replace(frame, quota=replace(frame.quota, accounts=(item,)))
 
 
-def estimated_allowances(frame, used=D(613)):
+def estimated_allowances(frame, used=D(613), *, renewed=False):
     """Independent raw parent/rates and a shorter secondary window for browser help."""
     base = frame.quota.accounts[0]
-    primary = QuotaComponent('Monthly', 'fixed', used=D(10), remaining=D(90), limit=D(100),
-        unit='messages', reset_at_ms=frame.now_ms + 9 * 86400000, primary=True)
+    native_used, days, workdays = (D(15), 12, 8) if renewed else (D(10), 9, 3)
+    remaining = D(100) - native_used
+    primary = QuotaComponent('Monthly', 'fixed', used=native_used, remaining=remaining, limit=D(100),
+        unit='messages', reset_at_ms=frame.now_ms + days * 86400000, primary=True)
     secondary = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'), duration_seconds=18000,
         reset_at_ms=frame.now_ms + 3600000)
-    periods = (QuotaPeriodProjection(primary, ComparisonCost(used, 1, 1), QuotaPace('Monthly', 'messages', D(10), 9, 3, D(30))),
+    periods = (QuotaPeriodProjection(primary, ComparisonCost(used, 1, 1),
+        QuotaPace('Monthly', 'messages', remaining / days, days, workdays, remaining / workdays)),
         QuotaPeriodProjection(secondary, ComparisonCost(D('61.3'), 1, 1), None))
     item = replace(base, account=replace(base.account, ref=AccountRef('fixture', 'other', account_id='estimate'),
         quotas=(primary, secondary), primary_quota_label='Monthly'), quota_periods=periods)
