@@ -22,7 +22,7 @@ from src.watch.models import SessionPreview
 from .projection import project
 from .session_navigation import Navigation
 from .session_catalog_scope import (
-    CatalogEpoch, PAGE_SIZE, activity_time, catalog_window, candidate_population, event_members, provisional_order, in_window, retained_positions,
+    CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, event_members, provisional_order, in_window, retained_positions,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -573,7 +573,11 @@ class SessionCatalog:
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today",
              navigation=None, applied=None, cancelled=None, passive=False):
         with self.lock:
-            window, candidates = self._population(period)
+            # Older pages take membership from their issued epoch, not the live population.
+            if not offset:
+                window, candidates = self._population(period)
+            elif period not in PERIODS:
+                raise ValueError("invalid_request")
             self._expire()
             if token is None:
                 if len(self.leases) >= 32:
@@ -632,11 +636,11 @@ class SessionCatalog:
                 (sort == 'name' or self._key_current(key, sort))
                 and (period == 'all' and sort != 'activity' or self._activity_current(key))
                 and (key not in self.active or self._activity_current(key))))
-            indexed = sum(qualified(key) for key in candidates)
-            pending = indexed != len(candidates)
-            if nav is not None and navigation is not None and not offset:
-                indexed, pending = len(nav.facts), bool(nav.pending)
             if offset == 0:
+                indexed = sum(qualified(key) for key in candidates)
+                pending = indexed != len(candidates)
+                if nav is not None and navigation is not None:
+                    indexed, pending = len(nav.facts), bool(nav.pending)
                 live_page = passive and navigation is None and nav is None
                 applied = "activity" if pending and not live_page else sort
                 order = -1 if pending and not live_page else direction
@@ -729,6 +733,7 @@ class SessionCatalog:
                     for row in selected)
             report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", (), session_usage=selected)
             result = project(report, self.timezone_id, self.unit).to_json()
+            facts = nav.facts if nav is not None and navigation is not None else dict(snapshot.facts)
             for row in result["session_usage"]:
                 key = row["session_id"]
                 current = key in self.roots and self._current(key)
@@ -760,7 +765,6 @@ class SessionCatalog:
                     row["metric_states"]["effort"] = "retained" if self.rows[key].effort_key is not None else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].effort_pending:
                     row["metric_states"]["effort"] = "pending"
-                facts = nav.facts if nav is not None and navigation is not None else dict(snapshot.facts)
                 if key in facts:
                     row['snapshot_revision'] = facts[key][1]
                     if facts[key][1] is None:
