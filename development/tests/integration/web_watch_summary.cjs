@@ -52,6 +52,7 @@ for(const node of watch.daily.children)assert.equal(node.events.focus,undefined)
 // Exact shared compact list, including quota modes, unit changes and edge cases.
 vm.runInContext('globalThis.compact=new AccountCards.CompactView();compact.update(input.view)',context);
 assert.equal(watch.accounts.textContent,context.compact.root.textContent);
+assert.deepEqual(watch.accounts.children.map(line=>line.helpText),context.compact.root.children.map(line=>line.helpText));
 const monthly=structuredClone(input.view.accounts.accounts[0]);
 const capacitySample=structuredClone(input.view.accounts.accounts[1]);
 for(const fixture of input.quota_cases||[]) {
@@ -59,7 +60,11 @@ for(const fixture of input.quota_cases||[]) {
     observation:{...monthly.observation,id:'case-'+fixture.name}}];
   render();
   const line=watch.accounts.children[0],bar=line.children[1];
-  assert.match(helpText(line.children[0].children[0]),/^Capacity: [\s\S]*\nNext reset:/);
+  const capacity=fixture.value.quota.display.capacity_amount;
+  const summary=`Capacity: ${capacity==='?'?'N/A':capacity}\nNext reset: ${fixture.value.display.mini_reset}`;
+  const help=helpText(line.children[0].children[0]);
+  assert.equal(help.split('\n\n')[0],summary);
+  if (!fixture.value.quota.ccost_pace) assert.equal(help,summary);
   assert.equal(bar.hidden,fixture.value.used_fraction==null||fixture.value.quota.unlimited);
   assert.equal(line.children[0].querySelectorAll('button').length,0);
   assert.ok(line.textContent.includes(fixture.value.quota.unlimited?'Unlimited':

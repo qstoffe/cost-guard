@@ -276,6 +276,21 @@ const AccountCards = (() => {
       this.align();
     }
   }
+  function compactQuotaHelp(primary) {
+    const capacity = display(primary.quota, 'capacity_amount');
+    const summary = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${display(primary, 'mini_reset')}`;
+    const pace = primary.quota.ccost_pace;
+    if (!pace) return summary;
+    const lines = [];
+    const day = display(pace, 'ccost_per_day');
+    if (day && day !== 'N/A') lines.push(`CCost Remaining/day: ${day}`);
+    if (pace.workdays === 0) lines.push('No workdays left');
+    else {
+      const workday = display(pace, 'ccost_per_workday');
+      if (workday && workday !== 'N/A') lines.push(`CCost Remaining/workday: ${workday}`);
+    }
+    return lines.length ? `${summary}\n\n${lines.join('\n')}` : summary;
+  }
   // Shared compact subscription presenter; owns neither acquisition nor PiP.
   class CompactView {
     constructor(doc = document) {
@@ -308,8 +323,7 @@ const AccountCards = (() => {
         ReportView.bind(line, () => {
           const quota = ReportView.quotaView(primary.quota, primary);
           const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
-          const capacity = display(primary.quota, 'capacity_amount');
-          line.helpText = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${display(primary, 'mini_reset')}`;
+          line.helpText = compactQuotaHelp(primary);
           text(line.children[0].children[0], `${obs.label} · ${used} (${display(primary.quota, 'ccost_' + quota.mode)})${warning}`);
           ContextHelp.refresh(line);
           line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';

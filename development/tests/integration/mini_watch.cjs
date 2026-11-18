@@ -224,7 +224,9 @@ function setup() {
   for (const [index, line] of [...view.accounts.children].entries()) {
     const primary = input.view.accounts.accounts[index].primary;
     const capacity = primary.quota.display.capacity_amount;
-    assert.equal(line.helpText, `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${primary.display.mini_reset}`);
+     const summary = `Capacity: ${capacity === '?' ? 'N/A' : capacity}\nNext reset: ${primary.display.mini_reset}`;
+     assert.equal(line.helpText.split('\n\n')[0], summary);
+     if (!primary.quota.ccost_pace) assert.equal(line.helpText, summary);
     assert.doesNotMatch(line.helpText, /Unrounded|Guesstimate|estimate|Observed same-window|Provider-reported fraction|÷/);
   }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
@@ -238,14 +240,37 @@ function setup() {
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
   const scopedDisplay = scopedPrimary.display;
-  for (const [capacity, usd, reset, expected] of [['3066 Credits', '$30.66', 'in 1h · 12:00 today'],
-      ['~3066 Credits', '~$30.66', 'in 23h · 10:00 tomorrow'], ['?', '?', 'N/A', 'N/A']]) {
-    scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,capacity_amount:capacity},
-      display_units:{credits:{capacity_amount:capacity},usd:{capacity_amount:usd}}};
-    scopedPrimary.display = {...scopedDisplay,mini_reset:reset};
-    for (const unit of ['credits','usd']) {
-      vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
-      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${expected || (unit === 'usd' ? usd : capacity)}\nNext reset: ${reset}`);
+   const rates = (day, workday) => ({ccost_per_day:day,ccost_per_workday:workday});
+   const pace = (workdays, credits, usd) => ({workdays,display:credits,display_units:{credits,usd}});
+   const label = retained.children[0].children[0];
+   for (const [capacity, usd, reset, projected, creditsLines, usdLines] of [
+     ['~3066 Credits', '~$30.66', 'in 1h · 12:00 today', pace(3,rates('600','1800'),rates('$6.00','$18.00')),
+       ['CCost Remaining/day: 600','CCost Remaining/workday: 1800'],
+       ['CCost Remaining/day: $6.00','CCost Remaining/workday: $18.00']],
+     ['3066 Credits', '$30.66', 'in 23h · 10:00 tomorrow', pace(0,rates('<0.1','N/A'),rates('<$0.01','N/A')),
+       ['CCost Remaining/day: <0.1','No workdays left'], ['CCost Remaining/day: <$0.01','No workdays left']],
+     ['3066 Credits', '$30.66', 'in 2 days', pace(2,rates('N/A','0'),rates(undefined,'$0.00')),
+       ['CCost Remaining/workday: 0'], ['CCost Remaining/workday: $0.00']],
+     ['3066 Credits', '$30.66', 'in 2 days', pace(2,rates('2','N/A'),rates('$0.02',undefined)),
+       ['CCost Remaining/day: 2'], ['CCost Remaining/day: $0.02']],
+     ['3066 Credits', '$30.66', 'in 2 days', pace(2,rates('N/A','N/A'),rates('N/A','N/A')), [], []],
+     ['?', '?', 'N/A', null, [], []]
+   ]) {
+     scopedPrimary.quota = {...scopedQuota, ccost_pace:projected, display:{...scopedQuota.display,capacity_amount:capacity},
+       display_units:{credits:{capacity_amount:capacity},usd:{capacity_amount:usd}}};
+     scopedPrimary.display = {...scopedDisplay,mini_reset:reset};
+     controller.update(input);
+     for (const unit of ['credits','usd']) {
+       vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
+       const lines = unit === 'usd' ? usdLines : creditsLines;
+       const amount = unit === 'usd' ? usd : capacity;
+       assert.equal(helpText(label), [`Capacity: ${amount === '?' ? 'N/A' : amount}\nNext reset: ${reset}`,
+         ...(lines.length ? [lines.join('\n')] : [])].join('\n\n'));
+       assert.equal(view.accounts.children[0],retained);
+       assert.equal(retained.children[0].children[0],label);
+       assert.equal(retained.children[1],retainedBar);
+       assert.equal(Number(retainedBar.value),Number(scopedQuota.quota_display.used.fraction));
+       assert.doesNotMatch(retained.textContent,/CCost Remaining|No workdays left/);
     }
   }
   scopedPrimary.quota = scopedQuota; scopedPrimary.display = scopedDisplay;
@@ -292,12 +317,13 @@ function setup() {
   input.view.accounts.accounts = [...accountItems].reverse(); controller.update(input);
   assert.equal(view.accounts.children.at(-1),retained,'provider-aware account key survives reorder');
   input.view.accounts.accounts = accountItems; controller.update(input);
-  const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
-  const savedQuota = primary.quota;
+   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
+   const savedQuota = primary.quota;
+   const beforePartialPricing = retained.helpText;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   primary.quota = {...savedQuota,display_units:{},display:{...savedQuota.display,ccost_brief:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(2088\)/,'provider Used does not depend on partial OpenCode pricing');
-  assert.equal(retained.helpText.split('\n').length, 2, 'attribution prose is not repeated in Mini help');
+   assert.equal(retained.helpText, beforePartialPricing, 'attribution prose is not repeated in Mini help');
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
   const quota = {...primary.quota}, saved = {...primary};

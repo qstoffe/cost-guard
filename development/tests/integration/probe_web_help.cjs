@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope, replay] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-   assert.ok(scope === undefined || ['--cost-tooltips','--numeric-tables','--mini-tooltips','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
+   assert.ok(scope === undefined || ['--cost-tooltips','--numeric-tables','--mini-tooltips','--compact-quota-pace','--control-focus','--watch-only','--hover-watchdog','--live-status','--ccost-unavailable','--quiet-refresh','--stable-refresh','--sessions-quiet-refresh','--raw-models','--effort-defaults','--watch-shells','--promotion-help','--promotion-isolation'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -126,6 +126,16 @@ async function main() {
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
       await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') &&
         document.styleSheets.length+document.adoptedStyleSheets.length===2`);
+       if(scope==='--compact-quota-pace') {
+         phase='compact-quota-pace';
+         const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');
+           return JSON.parse((await lines.next()).value);};
+         await require('./probe_compact_quota_pace.cjs')({command,evaluate,until,key,owner,mini,checks,fixture,input:replay});
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,scope,input:replay,checks,errors,
+           limitations:['Synthetic Live observations and headless browser input in Watch and native Document PiP; no physical desktop proof.']};
+         return;
+       }
        if(scope==='--cost-tooltips') {
          phase='compact-cost-groups';
          await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
@@ -304,7 +314,7 @@ async function main() {
     await evaluate(owner,`document.documentElement.style.zoom=''`);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
      const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-value');
-      assert.match(quota,/^Capacity: ~1680 Credits\nNext reset: [^\n]+$/);
+       assert.match(quota.split('\n\n')[0],/^Capacity: ~1680 Credits\nNext reset: [^\n]+$/);
     assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
     await key(mini,'Escape');
     await evaluate(owner,`(() => {window.helpMiniUpdate=miniWatch.update;window.helpMiniEpoch=liveValue.view.now_ms;

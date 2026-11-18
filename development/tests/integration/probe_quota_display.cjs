@@ -60,7 +60,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
         accessible:[...quotaAccounts.querySelectorAll('progress')].every(bar=>bar.getAttribute('aria-label')&&bar.getAttribute('aria-valuetext'))};})()`);
       assert.equal(layout.pageOverflow,false); assert.equal(layout.watchOverflow,false);
       assert.equal(layout.miniOverflow,false); assert.equal(layout.accessible,true);
-      assert.match(layout.description,/^Capacity: [^\n]+\nNext reset: [^\n]+$/);
+       assert.match(layout.description.split('\n\n')[0],/^Capacity: [^\n]+\nNext reset: [^\n]+$/);
       layouts.push({case:'quota-remaining',scheme,width,scale,...layout});
     }
   }

@@ -24,9 +24,9 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$6.00':'600'}/day`));
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$18.00':'1800'}/workday`));
         assert.ok(data.help.startsWith(`Capacity: ~${unit==='usd'?'$61.30':'6130 Credits'}\nNext reset: `));
-        assert.doesNotMatch(data.help,/Remaining:/,'compact help remains Capacity/Next reset only');
+        assert.equal(data.help.split('\n\n')[1],`CCost Remaining/day: ${unit==='usd'?'$6.00':'600'}\nCCost Remaining/workday: ${unit==='usd'?'$18.00':'1800'}`);
         assert.doesNotMatch(data.help,/Unrounded|estimate|Provider-reported fraction used|Observed same-window|Guesstimate|÷/i);
-        assert.match(data.help,/\nNext reset: in [^\n]+ · \d{2}:\d{2} [^\n]+$/);
+        assert.match(data.help.split('\n\n')[0],/\nNext reset: in [^\n]+ · \d{2}:\d{2} [^\n]+$/);
         assert.equal(await evaluate(`document.querySelectorAll('.watch-quota-summary .help-value').length`),0);
         assert.equal(data.raw,source.raw);assert.equal(data.streams,source.streams);assert.equal(data.reports,source.reports);
         assert.deepEqual(data.bars,mode==='used'?[.1,.1]:[.9,.9]);
