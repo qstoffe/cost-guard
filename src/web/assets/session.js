@@ -137,10 +137,13 @@ const SessionDetail = (() => {
       const head = el('thead'), header = el('tr');
       columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
-      const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
+      this.activityFeedback = el('tbody');
+      this.activityAnnouncement = el('span', '', 'sr-only'); this.activityAnnouncement.setAttribute('role', 'status');
+      const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, this.activityFeedback, foot); scroll.append(table);
       this.values = new Values();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.status, this.retry, this.loader.root, scroll, this.context.root, this.activity.root);
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
+        this.retry, this.loader.root, scroll, this.context.root, this.activity.root);
       if (this.quotaUsage) this.root.append(this.quotaUsage.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
@@ -154,6 +157,7 @@ const SessionDetail = (() => {
     detach() {
       this.exporter?.close();
       this.attached = false; this.generation++; clearTimeout(this.timer);
+      this.showActivityFeedback(null);
       this.activity.update(null); this.activityLimit = 25;
       if (this.data) this.data.activity = null;
       this.scroll.setAttribute('aria-busy', 'false'); this.loader.root.hidden = true;
@@ -226,6 +230,8 @@ const SessionDetail = (() => {
           this.invalidateValues();
         this.exporter?.update(this.token, data.export_available === true, data.result?.view?.prompt_blocks?.[0]?.title);
         if (!data.result) {
+          this.showActivityFeedback(data.activity_refresh || (this.activityFeedbackState && data.acquisition?.reason
+            ? 'unavailable' : null));
           this.sourceStatus(data);
           return;
         }
@@ -244,6 +250,7 @@ const SessionDetail = (() => {
             this.data?.value_authority?.rows?.[id] === state);
         if (this.data?.revision === data.revision && sameValues && (this.data.activity?.failures?.length || 0) >=
             Math.min(this.activityLimit, data.activity?.total || 0)) {
+          this.showActivityFeedback(data.activity_refresh);
           if (this.pendingRender) this.update(this.data); return;
         }
         const initial = this.data?.revision === data.revision && sameValues ?
@@ -258,6 +265,11 @@ const SessionDetail = (() => {
           }
         };
         validate(rows);
+        const materialTransfer = this.data?.activity_revision && data.activity_revision &&
+          this.data.activity_revision !== data.activity_revision &&
+          (rows.length < data.total || (data.activity?.failures?.length || 0) <
+            Math.min(this.activityLimit, data.activity?.total || 0));
+        this.showActivityFeedback(data.activity_refresh || (materialTransfer ? 'pending' : null));
         this.historyProgress(rows.length, data.total);
         while (rows.length < data.total) {
           const chunk = await this.api('/api/detail', {action: 'chunk', token: this.token,
@@ -294,10 +306,12 @@ const SessionDetail = (() => {
         }
         this.loading('Preparing session…');
         this.update(data);
+        this.showActivityFeedback(data.activity_refresh);
         this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
         this.waiting = false;
+        if (this.activityFeedbackState) this.showActivityFeedback('unavailable');
         this.status.textContent = this.data ? '' : 'Could not load. Return to Sessions to try again.';
         this.retry.hidden = true;
         this.status.hidden = !this.status.textContent;
@@ -311,6 +325,24 @@ const SessionDetail = (() => {
           this.invalidateValues(); this.detach();
         }
       } finally { this.busy = false; this.activity.more.disabled = false; }
+    }
+    showActivityFeedback(state) {
+      state = this.data && ['pending', 'unavailable'].includes(state) ? state : null;
+      if (state === this.activityFeedbackState) return;
+      this.activityFeedbackState = state;
+      if (!state) {
+        this.activityFeedback.replaceChildren(); this.activityAnnouncement.textContent = '';
+        return;
+      }
+      const text = state === 'pending'
+        ? 'Updating session activity… Checking any running prompts.'
+        : 'Could not update session activity. Running status may be out of date.';
+      if (!this.activityFeedback.firstChild) {
+        const row = el('tr', undefined, 'session-activity-feedback');
+        const cell = el('td'); cell.colSpan = columns.length; row.append(cell); this.activityFeedback.append(row);
+      }
+      this.activityFeedback.firstChild.firstChild.textContent = text;
+      this.activityAnnouncement.textContent = text;
     }
     sourceStatus(data) {
       this.freshness();
@@ -376,6 +408,7 @@ const SessionDetail = (() => {
     }
     invalidateValues() {
       this.values.clear(); this.costs = null; this.costSource = null; this.data = null;
+      this.showActivityFeedback(null);
       ContextHelp.dismiss(this.root);
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);

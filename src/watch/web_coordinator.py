@@ -67,8 +67,7 @@ class WebWatchCoordinator(WatchCoordinator):
         super()._record_refresh_duration(seconds)
 
     def tick_details(self, details, *, unavailable=False):
-        if not unavailable:
-            details.observe_source(self.catalog_observation)
+        details.observe_source(self.catalog_observation, self.cards.sessions, unavailable=unavailable)
         if self.detail_job is not None:
             if not self.detail_job.done():
                 return

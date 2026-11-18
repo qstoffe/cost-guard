@@ -28,6 +28,14 @@ RECOVERABLE = frozenset({
 })
 
 
+def prompt_activity(rows):
+    # Exclude compaction, clocks, prices, tokens and text. This is presentation
+    # evidence, never authority to synthesize or amend a canonical prompt row.
+    return {row.event_id: (row.in_progress, row.execution_unverified,
+        row.completed_at_ms, row.aborted, row.watch_error, row.completed_successfully)
+        for row in rows if not row.is_compaction}
+
+
 class SessionDetails:
     def __init__(self, *, clock=time.monotonic):
         self.clock = clock
@@ -42,24 +50,63 @@ class SessionDetails:
         with self.lock:
             self.quota_context = accounts, source, now_ms, stale
 
-    def observe_source(self, observation):
-        """Selected-root revision hints only; no source reads or timer evidence."""
-        if observation is None:
-            return
+    def observe_source(self, observation, cards=None, *, unavailable=False):
+        """Reuse selected-root revisions and proven Watch rows; no source reads."""
         with self.lock:
             for key, entry in self.histories.items():
                 if not self._active(key):
                     continue
-                revision = observation.revisions.get(key)
+                revision = observation.revisions.get(key) if observation is not None else None
+                entry['source_unavailable'] = unavailable or (observation is not None and revision is None)
+                if unavailable or observation is None:
+                    continue
                 if revision is None:
                     continue
                 signal = observation.source_epoch, revision
-                if entry.get('source_signal') == signal:
-                    continue
                 previous = entry.get('source_signal')
-                entry['source_signal'] = signal
-                if previous is not None:
+                if previous != signal:
+                    entry['source_signal'] = signal
+                    if previous is not None:
+                        self._wake(entry)
+                if entry.get('activity_signal') and entry['activity_signal'][0] != signal[0]:
+                    entry['activity_signal'] = None
+                if cards is not None:
+                    self._observe_watch(entry, key, signal, cards.get(key))
+
+    def _observe_watch(self, entry, key, signal, card):
+        if (not entry['activity'] or card is None or card.snapshot is None or card.capture is None
+                or card.verified_generation != card.generation or card.source_status.failed_at is not None
+                or not card.capture.authoritative or card.capture.retained
+                or card.snapshot.source_revision != signal[1]
+                or card.capture.observed_at_ms < entry['observed_at_ms']):
+            return
+        provenance = card.snapshot.root.provenance
+        scope = identity((provenance.source_type, provenance.source_generation, provenance.source_instance,
+            signal[0], key))
+        if scope != entry['activity']['scope']:
+            entry['activity_signal'] = None
+            return
+        # A capture for the already-reconciled source revision is not new work.
+        # Compare once per Watch observation and canonical activity version.
+        if signal[1] == entry.get('captured_source_revision'):
+            return
+        observed = (signal, card.capture.observed_at_ms, entry.get('activity_revision'))
+        if observed == entry.get('watch_activity_observation'):
+            return
+        entry['watch_activity_observation'] = observed
+        current = prompt_activity(row for row in card.capture.rows if row.event_id in card.capture.observed_ids)
+        previous = entry.get('prompt_activity', {})
+        if any(event not in previous or (
+                previous[event] != state and not state[1] and (state[0] or state[2] is not None))
+                for event, state in current.items()):
+            if entry.get('activity_signal') != signal:
+                if not entry.get('activity_signal'):
+                    entry['activity_queued_at'] = self.clock()
+                entry['activity_signal'] = signal
+                if entry['attempt'] is None or entry.get('attempt_signal') != signal:
                     self._wake(entry)
+        else:
+            entry['activity_signal'] = None
 
     def _wake(self, entry):
         # Hints never reset retry budgets, cooldowns or terminal errors.
@@ -82,7 +129,8 @@ class SessionDetails:
 
     def live_hints(self):
         with self.lock:
-            return [dict(session_id=key, hint=identity((entry.get('source_signal'), entry['generation'])))
+            return [dict(session_id=key, hint=identity((entry.get('source_signal'), entry['generation'],
+                entry.get('activity_signal'), entry.get('source_unavailable'))))
                 for key, entry in self.histories.items() if self._active(key)]
 
     def open(self, session_id, mode):
@@ -191,6 +239,7 @@ class SessionDetails:
             self.histories.move_to_end(key)
             attempt = uuid4().hex
             entry['attempt'] = attempt
+            entry['attempt_signal'] = entry.get('source_signal')
             entry['wake'] = False
             entry['attempt_leases'] = tuple(token for token, lease in self.leases.items()
                 if lease['session_id'] == key and self.clock() - lease['touched'] <= 300)
@@ -248,11 +297,21 @@ class SessionDetails:
                 entry['export_identity'] = None
             else:
                 report = outcome['report']
+                previous_scope = (entry['activity'] or {}).get('scope')
                 entry['history'] = outcome['history']
+                entry['captured_source_revision'] = entry['history'].revision
                 if outcome['changed']:
                     entry['result'] = report
                     entry['revision'] = uuid4().hex
+                    activity = prompt_activity(report.prompt_blocks[0].rows)
+                    if entry.get('prompt_activity') != activity:
+                        entry['prompt_activity'] = activity
+                        entry['activity_revision'] = entry['revision']
                 entry.update(outcome['metadata'])
+                signal = entry.get('activity_signal')
+                if signal and (signal[1] == entry['captured_source_revision']
+                        or previous_scope != (entry['activity'] or {}).get('scope')):
+                    entry['activity_signal'] = None
                 entry['validated'] = self.clock()
                 if entry['retry_windows']:
                     LOG.info("detail_recovered windows=%s", entry['retry_windows'])
@@ -268,7 +327,9 @@ class SessionDetails:
         status = entry['acquisition']
         age = max(0, self.clock() - status['changed_at'])
         # A stopped/uninitialized owner must not leave an eternal unadmitted bar.
-        if status['phase'] == 'queued' and entry['attempt'] is None and age >= 120:
+        if (entry['attempt'] is None and ((status['phase'] == 'queued' and age >= 120)
+                or (entry.get('activity_signal') and status['phase'] == 'ready'
+                    and self.clock() - entry['activity_queued_at'] >= 120))):
             status.update(phase='failed', reason='detail_not_admitted')
             self._schedule(entry)
         return dict(phase=status['phase'], reason=status['reason'], attempts=status['attempts'],
@@ -320,7 +381,8 @@ class SessionDetails:
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
                                               "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit", "activity",
-                                              "value_authority", "quota_evidence")}
+                                              "value_authority", "quota_evidence")} | {
+            'activity_revision': entry.get('activity_revision')}
 
     def activity_page(self, token, revision, offset):
         with self.lock:
@@ -355,11 +417,17 @@ class SessionDetails:
             pending = pending or expired
             acquisition = self.acquisition_status(entry)
             invalidated = acquisition["reason"] in INVALID_REASONS
+            activity_refresh = None
+            if begin and not pending and lease['mode'] == 'live' and entry.get('activity_signal'):
+                if entry.get('source_unavailable') or acquisition['reason']:
+                    activity_refresh = 'unavailable'
+                else:
+                    activity_refresh = 'pending'
             quota_context = self.quota_context
         report = capture["result"]
         if pending or report is None:
             return dict(state=capture["state"], pending=pending, result=None, acquisition=acquisition,
-                        values_invalidated=invalidated)
+                        values_invalidated=invalidated, activity_refresh=activity_refresh)
         block = report.prompt_blocks[0]
         rows = block.rows
         stale = revision is not None and revision != capture["revision"]
@@ -386,6 +454,7 @@ class SessionDetails:
                 usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms,
                     stale=quota_stale or acquisition['phase'] == 'failed', capacity_cache=self.quota_capacities)
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
+             **(dict(activity_refresh=activity_refresh, activity_revision=capture['activity_revision']) if begin else {}),
             **(dict(quota_usage=usage) if not chunk else {}),
             values_invalidated=invalidated,
             value_authority=authority,
