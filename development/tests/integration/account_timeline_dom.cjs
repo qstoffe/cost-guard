@@ -6,7 +6,8 @@ const vm = require('node:vm');
 class Node {
   constructor(tag, text = '', className) {
     Object.assign(this, {tag, textContent: text, className, children: [], attributes: {}, events: {}, style: {},
-      clientWidth: 480, scrollLeft: 0, classList: {toggle() {}}});
+      clientWidth: 480, scrollLeft: 0, offsetWidth: 200, offsetHeight: 100,
+      classList: {toggle() {}}, style: {setProperty() {}}});
   }
   append(...nodes) { for (const node of nodes) this.insertBefore(node, null); }
   insertBefore(node, before) {
@@ -24,14 +25,19 @@ class Node {
   }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   addEventListener(name, fn) { this.events[name] = fn; }
+  hidePopover() {}
+  matches() { return false; }
+  getBoundingClientRect() { return {left: 0, top: 0, right: 480, bottom: 220}; }
 }
 
 const context = vm.createContext({
-  document: {createElementNS: (_, tag) => new Node(tag)},
+  document: {documentElement: {lang: 'en'}, addEventListener() {}, createElementNS: (_, tag) => new Node(tag)},
+  innerWidth: 480, innerHeight: 640,
   setTimeout() {}, clearTimeout() {},
   ReportView: {
     element: (...args) => new Node(...args),
     text: (el, value) => { el.textContent = value; },
+    timestamp: ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' '),
     quotaLabel: item => item.label,
     display: item => item.display.amount
   }
@@ -73,11 +79,15 @@ async function check() {
   calls.at(-1).resolve(frame('current', 3, [1], [primary, secondary]));
   await pending;
   assert.equal(chart.shades.children.length, 1);
-  assert.equal(chart.message.textContent, 'Loading usage…');
+  assert.equal(chart.empty.hidden, true, 'a partial frame has only bucket-local loading');
+  chart.choose(1);
+  assert.equal(chart.tipTitle.textContent, '2026-11-02');
+  assert.equal(chart.tipState.textContent, 'Loading');
   const check = chart.entries.get(secondary.id).input;
   check.checked = true;
   check.events.change();
   assert.equal(demand, 2, 'selection is frontend-only');
+  assert.equal(chart.tipTitle.textContent, '2026-11-02', 'selection retains the inspected date');
   assert.equal(chart.layers.children.filter(node => node.attributes.class === 'account-timeline-bar').length, 2);
 
   const settled = chart.refresh();
@@ -85,7 +95,8 @@ async function check() {
   calls.at(-1).resolve(frame('current', 4, [], [{...secondary, account: 'Renamed account'}, primary]));
   await settled;
   assert.equal(chart.shades.children.length, 0);
-  assert.equal(chart.message.textContent, '');
+  assert.equal(chart.tipTitle.textContent, '2026-11-02', 'a compatible update retains the inspected date');
+  assert.equal(chart.tipState.textContent, '');
   assert.equal(chart.entries.get(secondary.id).input, check);
   assert.equal(check.checked, true);
   assert.match(chart.entries.get(secondary.id).name.textContent, /^Renamed account/);

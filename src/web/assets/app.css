@@ -247,26 +247,63 @@ section > label input { min-width: 0; }
 .ai-stats-periods button { transition-property: border-color; }
 .ai-stats-periods [aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .ai-stats-periods .help-label:hover { color: inherit; }
-.account-timeline { margin-top: 2rem; color: var(--ink); min-width: 0; }
-.account-timeline h2 { margin: 0 0 .65rem; }
-.account-timeline-layout {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 22%);
-  gap: .9rem clamp(1rem, 2.5vw, 2.25rem); align-items: start;
+.account-timeline {
+  margin-top: 2rem; padding: 0; border: 0; background: transparent; box-shadow: none;
+  color: var(--ink); min-width: 0;
 }
+.account-timeline-header {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: .65rem .55rem; margin-bottom: .7rem;
+}
+.account-timeline h2 { margin: 0; letter-spacing: -.025em; }
+.account-timeline-header .ai-stats-periods { grid-column: 1 / -1; margin: 0; }
+.account-timeline-chooser {
+  display: flex; align-items: center; justify-self: end; gap: .4rem;
+  padding: .4rem .6rem; border-radius: .55rem; font-size: .78rem; font-weight: 650;
+}
+.account-timeline-summary { display: inline-flex; gap: .15rem; }
+.account-timeline-summary:empty { display: none; }
+.account-timeline-count {
+  padding: .08rem .32rem; border-radius: .3rem; color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 9%, transparent);
+  font-size: .68rem; font-variant-numeric: tabular-nums;
+}
+.account-timeline-caret { color: var(--muted); }
 .account-timeline-graph { min-width: 0; position: relative; }
-.account-timeline-frame { position: relative; display: grid; grid-template-columns: 5.2rem minmax(0, 1fr); }
-.account-timeline-scroll { min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.account-timeline-frame { display: grid; grid-template-columns: min(4.8rem, 22%) minmax(0, 1fr); }
+.account-timeline-scroll { min-width: 0; overflow-x: auto; direction: ltr; scrollbar-width: thin; }
 .account-timeline-plot { display: block; max-width: none; }
 .account-timeline-plot:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: .3rem; }
-.account-timeline-plot text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.account-timeline-plot text { fill: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.account-timeline-plot .account-timeline-month-label {
+  fill: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .015em;
+}
+.account-timeline-slot-label[data-future="true"], .account-timeline-fold { fill: var(--muted); }
 .account-timeline-axis { position: relative; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .account-timeline-tick {
   position: absolute; inset-inline: 0 .25rem; transform: translateY(-50%);
   text-align: end; overflow-wrap: anywhere;
 }
-.account-timeline-loading { fill: color-mix(in srgb, var(--muted) 15%, transparent); }
-.account-timeline-highlight { fill: color-mix(in srgb, var(--accent) 17%, transparent); pointer-events: none; }
-.account-timeline-partial { fill: var(--muted); }
+.account-timeline-target { fill: transparent; }
+.account-timeline-loading { fill: color-mix(in srgb, var(--muted) 9%, transparent); }
+.account-timeline-future { fill: color-mix(in srgb, var(--muted) 4%, transparent); }
+.account-timeline-highlight { fill: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
+.account-timeline-partial, .account-timeline-month-divider { fill: var(--control-line); }
+.account-timeline-ring {
+  color: var(--muted); animation: account-timeline-turn .95s linear infinite;
+}
+path.account-timeline-ring {
+  fill: none; stroke: currentColor; stroke-width: 1.5;
+  stroke-linecap: round; transform-box: fill-box; transform-origin: center;
+}
+span.account-timeline-ring {
+  width: .85rem; height: .85rem; border: 2px solid var(--control-line);
+  border-top-color: currentColor; border-radius: 50%;
+}
+@keyframes account-timeline-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .account-timeline-ring { animation: none; }
+}
 .account-timeline [data-ink="0"] { --series-ink: light-dark(#2365ba, #81b8ff); }
 .account-timeline [data-ink="1"] { --series-ink: light-dark(#9f3521, #ff9b84); }
 .account-timeline [data-ink="2"] { --series-ink: light-dark(#157553, #75d5ab); }
@@ -275,30 +312,66 @@ section > label input { min-width: 0; }
 .account-timeline [data-ink="5"] { --series-ink: light-dark(#9e3369, #ff9ed3); }
 .account-timeline [data-ink="6"] { --series-ink: light-dark(#00747f, #77d6e2); }
 .account-timeline [data-ink="7"] { --series-ink: light-dark(#4d5c33, #c8d18f); }
+.account-timeline [data-ink="8"] { --series-ink: light-dark(#a64a00, #ffb95e); }
+.account-timeline [data-ink="9"] { --series-ink: light-dark(#44449c, #a6a9ff); }
+.account-timeline [data-ink="10"] { --series-ink: light-dark(#446958, #a9ccc1); }
+.account-timeline [data-ink="11"] { --series-ink: light-dark(#8d3049, #ffa3ad); }
 .account-timeline-bar { fill: var(--series-ink); }
-.account-timeline-legend { border: 0; padding: 0; margin: .25rem 0 0; min-width: 0; }
-.account-timeline-legend legend { padding: 0 0 .35rem; font-weight: 650; }
+.account-timeline-options {
+  position: fixed; inset: auto; margin: 0; padding: .65rem;
+  width: 18rem; overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--control-line); border-radius: .75rem;
+  background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+}
+.account-timeline-legend { border: 0; padding: 0; margin: 0; min-width: 0; }
+.account-timeline-legend legend { padding: 0 .35rem .3rem; font-size: .75rem; font-weight: 680; }
 .account-timeline-legend label {
-  display: grid; grid-template-columns: 1rem .65rem minmax(0, 1fr); align-items: center;
-  gap: .45rem; padding: .3rem 0; cursor: pointer; overflow-wrap: anywhere;
+  display: grid; grid-template-columns: 1rem .5rem minmax(0, 1fr); align-items: center;
+  gap: .45rem; padding: .33rem .35rem; min-height: 1.7rem; border-radius: .35rem;
+  cursor: pointer; overflow-wrap: anywhere; font-size: .8rem;
+}
+.account-timeline-legend label:has(input:checked) { font-weight: 620; }
+.account-timeline-legend label:hover, .account-timeline-legend label:focus-within {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .account-timeline-legend input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
-.account-timeline-swatch { width: .6rem; height: .9rem; border-radius: .15rem .15rem 0 0; background: var(--series-ink); }
-.account-timeline-message { margin: 0; color: var(--muted); font-size: .82rem; }
-.account-timeline-graph:has(.account-timeline-frame:not([hidden])) .account-timeline-message {
-  position: absolute; inset: auto auto 100% 0;
+.account-timeline-swatch { width: .48rem; height: .48rem; border-radius: .13rem; background: var(--series-ink); }
+.account-timeline-empty {
+  min-height: 244px; display: flex; justify-content: center; align-items: center; gap: .45rem;
+  color: var(--muted); font-size: .82rem; pointer-events: none;
 }
+.account-timeline-empty.over-plot { min-height: 0; position: absolute; inset: 4px 0 50px; }
 .account-timeline-tip {
-  position: absolute; inset: auto auto calc(100% + .25rem) 0; z-index: 1;
-  width: max-content; max-width: min(26rem, 100%);
-  padding: .5rem .65rem; border: 1px solid var(--control-line); border-radius: .45rem;
-  background: var(--panel); color: var(--ink); pointer-events: none; font-size: .8rem; overflow-wrap: anywhere;
+  position: fixed; z-index: 4; width: max-content; max-width: min(20rem, var(--tip-room, 100vw));
+  padding: .55rem .65rem; border: 1px solid var(--control-line); border-radius: .65rem;
+  background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+  pointer-events: none; font-size: .77rem; font-variant-numeric: tabular-nums;
 }
-.account-timeline-tip.below { top: calc(100% + .25rem); bottom: auto; }
+.account-timeline-tip.interactive:focus-within, .account-timeline-tip.pinned { pointer-events: auto; }
+.account-timeline-tip-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .55rem; }
+.account-timeline-tip-header strong { font-size: .86rem; letter-spacing: -.015em; }
+.account-timeline-tip-state { color: var(--muted); font-size: .71rem; }
+.account-timeline-tip-state:empty { display: none; }
+.account-timeline-tip-values {
+  margin-top: .35rem; padding-top: .22rem; border-top: 1px solid var(--line);
+  overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+}
+.account-timeline-tip-row {
+  display: grid; grid-template-columns: .5rem minmax(0, 1fr) auto; align-items: baseline;
+  gap: .35rem; padding: .15rem 0; min-width: 0;
+}
+.account-timeline-tip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-timeline-tip:focus-within .account-timeline-tip-name,
+.account-timeline-tip.pinned .account-timeline-tip-name { white-space: normal; overflow-wrap: anywhere; }
+.account-timeline-tip-row > :last-child { font-weight: 620; text-align: end; }
 .account-timeline [hidden] { display: none; }
-@media (max-width: 53rem) {
-  .account-timeline-layout { grid-template-columns: minmax(0, 1fr); }
-  .account-timeline-frame { grid-template-columns: min(4.6rem, 25%) minmax(0, 1fr); }
+@media (min-width: 52rem) {
+  .account-timeline-header { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 1rem; }
+  .account-timeline-header .ai-stats-periods { grid-column: 2; grid-row: 1; }
+  .account-timeline-chooser { grid-column: 3; grid-row: 1; }
+}
+@media (max-width: 34rem) {
+  .account-timeline-summary { display: none; }
 }
 .ai-stats-section { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .ai-stats-section h3 { margin: 1.1rem 0 .65rem; }

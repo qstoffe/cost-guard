@@ -117,32 +117,33 @@ def _overlap(intervals, buckets):
         else:
             ends[-1] = max(ends[-1], right)
     slots = (bisect_left(starts, right) - 1 for _, right in buckets)
-    return tuple(slot >= 0 and ends[slot] > left for (left, _), slot in zip(buckets, slots))
+    return tuple(left < right and slot >= 0 and ends[slot] > left for (left, right), slot in zip(buckets, slots))
 
 
 def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=()):
-    start, buckets, partial = timeline_window(period, now_ms, zone)
+    window = timeline_window(period, now_ms, zone)
+    elapsed = window.buckets[:len(window.buckets) - len(window.future)]
     # Unread scheduled roots allow provisional positive costs from acquired facts.
     # Unavailable facts (failed/incomplete reads, migration gaps) still block
     # qualification. Neither can manufacture a zero.
-    acquiring = _overlap(pending, buckets)
-    unavailable = _overlap(gaps, buckets)
+    acquiring = _overlap(pending, elapsed)
+    unavailable = _overlap(gaps, elapsed)
     qualified = tuple((max(left, first_covered_ms), right, waiting or left < first_covered_ms)
-                      if first_covered_ms is not None and right > first_covered_ms and not gap else None
-                      for (left, right), gap, waiting in zip(buckets, unavailable, acquiring))
+                      if first_covered_ms is not None and right > max(left, first_covered_ms) and not gap else None
+                      for (left, right), gap, waiting in zip(elapsed, unavailable, acquiring))
     series = []
     for item in roster:
         amounts = tuple(_bucket_cost(index, item, window[0], window[1], partial=window[2])
                         if index is not None and window is not None and item.eligible else None
                         for window in qualified)
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
-        points = tuple(_point(*point) if point is not None else None for point in amounts)
+        points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
         step = _nice_scale(peak)
         ticks = tuple(_point(step * i) for i in range(5))
         series.append(record(id=item.key, account=item.label, quota=item.quota, primary=item.primary,
                              peak=peak, ticks=ticks, points=points))
-    return record(period=period, timezone_id=zone, start_ms=start, end_ms=now_ms, buckets=buckets,
-                  partial_buckets=partial, pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting),
-                  series=tuple(series))
+    return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,
+                  slot_dates=window.dates, future_buckets=window.future, partial_buckets=window.partial,
+                  pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting), series=tuple(series))
