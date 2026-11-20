@@ -239,11 +239,11 @@ class WatchDailyTests(unittest.TestCase):
             # The unchanged old path already reuses its initial index. Only a
             # changed population eliminates a second construction, not every job.
             self.assertEqual([2, 2, 2], indexes)
-            first, unchanged, changed = (result[1] for result in results)
+            first, unchanged, changed = (result.usage for result in results)
             self.assertEqual(first, unchanged)
-            self.assertEqual((4, 4, 5), tuple(result[1].mix.request_count for result in results))
+            self.assertEqual((4, 4, 5), tuple(result.usage.mix.request_count for result in results))
             self.assertEqual((5, True), (changed.prompt_count, changed.prompt_count_complete))
-            rows = [result[0].project((native,), now_ms=now, today_start_ms=0, month_start_ms=0,
+            rows = [result.accounts.project((native,), now_ms=now, today_start_ms=0, month_start_ms=0,
                 timezone_id='UTC', workday_calendar='')[0] for result in results]
             self.assertEqual(rows[0], rows[1])
             self.assertEqual((4, 4, 5), tuple(row.quota_periods[0].cost.observed_requests for row in rows))
@@ -277,7 +277,8 @@ class WatchDailyTests(unittest.TestCase):
                 service_factory=lambda clock: make_service(tmp, source, now_ms=clock)[2])
             self.addCleanup(owner.close)
 
-            history, today = owner._account_history(source.list_sessions(), (native,), now)
+            publication = owner._account_history(source.list_sessions(), (native,), now)
+            history, today = publication.accounts, publication.usage
             loads = source.load_count
             owner._account_history(source.list_sessions(), (native,), now + 1)
             row = history.project((native,), now_ms=now, today_start_ms=local_day_start_ms('UTC', now_ms=now),
@@ -316,9 +317,10 @@ class WatchDailyTests(unittest.TestCase):
                 service_factory=lambda now: make_service(tmp, source, now_ms=now)[2], monotonic=lambda: clock[0])
             self.addCleanup(owner.close)
             observed = owner._account_history(source.list_sessions(), (), 80_000_000)
-            owner.history_quota, owner.daily_usage = observed
+            owner.history_quota, owner.daily_usage = observed.accounts, observed.usage
+            owner.history_source, owner.history_roots = observed.source, observed.roots
             observation = SimpleNamespace(revisions={}, sessions=(), active_candidates=frozenset(), live_candidates=frozenset())
-            owner.history_revision = ()
+            owner.history_revision = (observed.source, ())
             owner.history_due_ms = 80_060_000
             failure = transport_failure(TimeoutError(), phase='daily')
             with patch.object(owner, 'history_factory', side_effect=failure):
@@ -334,7 +336,7 @@ class WatchDailyTests(unittest.TestCase):
                     owner._refresh_quota(observation, now_ms=80_000_000 + seconds * 1000)
                     frame = owner._build_projection(now_ms=80_000_000 + seconds * 1000)
                     self.assertEqual('retrying' if seconds < 5 else 'unavailable', frame.daily_state)
-                    self.assertEqual(observed[1], frame.daily_usage)
+                    self.assertEqual(observed.usage, frame.daily_usage)
                 submit.assert_called_once()
                 self.assertEqual(80_005_000, submit.call_args.args[3])
                 completed = Future(); completed.set_result(observed)

@@ -49,9 +49,8 @@ class DailyCatalogBudgetTests(unittest.TestCase):
                 try:
                     with patch.object(source, '_list_native_sessions', side_effect=catalog):
                         result = owner._account_history(sessions, (), 80_000_000)
-                    self.assertIsInstance(result, tuple)
-                    self.assertEqual(64, result[1].mix.request_count)
-                    self.assertEqual(64, result[1].prompt_count)
+                    self.assertEqual(64, result.usage.mix.request_count)
+                    self.assertEqual(64, result.usage.prompt_count)
                     self.assertLessEqual(work_seconds[0], 120, f'{catalogs[0]} full catalog brackets')
                     self.assertLessEqual(catalogs[0], 34)
                 finally:
@@ -78,9 +77,8 @@ class DailyCatalogBudgetTests(unittest.TestCase):
                 remote.before_catalog = count_catalog
                 try:
                     result = owner._account_history(sessions, (), 80_000_000)
-                    self.assertIsInstance(result, tuple)
-                    self.assertEqual(4, result[1].mix.request_count)
-                    self.assertEqual(4, result[1].prompt_count)
+                    self.assertEqual(4, result.usage.mix.request_count)
+                    self.assertEqual(4, result.usage.prompt_count)
                     self.assertEqual(1, len(catalogs))
                 finally:
                     owner.close()
