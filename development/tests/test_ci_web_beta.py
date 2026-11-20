@@ -77,15 +77,15 @@ class CiEvidenceTests(unittest.TestCase):
                         selected = not pattern.startswith('!')
                 self.assertEqual(expected, selected)
 
-    def test_deep_sessions_workflow_keeps_both_journeys_on_manual_full(self):
+    def test_deep_sessions_journeys_stay_on_manual_full(self):
         workflow = (ci_web_beta.ROOT / '.github/workflows/web-beta.yml').read_text()
         steps = re.split(r'(?m)^      - name: ', workflow)
-        sessions = [step for step in steps if 'for mode in ("sessions-return", "fast-arrivals")' in step]
+        sessions = [step for step in steps if 'for mode in ("sessions-return", "fast-arrivals", "warm-pages")' in step]
         self.assertEqual(1, len(sessions))
         step = sessions[0]
         self.assertRegex(step, r"if: \$\{\{ !cancelled\(\) && github.event_name == 'workflow_dispatch' \}\}")
         # Execute the actual embedded Python with synthetic subprocess/browser
-        # boundaries: both retained modes run and the first failure stops delivery.
+        # boundaries: all three modes run and the first failure stops the step.
         script = step.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
         script = '\n'.join(line[10:] for line in script.splitlines())
         binding = SimpleNamespace(sync_playwright=lambda: contextlib.nullcontext(
@@ -99,7 +99,7 @@ class CiEvidenceTests(unittest.TestCase):
                         exec(compile(script, 'sessions-workflow', 'exec'), {})
                 else:
                     exec(compile(script, 'sessions-workflow', 'exec'), {})
-            self.assertEqual(['--sessions-return'] if failed else ['--sessions-return', '--fast-arrivals'],
+            self.assertEqual(['--sessions-return'] if failed else ['--sessions-return', '--fast-arrivals', '--warm-pages'],
                              [call.args[0][-1] for call in run.call_args_list])
             self.assertTrue(all(call.kwargs['check'] for call in run.call_args_list))
 

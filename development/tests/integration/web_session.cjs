@@ -323,8 +323,9 @@ async function main() {
   catalog.detach(); catalog.configure(new URLSearchParams('sort=ccost')); catalog.attach(parent);
   resolveCatalog(catalogData); await new Promise(setImmediate);
    const pageCalls = catalogCalls.filter(value=>value.action!=='interest');
-    assert.equal(pageCalls.length, 3, 'changed route starts independently; late HTTP reasserts current lease demand only');
-   assert.equal(pageCalls[1].sort, 'ccost');
+     assert.equal(pageCalls.length, 2, 'late HTTP does not make a redundant catalog request');
+    assert.equal(pageCalls[1].sort, 'ccost');
+    assert.equal(catalog.data.sort, 'ccost', 'late HTTP cannot replace the active sort');
     assert.ok(!catalogCalls.some(value=>value.action==='interest' && value.visible===false), 'late response cannot demote the same reattached lease');
    assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
    catalog.detach(); assert.equal(timers.size, 0);
@@ -404,7 +405,7 @@ async function main() {
       assert.equal(requests.length,2);
       assert.equal(requests[1].token,null); assert.equal(requests[1].offset,0);
        assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,direction);
-      assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
+       assert.equal(catalog.offset,0); assert.equal(catalog.data.epoch,'new-epoch');
        assert.equal(context.location.hash,`#/sessions?period=today&sort=ccost&direction=${direction}`);
        assert.match(catalog.label.textContent,/Page 1 of 2/);
        assert.equal(catalog.status.textContent,'','successful lease recovery has no live-region announcement');

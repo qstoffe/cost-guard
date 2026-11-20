@@ -380,6 +380,73 @@ class SessionNavigationTests(unittest.TestCase):
         self.catalog.tick(self.service)
         self.assertEqual(self.source.load_count - reads, 1)
 
+    def test_page_one_reuses_verified_epoch_while_only_visible_changed_scalars_refresh(self):
+        self.setup_catalog(43)
+        with patch('src.application.session_catalog.session_summary', side_effect=self.summary):
+            options = dict(period='today', sort='name', direction=1)
+            start = self.catalog.page(**options, navigation=1)
+            for _ in range(11):
+                self.catalog.tick(self.service)
+            options['token'] = start['token']
+            first = self.catalog.page(**options, navigation=1)
+            options['epoch'] = first['epoch']
+            second = self.catalog.page(**options, offset=25, navigation=2, applied=1)
+            for key in ('root-0000', 'root-0042'):
+                self.source.snapshots[key] = replace(self.source.snapshots[key], source_revision='changed')
+            self.observe()
+            with patch.object(self.catalog, '_population', side_effect=AssertionError('warm request rescanned scope')):
+                back = self.catalog.page(**options, navigation=3, applied=2)
+            self.assertTrue(back['page_reused'])
+            self.assertEqual((back['epoch'], back['total'], back['progress']['total']), (first['epoch'], 43, 25))
+            self.assertEqual((second['total'], len(second['view']['session_usage'])), (43, 18))
+            self.assertIsNone(self.catalog.leases[start['token']].get('navigation'))
+            self.assertFalse(back['pending_sort'])
+            self.assertEqual(back['view']['session_usage'][0]['metric_state'], 'retained')
+            self.assertEqual(len(self.acquired), 43)
+            self.clock += 6
+            self.catalog.tick(self.service)
+            live = self.catalog.page(**options, passive=True)
+            self.assertEqual(live['view']['session_usage'][0]['metric_state'], 'ready')
+            self.assertEqual(live['epoch'], first['epoch'])
+            self.assertCountEqual(self.acquired[43:], ['root-0000', 'root-0042'])
+
+    def test_verified_page_one_requires_same_lease_window_and_authority(self):
+        for change in ('tab', 'calendar', 'source', 'delete', 'expired', 'sort', 'dependency'):
+            with self.subTest(change=change):
+                self.setup_catalog(26)
+                with patch('src.application.session_catalog.session_summary', side_effect=self.summary):
+                    first = self.catalog.page(navigation=1)
+                    for _ in range(7):
+                        self.catalog.tick(self.service)
+                    first = self.catalog.page(token=first['token'], navigation=1)
+                options = dict(token=first['token'], epoch=first['epoch'], navigation=2, applied=1)
+                if change == 'tab':
+                    options['token'] = self.catalog.page()['token']
+                elif change == 'calendar':
+                    self.now += 86_400_000
+                elif change == 'source':
+                    self.source.observation_epoch = 'new-source'
+                    self.observe()
+                elif change == 'delete':
+                    self.source.snapshots.pop('root-0000')
+                    self.observe()
+                elif change == 'expired':
+                    self.clock += 301
+                elif change == 'sort':
+                    options['sort'] = 'ccost'
+                else:
+                    with patch.object(self.service, '_dependencies', return_value=('new-pricing-authority',)):
+                        self.catalog.tick(self.service)
+                with self.assertRaisesRegex(KeyError, 'catalog_expired'):
+                    self.catalog.page(**options)
+
+    def test_cancel_received_before_superseded_navigation_does_not_admit_it(self):
+        self.setup_catalog(1)
+        first = self.catalog.page()
+        self.catalog.page(token=first['token'], cancelled=3)
+        with self.assertRaisesRegex(ValueError, 'invalid_request'):
+            self.catalog.page(token=first['token'], navigation=3)
+
 
 if __name__ == '__main__':
     unittest.main()
