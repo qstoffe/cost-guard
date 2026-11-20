@@ -38,7 +38,7 @@ const context = vm.createContext({
     element: (...args) => new Node(...args),
     text: (el, value) => { el.textContent = value; },
     timestamp: ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' '),
-    quotaLabel: item => item.label,
+    compare: (a, b) => Number(a) - Number(b),
     display: item => item.display.amount
   }
 });
@@ -46,9 +46,9 @@ vm.runInContext(fs.readFileSync('src/web/assets/account-timeline.js', 'utf8') +
   '; globalThis.View = AccountTimelineView.View;', context);
 
 const point = {amount: '100', display: {credits: '100', usd: '$1.00'}};
-const primary = {id: '00000000', primary: true, account: 'Account A', quota: '5-hour',
+const first = {id: '00000000', account: 'Account A',
   points: [point, null], peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
-const secondary = {...primary, id: '00000008', primary: false, quota: 'Weekly'};
+const second = {...first, id: '00000008', account: 'Account B'};
 const start = Date.UTC(2026, 10, 1), day = 86_400_000;
 const frame = (scope, revision, pending, series, initial = pending, acquiring = true, price = 'price') =>
   ({scope, revision, acquiring,
@@ -65,19 +65,19 @@ async function check() {
   chart.setScope('old');
   const old = chart.refresh();
   chart.setScope('current');
-  calls.at(-1).resolve(frame('old', 1, [0], [primary, secondary]));
+  calls.at(-1).resolve(frame('old', 1, [0], [first, second]));
   await old;
   assert.equal(chart.view, undefined);
 
   const abandoned = chart.refresh();
   chart.select('today');
   chart.select('month');
-  calls.at(-1).resolve(frame('current', 2, [0], [primary, secondary]));
+  calls.at(-1).resolve(frame('current', 2, [0], [first, second]));
   await abandoned;
   assert.equal(chart.view, undefined, 'even a same-period reply from before a switch must be discarded');
 
   const pending = chart.refresh();
-  calls.at(-1).resolve(frame('current', 3, [1], [primary, secondary]));
+  calls.at(-1).resolve(frame('current', 3, [1], [first, second]));
   await pending;
   assert.equal(chart.shades.children.length, 1);
   assert.equal(chart.empty.hidden, true, 'a partial frame has only bucket-local loading');
@@ -91,28 +91,33 @@ async function check() {
   chart.choose(1);
   assert.equal(chart.tipTitle.textContent, '2026-11-02');
   assert.equal(chart.tipState.textContent, 'Loading');
-  const check = chart.entries.get(secondary.id).input;
-  check.checked = true;
+  const check = chart.entries.get(second.id).input;
+  assert.equal(check.checked, true, 'every available account starts selected');
+  check.checked = false;
   check.events.change();
   assert.equal(demand, 2, 'selection is frontend-only');
   assert.equal(chart.tipTitle.textContent, '2026-11-02', 'selection retains the inspected date');
-  assert.equal(chart.layers.children.filter(node => node.attributes.class === 'account-timeline-bar').length, 2);
-  assert.equal(chart.selectedLegend.children.length, 2);
+  assert.equal(chart.layers.children.filter(node => node.attributes.class === 'account-timeline-bar').length, 1);
+  assert.equal(chart.selectedLegend.children.length, 1);
+  const originalInk = chart.colors.get(second.id);
 
   const settled = chart.refresh();
   assert.equal(calls.at(-1).request.revision, 3);
-  calls.at(-1).resolve(frame('current', 4, [], [{...secondary, account: 'Renamed account'}, primary]));
+  calls.at(-1).resolve(frame('current', 4, [], [{...second, account: 'Renamed account'}, first]));
   await settled;
   assert.equal(chart.shades.children.length, 0);
   assert.equal(chart.tipTitle.textContent, '2026-11-02', 'a compatible update retains the inspected date');
   assert.equal(chart.tipState.textContent, '');
-  assert.equal(chart.entries.get(secondary.id).input, check);
-  assert.equal(check.checked, true);
-  assert.match(chart.entries.get(secondary.id).name.textContent, /^Renamed account/);
+  assert.equal(chart.entries.get(second.id).input, check);
+  assert.equal(chart.colors.get(second.id), originalInk);
+  assert.equal(check.checked, false);
+  check.checked = true;
+  check.events.change();
+  assert.match(chart.entries.get(second.id).name.textContent, /^Renamed account/);
   assert.match(chart.selectedLegend.children[0].children[1].textContent, /^Renamed account/);
 
   const provisional = chart.refresh();
-  calls.at(-1).resolve(frame('current', 5, [0, 1], [primary, secondary]));
+  calls.at(-1).resolve(frame('current', 5, [0, 1], [first, second]));
   await provisional;
   assert.equal(rings(), 1, 'one cue across two pending cells; never animate an already displayed value');
   assert.equal(chart.shades.children.length, 2);
@@ -121,7 +126,7 @@ async function check() {
   assert.equal(chart.tipState.textContent, 'Partial');
 
   const quiet = chart.refresh();
-  calls.at(-1).resolve(frame('current', 6, [0], [primary, secondary], []));
+  calls.at(-1).resolve(frame('current', 6, [0], [first, second], []));
   await quiet;
   assert.equal(rings(), 0);
   assert.equal(chart.shades.children.length, 0);
@@ -132,13 +137,13 @@ async function check() {
   assert.equal(rings(), 0, 'reentry does not flash a stale cue');
 
   const revised = chart.refresh(), newPoint = {...point, amount: '45'};
-  calls.at(-1).resolve(frame('current', 7, [], [{...primary, points: [newPoint, null]}, secondary], [], false));
+  calls.at(-1).resolve(frame('current', 7, [], [{...first, points: [newPoint, null]}, second], [], false));
   await revised;
   assert.equal(chart.view.series[0].points[0], newPoint);
   assert.equal(rings(), 0);
 
   const repriced = chart.refresh();
-  calls.at(-1).resolve(frame('current', 8, [0], [{...primary, points: [null, null]}, secondary],
+  calls.at(-1).resolve(frame('current', 8, [0], [{...first, points: [null, null]}, second],
     [], false, 'new price'));
   await repriced;
   assert.equal(chart.view.series[0].points[0], null, 'never reuse a last-good amount with an incompatible valuation');

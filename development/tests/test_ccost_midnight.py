@@ -47,7 +47,8 @@ class MidnightCCostTests(unittest.TestCase):
                 try:
                     # CLI retention and Web's independent background-history lane.
                     for now, expected in ((midnight - 1, (D(100), D(100), D(400))), (midnight, (D(0),) * 3)):
-                        history, daily = owner._account_history(source.list_sessions(), native, now)
+                        publication = owner._account_history(source.list_sessions(), native, now)
+                        history, daily = publication.accounts, publication.usage
                         rows = history.project(native, now_ms=now, today_start_ms=local_day_start_ms(zone, now_ms=now),
                             month_start_ms=local_month_start_ms(zone, now_ms=now), timezone_id=zone, workday_calendar='')
                         self.assertEqual(dict(zip(('github-copilot', 'openai', 'claude-code'), expected)),
@@ -62,7 +63,8 @@ class MidnightCCostTests(unittest.TestCase):
                         item = snapshot(10 + i, midnight + 1000, route, amount=(i + 1) * 10000, started=midnight - 500)
                         source.snapshots[item.root.session_id] = item
                     now = midnight + 2000
-                    history, daily = owner._account_history(source.list_sessions(), native, now)
+                    publication = owner._account_history(source.list_sessions(), native, now)
+                    history, daily = publication.accounts, publication.usage
                     rows = history.project(native, now_ms=now, today_start_ms=midnight,
                         month_start_ms=local_month_start_ms(zone, now_ms=now), timezone_id=zone, workday_calendar='')
                     self.assertEqual(dict(zip(('github-copilot', 'openai', 'claude-code'), EXPECTED)),
@@ -78,14 +80,15 @@ class MidnightCCostTests(unittest.TestCase):
                         self.assertEqual(expected, tuple(today['display_units'][unit]['account_ccost'] for unit in ('credits', 'usd')))
                         self.assertIsNone(row.billed_today)
                     loads = source.load_count
-                    repeated = owner._account_history(source.list_sessions(), native, now + 1)[1]
+                    repeated = owner._account_history(source.list_sessions(), native, now + 1).usage
                     self.assertEqual(daily.total, repeated.total)
                     self.assertEqual(loads + len(old), source.load_count,
                         'active old roots recheck; unchanged completed roots reuse history')
                     # Late telemetry in the same source request invalidates its revision/cache.
                     corrected = snapshot(10, midnight + 1000, ROUTES[0], amount=20000, started=midnight - 500)
                     source.snapshots[corrected.root.session_id] = replace(corrected, source_revision='late-telemetry')
-                    history, caught_up = owner._account_history(source.list_sessions(), native, now + 2)
+                    publication = owner._account_history(source.list_sessions(), native, now + 2)
+                    history, caught_up = publication.accounts, publication.usage
                     self.assertEqual(D(16), caught_up.total.ccost)
                     caught_up_rows = history.project(native, now_ms=now + 2, today_start_ms=midnight,
                         month_start_ms=local_month_start_ms(zone, now_ms=now), timezone_id=zone, workday_calendar='')

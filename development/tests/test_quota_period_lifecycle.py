@@ -31,7 +31,8 @@ from src.reports.accounts import WatchAccountProjection, account_projections
 from src.watch.accounts import reconcile_accounts
 from src.watch.account_refresh import WatchAccountRefresh
 from src.watch.coordinator import WatchCoordinator
-from src.watch.web_coordinator import WebWatchCoordinator
+from src.application.session_quota import source_scope
+from src.watch.web_coordinator import DailyAccountHistory, WebWatchCoordinator
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -261,11 +262,13 @@ class QuotaPeriodLifecycleTests(unittest.TestCase):
             self.addCleanup(owner.close)
             owner.accounts.snapshots = (current,)
             completed = Future()
-            completed.set_result((projector.history, SimpleNamespace(day_start_ms=DAY)))
+            scope = source_scope(service.source)
+            completed.set_result(DailyAccountHistory(
+                projector.history, SimpleNamespace(day_start_ms=DAY, observed_at_ms=NOW), scope, {}))
             owner.history_job = completed
             owner.history_due_ms = NOW + HOUR
             observation = SimpleNamespace(revisions={}, sessions=(), active_candidates=(), live_candidates=())
-            owner.history_revision = ()
+            owner.history_revision = (scope, ())
             with patch.object(owner.accounts, "refresh", return_value=True):
                 owner._refresh_quota(observation, now_ms=NOW)
             base = replace(summary_watch(), quota=owner.quota)

@@ -15,7 +15,7 @@ from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.analysis.account_timeline import DAY_MS, timeline_window
 from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import quota_roster, retain_compatible_quotas, retain_refresh, timeline_view
+from src.application.account_timeline import account_roster, retain_refresh, timeline_view
 from src.application.session_quota import source_scope
 from src.domain import QuotaComponent
 from src.reports.models import AccountProjection
@@ -23,7 +23,7 @@ from src.sources.errors import SourceConcurrentChangeError
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
-from src.watch.account_timeline import AccountTimeline, TimelineHistory, FOREGROUND_SLICE_MS, ROOTS_PER_TURN
+from src.watch.account_timeline import AccountTimeline, CardToday, TimelineHistory, FOREGROUND_SLICE_MS, ROOTS_PER_TURN
 from src.web.dispatch import DataDispatcher
 
 
@@ -111,8 +111,8 @@ class TimelineBucketsTests(unittest.TestCase):
 
 class TimelineProjectionTests(unittest.TestCase):
     def view(self, accounts, entries, *, gaps=(), start=NOV_1, value=None, now=NOV_5):
-        index = PeriodCCostIndex(entries, value or (lambda _, tokens: Decimal(tokens.input)), verified_models=True)
-        return timeline_view('month', now, 'UTC', quota_roster(accounts), index,
+        index = PeriodCCostIndex(entries, value or (lambda _, tokens: Decimal(tokens.input)), account_only=True)
+        return timeline_view('month', now, 'UTC', account_roster(accounts), index,
                              first_covered_ms=start, gaps=gaps).to_json()['series']
 
     def test_per_bucket_not_cumulative_and_never_joins_missing_history(self):
@@ -122,8 +122,8 @@ class TimelineProjectionTests(unittest.TestCase):
         series = self.view(projected(native), calls, gaps=((NOV_1 + 3 * DAY_MS, NOV_5),))
         expected = ['50000', '0', '12000', None, None] + [None] * 25
         self.assertEqual(expected, [p['amount'] if p else None for p in series[0]['points']])
-        self.assertEqual(series[0]['points'], series[1]['points'])
-        self.assertEqual([True, False], [row['primary'] for row in series])
+        self.assertEqual(1, len(series))
+        self.assertEqual('Safe label 1', series[0]['account'])
         self.assertNotIn('private-account-key', str(series))
 
     def test_covered_zero_differs_from_partial_pricing_attribution_and_source_gaps(self):
@@ -134,34 +134,32 @@ class TimelineProjectionTests(unittest.TestCase):
         rows = self.view(projected(a, b), calls, value=lambda model, tokens:
             None if model.model == 'missing' else Decimal(tokens.input))
         self.assertEqual(['500', None, '0', '0', '0'], [p['amount'] if p else None for p in rows[0]['points'][:5]])
-        self.assertEqual(['0', None, None, '0', '0'], [p['amount'] if p else None for p in rows[2]['points'][:5]])
+        self.assertEqual(['0', None, None, '0', '0'], [p['amount'] if p else None for p in rows[1]['points'][:5]])
         unknown = self.view(projected(a), (), start=None)
         self.assertTrue(all(p is None for p in unknown[0]['points']))
 
-    def test_model_quota_includes_deduplicated_child_usage_and_only_matching_models(self):
+    def test_account_wide_usage_deduplicates_the_child_and_does_not_filter_models(self):
         native = subscription()
         model = QuotaComponent('Model weekly', scope='model', model_id='GPT-Test')
         native = replace(native, primary_quota_label='weekly', quotas=(*native.quotas, model))
         child = replace(request('physical', NOV_1 + 55, amount=9, ref=native.ref),
                         session_id='child', root_session_id='root', parent_session_id='root')
-        other = request('other model', NOV_1 + 58, amount=13, model='other')
+        other = request('other model', NOV_1 + 58, amount=33, model='other')
         future = request('exact end', NOV_5, amount=500, ref=native.ref)
         series = self.view(projected(native), (child, child, other, future))
-        self.assertEqual(['weekly', '5-hour', 'Model weekly'], [row['quota'] for row in series])
-        self.assertEqual(['22', '22', '9'], [row['points'][0]['amount'] for row in series])
-        self.assertEqual(['~$0.22', '~$0.22', '$0.09'], [row['points'][0]['display']['usd'] for row in series])
-        self.assertEqual(['0', '0', '0'], [row['points'][4]['amount'] for row in series])
+        self.assertEqual(1, len(series))
+        self.assertEqual('42', series[0]['points'][0]['amount'])
+        self.assertEqual('~$0.42', series[0]['points'][0]['display']['usd'])
+        self.assertEqual('0', series[0]['points'][4]['amount'])
 
-    def test_partial_observation_retains_compatible_quota_but_real_change_retires_it(self):
+    def test_no_quota_account_remains_selectable_without_retiring_its_identity(self):
         native = subscription()
-        previous = {native.key: native}
-        partial = replace(native, availability='partial', quotas=native.quotas[:1])
-        retained = retain_compatible_quotas(projected(partial), previous)
-        self.assertEqual(native.quotas, retained[0].account.quotas)
-        observed = retain_compatible_quotas(projected(replace(partial, availability='available')), previous)
-        self.assertEqual(native.quotas[:1], observed[0].account.quotas)
+        partial = replace(native, availability='partial', quotas=())
         changed = replace(partial, ref=replace(native.ref, account_id='new'))
-        self.assertEqual(1, len(quota_roster(retain_compatible_quotas(projected(changed), previous))))
+        first, second = account_roster(projected(partial, changed, partial))
+        self.assertEqual(account_roster(projected(native))[0].key, first.key)
+        self.assertNotEqual(first.key, second.key)
+        self.assertEqual((), first.estimates)
 
     def test_small_positive_uses_product_format_and_nonzero_numeric_headroom(self):
         native = subscription()
@@ -174,26 +172,26 @@ class TimelineProjectionTests(unittest.TestCase):
     def test_pending_overlap_allows_only_provisional_positive_and_preserves_nonpending_gaps(self):
         native = subscription()
         index = PeriodCCostIndex((request('one', NOV_1 + DAY_MS + 5, amount=100, ref=native.ref),),
-                                 lambda _, tokens: Decimal(tokens.input), verified_models=True)
+                                 lambda _, tokens: Decimal(tokens.input), account_only=True)
         pending = ((NOV_1 + DAY_MS, NOV_1 + DAY_MS + 100), (NOV_1 + 3 * DAY_MS, NOV_1 + 4 * DAY_MS))
         permanent = ((NOV_1 + 2 * DAY_MS, NOV_1 + 3 * DAY_MS),)
-        result = timeline_view('month', NOV_5, 'UTC', quota_roster(projected(native)), index,
+        result = timeline_view('month', NOV_5, 'UTC', account_roster(projected(native)), index,
                                first_covered_ms=NOV_1, gaps=permanent, pending=pending).to_json()
         self.assertEqual([1, 3], result['pending_buckets'])
         self.assertEqual(['$0.00', '~$1.00', None, None, '$0.00'],
                          [point['display']['usd'] if point else None for point in result['series'][0]['points'][:5]])
 
     def test_missing_valuation_can_settle_without_zero_or_loading(self):
-        result = timeline_view('month', NOV_5, 'UTC', quota_roster(projected(subscription())), None,
+        result = timeline_view('month', NOV_5, 'UTC', account_roster(projected(subscription())), None,
                                first_covered_ms=NOV_1, gaps=()).to_json()
         self.assertEqual([], result['pending_buckets'])
         self.assertEqual([None] * 30, result['series'][0]['points'])
 
     def test_refresh_retains_a_usable_value_but_never_across_price_or_gap(self):
         native = subscription()
-        roster = quota_roster(projected(native))
+        roster = account_roster(projected(native))
         index = PeriodCCostIndex((request('old', NOV_1 + 5, amount=100, ref=native.ref),),
-                                 lambda _, tokens: Decimal(tokens.input), verified_models=True)
+                                 lambda _, tokens: Decimal(tokens.input), account_only=True)
         prior = timeline_view('month', NOV_5, 'UTC', roster, index, first_covered_ms=NOV_1,
                               gaps=(), price_revision='rates').to_json()
         day = ((NOV_1, NOV_1 + DAY_MS),)
@@ -215,7 +213,7 @@ class TimelineProjectionTests(unittest.TestCase):
         first = NOV_1 + DAY_MS
         now = first + 100
         calls = []
-        index = PeriodCCostIndex((), lambda *_: Decimal(1), verified_models=True)
+        index = PeriodCCostIndex((), lambda *_: Decimal(1), account_only=True)
         cost = index.cost
 
         def observed_cost(route, account, left, right, model=None):
@@ -223,7 +221,7 @@ class TimelineProjectionTests(unittest.TestCase):
             return cost(route, account, left, right, model)
 
         index.cost = observed_cost
-        view = timeline_view('month', now, 'UTC', quota_roster(projected(native)), index,
+        view = timeline_view('month', now, 'UTC', account_roster(projected(native)), index,
                              first_covered_ms=NOV_1, gaps=(), pending=((now, now + DAY_MS),)).to_json()
         self.assertEqual({(NOV_1, first), (first, now)}, set(calls))
         self.assertEqual(now, view['end_ms'])
@@ -238,8 +236,8 @@ class TimelineProjectionTests(unittest.TestCase):
         account = subscription()
         facts = tuple(request(str(at), at, amount=amount, ref=account.ref)
                       for at, amount in ((first - 1, 700), (first, 1), (second, 2), (now - 1, 3), (now, 900)))
-        index = PeriodCCostIndex(facts, lambda _, tokens: Decimal(tokens.input), verified_models=True)
-        view = timeline_view('30-days', now, 'Europe/Stockholm', quota_roster(projected(account)), index,
+        index = PeriodCCostIndex(facts, lambda _, tokens: Decimal(tokens.input), account_only=True)
+        view = timeline_view('30-days', now, 'Europe/Stockholm', account_roster(projected(account)), index,
                              first_covered_ms=first - DAY_MS, gaps=()).to_json()
         self.assertEqual(['1', '2'] + ['0'] * 27 + ['3'], [point['amount'] for point in view['series'][0]['points']])
 
@@ -253,6 +251,41 @@ class TimelineDOMTests(unittest.TestCase):
 
 
 class TimelineDemandTests(unittest.TestCase):
+    def test_numeric_card_seed_precedes_any_history_publication_and_never_creates_hours(self):
+        source = SyntheticMonthSource(0, 0, month_start_ms=NOV_1)
+        scope = source_scope(source)
+        account = subscription('github-copilot')
+        catalog = FakePricingProvider().catalog
+        lane = AccountTimeline(lambda _: self.fail('not a history turn'), SourceReads())
+        self.addCleanup(lane.close)
+        day = NOV_1 + 4 * DAY_MS
+        today = CardToday(scope, 'UTC', day, NOV_5 - 1000, catalog.diagnostic_signature,
+                          {account.key: Decimal('42.123')})
+        args = dict(source=scope, observation=None, periods={'month', '7-days', '30-days', 'today'},
+             accounts=projected(account), zone='UTC', catalog=catalog, prices=lambda: None,
+             migration_gap=None, card_today=today)
+
+        lane.tick(**args, now_ms=NOV_5)
+
+        for period in ('month', '7-days', '30-days'):
+            view = lane.lookup(period)['view']
+            current = next(i for i, (left, _) in enumerate(view['buckets']) if left == day)
+            points = view['series'][0]['points']
+            self.assertEqual('42.123', points[current]['amount'])
+            self.assertEqual('~$0.42', points[current]['display']['usd'])
+            self.assertEqual([current], [i for i, point in enumerate(points) if point is not None])
+            self.assertIn(current - 1, view['initial_pending_buckets'])
+        self.assertIsNone(lane.lookup('today')['view'])
+
+        lane.tick(**(args | {'periods': set()}), now_ms=NOV_5 + 200)
+        self.assertIsNotNone(lane.lookup('month')['view'], 'compatible revisits retain the seed')
+        lane.tick(**(args | {'card_today': replace(today, price_revision='new')}), now_ms=NOV_5 + 400)
+        self.assertIsNone(lane.lookup('month')['view'])
+        lane.tick(**(args | {'source': ('other', None, None)}), now_ms=NOV_5 + 600)
+        self.assertIsNone(lane.lookup('month')['view'])
+        lane.tick(**args, now_ms=day + DAY_MS + 1)
+        self.assertIsNone(lane.lookup('month')['view'])
+
     def test_silent_failure_preserves_last_good_then_a_new_revision_replaces_it(self):
         source = SyntheticMonthSource(1, 1, month_start_ms=NOV_1)
         key, snapshot = next(iter(source.snapshots.items()))
@@ -306,7 +339,7 @@ class TimelineDemandTests(unittest.TestCase):
 
             history = TimelineHistory(worker, SourceReads())
             values, more, _, interrupted = history.step(source_scope(origin), observation, ('today',),
-                quota_roster(projected(subscription('openai'))), 'UTC',
+                 account_roster(projected(subscription('openai'))), 'UTC',
                 FakePricingProvider().catalog, lambda: None, None, DAY_MS // 2)
 
             self.assertEqual({'today'}, values.keys())
@@ -344,7 +377,7 @@ class TimelineDemandTests(unittest.TestCase):
         service = SimpleNamespace(source=source, close_accounts=lambda: None, progress=lambda *_: None)
         catalog = FakePricingProvider().catalog
         history = TimelineHistory(lambda _: service, SourceReads())
-        roster = quota_roster(projected(subscription('github-copilot'), subscription('openai'), subscription()))
+        roster = account_roster(projected(subscription('github-copilot'), subscription('openai'), subscription()))
         observation = observe_catalog(source, include_archived_revisions=True)
 
         def turn(periods, now=NOV_5):
@@ -475,7 +508,7 @@ class TimelineDemandTests(unittest.TestCase):
 
         def turn(now):
             return history.step(source_scope(source), observe_catalog(source), ('month',),
-                quota_roster(projected(subscription('github-copilot'))), 'UTC', FakePricingProvider().catalog,
+                 account_roster(projected(subscription('github-copilot'))), 'UTC', FakePricingProvider().catalog,
                 lambda: None, None, now, foreground=True)
 
         first, _, _, _ = turn(NOV_5)

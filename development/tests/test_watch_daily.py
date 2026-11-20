@@ -177,16 +177,16 @@ class WatchDailyTests(unittest.TestCase):
             owner = WebWatchCoordinator(selection=selection, report_service=service, config=config, service_factory=factory)
             self.addCleanup(owner.close)
             sessions = source.list_sessions()
-            first = owner._account_history(sessions, (), 80_000_000)
-            self.assertEqual(64, first[1].prompt_count)
-            self.assertEqual(64, first[1].mix.request_count)
+            first = owner._account_history(sessions, (), 80_000_000).usage
+            self.assertEqual(64, first.prompt_count)
+            self.assertEqual(64, first.mix.request_count)
             loads = source.load_count
             second = owner._account_history(sessions, (), 80_000_001)
             self.assertEqual(loads, source.load_count)
-            second = owner._account_history((), (), 80_000_002)
-            self.assertEqual(first[1].total, second[1].total)
-            self.assertEqual(first[1].mix, second[1].mix)
-            self.assertEqual(first[1].prompt_count, second[1].prompt_count)
+            second = owner._account_history((), (), 80_000_002).usage
+            self.assertEqual(first.total, second.total)
+            self.assertEqual(first.mix, second.mix)
+            self.assertEqual(first.prompt_count, second.prompt_count)
 
     def test_account_requirement_setup_does_not_project_value_or_certify_history(self):
         now = int(datetime(2026, 10, 25, 12, tzinfo=timezone.utc).timestamp() * 1000)

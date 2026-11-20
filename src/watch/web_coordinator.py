@@ -5,14 +5,16 @@ Session captures and account-history aggregation have separate isolated services
 none of their full histories run on the presentation/live thread.
 """
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
+from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_quota import source_scope
 from src.reports.history import WatchHistoryAcquisition
-from .account_timeline import AccountTimeline
+from src.reports.accounts import AccountPeriodHistory
+from .account_timeline import AccountTimeline, CardToday
 from .card_workers import CardWorkers
 from .cards import WatchCards
 from .session_costs import SessionCosts
@@ -22,6 +24,14 @@ from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
 from .detail_capture import DetailWorkerStopError
+
+
+@dataclass(frozen=True, slots=True)
+class DailyAccountHistory:
+    accounts: AccountPeriodHistory
+    usage: DailyUsage
+    source: tuple
+    roots: dict
 
 
 class WebWatchCoordinator(WatchCoordinator):
@@ -45,7 +55,9 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_job = None
         self.history_due_ms = 0
         self.history_quota = None
-        self.daily_history = WatchHistoryAcquisition()
+        self.daily_history = WatchHistoryAcquisition(share_roots=True)
+        self.daily_history_source = None
+        self.history_source, self.history_roots, self.card_today = None, None, None
         self.daily_usage = None
         self.daily_status = SourceStatus(self._monotonic)
         self.history_revision = None
@@ -71,7 +83,8 @@ class WebWatchCoordinator(WatchCoordinator):
             zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
             prices=getattr(service.comparison_pricing_provider, 'cached_catalog', lambda: None),
             migration_gap=service.selection.migration_gap, now_ms=int(self.clock_ms()),
-            available=available, terminal=terminal)
+            available=available, terminal=terminal, card_today=self.card_today,
+            shared_roots=self.history_roots if self.history_source == source else None)
 
     def _record_refresh_duration(self, seconds):
         if not self.card_timing_observed:
@@ -176,11 +189,17 @@ class WebWatchCoordinator(WatchCoordinator):
     def _hydrate_startup(self, roots, *, now_ms):
         return ()
 
-    def _account_history(self, sessions, snapshots, now_ms, active_roots=()):
+    def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None):
         service = None
         try:
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
+                source = source_scope(service.source)
+                if expected_source is not None and source != expected_source:
+                    return None
+                if self.daily_history_source != source:
+                    self.daily_history.reset()
+                    self.daily_history_source = source
                 service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
                 service.prepare_watch_account_history(snapshots)
                 today = WatchTodayCCost(service.timezone_id)
@@ -189,10 +208,12 @@ class WebWatchCoordinator(WatchCoordinator):
                     # Share authoritative V2 brackets across the existing bounded
                     # four-root slice instead of relisting all history per root.
                     today.advance_history(service, now_ms)
-                if self._closed:
+                if self._closed or source_scope(service.source) != source:
+                    self.daily_history_source = None
                     return None
                 service.project_watch_accounts(snapshots)
-                return service.watch_account_history(), service.project_watch_today()
+                history, daily = service.watch_account_history(), service.project_watch_today()
+                return DailyAccountHistory(history, daily, source, dict(self.daily_history.chart_roots))
         except (SourceError, PricingUnavailableError) as error:
             return error
         finally:
@@ -200,7 +221,8 @@ class WebWatchCoordinator(WatchCoordinator):
                 service.close_accounts()
 
     def _refresh_quota(self, observation, *, now_ms, force=False, allow_history=True, fresh_root_ids=()):
-        revision = tuple(sorted(observation.revisions.items()))
+        source = source_scope(self.report_service.source)
+        revision = source, tuple(sorted(observation.revisions.items()))
         if revision != self.history_revision:
             self.history_due_ms = 0
             self.history_revision = revision
@@ -213,8 +235,10 @@ class WebWatchCoordinator(WatchCoordinator):
             if isinstance(value, Exception):
                 self.daily_status.fail(value)
                 self.history_due_ms = min(self.history_due_ms, now_ms + int(SOURCE_CONFIRM_SECONDS * 1000))
-            elif value is not None and value[1].day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms):
-                self.history_quota, self.daily_usage = value
+            elif (value is not None and value.source == source and
+                  value.usage.day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)):
+                self.history_quota, self.daily_usage = value.accounts, value.usage
+                self.history_source, self.history_roots = value.source, value.roots
                 self.daily_status.clear()
             elif value is not None:
                 self.history_due_ms = 0
@@ -223,7 +247,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self.history_due_ms = now_ms + 60_000
             self.history_job = self.history_pool.submit(self._account_history,
                 observation.sessions, tuple(self.accounts.snapshots), now_ms,
-                observation.active_candidates | observation.live_candidates)
+                observation.active_candidates | observation.live_candidates, expected_source=source)
 
     def enrich_once(self):
         return WatchCycle(self.status_projection(), (), ())
@@ -240,14 +264,17 @@ class WebWatchCoordinator(WatchCoordinator):
     def _build_projection(self, *, now_ms, status="", status_active=False, scanned=False):
         self.cards.tick(now_ms)
         day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
-        if self.daily_usage is not None and self.daily_usage.day_start_ms != day:
+        source = source_scope(self.report_service.source)
+        if self.daily_usage is not None and (self.daily_usage.day_start_ms != day or self.history_source != source):
             self.daily_usage = self.history_quota = None
+            self.history_source = self.history_roots = None
             self.history_due_ms = 0
         active, history, state = self.cards.project(now_ms)
         frame = super()._build_projection(now_ms=now_ms, status=status,
             status_active=status_active, scanned=scanned)
         # Keep independently refreshed native quota observations. Canonical
         # historical cost scopes are indexed separately, never recomputed here.
+        self.card_today = None
         if self.history_quota is not None and frame.quota is not None:
             accounts = self.history_quota.project(tuple(item.account for item in frame.quota.accounts),
                 now_ms=now_ms, today_start_ms=day,
@@ -255,6 +282,8 @@ class WebWatchCoordinator(WatchCoordinator):
                 timezone_id=self.report_service.timezone_id,
                 workday_calendar=str(self.config.get("workdayCalendar") or ""))
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
+            self.card_today = CardToday.from_accounts(accounts, source, self.report_service.timezone_id,
+                day, self.daily_usage.observed_at_ms, self.history_quota)
         proof = self.cards.history
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
             recent_finished_cards=self.cards.recent.project(self.cards, now_ms),
