@@ -15,6 +15,7 @@ const DataDemand = (() => {
       const value = {tab: this.tab, section: state.detail ? 'session' : state.section,
         visible, request: ['models', 'token-mix', 'ai-stats', 'comparisons'].includes(state.section) ? state.request : null};
       if (this.history && value.section === 'watch') value.history = state.history === true;
+      if (value.section === 'accounts' && state.accountTimeline) value.account_period = state.accountTimeline.period;
       return value;
     }
     send(value) {

@@ -13,10 +13,11 @@ from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
+        self.timeline_demand = timeline_demand
         self.stopping = Event()
         self.thread = None
         self.failure = None
@@ -113,10 +114,15 @@ class LiveRuntime:
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
+        timeline_scope = None
+        if self.timeline_demand is not None and callable(getattr(type(driver.coordinator), 'tick_account_timeline', None)):
+            timeline_scope = driver.coordinator.tick_account_timeline(
+                frame, self.timeline_demand, available=verified, terminal=driver.terminal)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
                 frame.now_ms, stale=frame.quota_stale or not verified)
         self.publish("live", record(state=driver.source_state,
+             account_timeline_scope=timeline_scope,
              catalog_hint=self.catalog.live_hint(),
              detail_hints=tuple(record(**hint) for hint in self.details.live_hints()),
             source_generation=generation if verified and generation in {"v1", "v2"} else "unknown",
