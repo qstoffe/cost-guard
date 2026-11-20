@@ -4,7 +4,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
-from src.analysis.account_timeline import timeline_buckets
+from src.analysis.account_timeline import timeline_window
 from src.analysis.period_ccost import account_usage_routes, combined_cost
 from src.numbers import ccost_amount
 from src.pricing.identities import reference_identity, unverified_alias
@@ -106,31 +106,35 @@ def _nice_scale(peak):
     return factor * unit
 
 
-def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps):
-    start, buckets = timeline_buckets(period, now_ms, zone, earliest_ms=index.earliest_ms)
-    # Gaps can overlap (parent and child) and must not create false zeroes.
-    gap_starts, gap_ends = [], []
-    for left, right in sorted(gaps):
+def _overlap(intervals, buckets):
+    starts, ends = [], []
+    for left, right in sorted(intervals):
         if left >= right:
             continue
-        if not gap_ends or gap_ends[-1] < left:
-            gap_starts.append(left)
-            gap_ends.append(right)
+        if not ends or ends[-1] < left:
+            starts.append(left)
+            ends.append(right)
         else:
-            gap_ends[-1] = max(gap_ends[-1], right)
+            ends[-1] = max(ends[-1], right)
+    slots = (bisect_left(starts, right) - 1 for _, right in buckets)
+    return tuple(slot >= 0 and ends[slot] > left for (left, _), slot in zip(buckets, slots))
 
-    def covered(left, right):
-        if first_covered_ms is None or right <= first_covered_ms:
-            return False
-        slot = bisect_left(gap_starts, right) - 1
-        return slot < 0 or gap_ends[slot] <= left
 
-    qualified = tuple((left, right, covered(left, right)) for left, right in buckets)
+def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=()):
+    start, buckets, partial = timeline_window(period, now_ms, zone)
+    # Unread scheduled roots allow provisional positive costs from acquired facts.
+    # Unavailable facts (failed/incomplete reads, migration gaps) still block
+    # qualification. Neither can manufacture a zero.
+    acquiring = _overlap(pending, buckets)
+    unavailable = _overlap(gaps, buckets)
+    qualified = tuple((max(left, first_covered_ms), right, waiting or left < first_covered_ms)
+                      if first_covered_ms is not None and right > first_covered_ms and not gap else None
+                      for (left, right), gap, waiting in zip(buckets, unavailable, acquiring))
     series = []
     for item in roster:
-        amounts = tuple(_bucket_cost(index, item, max(left, first_covered_ms), right,
-                                     partial=left < first_covered_ms) if complete and item.eligible else None
-                       for left, right, complete in qualified)
+        amounts = tuple(_bucket_cost(index, item, window[0], window[1], partial=window[2])
+                        if index is not None and window is not None and item.eligible else None
+                        for window in qualified)
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts)
         # The browser chooses the largest visible series' scale, without
@@ -139,4 +143,6 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
         ticks = tuple(_point(step * i) for i in range(5))
         series.append(record(id=item.key, account=item.label, quota=item.quota, primary=item.primary,
                              peak=peak, ticks=ticks, points=points))
-    return record(period=period, timezone_id=zone, start_ms=start, end_ms=now_ms, buckets=buckets, series=tuple(series))
+    return record(period=period, timezone_id=zone, start_ms=start, end_ms=now_ms, buckets=buckets,
+                  partial_buckets=partial, pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting),
+                  series=tuple(series))

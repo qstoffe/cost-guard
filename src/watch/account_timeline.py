@@ -19,6 +19,7 @@ from src.sources.errors import SourceError
 
 ROOTS_PER_TURN = 12
 RETRY_MS = 30_000
+PARTIAL_MS = 15_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,8 +97,6 @@ class TimelineHistory:
             except (OSError, sqlite3.Error):
                 pass  # Existing price observation remains usable on a cache miss.
         catalog = self.prices or catalog
-        if catalog is None:
-            return {}, False, False, ()
 
         if observation is not self.observation:
             self.activity = root_activity(observation.sessions, observation.root_by_session)
@@ -109,8 +108,8 @@ class TimelineHistory:
             self.observation = observation
         activity, first = self.activity, self.first
         active = observation.active_candidates | observation.live_candidates
-        cutoff = (0 if 'all' in periods else
-                  min(period_start(period, now_ms, zone) for period in periods) - 60_000)
+        starts = {period: period_start(period, now_ms, zone) for period in periods}
+        cutoff = min(starts.values()) - 60_000
         roots = [root for root in observation.sessions if root.parent_session_id is None and (
             root.session_id in active or activity[root.session_id] >= cutoff)]
         removed = bool(set(self.roots) - observation.revisions.keys())
@@ -128,44 +127,47 @@ class TimelineHistory:
             self.seen.update(root.session_id for root in batch)
 
         # Do not reprice the growing population after every acquisition slice.
-        # A shorter requested scope can finish while the All time pass continues.
+        # Shorter scopes can settle while a longer requested window is loading.
         newest_pending = max((now_ms if root.session_id in active else activity[root.session_id]
                               for root in remaining), default=-1)
-        covered = {period for period in periods if not remaining or (
-            period != 'all' and period_start(period, now_ms, zone) > newest_pending)}
-        ready = tuple(period for period in periods if not remaining or period in covered - self.covered_periods
-                      or now_ms >= self.partial_at.get(period, 0) + 15_000)
+        covered = {period for period in periods if not remaining or starts[period] > newest_pending}
+        ready = tuple(period for period in periods if not remaining or removed
+                      or period in covered - self.covered_periods
+                      or now_ms >= self.partial_at.get(period, 0) + PARTIAL_MS)
         self.covered_periods = covered
         if not ready:
             return {}, bool(remaining), removed, ()
 
-        candidates = {root.session_id for root in roots}
+        unread = {root.session_id for root in remaining if root.session_id not in self.roots}
+        acquiring = []
         gaps = []
         if migration_gap is not None and migration_gap.has_gap:
             gaps.extend((item.first_ms, item.last_ms + 1) for item in migration_gap.sessions)
             if not migration_gap.sessions:
                 gaps.append((0, now_ms))
-        for key in candidates:
+        for root in roots:
+            key = root.session_id
             saved = self.roots.get(key)
-            if not saved or not saved.complete:
+            if saved is None or not saved.complete:
                 # Use the same activity bound as history candidate selection.
                 # Unread active trees and unrooted sessions can affect Now.
-                gaps.append((first[key], now_ms if key in active else max(first[key] + 1, activity[key] + 1)))
+                intervals = acquiring if key in unread else gaps
+                intervals.append((first[key], now_ms if key in active else max(first[key] + 1, activity[key] + 1)))
         gaps.extend((stamp, now_ms) for key, stamp in first.items() if key not in observation.revisions)
         covered_from = min(first.values(), default=None)
         used = tuple(sorted(self.roots.items()))
-        index_key = (catalog.diagnostic_signature, tuple((key, id(value)) for key, value in used))
-        if self.index_key != index_key:
+        index_key = (catalog.diagnostic_signature, tuple((key, id(value)) for key, value in used)) if catalog else None
+        if catalog is not None and self.index_key != index_key:
             self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
                                           catalog.reference_valuation, verified_models=True)
             # Holding the facts also prevents object ID reuse in the index key.
             self.index_key, self.index_facts = index_key, used
-        by_period = {period: timeline_view(period, now_ms, zone, roster, self.index,
-            first_covered_ms=covered_from, gaps=gaps) for period in ready}
+        by_period = {period: timeline_view(period, now_ms, zone, roster, self.index if catalog else None,
+            first_covered_ms=covered_from, gaps=gaps, pending=acquiring) for period in ready}
         self.partial_at.update((period, now_ms) for period in ready if remaining)
         failed = {root.session_id for root in roots if (value := self.roots.get(root.session_id)) and not value.acquired}
-        interrupted = tuple(period for period in ready if failed and (period == 'all' or any(
-            key in active or activity[key] >= period_start(period, now_ms, zone) for key in failed)))
+        interrupted = tuple(period for period in ready if any(
+            key in active or activity[key] >= starts[period] for key in failed))
         return by_period, bool(remaining), removed, interrupted
 
 
@@ -235,7 +237,8 @@ class AccountTimeline:
                 if job_marker == marker and available:
                     if not removed:
                         values = {period: value for period, value in values.items()
-                                  if period not in interrupted or period not in self.results}
+                                  if period not in interrupted or period not in self.results
+                                  or self.results[period]['pending_buckets']}
                     if values or removed:
                         with self.lock:
                             if removed:

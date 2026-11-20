@@ -4,19 +4,17 @@ from datetime import datetime, time, timedelta, timezone
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
 
-PERIODS = ('today', '7-days', '30-days', 'month', 'all')
+PERIODS = ('today', '7-days', '30-days', 'month')
 DAY_MS = 86_400_000
 
 
-def period_start(period, now_ms, zone, earliest_ms=None):
+def period_start(period, now_ms, zone):
     if period == 'today':
         return local_day_start_ms(zone, now_ms=now_ms)
     if period == 'month':
         return local_month_start_ms(zone, now_ms=now_ms)
     if period in ('7-days', '30-days'):
         return now_ms - int(period.split('-')[0]) * DAY_MS
-    if period == 'all':
-        return earliest_ms
     raise ValueError('invalid_timeline_period')
 
 
@@ -52,27 +50,23 @@ def _hours(day, zone):
     return boundaries
 
 
-def timeline_buckets(period, now_ms, timezone_id, *, earliest_ms=None):
-    start = period_start(period, now_ms, timezone_id, earliest_ms)
-    if start is None or start >= now_ms:
-        return start, ()
+def timeline_window(period, now_ms, timezone_id):
+    start = period_start(period, now_ms, timezone_id)
+    if start >= now_ms:
+        return start, (), ()
     zone = resolve_timezone(timezone_id)
     first_day = _local(start, zone).date()
     if period == 'today':
         boundaries = _hours(first_day, zone)
     else:
         last_day = _local(now_ms, zone).date()
-        days = (last_day - first_day).days
-        monthly = period == 'all' and days > 182
-        weekly = period == 'all' and days > 62 and not monthly
-        day = (first_day.replace(day=1) if monthly else
-               first_day - timedelta(days=first_day.weekday()) if weekly else first_day)
+        day = first_day
         boundaries = set()
         while day <= last_day:
             boundaries.add(_stamp(datetime.combine(day, time(), zone)))
-            if monthly:
-                day = day.replace(year=day.year + 1, month=1) if day.month == 12 else day.replace(month=day.month + 1)
-            else:
-                day += timedelta(days=7 if weekly else 1)
+            day += timedelta(days=1)
     edges = [start, *sorted(ms for ms in boundaries if start < ms < now_ms), now_ms]
-    return start, tuple(zip(edges, edges[1:]))
+    buckets = tuple(zip(edges, edges[1:]))
+    partial = tuple(sorted({index for index, edge in ((0, start), (len(buckets) - 1, now_ms))
+                            if edge not in boundaries}))
+    return start, buckets, partial
