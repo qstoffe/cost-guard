@@ -3,6 +3,7 @@ from threading import Event, Thread
 import time
 
 from src.sources.errors import SourceError
+from src.watch.account_timeline import FOREGROUND_SLICE_MS
 from src.watch.source_status import SourceStatus
 
 from .contracts import record
@@ -52,10 +53,14 @@ class LiveRuntime:
                 return
             self.driver = driver
             publication_due = time.monotonic()
+            timeline_due = publication_due
+            coordinator = driver.coordinator
+            timeline = getattr(coordinator, 'account_timeline', None) if self.timeline_demand is not None else None
+            frame = None
             while not self.stopping.is_set():
                 now = time.monotonic()
                 if now < publication_due:
-                    ready = getattr(driver.coordinator, 'work_ready', self.stopping)
+                    ready = getattr(coordinator, 'work_ready', self.stopping)
                     if ready is not self.stopping and ready.is_set():
                         # Clear BEFORE servicing: completion during the bounded
                         # turn remains signalled. Callbacks never mutate owners.
@@ -63,11 +68,16 @@ class LiveRuntime:
                         if driver.error is None:
                             self.working.set()
                             try:
-                                driver.coordinator.service_completed()
+                                coordinator.service_completed()
                             finally:
                                 self.working.clear()
-                    else:
-                        ready.wait(publication_due - now)
+                    if timeline is not None and timeline.fast and now >= timeline_due:
+                        # Only service the isolated bounded history lane here.
+                        # Do not repeat Watch acquisition, projection or SSE.
+                        self._tick_timeline(driver, frame)
+                        timeline_due = time.monotonic() + FOREGROUND_SLICE_MS / 1000
+                    deadline = min(publication_due, timeline_due) if timeline is not None and timeline.fast else publication_due
+                    ready.wait(max(0, deadline - time.monotonic()))
                     continue
                 self.working.set()
                 try:
@@ -87,6 +97,7 @@ class LiveRuntime:
                     break
                 # Yield between history slices and keep account-only updates timely.
                 publication_due = time.monotonic() + (0.25 if driver.coordinator.today_ccost.history_pending else 1)
+                timeline_due = time.monotonic() + FOREGROUND_SLICE_MS / 1000
         except SourceError as error:
             self.source_failure = error
             self.publish("live", record(state="failed", error_code=error.code.value, view=None,
@@ -109,15 +120,20 @@ class LiveRuntime:
                     else:
                         raise
 
+    def _tick_timeline(self, driver, frame):
+        coordinator = driver.coordinator
+        if self.timeline_demand is not None and callable(getattr(type(coordinator), 'tick_account_timeline', None)):
+            verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
+            return coordinator.tick_account_timeline(frame, self.timeline_demand,
+                available=verified, terminal=driver.terminal)
+        return None
+
     def _publish_frame(self, driver, frame):
         health = getattr(driver, 'source_status', None)
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
-        timeline_scope = None
-        if self.timeline_demand is not None and callable(getattr(type(driver.coordinator), 'tick_account_timeline', None)):
-            timeline_scope = driver.coordinator.tick_account_timeline(
-                frame, self.timeline_demand, available=verified, terminal=driver.terminal)
+        timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
                 frame.now_ms, stale=frame.quota_stale or not verified)

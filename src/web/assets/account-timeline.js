@@ -31,11 +31,11 @@ const AccountTimelineView = (() => {
     const largest = series.reduce((peak, item) => !peak || Number(item.peak) > Number(peak.peak) ? item : peak, null);
     return largest?.ticks || [];
   }
-  function layoutWidth(view, available, seriesCount) {
+  function minimumWidth(view, seriesCount) {
     // Reserve a stable footprint for ordinary rosters. The minimum grows only
     // if a larger roster would otherwise force subpixel bars.
     const minimum = Math.max(view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25, 4 + 1.25 * seriesCount);
-    return Math.ceil(Math.max(available, 2 * inset + view.buckets.length * minimum));
+    return Math.ceil(2 * inset + view.buckets.length * minimum);
   }
   function layoutSlots(view, width) {
     const hourly = view.period === 'today', shortDates = view.period === '7-days';
@@ -128,7 +128,7 @@ const AccountTimelineView = (() => {
       this.axis.setAttribute('aria-hidden', 'true');
       this.scroller = e('div', undefined, 'account-timeline-scroll');
       this.plot = svg('svg', {role: 'group', 'aria-label': 'Usage by time. Use Left and Right arrows for bucket values.',
-        tabindex: '0', class: 'account-timeline-plot'});
+        tabindex: '0', class: 'account-timeline-plot', preserveAspectRatio: 'none'});
       this.shades = svg('g', {'aria-hidden': 'true'});
       this.highlight = svg('rect', {class: 'account-timeline-highlight', y: 4, height: bottom + 17,
         rx: 4, visibility: 'hidden', 'aria-hidden': 'true'});
@@ -137,6 +137,9 @@ const AccountTimelineView = (() => {
       this.targets = svg('g', {'aria-hidden': 'true'});
       this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
+      this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
+      this.selectedLegend.setAttribute('role', 'list');
+      this.selectedLegend.setAttribute('aria-label', 'Selected Accounts and quotas');
       this.empty = e('div', undefined, 'account-timeline-empty');
       this.message = e('span');
       this.initialRing = e('span', undefined, 'account-timeline-ring');
@@ -153,7 +156,7 @@ const AccountTimelineView = (() => {
       this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
-      this.frame.append(this.axis, this.scroller, this.tooltip);
+      this.frame.append(this.axis, this.scroller, this.selectedLegend, this.tooltip);
       graph.append(this.frame, this.empty, this.announce);
       this.chooser = e('button', undefined, 'account-timeline-chooser');
       this.chooser.type = 'button';
@@ -206,7 +209,7 @@ const AccountTimelineView = (() => {
           this.width = width;
           this.draw();
         }
-      }).observe(this.scroller);
+      }).observe(this.frame);
       this.draw();
     }
 
@@ -214,8 +217,10 @@ const AccountTimelineView = (() => {
       if (this.scope === scope) return;
       this.scope = scope;
       this.generation++;
+      this.working = false;
       this.initial = scope != null;
       this.cache.clear();
+      this.priceRevision = undefined;
       this.legendFor([]);
       // IDs include source/account/quota semantics; keep choices for still
       // compatible entries until the server publishes its new roster.
@@ -239,9 +244,10 @@ const AccountTimelineView = (() => {
       if (this.period === period) return;
       this.period = period;
       this.generation++;
+      this.working = false;
       this.focusKey = null;
       const cached = this.cache.get(period)?.view;
-      this.initial = !cached || !!cached.pending_buckets.length;
+      this.initial = !cached || !!cached.initial_pending_buckets?.length;
       this.inspect(null);
       this.draw();
       this.scroller.scrollLeft = 0;
@@ -253,13 +259,15 @@ const AccountTimelineView = (() => {
       if (value === this.visible) return;
       this.visible = value;
       this.generation++;
+      this.working = false;
       if (value) {
         const view = this.cache.get(this.period)?.view;
-        this.initial = !view || !!view.pending_buckets.length;
+        this.initial = !view || !!view.initial_pending_buckets?.length;
         this.draw();
       } else {
         this.panel.hidePopover();
         this.inspect(null);
+        this.draw();
       }
       this.schedule(0);
     }
@@ -277,26 +285,41 @@ const AccountTimelineView = (() => {
       try {
         const value = await this.api('/api/accounts/timeline', {period, revision});
         if (generation !== this.generation || value.scope !== this.scope) return;
+        const activityChanged = this.working !== (value.acquiring === true);
+        this.working = value.acquiring === true;
         if (value.view) {
-          if (!value.view.pending_buckets.length) this.initial = false;
-          this.cache.set(period, {revision: value.revision, view: value.view});
+          this.initial = !!value.view.initial_pending_buckets?.length;
+          if (value.view.price_revision !== this.priceRevision) {
+            this.cache.clear();
+            this.priceRevision = value.view.price_revision;
+          }
+          const {view} = value, previous = this.cache.get(period)?.shown;
+          const shown = new Set();
+          view.buckets.forEach(([start], index) => {
+            if (previous?.has(start) || view.series.some(series => series.points[index] != null)) shown.add(start);
+          });
+          this.cache.set(period, {revision: value.revision, view, shown});
           this.roster = value.view.series;
           this.draw();
         } else if (!value.unchanged) {
           const prior = this.cache.delete(period);
           const empty = value.ready && !value.series.length;
-          if (empty) this.initial = false;
-          if (prior || empty || this.rosterRevision !== value.revision) {
+          if (empty || prior) this.initial = !empty;
+          if (prior || empty || activityChanged || this.rosterRevision !== value.revision) {
             this.rosterRevision = value.revision;
             this.roster = value.series;
             this.draw();
           }
-        }
+        } else if (activityChanged) this.draw();
       } catch (_) {
         // Host health owns sign-in and connection UX. Never narrate retries.
+        if (generation === this.generation && this.working) {
+          this.working = false;
+          this.draw();
+        }
       } finally {
         this.pending = false;
-        this.schedule(generation !== this.generation ? 0 : this.initial ? 2000 : 6000);
+        this.schedule(generation !== this.generation ? 0 : this.initial ? 1000 : 6000);
       }
     }
 
@@ -342,14 +365,29 @@ const AccountTimelineView = (() => {
     }
 
     draw() {
-      const view = this.cache.get(this.period)?.view;
+      const cached = this.cache.get(this.period);
+      const view = cached?.view;
       const previous = this.view;
       const roster = view?.series || this.roster || [];
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       this.legendFor(roster);
-      this.series = view?.series.filter(item => this.selected.get(item.id) ?? item.primary) || [];
+      const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? item.primary);
+      this.series = view ? selectedSeries : [];
+      this.selectedLegend.hidden = !view || !selectedSeries.length;
+      const legend = selectedSeries.map(item => [this.colors.get(item.id), label(item)]);
+      const legendKey = JSON.stringify(legend);
+      if (legendKey !== this.legendKey) {
+        this.legendKey = legendKey;
+        this.selectedLegend.replaceChildren(...legend.map(([ink, name]) => {
+          const row = e('li');
+          row.append(swatch(ink), e('span', name));
+          return row;
+        }));
+      }
       this.view = view;
       this.acquiring = new Set(view?.pending_buckets);
+      this.unread = new Set(view?.initial_pending_buckets);
+      this.shown = cached?.shown;
       this.partial = new Set(view?.partial_buckets);
       this.future = new Set(view?.future_buckets);
       const scale = visibleScale(this.series.filter(item => item.points.some(point => point !== null)));
@@ -358,7 +396,7 @@ const AccountTimelineView = (() => {
       const message = unselected ? 'Select a series to show its usage.' :
         loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
-      this.initialRing.hidden = !loading;
+      this.initialRing.hidden = !loading || !this.working;
       this.frame.hidden = !view?.buckets.length;
       this.empty.hidden = !this.frame.hidden && !unselected;
       this.empty.classList.toggle('over-plot', !this.frame.hidden);
@@ -376,13 +414,17 @@ const AccountTimelineView = (() => {
         lastLabel = text;
       });
       this.axis.replaceChildren(...axis);
-      const width = layoutWidth(view, this.scroller.clientWidth || this.width, roster.length);
+      // SVG coordinates stay stable when a newly qualified value needs a wider
+      // tick label. CSS fits the shape to the scroller, not vice versa.
+      const minimum = minimumWidth(view, roster.length);
+      const width = Math.max(this.frame.clientWidth || this.width, minimum);
       const sameGeometry = equalSlots(previous, view) && this.layout?.width === width;
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
-        this.plot.setAttribute('width', layout.width);
+        this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);
+        this.plot.setAttribute('viewBox', `0 0 ${layout.width} ${plotHeight}`);
         this.plot.setAttribute('height', plotHeight);
         // Native hit testing is already in actual SVG coordinates, including
         // scroll, CSS zoom and transforms. Bars cannot be hit targets.
@@ -395,14 +437,19 @@ const AccountTimelineView = (() => {
         this.labels.replaceChildren(...axisLabels(layout, this.future));
 
       const shades = [], nodes = [];
+      let cue = false;
       for (const {index, x, center} of slots) {
-        const future = this.future.has(index), waiting = this.initial && this.acquiring.has(index);
+        const future = this.future.has(index), waiting = this.unread.has(index);
         if (future || waiting) shades.push(svg('rect', {
           class: future ? 'account-timeline-future' : 'account-timeline-loading',
           'data-bucket': index, x: x + 1, y: 4, width: group - 2, height: bottom - 4, rx: 4
         }));
-        if (waiting) nodes.push(svg('path', {class: 'account-timeline-ring',
-          d: `M${center + 4},14a4,4 0 1 1 -4,-4`, 'data-bucket': index}));
+        // This is a neutral cue in a backed unread region, not a claim that
+        // the source is reading one specific day (a tree can span many).
+        if (!cue && !future && waiting && !this.shown?.has(view.buckets[index][0]) && this.visible && this.working) {
+          nodes.push(svg('path', {class: 'account-timeline-ring', d: `M${center + 4},14a4,4 0 1 1 -4,-4`}));
+          cue = true;
+        }
         else if (this.partial.has(index)) nodes.push(svg('circle', {class: 'account-timeline-partial', cx: center,
           cy: 14, r: 2, 'data-bucket': index}));
       }
@@ -487,11 +534,13 @@ const AccountTimelineView = (() => {
         const repeat = slot.occurrence ? ` (${slot.occurrence === 1 ? 'first' : 'second'})` : '';
         heading += ` ${slot.time}–${partial ? 'Now' : end || 'N/A'}${repeat}`;
       }
-      const state = future ? 'Upcoming' : pending ? 'Loading' : partial ? 'Partial' : '';
+      const firstLoad = this.unread.has(index);
+      const state = future ? 'Upcoming' : firstLoad && !this.shown?.has(this.view.buckets[index][0]) ?
+        'Loading' : pending || partial ? 'Partial' : '';
       const values = [], rows = [];
       if (!future) for (const item of this.series) {
         const point = item.points[index];
-        const value = point ? shown(point) + (pending ? ' (so far)' : '') : pending ? '—' : 'Unavailable';
+        const value = point ? shown(point) + (firstLoad ? ' (so far)' : '') : pending ? '—' : 'Unavailable';
         const name = label(item), row = e('div', undefined, 'account-timeline-tip-row');
         const text = e('span', name, 'account-timeline-tip-name');
         text.title = name;

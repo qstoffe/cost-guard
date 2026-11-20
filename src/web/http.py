@@ -337,7 +337,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 driver = live.driver if live else None
                 timeline = getattr(driver.coordinator, 'account_timeline', None) if driver and not driver.terminal else None
                 self.reply(200, timeline.lookup(period, revision) if timeline else
-                           dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False))
+                           dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False,
+                                acquiring=False))
                 return
             if self.path == '/api/detail/export':
                 self.server.exports.handle(self, value)

@@ -100,14 +100,8 @@ class DataDispatcher:
             self._expire()
             if tab not in self.tabs and len(self.tabs) >= 16:
                 raise RuntimeError('busy')
-            old = self.tabs.get(tab, {})
-            now = self.clock()
-            boosted = old.get('account_boost', 0)
-            if (account_period and visible and (not boosted or now >= boosted + 5) and (
-                    not old.get('visible') or old.get('account_period') != account_period)):
-                boosted = now + 15
             self.tabs[tab] = dict(section=section, visible=visible, request=request, history=history,
-                                  account_period=account_period, account_boost=boosted, touched=now)
+                                  account_period=account_period, touched=self.clock())
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
@@ -124,9 +118,8 @@ class DataDispatcher:
     def account_timeline_demand(self):
         with self.lock:
             self._expire()
-            tabs = [tab for tab in self.tabs.values() if tab['visible'] and tab['account_period']]
-            return frozenset(tab['account_period'] for tab in tabs), any(
-                tab['account_boost'] > self.clock() for tab in tabs)
+            return frozenset(tab['account_period'] for tab in self.tabs.values()
+                             if tab['visible'] and tab['account_period'])
 
     def _expire(self):
         for tab, value in tuple(self.tabs.items()):

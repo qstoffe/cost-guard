@@ -50,10 +50,11 @@ const primary = {id: '00000000', primary: true, account: 'Account A', quota: '5-
   points: [point, null], peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
 const secondary = {...primary, id: '00000008', primary: false, quota: 'Weekly'};
 const start = Date.UTC(2026, 10, 1), day = 86_400_000;
-const frame = (scope, revision, pending, series) => ({scope, revision,
+const frame = (scope, revision, pending, series, initial = pending, acquiring = true, price = 'price') =>
+  ({scope, revision, acquiring,
   view: {period: 'month', timezone_id: 'UTC', start_ms: start, end_ms: start + 2 * day,
     buckets: [[start, start + day], [start + day, start + 2 * day]], partial_buckets: [],
-    pending_buckets: pending, series}});
+    pending_buckets: pending, initial_pending_buckets: initial, price_revision: price, series}});
 
 async function check() {
   const calls = [];
@@ -80,6 +81,13 @@ async function check() {
   await pending;
   assert.equal(chart.shades.children.length, 1);
   assert.equal(chart.empty.hidden, true, 'a partial frame has only bucket-local loading');
+  const rings = () => chart.layers.children.filter(node => node.attributes.class === 'account-timeline-ring').length;
+  assert.equal(rings(), 1);
+  const stalled = chart.refresh();
+  calls.at(-1).resolve({scope: 'current', unchanged: true, acquiring: false});
+  await stalled;
+  assert.equal(rings(), 0);
+  assert.equal(chart.shades.children.length, 1, 'stalled history remains distinguishable');
   chart.choose(1);
   assert.equal(chart.tipTitle.textContent, '2026-11-02');
   assert.equal(chart.tipState.textContent, 'Loading');
@@ -89,6 +97,7 @@ async function check() {
   assert.equal(demand, 2, 'selection is frontend-only');
   assert.equal(chart.tipTitle.textContent, '2026-11-02', 'selection retains the inspected date');
   assert.equal(chart.layers.children.filter(node => node.attributes.class === 'account-timeline-bar').length, 2);
+  assert.equal(chart.selectedLegend.children.length, 2);
 
   const settled = chart.refresh();
   assert.equal(calls.at(-1).request.revision, 3);
@@ -100,6 +109,39 @@ async function check() {
   assert.equal(chart.entries.get(secondary.id).input, check);
   assert.equal(check.checked, true);
   assert.match(chart.entries.get(secondary.id).name.textContent, /^Renamed account/);
+  assert.match(chart.selectedLegend.children[0].children[1].textContent, /^Renamed account/);
+
+  const provisional = chart.refresh();
+  calls.at(-1).resolve(frame('current', 5, [0, 1], [primary, secondary]));
+  await provisional;
+  assert.equal(rings(), 1, 'one cue across two pending cells; never animate an already displayed value');
+  assert.equal(chart.shades.children.length, 2);
+  chart.choose(0);
+  const polite = chart.announce.textContent;
+  assert.equal(chart.tipState.textContent, 'Partial');
+
+  const quiet = chart.refresh();
+  calls.at(-1).resolve(frame('current', 6, [0], [primary, secondary], []));
+  await quiet;
+  assert.equal(rings(), 0);
+  assert.equal(chart.shades.children.length, 0);
+  assert.equal(chart.view.series[0].points[0], point, 'in-flight revision retains the last usable value');
+  assert.equal(chart.announce.textContent, polite, 'passive refresh never re-announces');
+  chart.active(false);
+  chart.active(true);
+  assert.equal(rings(), 0, 'reentry does not flash a stale cue');
+
+  const revised = chart.refresh(), newPoint = {...point, amount: '45'};
+  calls.at(-1).resolve(frame('current', 7, [], [{...primary, points: [newPoint, null]}, secondary], [], false));
+  await revised;
+  assert.equal(chart.view.series[0].points[0], newPoint);
+  assert.equal(rings(), 0);
+
+  const repriced = chart.refresh();
+  calls.at(-1).resolve(frame('current', 8, [0], [{...primary, points: [null, null]}, secondary],
+    [], false, 'new price'));
+  await repriced;
+  assert.equal(chart.view.series[0].points[0], null, 'never reuse a last-good amount with an incompatible valuation');
 }
 
 check().catch(error => { console.error(error); process.exitCode = 1; });

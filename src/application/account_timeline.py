@@ -120,7 +120,8 @@ def _overlap(intervals, buckets):
     return tuple(left < right and slot >= 0 and ends[slot] > left for (left, right), slot in zip(buckets, slots))
 
 
-def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=()):
+def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=(), initial_pending=None,
+                  price_revision=None):
     window = timeline_window(period, now_ms, zone)
     elapsed = window.buckets[:len(window.buckets) - len(window.future)]
     # Unread scheduled roots allow provisional positive costs from acquired facts.
@@ -128,6 +129,7 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
     # qualification. Neither can manufacture a zero.
     acquiring = _overlap(pending, elapsed)
     unavailable = _overlap(gaps, elapsed)
+    initial = acquiring if initial_pending is None else _overlap(initial_pending, elapsed)
     qualified = tuple((max(left, first_covered_ms), right, waiting or left < first_covered_ms)
                       if first_covered_ms is not None and right > max(left, first_covered_ms) and not gap else None
                       for (left, right), gap, waiting in zip(elapsed, unavailable, acquiring))
@@ -146,4 +148,35 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
                              peak=peak, ticks=ticks, points=points))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,
                   slot_dates=window.dates, future_buckets=window.future, partial_buckets=window.partial,
-                  pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting), series=tuple(series))
+                  pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting and not unavailable[i]),
+                  initial_pending_buckets=tuple(i for i, waiting in enumerate(initial) if waiting and not unavailable[i]),
+                  price_revision=price_revision, series=tuple(series))
+
+
+def retain_refresh(prior, view):
+    """Within one scoped publication, hold usable values only for passive revisions."""
+    if prior is None or prior['price_revision'] != view['price_revision']:
+        return view
+    refreshing = set(view['pending_buckets']) - set(view['initial_pending_buckets'])
+    if not refreshing:
+        return view
+    old_slots = {start: i for i, (start, _) in enumerate(prior['buckets'])}
+    old_series = {item['id']: item for item in prior['series']}
+    series = []
+    for item in view['series']:
+        old = old_series.get(item['id'])
+        if old is None:
+            series.append(item)
+            continue
+        points = item['points'].copy()
+        retained_peak = Decimal(0)
+        for index in refreshing:
+            previous = old_slots.get(view['buckets'][index][0])
+            if previous is not None and (point := old['points'][previous]) is not None:
+                points[index] = point
+                retained_peak = max(retained_peak, Decimal(point['amount']))
+        replacement = dict(item, points=points)
+        if retained_peak > Decimal(item['peak']):
+            replacement.update(peak=old['peak'], ticks=old['ticks'])
+        series.append(replacement)
+    return dict(view, series=series)

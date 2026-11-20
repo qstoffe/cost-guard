@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from development.tests.fixtures.account_periods import request, subscription
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
@@ -14,7 +15,7 @@ from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.analysis.account_timeline import DAY_MS, timeline_window
 from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import quota_roster, retain_compatible_quotas, timeline_view
+from src.application.account_timeline import quota_roster, retain_compatible_quotas, retain_refresh, timeline_view
 from src.application.session_quota import source_scope
 from src.domain import QuotaComponent
 from src.reports.models import AccountProjection
@@ -22,7 +23,7 @@ from src.sources.errors import SourceConcurrentChangeError
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
-from src.watch.account_timeline import AccountTimeline, TimelineHistory, ROOTS_PER_TURN
+from src.watch.account_timeline import AccountTimeline, TimelineHistory, FOREGROUND_SLICE_MS, ROOTS_PER_TURN
 from src.web.dispatch import DataDispatcher
 
 
@@ -188,6 +189,27 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual([], result['pending_buckets'])
         self.assertEqual([None] * 30, result['series'][0]['points'])
 
+    def test_refresh_retains_a_usable_value_but_never_across_price_or_gap(self):
+        native = subscription()
+        roster = quota_roster(projected(native))
+        index = PeriodCCostIndex((request('old', NOV_1 + 5, amount=100, ref=native.ref),),
+                                 lambda _, tokens: Decimal(tokens.input), verified_models=True)
+        prior = timeline_view('month', NOV_5, 'UTC', roster, index, first_covered_ms=NOV_1,
+                              gaps=(), price_revision='rates').to_json()
+        day = ((NOV_1, NOV_1 + DAY_MS),)
+        options = dict(first_covered_ms=NOV_1, gaps=(), pending=day, initial_pending=(), price_revision='rates')
+
+        def view(**changes):
+            return timeline_view('month', NOV_5 + 1000, 'UTC', roster, None, **(options | changes)).to_json()
+
+        held = retain_refresh(prior, view())
+        self.assertEqual('$1.00', held['series'][0]['points'][0]['display']['usd'])
+        self.assertEqual([0], held['pending_buckets'])
+        self.assertEqual([], held['initial_pending_buckets'])
+        self.assertIsNone(retain_refresh(prior, view(gaps=day))['series'][0]['points'][0])
+        self.assertIsNone(retain_refresh(prior, view(initial_pending=day))['series'][0]['points'][0])
+        self.assertIsNone(retain_refresh(prior, view(price_revision='new rates'))['series'][0]['points'][0])
+
     def test_future_slots_never_query_the_index_or_acquire_history(self):
         native = subscription()
         first = NOV_1 + DAY_MS
@@ -239,7 +261,7 @@ class TimelineDemandTests(unittest.TestCase):
         lane = AccountTimeline(lambda _: service, SourceReads())
         self.addCleanup(lane.close)
         args = dict(source=source_scope(source), observation=observe_catalog(source), periods={'month'},
-            boosted=False, accounts=projected(subscription('github-copilot')), zone='UTC',
+            accounts=projected(subscription('github-copilot')), zone='UTC',
             catalog=FakePricingProvider().catalog, prices=lambda: None, migration_gap=None)
 
         def publish(now):
@@ -299,17 +321,22 @@ class TimelineDemandTests(unittest.TestCase):
         dispatch = DataDispatcher(None, clock=lambda: now)
         dispatch.interest('one', 'accounts', True, account_period='month')
         dispatch.interest('two', 'accounts', True, account_period='month')
-        self.assertEqual(({'month'}, True), dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_demand())
         now = 18
         dispatch.interest('one', 'accounts', True, account_period='month')
-        self.assertEqual(({'month'}, False), dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_demand())
         now = 25
         dispatch.interest('one', 'accounts', True, account_period='30-days')
-        self.assertEqual(({'month', '30-days'}, True), dispatch.account_timeline_demand())
+        self.assertEqual({'month', '30-days'}, dispatch.account_timeline_demand())
         dispatch.interest('one', 'accounts', False, account_period='30-days')
-        self.assertEqual(({'month'}, False), dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        dispatch.interest('two', 'watch', True)
+        self.assertEqual(set(), dispatch.account_timeline_demand())
+        dispatch.interest('two', 'accounts', True, account_period='month')
         now = 100
-        self.assertEqual((set(), False), dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        now = 116
+        self.assertEqual(set(), dispatch.account_timeline_demand())
 
     def test_bounded_slices_reuse_unchanged_root_facts_across_periods_and_retire_removed_roots(self):
         source = SyntheticMonthSource(217, 5, month_start_ms=NOV_1)
@@ -366,7 +393,7 @@ class TimelineDemandTests(unittest.TestCase):
         lane = AccountTimeline(lambda _: service, SourceReads())
         self.addCleanup(lane.close)
         args = dict(source=source_scope(source), observation=observe_catalog(source), periods={'month'},
-            boosted=True, accounts=projected(subscription('github-copilot')), zone='UTC',
+            accounts=projected(subscription('github-copilot')), zone='UTC',
             catalog=FakePricingProvider().catalog, prices=lambda: None, migration_gap=None)
 
         def publish(now):
@@ -378,15 +405,110 @@ class TimelineDemandTests(unittest.TestCase):
         first = publish(NOV_5)
         self.assertEqual(12, source.load_count)
         self.assertEqual([0, 2], first['view']['pending_buckets'])
+        self.assertEqual([0, 2], first['view']['initial_pending_buckets'])
         points = first['view']['series'][0]['points']
         self.assertIsNone(points[0])
         self.assertEqual('0', points[1]['amount'])
         self.assertEqual('~<$0.01', points[2]['display']['usd'])
-        self.assertEqual(first, publish(NOV_5 + 1_000), 'intermediate repricing is coalesced')
-        final = publish(NOV_5 + 2_000)
+        self.assertEqual(first, publish(NOV_5 + FOREGROUND_SLICE_MS), 'intermediate repricing is coalesced')
+        final = publish(NOV_5 + 2 * FOREGROUND_SLICE_MS)
         self.assertEqual(24, source.load_count)
         self.assertGreater(final['revision'], first['revision'])
         self.assertEqual(first['scope'], final['scope'])
         self.assertEqual([], final['view']['pending_buckets'])
         self.assertIsNone(final['view']['series'][0]['points'][0])
         self.assertGreater(Decimal(final['view']['series'][0]['points'][2]['amount']), Decimal(points[2]['amount']))
+
+    def test_visible_cold_slices_keep_priority_past_fifteen_seconds_and_withdraw(self):
+        source = SyntheticMonthSource(49, 1, month_start_ms=NOV_1)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+        self.addCleanup(lane.close)
+        args = dict(source=source_scope(source), observation=observe_catalog(source),
+            accounts=projected(subscription('github-copilot')), zone='UTC', catalog=FakePricingProvider().catalog,
+            prices=lambda: None, migration_gap=None)
+        dispatch = DataDispatcher(None, clock=lambda: elapsed)
+        elapsed = 1
+        dispatch.interest('tab', 'accounts', True, account_period='month')
+
+        def tick(now):
+            lane.tick(**args, periods=dispatch.account_timeline_demand(), now_ms=now)
+
+        tick(NOV_5)
+        lane.job.result(2)
+        self.assertEqual(12, source.load_count)
+        tick(NOV_5 + 1)
+        # Even after 15 seconds the same visible request gets sub-second turns.
+        elapsed = 17
+        tick(NOV_5 + 16_000)
+        lane.job.result(2)
+        tick(NOV_5 + 16_001)
+        tick(NOV_5 + 16_000 + FOREGROUND_SLICE_MS)
+        lane.job.result(2)
+        self.assertEqual(36, source.load_count)
+        dispatch.interest('tab', 'watch', True)
+        tick(NOV_5 + 17_000)
+        self.assertFalse(lane.fast)
+        self.assertFalse(lane.lookup('month')['acquiring'])
+        self.assertIsNone(lane.job)
+        self.assertEqual(36, source.load_count)
+        dispatch.interest('tab', 'accounts', True, account_period='month')
+        tick(NOV_5 + 18_000)
+        lane.job.result(2)
+        tick(NOV_5 + 18_000 + FOREGROUND_SLICE_MS)
+        lane.job.result(2)
+        tick(NOV_5 + 18_001 + FOREGROUND_SLICE_MS)
+        self.assertEqual(49, source.load_count)
+        self.assertFalse(lane.fast)
+        self.assertFalse(lane.lookup('month')['acquiring'])
+
+    def test_live_revision_is_quiet_pending_and_historical_roots_are_not_reacquired(self):
+        source = SyntheticMonthSource(25, 2, month_start_ms=NOV_1, today_roots=1, now_ms=NOV_5)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        live = next(reversed(source.snapshots))
+        original = source.snapshots[live]
+        active_root = replace(original.root, active=True)
+        source.snapshots[live] = replace(original, root=active_root, sessions=(active_root,))
+        history = TimelineHistory(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+
+        def turn(now):
+            return history.step(source_scope(source), observe_catalog(source), ('month',),
+                quota_roster(projected(subscription('github-copilot'))), 'UTC', FakePricingProvider().catalog,
+                lambda: None, None, now, foreground=True)
+
+        first, _, _, _ = turn(NOV_5)
+        self.assertGreater(Decimal(first['month'].to_json()['series'][0]['points'][4]['amount']), 0)
+        invocation = original.invocations[1]
+        source.snapshots[live] = replace(source.snapshots[live], complete=False, source_revision='in-flight',
+            invocations=(original.invocations[0], replace(invocation, completed_at_ms=None)))
+        turn(NOV_5 + FOREGROUND_SLICE_MS)
+        self.assertEqual(24, source.load_count)
+        self.assertNotIn(live, history.roots, 'need not chase a revised live root before untouched older roots')
+        values, more, _, _ = turn(NOV_5 + 2 * FOREGROUND_SLICE_MS)
+        partial = values['month'].to_json()
+        self.assertFalse(more)
+        self.assertEqual(26, source.load_count)
+        self.assertEqual([4], partial['pending_buckets'])
+        self.assertEqual([], partial['initial_pending_buckets'])
+
+    def test_stalled_slice_expires_only_the_activity_hint(self):
+        source = SyntheticMonthSource(25, 1, month_start_ms=NOV_1)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+        self.addCleanup(lane.close)
+        args = dict(source=source_scope(source), observation=observe_catalog(source), periods={'month'},
+            accounts=projected(subscription('github-copilot')), zone='UTC', catalog=FakePricingProvider().catalog,
+            prices=lambda: None, migration_gap=None)
+        with patch('src.watch.account_timeline.monotonic', return_value=100) as clock:
+            lane.tick(**args, now_ms=NOV_5)
+            lane.job.result(2)
+            lane.tick(**args, now_ms=NOV_5 + FOREGROUND_SLICE_MS)
+            partial = lane.lookup('month')
+            self.assertTrue(partial['acquiring'])
+            clock.return_value = 105
+            stalled = lane.lookup('month', partial['revision'])
+            self.assertTrue(stalled['unchanged'])
+            self.assertFalse(stalled['acquiring'])
