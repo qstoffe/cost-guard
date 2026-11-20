@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from src.analysis.account_timeline import timeline_window
-from src.analysis.period_ccost import account_usage_routes, combined_cost
+from src.analysis.period_ccost import account_usage_routes
 from src.numbers import ccost_amount
 
 from .contracts import record
@@ -18,39 +18,33 @@ class AccountSeries:
     account_key: tuple
     label: str
     routes: tuple[str, ...]
-    candidates: tuple[str, ...]
-    estimates: tuple[str, ...]
+    allocation: tuple[tuple[str, int], ...]
 
 
 def account_roster(accounts):
     # Card projection supplies the safe heading and its stable account identity.
     distinct = {item.account.key: item for item in accounts}
-    candidates = Counter(route for item in distinct.values() for route in account_usage_routes(item.account))
+    counts = Counter(route for item in distinct.values() for route in account_usage_routes(item.account))
     return tuple(AccountSeries(identity(key), key, item.label, account_usage_routes(item.account, proven=True),
-        account_usage_routes(item.account),
-        tuple(route for route in account_usage_routes(item.account) if candidates[route] == 1))
+        tuple((route, counts[route]) for route in account_usage_routes(item.account)))
         for key, item in distinct.items())
 
 
 def _bucket_cost(index, series, start, end, *, partial=False):
-    if index.cost('', 'provider', start, end).observed_requests:
-        return None  # Unknown route could belong to any current account.
     proven = [index.cost(route, series.account_key, start, end) for route in series.routes]
-    estimated = []
-    for route in series.candidates:
+    amount = sum((value.known_ccost for value in proven), Decimal(0))
+    uncertain = partial or any(not value.complete for value in proven)
+    for route, candidates in series.allocation:
         unknown = index.cost(route, None, start, end)
-        if route in series.estimates:
-            estimated.append(unknown)
-        elif unknown.observed_requests:
-            return None
-    total = combined_cost((*proven, *estimated))
-    if not total.complete:
+        if unknown.observed_requests:
+            amount += unknown.known_ccost / candidates
+            uncertain = True
+    # A missing provider has no legitimate candidate set. It can weaken the
+    # confidence of a subtotal, but cannot be allocated across unrelated routes.
+    uncertain = uncertain or bool(index.cost('', None, start, end).observed_requests)
+    if uncertain and not amount and not any(value.priced_requests for value in proven):
         return None
-    amount = total.known_ccost
-    if partial and not amount:
-        return None
-    mark = '~' if partial or any(value.observed_requests for value in estimated) else ''
-    return amount, mark
+    return amount, '~' if uncertain else ''
 
 
 def _point(amount, mark=''):
@@ -64,14 +58,16 @@ def _ticks(peak):
 
 
 def seed_today(view, day, amounts):
-    """Supplement only an acquiring daily bucket with a separate observed subtotal."""
+    """Use the larger compatible daily subtotal, never add overlapping facts."""
     index = next((i for i, (left, _) in enumerate(view['buckets']) if left == day), None)
-    if view['period'] == 'today' or index not in view['pending_buckets']:
+    if view['period'] == 'today' or index is None or day >= view['end_ms']:
         return view
     series = []
     for item in view['series']:
         amount = amounts.get(item['id'])
-        if amount is None:
+        point = item['points'][index]
+        if (amount is None or point is not None and
+                (not point['display']['credits'].startswith('~') or Decimal(point['amount']) >= amount)):
             series.append(item)
             continue
         points = item['points'].copy()
@@ -112,19 +108,16 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
                   price_revision=None):
     window = timeline_window(period, now_ms, zone)
     elapsed = window.buckets[:len(window.buckets) - len(window.future)]
-    # Unread scheduled roots allow provisional positive costs from acquired facts.
-    # Unavailable facts (failed/incomplete reads, migration gaps) still block
-    # qualification. Neither can manufacture a zero.
     acquiring = _overlap(pending, elapsed)
-    unavailable = _overlap(gaps, elapsed)
+    missing = _overlap(gaps, elapsed)
     initial = acquiring if initial_pending is None else _overlap(initial_pending, elapsed)
-    qualified = tuple((max(left, first_covered_ms), right, waiting or left < first_covered_ms)
-                      if first_covered_ms is not None and right > max(left, first_covered_ms) and not gap else None
-                      for (left, right), gap, waiting in zip(elapsed, unavailable, acquiring))
+    partial = tuple(gap or waiting or first_covered_ms is None or left < first_covered_ms
+                    for (left, _), gap, waiting in zip(elapsed, missing, acquiring))
     series = []
     for item in roster:
-        amounts = tuple(_bucket_cost(index, item, bucket[0], bucket[1], partial=bucket[2])
-                        if index is not None and bucket is not None else None for bucket in qualified)
+        amounts = tuple(_bucket_cost(index, item, left, right, partial=uncertain)
+                        if index is not None and left < right else None
+                        for (left, right), uncertain in zip(elapsed, partial))
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
         # The browser chooses the largest visible series' scale, without
@@ -132,35 +125,6 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
         series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,
                   slot_dates=window.dates, future_buckets=window.future, partial_buckets=window.partial,
-                  pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting and not unavailable[i]),
-                  initial_pending_buckets=tuple(i for i, waiting in enumerate(initial) if waiting and not unavailable[i]),
+                  pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting),
+                  initial_pending_buckets=tuple(i for i, waiting in enumerate(initial) if waiting),
                   price_revision=price_revision, series=tuple(series))
-
-
-def retain_refresh(prior, view):
-    """Within one scoped publication, hold usable values only for passive revisions."""
-    if prior is None or prior['price_revision'] != view['price_revision']:
-        return view
-    refreshing = set(view['pending_buckets']) - set(view['initial_pending_buckets'])
-    if not refreshing:
-        return view
-    old_slots = {start: i for i, (start, _) in enumerate(prior['buckets'])}
-    old_series = {item['id']: item for item in prior['series']}
-    series = []
-    for item in view['series']:
-        old = old_series.get(item['id'])
-        if old is None:
-            series.append(item)
-            continue
-        points = item['points'].copy()
-        retained_peak = Decimal(0)
-        for index in refreshing:
-            previous = old_slots.get(view['buckets'][index][0])
-            if previous is not None and (point := old['points'][previous]) is not None:
-                points[index] = point
-                retained_peak = max(retained_peak, Decimal(point['amount']))
-        replacement = dict(item, points=points)
-        if retained_peak > Decimal(item['peak']):
-            replacement.update(peak=old['peak'], ticks=old['ticks'])
-        series.append(replacement)
-    return dict(view, series=series)

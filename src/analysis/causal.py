@@ -54,6 +54,7 @@ def trace_entries(
             variant=invocation.variant,
             tokens=invocation.tokens,
             reported_cost=reported,
+            reported_cost_currency=invocation.cost.currency if invocation.cost is not None else None,
             summary=invocation.summary,
             finish_reason=invocation.finish_reason,
             error_name=invocation.error_name,

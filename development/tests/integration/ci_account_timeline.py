@@ -1,5 +1,6 @@
 """Real headless Accounts journey over shipped HTTP, Live and synthetic source facts."""
 import argparse
+import re
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import replace
@@ -22,6 +23,7 @@ from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
 from src.analysis.account_timeline import DAY_MS, timeline_window
 from src.domain import QuotaComponent, TokenUsage
+from src.sources.errors import SourceConcurrentChangeError
 from src.watch.account_timeline import ROOTS_PER_TURN
 from src.watch.acquisition import LiveAcquisition
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -48,7 +50,8 @@ class ChartSource(SyntheticMonthSource):
     def replace_usage(self, index, at_ms, tokens, account):
         snapshot = make_root_snapshot(index, 1, month_start_ms=at_ms - index * 60_000)
         model = replace(snapshot.invocations[0].model, provider=account.provider_id)
-        invocation = replace(snapshot.invocations[0], model=model, account_ref=account, tokens=TokenUsage(input=tokens))
+        invocation = replace(snapshot.invocations[0], model=model, account_ref=account, tokens=TokenUsage(input=tokens),
+                             cost=None)
         self.snapshots[snapshot.root.session_id] = replace(snapshot, complete=True, invocations=(invocation,))
 
     def load_session_snapshot(self, key):
@@ -231,7 +234,7 @@ def stress_plot(page, chart, screenshots):
     chart.evaluate('el => el.scrollIntoView({block:"center"})')
     plot.focus()
     page.keyboard.press('End')
-    expect(status).to_contain_text('2026-11-20. Partial')
+    expect(status).to_contain_text('2026-11-20. Account')
     assert scroller.evaluate('el => el.scrollLeft > 0')
     assert axis.is_visible()
     assert tip.evaluate('''el => {
@@ -377,7 +380,7 @@ def check(browser, root, screenshots=None):
         expect(bars).to_have_count(1, timeout=20_000)
         assert not source.timeline_reads, 'Today painted before even the first chart root could be acquired'
         expect(bars.first).to_have_attribute('data-bucket', '4')
-        expect(shades).to_have_count(5)
+        expect(shades).to_have_count(4)
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         first_paint = time.monotonic()
         chooser.click()
@@ -395,14 +398,15 @@ def check(browser, root, screenshots=None):
         expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
         assert labels.all_text_contents() == list(map(str, range(1, 31)))
         source.first_read.set()
-        expect(shades).to_have_count(1, timeout=8000)
+        page.wait_for_function("() => JSON.stringify(current.accountTimeline.view?.pending_buckets) === '[0]'",
+                               timeout=8000)
         assert page.evaluate('current.accountTimeline.view.pending_buckets') == [0]
         assert len(source.timeline_reads) == 12
         expect(selected.get_by_role('listitem')).to_have_count(3)
         positions = labels.evaluate_all("labels => labels.map(label => label.getAttribute('x'))")
         plot.focus()
         page.keyboard.press('Home')
-        expect(status).to_contain_text(f'{today_label}: ~$200.00 (so far)')
+        expect(status).to_contain_text(f'{today_label}: ~$200.00')
         page.keyboard.press('ArrowRight')
         expect(status).to_contain_text('$0.00')
         page.keyboard.press('ArrowRight')
@@ -411,7 +415,7 @@ def check(browser, root, screenshots=None):
             chart.screenshot(path=screenshots / '01-cold-loading.png', animations='disabled')
 
         expect(rings).to_have_count(0, timeout=8000)
-        expect(shades).to_have_count(1)
+        expect(shades).to_have_count(0)
         assert len(source.timeline_reads) == 12
         source.continue_history.set()
         expect(shades).to_have_count(0, timeout=20_000)
@@ -575,6 +579,56 @@ def check(browser, root, screenshots=None):
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
 
 
+def check_best_effort(browser, root):
+    from playwright.sync_api import expect
+
+    class IncompleteSource(ChartSource):
+        def __init__(self, accounts):
+            super().__init__(accounts)
+            self.replace_usage(25, NOV_1 + 2 * DAY_MS + 1_000, 1, accounts[1].ref)
+            key = 'root-0025'
+            snapshot = self.snapshots[key]
+            call = snapshot.invocations[0]
+            self.snapshots[key] = replace(snapshot, invocations=(replace(call,
+                model=replace(call.model, model='alias-without-reference-rate')),))
+            self.first_read.set()
+            self.continue_history.set()
+
+        def load_session_snapshot(self, key):
+            if key in {'root-0000', 'root-0004'}:
+                raise SourceConcurrentChangeError('fixture: two unavailable roots')
+            return super().load_session_snapshot(key)
+
+    with chart_fixture(browser, root, IncompleteSource) as (page, host, _, _, _, _, errors, _, _):
+        page.goto(host.browser_url())
+        page.get_by_role('link', name='Accounts', exact=True).click()
+        page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row =>
+            +row.points[2]?.amount > 0) && !current.accountTimeline.view.initial_pending_buckets.length""")
+        chart = page.get_by_role('region', name='CCost', exact=True)
+        plot = chart.locator('.account-timeline-plot')
+        bar = plot.locator('.account-timeline-bar[data-bucket="2"]')
+        assert any(height > 0 for height in bar.evaluate_all("bars => bars.map(bar => bar.getBBox().height)"))
+        point = page.evaluate("""() => current.accountTimeline.view.series
+            .find(row => row.account.endsWith('account 2')).points[2]""")
+        assert 0 < float(point['amount']) < 0.1 and point['display'] == {'usd': '~<$0.01', 'credits': '~<0.1'}, point
+        target = plot.locator('.account-timeline-target[data-slot="2"]')
+        tip = chart.locator('.account-timeline-tip')
+        status = chart.get_by_role('status')
+        for inspect in (target.hover, target.tap):
+            inspect()
+            expect(tip).to_contain_text('account 2~<$0.01')
+        plot.focus()
+        page.keyboard.press('Home')
+        page.keyboard.press('ArrowRight')
+        page.keyboard.press('ArrowRight')
+        expect(status).to_contain_text('account 2: ~<$0.01')
+        for surface in (tip, status):
+            expect(surface).not_to_contain_text(re.compile(r'Unavailable|N/A|Unknown|Partial|Provisional'))
+        expect(plot.locator('.account-timeline-ring')).to_have_count(0)
+        assert host.failure is None and host.live.failure is None and not errors, errors
+        print('Accounts best effort PASS: failed reads, tiny estimated wire value, SVG, hover, touch and keyboard')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--browser', type=Path, help='Explicit local Chromium executable; CI uses bundled Playwright')
@@ -590,7 +644,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix='accounts-timeline-', dir=options.scratch) as directory, sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True, executable_path=options.browser)
         try:
-            check(browser, Path(directory), options.screenshots)
+            root = Path(directory)
+            check(browser, root, options.screenshots)
+            best_effort = root / 'best-effort'
+            best_effort.mkdir()
+            check_best_effort(browser, best_effort)
         finally:
             browser.close()
 

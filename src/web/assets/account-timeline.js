@@ -316,7 +316,7 @@ const AccountTimelineView = (() => {
         }
       } finally {
         this.pending = false;
-        this.schedule(generation !== this.generation ? 0 : this.initial ? 1000 : 6000);
+        this.schedule(generation !== this.generation ? 0 : this.initial ? 350 : 6000);
       }
     }
 
@@ -383,7 +383,6 @@ const AccountTimelineView = (() => {
         }));
       }
       this.view = view;
-      this.acquiring = new Set(view?.pending_buckets);
       this.unread = new Set(view?.initial_pending_buckets);
       this.shown = cached?.shown;
       this.partial = new Set(view?.partial_buckets);
@@ -437,14 +436,15 @@ const AccountTimelineView = (() => {
       const shades = [], nodes = [];
       let cue = false;
       for (const {index, x, center} of slots) {
-        const future = this.future.has(index), waiting = this.unread.has(index);
+        const future = this.future.has(index);
+        const waiting = this.unread.has(index) && !this.shown?.has(view.buckets[index][0]);
         if (future || waiting) shades.push(svg('rect', {
           class: future ? 'account-timeline-future' : 'account-timeline-loading',
           'data-bucket': index, x: x + 1, y: 4, width: group - 2, height: bottom - 4, rx: 4
         }));
         // This is a neutral cue in a backed unread region, not a claim that
         // the source is reading one specific day (a tree can span many).
-        if (!cue && !future && waiting && !this.shown?.has(view.buckets[index][0]) && this.visible && this.working) {
+        if (!cue && !future && waiting && this.visible && this.working) {
           nodes.push(svg('path', {class: 'account-timeline-ring', d: `M${center + 4},14a4,4 0 1 1 -4,-4`}));
           cue = true;
         }
@@ -519,21 +519,18 @@ const AccountTimelineView = (() => {
       }
       this.highlight.setAttribute('x', slot.x + 1);
       this.highlight.setAttribute('visibility', 'visible');
-      const future = this.future.has(index), pending = this.acquiring.has(index), partial = this.partial.has(index);
+      const future = this.future.has(index), partial = this.partial.has(index);
       let heading = slot.day;
       if (this.layout.hourly && slot.time) {
         const end = ReportView.timestamp(this.view.buckets[index][1], this.view.timezone_id).split(' ')[1];
         const repeat = slot.occurrence ? ` (${slot.occurrence === 1 ? 'first' : 'second'})` : '';
-        heading += ` ${slot.time}–${partial ? 'Now' : end || 'N/A'}${repeat}`;
+        heading += ` ${slot.time}${partial ? '–Now' : end ? `–${end}` : ''}${repeat}`;
       }
-      const firstLoad = this.unread.has(index);
-      const state = future ? 'Upcoming' : firstLoad && !this.shown?.has(this.view.buckets[index][0]) ?
-        'Loading' : pending || partial ? 'Partial' : '';
+      const state = future ? 'Upcoming' : '';
       const values = [], rows = [];
       for (const [ordinal, item] of this.series.entries()) {
         const point = item.points[index];
-        const value = point ? shown(point) + (firstLoad && shown(point).startsWith('~') ? ' (so far)' : '') :
-          pending || future ? '—' : 'Unavailable';
+        const value = point ? shown(point) : '—';
         ReportView.text(this.selectedLegend.children[ordinal].children[2], future ? '' : value);
         if (future) continue;
         const name = item.account, row = e('div', undefined, 'account-timeline-tip-row');
