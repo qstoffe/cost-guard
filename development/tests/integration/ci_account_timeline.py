@@ -139,6 +139,7 @@ def stress_plot(page, chart, screenshots):
     scroller = chart.locator('.account-timeline-scroll')
     chooser = chart.get_by_role('button', name='Accounts & quotas', exact=False)
     legend = chart.get_by_role('group', name='Accounts and quotas')
+    selected = chart.get_by_role('list', name='Selected Accounts and quotas')
     tip = chart.locator('.account-timeline-tip')
     labels = plot.locator('.account-timeline-slot-label')
     bands = plot.locator('.account-timeline-month-label')
@@ -155,11 +156,15 @@ def stress_plot(page, chart, screenshots):
     inputs = legend.get_by_role('checkbox')
     slots = plot.locator('.account-timeline-target')
     x_positions = slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))")
-    for checked in (1, 2, 5, 10, 20):
+    for checked in (0, 1, 2, 5, 10, 20):
         # 'Weekly' was retained in the source journey; make each state exact.
         for i, checkbox in enumerate(inputs.all()):
             checkbox.set_checked(i < checked)
-        assert_geometry(plot, checked)
+        if checked:
+            assert_geometry(plot, checked)
+            expect(selected.get_by_role('listitem')).to_have_count(checked)
+        else:
+            expect(selected).not_to_be_visible()
         assert slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))") == x_positions
     expect(chooser).to_contain_text('20 selected')
     page.keyboard.press('Escape')
@@ -183,24 +188,42 @@ def stress_plot(page, chart, screenshots):
             page.set_viewport_size({'width': width, 'height': 900})
             expect(labels).to_have_count(30)
             assert_geometry(plot, 20)
-            layout = chart.evaluate('''chart => {
+            inspect_layout = '''chart => {
                 const chooser = chart.querySelector('.account-timeline-chooser').getBoundingClientRect();
                 const graph = chart.querySelector('.account-timeline-graph').getBoundingClientRect();
-                const swatch = chart.querySelector('.account-timeline-legend .account-timeline-swatch');
+                const scroller = chart.querySelector('.account-timeline-scroll').getBoundingClientRect();
+                const legend = chart.querySelector('.account-timeline-selected').getBoundingClientRect();
+                const ticks = [...chart.querySelectorAll('.account-timeline-tick')];
+                const range = document.createRange();
+                const widest = Math.max(...ticks.map(tick => {
+                    range.selectNodeContents(tick);
+                    return range.getBoundingClientRect().width;
+                }));
+                const swatch = chart.querySelector('.account-timeline-selected .account-timeline-swatch');
+                const bar = chart.querySelector('.account-timeline-bar');
                 return {toolbar: chooser.bottom <= graph.top && Math.abs(chooser.right - graph.right) < 2,
+                    gap: graph.top - chart.querySelector('.account-timeline-header').getBoundingClientRect().bottom,
+                    gutter: scroller.left - graph.left, widest,
+                    alignment: Math.abs(legend.left - scroller.left), under: legend.top > scroller.bottom,
                     overflow: chart.scrollWidth > chart.clientWidth || document.documentElement.scrollWidth > innerWidth,
-                    fill: getComputedStyle(swatch).backgroundColor};
-            }''')
-            assert layout['toolbar'] and not layout['overflow'], layout
-            assert layout['fill'] != 'rgba(0, 0, 0, 0)'
-            layouts.append(layout)
+                    fill: getComputedStyle(swatch).backgroundColor, bar: getComputedStyle(bar).fill};
+            }'''
+            for zoom in (1, 1.5, 2):
+                chart.evaluate('(el, zoom) => el.style.zoom = zoom', zoom)
+                layout = chart.evaluate(inspect_layout)
+                assert layout['toolbar'] and not layout['overflow'], (theme, width, zoom, layout)
+                assert layout['gap'] >= 19 * zoom and 0 < layout['gutter'] - layout['widest'] < 13 * zoom, layout
+                assert layout['alignment'] < 2 and layout['under'], layout
+                assert layout['fill'] == layout['bar'] != 'rgba(0, 0, 0, 0)', layout
+                layouts.append(layout)
+            chart.evaluate("el => el.style.removeProperty('zoom')")
             chart.evaluate('el => el.scrollIntoView({block:"center"})')
             plot.focus()
             page.keyboard.press('Home')
             expect(tip).to_contain_text('2026-10-22')
             if screenshots:
                 page.screenshot(path=screenshots / f'02-{theme}-{scheme}-{width}.png', animations='disabled')
-    assert layouts[0]['fill'] != layouts[4]['fill'], layouts
+    assert layouts[0]['fill'] != layouts[12]['fill'], layouts
     page.set_viewport_size({'width': 360, 'height': 850})
     chart.evaluate('el => el.scrollIntoView({block:"center"})')
     plot.focus()
@@ -324,6 +347,7 @@ def check(browser, root, screenshots=None):
         rings = plot.locator('.account-timeline-ring')
         labels = plot.locator('.account-timeline-slot-label')
         axis = chart.locator('.account-timeline-axis')
+        selected = chart.get_by_role('list', name='Selected Accounts and quotas')
         scroller = chart.locator('.account-timeline-scroll')
         tip = chart.locator('.account-timeline-tip')
         bars = chart.locator('.account-timeline-bar')
@@ -337,13 +361,14 @@ def check(browser, root, screenshots=None):
         page.keyboard.press('Escape')
         expect(chooser).to_be_focused()
         expect(legend).not_to_be_visible()
-        expect(rings).to_have_count(2)
+        expect(rings).to_have_count(1)
         page.emulate_media(reduced_motion='reduce')
         assert rings.first.evaluate("el => getComputedStyle(el).animationName") == 'none'
         expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
         assert labels.all_text_contents() == list(map(str, range(1, 31)))
         assert page.evaluate('current.accountTimeline.view.pending_buckets') == [0, 2]
         assert len(source.timeline_reads) == 12
+        expect(selected.get_by_role('listitem')).to_have_count(3)
         positions = labels.evaluate_all("labels => labels.map(label => label.getAttribute('x'))")
         plot.focus()
         page.keyboard.press('Home')
@@ -355,6 +380,9 @@ def check(browser, root, screenshots=None):
         if screenshots:
             chart.screenshot(path=screenshots / '01-cold-loading.png', animations='disabled')
 
+        expect(rings).to_have_count(0, timeout=8000)
+        expect(shades).to_have_count(2)
+        assert len(source.timeline_reads) == 12
         source.continue_history.set()
         expect(shades).to_have_count(0, timeout=20_000)
         expect(rings).to_have_count(0)
@@ -375,6 +403,8 @@ def check(browser, root, screenshots=None):
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · Weekly').check()
         expect(axis.locator('span').last).to_have_text('$1200.00')
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · 5-hour').check()
+        expect(selected.get_by_text('GitHub Copilot Plus · 5-hour', exact=True)).to_be_visible()
+        expect(selected.get_by_text('GitHub Copilot Plus · Weekly', exact=True)).to_be_visible()
         assert 'checkbox' in chart.aria_snapshot()
         page.keyboard.press('Escape')
         pair = plot.locator('.account-timeline-bar[data-bucket="0"]')
@@ -401,7 +431,9 @@ def check(browser, root, screenshots=None):
         for checkbox in legend.locator('input:checked').all()[::-1]:
             checkbox.uncheck()
         expect(chart.get_by_text('Select a series to show its usage.')).to_be_visible()
+        expect(selected).not_to_be_visible()
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · Weekly').check()
+        expect(selected.get_by_role('listitem')).to_have_count(1)
         chart.get_by_role('heading', name='CCost').click()
         expect(legend).not_to_be_visible()
         # Accept normal passive lookup cadence, but never let a legend toggle
@@ -433,6 +465,32 @@ def check(browser, root, screenshots=None):
         }""")
         assert rejected_periods == ['invalid_request', 'invalid_request'], rejected_periods
 
+        chart.get_by_role('button', name='Today', exact=True).click()
+        page.wait_for_function("() => current.accountTimeline.view?.period === 'today'")
+        before = page.evaluate('''() => {
+            const chart = current.accountTimeline;
+            const point = chart.view.series.find(row => row.primary && Number(row.peak) > 0);
+            window.liveCueFlashes = 0;
+            const observer = new MutationObserver(records => {
+                for (const record of records) for (const node of record.addedNodes)
+                    if (node.matches?.('path.account-timeline-ring')) window.liveCueFlashes++;
+            });
+            observer.observe(chart.layers, {childList: true});
+            return {id: point.id, peak: Number(point.peak), revision: chart.cache.get('today').revision};
+        }''')
+        live_key = 'root-0014'
+        source.replace_usage(14, NOV_1 + 4 * DAY_MS + 14_000, 100_000_000, accounts[2].ref)
+        fact = source.snapshots[live_key]
+        live_root = replace(fact.root, active=True)
+        source.snapshots[live_key] = replace(fact, root=live_root, sessions=(live_root,), source_revision='revised-today')
+        page.wait_for_function("""before => {
+            const chart = current.accountTimeline, value = chart.cache.get('today');
+            return value?.revision > before.revision &&
+                Number(value.view.series.find(row => row.id === before.id)?.peak) > before.peak;
+        }""", arg=before, timeout=30_000)
+        assert page.evaluate('window.liveCueFlashes') == 0
+        assert source.timeline_reads[live_key] == 2 and sum(source.timeline_reads.values()) == 26
+
         chart.get_by_role('button', name='30 days', exact=True).click()
         page.wait_for_function("() => current.accountTimeline.view?.period === '30-days'")
         layouts = stress_plot(page, chart, screenshots)
@@ -443,9 +501,9 @@ def check(browser, root, screenshots=None):
         while_tabs = len(lookups)
         page.wait_for_timeout(1000)
         assert while_tabs == len(lookups)
-        assert not host.dispatcher.account_timeline_demand()[0]
+        assert not host.dispatcher.account_timeline_demand()
         assert host.failure is None and host.live.failure is None and not errors, errors
-        print(f'Accounts timeline PASS: {layouts} layouts, four periods, staged acquisition, '
+        print(f'Accounts timeline PASS: {layouts} layouts, four periods, staged acquisition and quiet live revision, '
                f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh')
     finally:
         source.continue_history.set()

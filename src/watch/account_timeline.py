@@ -1,15 +1,17 @@
 """Demand-driven account history, isolated from Live's native quota and card lanes."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 import sqlite3
 from threading import Lock
+from time import monotonic
 from uuid import uuid4
 
 from src.analysis.account_timeline import period_start
 from src.analysis.causal import trace_entries
 from src.analysis.coverage import snapshot_coverage_complete
 from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import quota_roster, retain_compatible_quotas, timeline_view
+from src.application.account_timeline import quota_roster, retain_compatible_quotas, retain_refresh, timeline_view
 from src.application.session_quota import source_scope
 from src.domain.session_tree import root_activity
 from src.reports.history_snapshots import load as load_snapshots
@@ -20,6 +22,10 @@ from src.sources.errors import SourceError
 ROOTS_PER_TURN = 12
 RETRY_MS = 30_000
 PARTIAL_MS = 15_000
+FOREGROUND_SLICE_MS = 200
+FOREGROUND_PARTIAL_MS = 1_200
+ACTIVE_CUE_SECONDS = 4
+REFRESH_MS = 15_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,13 +45,17 @@ class TimelineHistory:
         self.source = None
         self.roots = {}
         self.seen = set()
+        self.established = set()
         self.index_key = self.index = None
         self.index_facts = ()
         self.partial_at = {}
         self.covered_periods = set()
+        self.initial_periods = set()
         self.observation = None
         self.prices = None
         self.prices_due_ms = 0
+        self.price_revision = None
+        self.value_usage = None
 
     def _load(self, roots, observation, scope, now_ms):
         service = self.factory(now_ms)
@@ -69,7 +79,9 @@ class TimelineHistory:
                     complete = snapshot_coverage_complete(snapshot, entries) and all(
                         0 < entry.completed_at_ms <= now_ms for entry in entries)
                     self.roots[key] = RootUsage(revision, entries, complete,
-                                                0 if complete else now_ms + RETRY_MS)
+                                                 0 if complete else now_ms + RETRY_MS)
+                    if complete:
+                        self.established.add(key)
         except SourceError as error:
             if error.terminal:
                 raise
@@ -80,16 +92,20 @@ class TimelineHistory:
             service.close_accounts()
         return True
 
-    def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms):
+    def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *, foreground=False):
         if self.source != scope:
             self.source = scope
             self.roots.clear()
             self.seen.clear()
+            self.established.clear()
             self.index_key = self.index = None
             self.index_facts = ()
             self.observation = None
             self.partial_at.clear()
             self.covered_periods.clear()
+            self.initial_periods.clear()
+            self.price_revision = self.value_usage = None
+            self.prices, self.prices_due_ms = None, 0
         if now_ms >= self.prices_due_ms:
             self.prices_due_ms = now_ms + 15_000
             try:
@@ -97,6 +113,13 @@ class TimelineHistory:
             except (OSError, sqlite3.Error):
                 pass  # Existing price observation remains usable on a cache miss.
         catalog = self.prices or catalog
+        price_revision = catalog.diagnostic_signature if catalog else None
+        price_changed = self.price_revision != price_revision
+        if price_changed:
+            self.price_revision = price_revision
+            # Keep global request deduplication and prefix sums authoritative,
+            # but don't revalue identical model/token inputs at every publication.
+            self.value_usage = lru_cache(maxsize=8192)(catalog.reference_valuation) if catalog else None
 
         if observation is not self.observation:
             self.activity = root_activity(observation.sessions, observation.root_by_session)
@@ -114,6 +137,7 @@ class TimelineHistory:
             root.session_id in active or activity[root.session_id] >= cutoff)]
         removed = bool(set(self.roots) - observation.revisions.keys())
         self.seen.intersection_update(observation.revisions)
+        self.established.intersection_update(observation.revisions)
         self.roots = {key: value for key, value in self.roots.items()
                       if observation.revisions.get(key) == value.revision}
         pending = [root for root in roots if root.session_id in observation.revisions and (
@@ -123,6 +147,7 @@ class TimelineHistory:
         batch, remaining = pending[:ROOTS_PER_TURN], pending[ROOTS_PER_TURN:]
         if batch:
             if not self._load(batch, observation, scope, now_ms):
+                self.initial_periods.clear()
                 return {}, False, removed, ()
             self.seen.update(root.session_id for root in batch)
 
@@ -130,16 +155,24 @@ class TimelineHistory:
         # Shorter scopes can settle while a longer requested window is loading.
         newest_pending = max((now_ms if root.session_id in active else activity[root.session_id]
                               for root in remaining), default=-1)
+        newest_initial = max((now_ms if root.session_id in active else activity[root.session_id]
+                              for root in remaining if root.session_id not in self.seen), default=-1)
+        self.initial_periods = {period for period in periods if starts[period] <= newest_initial}
         covered = {period for period in periods if not remaining or starts[period] > newest_pending}
-        ready = tuple(period for period in periods if not remaining or removed
+        partial_ms = FOREGROUND_PARTIAL_MS if foreground else PARTIAL_MS
+        ready = tuple(period for period in periods if not remaining or removed or price_changed
                       or period in covered - self.covered_periods
-                      or now_ms >= self.partial_at.get(period, 0) + PARTIAL_MS)
+                      or now_ms >= self.partial_at.get(period, 0) + partial_ms)
         self.covered_periods = covered
         if not ready:
             return {}, bool(remaining), removed, ()
 
         unread = {root.session_id for root in remaining if root.session_id not in self.roots}
+        def refreshing(key):
+            return key in active and key in self.established
+
         acquiring = []
+        initial = []
         gaps = []
         if migration_gap is not None and migration_gap.has_gap:
             gaps.extend((item.first_ms, item.last_ms + 1) for item in migration_gap.sessions)
@@ -151,21 +184,28 @@ class TimelineHistory:
             if saved is None or not saved.complete:
                 # Use the same activity bound as history candidate selection.
                 # Unread active trees and unrooted sessions can affect Now.
-                intervals = acquiring if key in unread else gaps
-                intervals.append((first[key], now_ms if key in active else max(first[key] + 1, activity[key] + 1)))
+                interval = (first[key], now_ms if key in active else max(first[key] + 1, activity[key] + 1))
+                if key in unread or refreshing(key):
+                    acquiring.append(interval)
+                    if key not in self.seen:
+                        initial.append(interval)
+                else:
+                    gaps.append(interval)
         gaps.extend((stamp, now_ms) for key, stamp in first.items() if key not in observation.revisions)
         covered_from = min(first.values(), default=None)
         used = tuple(sorted(self.roots.items()))
-        index_key = (catalog.diagnostic_signature, tuple((key, id(value)) for key, value in used)) if catalog else None
+        index_key = (price_revision, tuple((key, id(value)) for key, value in used)) if catalog else None
         if catalog is not None and self.index_key != index_key:
             self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
-                                          catalog.reference_valuation, verified_models=True)
+                                          self.value_usage, verified_models=True)
             # Holding the facts also prevents object ID reuse in the index key.
             self.index_key, self.index_facts = index_key, used
         by_period = {period: timeline_view(period, now_ms, zone, roster, self.index if catalog else None,
-            first_covered_ms=covered_from, gaps=gaps, pending=acquiring) for period in ready}
+            first_covered_ms=covered_from, gaps=gaps, pending=acquiring, initial_pending=initial,
+            price_revision=price_revision) for period in ready}
         self.partial_at.update((period, now_ms) for period in ready if remaining)
-        failed = {root.session_id for root in roots if (value := self.roots.get(root.session_id)) and not value.acquired}
+        failed = {root.session_id for root in roots if (value := self.roots.get(root.session_id)) and not value.acquired
+                  and not refreshing(root.session_id)}
         interrupted = tuple(period for period in ready if any(
             key in active or activity[key] >= starts[period] for key in failed))
         return by_period, bool(remaining), removed, interrupted
@@ -183,6 +223,11 @@ class AccountTimeline:
         self.results = {}
         self.frame_revision = 0
         self.job = None
+        self.fast = False
+        self.initial_periods = set()
+        self.active_periods = frozenset()
+        self.active_until = 0
+        self.price_revision = None
         self.demand = frozenset()
         self.roster = ()
         self.public_roster = ()
@@ -197,10 +242,12 @@ class AccountTimeline:
             value = self.results.get(period)
             marker, current = self.marker, self.frame_revision
             roster, ready = self.public_roster, self.public_ready
+            acquiring = ready and period in self.active_periods and monotonic() < self.active_until
         return dict(scope=marker, revision=current, unchanged=value is not None and revision == current,
-                    view=value if revision != current else None, series=roster if value is None else (), ready=ready)
+                     view=value if revision != current else None, series=roster if value is None else (), ready=ready,
+                     acquiring=acquiring)
 
-    def tick(self, *, source, observation, accounts, periods, boosted, zone, catalog, prices, migration_gap,
+    def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
              now_ms, available=True, terminal=False):
         changed_source = source is not None and source != self.source
         if changed_source:
@@ -218,6 +265,7 @@ class AccountTimeline:
             self.source, self.native_accounts = None, {}
             roster = ()
             scope = None
+        starts = {period: period_start(period, now_ms, zone) for period in periods if period != '7-days'}
         with self.lock:
             if available or changed_source or terminal:
                 self.public_ready = available and not terminal
@@ -229,24 +277,47 @@ class AccountTimeline:
                 self.results.clear()
                 self.frame_revision += 1
                 self.due = 0
+                self.initial_periods.clear()
+                self.active_periods = frozenset()
+                self.price_revision = None
+            rolled = tuple(period for period, start in starts.items()
+                           if period in self.results and self.results[period]['start_ms'] != start)
+            if rolled:
+                for period in rolled:
+                    del self.results[period]
+                self.frame_revision += 1
+                self.due = 0
             marker = self.marker
 
         if self.job is not None and self.job.done():
             try:
-                job_marker, values, more, removed, interrupted = self.job.result()
+                job_marker, values, more, removed, interrupted, initial = self.job.result()
                 if job_marker == marker and available:
+                    self.initial_periods = initial
+                    values = {period: value for period, value in values.items()
+                              if value['start_ms'] == starts.get(period, value['start_ms'])}
+                    price_revision = next(iter(values.values()))['price_revision'] if values else self.price_revision
+                    repriced = price_revision != self.price_revision
                     if not removed:
                         values = {period: value for period, value in values.items()
                                   if period not in interrupted or period not in self.results
-                                  or (period != '7-days' and value['start_ms'] != self.results[period]['start_ms'])
+                                  or repriced
                                   or self.results[period]['pending_buckets']}
+                        if not repriced:
+                            values = {period: retain_refresh(self.results.get(period), value)
+                                      for period, value in values.items()}
                     if values or removed:
                         with self.lock:
-                            if removed:
+                            if removed or repriced:
                                 self.results.clear()
+                            self.price_revision = price_revision
                             self.results.update(values)
                             self.frame_revision += 1
-                    self.due = self.last_started + ((1000 if boosted else 4000) if more else 15_000)
+                    self.due = self.last_started + (4000 if more else REFRESH_MS)
+                    if rolled:
+                        self.due = 0
+                    elif more and periods & initial:
+                        self.due = self.last_started + FOREGROUND_SLICE_MS
                 recovered('account-timeline')
             except SourceError:
                 self.due = self.last_started + RETRY_MS
@@ -254,21 +325,36 @@ class AccountTimeline:
                 recoverable(error, 'account-timeline')
                 self.due = self.last_started + RETRY_MS
             self.job = None
+            with self.lock:
+                self.active_periods = frozenset()
 
         if periods != self.demand or self.roster != roster:
             self.demand, self.roster = periods, roster
             self.due = 0
-        if (self.closed or terminal or not available or not periods or observation is None or
-                not roster or self.job is not None or now_ms < max(self.due, self.last_started + 1000)):
+        if self.closed or terminal or not available or not periods or observation is None or not roster:
+            self.fast = False
+            with self.lock:
+                self.active_periods = frozenset()
+            return marker
+        cold = (periods - self.results.keys()) | (periods & self.initial_periods)
+        with self.lock:
+            self.active_periods &= cold
+        self.fast = bool(cold and (self.job is not None or self.due <= now_ms + FOREGROUND_SLICE_MS))
+        minimum = FOREGROUND_SLICE_MS if cold else 1000
+        if self.job is not None or now_ms < max(self.due, self.last_started + minimum):
             return marker
         self.last_started = now_ms
 
         def step():
             values, more, removed, interrupted = self.history.step(source, observation, sorted(periods), roster,
-                zone, catalog, prices, migration_gap, now_ms)
-            return marker, {period: value.to_json() for period, value in values.items()}, more, removed, interrupted
+                zone, catalog, prices, migration_gap, now_ms, foreground=bool(cold))
+            return (marker, {period: value.to_json() for period, value in values.items()}, more, removed, interrupted,
+                    self.history.initial_periods.copy())
 
         self.job = self.pool.submit(step)
+        with self.lock:
+            self.active_periods = cold
+            self.active_until = monotonic() + ACTIVE_CUE_SECONDS
         return marker
 
     def close(self):

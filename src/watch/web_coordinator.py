@@ -61,14 +61,14 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def tick_account_timeline(self, frame, demand, *, available, terminal):
         service = self.report_service
-        periods, boosted = demand()
+        periods = demand()
         source = source_scope(service.source)
         observation = self.catalog_observation
         available = available and observation is not None and observation.source_epoch == source[-1]
         identified = source[0] != 'opencode-v2' or source[-1] is not None
         return self.account_timeline.tick(source=source if identified else None, observation=observation,
             accounts=frame.quota.accounts if frame and frame.quota else (), periods=periods,
-            boosted=boosted, zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
+            zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
             prices=getattr(service.comparison_pricing_provider, 'cached_catalog', lambda: None),
             migration_gap=service.selection.migration_gap, now_ms=int(self.clock_ms()),
             available=available, terminal=terminal)
