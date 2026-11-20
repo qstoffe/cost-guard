@@ -13,6 +13,10 @@ from .valuation import ComparisonCost
 _RATE_FIELDS = ('per_million_input', 'per_million_cache_read', 'per_million_cache_write', 'per_million_output')
 _MILLION = Decimal(1_000_000)
 _NO_RATES = (None,) * len(_RATE_FIELDS)
+# Same conservative activity floor as AI Stats; never a substitute for an
+# observed count/rate pair. Bound only the fallback, never confirmed costs.
+_ACTIVITY_RATE = Decimal('.000003')
+_ACTIVITY_LIMIT = Decimal(10)
 
 
 def _counts(tokens):
@@ -79,7 +83,15 @@ class TimelineValuation:
         if exact is not None and complete:
             return ComparisonCost(exact, 1, 1, source_complete=not self.catalog.reference_stale)
 
-        typical = next((samples[key] for key in _sample_keys(entry) if key in samples), (0, 0, 0, 0))
+        typical = next((samples[key] for key in _sample_keys(entry) if key in samples), None)
+        if typical is None:
+            # A completed response with no counters still provides one request
+            # of evidence. Don't infer usage from an error or a start alone.
+            if not tokens.known_fields and not tokens.reasoning and not entry.error_name and entry.finish_reason in (
+                    'stop', 'end_turn', 'length', 'tool-calls', 'tool_use'):
+                typical = 250, 0, 0, 1000
+            else:
+                typical = 0, 0, 0, 0
         inferred = (*typical[:3], max(typical[3], tokens.reasoning))
         estimated_counts = tuple(count if name in tokens.known_fields else estimate
                                  for name, count, estimate in zip(MIX_FIELDS, _counts(tokens), inferred))
@@ -99,5 +111,6 @@ class TimelineValuation:
                  for options in zip(direct, cached, provider, self.default_rates)]
         valued = sum((count * rate for count, rate in zip(estimated_counts, rates) if count and rate is not None),
                      Decimal(0)) / _MILLION
-        amount = max(exact or Decimal(0), valued)
+        unpriced = sum(count for count, rate in zip(estimated_counts, rates) if rate is None)
+        amount = max(exact or Decimal(0), valued + min(_ACTIVITY_LIMIT, unpriced * _ACTIVITY_RATE))
         return ComparisonCost(amount, 1, int(amount > 0), source_complete=False)

@@ -187,7 +187,7 @@ class TimelineProjectionTests(unittest.TestCase):
         dollars = replace(unknown, tokens=TokenUsage(known_fields=()), reported_cost=Decimal('0.47'),
                           reported_cost_currency='USD')
         foreign = replace(dollars, session_id='separate', completed_at_ms=NOV_1 + 2 * DAY_MS + 1,
-                          reported_cost_currency='EUR')
+                          reported_cost_currency='EUR', finish_reason=None)
 
         points = self.view(projected(account), (priced, dollars, foreign),
                            catalog=PricingCatalog(()), previous=catalog)[0]['points']
@@ -198,6 +198,23 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertIsNone(points[2])
         self.assertEqual(Decimal(0), Decimal(points[3]['amount']))
         self.assertEqual('0', points[3]['display']['credits'])
+
+    def test_last_resort_scales_with_observed_usage_even_before_any_rates_are_loaded(self):
+        account = subscription()
+        a = replace(request('tokens only', NOV_1 + 1, amount=9, ref=account.ref), reported_cost=Decimal(0))
+        b = replace(request('larger', NOV_1 + DAY_MS + 1, amount=5_000_000, ref=account.ref),
+                    reported_cost=Decimal(0))
+        c = replace(request('completed without counters', NOV_1 + 2 * DAY_MS + 1, ref=account.ref),
+                    tokens=TokenUsage(known_fields=()), finish_reason='stop', reported_cost=Decimal(0),
+                    model=ModelRef('claude-code', 'unknown'))
+        d = replace(c, invocation_id='aborted', completed_at_ms=NOV_1 + 3 * DAY_MS + 1, finish_reason='aborted')
+
+        points = self.view(projected(account), (a, b, c, d), catalog=PricingCatalog(()))[0]['points']
+
+        self.assertEqual([Decimal('0.000027'), Decimal(10), Decimal('0.003750')],
+                         [Decimal(point['amount']) for point in points[:3]])
+        self.assertEqual('~<0.1', points[0]['display']['credits'])
+        self.assertIsNone(points[3])
 
     def test_session_clue_and_equal_split_keep_provider_total_without_cross_route_attribution(self):
         a, b, other = (subscription(identity='first'), subscription(identity='second'), subscription('openai'))
