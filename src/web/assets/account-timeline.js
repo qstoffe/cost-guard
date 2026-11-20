@@ -513,12 +513,14 @@ const AccountTimelineView = (() => {
       this.positionTip();
       if (!this.panel.matches(':popover-open')) return;
       const anchor = this.chooser.getBoundingClientRect(), screen = viewport();
-      const below = screen.bottom - anchor.bottom - 6, above = anchor.top - screen.top - 6;
+      const belowTop = Math.max(screen.top, anchor.bottom + 6);
+      const aboveBottom = Math.min(screen.bottom, anchor.top - 6);
+      const below = screen.bottom - belowTop, above = aboveBottom - screen.top;
       const openBelow = below >= 140 || below >= above;
       this.panel.style.maxHeight = `${Math.max(0, Math.min(360, openBelow ? below : above))}px`;
       this.panel.style.maxWidth = `${screen.right - screen.left}px`;
       this.panel.style.left = `${clamp(anchor.right - this.panel.offsetWidth, screen.left, screen.right - this.panel.offsetWidth)}px`;
-      this.panel.style.top = `${openBelow ? anchor.bottom + 6 : anchor.top - 6 - this.panel.offsetHeight}px`;
+      this.panel.style.top = `${openBelow ? belowTop : aboveBottom - this.panel.offsetHeight}px`;
     }
     positionTip() {
       const index = this.indexOf(this.shownKey);
