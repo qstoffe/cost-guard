@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 import shutil
 import sys
@@ -16,9 +17,9 @@ from development.tests.fixtures.account_periods import subscription
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.integration.serve_data_dispatch import DispatchJobs
-from development.tests.test_account_timeline import NOV_1, NOV_5
+from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
-from src.analysis.account_timeline import DAY_MS
+from src.analysis.account_timeline import DAY_MS, timeline_window
 from src.domain import QuotaComponent, TokenUsage
 from src.watch.account_timeline import ROOTS_PER_TURN
 from src.watch.acquisition import LiveAcquisition
@@ -54,13 +55,225 @@ class ChartSource(SyntheticMonthSource):
         return super().load_session_snapshot(key)
 
 
-def check(browser, root):
+def replace_geometry(page, period, now, zone, width=20):
+    window = timeline_window(period, now, zone)
+    page.evaluate('''({period, zone, window, width}) => {
+        const chart = current.accountTimeline;
+        clearTimeout(chart.timer);
+        chart.generation++;
+        chart.schedule = () => {};
+        const sample = chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
+        const peak = sample.points.find(point => Number(point?.amount) > 0);
+        const series = chart.view.series.slice(0, width).map((row, i) => ({...row, account: 'Account with same name',
+            quota: `Quota ${i + 1} with a deliberately long label to exercise clipping`,
+            peak: sample.peak, ticks: sample.ticks, points: window.buckets.map(() => peak)}));
+        const view = {period, timezone_id: zone, ...window, series, pending_buckets: []};
+        chart.period = period;
+        chart.cache.set(period, {view});
+        chart.inspect(null);
+        chart.focusKey = null;
+        chart.draw();
+    }''', dict(period=period, zone=zone, width=width,
+              window=dict(buckets=window.buckets, slot_dates=window.dates, partial_buckets=window.partial,
+                          future_buckets=window.future, start_ms=window.start, end_ms=now)))
+
+
+def assert_geometry(plot, series_count):
+    result = plot.evaluate('''plot => {
+        const labels = [...plot.querySelectorAll('.account-timeline-slot-label')].map(label => label.getBBox());
+        const targets = [...plot.querySelectorAll('.account-timeline-target')].map(target => target.getBBox());
+        const bars = [...plot.querySelectorAll('.account-timeline-bar')].map(bar => [bar.dataset.bucket, bar.getBBox()]);
+        return {ticks: labels.length, cells: targets.length, bars: bars.length,
+            fit: targets.every((target, i) => {
+                const tick = labels[i], columns = bars.filter(([slot]) => Number(slot) === i).map(([, box]) => box);
+                return tick.x >= target.x && tick.x + tick.width <= target.x + target.width
+                    && columns.every((bar, j) => bar.width >= .99 && bar.x >= target.x
+                        && bar.x + bar.width <= target.x + target.width
+                        && (!j || columns[j - 1].x + columns[j - 1].width < bar.x));
+            })};
+    }''')
+    assert result == {'ticks': 30, 'cells': 30, 'bars': 30 * series_count, 'fit': True}, result
+
+
+def assert_hover(page, plot, scroller, dates):
+    # Real mouse movement across both edges and the middle of every cell. Bring
+    # its center into the scrollport when needed, then probe each of its bars.
+    targets = plot.locator('.account-timeline-target')
+    for index, expected in enumerate(dates):
+        target = targets.nth(index)
+        points = target.evaluate('''(cell, index) => {
+            const svg = cell.ownerSVGElement;
+            const scroll = svg.parentElement;
+            const clip = scroll.getBoundingClientRect();
+            const old = cell.getBoundingClientRect();
+            if (old.left < clip.left || old.right > clip.right)
+                scroll.scrollLeft += (old.left + old.right - clip.left - clip.right) / 2;
+            const bounds = cell.getBoundingClientRect();
+            const bars = [...svg.querySelectorAll(`.account-timeline-bar[data-bucket="${index}"]`)];
+            const pixels = bars.map(bar => {
+                const box = bar.getBoundingClientRect();
+                return [box.x + box.width / 2, box.bottom - 1];
+            });
+            return [[bounds.left + 1, bounds.top + 36], [bounds.right - 1, bounds.top + 36],
+                [bounds.x + bounds.width / 2, bounds.top + 36], ...pixels]
+                .filter(([x, y]) => x > clip.left && x < clip.right && y > clip.top && y < clip.bottom);
+        }''', index)
+        assert len(points) == 23, (index, points)
+        for x, y in points:
+            page.mouse.move(x, y)
+            actual = plot.evaluate('''plot => {
+                const chart = current.accountTimeline;
+                const highlight = plot.querySelector('.account-timeline-highlight');
+                const cell = [...plot.querySelectorAll('.account-timeline-target')]
+                    .find(cell => Math.abs(Number(cell.getAttribute('x')) + 1 - Number(highlight.getAttribute('x'))) < .001);
+                return [chart.tipTitle.textContent, cell?.dataset.slot, !chart.tooltip.hidden];
+            }''')
+            assert actual == [expected, str(index), True], (index, x, y, actual)
+    assert scroller.evaluate('el => Math.abs(el.scrollWidth - el.clientWidth - el.scrollLeft) < 2')
+
+
+def stress_plot(page, chart, screenshots):
+    from playwright.sync_api import expect
+
+    plot = chart.locator('.account-timeline-plot')
+    scroller = chart.locator('.account-timeline-scroll')
+    chooser = chart.get_by_role('button', name='Accounts & quotas', exact=False)
+    legend = chart.get_by_role('group', name='Accounts and quotas')
+    tip = chart.locator('.account-timeline-tip')
+    labels = plot.locator('.account-timeline-slot-label')
+    bands = plot.locator('.account-timeline-month-label')
+    axis = chart.locator('.account-timeline-axis')
+    status = chart.get_by_role('status')
+    now = stamp('2026-11-20T10:15:00+01:00')
+    replace_geometry(page, '30-days', now, 'Europe/Stockholm')
+    dates = [(date(2026, 10, 22) + timedelta(days=i)).isoformat() for i in range(30)]
+    assert labels.all_text_contents() == [str(int(day[-2:])) for day in dates]
+    assert bands.all_text_contents() == ['October', 'November']
+
+    chart.evaluate('chart => chart.scrollIntoView({block:"center"})')
+    chooser.click()
+    inputs = legend.get_by_role('checkbox')
+    slots = plot.locator('.account-timeline-target')
+    x_positions = slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))")
+    for checked in (1, 2, 5, 10, 20):
+        # 'Weekly' was retained in the source journey; make each state exact.
+        for i, checkbox in enumerate(inputs.all()):
+            checkbox.set_checked(i < checked)
+        assert_geometry(plot, checked)
+        assert slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))") == x_positions
+    expect(chooser).to_contain_text('20 selected')
+    page.keyboard.press('Escape')
+    expect(legend).not_to_be_visible()
+    chooser.tap()
+    expect(legend).to_be_visible()
+    assert legend.evaluate('''el => {
+        const panel = el.parentElement, box = panel.getBoundingClientRect();
+        return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight
+            && panel.scrollHeight > panel.clientHeight;
+    }''')
+    if screenshots:
+        page.screenshot(path=screenshots / '03-chooser.png', animations='disabled')
+    page.keyboard.press('Escape')
+
+    layouts = []
+    for theme, scheme in [('web', 'light'), ('web', 'dark'), ('classic', 'light')]:
+        page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
+        page.emulate_media(color_scheme=scheme, reduced_motion='reduce')
+        for width in (360, 768, 1280, 1920):
+            page.set_viewport_size({'width': width, 'height': 900})
+            expect(labels).to_have_count(30)
+            assert_geometry(plot, 20)
+            layout = chart.evaluate('''chart => {
+                const chooser = chart.querySelector('.account-timeline-chooser').getBoundingClientRect();
+                const graph = chart.querySelector('.account-timeline-graph').getBoundingClientRect();
+                const swatch = chart.querySelector('.account-timeline-legend .account-timeline-swatch');
+                return {toolbar: chooser.bottom <= graph.top && Math.abs(chooser.right - graph.right) < 2,
+                    overflow: chart.scrollWidth > chart.clientWidth || document.documentElement.scrollWidth > innerWidth,
+                    fill: getComputedStyle(swatch).backgroundColor};
+            }''')
+            assert layout['toolbar'] and not layout['overflow'], layout
+            assert layout['fill'] != 'rgba(0, 0, 0, 0)'
+            layouts.append(layout)
+            chart.evaluate('el => el.scrollIntoView({block:"center"})')
+            plot.focus()
+            page.keyboard.press('Home')
+            expect(tip).to_contain_text('2026-10-22')
+            if screenshots:
+                page.screenshot(path=screenshots / f'02-{theme}-{scheme}-{width}.png', animations='disabled')
+    assert layouts[0]['fill'] != layouts[4]['fill'], layouts
+    page.set_viewport_size({'width': 360, 'height': 850})
+    chart.evaluate('el => el.scrollIntoView({block:"center"})')
+    plot.focus()
+    page.keyboard.press('End')
+    expect(status).to_contain_text('2026-11-20. Partial')
+    assert scroller.evaluate('el => el.scrollLeft > 0')
+    assert axis.is_visible()
+    assert tip.evaluate('''el => {
+        const box = el.getBoundingClientRect(), values = el.querySelector('.account-timeline-tip-values');
+        return box.right <= innerWidth && box.bottom <= innerHeight &&
+            values.scrollHeight > values.clientHeight && values.children.length === 20;
+    }''')
+    page.keyboard.press('Tab')
+    expect(tip.locator('.account-timeline-tip-values')).to_be_focused()
+    page.keyboard.press('PageDown')
+    page.wait_for_function("() => document.activeElement.scrollTop > 0")
+    page.keyboard.press('Escape')
+    expect(plot).to_be_focused()
+    page.mouse.move(8, 8)
+    for zoom in (1, 1.5, 2):
+        page.set_viewport_size({'width': 900, 'height': 960})
+        plot.evaluate('(plot, zoom) => plot.style.zoom = zoom', zoom)
+        chart.evaluate('el => el.scrollIntoView({block:"center"})')
+        assert_hover(page, plot, scroller, dates)
+    plot.evaluate("plot => plot.style.removeProperty('zoom')")
+    page.mouse.move(8, 8)
+    page.set_viewport_size({'width': 360, 'height': 850})
+    chart.evaluate('el => el.scrollIntoView({block:"center"})')
+    cdp = page.context.new_cdp_session(page)
+    cdp.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 2})
+    try:
+        chooser.evaluate('el => el.click()')
+        expect(legend).to_be_visible()
+        page.wait_for_function('''() => {
+            const {left, right, top, bottom} = current.accountTimeline.panel.getBoundingClientRect();
+            const {offsetLeft, offsetTop, width, height} = visualViewport;
+            return left >= offsetLeft && right <= offsetLeft + width &&
+                top >= offsetTop && bottom <= offsetTop + height;
+        }''')
+        page.keyboard.press('Escape')
+    finally:
+        cdp.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 1})
+        page.set_viewport_size({'width': 900, 'height': 960})
+
+    replace_geometry(page, '30-days', stamp('2027-01-02T11:00:00+01:00'), 'Europe/Stockholm')
+    assert bands.all_text_contents() == ['December', '2026', 'Jan', '2027']
+    replace_geometry(page, 'today', stamp('2026-10-25T23:50:00+01:00'), 'Europe/Stockholm')
+    expect(labels).to_have_count(25)
+    assert labels.all_text_contents()[2:4] == ['02¹', '02²']
+    plot.focus()
+    page.keyboard.press('Home')
+    for title in ('2026-10-25 01:00–02:00', '2026-10-25 02:00–02:00 (first)',
+                  '2026-10-25 02:00–03:00 (second)'):
+        page.keyboard.press('ArrowRight')
+        expect(tip.locator('strong')).to_have_text(title)
+    replace_geometry(page, 'today', stamp('2026-03-29T23:50:00+02:00'), 'Europe/Stockholm')
+    expect(labels).to_have_count(23)
+    assert '02' not in labels.all_text_contents()
+    replace_geometry(page, 'today', stamp('2026-11-20T23:50:00+01:00'), 'Europe/Stockholm')
+    expect(labels).to_have_count(24)
+    page.keyboard.press('End')
+    expect(tip.locator('strong')).to_have_text('2026-11-20 23:00–Now')
+    return len(layouts)
+
+
+def check(browser, root, screenshots=None):
     from playwright.sync_api import expect
 
     (root / 'config').mkdir()
     shutil.copyfile(ROOT / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
     high = subscription('github-copilot')
-    high = replace(high, quotas=(*high.quotas, QuotaComponent('Model weekly', scope='model', model_id='GPT-Test')))
+    high = replace(high, quotas=(*high.quotas, QuotaComponent('Model weekly', scope='model', model_id='GPT-Test'),
+                                 *(QuotaComponent(f'Quota {i:02}') for i in range(1, 14))))
     low = subscription('openai')
     accounts = (high, low, subscription())
     source = ChartSource(accounts)
@@ -91,7 +304,7 @@ def check(browser, root):
     host.live.timeline_demand = host.dispatcher.account_timeline_demand
     host.start()
     host.publish_ready()
-    context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True)
+    context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True, device_scale_factor=2)
     context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(host.server.origin + '/') else route.abort())
     page = context.new_page()
     errors, lookups, interests = [], [], []
@@ -104,21 +317,31 @@ def check(browser, root):
         page.goto(host.browser_url())
         page.get_by_role('link', name='Accounts', exact=True).click()
         chart = page.get_by_role('region', name='CCost', exact=True)
+        chooser = chart.get_by_role('button', name='Accounts & quotas 3 selected')
         legend = chart.get_by_role('group', name='Accounts and quotas')
         plot = chart.locator('.account-timeline-plot')
         shades = plot.locator('.account-timeline-loading')
-        labels = plot.locator('text')
+        rings = plot.locator('.account-timeline-ring')
+        labels = plot.locator('.account-timeline-slot-label')
         axis = chart.locator('.account-timeline-axis')
         scroller = chart.locator('.account-timeline-scroll')
         tip = chart.locator('.account-timeline-tip')
         bars = chart.locator('.account-timeline-bar')
         status = chart.get_by_role('status')
-        assert chart.get_by_role('button').all_text_contents() == ['Today', '7 days', '30 days', 'This month']
+        assert chart.locator('.ai-stats-periods button').all_text_contents() == ['Today', '7 days', '30 days', 'This month']
         expect(chart.get_by_role('button', name='This month')).to_have_attribute('aria-pressed', 'true')
-        expect(legend.get_by_role('checkbox')).to_have_count(7)
-        expect(legend.locator('input:checked')).to_have_count(3)
         expect(shades).to_have_count(2, timeout=20_000)
-        expect(chart.get_by_text('Loading usage…', exact=True)).to_be_visible()
+        chooser.click()
+        expect(legend.get_by_role('checkbox')).to_have_count(20)
+        expect(legend.locator('input:checked')).to_have_count(3)
+        page.keyboard.press('Escape')
+        expect(chooser).to_be_focused()
+        expect(legend).not_to_be_visible()
+        expect(rings).to_have_count(2)
+        page.emulate_media(reduced_motion='reduce')
+        assert rings.first.evaluate("el => getComputedStyle(el).animationName") == 'none'
+        expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
+        assert labels.all_text_contents() == list(map(str, range(1, 31)))
         assert page.evaluate('current.accountTimeline.view.pending_buckets') == [0, 2]
         assert len(source.timeline_reads) == 12
         positions = labels.evaluate_all("labels => labels.map(label => label.getAttribute('x'))")
@@ -129,26 +352,31 @@ def check(browser, root):
         expect(status).to_contain_text('$0.00')
         page.keyboard.press('ArrowRight')
         expect(status).to_contain_text('~$1.00 (so far)')
+        if screenshots:
+            chart.screenshot(path=screenshots / '01-cold-loading.png', animations='disabled')
 
         source.continue_history.set()
         expect(shades).to_have_count(0, timeout=20_000)
+        expect(rings).to_have_count(0)
         expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
         expect(bars).to_have_count(3)
         expect(plot).to_be_focused()
         assert labels.evaluate_all("labels => labels.map(label => label.getAttribute('x'))") == positions
         expect(tip).not_to_contain_text('so far')
         assert not plot.locator('line, [stroke-dasharray]').count()
-        assert chart.locator('.account-timeline-layout').evaluate(
-            "layout => getComputedStyle(layout).backgroundColor === 'rgba(0, 0, 0, 0)'"
-            " && getComputedStyle(layout).borderTopWidth === '0px'")
+        assert chart.evaluate("el => getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)'"
+                              " && getComputedStyle(el).borderTopWidth === '0px'")
         assert chart.evaluate("(chart) => chart.previousElementSibling.classList.contains('watch-account-grid')")
         assert not chart.get_by_role('combobox').count()
 
+        chart.get_by_role('button', name='Accounts & quotas', exact=False).click()
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · 5-hour').uncheck()
         expect(axis.locator('span').last).to_have_text('$1.20')
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · Weekly').check()
         expect(axis.locator('span').last).to_have_text('$1200.00')
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · 5-hour').check()
+        assert 'checkbox' in chart.aria_snapshot()
+        page.keyboard.press('Escape')
         pair = plot.locator('.account-timeline-bar[data-bucket="0"]')
         expect(pair).to_have_count(2)
         assert pair.evaluate_all('''([first, second]) => {
@@ -160,30 +388,40 @@ def check(browser, root):
         page.keyboard.press('Home')
         expect(status).to_contain_text('GitHub Copilot Plus · 5-hour: ~$1000.00')
         expect(status).to_contain_text('GitHub Copilot Plus · Weekly: ~$1000.00')
-        assert 'checkbox' in chart.aria_snapshot() and 'Usage by time' in chart.aria_snapshot()
+        assert 'Usage by time' in chart.aria_snapshot()
         page.keyboard.press('ArrowRight')
         expect(status).to_contain_text('GitHub Copilot Plus · Weekly: $0.00')
         first_x = pair.first.evaluate("bar => bar.getBBox().x + 2")
+        weekly_tip = tip.locator('.account-timeline-tip-row').filter(has_text='GitHub Copilot Plus · Weekly')
         plot.hover(position={'x': first_x, 'y': 160})
-        expect(tip).to_contain_text('GitHub Copilot Plus · Weekly: ~$1000.00')
+        expect(weekly_tip.locator('span').last).to_have_text('~$1000.00')
         plot.tap(position={'x': first_x, 'y': 170})
-        expect(tip).to_contain_text('GitHub Copilot Plus · Weekly: ~$1000.00')
-        for checkbox in legend.get_by_role('checkbox').all():
+        expect(weekly_tip.locator('span').last).to_have_text('~$1000.00')
+        chart.get_by_role('button', name='Accounts & quotas', exact=False).click()
+        for checkbox in legend.locator('input:checked').all()[::-1]:
             checkbox.uncheck()
         expect(chart.get_by_text('Select a series to show its usage.')).to_be_visible()
         chart.get_by_role('checkbox', name='GitHub Copilot Plus · Weekly').check()
+        chart.get_by_role('heading', name='CCost').click()
+        expect(legend).not_to_be_visible()
         # Accept normal passive lookup cadence, but never let a legend toggle
         # submit report/provider work or a second history acquisition.
         assert len(source.timeline_reads) == 25 and set(source.timeline_reads.values()) == {1}
         for name, period, count in (('Today', 'today', 6), ('7 days', '7-days', 8),
-                                     ('30 days', '30-days', 31), ('This month', 'month', 5)):
+                                     ('30 days', '30-days', 30), ('This month', 'month', 30)):
             button = chart.get_by_role('button', name=name, exact=True)
             button.click()
             expect(button).to_have_attribute('aria-pressed', 'true')
             page.wait_for_function("(period) => current.accountTimeline.view?.period === period",
                                    arg=period, timeout=18_000)
             assert page.evaluate('current.accountTimeline.view.buckets.length') == count
+        plot.focus()
+        page.keyboard.press('End')
+        expect(tip).to_have_text('2026-11-30Upcoming')
+        expect(status).to_have_text('2026-11-30. Upcoming')
+        chart.get_by_role('button', name='Accounts & quotas', exact=False).click()
         expect(chart.get_by_role('checkbox', name='GitHub Copilot Plus · Weekly')).to_be_checked()
+        page.keyboard.press('Escape')
         assert len(source.timeline_reads) == 25 and set(source.timeline_reads.values()) == {1}
         assert len(provider_refreshes) == 1
         assert 'all' not in lookups and 'all' not in interests
@@ -197,45 +435,7 @@ def check(browser, root):
 
         chart.get_by_role('button', name='30 days', exact=True).click()
         page.wait_for_function("() => current.accountTimeline.view?.period === '30-days'")
-        for checkbox in legend.get_by_role('checkbox').all():
-            checkbox.check()
-
-        layouts = []
-        for theme, scheme in [('web', 'light'), ('web', 'dark'), ('classic', 'light')]:
-            page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
-            page.emulate_media(color_scheme=scheme, reduced_motion='reduce')
-            for width in (360, 768, 1280, 1920):
-                page.set_viewport_size({'width': width, 'height': 900})
-                layout = chart.evaluate('''chart => {
-                    const graph = chart.querySelector('.account-timeline-graph').getBoundingClientRect(),
-                        key = chart.querySelector('fieldset').getBoundingClientRect(),
-                        swatch = chart.querySelector('.account-timeline-swatch'),
-                        labels = [...chart.querySelectorAll('.account-timeline-plot text')].map(el => el.getBBox()),
-                        plot = chart.querySelector('.account-timeline-plot');
-                    return {below: key.top >= graph.bottom, right: key.left >= graph.right,
-                        overflow: chart.scrollWidth > chart.clientWidth || document.documentElement.scrollWidth > innerWidth,
-                        clipped: labels.some(box => box.x < 0 || box.x + box.width > plot.width.baseVal.value),
-                        overlaps: labels.some((box, i) => i > 0 && labels[i - 1].x + labels[i - 1].width > box.x),
-                        fill: getComputedStyle(swatch).backgroundColor};
-                }''')
-                assert layout['below' if width < 800 else 'right'] and not layout['overflow'], layout
-                assert not (layout['clipped'] or layout['overlaps']), layout
-                assert layout['fill'] != 'rgba(0, 0, 0, 0)'
-                layouts.append((scheme, width, layout['fill']))
-        assert layouts[0][2] != layouts[4][2], layouts
-        page.set_viewport_size({'width': 360, 'height': 850})
-        plot.focus()
-        page.keyboard.press('End')
-        expect(status).to_contain_text('Partial')
-        assert scroller.evaluate('el => el.scrollLeft > 0')
-        assert axis.is_visible()
-        assert tip.evaluate('el => el.getBoundingClientRect().right <= innerWidth')
-        # Browser zoom changes the responsive layout without requiring any
-        # real desktop/window focus. Use Chromium's isolated page scale.
-        cdp = context.new_cdp_session(page)
-        cdp.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 2})
-        expect(chart.get_by_role('checkbox', name='GitHub Copilot Plus · 5-hour')).to_be_visible()
-        cdp.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 1})
+        layouts = stress_plot(page, chart, screenshots)
 
         page.get_by_role('link', name='Watch', exact=True).click()
         expect(page.locator('body')).to_have_attribute('data-section', 'watch')
@@ -245,7 +445,7 @@ def check(browser, root):
         assert while_tabs == len(lookups)
         assert not host.dispatcher.account_timeline_demand()[0]
         assert host.failure is None and host.live.failure is None and not errors, errors
-        print(f'Accounts timeline PASS: {len(layouts)} layouts, four periods, staged acquisition, '
+        print(f'Accounts timeline PASS: {layouts} layouts, four periods, staged acquisition, '
                f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh')
     finally:
         source.continue_history.set()
@@ -257,7 +457,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--browser', type=Path, help='Explicit local Chromium executable; CI uses bundled Playwright')
     parser.add_argument('--scratch', type=Path, help='Parent directory for isolated fixture files')
+    parser.add_argument('--screenshots', type=Path, help='Owned directory for rendered chart evidence')
     options = parser.parse_args()
+    if options.screenshots:
+        options.screenshots.mkdir(parents=True, exist_ok=True)
     if options.browser is None:
         from development.tools.ci_web_beta import hosted_only
         hosted_only()
@@ -265,7 +468,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='accounts-timeline-', dir=options.scratch) as directory, sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True, executable_path=options.browser)
         try:
-            check(browser, Path(directory))
+            check(browser, Path(directory), options.screenshots)
         finally:
             browser.close()
 

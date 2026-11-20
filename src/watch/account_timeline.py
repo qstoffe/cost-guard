@@ -238,6 +238,7 @@ class AccountTimeline:
                     if not removed:
                         values = {period: value for period, value in values.items()
                                   if period not in interrupted or period not in self.results
+                                  or (period != '7-days' and value['start_ms'] != self.results[period]['start_ms'])
                                   or self.results[period]['pending_buckets']}
                     if values or removed:
                         with self.lock:

@@ -1,4 +1,6 @@
 """Absolute, half-open timeline buckets with local calendar boundaries."""
+from calendar import monthrange
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
@@ -8,13 +10,24 @@ PERIODS = ('today', '7-days', '30-days', 'month')
 DAY_MS = 86_400_000
 
 
+@dataclass(frozen=True, slots=True)
+class TimelineWindow:
+    start: int
+    buckets: tuple[tuple[int, int], ...]
+    partial: tuple[int, ...]
+    dates: tuple[str, ...] = ()
+    future: tuple[int, ...] = ()
+
+
 def period_start(period, now_ms, zone):
     if period == 'today':
         return local_day_start_ms(zone, now_ms=now_ms)
     if period == 'month':
         return local_month_start_ms(zone, now_ms=now_ms)
-    if period in ('7-days', '30-days'):
-        return now_ms - int(period.split('-')[0]) * DAY_MS
+    if period == '7-days':
+        return now_ms - 7 * DAY_MS
+    if period == '30-days':
+        return local_day_start_ms(zone, now_ms=now_ms, days_ago=29)
     raise ValueError('invalid_timeline_period')
 
 
@@ -24,6 +37,26 @@ def _local(ms, zone):
 
 def _stamp(value):
     return int(value.timestamp() * 1000)
+
+
+def _midnight(day, zone):
+    return _stamp(datetime.combine(day, time(), zone))
+
+
+def _calendar_window(period, now_ms, zone):
+    today = _local(now_ms, zone).date()
+    if period == 'month':
+        first, count = today.replace(day=1), monthrange(today.year, today.month)[1]
+    else:
+        first, count = today - timedelta(days=29), 30
+    days = tuple(first + timedelta(days=i) for i in range(count + 1))
+    edges = tuple(_midnight(day, zone) for day in days)
+    current = (today - first).days
+    # Even exactly at midnight, the current date owns a (then empty) slot.
+    buckets = tuple((left, now_ms if i == current else right)
+                    for i, (left, right) in enumerate(zip(edges, edges[1:])))
+    return TimelineWindow(edges[0], buckets, (current,), tuple(day.isoformat() for day in days[:-1]),
+                          tuple(range(current + 1, count)))
 
 
 def _hours(day, zone):
@@ -51,10 +84,10 @@ def _hours(day, zone):
 
 
 def timeline_window(period, now_ms, timezone_id):
-    start = period_start(period, now_ms, timezone_id)
-    if start >= now_ms:
-        return start, (), ()
     zone = resolve_timezone(timezone_id)
+    if period in ('month', '30-days'):
+        return _calendar_window(period, now_ms, zone)
+    start = period_start(period, now_ms, timezone_id)
     first_day = _local(start, zone).date()
     if period == 'today':
         boundaries = _hours(first_day, zone)
@@ -63,10 +96,13 @@ def timeline_window(period, now_ms, timezone_id):
         day = first_day
         boundaries = set()
         while day <= last_day:
-            boundaries.add(_stamp(datetime.combine(day, time(), zone)))
+            boundaries.add(_midnight(day, zone))
             day += timedelta(days=1)
     edges = [start, *sorted(ms for ms in boundaries if start < ms < now_ms), now_ms]
     buckets = tuple(zip(edges, edges[1:]))
     partial = tuple(sorted({index for index, edge in ((0, start), (len(buckets) - 1, now_ms))
                             if edge not in boundaries}))
-    return start, buckets, partial
+    if period == 'today' and now_ms in boundaries:
+        buckets = (*buckets[:-1], (now_ms, now_ms)) if start == now_ms else (*buckets, (now_ms, now_ms))
+        partial = (*partial, len(buckets) - 1)
+    return TimelineWindow(start, buckets, partial)

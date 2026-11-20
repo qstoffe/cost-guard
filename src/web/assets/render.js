@@ -38,12 +38,16 @@ const ReportView = (() => {
     return costGroups(cost, true) + (Number.isFinite(summary?.duration_ms) ?
       '\n\nDuration: ' + display(summary, 'duration_ms') : '');
   }
+  let timestampZone, timestampFormatter;
   function timestamp(value, zone = timezone) {
     if (!Number.isSafeInteger(value) || value < 0 || typeof zone !== 'string') return 'N/A';
     try {
-      const parts = new Intl.DateTimeFormat('sv-SE', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'})
-        .formatToParts(value);
+      if (zone !== timestampZone) {
+        timestampFormatter = new Intl.DateTimeFormat('sv-SE', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+        timestampZone = zone;
+      }
+      const parts = timestampFormatter.formatToParts(value);
       const fields = Object.fromEntries(parts.map(part => [part.type, part.value]));
       return `${fields.year}-${fields.month}-${fields.day} ${fields.hour}:${fields.minute}`;
     } catch (_) { return 'N/A'; } // Never substitute the browser's timezone for missing configuration.

@@ -4,7 +4,7 @@ const AccountTimelineView = (() => {
     ['month', 'This month']];
   const e = (...args) => ReportView.element(...args);
   const ns = 'http://www.w3.org/2000/svg';
-  const plotHeight = 240, top = 12, bottom = 206, inset = 10;
+  const top = 27, bottom = 194, inset = 3, paletteSize = 12;
   const label = series => `${series.account} · ${ReportView.quotaLabel({label: series.quota})}`;
   const shown = item => ReportView.display({
     display: {amount: item.display.credits},
@@ -16,30 +16,84 @@ const AccountTimelineView = (() => {
     if (text !== undefined) node.textContent = text;
     return node;
   }
+  function swatch(ink) {
+    const node = e('span', undefined, 'account-timeline-swatch');
+    node.setAttribute('data-ink', ink);
+    node.setAttribute('aria-hidden', 'true');
+    return node;
+  }
+  function viewport() {
+    const {offsetLeft = 0, offsetTop = 0, width = innerWidth, height = innerHeight} = globalThis.visualViewport || {};
+    return {left: offsetLeft + 8, right: offsetLeft + width - 8, top: offsetTop + 8, bottom: offsetTop + height - 8};
+  }
+  const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
   function visibleScale(series) {
     const largest = series.reduce((peak, item) => !peak || Number(item.peak) > Number(peak.peak) ? item : peak, null);
     return largest?.ticks || [];
   }
-  function clock(zone, options) {
-    return new Intl.DateTimeFormat('en-GB', {timeZone: zone, ...options});
+  function layoutWidth(view, available, seriesCount) {
+    // Reserve a stable footprint for ordinary rosters. The minimum grows only
+    // if a larger roster would otherwise force subpixel bars.
+    const minimum = Math.max(view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25, 4 + 1.25 * seriesCount);
+    return Math.ceil(Math.max(available, 2 * inset + view.buckets.length * minimum));
   }
-  function tickLabels(view, width, group) {
-    const day = {month: 'short', day: 'numeric'};
-    const year = clock(view.timezone_id, {year: '2-digit'});
-    const rollsYear = year.format(view.start_ms) !== year.format(view.buckets.at(-1)[0]);
-    const hourly = view.period === 'today';
-    const format = clock(view.timezone_id, hourly ? {hour: '2-digit', hourCycle: 'h23'} :
-      rollsYear ? {...day, year: '2-digit'} : day);
-    const count = view.buckets.length;
-    const spacing = hourly ? 36 : rollsYear ? 100 : 66;
-    const step = Math.max(1, Math.ceil(spacing / group));
-    return view.buckets.flatMap(([start], index) => {
-      const last = index === count - 1;
-      if (!last && index !== 0 && (index % step || count - 1 - index < step)) return [];
-      const x = Math.max(inset, Math.min(width - inset, inset + group * (index + .5)));
-      const anchor = last && count > 1 ? 'end' : index === 0 ? 'start' : 'middle';
-      return [svg('text', {x, y: 230, 'text-anchor': anchor}, format.format(start))];
+  function layoutSlots(view, width) {
+    const hourly = view.period === 'today', shortDates = view.period === '7-days';
+    const group = (width - 2 * inset) / view.buckets.length;
+    const slots = view.buckets.map(([start], index) => {
+      const [day, time] = view.slot_dates?.[index] ? [view.slot_dates[index]] :
+        ReportView.timestamp(start, view.timezone_id).split(' ');
+      const x = inset + index * group;
+      return {index, key: hourly ? start : day, day, time, x, center: x + group / 2};
     });
+    const hours = new Map(), months = [];
+    for (const slot of slots) {
+      if (hourly) {
+        const hour = slot.time?.slice(0, 2);
+        const group = hours.get(hour) || [];
+        group.push(slot);
+        hours.set(hour, group);
+      } else {
+        const month = slot.day.slice(0, 7);
+        const last = months.at(-1);
+        if (last?.month === month) last.count++;
+        else months.push({month, x: slot.x, count: 1});
+      }
+    }
+    for (const repeated of hours.values())
+      if (repeated.length > 1) repeated.forEach((slot, index) => { slot.occurrence = index + 1; });
+    const years = new Set(months.map(({month}) => month.slice(0, 4)));
+    return {slots, width, group, hourly, shortDates, months, crossYear: years.size > 1};
+  }
+  function equalSlots(a, b) {
+    return a && b && a.period === b.period && a.timezone_id === b.timezone_id &&
+      a.buckets.length === b.buckets.length && b.buckets.every(([start], i) => a.buckets[i][0] === start);
+  }
+  function axisLabels(layout, future) {
+    const {slots, hourly, shortDates, months, group, crossYear} = layout;
+    const labels = slots.map(slot => {
+      const tick = hourly ? slot.time?.slice(0, 2) :
+        shortDates ? `${Number(slot.day.slice(8))}/${Number(slot.day.slice(5, 7))}` : Number(slot.day.slice(8));
+      const node = svg('text', {x: slot.center, y: 214, class: 'account-timeline-slot-label',
+        'data-bucket': slot.index, 'data-future': future.has(slot.index), 'text-anchor': 'middle'},
+        slot.day === 'N/A' ? '—' : tick);
+      if (slot.occurrence) node.append(svg('tspan', {class: 'account-timeline-fold'}, slot.occurrence === 1 ? '¹' : '²'));
+      return node;
+    });
+    months.forEach(({month, x, count}, index) => {
+      const width = group * count;
+      const [year, number] = month.split('-').map(Number);
+      if (!year || !number) return;
+      const caption = new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
+        month: width < 85 ? 'short' : 'long', timeZone: 'UTC'
+      }).format(Date.UTC(year, number - 1, 1));
+      if (index) labels.push(svg('rect', {x: x - .5, y: bottom + 6, width: 1, height: crossYear ? 51 : 38,
+        class: 'account-timeline-month-divider'}));
+      const attrs = {x: x + width / 2, y: 236, 'text-anchor': 'middle', class: 'account-timeline-month-label'};
+      labels.push(svg('text', attrs, caption));
+      if (crossYear) labels.push(svg('text', {...attrs, y: 250}, year));
+    });
+    return labels;
   }
 
   class View {
@@ -67,7 +121,7 @@ const AccountTimelineView = (() => {
         filters.append(button);
         return [period, button];
       });
-      const layout = e('div', undefined, 'account-timeline-layout');
+      const header = e('div', undefined, 'account-timeline-header');
       const graph = e('div', undefined, 'account-timeline-graph');
       this.frame = e('div', undefined, 'account-timeline-frame');
       this.axis = e('div', undefined, 'account-timeline-axis');
@@ -76,33 +130,76 @@ const AccountTimelineView = (() => {
       this.plot = svg('svg', {role: 'group', 'aria-label': 'Usage by time. Use Left and Right arrows for bucket values.',
         tabindex: '0', class: 'account-timeline-plot'});
       this.shades = svg('g', {'aria-hidden': 'true'});
-      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: top, height: bottom - top,
+      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: 4, height: bottom + 17,
         rx: 4, visibility: 'hidden', 'aria-hidden': 'true'});
       this.layers = svg('g', {'aria-hidden': 'true'});
-      this.plot.append(this.shades, this.highlight, this.layers);
+      this.labels = svg('g', {'aria-hidden': 'true'});
+      this.targets = svg('g', {'aria-hidden': 'true'});
+      this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
-      this.message = e('p', '', 'account-timeline-message');
+      this.empty = e('div', undefined, 'account-timeline-empty');
+      this.message = e('span');
+      this.initialRing = e('span', undefined, 'account-timeline-ring');
+      this.initialRing.setAttribute('aria-hidden', 'true');
+      this.empty.append(this.initialRing, this.message);
       this.tooltip = e('div', undefined, 'account-timeline-tip');
       this.tooltip.hidden = true;
+      this.tipTitle = e('strong');
+      this.tipState = e('span', undefined, 'account-timeline-tip-state');
+      const tipHeader = e('div', undefined, 'account-timeline-tip-header');
+      tipHeader.append(this.tipTitle, this.tipState);
+      this.tipValues = e('div', undefined, 'account-timeline-tip-values');
+      this.tipValues.setAttribute('aria-label', 'Selected series values');
+      this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
       this.frame.append(this.axis, this.scroller, this.tooltip);
-      graph.append(this.message, this.frame, this.announce);
+      graph.append(this.frame, this.empty, this.announce);
+      this.chooser = e('button', undefined, 'account-timeline-chooser');
+      this.chooser.type = 'button';
+      this.summary = e('span', undefined, 'account-timeline-summary');
+      this.summary.setAttribute('aria-hidden', 'true');
+      this.selectionCount = e('span', undefined, 'account-timeline-count');
+      const caret = e('span', '⌄', 'account-timeline-caret');
+      caret.setAttribute('aria-hidden', 'true');
+      this.chooser.append(this.summary, e('span', 'Accounts & quotas'), this.selectionCount, caret);
+      this.chooser.setAttribute('popovertarget', 'account-timeline-options');
+      this.panel = e('div', undefined, 'account-timeline-options');
+      this.panel.id = 'account-timeline-options';
+      this.panel.setAttribute('popover', 'auto');
       this.legend = e('fieldset', undefined, 'account-timeline-legend');
       this.legend.append(e('legend', 'Accounts and quotas'));
       this.legendRows = e('div');
       this.legend.append(this.legendRows);
-      layout.append(graph, this.legend);
-      this.root.append(title, filters, layout);
+      this.panel.append(this.legend);
+      header.append(title, this.chooser, filters, this.panel);
+      this.root.append(header, graph);
+      this.panel.addEventListener('toggle', () => this.positionOverlays());
       this.plot.addEventListener('keydown', event => this.key(event));
-      this.plot.addEventListener('focus', () => this.inspect(this.focusBucket ?? 0, true));
-      this.plot.addEventListener('blur', () => this.inspect(null));
+      this.plot.addEventListener('focus', () => this.choose(this.indexOf(this.focusKey) ?? 0));
+      this.plot.addEventListener('blur', event => {
+        if (!this.tooltip.contains(event.relatedTarget)) this.inspect(null);
+      });
+      this.tipValues.addEventListener('blur', event => {
+        if (event.relatedTarget !== this.plot) this.inspect(null);
+      });
+      this.tipValues.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { this.plot.focus({preventScroll: true}); this.inspect(null); }
+      });
       this.plot.addEventListener('pointermove', event => this.pointer(event));
       this.plot.addEventListener('pointerdown', event => this.pointer(event));
-      this.plot.addEventListener('pointerleave', () => {
-        this.inspect(document.activeElement === this.plot ? this.focusBucket : null);
+      this.plot.addEventListener('pointerup', event => this.pointer(event));
+      this.plot.addEventListener('pointerleave', event => {
+        if (event.pointerType === 'touch' || this.tooltip.contains(event.relatedTarget)) return;
+        this.inspect(document.activeElement === this.plot ? this.indexOf(this.focusKey) : null,
+          this.plot.matches(':focus-visible'));
       });
       this.scroller.addEventListener('scroll', () => this.positionTip());
+      // One instance per Accounts view lifecycle; removing the root also stops
+      // positioning work until the section is visible again.
+      document.addEventListener('scroll', () => this.positionOverlays(), {capture: true, passive: true});
+      globalThis.visualViewport?.addEventListener('resize', () => this.positionOverlays());
+      globalThis.visualViewport?.addEventListener('scroll', () => this.positionOverlays());
       if (typeof ResizeObserver !== 'undefined') new ResizeObserver(records => {
         const width = Math.floor(records[0].contentRect.width);
         if (width > 0 && width !== this.width) {
@@ -117,13 +214,14 @@ const AccountTimelineView = (() => {
       if (this.scope === scope) return;
       this.scope = scope;
       this.generation++;
+      this.initial = scope != null;
       this.cache.clear();
       this.legendFor([]);
       // IDs include source/account/quota semantics; keep choices for still
       // compatible entries until the server publishes its new roster.
       this.roster = [];
       this.rosterRevision = null;
-      this.focusBucket = null;
+      this.focusKey = null;
       this.inspect(null);
       ReportView.text(this.announce, '');
       this.draw();
@@ -141,7 +239,7 @@ const AccountTimelineView = (() => {
       if (this.period === period) return;
       this.period = period;
       this.generation++;
-      this.focusBucket = null;
+      this.focusKey = null;
       const cached = this.cache.get(period)?.view;
       this.initial = !cached || !!cached.pending_buckets.length;
       this.inspect(null);
@@ -159,6 +257,9 @@ const AccountTimelineView = (() => {
         const view = this.cache.get(this.period)?.view;
         this.initial = !view || !!view.pending_buckets.length;
         this.draw();
+      } else {
+        this.panel.hidePopover();
+        this.inspect(null);
       }
       this.schedule(0);
     }
@@ -203,14 +304,16 @@ const AccountTimelineView = (() => {
       const wanted = new Set(series.map(item => item.id));
       for (const [id, entry] of this.entries)
         if (!wanted.has(id)) { entry.root.remove(); this.entries.delete(id); }
-      this.legend.hidden = !wanted.size;
+      this.chooser.hidden = !wanted.size;
+      if (!wanted.size) this.panel.hidePopover();
       const occupied = new Set(series.flatMap(item => this.colors.has(item.id) ? [this.colors.get(item.id)] : []));
+      const selectedInks = [];
       series.forEach((item, index) => {
         if (!this.colors.has(item.id)) {
-          const preferred = (parseInt(item.id.slice(0, 8), 16) >>> 0) % 8;
+          const preferred = (parseInt(item.id.slice(0, 8), 16) >>> 0) % paletteSize;
           let color = preferred;
-          for (let offset = 0; offset < 8; offset++) {
-            const candidate = (preferred + offset) % 8;
+          for (let offset = 0; offset < paletteSize; offset++) {
+            const candidate = (preferred + offset) % paletteSize;
             if (!occupied.has(candidate)) { color = candidate; break; }
           }
           this.colors.set(item.id, color);
@@ -220,26 +323,27 @@ const AccountTimelineView = (() => {
         if (!entry) {
           const input = e('input'), name = e('span'), wrapper = e('label');
           input.type = 'checkbox';
-          const swatch = e('span', undefined, 'account-timeline-swatch');
-          swatch.setAttribute('data-ink', this.colors.get(item.id));
-          swatch.setAttribute('aria-hidden', 'true');
           input.addEventListener('change', () => {
             this.selected.set(item.id, input.checked);
             this.draw();
           });
           entry = {input, name, root: wrapper};
-          wrapper.append(input, swatch, name);
+          wrapper.append(input, swatch(this.colors.get(item.id)), name);
           this.entries.set(item.id, entry);
         }
         entry.input.checked = this.selected.get(item.id) ?? item.primary;
+        if (entry.input.checked) selectedInks.push(this.colors.get(item.id));
         ReportView.text(entry.name, label(item));
         if (this.legendRows.children[index] !== entry.root)
           this.legendRows.insertBefore(entry.root, this.legendRows.children[index] || null);
       });
+      ReportView.text(this.selectionCount, `${selectedInks.length} selected`);
+      this.summary.replaceChildren(...selectedInks.slice(0, 4).map(swatch));
     }
 
     draw() {
       const view = this.cache.get(this.period)?.view;
+      const previous = this.view;
       const roster = view?.series || this.roster || [];
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       this.legendFor(roster);
@@ -247,15 +351,17 @@ const AccountTimelineView = (() => {
       this.view = view;
       this.acquiring = new Set(view?.pending_buckets);
       this.partial = new Set(view?.partial_buckets);
+      this.future = new Set(view?.future_buckets);
       const scale = visibleScale(this.series.filter(item => item.points.some(point => point !== null)));
       const unselected = roster.length && !roster.some(item => this.selected.get(item.id) ?? item.primary);
-      const exploring = this.initial && this.visible;
+      const loading = !view && !unselected && this.initial && this.visible;
       const message = unselected ? 'Select a series to show its usage.' :
-        exploring && (!view || this.acquiring.size) ? 'Loading usage…' :
-        !scale.length && !this.acquiring.size ? 'No usage history to show.' : '';
+        loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
-      this.message.hidden = !message;
-      this.frame.hidden = !view?.buckets.length || !!unselected;
+      this.initialRing.hidden = !loading;
+      this.frame.hidden = !view?.buckets.length;
+      this.empty.hidden = !this.frame.hidden && !unselected;
+      this.empty.classList.toggle('over-plot', !this.frame.hidden);
       this.plot.setAttribute('tabindex', this.frame.hidden ? '-1' : '0');
       if (this.frame.hidden) return this.inspect(null);
 
@@ -270,34 +376,47 @@ const AccountTimelineView = (() => {
         lastLabel = text;
       });
       this.axis.replaceChildren(...axis);
-      const available = this.scroller.clientWidth || this.width;
-      const count = view.buckets.length, seriesCount = this.series.length;
-      const width = Math.max(available, 2 * inset + count * Math.max(24, seriesCount * 8 + 10));
-      const group = this.group = (width - 2 * inset) / count;
-      this.plot.setAttribute('width', width);
-      this.plot.setAttribute('height', plotHeight);
-      this.x = index => inset + index * group;
-      this.fullDate = clock(view.timezone_id, {month: 'short', day: 'numeric', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset'});
-
-      const shades = [];
-      for (let index = 0; index < count; index++) {
-        if (!this.acquiring.has(index)) continue;
-        const first = index;
-        while (this.acquiring.has(index + 1)) index++;
-        shades.push(svg('rect', {class: 'account-timeline-loading', x: this.x(first) + 1, y: top,
-          width: (index - first + 1) * group - 2, height: bottom - top, rx: 4}));
+      const width = layoutWidth(view, this.scroller.clientWidth || this.width, roster.length);
+      const sameGeometry = equalSlots(previous, view) && this.layout?.width === width;
+      const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
+      const {slots, group} = layout;
+      if (!sameGeometry) {
+        const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
+        this.plot.setAttribute('width', layout.width);
+        this.plot.setAttribute('height', plotHeight);
+        // Native hit testing is already in actual SVG coordinates, including
+        // scroll, CSS zoom and transforms. Bars cannot be hit targets.
+        this.targets.replaceChildren(...slots.map(({index, x}) => svg('rect', {
+          class: 'account-timeline-target', x, y: 0, width: group, height: bottom + 25, 'data-slot': index
+        })));
+        this.highlight.setAttribute('width', group - 2);
       }
-      this.shades.replaceChildren(...shades);
-      const nodes = tickLabels(view, width, group);
-      const bar = Math.min(28, (group - 8) / Math.max(1, seriesCount) - 2);
+      if (!sameGeometry || previous.future_buckets?.length !== view.future_buckets?.length)
+        this.labels.replaceChildren(...axisLabels(layout, this.future));
+
+      const shades = [], nodes = [];
+      for (const {index, x, center} of slots) {
+        const future = this.future.has(index), waiting = this.initial && this.acquiring.has(index);
+        if (future || waiting) shades.push(svg('rect', {
+          class: future ? 'account-timeline-future' : 'account-timeline-loading',
+          'data-bucket': index, x: x + 1, y: 4, width: group - 2, height: bottom - 4, rx: 4
+        }));
+        if (waiting) nodes.push(svg('path', {class: 'account-timeline-ring',
+          d: `M${center + 4},14a4,4 0 1 1 -4,-4`, 'data-bucket': index}));
+        else if (this.partial.has(index)) nodes.push(svg('circle', {class: 'account-timeline-partial', cx: center,
+          cy: 14, r: 2, 'data-bucket': index}));
+      }
+      const seriesCount = this.series.length;
+      const gap = Math.min(3, Math.max(.2, group / (Math.max(1, seriesCount) * 6)));
+      const bar = Math.min(26, (group - 4 - (seriesCount - 1) * gap) / Math.max(1, seriesCount));
+      const offset = (group - seriesCount * (bar + gap) + gap) / 2;
       const max = Number(scale.at(-1)?.amount);
       if (max > 0) for (const [slot, item] of this.series.entries()) {
         item.points.forEach((point, index) => {
           const amount = Number(point?.amount);
           if (!(amount > 0)) return;
           const height = Math.max(1, (bottom - top) * (amount / max));
-          const x = this.x(index) + (group - seriesCount * (bar + 2) + 2) / 2 + slot * (bar + 2);
+          const x = slots[index].x + offset + slot * (bar + gap);
           // Clip the bottom corner of the rounded column at the value origin.
           const radius = Math.min(3, height, bar / 2);
           const y = bottom - height, right = x + bar;
@@ -307,73 +426,119 @@ const AccountTimelineView = (() => {
             'data-bucket': index}));
         });
       }
-      for (const index of this.partial) {
-        nodes.push(svg('circle', {cx: this.x(index) + group / 2, cy: 214, r: 2,
-          class: 'account-timeline-partial'}));
-      }
+      this.shades.replaceChildren(...shades);
       this.layers.replaceChildren(...nodes);
-      this.highlight.setAttribute('width', group - 2);
-      this.inspect(this.bucket);
+      this.inspect(this.indexOf(this.shownKey), this.tipInteractive);
+      this.positionOverlays();
     }
 
+    indexOf(key) {
+      return this.layout?.slots.find(slot => slot.key === key)?.index;
+    }
     key(event) {
       if (event.key === 'Escape') return this.inspect(null);
       const steps = {ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity};
       if (this.frame.hidden || !Object.hasOwn(steps, event.key)) return;
       event.preventDefault();
-      const value = (this.focusBucket ?? 0) + steps[event.key];
-      this.focusBucket = Math.max(0, Math.min(this.view.buckets.length - 1, value));
-      this.inspect(this.focusBucket, true);
+      const value = (this.indexOf(this.shownKey) ?? this.indexOf(this.focusKey) ?? 0) + steps[event.key];
+      this.choose(clamp(value, 0, this.layout.slots.length - 1), true);
     }
-
     pointer(event) {
-      if (this.frame.hidden) return;
-      const box = this.plot.getBoundingClientRect();
-      const index = Math.floor((event.clientX - box.left - inset) / this.group);
-      if (event.type === 'pointerdown' && index >= 0 && index < this.view.buckets.length) this.focusBucket = index;
-      if (index !== this.bucket || this.tooltip.hidden) this.inspect(index);
+      if (this.frame.hidden || (event.pointerType === 'touch' ? event.type !== 'pointerup' : event.type === 'pointerup'))
+        return;
+      const target = event.target.getAttribute('data-slot');
+      const index = target === null ? null : Number(target);
+      if (index !== null && (event.pointerType === 'touch' || event.type === 'pointerdown'))
+        return this.choose(index, false, event.pointerType === 'touch');
+      if (index !== this.indexOf(this.shownKey) || this.tooltip.hidden) this.inspect(index);
     }
-
-    inspect(index, announce = false) {
-      this.bucket = index;
-      const bucket = this.view?.buckets[index];
-      if (!bucket || this.frame.hidden) {
+    choose(index, scroll = false, pinned = false) {
+      const slot = this.layout?.slots[index];
+      if (!slot || this.frame.hidden) return;
+      this.focusKey = slot.key;
+      if (scroll) {
+        const clip = this.scroller.getBoundingClientRect();
+        const cell = this.targets.children[index].getBoundingClientRect();
+        const ratio = clip.width / this.scroller.offsetWidth || 1;
+        if (cell.left < clip.left) this.scroller.scrollLeft += (cell.left - clip.left) / ratio - inset;
+        else if (cell.right > clip.right) this.scroller.scrollLeft += (cell.right - clip.right) / ratio + inset;
+      }
+      this.inspect(index, true, true, pinned);
+    }
+    inspect(index, interactive = false, announce = false, pinned = this.tipPinned && !announce && interactive) {
+      const slot = this.layout?.slots[index];
+      this.shownKey = slot?.key;
+      this.tipInteractive = interactive;
+      this.tipPinned = pinned;
+      this.tipValues.tabIndex = interactive ? 0 : -1;
+      this.tooltip.classList.toggle('interactive', interactive);
+      this.tooltip.classList.toggle('pinned', pinned);
+      if (!slot || this.frame.hidden) {
         this.tooltip.hidden = true;
         this.highlight.setAttribute('visibility', 'hidden');
         return;
       }
-      const [start, end] = bucket;
-      const x = this.x(index);
-      this.highlight.setAttribute('x', x + 1);
+      this.highlight.setAttribute('x', slot.x + 1);
       this.highlight.setAttribute('visibility', 'visible');
-      if (announce) {
-        this.focusBucket = index;
-        if (x < this.scroller.scrollLeft) this.scroller.scrollLeft = x - inset;
-        else if (x + this.group > this.scroller.scrollLeft + this.scroller.clientWidth)
-          this.scroller.scrollLeft = x + this.group + inset - this.scroller.clientWidth;
+      const future = this.future.has(index), pending = this.acquiring.has(index), partial = this.partial.has(index);
+      let heading = slot.day;
+      if (this.layout.hourly && slot.time) {
+        const end = ReportView.timestamp(this.view.buckets[index][1], this.view.timezone_id).split(' ')[1];
+        const repeat = slot.occurrence ? ` (${slot.occurrence === 1 ? 'first' : 'second'})` : '';
+        heading += ` ${slot.time}–${partial ? 'Now' : end || 'N/A'}${repeat}`;
       }
-      const partial = this.partial.has(index) ? ' · Partial' : '';
-      const pending = this.acquiring.has(index);
-      const time = `${this.fullDate.format(start)} – ${this.fullDate.format(end)}${partial}`;
-      const values = this.series.map(item => {
+      const state = future ? 'Upcoming' : pending ? 'Loading' : partial ? 'Partial' : '';
+      const values = [], rows = [];
+      if (!future) for (const item of this.series) {
         const point = item.points[index];
-        return `${label(item)}: ${point ? shown(point) + (pending ? ' (so far)' : '') : pending ? '—' : 'Unavailable'}`;
-      });
-      const heading = pending && this.initial ? `${time} · Loading` : time;
-      this.tooltip.replaceChildren(e('strong', heading), ...values.map(value => e('div', value)));
+        const value = point ? shown(point) + (pending ? ' (so far)' : '') : pending ? '—' : 'Unavailable';
+        const name = label(item), row = e('div', undefined, 'account-timeline-tip-row');
+        const text = e('span', name, 'account-timeline-tip-name');
+        text.title = name;
+        row.append(swatch(this.colors.get(item.id)), text, e('span', value));
+        rows.push(row);
+        values.push(`${name}: ${value}`);
+      }
+      ReportView.text(this.tipTitle, heading);
+      ReportView.text(this.tipState, state);
+      if (this.tipValues.hidden || !rows.length) this.tipValues.scrollTop = 0;
+      this.tipValues.hidden = !rows.length;
+      this.tipValues.replaceChildren(...rows);
       this.positionTip();
-      if (announce) ReportView.text(this.announce, [heading, ...values].join('. '));
+      if (announce) ReportView.text(this.announce, [heading, state, ...values].filter(Boolean).join('. '));
     }
 
+    positionOverlays() {
+      if (!this.visible) return;
+      this.positionTip();
+      if (!this.panel.matches(':popover-open')) return;
+      const anchor = this.chooser.getBoundingClientRect(), screen = viewport();
+      const below = screen.bottom - anchor.bottom - 6, above = anchor.top - screen.top - 6;
+      const openBelow = below >= 140 || below >= above;
+      this.panel.style.maxHeight = `${Math.max(0, Math.min(360, openBelow ? below : above))}px`;
+      this.panel.style.maxWidth = `${screen.right - screen.left}px`;
+      this.panel.style.left = `${clamp(anchor.right - this.panel.offsetWidth, screen.left, screen.right - this.panel.offsetWidth)}px`;
+      this.panel.style.top = `${openBelow ? anchor.bottom + 6 : anchor.top - 6 - this.panel.offsetHeight}px`;
+    }
     positionTip() {
-      if (!this.view?.buckets[this.bucket] || this.frame.hidden) return;
-      const center = this.x(this.bucket) + this.group / 2 - this.scroller.scrollLeft;
-      this.tooltip.hidden = center < 0 || center > this.scroller.clientWidth;
+      const index = this.indexOf(this.shownKey);
+      if (index === undefined || this.frame.hidden) return;
+      const cell = this.targets.children[index].getBoundingClientRect();
+      const clip = this.scroller.getBoundingClientRect(), frame = this.frame.getBoundingClientRect(), screen = viewport();
+      const left = Math.max(screen.left, clip.left, cell.left), right = Math.min(screen.right, clip.right, cell.right);
+      this.tooltip.hidden = right <= left || cell.bottom <= screen.top || cell.top >= screen.bottom;
       if (this.tooltip.hidden) return;
-      const offset = this.scroller.offsetLeft + center;
-      this.tooltip.style.left = `${Math.max(0, Math.min(this.frame.clientWidth - this.tooltip.offsetWidth,
-        offset - this.tooltip.offsetWidth / 2))}px`;
-      this.tooltip.classList.toggle('below', this.frame.getBoundingClientRect().top < this.tooltip.offsetHeight + 12);
+      const low = Math.max(screen.left, clip.left), high = Math.min(screen.right, frame.right);
+      this.tooltip.style.setProperty('--tip-room', `${high - low}px`);
+      this.tipValues.style.maxHeight = `${Math.max(28, Math.min(140, screen.bottom - screen.top - 60))}px`;
+      const width = this.tooltip.offsetWidth, height = this.tooltip.offsetHeight;
+      // Keep the controls and ticks clear. Prefer the space beside the
+      // inspected slot so that its bars and loading cue remain visible.
+      const anchor = right + 6 + width <= high ? right + 6 : left - 6 - width;
+      const x = clamp(anchor, low, high - width);
+      const y = clamp(frame.top + 8, screen.top, Math.min(screen.bottom, cell.bottom - 23) - height);
+      this.tooltip.style.left = `${x}px`;
+      this.tooltip.style.top = `${y}px`;
     }
   }
   return {View, visibleScale};

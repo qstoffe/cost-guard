@@ -47,42 +47,65 @@ class TimelineBucketsTests(unittest.TestCase):
                                           '02:00+01:00', '03:00+01:00', '04:00+01:00')),
         ):
             with self.subTest(now=now):
-                start, buckets, partial = timeline_window('today', stamp(now), 'Europe/Stockholm')
+                window = timeline_window('today', stamp(now), 'Europe/Stockholm')
                 left = [stamp(now[:11] + item) for item in expected]
-                self.assertEqual(left[0], start)
-                self.assertEqual(list(zip(left, [*left[1:], stamp(now)])), list(buckets))
-                self.assertEqual((len(left) - 1,), partial)
+                self.assertEqual(left[0], window.start)
+                self.assertEqual(tuple(zip(left, [*left[1:], stamp(now)])), window.buckets)
+                self.assertEqual((len(left) - 1,), window.partial)
 
-    def test_rolling_cutoffs_are_absolute_and_keep_partial_calendar_edges(self):
+    def test_seven_days_is_still_rolling_with_partial_calendar_edges(self):
         now = stamp('2026-11-01T11:25:00+01:00')
-        for period, days in (('7-days', 7), ('30-days', 30)):
-            start, buckets, partial = timeline_window(period, now, 'Europe/Stockholm')
-            self.assertEqual(now - days * DAY_MS, start)
-            self.assertEqual(days + 1, len(buckets))
-            self.assertEqual(stamp('2026-11-01T00:00:00+01:00'), buckets[-1][0])
-            self.assertEqual(now, buckets[-1][1])
-            self.assertEqual((0, len(buckets) - 1), partial)
-        _, buckets, _ = timeline_window('7-days', now, 'Europe/Stockholm')
-        self.assertEqual(stamp('2026-10-26T00:00:00+01:00'), buckets[0][1])
+        window = timeline_window('7-days', now, 'Europe/Stockholm')
+        self.assertEqual(now - 7 * DAY_MS, window.start)
+        self.assertEqual(8, len(window.buckets))
+        self.assertEqual((stamp('2026-11-01T00:00:00+01:00'), now), window.buckets[-1])
+        self.assertEqual((0, 7), window.partial)
+        self.assertEqual(stamp('2026-10-26T00:00:00+01:00'), window.buckets[0][1])
+        midnight = stamp('2027-01-01T00:00:00+00:00')
+        window = timeline_window('7-days', midnight, 'UTC')
+        self.assertEqual((stamp('2026-12-31T00:00:00+00:00'), midnight), window.buckets[-1])
+        self.assertEqual((), window.partial)
 
-    def test_calendar_buckets_span_leap_day_and_year_rollover_without_future_dates(self):
-        start, days, partial = timeline_window('month', stamp('2028-02-29T13:00:00+00:00'), 'UTC')
-        self.assertEqual(stamp('2028-02-01T00:00:00+00:00'), start)
-        self.assertEqual(29, len(days))
-        self.assertEqual((stamp('2028-02-29T00:00:00+00:00'), stamp('2028-02-29T13:00:00+00:00')), days[-1])
-        self.assertEqual((28,), partial)
-        now = stamp('2027-01-01T00:00:00+00:00')
-        _, dates, partial = timeline_window('7-days', now, 'UTC')
-        self.assertEqual((stamp('2026-12-31T00:00:00+00:00'), now), dates[-1])
-        self.assertEqual((), partial)
+    def test_thirty_days_includes_today_and_exactly_29_prior_dates(self):
+        now = stamp('2026-11-20T00:45:00+01:00')
+        window = timeline_window('30-days', now, 'Europe/Stockholm')
+        self.assertEqual(stamp('2026-10-22T00:00:00+02:00'), window.start)
+        self.assertEqual(tuple([f'2026-10-{day}' for day in range(22, 32)] +
+                               [f'2026-11-{day:02}' for day in range(1, 21)]), window.dates)
+        self.assertEqual((stamp('2026-11-20T00:00:00+01:00'), now), window.buckets[-1])
+        self.assertEqual((29,), window.partial)
+        self.assertEqual((), window.future)
 
-    def test_daily_buckets_cover_both_dst_day_lengths_without_changing_rolling_cutoff(self):
+    def test_month_axis_reserves_each_local_date_at_first_paint_and_midnight_rollover(self):
+        for day, count, current in (('2026-11-01', 30, 0), ('2026-11-02', 30, 1), ('2026-11-20', 30, 19),
+                                     ('2027-01-02', 31, 1), ('2027-02-02', 28, 1), ('2028-02-02', 29, 1),
+                                     ('2028-02-29', 29, 28), ('2028-03-01', 31, 0)):
+            with self.subTest(day=day):
+                now = stamp(f'{day}T00:00:00+01:00')
+                window = timeline_window('month', now, 'Europe/Stockholm')
+                self.assertEqual(tuple(f'{day[:7]}-{number:02}' for number in range(1, count + 1)), window.dates)
+                self.assertEqual(count, len(window.buckets))
+                self.assertEqual((now, now), window.buckets[current])
+                self.assertEqual((current,), window.partial)
+                self.assertEqual(tuple(range(current + 1, count)), window.future)
+
+    def test_today_keeps_an_empty_current_hour_on_an_exact_clock_boundary(self):
+        now = stamp('2026-10-25T02:00:00+01:00')
+        window = timeline_window('today', now, 'Europe/Stockholm')
+        self.assertEqual(4, len(window.buckets))
+        self.assertEqual((stamp('2026-10-25T02:00:00+02:00'), now), window.buckets[-2])
+        self.assertEqual((now, now), window.buckets[-1])
+        self.assertEqual((3,), window.partial)
+
+    def test_calendar_and_rolling_buckets_cover_both_dst_day_lengths(self):
         for now, date, hours in (('2026-03-30T12:00:00+02:00', '2026-03-29', 23),
                                  ('2026-10-26T12:00:00+01:00', '2026-10-25', 25)):
             with self.subTest(date=date):
-                start, buckets, _ = timeline_window('7-days', stamp(now), 'Europe/Stockholm')
-                self.assertEqual(stamp(now) - 7 * DAY_MS, start)
-                self.assertEqual(hours * 3_600_000, buckets[-2][1] - buckets[-2][0])
+                for period in ('7-days', '30-days', 'month'):
+                    window = timeline_window(period, stamp(now), 'Europe/Stockholm')
+                    index = window.dates.index(date) if window.dates else -2
+                    left, right = window.buckets[index]
+                    self.assertEqual(hours * 3_600_000, right - left)
 
 
 class TimelineProjectionTests(unittest.TestCase):
@@ -96,7 +119,7 @@ class TimelineProjectionTests(unittest.TestCase):
         calls = (request('one', NOV_1 + 5, amount=50_000, ref=native.ref),
                  request('two', NOV_1 + 2 * DAY_MS, amount=12_000, ref=native.ref))
         series = self.view(projected(native), calls, gaps=((NOV_1 + 3 * DAY_MS, NOV_5),))
-        expected = ['50000', '0', '12000', None, None]
+        expected = ['50000', '0', '12000', None, None] + [None] * 25
         self.assertEqual(expected, [p['amount'] if p else None for p in series[0]['points']])
         self.assertEqual(series[0]['points'], series[1]['points'])
         self.assertEqual([True, False], [row['primary'] for row in series])
@@ -109,8 +132,8 @@ class TimelineProjectionTests(unittest.TestCase):
                  request('unpriced', NOV_1 + 2 * DAY_MS, amount=700, ref=b.ref, model='missing'))
         rows = self.view(projected(a, b), calls, value=lambda model, tokens:
             None if model.model == 'missing' else Decimal(tokens.input))
-        self.assertEqual(['500', None, '0', '0', '0'], [p['amount'] if p else None for p in rows[0]['points']])
-        self.assertEqual(['0', None, None, '0', '0'], [p['amount'] if p else None for p in rows[2]['points']])
+        self.assertEqual(['500', None, '0', '0', '0'], [p['amount'] if p else None for p in rows[0]['points'][:5]])
+        self.assertEqual(['0', None, None, '0', '0'], [p['amount'] if p else None for p in rows[2]['points'][:5]])
         unknown = self.view(projected(a), (), start=None)
         self.assertTrue(all(p is None for p in unknown[0]['points']))
 
@@ -126,7 +149,7 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(['weekly', '5-hour', 'Model weekly'], [row['quota'] for row in series])
         self.assertEqual(['22', '22', '9'], [row['points'][0]['amount'] for row in series])
         self.assertEqual(['~$0.22', '~$0.22', '$0.09'], [row['points'][0]['display']['usd'] for row in series])
-        self.assertEqual(['0', '0', '0'], [row['points'][-1]['amount'] for row in series])
+        self.assertEqual(['0', '0', '0'], [row['points'][4]['amount'] for row in series])
 
     def test_partial_observation_retains_compatible_quota_but_real_change_retires_it(self):
         native = subscription()
@@ -157,13 +180,46 @@ class TimelineProjectionTests(unittest.TestCase):
                                first_covered_ms=NOV_1, gaps=permanent, pending=pending).to_json()
         self.assertEqual([1, 3], result['pending_buckets'])
         self.assertEqual(['$0.00', '~$1.00', None, None, '$0.00'],
-                         [point['display']['usd'] if point else None for point in result['series'][0]['points']])
+                         [point['display']['usd'] if point else None for point in result['series'][0]['points'][:5]])
 
     def test_missing_valuation_can_settle_without_zero_or_loading(self):
         result = timeline_view('month', NOV_5, 'UTC', quota_roster(projected(subscription())), None,
                                first_covered_ms=NOV_1, gaps=()).to_json()
         self.assertEqual([], result['pending_buckets'])
-        self.assertEqual([None] * 5, result['series'][0]['points'])
+        self.assertEqual([None] * 30, result['series'][0]['points'])
+
+    def test_future_slots_never_query_the_index_or_acquire_history(self):
+        native = subscription()
+        first = NOV_1 + DAY_MS
+        now = first + 100
+        calls = []
+        index = PeriodCCostIndex((), lambda *_: Decimal(1), verified_models=True)
+        cost = index.cost
+
+        def observed_cost(route, account, left, right, model=None):
+            calls.append((left, right))
+            return cost(route, account, left, right, model)
+
+        index.cost = observed_cost
+        view = timeline_view('month', now, 'UTC', quota_roster(projected(native)), index,
+                             first_covered_ms=NOV_1, gaps=(), pending=((now, now + DAY_MS),)).to_json()
+        self.assertEqual({(NOV_1, first), (first, now)}, set(calls))
+        self.assertEqual(now, view['end_ms'])
+        self.assertEqual(list(range(2, 30)), view['future_buckets'])
+        self.assertEqual([], view['pending_buckets'])
+        self.assertEqual([None] * 28, view['series'][0]['points'][2:])
+
+    def test_thirty_day_cost_boundaries_are_half_open_including_local_midnight(self):
+        first = stamp('2026-10-22T00:00:00+02:00')
+        second = stamp('2026-10-23T00:00:00+02:00')
+        now = stamp('2026-11-20T00:01:00+01:00')
+        account = subscription()
+        facts = tuple(request(str(at), at, amount=amount, ref=account.ref)
+                      for at, amount in ((first - 1, 700), (first, 1), (second, 2), (now - 1, 3), (now, 900)))
+        index = PeriodCCostIndex(facts, lambda _, tokens: Decimal(tokens.input), verified_models=True)
+        view = timeline_view('30-days', now, 'Europe/Stockholm', quota_roster(projected(account)), index,
+                             first_covered_ms=first - DAY_MS, gaps=()).to_json()
+        self.assertEqual(['1', '2'] + ['0'] * 27 + ['3'], [point['amount'] for point in view['series'][0]['points']])
 
 
 class TimelineDOMTests(unittest.TestCase):
