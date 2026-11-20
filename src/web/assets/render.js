@@ -553,20 +553,33 @@ const ReportView = (() => {
       });
       const wanted = [];
       for (const model of shown) {
-      const identity = JSON.stringify([model.publisher, model.model]);
-       const signature = JSON.stringify(model);
-      let entry = rows.get(identity);
-      if (!entry || entry.signature !== signature) {
-      const row = element('tr', undefined, (model.display_roles || []).filter(role => role !== 'superseded').join(' '));
-      row.setAttribute('role', 'row');
-      for (const value of [model.publisher || 'N/A', element('span', model.model, model.recent ? 'new' : ''),
-        modelRelative(model), element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
-        const cell = element('td'); cell.setAttribute('role', 'cell');
-        cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
-      }
-      entry = {row, signature}; rows.set(identity, entry);
-      }
-      wanted.push(entry.row);
+        const identity = JSON.stringify([model.publisher, model.model]);
+        const {category = null, ...rowData} = model;
+        const signature = JSON.stringify(rowData);
+        let entry = rows.get(identity);
+        if (!entry || entry.signature !== signature) {
+          const row = element('tr', undefined, (model.display_roles || []).filter(role => role !== 'superseded').join(' '));
+          row.setAttribute('role', 'row');
+          const name = element('span', model.model, model.recent ? 'new' : '');
+          for (const value of [model.publisher || 'N/A', name, modelRelative(model),
+            element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
+            const cell = element('td'); cell.setAttribute('role', 'cell');
+            cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
+          }
+          entry = {row, name, signature, category: null}; rows.set(identity, entry);
+        }
+        if (entry.category !== category) {
+          if (category) {
+            ContextHelp.value(entry.name, 'GitHub category: ' + category);
+          } else if (entry.category) {
+            ContextHelp.dismiss(entry.name);
+            const plainName = element('span', model.model, model.recent ? 'new' : '');
+            entry.name.parentNode.replaceChildren(plainName);
+            entry.name = plainName;
+          }
+          entry.category = category;
+        }
+        wanted.push(entry.row);
       }
       const keep = new Set(wanted);
       for (const row of [...body.children]) if (!keep.has(row)) row.remove();

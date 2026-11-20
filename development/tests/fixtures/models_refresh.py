@@ -66,10 +66,12 @@ def models_refresh_report(root, sender, request):
         if mode == 'invalid':
             return 'invalid upstream document'
         rate = 10 if mode == 'changed' else 1
-        rows = [f'GPT-Test | ${rate} | $0.1 | ${rate * 4}']
-        rows += [f'GPT-Other-{i} | $1 | $0.1 | $4' for i in range(4)]
-        return ('## OpenAI\nModel | Input | Cached input | Output\n'
-                '--- | --- | --- | ---\n' + '\n'.join(rows))
+        category = 'Lightweight' if mode == 'changed' else 'Powerful'
+        rows = [f'| GPT-Test | ${rate} | $0.1 | ${rate * 4} | {category} |']
+        rows += [f'| GPT-Other-{i} | $1 | $0.1 | $4 | {label} |'
+                 for i, label in enumerate(('Versatile', 'Lightweight', '', ''))]
+        return ('## OpenAI\nModel | Input | Cached input | Output | Category\n'
+                '--- | --- | --- | --- | ---\n' + '\n'.join(rows))
 
     def factory(now, progress):
         source = FakeSource()

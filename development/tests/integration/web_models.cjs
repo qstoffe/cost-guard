@@ -134,18 +134,48 @@ view.model_comparison_sample_size = sampleSize;
 const row = (model, selectable, superseded, superseded_selectable, ratios = ['1'], date = '2026-10-01') => ({...base,
   model, publisher: 'OpenAI', selectable, superseded, superseded_selectable, release_date: date,
   relative_cost: ratios[0], relative_levels: ratios.map(relative_cost => ({relative_cost})), display_roles: [], recent: false});
-view.model_catalog = {rows: [row('GPT-4.8', true, true, false), row('GPT-5', false, true, false),
-  row('GPT-5.5', false, false, false), row('GPT-5 mini', true, false, false),
+view.model_catalog = {rows: [{...row('GPT-4.8', true, true, false), category: 'Versatile'},
+  row('GPT-5', false, true, false), {...row('GPT-5.5', false, false, false), category: 'Powerful'},
+  {...row('GPT-5 mini', true, false, false), category: 'Lightweight'},
   row('GPT-6 preview', true, false, false), row('Ambiguous', true, false, false), row('Unknown', true, false, false, [null])],
   promotion_notes: [], recent_notices: []};
+const modelName = name => rows().find(row => row.children[1].textContent === name).children[1].children[0];
+const assertCategory = (name, label) => {
+  const trigger = modelName(name);
+  assert.equal(trigger.tabIndex, 0);
+  assert.equal(trigger.parentNode.events.focus, undefined, 'only the name is a help trigger');
+  assert.equal(helpText(trigger), 'GitHub category: ' + label);
+  trigger.events.blur();
+};
 state.models = undefined; draw();
 assert.deepEqual(names(), ['GPT-4.8', 'GPT-5 mini', 'GPT-6 preview', 'Ambiguous', 'Unknown']);
+assertCategory('GPT-4.8', 'Versatile');
+assertCategory('GPT-5 mini', 'Lightweight');
+assert.equal(modelName('Unknown').tabIndex, undefined);
+assert.equal(modelName('Unknown').events.focus, undefined);
 check(0, true);
 assert.deepEqual(names(), ['GPT-5.5', 'GPT-5 mini', 'GPT-6 preview', 'Ambiguous', 'Unknown']);
+assertCategory('GPT-5.5', 'Powerful');
+assertCategory('GPT-5 mini', 'Lightweight');
 check(1, false); assert.equal(rows().length, 7);
+assertCategory('GPT-4.8', 'Versatile');
 check(0, false); assert.equal(rows().length, 5);
 assert.ok(names().includes('GPT-4.8'));
 assert.ok(rows().every(row => !row.className?.includes('superseded')));
+const mini = modelName('GPT-5 mini');
+click('Model');
+assert.equal(modelName('GPT-5 mini'), mini, 'sorting retains the model’s physical trigger');
+assertCategory('GPT-5 mini', 'Lightweight');
+const retainedRoot = state.modelView.root, olderName = modelName('GPT-4.8');
+view.model_catalog.rows = view.model_catalog.rows.map(r => r.model === 'GPT-5 mini' ? {...r, category: 'Powerful'} : r);
+draw();
+assert.equal(state.modelView.root, retainedRoot);
+assert.equal(modelName('GPT-5 mini'), mini, 'category text can update without replacing the focused trigger');
+assert.equal(modelName('GPT-4.8'), olderName, 'category changes do not replace adjacent nodes');
+assertCategory('GPT-5 mini', 'Powerful');
+view.model_catalog.rows = view.model_catalog.rows.map(r => r.model === 'GPT-5 mini' ? {...r, category: null} : r);
+draw();
+assert.equal(modelName('GPT-5 mini').events.focus, undefined, 'removed category does not leave a stale trigger');
 
 // Exact decimals, later tiers BEFORE secondary keys, no threshold ranking, missing last.
 view.model_catalog.rows = [row('Z lower tier', true, false, false, ['8.00000000000000000001', '16']),

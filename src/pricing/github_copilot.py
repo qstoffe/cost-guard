@@ -147,6 +147,7 @@ def parse_pricing_markdown(markdown: str) -> tuple[ModelPricing, ...]:
     lines = markdown.splitlines()
     provider = ""
     models: dict[str, dict[str, object]] = {}
+    categories: dict[str, set[str | None]] = {}
     index = 0
     while index < len(lines):
         line = lines[index].strip()
@@ -185,9 +186,9 @@ def parse_pricing_markdown(markdown: str) -> tuple[ModelPricing, ...]:
             model = models.setdefault(key, {"name": name, "provider": row_provider, "tiers": [], "metadata": {}})
             metadata = model["metadata"]
             assert isinstance(metadata, dict)
-            for source, target in (("release status", "release_status"), ("category", "category")):
-                if row.get(source):
-                    metadata[target] = row[source]
+            if row.get("release status"):
+                metadata["release_status"] = row["release status"]
+            categories.setdefault(key, set()).add(row.get("category") or None)
             min_tokens, max_tokens = _parse_threshold(row.get("threshold (input tokens)"))
             tiers = model["tiers"]
             assert isinstance(tiers, list)
@@ -208,6 +209,9 @@ def parse_pricing_markdown(markdown: str) -> tuple[ModelPricing, ...]:
     result: list[ModelPricing] = []
     for key, value in models.items():
         metadata = dict(value["metadata"])
+        # A category describes the model, not an individual rate tier.
+        if len(categories[key]) == 1 and (category := next(iter(categories[key]))) is not None:
+            metadata["category"] = category
         metadata["key"] = key
         metadata["publisher"] = str(value["provider"])
         tiers = tuple(sorted(value["tiers"], key=lambda tier: tier.min_input_tokens or 0))
@@ -275,7 +279,8 @@ def _model_from_dict(value: dict[str, object]) -> ModelPricing:
         currency=str(value.get("currency") or "USD"),
         per_million_input=first.per_million_input, per_million_cache_read=first.per_million_cache_read,
         per_million_cache_write=first.per_million_cache_write, per_million_output=first.per_million_output,
-        tiers=tiers, metadata={str(k): str(v) for k, v in dict(value.get("metadata") or {}).items()},
+        tiers=tiers, metadata={str(k): str(v) for k, v in dict(value.get("metadata") or {}).items()
+                               if k != "category" or isinstance(v, str)},
     )
 
 

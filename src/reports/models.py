@@ -237,6 +237,7 @@ class ModelComparisonProjection:
     evidence: MixEvidence = MixEvidence()
     promotion: ModelPromotion | None = None
     price_help: str = ''
+    category: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

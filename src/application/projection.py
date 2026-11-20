@@ -199,7 +199,7 @@ def model_rows(items, selectable=None):
     selected_faded = {(selected[index].publisher, selected[index].model)
                       for index in superseded_rows([(item.publisher, item.model) for item in selected])}
     for index, item in enumerate(items):
-        base = fields(item, "publisher model relative_cost price_summary price_help release_date promotional recent promotion_marker")
+        base = fields(item, "publisher model category relative_cost price_summary price_help release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
             "model description through resumes price_comparison") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),

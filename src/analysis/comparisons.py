@@ -36,6 +36,7 @@ class ModelComparisonRow:
     promotional: bool = False
     relative_levels: tuple[RelativePriceLevel, ...] = ()
     evidence: MixEvidence = MixEvidence()
+    category: str | None = None
 
 
 
@@ -64,6 +65,7 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
         unit = units[0]
         if comparable and unit is None and not include_uncomparable:
             continue  # Preserve the observed-mix comparable-model selection.
+        category = model.metadata.get("category", "").strip() if model.model.provider == "github-copilot" else ""
         # Normalize the shared observed mix to one million tokens.  The absolute
         # number is diagnostic only; relative ordering is the important contract.
         rows.append(ModelComparisonRow(
@@ -74,6 +76,7 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
             release_date=model.metadata.get("release_date"),
             promotional=str(model.metadata.get("promotion_active", "false")).lower() == "true",
             evidence=MixEvidence(generic_prior_weight=0, global_prompts=mix[4]),
+            category=category if 0 < len(category) <= 64 and category.isprintable() else None,
         ))
         scores.append(units)
         bounds.append(tuple(None if index == 0 else lower_bound(tier, tiers[index - 1])
