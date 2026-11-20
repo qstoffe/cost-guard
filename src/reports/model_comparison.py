@@ -93,7 +93,7 @@ def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository, pro
             row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
             markers.get(row.model_name), row.relative_levels, row.evidence,
             web_model_promotion(catalog.resolve_reference(row.model_name), now_ms),
-            price_help(catalog, row.model_name),
+            price_help(catalog, row.model_name), category=row.category,
         ))
         if progress is not None:
             progress(index + 1, len(candidates))

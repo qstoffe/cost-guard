@@ -433,7 +433,7 @@ class ReportService:
                 row.relative_levels,
                 row.evidence,
                 active_model_promotion(comparison_catalog.resolve_reference(row.model_name), self.now_ms),
-                price_help(comparison_catalog, row.model_name),
+                price_help(comparison_catalog, row.model_name), category=row.category,
             ))
             self.progress(WorkProgress("Comparing model prices", "projection", index + 1, len(candidates), stage="comparison"))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)

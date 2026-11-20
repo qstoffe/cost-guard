@@ -1,4 +1,5 @@
 """Strict upstream provenance, coherent repricing and Web-only job isolation."""
+from dataclasses import replace
 from decimal import Decimal
 import json
 from multiprocessing.reduction import ForkingPickler
@@ -8,12 +9,16 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
+from development.tests.fixtures.model_views import model_report
 from development.tests.fixtures.report_runtime import FakeSource
+from src.application.projection import project
 from src.cache import CacheDatabase, CacheRepository
 from src.pricing.base import PricingUnavailableError
+from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import (CACHE_KEY, CACHE_NAMESPACE, DOCS_API_BODY,
     PRICING_ARTICLE_PATH, GitHubCopilotPricingProvider)
 from src.reports import ReportRequest, ReportService
+from src.reports.model_comparison import web_model_catalog
 from src.sources.selection import SourceSelection
 from src.web.composition import application
 from src.web.jobs import ModelsPriceRefresh, ReportJobs
@@ -90,6 +95,65 @@ class PriceRefreshTests(unittest.TestCase):
 
         self.assertFalse(verified.reference_stale)
         self.assertEqual(original.analysis_signature, verified.analysis_signature)
+
+    def test_published_categories_stay_with_model_and_agree_across_tiers(self):
+        document = """## OpenAI
+| Model | Input | Cached input | Output | Cache write | Category | Threshold (input tokens) |
+| --- | --- | --- | --- | --- | --- | --- |
+| GPT-Test | $1 | $0.1 | $4 | $1.25 | Powerful | ≤ 200K |
+| GPT-Test | $2 | $0.2 | $8 | $2.50 | Powerful | > 200K |
+| GPT-Test Mini | $1 | $0.1 | $4 | $1.25 | Lightweight | |
+| GPT-Test Plus | $1 | $0.1 | $4 | $1.25 | Versatile | |
+| GPT-Conflict | $1 | $0.1 | $4 | $1.25 | Powerful | ≤ 200K |
+| GPT-Conflict | $2 | $0.2 | $8 | $2.50 | Versatile | > 200K |
+| GPT-Legacy | $1 | $0.1 | $4 | $1.25 | | |
+| GPT-Future | $1 | $0.1 | $4 | $1.25 | Future Tier | |
+| GPT-Long | $1 | $0.1 | $4 | $1.25 | CATEGORY_TOO_LONG | |
+| GPT-Control | $1 | $0.1 | $4 | $1.25 | A\u202eB | |
+"""
+        self.fetch.return_value = document.replace("CATEGORY_TOO_LONG", "A" * 65)
+        expected = {"GPT-Test": "Powerful", "GPT-Test Mini": "Lightweight", "GPT-Test Plus": "Versatile",
+                    "GPT-Conflict": None, "GPT-Legacy": None, "GPT-Future": "Future Tier",
+                    "GPT-Long": None, "GPT-Control": None}
+
+        fetched = self.provider.refresh_catalog()
+
+        self.fetch.assert_called_once_with(DOCS_API_BODY + PRICING_ARTICLE_PATH, 20)
+        cached_categories = {**expected, "GPT-Long": "A" * 65, "GPT-Control": "A\u202eB"}
+        self.assertEqual(cached_categories, {
+            model.model.display_name: model.metadata.get("category") for model in fetched.models})
+        cache = self.cache.get(CACHE_NAMESPACE, CACHE_KEY).payload
+        self.assertEqual(cached_categories, {
+            model["display"]: model["metadata"].get("category") for model in cache["models"]})
+
+        def web_rows(catalog):
+            selected = PricingCatalog((catalog.resolve_reference("GPT-Test"),))
+            projection = web_model_catalog((), catalog, selected, now_ms=self.now, cache_repository=None)
+            view = project(replace(model_report(), model_catalog=projection)).to_json()
+            return {row["model"]: row for row in view["model_catalog"]["rows"]}
+
+        offline = Mock(side_effect=OSError("offline"))
+        reader = GitHubCopilotPricingProvider(cache=self.cache, fetch_text=offline, now_ms=lambda: self.now,
+                                             defer_metadata_refresh=True)
+        warm = reader.get_catalog()
+        offline.assert_not_called()
+        stale = reader.get_catalog(force=True)
+        self.assertTrue(stale.reference_stale)
+        for catalog in (fetched, warm, stale):
+            with self.subTest(stale=catalog.reference_stale, from_cache=catalog is not fetched):
+                rows = web_rows(catalog)
+                self.assertEqual(expected, {name: row["category"] for name, row in rows.items()})
+                self.assertEqual(["GPT-Test"], [name for name, row in rows.items() if row["selectable"]])
+                self.assertEqual(2, len(rows["GPT-Test"]["relative_levels"]))
+                self.assertEqual(2, len(rows["GPT-Conflict"]["relative_levels"]))
+                self.assertIsNotNone(rows["GPT-Legacy"]["relative_cost"])
+
+        self.fetch.reset_mock()
+        self.fetch.return_value = self.fetch.return_value.replace("| Powerful |", "| Lightweight |", 2)
+        refreshed = self.provider.refresh_catalog()
+        self.fetch.assert_called_once_with(DOCS_API_BODY + PRICING_ARTICLE_PATH, 20)
+        self.assertEqual(fetched.analysis_signature, refreshed.analysis_signature)
+        self.assertEqual("Lightweight", web_rows(refreshed)["GPT-Test"]["category"])
 
     def test_isolated_refresh_rebuilds_fixed_prices_without_history_accounts_or_watch_repricing(self):
         pinned_watch = self.provider.get_catalog()
