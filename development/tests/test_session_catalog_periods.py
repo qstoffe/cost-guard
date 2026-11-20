@@ -371,7 +371,7 @@ class SessionPeriodTests(unittest.TestCase):
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         self.assertEqual(catalog.page(token=page["token"])["total"], 1)
 
-    def test_verified_older_page_keeps_snapshot_and_counts_live_qualification_without_population(self):
+    def test_verified_older_page_revisit_reads_only_visible_facts_without_population(self):
         source, catalog = self.catalog([self.now - 1000] * 51)
         self.qualify(catalog)
         options = dict(period="7-days", sort="ccost", direction=1)
@@ -385,12 +385,17 @@ class SessionPeriodTests(unittest.TestCase):
             explicit = catalog_page(catalog, dict(older, applied=1, navigation=2))
             pinned = catalog_page(catalog, dict(older, applied=2))
 
+        self.assertFalse(explicit["page_reused"])
+        self.assertTrue(pinned["page_reused"])
+        self.assertEqual((explicit["indexed"], explicit["available"], explicit["total"]), (50, 51, 51))
+        self.assertEqual((pinned["indexed"], pinned["available"], pinned["total"]), (25, 51, 51))
         for page in (explicit, pinned):
-            self.assertEqual((page["indexed"], page["available"], page["total"]), (50, 51, 51))
             self.assertFalse(page["pending_sort"])
             rows = page["view"]["session_usage"]
             self.assertEqual([row["session_id"] for row in rows], [f"root-{i:04d}" for i in range(25, 50)])
-            self.assertTrue(all(row["metric_state"] == "snapshot" and row["snapshot_revision"] for row in rows))
+        self.assertTrue(all(row["metric_state"] == "snapshot" and row["snapshot_revision"]
+                            for row in explicit["view"]["session_usage"]))
+        self.assertTrue(all(row["metric_state"] == "ready" for row in pinned["view"]["session_usage"]))
         self.assertEqual(source.load_count, 0)
 
     def test_period_and_direction_qualified_epochs_and_independent_lease_union(self):

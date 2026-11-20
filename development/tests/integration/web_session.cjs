@@ -404,7 +404,7 @@ async function main() {
       assert.equal(requests.length,2);
       assert.equal(requests[1].token,null); assert.equal(requests[1].offset,0);
        assert.equal(requests[1].sort,'ccost'); assert.equal(requests[1].direction,direction);
-      assert.equal(catalog.offset,0); assert.equal(catalog.epoch,'new-epoch');
+       assert.equal(catalog.offset,0); assert.equal(catalog.data.epoch,'new-epoch');
        assert.equal(context.location.hash,`#/sessions?period=today&sort=ccost&direction=${direction}`);
        assert.match(catalog.label.textContent,/Page 1 of 2/);
        assert.equal(catalog.status.textContent,'','successful lease recovery has no live-region announcement');

@@ -84,7 +84,7 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
     await run(`location.hash='#/sessions?sort=ccost&direction=1&offset=${offset}&epoch=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'`);
     await ready(`current.catalog?.offset===${offset} && !current.catalog.busy`);
     await run(`expireCatalog=true;current.catalog.load()`);
-   assert.equal(await run(`current.catalog.offset===0 && current.catalog.epoch==='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' && location.hash==='#/sessions?period=today&sort=ccost&direction=1'`),true);
+    assert.equal(await run(`current.catalog.offset===0 && current.catalog.data.epoch==='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' && location.hash==='#/sessions?period=today&sort=ccost&direction=1'`),true);
     await audit();
     await run(`window.quietRow=current.catalog.body.firstChild;window.quietCell=quietRow.cells[3].firstChild;
       quietRow.querySelector('a').focus();window.quietFocus=document.activeElement;window.quietScroll=scrollY`);

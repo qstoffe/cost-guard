@@ -555,9 +555,11 @@ function navigate() {
     current.detailFocus = current.detail.root.contains(document.activeElement) ? document.activeElement : null;
   }
   if (current?.detail) current.detail.detach();
-  if (current?.catalog) current.catalog.detach();
   current = views.get(key);
-  if (current !== previous) previous?.accountTimeline?.active(false);
+  if (current !== previous) {
+    previous?.catalog?.detach();
+    previous?.accountTimeline?.active(false);
+  }
   // A requested report (including bounded admission backoff) belongs to its view,
   // not the active route. Navigation never abandons it or starts another attempt.
   if (current.section === 'ai-stats') {

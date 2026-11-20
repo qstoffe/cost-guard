@@ -43,7 +43,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   };
   await route('today');
   await fixture('warm-pending');
-  await until('current.catalog.data.order_state==="provisional"');
+  await until('current.catalog.data.page_reused && current.catalog.data.progress.revalidating > 0');
   assert.deepEqual(await evaluate('warmFlickers'),[]);
   assert.equal(await evaluate('current.catalog.body.rows[0].dataset.id'),'root-0000');
   assert.equal(await evaluate('current.catalog.status.hidden'),true);
@@ -104,7 +104,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   const final=await fixture('warm-observe');
   assert.equal(final.reads['root-0002'],1);
   return {checks:['60 warm header clicks: all seven columns/both directions, no banner/read/scalar admission',
-    '48 candidates/46 Today matches; quiet provisional activity retains old start-only row on page two',
+    '48 candidates/46 Today matches; quiet verified order retains old start-only row on page two',
     'exact single-star local timestamp and hover/focus/touch help; frozen page-two membership',
     '7-days/All time, rapid supersession; real finish waits with legitimate banner then retires Running'],
     measurements:{timings,http:await evaluate('warmReplies'),baseline,after,final}};

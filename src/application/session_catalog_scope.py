@@ -1,6 +1,7 @@
 """Cheap catalog membership and immutable server-issued period windows."""
 from bisect import bisect_left
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import dataclass, field
 
 from src.analysis.ai_stats import windows
 
@@ -29,6 +30,13 @@ class CatalogEpoch:
     window: CatalogWindow
     provisional: bool = False
     facts: tuple = ()
+    served: OrderedDict = field(default_factory=OrderedDict, compare=False, repr=False)
+
+    def remember_page(self, offset):
+        self.served[offset] = None
+        self.served.move_to_end(offset)
+        if len(self.served) > 32:
+            self.served.popitem(last=False)
 
 
 def catalog_window(period, timezone_id, now_ms):
