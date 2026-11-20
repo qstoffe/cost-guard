@@ -50,6 +50,7 @@ class TraceEntry:
     root_session_id: str | None = None  # Acquisition tree; independent siblings are not fork clones.
     invocation_id: str | None = None  # Canonical physical request, private to analysis/cache.
     parent_session_id: str | None = None  # Proven membership in the acquisition tree.
+    reported_cost_currency: str | None = None
 
     @property
     def request_input_approx(self) -> int:

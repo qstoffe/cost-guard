@@ -127,20 +127,24 @@ class PeriodCCostIndex:
     """Value once per history publication; moving windows query prefix sums, no rescans."""
 
     def __init__(self, entries: Iterable[TraceEntry], valuation: ReferenceValuation, *,
-                 account_only: bool = False) -> None:
+                 account_only: bool = False, timeline_valuation=None, timeline_accounts=()) -> None:
         self._series: dict[tuple, _Series] = {}
         self.earliest_ms = None
-        for entry in unique_usage(entries):
-            if account_only and entry.completed_at_ms <= 0:
-                continue
+        canonical = tuple(entry for entry in unique_usage(entries) if _eligible(entry, account_only))
+        clues = _account_clues(canonical, timeline_accounts)
+        values = (timeline_valuation(canonical) if timeline_valuation is not None
+                  else (comparison_cost((entry,), valuation) for entry in canonical))
+        for entry, value in zip(canonical, values):
             provider = usage_provider(entry.model.provider)
-            if provider == 'claude-agent' and (entry.cost_disposition is CostDisposition.BILLED
-                    or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'):
-                continue  # Explicit API/foreign-account proof must not become a Pro estimate.
+            if timeline_valuation is not None and not provider and entry.account_ref is not None:
+                provider = usage_provider(entry.account_ref.provider_id)
             account = entry.account_ref.key if entry.account_ref else None
+            if account is None:
+                account = clues.get((entry.source_instance, entry.session_id, provider))
+                if account is not None:
+                    value = replace(value, source_complete=False)
             if self.earliest_ms is None and entry.completed_at_ms > 0:
                 self.earliest_ms = entry.completed_at_ms
-            value = comparison_cost((entry,), valuation)
             scopes = (None,) if account_only else (None, canonical_model_name(entry.model.model))
             for identity in ("provider", account):
                 for scope in scopes:
@@ -156,3 +160,25 @@ class PeriodCCostIndex:
         model = canonical_model_name(model_id) if model_id else None
         series = self._series.get((usage_provider(provider), identity, model))
         return series.between(start, end) if series else ComparisonCost()
+
+
+def _eligible(entry, account_only):
+    if account_only and entry.completed_at_ms <= 0:
+        return False
+    # Explicit API/foreign-account proof must not become a Pro estimate.
+    return not (usage_provider(entry.model.provider) == 'claude-agent' and (
+        entry.cost_disposition is CostDisposition.BILLED
+        or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'))
+
+
+def _account_clues(entries, candidates):
+    """A unique same-source, same-route account in the same session is a clue."""
+    if not candidates:
+        return {}
+    refs = {}
+    for entry in entries:
+        if entry.source_instance and entry.model.provider and entry.account_ref is not None:
+            group = entry.source_instance, entry.session_id, usage_provider(entry.model.provider)
+            refs.setdefault(group, set()).add(entry.account_ref.key)
+    return {group: account for group, accounts in refs.items() if len(accounts) == 1
+            for account in accounts if (group[2], account) in candidates}

@@ -14,10 +14,12 @@ from development.tests.fixtures.opencode_v2_service import source_with_current_s
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.analysis.account_timeline import DAY_MS, timeline_window
+from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import account_roster, retain_refresh, timeline_view
+from src.application.account_timeline import account_roster, timeline_view
 from src.application.session_quota import source_scope
-from src.domain import QuotaComponent
+from src.domain import ModelPricing, ModelRef, PricingTier, QuotaComponent, TokenUsage
+from src.pricing.catalog import PricingCatalog
 from src.reports.models import AccountProjection
 from src.sources.errors import SourceConcurrentChangeError
 from src.sources.opencode_v2 import OpenCodeV2Source
@@ -110,8 +112,12 @@ class TimelineBucketsTests(unittest.TestCase):
 
 
 class TimelineProjectionTests(unittest.TestCase):
-    def view(self, accounts, entries, *, gaps=(), start=NOV_1, value=None, now=NOV_5):
-        index = PeriodCCostIndex(entries, value or (lambda _, tokens: Decimal(tokens.input)), account_only=True)
+    def view(self, accounts, entries, *, gaps=(), start=NOV_1, value=None, now=NOV_5, catalog=None, previous=None):
+        roster = account_roster(accounts)
+        options = {} if catalog is None else dict(timeline_valuation=TimelineValuation(catalog, previous),
+            timeline_accounts={(route, item.account_key) for item in roster for route, _ in item.allocation})
+        index = PeriodCCostIndex(entries, value or (lambda _, tokens: Decimal(tokens.input)),
+                                 account_only=True, **options)
         return timeline_view('month', now, 'UTC', account_roster(accounts), index,
                              first_covered_ms=start, gaps=gaps).to_json()['series']
 
@@ -133,10 +139,80 @@ class TimelineProjectionTests(unittest.TestCase):
                  request('unpriced', NOV_1 + 2 * DAY_MS, amount=700, ref=b.ref, model='missing'))
         rows = self.view(projected(a, b), calls, value=lambda model, tokens:
             None if model.model == 'missing' else Decimal(tokens.input))
-        self.assertEqual(['500', None, '0', '0', '0'], [p['amount'] if p else None for p in rows[0]['points'][:5]])
-        self.assertEqual(['0', None, None, '0', '0'], [p['amount'] if p else None for p in rows[1]['points'][:5]])
+        self.assertEqual(['500', '150', '0', '0', '0'], [p['amount'] if p else None for p in rows[0]['points'][:5]])
+        self.assertEqual(['0', '150', None, '0', '0'], [p['amount'] if p else None for p in rows[1]['points'][:5]])
+        self.assertEqual('~150', rows[0]['points'][1]['display']['credits'])
         unknown = self.view(projected(a), (), start=None)
         self.assertTrue(all(p is None for p in unknown[0]['points']))
+
+    def test_priced_subtotal_survives_missing_price_provider_and_coverage(self):
+        account = subscription()
+        calls = (request('priced', NOV_1 + 1, amount=47, ref=account.ref),
+                 request('unpriced', NOV_1 + 2, amount=60, ref=account.ref, model='missing'),
+                 request('no provider', NOV_1 + 3, provider='', amount=1_000_000))
+        rows = self.view(projected(account), calls, start=None, gaps=((NOV_1, NOV_1 + DAY_MS),),
+                         value=lambda model, tokens: None if model.model == 'missing' else Decimal(tokens.input))
+        self.assertEqual({'amount': '47', 'display': {'credits': '~47', 'usd': '~$0.47'}}, rows[0]['points'][0])
+        self.assertIsNone(rows[0]['points'][1])
+
+    def test_fallback_uses_token_evidence_and_later_reference_rates_with_no_duplicate(self):
+        account = subscription()
+        a = request('complete', NOV_1 + 1, amount=1_000, ref=account.ref)
+        b = replace(request('child', NOV_1 + 2, model='missing', ref=account.ref), session_id='child',
+                    parent_session_id='root', root_session_id='root',
+                    tokens=TokenUsage(input=999_999, output=1_000, known_fields=('output',)))
+        c = request('other alias', NOV_1 + 3, model='no-price', amount=1, ref=account.ref)
+        tier = PricingTier(per_million_input=Decimal(1), per_million_cache_read=Decimal('0.1'),
+                           per_million_output=Decimal(2))
+        priced = ModelPricing(ModelRef('claude-code', 'gpt-test'), 'USD', tiers=(tier,))
+        catalog = PricingCatalog((priced,))
+        entries = tuple(replace(call, reported_cost=Decimal(0)) for call in (a, b, b, c))
+
+        first = self.view(projected(account), entries, catalog=catalog)[0]['points'][0]
+        self.assertEqual(Decimal('0.4001'), Decimal(first['amount']))
+        self.assertEqual({'credits': '~0.5', 'usd': '~<$0.01'}, first['display'])
+
+        corrected = replace(b, tokens=TokenUsage(output=2_000))
+        repriced = PricingCatalog((priced, replace(priced, model=ModelRef('claude-code', 'missing'),
+                                                  tiers=(replace(tier, per_million_output=Decimal(3)),))))
+        revised_calls = tuple(replace(call, reported_cost=Decimal(0)) for call in (a, corrected, c))
+        revised = self.view(projected(account), revised_calls, catalog=repriced)[0]['points'][0]
+        self.assertEqual(Decimal('0.7001'), Decimal(revised['amount']))
+
+    def test_last_good_model_rate_and_observed_usd_survive_missing_catalog(self):
+        account = subscription()
+        catalog = FakePricingProvider().catalog
+        priced = request('previously priced', NOV_1 + 1, amount=1_000, ref=account.ref)
+        unknown = request('observed cost only', NOV_1 + DAY_MS + 1, model='missing', ref=account.ref)
+        dollars = replace(unknown, tokens=TokenUsage(known_fields=()), reported_cost=Decimal('0.47'),
+                          reported_cost_currency='USD')
+        foreign = replace(dollars, session_id='separate', completed_at_ms=NOV_1 + 2 * DAY_MS + 1,
+                          reported_cost_currency='EUR')
+
+        points = self.view(projected(account), (priced, dollars, foreign),
+                           catalog=PricingCatalog(()), previous=catalog)[0]['points']
+
+        self.assertEqual([Decimal('0.1'), Decimal(47)],
+                         [Decimal(point['amount']) for point in points[:2]])
+        self.assertEqual('~47', points[1]['display']['credits'])
+        self.assertIsNone(points[2])
+        self.assertEqual(Decimal(0), Decimal(points[3]['amount']))
+        self.assertEqual('0', points[3]['display']['credits'])
+
+    def test_session_clue_and_equal_split_keep_provider_total_without_cross_route_attribution(self):
+        a, b, other = (subscription(identity='first'), subscription(identity='second'), subscription('openai'))
+        anchor = request('anchor', NOV_1 + 1, amount=1000, ref=a.ref)
+        second = replace(request('second', NOV_1 + 2, amount=2000, ref=b.ref), session_id='second')
+        clue = request('same session', NOV_1 + 3, amount=1000)
+        pooled = replace(request('no clue', NOV_1 + 4, amount=3000), session_id='third')
+        foreign = request('foreign', NOV_1 + 5, provider='other', amount=100_000)
+        rates = FakePricingProvider().catalog
+
+        rows = self.view(projected(a, b, other), (anchor, second, clue, pooled, foreign), catalog=rates)
+
+        self.assertEqual([Decimal('0.35'), Decimal('0.35'), Decimal(0)],
+                         [Decimal(row['points'][0]['amount']) for row in rows])
+        self.assertEqual(['~0.4', '~0.4', '0'], [row['points'][0]['display']['credits'] for row in rows])
 
     def test_account_wide_usage_deduplicates_the_child_and_does_not_filter_models(self):
         native = subscription()
@@ -159,7 +235,7 @@ class TimelineProjectionTests(unittest.TestCase):
         first, second = account_roster(projected(partial, changed, partial))
         self.assertEqual(account_roster(projected(native))[0].key, first.key)
         self.assertNotEqual(first.key, second.key)
-        self.assertEqual((), first.estimates)
+        self.assertEqual((('claude-code', 2),), first.allocation)
 
     def test_small_positive_uses_product_format_and_nonzero_numeric_headroom(self):
         native = subscription()
@@ -186,27 +262,6 @@ class TimelineProjectionTests(unittest.TestCase):
                                first_covered_ms=NOV_1, gaps=()).to_json()
         self.assertEqual([], result['pending_buckets'])
         self.assertEqual([None] * 30, result['series'][0]['points'])
-
-    def test_refresh_retains_a_usable_value_but_never_across_price_or_gap(self):
-        native = subscription()
-        roster = account_roster(projected(native))
-        index = PeriodCCostIndex((request('old', NOV_1 + 5, amount=100, ref=native.ref),),
-                                 lambda _, tokens: Decimal(tokens.input), account_only=True)
-        prior = timeline_view('month', NOV_5, 'UTC', roster, index, first_covered_ms=NOV_1,
-                              gaps=(), price_revision='rates').to_json()
-        day = ((NOV_1, NOV_1 + DAY_MS),)
-        options = dict(first_covered_ms=NOV_1, gaps=(), pending=day, initial_pending=(), price_revision='rates')
-
-        def view(**changes):
-            return timeline_view('month', NOV_5 + 1000, 'UTC', roster, None, **(options | changes)).to_json()
-
-        held = retain_refresh(prior, view())
-        self.assertEqual('$1.00', held['series'][0]['points'][0]['display']['usd'])
-        self.assertEqual([0], held['pending_buckets'])
-        self.assertEqual([], held['initial_pending_buckets'])
-        self.assertIsNone(retain_refresh(prior, view(gaps=day))['series'][0]['points'][0])
-        self.assertIsNone(retain_refresh(prior, view(initial_pending=day))['series'][0]['points'][0])
-        self.assertIsNone(retain_refresh(prior, view(price_revision='new rates'))['series'][0]['points'][0])
 
     def test_future_slots_never_query_the_index_or_acquire_history(self):
         native = subscription()
@@ -314,7 +369,13 @@ class TimelineDemandTests(unittest.TestCase):
             raise SourceConcurrentChangeError('synthetic tree changed')
 
         source.load_session_snapshot = fail
-        self.assertEqual(initial, publish(NOV_5 + 15_000))
+        retained = publish(NOV_5 + 15_000)
+        old = initial['view']['series'][0]['points'][0]
+        same = retained['view']['series'][0]['points'][0]
+        self.assertEqual(old['amount'], same['amount'])
+        self.assertTrue(same['display']['credits'].startswith('~'))
+        self.assertEqual([], retained['view']['initial_pending_buckets'])
+        self.assertFalse(retained['acquiring'])
         source.load_session_snapshot = load
         corrected = publish(NOV_5 + 46_000)
         self.assertGreater(Decimal(corrected['view']['series'][0]['peak']),
@@ -338,14 +399,13 @@ class TimelineDemandTests(unittest.TestCase):
                 return SimpleNamespace(source=reader, close_accounts=lambda: None, progress=lambda *_: None)
 
             history = TimelineHistory(worker, SourceReads())
-            values, more, _, interrupted = history.step(source_scope(origin), observation, ('today',),
+            values, more, _ = history.step(source_scope(origin), observation, ('today',),
                  account_roster(projected(subscription('openai'))), 'UTC',
                 FakePricingProvider().catalog, lambda: None, None, DAY_MS // 2)
 
             self.assertEqual({'today'}, values.keys())
-            self.assertFalse(more or interrupted)
+            self.assertFalse(more)
             evidence = history.roots['ses_current']
-            self.assertTrue(evidence.acquired)
             self.assertIn('ses_current_child', {entry.session_id for entry in evidence.entries})
             self.assertEqual(observation.revisions['ses_current'], evidence.revision)
 
@@ -387,11 +447,11 @@ class TimelineDemandTests(unittest.TestCase):
             self.assertLessEqual(source.load_count - before, ROOTS_PER_TURN)
             return result
 
-        values, more, _, _ = turn(('30-days', 'today'))
+        values, more, _ = turn(('30-days', 'today'))
         self.assertTrue(more)
         self.assertEqual({'30-days', 'today'}, values.keys())
         for index in range(1, 20):
-            values, more, _, _ = turn(('30-days', 'month'), NOV_5 + 1000 * index)
+            values, more, _ = turn(('30-days', 'month'), NOV_5 + 1000 * index)
             if not more:
                 break
         self.assertFalse(more)
@@ -403,7 +463,7 @@ class TimelineDemandTests(unittest.TestCase):
         newest = next(iter(source.snapshots))
         source.snapshots[newest] = replace(source.snapshots[newest], source_revision='corrected')
         observation = observe_catalog(source, include_archived_revisions=True)
-        _, _, invalidated, _ = turn(('month',), NOV_5 + 27_000)
+        _, _, invalidated = turn(('month',), NOV_5 + 27_000)
         self.assertTrue(invalidated)
         self.assertNotIn(removed, history.roots)
         self.assertEqual('corrected', history.roots[newest].revision)
@@ -443,7 +503,9 @@ class TimelineDemandTests(unittest.TestCase):
         self.assertIsNone(points[0])
         self.assertEqual('0', points[1]['amount'])
         self.assertEqual('~<$0.01', points[2]['display']['usd'])
-        self.assertEqual(first, publish(NOV_5 + FOREGROUND_SLICE_MS), 'intermediate repricing is coalesced')
+        middle = publish(NOV_5 + FOREGROUND_SLICE_MS)
+        self.assertGreaterEqual(Decimal(middle['view']['series'][0]['points'][2]['amount']),
+                                Decimal(points[2]['amount']))
         final = publish(NOV_5 + 2 * FOREGROUND_SLICE_MS)
         self.assertEqual(24, source.load_count)
         self.assertGreater(final['revision'], first['revision'])
@@ -511,19 +573,19 @@ class TimelineDemandTests(unittest.TestCase):
                  account_roster(projected(subscription('github-copilot'))), 'UTC', FakePricingProvider().catalog,
                 lambda: None, None, now, foreground=True)
 
-        first, _, _, _ = turn(NOV_5)
+        first, _, _ = turn(NOV_5)
         self.assertGreater(Decimal(first['month'].to_json()['series'][0]['points'][4]['amount']), 0)
         invocation = original.invocations[1]
         source.snapshots[live] = replace(source.snapshots[live], complete=False, source_revision='in-flight',
             invocations=(original.invocations[0], replace(invocation, completed_at_ms=None)))
         turn(NOV_5 + FOREGROUND_SLICE_MS)
         self.assertEqual(24, source.load_count)
-        self.assertNotIn(live, history.roots, 'need not chase a revised live root before untouched older roots')
-        values, more, _, _ = turn(NOV_5 + 2 * FOREGROUND_SLICE_MS)
+        self.assertEqual(original.source_revision, history.roots[live].revision)
+        values, more, _ = turn(NOV_5 + 2 * FOREGROUND_SLICE_MS)
         partial = values['month'].to_json()
         self.assertFalse(more)
         self.assertEqual(26, source.load_count)
-        self.assertEqual([4], partial['pending_buckets'])
+        self.assertEqual([], partial['pending_buckets'])
         self.assertEqual([], partial['initial_pending_buckets'])
 
     def test_stalled_slice_expires_only_the_activity_hint(self):

@@ -2,19 +2,21 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import Decimal
-from functools import lru_cache
 import sqlite3
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
 
 from src.analysis.account_timeline import period_start, timeline_window
+from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.causal import trace_entries
 from src.analysis.coverage import snapshot_coverage_complete
-from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import account_roster, retain_refresh, seed_today, timeline_view
+from src.analysis.period_ccost import PeriodCCostIndex, reconcile_usage
+from src.analysis.valuation import physical_usage_key
+from src.application.account_timeline import account_roster, seed_today, timeline_view
 from src.application.session_quota import source_scope
 from src.domain.session_tree import root_activity
+from src.pricing.catalog import PricingCatalog
 from src.reports.history_snapshots import load as load_snapshots
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
@@ -24,18 +26,30 @@ ROOTS_PER_TURN = 12
 RETRY_MS = 30_000
 PARTIAL_MS = 15_000
 FOREGROUND_SLICE_MS = 200
-FOREGROUND_PARTIAL_MS = 1_200
+FOREGROUND_PARTIAL_MS = 400
 ACTIVE_CUE_SECONDS = 4
 REFRESH_MS = 15_000
+NO_PUBLISHED_RATES = PricingCatalog(())
 
 
 @dataclass(frozen=True, slots=True)
 class RootUsage:
     revision: str
+    provenance: object
     entries: tuple
     complete: bool
     retry_at_ms: int = 0
-    acquired: bool = True
+
+
+def _reconcile_entries(previous, entries, *, complete):
+    saved = {key: entry for entry in previous if (key := physical_usage_key(entry)) is not None}
+    current = []
+    for entry in entries:
+        old = saved.pop(physical_usage_key(entry), None)
+        if old is not None and (old.model, old.account_ref) == (entry.model, entry.account_ref):
+            entry = reconcile_usage(old, entry)
+        current.append(entry)
+    return tuple(current) if complete else (*current, *saved.values())
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,13 +64,10 @@ class CardToday:
 
     @classmethod
     def from_accounts(cls, accounts, source, zone, day, observed_at, history):
-        if (history.observed_start_ms is None or history.observed_start_ms > day
-                or history.index.cost('', 'provider', day, observed_at + 1).observed_requests):
-            return None
         amounts = {}
         for item in accounts:
             cost = dict(item.ccost_scopes).get('today')
-            if cost is not None and cost.complete and cost.known_ccost > 0:
+            if cost is not None and cost.known_ccost > 0:
                 amounts[item.account.key] = cost.known_ccost
         # The retention lane does not certify every chart candidate. A known
         # positive is useful provisionally; only chart coverage qualifies zeros.
@@ -77,7 +88,6 @@ class TimelineHistory:
         self.source = None
         self.roots = {}
         self.seen = set()
-        self.established = set()
         self.index_key = self.index = None
         self.index_facts = ()
         self.partial_at = {}
@@ -96,33 +106,45 @@ class TimelineHistory:
                 if source_scope(service.source) != scope:
                     return False
                 service.allow_partial_history = True
-                snapshots = load_snapshots(service, roots)
+                if callable(getattr(service.source, 'load_session_snapshots_available', None)):
+                    snapshots = self._available(service, roots)
+                else:
+                    # On readers without partial batches, isolate a failed root
+                    # rather than losing the other observations in the slice.
+                    snapshots = {}
+                    for root in roots:
+                        snapshots.update(self._available(service, (root,)))
                 if source_scope(service.source) != scope:
                     return False
                 for root in roots:
                     key = root.session_id
                     revision = observation.revisions[key]
                     snapshot = snapshots.get(key)
+                    previous = self.roots.get(key)
+                    saved = previous.entries if previous is not None else ()
                     if (snapshot is None or snapshot.root.provenance != root.provenance
                             or snapshot.source_revision != revision):
-                        self.roots[key] = RootUsage(revision, (), False, now_ms + RETRY_MS, acquired=False)
+                        self.roots[key] = RootUsage(revision, root.provenance, saved, False, now_ms + RETRY_MS)
                         continue
                     entries = trace_entries(snapshot)
                     complete = snapshot_coverage_complete(snapshot, entries) and all(
                         0 < entry.completed_at_ms <= now_ms for entry in entries)
-                    self.roots[key] = RootUsage(revision, entries, complete,
-                                                 0 if complete else now_ms + RETRY_MS)
-                    if complete:
-                        self.established.add(key)
-        except SourceError as error:
-            if error.terminal:
-                raise
-            for root in roots:
-                key = root.session_id
-                self.roots[key] = RootUsage(observation.revisions[key], (), False, now_ms + RETRY_MS, acquired=False)
+                    if saved:
+                        entries = _reconcile_entries(saved, entries, complete=complete)
+                    self.roots[key] = RootUsage(revision, root.provenance, entries, complete,
+                                                  0 if complete else now_ms + RETRY_MS)
         finally:
             service.close_accounts()
         return True
+
+    @staticmethod
+    def _available(service, roots):
+        try:
+            return load_snapshots(service, roots)
+        except SourceError as error:
+            if error.terminal:
+                raise
+            return {}
 
     def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *,
              foreground=False, shared_roots=None):
@@ -130,7 +152,6 @@ class TimelineHistory:
             self.source = scope
             self.roots.clear()
             self.seen.clear()
-            self.established.clear()
             self.index_key = self.index = None
             self.index_facts = ()
             self.observation = None
@@ -148,11 +169,12 @@ class TimelineHistory:
         catalog = self.prices or catalog
         price_revision = catalog.diagnostic_signature if catalog else None
         price_changed = self.price_revision != price_revision
-        if price_changed:
+        if price_changed or self.value_usage is None:
             self.price_revision = price_revision
             # Keep global request deduplication and prefix sums authoritative,
             # but don't revalue identical model/token inputs at every publication.
-            self.value_usage = lru_cache(maxsize=8192)(catalog.reference_valuation) if catalog else None
+            previous = self.value_usage.catalog if self.value_usage else None
+            self.value_usage = TimelineValuation(catalog or NO_PUBLISHED_RATES, previous)
 
         if observation is not self.observation:
             self.activity = root_activity(observation.sessions, observation.root_by_session)
@@ -168,31 +190,36 @@ class TimelineHistory:
         cutoff = min(starts.values()) - 60_000
         roots = [root for root in observation.sessions if root.parent_session_id is None and (
             root.session_id in active or activity[root.session_id] >= cutoff)]
-        removed = bool(set(self.roots) - observation.revisions.keys())
+        provenance = {root.session_id: root.provenance for root in observation.sessions
+                      if root.parent_session_id is None}
+        retired = {key for key, value in self.roots.items()
+                   if key not in provenance or provenance[key] != value.provenance}
+        removed = bool(retired)
         self.seen.intersection_update(observation.revisions)
-        self.established.intersection_update(observation.revisions)
+        self.seen.difference_update(retired)
         self.roots = {key: value for key, value in self.roots.items()
-                      if observation.revisions.get(key) == value.revision}
+                      if key not in retired}
         # Use the card lane's already-acquired stable trees only at the same
         # source revision. Active/incomplete trees still get normal chart reads.
         for root in roots:
             key = root.session_id
             shared = shared_roots.get(key) if shared_roots is not None else None
             if (shared is not None and shared[0] == observation.revisions.get(key)
-                    and key not in active and not (key in self.roots and self.roots[key].complete)
+                    and key not in active and not ((saved := self.roots.get(key)) and
+                        saved.complete and saved.revision == shared[0])
                     and all(entry.completed_at_ms <= now_ms for entry in shared[1])):
-                self.roots[key] = RootUsage(shared[0], shared[1], True)
-                self.established.add(key)
+                self.roots[key] = RootUsage(shared[0], root.provenance, shared[1], True)
                 self.seen.add(key)
         pending = [root for root in roots if root.session_id in observation.revisions and (
-            (saved := self.roots.get(root.session_id)) is None or 0 < saved.retry_at_ms <= now_ms)]
+            (saved := self.roots.get(root.session_id)) is None
+            or saved.revision != observation.revisions[root.session_id] or 0 < saved.retry_at_ms <= now_ms)]
         pending.sort(key=lambda item: (item.session_id in self.seen, item.session_id in self.roots,
                                        -activity[item.session_id], item.session_id))
         batch, remaining = pending[:ROOTS_PER_TURN], pending[ROOTS_PER_TURN:]
         if batch:
             if not self._load(batch, observation, scope, now_ms):
                 self.initial_periods.clear()
-                return {}, False, removed, ()
+                return {}, False, removed
             self.seen.update(root.session_id for root in batch)
 
         # Do not reprice the growing population after every acquisition slice.
@@ -209,23 +236,21 @@ class TimelineHistory:
                       or now_ms >= self.partial_at.get(period, 0) + partial_ms)
         self.covered_periods = covered
         if not ready:
-            return {}, bool(remaining), removed, ()
+            return {}, bool(remaining), removed
 
-        unread = {root.session_id for root in remaining if root.session_id not in self.roots}
-        def refreshing(key):
-            return key in active and key in self.established
-
+        queued = {root.session_id for root in remaining}
         acquiring = []
         initial = []
         gaps = list(_migration_gaps(migration_gap, now_ms))
         for root in roots:
             key = root.session_id
             saved = self.roots.get(key)
-            if saved is None or not saved.complete:
+            stale = saved is None or saved.revision != observation.revisions.get(key)
+            if stale or not saved.complete:
                 # Use the same activity bound as history candidate selection.
                 # Unread active trees and unrooted sessions can affect Now.
                 interval = (first[key], now_ms if key in active else max(first[key] + 1, activity[key] + 1))
-                if key in unread or refreshing(key):
+                if key in queued and (stale or key not in self.seen):
                     acquiring.append(interval)
                     if key not in self.seen:
                         initial.append(interval)
@@ -234,21 +259,19 @@ class TimelineHistory:
         gaps.extend((stamp, now_ms) for key, stamp in first.items() if key not in observation.revisions)
         covered_from = min(first.values(), default=None)
         used = tuple(sorted(self.roots.items()))
-        index_key = (price_revision, tuple((key, id(value)) for key, value in used)) if catalog else None
-        if catalog is not None and self.index_key != index_key:
+        candidates = frozenset((route, item.account_key) for item in roster for route, _ in item.allocation)
+        index_key = price_revision, candidates, tuple((key, id(value)) for key, value in used)
+        if self.index_key != index_key:
             self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
-                                          self.value_usage, account_only=True)
+                self.value_usage.reference, account_only=True, timeline_valuation=self.value_usage,
+                timeline_accounts=candidates)
             # Holding the facts also prevents object ID reuse in the index key.
             self.index_key, self.index_facts = index_key, used
-        by_period = {period: timeline_view(period, now_ms, zone, roster, self.index if catalog else None,
+        by_period = {period: timeline_view(period, now_ms, zone, roster, self.index,
             first_covered_ms=covered_from, gaps=gaps, pending=acquiring, initial_pending=initial,
             price_revision=price_revision) for period in ready}
         self.partial_at.update((period, now_ms) for period in ready if remaining)
-        failed = {root.session_id for root in roots if (value := self.roots.get(root.session_id)) and not value.acquired
-                  and not refreshing(root.session_id)}
-        interrupted = tuple(period for period in ready if any(
-            key in active or activity[key] >= starts[period] for key in failed))
-        return by_period, bool(remaining), removed, interrupted
+        return by_period, bool(remaining), removed
 
 
 class AccountTimeline:
@@ -300,7 +323,7 @@ class AccountTimeline:
             source, roster = self.source, () if changed_source else self.roster
         # Names and ordering can change without losing selections. Keys and
         # compatible account routes, unlike balances/labels, define membership.
-        scope = (source, zone, frozenset((entry.key, entry.routes, entry.candidates, entry.estimates) for entry in roster))
+        scope = (source, zone, frozenset((entry.key, entry.routes, entry.allocation) for entry in roster))
         if terminal:
             self.source = None
             roster = ()
@@ -337,7 +360,7 @@ class AccountTimeline:
 
         if self.job is not None and self.job.done():
             try:
-                job_marker, values, more, removed, interrupted, initial = self.job.result()
+                job_marker, values, more, removed, initial = self.job.result()
                 if job_marker == marker and available:
                     self.initial_periods = initial
                     values = {period: value for period, value in values.items()
@@ -345,14 +368,6 @@ class AccountTimeline:
                               and value['start_ms'] == starts.get(period, value['start_ms'])}
                     price_revision = next(iter(values.values()))['price_revision'] if values else self.price_revision
                     repriced = price_revision != self.price_revision
-                    if not removed:
-                        values = {period: value for period, value in values.items()
-                                  if period not in interrupted or period not in self.results
-                                  or repriced
-                                  or self.results[period]['pending_buckets']}
-                        if not repriced:
-                            values = {period: retain_refresh(self.results.get(period), value)
-                                      for period, value in values.items()}
                     if values or removed:
                         with self.lock:
                             if removed or repriced:
@@ -361,11 +376,9 @@ class AccountTimeline:
                             self.results.update(values)
                             self.frame_revision += 1
                             self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
-                    self.due = self.last_started + (4000 if more else REFRESH_MS)
+                    self.due = self.last_started + (FOREGROUND_SLICE_MS if more else REFRESH_MS)
                     if rolled:
                         self.due = 0
-                    elif more and periods & initial:
-                        self.due = self.last_started + FOREGROUND_SLICE_MS
                 recovered('account-timeline')
             except SourceError:
                 self.due = self.last_started + RETRY_MS
@@ -397,9 +410,9 @@ class AccountTimeline:
         self.last_started = now_ms
 
         def step():
-            values, more, removed, interrupted = self.history.step(source, observation, sorted(periods), roster,
+            values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(cold), shared_roots=shared_roots)
-            return (marker, {period: value.to_json() for period, value in values.items()}, more, removed, interrupted,
+            return (marker, {period: value.to_json() for period, value in values.items()}, more, removed,
                     self.history.initial_periods.copy())
 
         self.job = self.pool.submit(step)
@@ -417,8 +430,7 @@ class AccountTimeline:
         revision = self.price_revision or (catalog.diagnostic_signature if catalog else None)
         gaps = _migration_gaps(migration_gap, now_ms)
         if (today is None or (today.source, today.zone, today.day, today.price_revision) !=
-                (source, zone, day, revision) or not day <= today.observed_at < now_ms
-                or any(left < now_ms and right > day for left, right in gaps)):
+                (source, zone, day, revision) or not day <= today.observed_at < now_ms):
             today = None
         signature = (today, frozenset(daily), self.frame_revision, roster, day)
         if signature == self.seed_input:
@@ -428,7 +440,7 @@ class AccountTimeline:
             amounts = {item.key: today.amounts[item.account_key] for item in roster if item.account_key in today.amounts}
             for period in daily:
                 view = self.results.get(period)
-                if view is not None and (view['end_ms'] <= today.observed_at or not view['pending_buckets']):
+                if view is not None and view['end_ms'] <= today.observed_at:
                     continue
                 if amounts and view is None and period in periods:
                     window = timeline_window(period, now_ms, zone)

@@ -1,4 +1,4 @@
-"""Time source, publication and browser stages with and without card-history sharing."""
+"""Time Accounts across source reads, server publication and browser paint."""
 import argparse
 import json
 from pathlib import Path
@@ -13,10 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from development.tests.integration.ci_account_timeline import ChartSource, chart_fixture
 from development.tests.test_account_timeline import NOV_1
 from src.analysis.account_timeline import DAY_MS
+from src.sources.errors import SourceConcurrentChangeError
 from src.watch import account_timeline
 
 
-def run(browser, root, count, delay, share):
+def run(browser, root, count, delay, share, *, broken=False):
     class Source(ChartSource):
         def __init__(self, accounts):
             super().__init__(accounts)
@@ -28,6 +29,9 @@ def run(browser, root, count, delay, share):
         def load_session_snapshot(self, key):
             if delay and current_thread().name.startswith('cost-guard-account-timeline'):
                 sleep(delay)
+            if broken and key == 'root-0000':
+                self.timeline_reads[key] += 1
+                raise SourceConcurrentChangeError('benchmark: one unpublished root')
             return super().load_session_snapshot(key)
 
     steps, reads, indices = [], [], []
@@ -57,36 +61,43 @@ def run(browser, root, count, delay, share):
             page.goto(host.browser_url())
             page.wait_for_function("""() => liveValue?.view?.accounts?.accounts?.some(row =>
                 +row.ccost_scopes.find(scope => scope.name === 'today')?.cost?.known_ccost > 0)""")
-            card = perf_counter()
+            opened = perf_counter()
             page.get_by_role('link', name='Accounts', exact=True).click()
             page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row =>
                 +row.points[4]?.amount > 0)""")
             page.evaluate(frame)
             first = perf_counter()
-            page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row => +row.points[0]?.amount > 0)
-                && !current.accountTimeline.view.pending_buckets.length""", timeout=60_000)
+            page.wait_for_function("""() => current.accountTimeline?.plot
+                .querySelector('.account-timeline-bar[data-bucket="2"]')""")
+            page.evaluate(frame)
+            historical = perf_counter()
+            page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row => +row.points[2]?.amount > 0)
+                && !current.accountTimeline.view.initial_pending_buckets.length""", timeout=90_000)
             page.evaluate(frame)
             complete = perf_counter()
+            painted = page.locator('.account-timeline-bar').evaluate_all(
+                "bars => [...new Set(bars.map(bar => +bar.dataset.bucket))].sort((a, b) => a - b)")
             read_count = sum(source.timeline_reads.values())
             through = [(start, end) for start, end, _ in reads if end <= complete]
-            emissions = [end for _, end, (views, _, _, _) in steps if views and end <= complete]
-            snapshot = dict(roots=count, delay_ms=ms(delay), share=share, card_to_first_paint_ms=ms(first - card),
-                card_to_complete_paint_ms=ms(complete - card), reads=read_count,
+            emissions = [end for _, end, result in steps if result[0] and end <= complete]
+            snapshot = dict(roots=count, delay_ms=ms(delay), share=share, broken_root=broken,
+                first_paint_ms=ms(first - opened), historical_paint_ms=ms(historical - opened),
+                initial_pass_paint_ms=ms(complete - opened), painted_buckets=painted, reads=read_count,
                 read_ms=ms(sum(end - start for start, end in through)),
                 index_ms=ms(sum(end - start for start, end, _ in indices if end <= complete)),
                 worker_idle_ms=ms(sum(right[0] - left[1] for left, right in zip(through, through[1:]))),
-                card_to_last_worker_emission_ms=ms(emissions[-1] - card), worker_emissions=len(emissions))
+                last_worker_emission_ms=ms(emissions[-1] - opened), worker_emissions=len(emissions))
             start = perf_counter()
             page.get_by_role('button', name='30 days', exact=True).click()
             page.wait_for_function("""() => current.accountTimeline?.view?.period === '30-days'
-                && !current.accountTimeline.view.pending_buckets.length""")
+                && !current.accountTimeline.view.initial_pending_buckets.length""")
             page.evaluate(frame)
             snapshot['warm_30_days_paint_ms'] = ms(perf_counter() - start)
             page.get_by_role('link', name='Watch', exact=True).click()
             start = perf_counter()
             page.get_by_role('link', name='Accounts', exact=True).click()
             page.wait_for_function("""() => current.accountTimeline?.view?.period === '30-days'
-                && !current.accountTimeline.view.pending_buckets.length""")
+                && !current.accountTimeline.view.initial_pending_buckets.length""")
             page.evaluate(frame)
             snapshot['revisit_paint_ms'] = ms(perf_counter() - start)
             snapshot['extra_reads_warm_and_revisit'] = sum(source.timeline_reads.values()) - read_count
@@ -98,16 +109,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--browser', type=Path, required=True)
     parser.add_argument('--scratch', type=Path, required=True)
+    parser.add_argument('--broken', action='store_true', help='smaller and larger cold/warm runs with one failed root')
     options = parser.parse_args()
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, executable_path=options.browser)
-        for count in (25, 217):
-            for delay in (0, .11):
-                for share in (False, True):
-                    with TemporaryDirectory(prefix='benchmark-accounts-', dir=options.scratch) as directory:
-                        print(json.dumps(run(browser, Path(directory), count, delay, share)), flush=True)
+        cases = ((25, .025, True), (217, .11, True)) if options.broken else (
+            (count, delay, share) for count in (25, 217) for delay in (0, .11) for share in (False, True))
+        for count, delay, share in cases:
+            with TemporaryDirectory(prefix='benchmark-accounts-', dir=options.scratch) as directory:
+                print(json.dumps(run(browser, Path(directory), count, delay, share, broken=options.broken)), flush=True)
 
 
 if __name__ == '__main__':

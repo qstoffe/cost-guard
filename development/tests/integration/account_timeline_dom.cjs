@@ -90,7 +90,8 @@ async function check() {
   assert.equal(chart.shades.children.length, 1, 'stalled history remains distinguishable');
   chart.choose(1);
   assert.equal(chart.tipTitle.textContent, '2026-11-02');
-  assert.equal(chart.tipState.textContent, 'Loading');
+  assert.equal(chart.tipState.textContent, '');
+  assert.equal(chart.announce.textContent, '2026-11-02. Account A: —. Account B: —');
   const check = chart.entries.get(second.id).input;
   assert.equal(check.checked, true, 'every available account starts selected');
   check.checked = false;
@@ -117,13 +118,17 @@ async function check() {
   assert.match(chart.selectedLegend.children[0].children[1].textContent, /^Renamed account/);
 
   const provisional = chart.refresh();
-  calls.at(-1).resolve(frame('current', 5, [0, 1], [first, second]));
+  const estimated = {amount: '0.00001', display: {credits: '~<0.1', usd: '~<$0.01'}};
+  calls.at(-1).resolve(frame('current', 5, [0, 1], [{...first, points: [estimated, null]}, second]));
   await provisional;
   assert.equal(rings(), 1, 'one cue across two pending cells; never animate an already displayed value');
-  assert.equal(chart.shades.children.length, 2);
+  assert.equal(chart.shades.children.length, 1);
+  const tiny = chart.layers.children.find(node => node.attributes['data-ink'] === String(chart.colors.get(first.id)));
+  assert.ok(Number(tiny.attributes.height) > 0);
   chart.choose(0);
   const polite = chart.announce.textContent;
-  assert.equal(chart.tipState.textContent, 'Partial');
+  assert.equal(chart.tipState.textContent, '');
+  assert.match(polite, /Account A: ~<0.1/);
 
   const quiet = chart.refresh();
   calls.at(-1).resolve(frame('current', 6, [0], [first, second], []));
