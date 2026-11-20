@@ -2,14 +2,17 @@
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+import shutil
+import subprocess
 from types import SimpleNamespace
 import unittest
 
 from development.tests.fixtures.account_periods import request, subscription
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.report_runtime import FakePricingProvider
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from src.analysis.account_timeline import DAY_MS, timeline_buckets
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
+from src.analysis.account_timeline import DAY_MS, timeline_window
 from src.analysis.period_ccost import PeriodCCostIndex
 from src.application.account_timeline import quota_roster, retain_compatible_quotas, timeline_view
 from src.application.session_quota import source_scope
@@ -44,32 +47,42 @@ class TimelineBucketsTests(unittest.TestCase):
                                           '02:00+01:00', '03:00+01:00', '04:00+01:00')),
         ):
             with self.subTest(now=now):
-                start, buckets = timeline_buckets('today', stamp(now), 'Europe/Stockholm')
+                start, buckets, partial = timeline_window('today', stamp(now), 'Europe/Stockholm')
                 left = [stamp(now[:11] + item) for item in expected]
                 self.assertEqual(left[0], start)
                 self.assertEqual(list(zip(left, [*left[1:], stamp(now)])), list(buckets))
+                self.assertEqual((len(left) - 1,), partial)
 
     def test_rolling_cutoffs_are_absolute_and_keep_partial_calendar_edges(self):
         now = stamp('2026-11-01T11:25:00+01:00')
         for period, days in (('7-days', 7), ('30-days', 30)):
-            start, buckets = timeline_buckets(period, now, 'Europe/Stockholm')
+            start, buckets, partial = timeline_window(period, now, 'Europe/Stockholm')
             self.assertEqual(now - days * DAY_MS, start)
             self.assertEqual(days + 1, len(buckets))
             self.assertEqual(stamp('2026-11-01T00:00:00+01:00'), buckets[-1][0])
             self.assertEqual(now, buckets[-1][1])
-        _, buckets = timeline_buckets('7-days', now, 'Europe/Stockholm')
+            self.assertEqual((0, len(buckets) - 1), partial)
+        _, buckets, _ = timeline_window('7-days', now, 'Europe/Stockholm')
         self.assertEqual(stamp('2026-10-26T00:00:00+01:00'), buckets[0][1])
 
-    def test_calendar_month_and_long_history_span_leap_day_and_year_rollover(self):
-        start, days = timeline_buckets('month', stamp('2028-02-29T13:00:00+00:00'), 'UTC')
+    def test_calendar_buckets_span_leap_day_and_year_rollover_without_future_dates(self):
+        start, days, partial = timeline_window('month', stamp('2028-02-29T13:00:00+00:00'), 'UTC')
         self.assertEqual(stamp('2028-02-01T00:00:00+00:00'), start)
         self.assertEqual(29, len(days))
-        first = stamp('2026-12-31T22:30:00+00:00')
-        now = stamp('2028-02-29T13:00:00+00:00')
-        _, months = timeline_buckets('all', now, 'UTC', earliest_ms=first)
-        self.assertEqual((first, stamp('2027-01-01T00:00:00+00:00')), months[0])
-        self.assertEqual((start, now), months[-1])
-        self.assertEqual(15, len(months))
+        self.assertEqual((stamp('2028-02-29T00:00:00+00:00'), stamp('2028-02-29T13:00:00+00:00')), days[-1])
+        self.assertEqual((28,), partial)
+        now = stamp('2027-01-01T00:00:00+00:00')
+        _, dates, partial = timeline_window('7-days', now, 'UTC')
+        self.assertEqual((stamp('2026-12-31T00:00:00+00:00'), now), dates[-1])
+        self.assertEqual((), partial)
+
+    def test_daily_buckets_cover_both_dst_day_lengths_without_changing_rolling_cutoff(self):
+        for now, date, hours in (('2026-03-30T12:00:00+02:00', '2026-03-29', 23),
+                                 ('2026-10-26T12:00:00+01:00', '2026-10-25', 25)):
+            with self.subTest(date=date):
+                start, buckets, _ = timeline_window('7-days', stamp(now), 'Europe/Stockholm')
+                self.assertEqual(stamp(now) - 7 * DAY_MS, start)
+                self.assertEqual(hours * 3_600_000, buckets[-2][1] - buckets[-2][0])
 
 
 class TimelineProjectionTests(unittest.TestCase):
@@ -134,6 +147,32 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(Decimal(0), Decimal(rows[0]['ticks'][0]['amount']))
         self.assertGreater(Decimal(rows[0]['ticks'][-1]['amount']), Decimal('.00001'))
 
+    def test_pending_overlap_allows_only_provisional_positive_and_preserves_nonpending_gaps(self):
+        native = subscription()
+        index = PeriodCCostIndex((request('one', NOV_1 + DAY_MS + 5, amount=100, ref=native.ref),),
+                                 lambda _, tokens: Decimal(tokens.input), verified_models=True)
+        pending = ((NOV_1 + DAY_MS, NOV_1 + DAY_MS + 100), (NOV_1 + 3 * DAY_MS, NOV_1 + 4 * DAY_MS))
+        permanent = ((NOV_1 + 2 * DAY_MS, NOV_1 + 3 * DAY_MS),)
+        result = timeline_view('month', NOV_5, 'UTC', quota_roster(projected(native)), index,
+                               first_covered_ms=NOV_1, gaps=permanent, pending=pending).to_json()
+        self.assertEqual([1, 3], result['pending_buckets'])
+        self.assertEqual(['$0.00', '~$1.00', None, None, '$0.00'],
+                         [point['display']['usd'] if point else None for point in result['series'][0]['points']])
+
+    def test_missing_valuation_can_settle_without_zero_or_loading(self):
+        result = timeline_view('month', NOV_5, 'UTC', quota_roster(projected(subscription())), None,
+                               first_covered_ms=NOV_1, gaps=()).to_json()
+        self.assertEqual([], result['pending_buckets'])
+        self.assertEqual([None] * 5, result['series'][0]['points'])
+
+
+class TimelineDOMTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node is optional VM tooling')
+    def test_stale_bucket_frames_and_compatible_selection(self):
+        result = subprocess.run(['node', 'development/tests/integration/account_timeline_dom.cjs'],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, encoding='utf-8', timeout=15)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
 
 class TimelineDemandTests(unittest.TestCase):
     def test_silent_failure_preserves_last_good_then_a_new_revision_replaces_it(self):
@@ -188,11 +227,11 @@ class TimelineDemandTests(unittest.TestCase):
                 return SimpleNamespace(source=reader, close_accounts=lambda: None, progress=lambda *_: None)
 
             history = TimelineHistory(worker, SourceReads())
-            values, more, _, interrupted = history.step(source_scope(origin), observation, ('all',),
+            values, more, _, interrupted = history.step(source_scope(origin), observation, ('today',),
                 quota_roster(projected(subscription('openai'))), 'UTC',
-                FakePricingProvider().catalog, lambda: None, None, NOV_5)
+                FakePricingProvider().catalog, lambda: None, None, DAY_MS // 2)
 
-            self.assertEqual({'all'}, values.keys())
+            self.assertEqual({'today'}, values.keys())
             self.assertFalse(more or interrupted)
             evidence = history.roots['ses_current']
             self.assertTrue(evidence.acquired)
@@ -209,9 +248,9 @@ class TimelineDemandTests(unittest.TestCase):
         dispatch.interest('one', 'accounts', True, account_period='month')
         self.assertEqual(({'month'}, False), dispatch.account_timeline_demand())
         now = 25
-        dispatch.interest('one', 'accounts', True, account_period='all')
-        self.assertEqual(({'month', 'all'}, True), dispatch.account_timeline_demand())
-        dispatch.interest('one', 'accounts', False, account_period='all')
+        dispatch.interest('one', 'accounts', True, account_period='30-days')
+        self.assertEqual(({'month', '30-days'}, True), dispatch.account_timeline_demand())
+        dispatch.interest('one', 'accounts', False, account_period='30-days')
         self.assertEqual(({'month'}, False), dispatch.account_timeline_demand())
         now = 100
         self.assertEqual((set(), False), dispatch.account_timeline_demand())
@@ -232,24 +271,66 @@ class TimelineDemandTests(unittest.TestCase):
             self.assertLessEqual(source.load_count - before, ROOTS_PER_TURN)
             return result
 
-        values, more, _, _ = turn(('all', 'today'))
+        values, more, _, _ = turn(('30-days', 'today'))
         self.assertTrue(more)
-        self.assertEqual({'all', 'today'}, values.keys())
+        self.assertEqual({'30-days', 'today'}, values.keys())
         for index in range(1, 20):
-            values, more, _, _ = turn(('all', 'month'), NOV_5 + 1000 * index)
+            values, more, _, _ = turn(('30-days', 'month'), NOV_5 + 1000 * index)
             if not more:
                 break
         self.assertFalse(more)
         self.assertEqual(217, source.load_count)
-        self.assertGreater(Decimal(values['all'].to_json()['series'][0]['peak']), 0)
+        self.assertGreater(Decimal(values['30-days'].to_json()['series'][0]['peak']), 0)
         turn(('30-days',), NOV_5 + 25_000)
         self.assertEqual(217, source.load_count)
         removed, _ = source.snapshots.popitem()
         newest = next(iter(source.snapshots))
         source.snapshots[newest] = replace(source.snapshots[newest], source_revision='corrected')
         observation = observe_catalog(source, include_archived_revisions=True)
-        _, _, invalidated, _ = turn(('all',), NOV_5 + 27_000)
+        _, _, invalidated, _ = turn(('month',), NOV_5 + 27_000)
         self.assertTrue(invalidated)
         self.assertNotIn(removed, history.roots)
         self.assertEqual('corrected', history.roots[newest].revision)
         self.assertEqual(218, source.load_count)
+
+    def test_cold_progress_marks_disjoint_dates_and_clears_failed_reads_without_false_zero(self):
+        source = SyntheticMonthSource(0, 0, month_start_ms=NOV_1)
+        for index, day in enumerate((0, *(2 for _ in range(13)), *(4 for _ in range(11)))):
+            snapshot = make_root_snapshot(index, 1, month_start_ms=NOV_1 + day * DAY_MS)
+            source.snapshots[snapshot.root.session_id] = replace(snapshot, complete=True)
+        load = source.load_session_snapshot
+
+        def failing_oldest(key):
+            if key == 'root-0000':
+                raise SourceConcurrentChangeError('old tree unavailable')
+            return load(key)
+
+        source.load_session_snapshot = failing_oldest
+        service = SimpleNamespace(source=source, close_accounts=lambda: None, progress=lambda *_: None)
+        lane = AccountTimeline(lambda _: service, SourceReads())
+        self.addCleanup(lane.close)
+        args = dict(source=source_scope(source), observation=observe_catalog(source), periods={'month'},
+            boosted=True, accounts=projected(subscription('github-copilot')), zone='UTC',
+            catalog=FakePricingProvider().catalog, prices=lambda: None, migration_gap=None)
+
+        def publish(now):
+            lane.tick(**args, now_ms=now)
+            lane.job.result(2)
+            lane.tick(**args, now_ms=now + 1)
+            return lane.lookup('month')
+
+        first = publish(NOV_5)
+        self.assertEqual(12, source.load_count)
+        self.assertEqual([0, 2], first['view']['pending_buckets'])
+        points = first['view']['series'][0]['points']
+        self.assertIsNone(points[0])
+        self.assertEqual('0', points[1]['amount'])
+        self.assertEqual('~<$0.01', points[2]['display']['usd'])
+        self.assertEqual(first, publish(NOV_5 + 1_000), 'intermediate repricing is coalesced')
+        final = publish(NOV_5 + 2_000)
+        self.assertEqual(24, source.load_count)
+        self.assertGreater(final['revision'], first['revision'])
+        self.assertEqual(first['scope'], final['scope'])
+        self.assertEqual([], final['view']['pending_buckets'])
+        self.assertIsNone(final['view']['series'][0]['points'][0])
+        self.assertGreater(Decimal(final['view']['series'][0]['points'][2]['amount']), Decimal(points[2]['amount']))
