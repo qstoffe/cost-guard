@@ -10,6 +10,7 @@ from typing import Iterable
 from src.domain import AccountSnapshot, QuotaComponent, CostDisposition
 from src.domain.ccost import ReferenceValuation
 from src.pricing.catalog import canonical_model_name
+from src.pricing.identities import reference_identity, unverified_alias
 from .models import TraceEntry
 from .valuation import ComparisonCost, comparison_cost, unique_usage
 from .token_mix import MIX_FIELDS
@@ -126,18 +127,28 @@ class _Series:
 class PeriodCCostIndex:
     """Value once per history publication; moving windows query prefix sums, no rescans."""
 
-    def __init__(self, entries: Iterable[TraceEntry], valuation: ReferenceValuation) -> None:
+    def __init__(self, entries: Iterable[TraceEntry], valuation: ReferenceValuation, *,
+                 verified_models: bool = False) -> None:
         self._series: dict[tuple, _Series] = {}
+        self.earliest_ms = None
+        self._model_key = reference_identity if verified_models else canonical_model_name
         for entry in unique_usage(entries):
+            if verified_models and entry.completed_at_ms <= 0:
+                continue
             provider = usage_provider(entry.model.provider)
             if provider == 'claude-agent' and (entry.cost_disposition is CostDisposition.BILLED
                     or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'):
                 continue  # Explicit API/foreign-account proof must not become a Pro estimate.
             account = entry.account_ref.key if entry.account_ref else None
+            if self.earliest_ms is None and entry.completed_at_ms > 0:
+                self.earliest_ms = entry.completed_at_ms
             value = comparison_cost((entry,), valuation)
+            model = self._model_key(entry.model.model)
+            if verified_models and (not model or unverified_alias(entry.model.model, entry.model.provider)):
+                model = _UNKNOWN_MODEL
             for identity in ("provider", account):
-                for model in (None, canonical_model_name(entry.model.model)):
-                    key = provider, identity, model
+                for scope in (None, model):
+                    key = provider, identity, scope
                     series = self._series.setdefault(key, _Series([], [Decimal(0)], [0], [0]))
                     series.times.append(entry.completed_at_ms)
                     series.totals.append(series.totals[-1] + value.known_ccost)
@@ -146,6 +157,14 @@ class PeriodCCostIndex:
 
     def cost(self, provider: str, identity: object, start: int, end: int,
              model_id: str | None = None) -> ComparisonCost:
-        key = usage_provider(provider), identity, canonical_model_name(model_id) if model_id else None
-        series = self._series.get(key)
+        return self._cost(provider, identity, start, end, self._model_key(model_id) if model_id else None)
+
+    def unknown_model_cost(self, provider: str, identity: object, start: int, end: int) -> ComparisonCost:
+        return self._cost(provider, identity, start, end, _UNKNOWN_MODEL)
+
+    def _cost(self, provider, identity, start, end, model):
+        series = self._series.get((usage_provider(provider), identity, model))
         return series.between(start, end) if series else ComparisonCost()
+
+
+_UNKNOWN_MODEL = object()

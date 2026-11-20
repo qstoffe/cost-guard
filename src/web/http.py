@@ -11,6 +11,7 @@ import time
 from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
+from src.analysis.account_timeline import PERIODS as ACCOUNT_PERIODS
 from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
@@ -27,7 +28,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
             "/help.js": ("help.js", "text/javascript; charset=utf-8"),
              "/render.js": ("render.js", "text/javascript; charset=utf-8"),
              "/benchmark.js": ("benchmark.js", "text/javascript; charset=utf-8"),
-            "/account-cards.js": ("account-cards.js", "text/javascript; charset=utf-8"),
+           "/account-cards.js": ("account-cards.js", "text/javascript; charset=utf-8"),
+           "/account-timeline.js": ("account-timeline.js", "text/javascript; charset=utf-8"),
             "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
             "/reports.js": ("reports.js", "text/javascript; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
@@ -325,6 +327,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if handle_dispatch(self, value):
                 return
+            if self.path == '/api/accounts/timeline':
+                period, revision = value.get('period'), value.get('revision')
+                if (set(value) != {'period', 'revision'} or period not in ACCOUNT_PERIODS
+                        or revision is not None and (type(revision) is not int or revision < 0)):
+                    self.reply(400, {'error': 'invalid_request'})
+                    return
+                live = getattr(self.server.lifecycle, 'live', None)
+                driver = live.driver if live else None
+                timeline = getattr(driver.coordinator, 'account_timeline', None) if driver and not driver.terminal else None
+                self.reply(200, timeline.lookup(period, revision) if timeline else
+                           dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False))
+                return
             if self.path == '/api/detail/export':
                 self.server.exports.handle(self, value)
                 return
@@ -412,6 +426,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 value["product_version"] = DISPLAY_VERSION
                 value['data_dispatcher'] = getattr(self.server.lifecycle, 'dispatcher', None) is not None
                 value['history_demand'] = value['data_dispatcher']
+                value['account_timeline'] = value['data_dispatcher'] and self.server.lifecycle.live is not None
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

@@ -10,7 +10,9 @@ from dataclasses import replace
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
+from src.application.session_quota import source_scope
 from src.reports.history import WatchHistoryAcquisition
+from .account_timeline import AccountTimeline
 from .card_workers import CardWorkers
 from .cards import WatchCards
 from .session_costs import SessionCosts
@@ -55,6 +57,21 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
         self.reads = SourceReads()
+        self.account_timeline = AccountTimeline(service_factory, self.reads)
+
+    def tick_account_timeline(self, frame, demand, *, available, terminal):
+        service = self.report_service
+        periods, boosted = demand()
+        source = source_scope(service.source)
+        observation = self.catalog_observation
+        available = available and observation is not None and observation.source_epoch == source[-1]
+        identified = source[0] != 'opencode-v2' or source[-1] is not None
+        return self.account_timeline.tick(source=source if identified else None, observation=observation,
+            accounts=frame.quota.accounts if frame and frame.quota else (), periods=periods,
+            boosted=boosted, zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
+            prices=getattr(service.comparison_pricing_provider, 'cached_catalog', lambda: None),
+            migration_gap=service.selection.migration_gap, now_ms=int(self.clock_ms()),
+            available=available, terminal=terminal)
 
     def _record_refresh_duration(self, seconds):
         if not self.card_timing_observed:
@@ -273,6 +290,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             self.catalog_pool.shutdown(wait=True, cancel_futures=True)
+            self.account_timeline.close()
             for future in (self.history_job, self.catalog_job):
                 if future is not None and not future.cancelled():
                     future.result()

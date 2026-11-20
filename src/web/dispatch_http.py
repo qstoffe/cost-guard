@@ -1,6 +1,7 @@
 """Validated demand/lookup routes, called only after cookie, Origin and CSRF checks."""
 import re
 
+from src.analysis.account_timeline import PERIODS
 from src.reports import ReportKind
 from .dispatch import FINITE, SECTIONS
 from .jobs import ReportWorkerStopError, parse_report
@@ -19,7 +20,8 @@ def handle(handler, value):
         return True
     try:
         if handler.path == '/api/interest':
-            if (set(value) not in ({'tab', 'section', 'visible', 'request'}, {'tab', 'section', 'visible', 'request', 'history'})
+            required = {'tab', 'section', 'visible', 'request'}
+            if (not required <= set(value) or set(value) - required - {'history', 'account_period'}
                     or not isinstance(value['tab'], str) or not re.fullmatch(r'[a-f0-9-]{32,36}', value['tab'])
                     or value['section'] not in SECTIONS or type(value['visible']) is not bool):
                 raise ValueError('invalid_interest')
@@ -28,8 +30,11 @@ def handle(handler, value):
                 raise ValueError('invalid_interest')
             if 'history' in value and (type(value['history']) is not bool or value['section'] != 'watch' or request is not None):
                 raise ValueError('invalid_interest')
+            period = value.get('account_period')
+            if 'account_period' in value and (period not in PERIODS or value['section'] != 'accounts' or request is not None):
+                raise ValueError('invalid_interest')
             handler.reply(200, dispatcher.interest(value['tab'], value['section'], value['visible'], request,
-                history=value.get('history', False)))
+                history=value.get('history', False), account_period=period))
             housekeeping = getattr(owner, 'cache_housekeeping', None)
             if housekeeping and value['visible'] and handler.headers.get('X-CG-Viewed') == '1':
                 if request:

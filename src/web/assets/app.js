@@ -16,6 +16,7 @@ let liveConnection = null;
 let liveValue = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
+let accountTimelineAvailable = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
@@ -105,6 +106,7 @@ function applySettings(value) {
     if (state.catalog) ReportView.syncUnits(state.catalog.root);
     if (state.watch) ReportView.syncUnits(state.watch.root);
     if (state.accounts) ReportView.syncUnits(state.accounts.root);
+    state.accountTimeline?.draw();
     if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
     if (state.stats) ReportView.syncUnits(state.stats.root);
     if (state.comparisons) ReportView.syncUnits(state.comparisons.root);
@@ -153,6 +155,7 @@ function connectionStatus(message, state = {}) {
   }
   if (hostState.terminal || hostState.sourceBlocked) for (const view of views.values()) {
     view.detail?.invalidateValues(); view.detail?.detach(); view.catalog?.detach();
+    view.accountTimeline?.invalidate();
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
@@ -289,6 +292,13 @@ function show(state) {
       state.accounts ||= new AccountCards.View(true);
       state.accounts.update(liveValue?.view || {});
       state.accounts.attach(output);
+      if (accountTimelineAvailable) {
+        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
+        const chart = state.accountTimeline;
+        if (!hostState.terminal && !hostState.sourceBlocked) chart.setScope(liveValue?.account_timeline_scope ?? null);
+        if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
+        chart.active(!document.hidden && !!csrf && hostState.writable);
+      }
     } else if (liveValue?.view) {
       state.miniControls = miniWatch?.button.parentNode;
       ReportView.renderLive(output, liveValue, state);
@@ -547,6 +557,7 @@ function navigate() {
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
+  if (current !== previous) previous?.accountTimeline?.active(false);
   // A requested report (including bounded admission backoff) belongs to its view,
   // not the active route. Navigation never abandons it or starts another attempt.
   if (current.section === 'ai-stats') {
@@ -616,6 +627,7 @@ async function connect() {
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
+    accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -689,6 +701,7 @@ window.addEventListener('offline', () => connectionStatus('OFFLINE — last obse
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
+  current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
