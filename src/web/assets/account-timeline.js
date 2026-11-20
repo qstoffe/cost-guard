@@ -5,7 +5,6 @@ const AccountTimelineView = (() => {
   const e = (...args) => ReportView.element(...args);
   const ns = 'http://www.w3.org/2000/svg';
   const top = 27, bottom = 194, inset = 3, paletteSize = 12;
-  const label = series => `${series.account} · ${ReportView.quotaLabel({label: series.quota})}`;
   const shown = item => ReportView.display({
     display: {amount: item.display.credits},
     display_units: {usd: {amount: item.display.usd}}
@@ -28,14 +27,12 @@ const AccountTimelineView = (() => {
   }
   const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
   function visibleScale(series) {
-    const largest = series.reduce((peak, item) => !peak || Number(item.peak) > Number(peak.peak) ? item : peak, null);
+    const largest = series.reduce((peak, item) => !peak || ReportView.compare(item.peak, peak.peak) > 0 ? item : peak, null);
     return largest?.ticks || [];
   }
-  function minimumWidth(view, seriesCount) {
-    // Reserve a stable footprint for ordinary rosters. The minimum grows only
-    // if a larger roster would otherwise force subpixel bars.
-    const minimum = Math.max(view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25, 4 + 1.25 * seriesCount);
-    return Math.ceil(2 * inset + view.buckets.length * minimum);
+  function minimumWidth(view) {
+    const minimum = view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25;
+    return 2 * inset + view.buckets.length * minimum;
   }
   function layoutSlots(view, width) {
     const hourly = view.period === 'today', shortDates = view.period === '7-days';
@@ -139,7 +136,7 @@ const AccountTimelineView = (() => {
       this.scroller.append(this.plot);
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
-      this.selectedLegend.setAttribute('aria-label', 'Selected Accounts and quotas');
+      this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
       this.empty = e('div', undefined, 'account-timeline-empty');
       this.message = e('span');
       this.initialRing = e('span', undefined, 'account-timeline-ring');
@@ -152,7 +149,7 @@ const AccountTimelineView = (() => {
       const tipHeader = e('div', undefined, 'account-timeline-tip-header');
       tipHeader.append(this.tipTitle, this.tipState);
       this.tipValues = e('div', undefined, 'account-timeline-tip-values');
-      this.tipValues.setAttribute('aria-label', 'Selected series values');
+      this.tipValues.setAttribute('aria-label', 'Selected account values');
       this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
@@ -165,13 +162,13 @@ const AccountTimelineView = (() => {
       this.selectionCount = e('span', undefined, 'account-timeline-count');
       const caret = e('span', '⌄', 'account-timeline-caret');
       caret.setAttribute('aria-hidden', 'true');
-      this.chooser.append(this.summary, e('span', 'Accounts & quotas'), this.selectionCount, caret);
+      this.chooser.append(this.summary, e('span', 'Accounts'), this.selectionCount, caret);
       this.chooser.setAttribute('popovertarget', 'account-timeline-options');
       this.panel = e('div', undefined, 'account-timeline-options');
       this.panel.id = 'account-timeline-options';
       this.panel.setAttribute('popover', 'auto');
       this.legend = e('fieldset', undefined, 'account-timeline-legend');
-      this.legend.append(e('legend', 'Accounts and quotas'));
+      this.legend.append(e('legend', 'Accounts'));
       this.legendRows = e('div');
       this.legend.append(this.legendRows);
       this.panel.append(this.legend);
@@ -222,7 +219,7 @@ const AccountTimelineView = (() => {
       this.cache.clear();
       this.priceRevision = undefined;
       this.legendFor([]);
-      // IDs include source/account/quota semantics; keep choices for still
+      // IDs include the source-qualified account identity; keep choices for still
       // compatible entries until the server publishes its new roster.
       this.roster = [];
       this.rosterRevision = null;
@@ -331,17 +328,18 @@ const AccountTimelineView = (() => {
       if (!wanted.size) this.panel.hidePopover();
       const occupied = new Set(series.flatMap(item => this.colors.has(item.id) ? [this.colors.get(item.id)] : []));
       const selectedInks = [];
-      series.forEach((item, index) => {
-        if (!this.colors.has(item.id)) {
-          const preferred = (parseInt(item.id.slice(0, 8), 16) >>> 0) % paletteSize;
-          let color = preferred;
-          for (let offset = 0; offset < paletteSize; offset++) {
-            const candidate = (preferred + offset) % paletteSize;
-            if (!occupied.has(candidate)) { color = candidate; break; }
-          }
-          this.colors.set(item.id, color);
-          occupied.add(color);
+      for (const id of [...wanted].sort()) {
+        if (this.colors.has(id)) continue;
+        const preferred = (parseInt(id.slice(0, 8), 16) >>> 0) % paletteSize;
+        let color = preferred;
+        for (let offset = 0; offset < paletteSize; offset++) {
+          const candidate = (preferred + offset) % paletteSize;
+          if (!occupied.has(candidate)) { color = candidate; break; }
         }
+        this.colors.set(id, color);
+        occupied.add(color);
+      }
+      series.forEach((item, index) => {
         let entry = this.entries.get(item.id);
         if (!entry) {
           const input = e('input'), name = e('span'), wrapper = e('label');
@@ -354,9 +352,9 @@ const AccountTimelineView = (() => {
           wrapper.append(input, swatch(this.colors.get(item.id)), name);
           this.entries.set(item.id, entry);
         }
-        entry.input.checked = this.selected.get(item.id) ?? item.primary;
+        entry.input.checked = this.selected.get(item.id) ?? true;
         if (entry.input.checked) selectedInks.push(this.colors.get(item.id));
-        ReportView.text(entry.name, label(item));
+        ReportView.text(entry.name, item.account);
         if (this.legendRows.children[index] !== entry.root)
           this.legendRows.insertBefore(entry.root, this.legendRows.children[index] || null);
       });
@@ -371,16 +369,16 @@ const AccountTimelineView = (() => {
       const roster = view?.series || this.roster || [];
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       this.legendFor(roster);
-      const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? item.primary);
+      const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
       this.selectedLegend.hidden = !view || !selectedSeries.length;
-      const legend = selectedSeries.map(item => [this.colors.get(item.id), label(item)]);
+      const legend = selectedSeries.map(item => [this.colors.get(item.id), item.account]);
       const legendKey = JSON.stringify(legend);
       if (legendKey !== this.legendKey) {
         this.legendKey = legendKey;
         this.selectedLegend.replaceChildren(...legend.map(([ink, name]) => {
           const row = e('li');
-          row.append(swatch(ink), e('span', name));
+          row.append(swatch(ink), e('span', name), e('span', '', 'account-timeline-legend-value'));
           return row;
         }));
       }
@@ -391,9 +389,9 @@ const AccountTimelineView = (() => {
       this.partial = new Set(view?.partial_buckets);
       this.future = new Set(view?.future_buckets);
       const scale = visibleScale(this.series.filter(item => item.points.some(point => point !== null)));
-      const unselected = roster.length && !roster.some(item => this.selected.get(item.id) ?? item.primary);
+      const unselected = roster.length && !selectedSeries.length;
       const loading = !view && !unselected && this.initial && this.visible;
-      const message = unselected ? 'Select a series to show its usage.' :
+      const message = unselected ? 'Select an account to show its usage.' :
         loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
       this.initialRing.hidden = !loading || !this.working;
@@ -416,7 +414,7 @@ const AccountTimelineView = (() => {
       this.axis.replaceChildren(...axis);
       // SVG coordinates stay stable when a newly qualified value needs a wider
       // tick label. CSS fits the shape to the scroller, not vice versa.
-      const minimum = minimumWidth(view, roster.length);
+      const minimum = minimumWidth(view);
       const width = Math.max(this.frame.clientWidth || this.width, minimum);
       const sameGeometry = equalSlots(previous, view) && this.layout?.width === width;
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
@@ -453,25 +451,18 @@ const AccountTimelineView = (() => {
         else if (this.partial.has(index)) nodes.push(svg('circle', {class: 'account-timeline-partial', cx: center,
           cy: 14, r: 2, 'data-bucket': index}));
       }
-      const seriesCount = this.series.length;
-      const gap = Math.min(3, Math.max(.2, group / (Math.max(1, seriesCount) * 6)));
-      const bar = Math.min(26, (group - 4 - (seriesCount - 1) * gap) / Math.max(1, seriesCount));
-      const offset = (group - seriesCount * (bar + gap) + gap) / 2;
+      const bar = Math.min(28, group - 6);
       const max = Number(scale.at(-1)?.amount);
-      if (max > 0) for (const [slot, item] of this.series.entries()) {
-        item.points.forEach((point, index) => {
-          const amount = Number(point?.amount);
-          if (!(amount > 0)) return;
-          const height = Math.max(1, (bottom - top) * (amount / max));
-          const x = slots[index].x + offset + slot * (bar + gap);
-          // Clip the bottom corner of the rounded column at the value origin.
-          const radius = Math.min(3, height, bar / 2);
-          const y = bottom - height, right = x + bar;
-          const shape = `M${x},${bottom}V${y + radius}Q${x},${y} ${x + radius},${y}` +
-            `H${right - radius}Q${right},${y} ${right},${y + radius}V${bottom}Z`;
-          nodes.push(svg('path', {d: shape, class: 'account-timeline-bar', 'data-ink': this.colors.get(item.id),
-            'data-bucket': index}));
-        });
+      if (max > 0) for (const {index, center} of slots) {
+        // SVG paints in document order. The hit layer remains a single full slot.
+        const overlays = this.series.filter(item => Number(item.points[index]?.amount) > 0);
+        overlays.sort((a, b) => ReportView.compare(b.points[index].amount, a.points[index].amount)
+          || a.id.localeCompare(b.id));
+        for (const item of overlays) {
+          const height = Math.max(1, (bottom - top) * Number(item.points[index].amount) / max);
+          nodes.push(svg('rect', {x: center - bar / 2, y: bottom - height, width: bar, height,
+            class: 'account-timeline-bar', 'data-ink': this.colors.get(item.id), 'data-bucket': index}));
+        }
       }
       this.shades.replaceChildren(...shades);
       this.layers.replaceChildren(...nodes);
@@ -521,6 +512,7 @@ const AccountTimelineView = (() => {
       this.tooltip.classList.toggle('interactive', interactive);
       this.tooltip.classList.toggle('pinned', pinned);
       if (!slot || this.frame.hidden) {
+        for (const row of this.selectedLegend.children) ReportView.text(row.children[2], '');
         this.tooltip.hidden = true;
         this.highlight.setAttribute('visibility', 'hidden');
         return;
@@ -538,10 +530,13 @@ const AccountTimelineView = (() => {
       const state = future ? 'Upcoming' : firstLoad && !this.shown?.has(this.view.buckets[index][0]) ?
         'Loading' : pending || partial ? 'Partial' : '';
       const values = [], rows = [];
-      if (!future) for (const item of this.series) {
+      for (const [ordinal, item] of this.series.entries()) {
         const point = item.points[index];
-        const value = point ? shown(point) + (firstLoad ? ' (so far)' : '') : pending ? '—' : 'Unavailable';
-        const name = label(item), row = e('div', undefined, 'account-timeline-tip-row');
+        const value = point ? shown(point) + (firstLoad && shown(point).startsWith('~') ? ' (so far)' : '') :
+          pending || future ? '—' : 'Unavailable';
+        ReportView.text(this.selectedLegend.children[ordinal].children[2], future ? '' : value);
+        if (future) continue;
+        const name = item.account, row = e('div', undefined, 'account-timeline-tip-row');
         const text = e('span', name, 'account-timeline-tip-name');
         text.title = name;
         row.append(swatch(this.colors.get(item.id)), text, e('span', value));

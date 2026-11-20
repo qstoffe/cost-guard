@@ -56,7 +56,9 @@ class WatchHistoryAcquisition:
     its flattened scope once, not quadratically after every enrichment slice.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, share_roots: bool = False) -> None:
+        self.share_roots = share_roots
+        self.chart_roots: dict[str, tuple[str, tuple[TraceEntry, ...]]] = {}
         self.entries_by_root: dict[str, tuple[TraceEntry, ...]] = {}
         self.state: dict[str, tuple[int, str]] = {}
         self.day_start_ms: int | None = None
@@ -70,6 +72,7 @@ class WatchHistoryAcquisition:
         self.prompt_of: dict[tuple, tuple | None] = {}
 
     def reset(self) -> None:
+        self.chart_roots.clear()
         self.entries_by_root.clear()
         self.state.clear()
         self.day_start_ms = None
@@ -109,6 +112,7 @@ class WatchHistoryAcquisition:
             self._dirty = True
         self.entries_by_root = {key: entries for key, entries in self.entries_by_root.items() if key in ids}
         self.state = {key: value for key, value in self.state.items() if key in ids}
+        self.chart_roots = {key: value for key, value in self.chart_roots.items() if revisions.get(key) == value[0]}
         return roots, revisions
 
     def unchanged(self, root_id: str, revision: str) -> bool:
@@ -126,6 +130,12 @@ class WatchHistoryAcquisition:
             self.state[root_id] = (self.day_start_ms, bundle.source_revision)
         else:
             self.state.pop(root_id, None)
+        if self.share_roots:
+            if root_id in self.state and bundle.usage_coverage_complete and all(
+                    0 < entry.completed_at_ms for entry in bundle.trace_entries):
+                self.chart_roots[root_id] = (bundle.source_revision, bundle.trace_entries)
+            else:
+                self.chart_roots.pop(root_id, None)
         return entries
 
     def _retain(self, entries: Sequence[TraceEntry], now_ms: int) -> None:

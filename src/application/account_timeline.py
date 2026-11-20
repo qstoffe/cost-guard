@@ -1,82 +1,47 @@
-"""Wire-safe historical reference cost by the current Accounts quota roster."""
+"""Wire-safe historical reference cost by the current account roster."""
 from bisect import bisect_left
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from decimal import Decimal
 
 from src.analysis.account_timeline import timeline_window
 from src.analysis.period_ccost import account_usage_routes, combined_cost
 from src.numbers import ccost_amount
-from src.pricing.identities import reference_identity, unverified_alias
 
 from .contracts import record
 from .projection import identity
-from .watch_accounts import primary_quota
 
 
 @dataclass(frozen=True, slots=True)
-class QuotaSeries:
+class AccountSeries:
     key: str
     account_key: tuple
     label: str
-    quota: str
-    model: str | None
-    eligible: bool
-    primary: bool
     routes: tuple[str, ...]
+    candidates: tuple[str, ...]
     estimates: tuple[str, ...]
 
 
-def quota_roster(accounts):
-    candidates = Counter(route for item in accounts for route in account_usage_routes(item.account))
-    result = []
-    for item in accounts:
-        account = item.account
-        primary = primary_quota(account)
-        routes = account_usage_routes(account, proven=True)
-        estimates = tuple(route for route in account_usage_routes(account) if candidates[route] == 1)
-        ordinals = Counter()
-        for quota in sorted(account.quotas, key=lambda quota: quota is not primary):
-            model = quota.model_id if quota.scope == 'model' and quota.model_id else None
-            eligible = (quota.scope == 'account' or bool(model)
-                        and bool(reference_identity(model)) and not unverified_alias(model, account.ref.provider_id))
-            shape = (quota.label, quota.scope, quota.model_id, quota.period, quota.duration_seconds, quota.origin)
-            ordinals[shape] += 1
-            result.append(QuotaSeries(identity((*account.key, *shape, ordinals[shape])), account.key,
-                item.label, quota.label, model, eligible, quota is primary, routes, estimates))
-    return tuple(result)
-
-
-def retain_compatible_quotas(accounts, previous):
-    """Temporary partial observations don't delete otherwise compatible quota slots."""
-    result = []
-    for item in accounts:
-        account = item.account
-        prior = previous.get(account.key)
-        if (account.availability in {'partial', 'stale'} and prior and
-                account.plan == prior.plan and account.primary_quota_label == prior.primary_quota_label and
-                account_usage_routes(account) == account_usage_routes(prior)):
-            labels = {quota.label for quota in account.quotas}
-            account = replace(account, quotas=account.quotas + tuple(
-                quota for quota in prior.quotas if quota.label not in labels))
-            item = replace(item, account=account)
-        result.append(item)
-    return tuple(result)
+def account_roster(accounts):
+    # Card projection supplies the safe heading and its stable account identity.
+    distinct = {item.account.key: item for item in accounts}
+    candidates = Counter(route for item in distinct.values() for route in account_usage_routes(item.account))
+    return tuple(AccountSeries(identity(key), key, item.label, account_usage_routes(item.account, proven=True),
+        account_usage_routes(item.account),
+        tuple(route for route in account_usage_routes(item.account) if candidates[route] == 1))
+        for key, item in distinct.items())
 
 
 def _bucket_cost(index, series, start, end, *, partial=False):
     if index.cost('', 'provider', start, end).observed_requests:
         return None  # Unknown route could belong to any current account.
-    proven, estimated = [], []
-    for route in series.routes:
-        proven.append(index.cost(route, series.account_key, start, end, series.model))
-        unknown = index.cost(route, None, start, end, series.model)
+    proven = [index.cost(route, series.account_key, start, end) for route in series.routes]
+    estimated = []
+    for route in series.candidates:
+        unknown = index.cost(route, None, start, end)
         if route in series.estimates:
             estimated.append(unknown)
         elif unknown.observed_requests:
-            return None
-        if series.model and any(index.unknown_model_cost(route, owner, start, end).observed_requests
-                                for owner in (None, series.account_key)):
             return None
     total = combined_cost((*proven, *estimated))
     if not total.complete:
@@ -84,13 +49,36 @@ def _bucket_cost(index, series, start, end, *, partial=False):
     amount = total.known_ccost
     if partial and not amount:
         return None
-    mark = '~' if partial or any(value.known_ccost > 0 for value in estimated) else ''
+    mark = '~' if partial or any(value.observed_requests for value in estimated) else ''
     return amount, mark
 
 
 def _point(amount, mark=''):
     return record(amount=amount, display=record(credits=mark + ccost_amount(amount, unit='credits'),
-                                               usd=mark + ccost_amount(amount, unit='usd')))
+                                                usd=mark + ccost_amount(amount, unit='usd')))
+
+
+def _ticks(peak):
+    step = _nice_scale(peak)
+    return tuple(_point(step * i) for i in range(5))
+
+
+def seed_today(view, day, amounts):
+    """Supplement only an acquiring daily bucket with a separate observed subtotal."""
+    index = next((i for i, (left, _) in enumerate(view['buckets']) if left == day), None)
+    if view['period'] == 'today' or index not in view['pending_buckets']:
+        return view
+    series = []
+    for item in view['series']:
+        amount = amounts.get(item['id'])
+        if amount is None:
+            series.append(item)
+            continue
+        points = item['points'].copy()
+        points[index] = _point(amount, '~').to_json()
+        peak = max(Decimal(point['amount']) for point in points if point is not None)
+        series.append(dict(item, points=points, peak=str(peak), ticks=[tick.to_json() for tick in _ticks(peak)]))
+    return dict(view, series=series)
 
 
 def _nice_scale(peak):
@@ -135,17 +123,13 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
                       for (left, right), gap, waiting in zip(elapsed, unavailable, acquiring))
     series = []
     for item in roster:
-        amounts = tuple(_bucket_cost(index, item, window[0], window[1], partial=window[2])
-                        if index is not None and window is not None and item.eligible else None
-                        for window in qualified)
+        amounts = tuple(_bucket_cost(index, item, bucket[0], bucket[1], partial=bucket[2])
+                        if index is not None and bucket is not None else None for bucket in qualified)
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
-        step = _nice_scale(peak)
-        ticks = tuple(_point(step * i) for i in range(5))
-        series.append(record(id=item.key, account=item.label, quota=item.quota, primary=item.primary,
-                             peak=peak, ticks=ticks, points=points))
+        series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,
                   slot_dates=window.dates, future_buckets=window.future, partial_buckets=window.partial,
                   pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting and not unavailable[i]),

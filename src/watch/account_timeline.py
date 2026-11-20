@@ -1,17 +1,18 @@
 """Demand-driven account history, isolated from Live's native quota and card lanes."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from decimal import Decimal
 from functools import lru_cache
 import sqlite3
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
 
-from src.analysis.account_timeline import period_start
+from src.analysis.account_timeline import period_start, timeline_window
 from src.analysis.causal import trace_entries
 from src.analysis.coverage import snapshot_coverage_complete
 from src.analysis.period_ccost import PeriodCCostIndex
-from src.application.account_timeline import quota_roster, retain_compatible_quotas, retain_refresh, timeline_view
+from src.application.account_timeline import account_roster, retain_refresh, seed_today, timeline_view
 from src.application.session_quota import source_scope
 from src.domain.session_tree import root_activity
 from src.reports.history_snapshots import load as load_snapshots
@@ -35,6 +36,37 @@ class RootUsage:
     complete: bool
     retry_at_ms: int = 0
     acquired: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class CardToday:
+    """Numeric Today values from the same qualified projection as the cards."""
+    source: tuple
+    zone: str
+    day: int
+    observed_at: int
+    price_revision: str
+    amounts: dict[tuple[str, str, str], Decimal]
+
+    @classmethod
+    def from_accounts(cls, accounts, source, zone, day, observed_at, history):
+        if (history.observed_start_ms is None or history.observed_start_ms > day
+                or history.index.cost('', 'provider', day, observed_at + 1).observed_requests):
+            return None
+        amounts = {}
+        for item in accounts:
+            cost = dict(item.ccost_scopes).get('today')
+            if cost is not None and cost.complete and cost.known_ccost > 0:
+                amounts[item.account.key] = cost.known_ccost
+        # The retention lane does not certify every chart candidate. A known
+        # positive is useful provisionally; only chart coverage qualifies zeros.
+        return cls(source, zone, day, observed_at, history.catalog.diagnostic_signature, amounts) if amounts else None
+
+
+def _migration_gaps(gap, now_ms):
+    if gap is not None and gap.has_gap:
+        return tuple((item.first_ms, item.last_ms + 1) for item in gap.sessions) or ((0, now_ms),)
+    return ()
 
 
 class TimelineHistory:
@@ -92,7 +124,8 @@ class TimelineHistory:
             service.close_accounts()
         return True
 
-    def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *, foreground=False):
+    def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *,
+             foreground=False, shared_roots=None):
         if self.source != scope:
             self.source = scope
             self.roots.clear()
@@ -140,6 +173,17 @@ class TimelineHistory:
         self.established.intersection_update(observation.revisions)
         self.roots = {key: value for key, value in self.roots.items()
                       if observation.revisions.get(key) == value.revision}
+        # Use the card lane's already-acquired stable trees only at the same
+        # source revision. Active/incomplete trees still get normal chart reads.
+        for root in roots:
+            key = root.session_id
+            shared = shared_roots.get(key) if shared_roots is not None else None
+            if (shared is not None and shared[0] == observation.revisions.get(key)
+                    and key not in active and not (key in self.roots and self.roots[key].complete)
+                    and all(entry.completed_at_ms <= now_ms for entry in shared[1])):
+                self.roots[key] = RootUsage(shared[0], shared[1], True)
+                self.established.add(key)
+                self.seen.add(key)
         pending = [root for root in roots if root.session_id in observation.revisions and (
             (saved := self.roots.get(root.session_id)) is None or 0 < saved.retry_at_ms <= now_ms)]
         pending.sort(key=lambda item: (item.session_id in self.seen, item.session_id in self.roots,
@@ -173,11 +217,7 @@ class TimelineHistory:
 
         acquiring = []
         initial = []
-        gaps = []
-        if migration_gap is not None and migration_gap.has_gap:
-            gaps.extend((item.first_ms, item.last_ms + 1) for item in migration_gap.sessions)
-            if not migration_gap.sessions:
-                gaps.append((0, now_ms))
+        gaps = list(_migration_gaps(migration_gap, now_ms))
         for root in roots:
             key = root.session_id
             saved = self.roots.get(key)
@@ -197,7 +237,7 @@ class TimelineHistory:
         index_key = (price_revision, tuple((key, id(value)) for key, value in used)) if catalog else None
         if catalog is not None and self.index_key != index_key:
             self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
-                                          self.value_usage, verified_models=True)
+                                          self.value_usage, account_only=True)
             # Holding the facts also prevents object ID reuse in the index key.
             self.index_key, self.index_facts = index_key, used
         by_period = {period: timeline_view(period, now_ms, zone, roster, self.index if catalog else None,
@@ -219,8 +259,11 @@ class AccountTimeline:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None
+        self.day = None
         self.marker = uuid4().hex
         self.results = {}
+        self.seeded = {}
+        self.seed_input = None
         self.frame_revision = 0
         self.job = None
         self.fast = False
@@ -232,14 +275,13 @@ class AccountTimeline:
         self.roster = ()
         self.public_roster = ()
         self.public_ready = False
-        self.native_accounts = {}
         self.source = None
         self.due = self.last_started = 0
         self.closed = False
 
     def lookup(self, period, revision=None):
         with self.lock:
-            value = self.results.get(period)
+            value = self.seeded.get(period, self.results.get(period))
             marker, current = self.marker, self.frame_revision
             roster, ready = self.public_roster, self.public_ready
             acquiring = ready and period in self.active_periods and monotonic() < self.active_until
@@ -248,33 +290,36 @@ class AccountTimeline:
                      acquiring=acquiring)
 
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
-             now_ms, available=True, terminal=False):
+             now_ms, available=True, terminal=False, card_today=None, shared_roots=None):
         changed_source = source is not None and source != self.source
         if changed_source:
-            self.source, self.native_accounts = source, {}
+            self.source = source
         if available:
-            compatible = retain_compatible_quotas(accounts, self.native_accounts)
-            self.native_accounts = {item.account.key: item.account for item in compatible}
-            roster = quota_roster(compatible)
+            roster = account_roster(accounts)
         else:
             source, roster = self.source, () if changed_source else self.roster
         # Names and ordering can change without losing selections. Keys and
         # compatible account routes, unlike balances/labels, define membership.
-        scope = (source, zone, frozenset((entry.key, entry.routes, entry.estimates) for entry in roster))
+        scope = (source, zone, frozenset((entry.key, entry.routes, entry.candidates, entry.estimates) for entry in roster))
         if terminal:
-            self.source, self.native_accounts = None, {}
+            self.source = None
             roster = ()
             scope = None
+        day = period_start('today', now_ms, zone)
+        day_changed = day != self.day
+        self.day = day
         starts = {period: period_start(period, now_ms, zone) for period in periods if period != '7-days'}
         with self.lock:
             if available or changed_source or terminal:
                 self.public_ready = available and not terminal
             if roster != self.roster or terminal:
-                self.public_roster = tuple(dict(id=item.key, account=item.label, quota=item.quota, primary=item.primary)
+                self.public_roster = tuple(dict(id=item.key, account=item.label)
                                            for item in roster) if not terminal else ()
-            if scope != self.scope:
+            if scope != self.scope or day_changed:
                 self.scope, self.marker = scope, uuid4().hex
                 self.results.clear()
+                self.seeded.clear()
+                self.seed_input = None
                 self.frame_revision += 1
                 self.due = 0
                 self.initial_periods.clear()
@@ -285,6 +330,7 @@ class AccountTimeline:
             if rolled:
                 for period in rolled:
                     del self.results[period]
+                    self.seeded.pop(period, None)
                 self.frame_revision += 1
                 self.due = 0
             marker = self.marker
@@ -295,7 +341,8 @@ class AccountTimeline:
                 if job_marker == marker and available:
                     self.initial_periods = initial
                     values = {period: value for period, value in values.items()
-                              if value['start_ms'] == starts.get(period, value['start_ms'])}
+                              if period_start('today', value['end_ms'], zone) == day
+                              and value['start_ms'] == starts.get(period, value['start_ms'])}
                     price_revision = next(iter(values.values()))['price_revision'] if values else self.price_revision
                     repriced = price_revision != self.price_revision
                     if not removed:
@@ -313,6 +360,7 @@ class AccountTimeline:
                             self.price_revision = price_revision
                             self.results.update(values)
                             self.frame_revision += 1
+                            self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
                     self.due = self.last_started + (4000 if more else REFRESH_MS)
                     if rolled:
                         self.due = 0
@@ -331,6 +379,9 @@ class AccountTimeline:
         if periods != self.demand or self.roster != roster:
             self.demand, self.roster = periods, roster
             self.due = 0
+        if available and not terminal:
+            with self.lock:
+                self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
         if self.closed or terminal or not available or not periods or observation is None or not roster:
             self.fast = False
             with self.lock:
@@ -347,7 +398,7 @@ class AccountTimeline:
 
         def step():
             values, more, removed, interrupted = self.history.step(source, observation, sorted(periods), roster,
-                zone, catalog, prices, migration_gap, now_ms, foreground=bool(cold))
+                zone, catalog, prices, migration_gap, now_ms, foreground=bool(cold), shared_roots=shared_roots)
             return (marker, {period: value.to_json() for period, value in values.items()}, more, removed, interrupted,
                     self.history.initial_periods.copy())
 
@@ -356,6 +407,40 @@ class AccountTimeline:
             self.active_periods = cold
             self.active_until = monotonic() + ACTIVE_CUE_SECONDS
         return marker
+
+    def _publish_today(self, periods, roster, today, source, zone, catalog, migration_gap, now_ms):
+        # Caller holds the frame lock: history, seeds and revision move together.
+        daily = (periods | self.seeded.keys()) - {'today'}
+        if not daily:
+            return
+        day = period_start('today', now_ms, zone)
+        revision = self.price_revision or (catalog.diagnostic_signature if catalog else None)
+        gaps = _migration_gaps(migration_gap, now_ms)
+        if (today is None or (today.source, today.zone, today.day, today.price_revision) !=
+                (source, zone, day, revision) or not day <= today.observed_at < now_ms
+                or any(left < now_ms and right > day for left, right in gaps)):
+            today = None
+        signature = (today, frozenset(daily), self.frame_revision, roster, day)
+        if signature == self.seed_input:
+            return
+        seeded = {}
+        if today is not None:
+            amounts = {item.key: today.amounts[item.account_key] for item in roster if item.account_key in today.amounts}
+            for period in daily:
+                view = self.results.get(period)
+                if view is not None and (view['end_ms'] <= today.observed_at or not view['pending_buckets']):
+                    continue
+                if amounts and view is None and period in periods:
+                    window = timeline_window(period, now_ms, zone)
+                    pending = ((window.start, now_ms),)
+                    view = timeline_view(period, now_ms, zone, roster, None, first_covered_ms=None,
+                        gaps=gaps, pending=pending, price_revision=revision).to_json()
+                if view is not None and (value := seed_today(view, day, amounts)) != view:
+                    seeded[period] = value
+        if seeded != self.seeded:
+            self.seeded = seeded
+            self.frame_revision += 1
+        self.seed_input = (today, frozenset((periods | seeded.keys()) - {'today'}), self.frame_revision, roster, day)
 
     def close(self):
         self.closed = True
