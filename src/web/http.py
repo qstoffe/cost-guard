@@ -409,6 +409,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/session-detail":
                 self.cached_sessions(value, detail=True)
                 return
+            if self.path == "/api/cache/token-mix":
+                self.cached_mix_total(value)
+                return
             if self.path == "/api/cache/session-detail/demand":
                 self.cached_detail_demand(value)
                 return
@@ -596,6 +599,30 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(409, {"error": "cache_source_unbound"})
         else:
             self.reply(202, {"prioritized": prioritized})
+
+    def cached_mix_total(self, value):
+        from src.cache.display_mix_totals import MIX_PERIODS
+
+        period = value.get("period")
+        if set(value) != {"period"} or type(period) is not str or period not in MIX_PERIODS:
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        if archive is None or not getattr(owner, "cached_mix_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        try:
+            result = archive.mix_total(period)
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif owner.display_archive is not archive or result is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, result)
 
     def cached_watch(self):
         owner = self.server.lifecycle

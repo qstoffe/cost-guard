@@ -5,6 +5,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
+from src.application.cached_mix_view import cached_mix_view
 from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
@@ -177,6 +178,16 @@ class DisplayArchive:
             if presentation:
                 value["view"] = cached_watch_view(value, views.timezone_id)
         return value if self.views is views else None
+
+    def mix_total(self, period):
+        views = self.views
+        if views is None:
+            return None
+        fence = self.sessions.clear_fence
+        snapshot = cached_mix_view(self.history, views.source, views.timezone_id, period, int(time.time() * 1000))
+        if self.views is views and self.sessions.clear_fence == fence:
+            return dict(binding=views.binding, **snapshot)
+        return None
 
     def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False, native_export_supported=False):
         if binding == self._binding:

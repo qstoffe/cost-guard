@@ -324,6 +324,87 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual("unverified", json.loads(held[2])["cards"][0]["outcome"])
         self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
 
+    def test_token_mix_endpoint_reads_only_a_materialized_authorized_period(self):
+        from dataclasses import replace
+        from development.tests.fixtures.session_snapshots import make_snapshot
+        from src.analysis import analyze_snapshot
+        from src.application.archive_mix_build import ArchiveMixBuild, MixBuildState
+        from src.application.request_archive_projection import request_roster
+        from src.cache.display_history import SessionChange, SessionFact
+        from src.web.display_archive import DisplayArchive
+
+        endpoint = "/api/cache/token-mix"
+        self.assertEqual(401, self.request(endpoint, {"period": "today"})[0])
+        self.login()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity = root / "source.db"
+            identity.write_bytes(b"identity only; no source query can succeed")
+            source = OpenCodeV1Source(identity)
+            selection = SimpleNamespace(selected="v1", source=source)
+            driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(
+                report_service=SimpleNamespace(timezone_id="UTC", selection=selection), catalog_observation=None))
+            archive = DisplayArchive(root, lambda *_: None)
+            try:
+                archive.initialize()
+                archive.observe(driver, before_tick=True)
+                owner = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
+                                        display_archive=archive, cached_mix_enabled=True)
+                self.server.lifecycle = owner
+                with patch.object(archive.history, "usage_inputs", side_effect=AssertionError("request scanned usage")):
+                    cold = self.request(endpoint, {"period": "today"})
+                at = int(time.time() * 1000)
+                snapshot = make_snapshot()
+                price = SimpleNamespace(analysis_signature="fixture", reference_category_valuation=lambda *_: None)
+                roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), price)
+                child = next(item for item in roster.requests if item.session_id == "child")
+                entry = replace(child, clock_ms=at, category_costs=None, known=0b1011,
+                                tokens=(20, 3, 0, 5, 1), fork_key=None)
+                archive.history.commit_sessions(archive.views.source,
+                    (SessionChange(SessionFact("root", "r1", "Fixture"), None, previous_progress=0,
+                        request_roster=replace(roster, requests=(entry,), attribution=())),))
+                with ArchiveMixBuild(archive.views.source, "UTC", at) as build:
+                    self.assertEqual(MixBuildState.PUBLISHED, build.step(archive.history))
+                with patch.object(archive.history, "usage_inputs", side_effect=AssertionError("request scanned usage")):
+                    periods = ("today", "7-days", "30-days", "month", "all")
+                    responses = {period: self.request(endpoint, {"period": period}) for period in periods}
+                    invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
+                read = archive.history.mix_total
+
+                def read_after_auth_revoked(*args):
+                    saved = read(*args)
+                    authenticated.return_value = False
+                    return saved
+
+                with patch.object(self.server.session, "authenticated", wraps=self.server.session.authenticated) as authenticated:
+                    with patch.object(archive.history, "mix_total", side_effect=read_after_auth_revoked):
+                        expired = self.request(endpoint, {"period": "today"})
+
+                def revoke_binding(*args):
+                    saved = read(*args)
+                    archive.unbind()
+                    return saved
+
+                with patch.object(archive.history, "mix_total", side_effect=revoke_binding):
+                    unbound = self.request(endpoint, {"period": "today"})
+            finally:
+                archive.close()
+
+        self.assertEqual((200, "unknown", None), (cold[0], json.loads(cold[2])["coverage"], json.loads(cold[2])["token_mix"]))
+        for period, (status, _, body) in responses.items():
+            with self.subTest(period=period):
+                self.assertEqual(200, status)
+                projection = json.loads(body)
+                self.assertEqual((period, "partial", ["20", "3", "0", "6"]),
+                                 (projection["scope"], projection["coverage"], projection["observed_category_totals"]))
+                mix = projection["token_mix"]
+                self.assertEqual((1, [20, 3, None, 6], [None] * 4, None),
+                                 (mix["request_count"], mix["totals"], mix["shares"], mix["costs"]))
+                self.assertEqual("N/A", mix["display"]["mix_write_share"])
+        self.assertEqual(400, invalid[0])
+        self.assertEqual(401, expired[0])
+        self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
+
     def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
         from src.application.session_catalog import SessionCatalog
         from src.cache.display_history import SessionChange, SessionFact
