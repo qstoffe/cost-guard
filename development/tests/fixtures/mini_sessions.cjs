@@ -27,17 +27,32 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(helpText(headers[2].children[0]),"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
   assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');
   assert.equal(helpText(headers[4].children[0]),'Estimated context for this session, in tokens.');
-  for(const count of [0,1,3,4,5,6,10]) {
+  for(const count of [0,1,4,5,10,12]) {
     const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
-    assert.equal(rows().length,Math.max(5,count));
-    assert.deepEqual(ids(),[...history.slice(Math.min(5,count)).map(c=>c.session_id),...active.map(c=>c.session_id)]);
+    assert.equal(rows().length,5+count);
+    assert.deepEqual(ids(),[...history.map(c=>c.session_id),...active.map(c=>c.session_id)]);
     const expected=require('./mini_history_expected.cjs')(input.view);
     assert.deepEqual(ids(),expected.map(row=>row.id));
     if(count===1) assert.notDeepEqual(ids(),history.map(c=>c.session_id),
       'the obsolete history-only oracle excludes a legitimate running representative');
-    assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,count<5);
+    assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,false);
     for(const row of rows()) assert.equal(row.children[0].textContent,row.dataset.id.startsWith('a')?'▶ 12:34':'23:47');
   }
+  for (const capacity of [2,5,10]) {
+    controller.settings({miniWatchPlacement:'remember-last',miniWatchNonRunningRows:capacity});
+    for (const running of [0,1,4,5,10,12]) for (const nonRunning of [0,2,5,10,19]) {
+      const active=Array.from({length:running},(_,i)=>card('running'+i,200+2*i,true));
+      const ended=Array.from({length:nonRunning},(_,i)=>card('ended'+i,185+3*i));
+      show(active,ended);
+      assert.equal(view.nonRunningRows,capacity);
+      assert.equal(view.needsHistory,nonRunning<capacity);
+      const scrollback=ended.slice(-15);
+      const opening=[...active,...scrollback.slice(-capacity)]
+        .sort((a,b)=>a.rows[0].prompt.at_ms-b.rows[0].prompt.at_ms || a.session_id.localeCompare(b.session_id));
+      assert.deepEqual(ids(),[...scrollback.slice(0,-capacity),...opening].map(value=>value.session_id));
+    }
+  }
+  controller.settings({miniWatchPlacement:'remember-last'});
   show([],history);
   const fixed=[...view.body.children];
   saved.recent_finished_cards=[history.at(-1)];
@@ -129,7 +144,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
    assert.equal(view.promptRows.has('h4'),false);assert.equal(rows()[0].children[0].textContent,'▶ 12:34');
    show([],[card('replacement',600)]);assert.equal(rows()[0].children[0].textContent,'23:47','replacement session clears its own cue');
   const olderGrace=card('grace',50);olderGrace.focal_id='grace';show([olderGrace],history);
-  assert.deepEqual(ids(),history.map(c=>c.session_id),'older grace cannot displace a newer history winner');
+  assert.deepEqual(ids(),['grace',...history.map(c=>c.session_id)],'older grace remains available in scrollback');
   const unknown=card('unknown',0);unknown.rows[0].prompt.completed_at_ms=null;
   show([],[unknown,...history.slice(1)]);assert.equal(ids()[0],'unknown');
   assert.equal(rows()[0].children[0].textContent,'—');assert.equal(helpText(rows()[0].children[0].children[0]),activityHelp('Unknown finish time'));
@@ -185,6 +200,6 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   show(saved.active_cards,history);context.fullInput=input;context.fullParent=view.el('div');context.fullState={connection:'Live connected.'};
   vm.runInContext('ReportView.renderLive(fullParent,fullInput,fullState)',context);
   assert.equal(context.fullState.watch.history,undefined);
-  assert.equal(view.promptRows.size,5);
+  assert.equal(view.promptRows.size,saved.active_cards.length+5);
   input.view=saved;controller.update(input);
 };

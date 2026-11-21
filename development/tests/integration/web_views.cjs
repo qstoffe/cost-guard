@@ -159,10 +159,10 @@ async function main() {
   assert.doesNotMatch(ids.result.textContent, /More information/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
-  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}, webSettingsChoices: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "default", miniWatchSize: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}})', context);
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", miniWatchNonRunningRows: 5, quotaDisplayMode: "used"}, webSettingsChoices: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "default", miniWatchSize: "default", miniWatchNonRunningRows: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", miniWatchNonRunningRows: 5, quotaDisplayMode: "used"}})', context);
   assert.equal(ids.result.textContent, creditsText, 'unitless Models ratios do not change with Credits/USD');
   assert.deepEqual(ids.result.children, retainedChildren, 'unit change retains DOM');
-  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}, webSettingsChoices: {theme: "default", ccostDisplayUnit: "default", miniWatchPlacement: "default", miniWatchSize: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}})', context);
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", miniWatchNonRunningRows: 5, quotaDisplayMode: "used"}, webSettingsChoices: {theme: "default", ccostDisplayUnit: "default", miniWatchPlacement: "default", miniWatchSize: "default", miniWatchNonRunningRows: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", miniWatchNonRunningRows: 5, quotaDisplayMode: "used"}})', context);
   assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
   assert.equal(requests, beforeToggle, 'toggle never requests a report/provider');
   const overviewTable = all(ids.result, 'table')[0];
@@ -203,7 +203,7 @@ async function main() {
   const frozenModels = ids.result.textContent;
   navigate('settings');
   await until(() => all(ids.result, 'select')[0]?.disabled === false);
-  assert.equal(all(ids.result, 'select').length, 5, 'Theme, CCost display, Mini position/size and quota orientation');
+  assert.equal(all(ids.result, 'select').length, 6, 'Theme, CCost display, Mini position/size/rows and quota orientation');
   assert.equal(ids.result.firstChild.getAttribute('aria-label'), 'Settings');
   assert.equal(all(ids.result, 'h3').length, 0, 'compact Settings has no inner panel heading');
   assert.equal(all(ids.result, 'button').length, 0, 'no save or apply action');

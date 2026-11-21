@@ -401,7 +401,8 @@ class CiEvidenceTests(unittest.TestCase):
                 selected = [(call.args[0][-1], call.args[0][-2]) for call in run.call_args_list]
                 self.assertEqual([('opening-only', '1'), ('opening-races-only', '1')] +
                     [('header-only', zoom) for zoom in zooms] +
-                    [('dashboard-only', '1'), ('previews-only', '1')], selected)
+                        [('dashboard-only', '1'), ('previews-only', '1')] +
+                        [('compact-only', zoom) for zoom in ('1', '1.25', '1.5')], selected)
                 omitted = [call.args[1] for call in notice.call_args_list
                            if call.args[0] == 'watch-header-extra-zooms']
                 self.assertEqual([] if event == 'workflow_dispatch' else ['NOT RUN'],

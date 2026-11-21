@@ -10,6 +10,7 @@ import unittest
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.catalog_previews import CatalogPreviewFixture
 from development.tests.fixtures.watch_runtime import make_service
+from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.test_watch_cards import ManualWorkers
 from src.application.live_projection import project_live
 from src.application.session_catalog import SessionCatalog
@@ -18,7 +19,7 @@ from src.reports.watch_capture import capture_rows
 from src.sources.errors import http_failure, transport_failure
 from src.watch.card_workers import CardResult
 from src.watch.cards import WatchCards
-from src.watch.models import WatchProjection
+from src.watch.models import WatchCard, WatchProjection
 from src.watch.observers import observe_catalog
 from src.watch.web_coordinator import WebWatchCoordinator
 
@@ -103,9 +104,9 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         published = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
         wire = project_live(published).to_json()
 
-        expected = [f"root-{index:04}" for index in range(3216, 3211, -1)]
+        expected = [f"root-{index:04}" for index in range(3216, 3201, -1)]
         self.assertEqual(expected, [item["session_id"] for item in wire["earlier_previews"]])
-        self.assertEqual(expected, [row["session_id"] for row in page["view"]["session_usage"][:5]])
+        self.assertEqual(expected, [row["session_id"] for row in page["view"]["session_usage"][:15]])
         self.assertEqual("3216", wire["earlier_previews"][0]["total_ccost"])
         self.assertEqual((), published.history_cards)
         self.assertEqual((20, 3217), (cards.history.checked, cards.history.total))
@@ -124,7 +125,7 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         published = WebWatchCoordinator.catalog_frame(SimpleNamespace(cards=cards), catalog, frame)
         previews = project_live(published).to_json()["earlier_previews"]
 
-        self.assertEqual(5, len(previews))
+        self.assertEqual(15, len(previews))
         self.assertEqual("Synthetic 2792", previews[0]["title"])
         self.assertEqual("catalog", previews[0]["activity_origin"])
         self.assertIsNone(previews[0]["total_ccost"])
@@ -216,19 +217,30 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertIsNone(retained.observed_at_ms)
 
     def test_shortlist_bounds_speculative_history_and_keeps_running_capacity(self):
-        _, catalog, observation = observed_catalog(324)
+        source, catalog, observation = observed_catalog(324)
         workers = ManualWorkers()
         cards = WatchCards(workers)
         cards.catalog(observation)
-        WebWatchCoordinator.catalog_frame(SimpleNamespace(cards=cards), catalog,
-            WatchProjection("Watch", "Synthetic", (), now_ms=NOW))
+        base = summary_watch().active_cards[0]
+        prompt = replace(base.rows[0].prompt, in_progress=True)
+        running = tuple(WatchCard(key, key, prompt.event_id, (replace(base.rows[0], prompt=prompt),))
+                        for key in (f"root-{i:04}" for i in range(312, 324)))
+        counts = source.load_count, source.catalog_count, source.batch_count
+
+        published = WebWatchCoordinator.catalog_frame(SimpleNamespace(cards=cards), catalog,
+            WatchProjection("Watch", "Synthetic", (), now_ms=NOW, active_cards=running))
 
         cards.tick(NOW)
 
         self.assertEqual(4, len(workers.jobs))
         self.assertTrue(set(workers.jobs).issubset(cards.preview_ids))
-        self.assertEqual(("root-0323", "root-0322", "root-0321", "root-0320"),
+        self.assertEqual(running, published.active_cards)
+        self.assertEqual([f"root-{i:04}" for i in range(311, 296, -1)],
+                         [preview.session_id for preview in published.earlier_previews])
+        self.assertEqual(counts, (source.load_count, source.catalog_count, source.batch_count))
+        self.assertEqual(("root-0311", "root-0310", "root-0309", "root-0308"),
             tuple(workers.submissions))
+        self.assertEqual(15, len(catalog.previews(limit=1000)))
         self.assertEqual(3, len(catalog.previews(("root-0323", "root-0322"), limit=3)))
         self.assertEqual((), catalog.previews(limit=0))
 

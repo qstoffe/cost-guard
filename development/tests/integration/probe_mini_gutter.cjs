@@ -22,7 +22,9 @@ module.exports=async({evaluate,until,fixture,command,sessionId,open,close,captur
   for(const theme of ['classic','web'])for(const color of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},sessionId);
     await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'${theme}'})))()`);
-    await fixture('density-3-1');await until('liveValue.view.active_cards.length===3');await open();
+    await fixture('history-5-3-1');
+    await until('liveValue.view.active_cards.length===3 && liveValue.view.history_cards.length===5');
+    await open();
     // Reproduce the original declaration in this exact native window, then restore shipped CSS.
     await evaluate(`miniWatch.view.prompts.style.scrollbarGutter='stable'`);await settle();
     const before=await read();await capture(`gutter-${theme}-${color}-before`);
@@ -33,7 +35,7 @@ module.exports=async({evaluate,until,fixture,command,sessionId,open,close,captur
     assert.equal(after.scrollbarGutter,'auto');assert.deepEqual(after.outer,before.outer);
     if(before.gutter>0)assert.ok(before.insets[1]-after.insets[1]>=before.gutter-1);
     for(const count of [0,1,3,5,6,10,5,1]) {
-      await fixture(`density-${count}-1`);await until(`miniWatch.view.promptRows.size===${count}`);await settle();
+      await fixture(`history-${count}-3-1`);await until(`miniWatch.view.promptRows.size===${count+3}`);await settle();
       const value=await read();layouts.push({case:`gutter-${theme}-${color}-${count}`, ...value});
       assert.equal(value.vertical,count>5,JSON.stringify(value));
       assert.equal(value.documentOverflow,false);assert.equal(value.horizontal,false);
@@ -54,6 +56,6 @@ module.exports=async({evaluate,until,fixture,command,sessionId,open,close,captur
     await close();
   }
   await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'default'})))()`);
-  checks.push('Paired original-stable/shipped gutter screenshots and DOM geometry in Classic/Web light/dark; 0/1/3/5/6/10→5→1 rows, authentic internal scrollbar, sticky header, reachable last row, symmetric body padding and no passive native resize');
+  checks.push('Paired stable/shipped gutter geometry in Classic/Web light/dark: three running rows plus 0–10 non-running; sticky header, internal scrolling, reachable last row, symmetric padding and no passive native resize');
 };
 module.exports.inspect=inspect;

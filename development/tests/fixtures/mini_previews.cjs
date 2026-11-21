@@ -24,8 +24,9 @@ module.exports = (controller, view, input, helpText) => {
   for(const count of [0,1,2,3,5]) {
     const active=Array.from({length:count},(_,i)=>({...structuredClone(base),session_id:'running-'+i}));
     show(active);
-    assert.equal(view.promptRows.size,5);
-    assert.equal(view.body.children.length,5,'no fake sixth loading/status row');
+    assert.equal(view.promptRows.size,5+count);
+    assert.equal(view.body.children.length,5+count,'no extra loading/status row');
+    assert.equal(view.needsHistory,true,'unhydrated previews do not release history interest');
     for(const row of view.body.children.filter(r=>r.dataset.id.startsWith('preview-'))) {
       assertPending(row,[0,2]);
       assert.equal(row.className,'');assert.doesNotMatch(row.attributes['aria-label'],/Prompt|Completed|Ended|Running/);
@@ -64,8 +65,12 @@ module.exports = (controller, view, input, helpText) => {
   assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),['?','0','?']);
   assert.equal(helpText(row.children[2].children[0]),'No prompt is recorded for this session.');
   assert.equal(helpText(row.children[4]),'No recorded context is available for this session.');
+  assert.equal(view.needsHistory,true,'one confirmed empty session does not qualify all previews');
+  show([],[],previews.map(value=>({...value,metric_absences:absent.metric_absences})));
+  assert.equal(view.needsHistory,false,'provider-confirmed empty histories satisfy the current capacity');
   show();
   assertPending(row,[0,1,2]);
+  assert.equal(view.needsHistory,true,'unqualified preview data restores demand');
   assert.equal(row.children[4].attributes['aria-describedby'],undefined);
   const real={...structuredClone(base),session_id:'preview-0',title:'Catalog session 0',focal_id:'',
     rows:[{...structuredClone(base.rows[0]),prompt:{...structuredClone(base.rows[0].prompt),

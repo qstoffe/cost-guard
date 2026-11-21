@@ -329,7 +329,7 @@ class WatchCards:
         active.sort(key=lambda item: (item[0], item[1]))
         # Metadata is an admission hint only, never a finish bound/proof.
         history.sort(key=lambda item: (item[1] not in preview_order, not item[2].inspect_recent,
-            item[0], preview_order.get(item[1], 5),
+            item[0], preview_order.get(item[1], len(preview_order)),
             -(item[2].root.updated_at_ms or 0), item[1]))
         planned = []
         admission_turns = {}

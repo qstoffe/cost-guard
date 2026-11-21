@@ -12,6 +12,7 @@ from src.sources.errors import SourceError
 from src.analysis.account_timeline import PERIODS
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
+from src.application.session_catalog import MINI_PREVIEW_LIMIT
 from src.application.session_quota import source_scope
 from src.reports.history import WatchHistoryAcquisition
 from src.reports.accounts import AccountPeriodHistory
@@ -169,7 +170,7 @@ class WebWatchCoordinator(WatchCoordinator):
             return None
         running = {card.session_id for card in frame.active_cards
             if any(row.prompt.in_progress or row.prompt.execution_unverified for row in card.rows)}
-        previews = catalog.previews(running, limit=5 - len(running))
+        previews = catalog.previews(running, limit=MINI_PREVIEW_LIMIT)
         self.cards.preview_ids = tuple(item.session_id for item in previews)
         published = []
         for item in previews:

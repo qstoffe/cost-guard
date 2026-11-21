@@ -34,6 +34,9 @@ INTERACTIVE_ATTEMPTS = 12
 INTERACTIVE_ADMISSION_SECONDS = 0.35
 ARRIVAL_SLOTS = 5
 ARRIVAL_SECONDS = 120
+# Maximum Mini viewport (10) plus a small scrollback window. The card
+# scheduler still owns bounded source admission; this shortlist is in-memory.
+MINI_PREVIEW_LIMIT = 15
 
 
 @dataclass(frozen=True, slots=True)
@@ -1008,7 +1011,7 @@ class SessionCatalog:
         owner and is deliberately absent from this DTO.
         """
         with self.lock:
-            limit = max(0, min(5, limit))
+            limit = max(0, min(MINI_PREVIEW_LIMIT, limit))
             if self.last_observation is None or not limit:
                 return ()
             excluded = set(excluded) | self.active
@@ -1041,7 +1044,7 @@ class SessionCatalog:
                 return SessionPreview(key, self.roots[key].title or "Untitled session", at,
                     "events" if self._activity_current(key) else "catalog",
                     total, total is not None, total_state=total_state)
-            # O(N log 5), bounded output/memory; no full-history sort or capture.
+            # Bounded top-K output/memory; no full-history sort or capture.
             selected = tuple(nsmallest(limit, (value for key in self.roots
                 if (value := candidate(key)) is not None),
                 key=lambda value: (-(value.activity_ms or 0), value.session_id)))

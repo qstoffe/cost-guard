@@ -33,9 +33,11 @@ assert.throws(()=>measure(failed.view,true),/layout failed/);
 assert.equal(failed.removed(),true,'failed measurements must not leave clones');
 const contentHeight=vm.runInContext('MiniWatch.contentHeight',context);
 let removed=false, appended=false;
+const region={style:{},offsetHeight:10,clientHeight:10,
+  firstElementChild:{tBodies:[{rows:[]}],tHead:{getBoundingClientRect:()=>({height:20})}}};
 const copy={classList:{add(){}},setAttribute(){},style:{},getBoundingClientRect:()=>({height:123.25}),
-  querySelector(){throw new Error('Manual fit must not inspect/sample future rows');},remove(){removed=true;}};
-const visible={doc:{},root:{cloneNode:()=>copy,parentNode:{append(node){assert.equal(node,copy);appended=true;}}},
+  querySelector(){return region;},remove(){removed=true;}};
+const visible={doc:{},nonRunningRows:5,root:{cloneNode:()=>copy,parentNode:{append(node){assert.equal(node,copy);appended=true;}}},
   sessionRow(){throw new Error('No synthetic running-row reserve in manual fit');}};
 assert.equal(contentHeight(visible,417,false),124);
 assert.equal(copy.style.width,'417px');assert.equal(copy.inert,true);

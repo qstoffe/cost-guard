@@ -27,10 +27,10 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
   const size = await evaluate('({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight})');
   await fixture('proof-observed'); await until(`miniWatch.view.promptRows.has('proof-4')`);
   assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
-  assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(r=>r.dataset.id).filter(id=>id?.startsWith('proof-'))`),['proof-1','proof-2','proof-3','proof-4']);
+  assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(r=>r.dataset.id).filter(id=>id?.startsWith('proof-'))`),['proof-0','proof-1','proof-2','proof-3','proof-4']);
   assert.doesNotMatch(await ax(sessionId),/Latest sample/);
   assert.match(await ax(pip),/Latest sample 4/);
-  const miniNames=await ax(pip); assert.match(miniNames,/Activity/); assert.doesNotMatch(miniNames,/Latest sample 0/);
+  const miniNames=await ax(pip); assert.match(miniNames,/Activity/); assert.match(miniNames,/Latest sample 0/);
   for (const state of ['refreshing','unavailable']) {
     await fixture('proof-'+state); await until(`liveValue.view.history_state==='${state}'`);
     assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
@@ -40,5 +40,5 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
     'background proof publications never resize the popup');
   await fixture('proof-switch'); await until(`liveValue.view.history_scope==='other-source'`); await loading();
   await close();
-  checks.push('Actual Watch/Mini DOM and accessibility: no Web history, quiet Mini loading/four fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
+  checks.push('Actual Watch/Mini DOM and accessibility: no Web history, quiet Mini loading/five fillers plus one running session, silent refresh/failure, source switch, no background popup resize');
 };

@@ -1,6 +1,9 @@
 'use strict';
 // App-owned PiP presentation. No auth, source calls, totals or lifecycle inference.
 const MiniWatch = (() => {
+  const defaultNonRunningRows = 5;
+  const nonRunningScrollback = 15; // Same bounded window as the shared catalog publication.
+  const openingWidthRatio = 0.75;
   const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, {granularity: 'grapheme'}) : null;
   function promptPreview(prompt) {
     if (!graphemes || !prompt?.event_id || prompt.is_compaction || typeof prompt.preview !== 'string') return '';
@@ -121,7 +124,7 @@ const MiniWatch = (() => {
   }
   // Select presentation representatives from canonical, already-acquired facts.
   // Never infer completion, revalue costs or resolve identity from display names.
-  function sessions(view) {
+  function sessions(view, nonRunningRows) {
     const active = new Map(), finished = new Map();
     const catalog = new Map((view?.earlier_previews || []).map(value => [value.session_id, value]));
     const start = value => [value.item?.prompt?.at_ms ?? 0, value.item?.prompt?.event_id || ''];
@@ -154,9 +157,12 @@ const MiniWatch = (() => {
     for (const card of view?.earlier_previews || []) if (!finished.has(card.session_id))
       finished.set(card.session_id, {card, preview: true, running: false, historical: true});
     for (const id of active.keys()) finished.delete(id);
-    const fillers = [...finished.values()].sort(compare).slice(-Math.max(0, 5 - active.size));
-    // slice(-0) would select everything when five or more sessions are active.
-    return [...active.values(), ...(active.size < 5 ? fillers : [])].sort(compare)
+    const fillers = [...finished.values()].sort(compare).slice(-nonRunningScrollback);
+    const split = Math.max(0, fillers.length - nonRunningRows);
+    // Older finished rows form scrollback. Preserve activity order within
+    // each band: even a long-running session belongs in the opening band.
+    const latest = [...active.values(), ...fillers.slice(split)].sort(compare);
+    return [...fillers.slice(0, split), ...latest]
       .map(value => ({...value, catalog: catalog.get(value.card.session_id)}));
   }
   function activityLabel(prompt, running, now, today) {
@@ -181,8 +187,6 @@ const MiniWatch = (() => {
     unavailable: 'Session details are currently unavailable from the source.'
   };
   const hydrationDetail = value => hydrationHelp[value?.hydration_state] || 'Waiting for an available history slot.';
-  // Five real styled row metrics, plus the header and any horizontal scrollbar.
-  // This changes only the internal viewport, never native window bounds.
   function measurementRow(view) {
     const row = view.sessionRow(); row.inert = true; row.setAttribute('aria-hidden', 'true');
     row.children[0].children[0].textContent = '23:59';
@@ -192,17 +196,49 @@ const MiniWatch = (() => {
     row.children[4].textContent = '120k';
     return row;
   }
-  function boundTable(view, root) {
+  // Budget the opening band's real heights independently:
+  // every running row, plus the newest configured number of non-running rows.
+  function boundTable(view, root, {reserve = false, viewport = false} = {}) {
     const region = root.querySelector('.mini-prompts'), table = region.firstElementChild;
-    const body = table.tBodies[0], rows = [...body.rows].filter(row => !row.querySelector('.mini-empty'));
-    const sample = measurementRow(view);
-    body.append(sample);
-    const normal = Math.max(sample.getBoundingClientRect().height, ...rows.map(row => row.getBoundingClientRect().height));
-    sample.remove();
-    const horizontal = region.offsetHeight - region.clientHeight;
+    const body = table.tBodies[0], rows = [...body.rows];
+    // DOM attributes, rather than class names, also cover unverified running
+    // representatives and survive cloning for opening/explicit-fit measurement.
+    const nonRunning = rows.filter(row => row.dataset.running === 'false');
+    const capacity = view.nonRunningRows;
+    const visible = [...rows.filter(row => row.dataset.running !== 'false'), ...nonRunning.slice(-capacity)];
     const zoom = region.currentCSSZoom || 1;
-    region.style.height = Math.ceil((table.tHead.getBoundingClientRect().height +
-      5 * normal) / zoom + horizontal) + 'px';
+    const header = table.tHead.getBoundingClientRect().height;
+    const height = row => row.getBoundingClientRect().height;
+    let content = header + visible.reduce((total, row) => total + height(row), 0);
+    if (reserve && nonRunning.length < capacity) {
+      const sample = measurementRow(view);
+      body.append(sample);
+      try {
+        const missing = capacity - nonRunning.length;
+        const notice = rows.find(row => row.dataset.running === undefined);
+        content += Math.max(0, missing * height(sample) - (notice ? height(notice) : 0));
+      } finally { sample.remove(); }
+    }
+    let available = Infinity, minimum = 0;
+    if (viewport) {
+      const win = view.doc.defaultView;
+      const inset = region.getBoundingClientRect().top + win.scrollY;
+      const padding = parseFloat(win.getComputedStyle(view.doc.body).paddingBottom) * zoom;
+      // Keep at least a header and one row reachable even in a very short
+      // viewport; the document can still scroll past the header or to accounts.
+      minimum = (header + (rows.length ? height(rows.at(-1)) : 0)) / zoom;
+      available = (win.innerHeight - inset - padding) / zoom;
+    }
+    const gutter = () => region.offsetHeight - region.clientHeight;
+    const apply = horizontal => {
+      const desired = Math.ceil(content / zoom + horizontal);
+      const limit = Math.max(Math.ceil(minimum + horizontal), Math.floor(available));
+      region.style.maxHeight = Math.min(desired, limit) + 'px';
+      if (reserve) region.style.minHeight = desired + 'px';
+    };
+    apply(gutter());
+    // Some scrollbar modes report their horizontal gutter only after layout.
+    apply(gutter());
   }
   // Clones are invisible, inert measurement artifacts, never published prompt data.
   function contentHeight(view, width, reserve = true) {
@@ -211,7 +247,7 @@ const MiniWatch = (() => {
     copy.inert = true; copy.setAttribute('aria-hidden', 'true'); copy.style.width = width + 'px';
     root.parentNode.append(copy);
     try {
-      if (reserve) boundTable(view, copy);
+      boundTable(view, copy, {reserve});
       return Math.ceil(copy.getBoundingClientRect().height);
     } finally { copy.remove(); }
   }
@@ -323,12 +359,13 @@ const MiniWatch = (() => {
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Session activity');
       this.body = this.table(this.prompts);
+      this.nonRunningRows = defaultNonRunningRows;
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5);
       this.compactAccounts = new AccountCards.CompactView(doc);
       this.accounts = this.compactAccounts.root;
       this.fitSize = mount === doc.body ? new FitSize(this) : null;
       this.root.append(top, this.health, this.prompts, this.accounts); mount.replaceChildren(this.root);
-      if (mount === doc.body) doc.defaultView.addEventListener('resize', () => boundTable(this, this.root));
+      if (mount === doc.body) doc.defaultView.addEventListener('resize', () => this.boundSessions());
     }
     table(parent) {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
@@ -347,6 +384,25 @@ const MiniWatch = (() => {
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }
     fitHeight(reserve = true) { return targetHeight(this, reserve); }
+    openingFits() {
+      const win = this.doc.defaultView, body = this.doc.body;
+      const root = this.root.getBoundingClientRect();
+      const padding = parseFloat(win.getComputedStyle(body).paddingBottom) * (body.currentCSSZoom || 1);
+      // Report actual clipped content, not unused reservation for future rows.
+      // Measure in the achieved viewport; native frame size varies by platform.
+      return root.top + contentHeight(this, root.width / (this.root.currentCSSZoom || 1), false) +
+        padding <= win.innerHeight + 2;
+    }
+    atLatest() {
+      const region = this.prompts;
+      return Boolean(this.body.rows) && region.scrollHeight - region.clientHeight - region.scrollTop <= 1 &&
+        !region.contains(this.doc.activeElement);
+    }
+    boundSessions(followLatest = this.atLatest()) {
+      if (!this.body.rows) return; // VM fixtures have no layout engine.
+      boundTable(this, this.root, {viewport: true});
+      if (followLatest) this.prompts.scrollTop = this.prompts.scrollHeight;
+    }
     emptyRow(columns) {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
@@ -477,8 +533,12 @@ const MiniWatch = (() => {
       const localNow = ReportView.formatDateTime(now, ReportView.DateTimeMode.DATE,
         view?.timezone_id ?? ReportView.configuredTimezone());
       const today = localNow === 'N/A' ? null : localNow;
-      const values = sessions(view);
-      const needsHistory = values.filter(value => value.running).length < 5;
+      const values = sessions(view, this.nonRunningRows);
+      const nonRunning = values.filter(value => !value.running);
+      // A metadata preview can fill space before prompt history settles.
+      const needsHistory = nonRunning.slice(-this.nonRunningRows)
+        .filter(value => !value.preview || value.card.metric_absences?.prompt_ccost === 'complete_empty_history')
+        .length < this.nonRunningRows;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
       for (const {card, item, running, historical, preview, catalog} of values) {
         const prompt = item?.prompt, key = card.session_id;
@@ -489,6 +549,7 @@ const MiniWatch = (() => {
           row = this.sessionRow(); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
+        row.dataset.running = String(running);
         if (preview) { this.drawPreview(row, card, now, today); wanted.push(row); continue; }
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
@@ -518,16 +579,13 @@ const MiniWatch = (() => {
         wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;
-      // Background demand may remain useful even with five filled slots. It
-      // cannot authorize a sixth physical/accessible acquisition-status row.
-      const notice = !values.some(value => value.preview) && wanted.length < 5 && (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
+      const notice = !values.some(value => value.preview) && nonRunning.length < this.nonRunningRows &&
+        (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
         WatchView.historyNotice(view, values.some(value => value.historical)) : '';
       text(this.emptyPrompts.children[0].children[0], notice || (view?.cards_state === 'observed' ? 'No sessions' : 'Loading…'));
       this.emptyPrompts.setAttribute('role', 'status');
       reconcile(this.body, [...wanted, ...(!wanted.length || notice ? [this.emptyPrompts] : [])]);
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
-      // VM fixtures have no layout engine. Native documents measure real styles.
-      if (this.body.rows) boundTable(this, this.root);
     }
     drawAccounts(view) {
       this.compactAccounts.update(view);
@@ -660,17 +718,18 @@ const MiniWatch = (() => {
           catch (_) { this.view.health.textContent = 'Use the browser’s native return-to-tab control.'; }
         });
         this.view.historyChanged = () => { if (this.window === win) this.demand?.update(); };
+        this.render();
         if (this.demandFactory) { this.demand = this.demandFactory(win); this.demand.update(); }
         // A visible PiP document owns this freshness timer, not a hidden main rAF.
         this.timer = win.setInterval(() => { this.sync(); this.render(); }, 5000);
-        this.render();
         win.requestAnimationFrame(() => {
           if (this.window !== win || win.closed) return;
           this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
             innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
-          if (size === 'fit-on-open' && (this.view.fitHeight() > win.outerHeight + 2 ||
-              headerWidth(this.view, true) > this.view.root.getBoundingClientRect().width + 1))
-            { this.failure = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.'; this.sync(); }
+          if (size === 'fit-on-open' && !this.view.openingFits()) {
+            this.failure = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
+            this.sync();
+          }
         });
       } catch (_) {
         const cancelled = request.cancelled;
@@ -713,6 +772,7 @@ const MiniWatch = (() => {
       if (values) {
         this.placement = values.miniWatchPlacement;
         this.size = values.miniWatchSize || 'fit-on-open';
+        this.nonRunningRows = values.miniWatchNonRunningRows ?? defaultNonRunningRows;
         this.failure = '';
       }
       this.syncTheme(); this.sync(); this.render();
@@ -734,7 +794,10 @@ const MiniWatch = (() => {
     render() {
       if (!this.view) return;
       const now = Date.now();
+      const followLatest = this.view.atLatest();
+      this.view.nonRunningRows = this.nonRunningRows ?? defaultNonRunningRows;
       this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
+      this.view.boundSessions(followLatest);
     }
     defaultContentWidth() {
       return this.measure?.ready ? this.measure.defaultContentWidth?.() : null;
@@ -782,6 +845,7 @@ const MiniWatch = (() => {
     }
     read(controller) {
       const owner = this.owner, view = this.view, now = Date.now();
+      view.nonRunningRows = controller.nonRunningRows ?? defaultNonRunningRows;
       view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
       // First-open native frame estimate is intentionally conservative; the API has
       // no pre-open frame/zoom query. Screen clamps remain browser-owned and scrollable.
@@ -793,11 +857,13 @@ const MiniWatch = (() => {
       const horizontal = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
       // A stable, measured table scrollbar gutter prevents extra rows from stealing
       // header space. Eight CSS pixels cover focus/rounding, not a fixed window target.
-      // Remember keeps its first request and browser-owned bounds, without this reserve.
+      // Remembered placement/size is browser-owned. Only its first-open fallback
+      // is compacted here, alongside the measured Fit request.
       const requested = controller.size === 'remember-last' ? 650 - frameWidth :
         Math.ceil((this.defaultContentWidth() + horizontal) * scale);
-      const width = Math.max(1, Math.min(requested, owner.screen?.availWidth > 0 ? owner.screen.availWidth - frameWidth : requested));
-      const contentWidth = width / scale - horizontal;
+      const screenWidth = owner.screen?.availWidth > 0 ? owner.screen.availWidth - frameWidth : requested;
+      const width = Math.max(1, Math.round(Math.min(requested, screenWidth) * openingWidthRatio));
+      const contentWidth = Math.max(1, width / scale - horizontal);
       const height = Math.ceil((contentHeight(view, contentWidth) + padding + 6) * scale);
       return {width, height: Math.max(1, Math.min(heightCap(owner) - frameHeight, height))};
     }

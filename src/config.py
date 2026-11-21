@@ -27,8 +27,15 @@ WEB_PREFERENCES = {
     "ccostDisplayUnit": ("credits", "usd"),
     "miniWatchPlacement": ("remember-last", "standard"),
     "miniWatchSize": ("fit-on-open", "remember-last"),
+    "miniWatchNonRunningRows": tuple(range(2, 11)),
     "quotaDisplayMode": ("used", "remaining"),
 }
+
+
+def valid_web_preference(name, value, *, inherit=False):
+    allowed = WEB_PREFERENCES.get(name)
+    return allowed is not None and (inherit and value == "default" or
+        type(value) is type(allowed[0]) and value in allowed)
 
 
 class ConfigError(ValueError):
@@ -246,8 +253,8 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
     for name, allowed in WEB_PREFERENCES.items():
         value = web.get(name)
         path = "webSettings." + name
-        if not isinstance(value, str) or value not in allowed:
-            raise _invalid(_setting_source(path, overrides), path, value, " or ".join(sorted(allowed)))
+        if not valid_web_preference(name, value):
+            raise _invalid(_setting_source(path, overrides), path, value, " or ".join(map(str, sorted(allowed))))
 
     unit = config.get("ccostDisplayUnit", "credits")
     if not isinstance(unit, str) or unit not in {"credits", "usd"}:

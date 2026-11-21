@@ -47,6 +47,14 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/mini.css": ("mini.css", "text/css; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
+WEB_SETTINGS_PATHS = {
+    "/api/settings/theme": "theme",
+    "/api/settings/ccost": "ccostDisplayUnit",
+    "/api/settings/mini-placement": "miniWatchPlacement",
+    "/api/settings/mini-size": "miniWatchSize",
+    "/api/settings/mini-non-running-rows": "miniWatchNonRunningRows",
+    "/api/settings/quota-display": "quotaDisplayMode",
+}
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
         "img-src {origin}/favicon-cg1.ico {origin}/favicon.ico; "
         "font-src 'none'; object-src 'none'; base-uri 'none'; "
@@ -383,7 +391,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 self.reply(202, {"id": key})
                 return
-            if self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement", "/api/settings/mini-size", "/api/settings/quota-display"}:
+            if self.path in WEB_SETTINGS_PATHS:
                 self.web_settings(value)
                 return
             if self.path == "/api/detail" and self.server.lifecycle and self.server.lifecycle.live:
@@ -454,10 +462,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if value is None:
                 settings = self.server.settings.read()
             else:
-                field = {"/api/settings/theme": "theme", "/api/settings/ccost": "ccostDisplayUnit",
-                         "/api/settings/mini-placement": "miniWatchPlacement",
-                         "/api/settings/mini-size": "miniWatchSize",
-                         "/api/settings/quota-display": "quotaDisplayMode"}[self.path]
+                field = WEB_SETTINGS_PATHS[self.path]
                 if set(value) != {field}:
                     raise SettingsError("invalid_request")
                 def allowed():

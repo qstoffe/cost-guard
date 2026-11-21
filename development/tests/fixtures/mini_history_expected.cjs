@@ -26,7 +26,6 @@ module.exports = function expectedMiniRows(view) {
     const value=entry(card,card.rows[0].prompt,false), old=finished.get(value.id);
     if(!old || ordered(value,old)>=0) finished.set(value.id,value);
   }
-  const fillers=[...finished.values()].filter(value=>!running.has(value.id)).sort(ordered);
-  const slots=Math.max(0,5-running.size);
-  return [...running.values(),...(slots ? fillers.slice(-slots) : [])].sort(ordered);
+  const fillers=[...finished.values()].filter(value=>!running.has(value.id)).sort(ordered).slice(-15);
+  return [...fillers.slice(0,-5),...[...running.values(),...fillers.slice(-5)].sort(ordered)];
 };
