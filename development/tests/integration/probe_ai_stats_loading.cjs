@@ -5,8 +5,8 @@ module.exports = async ({evaluate,checks}) => {
     const parent=document.createElement('div');document.body.append(parent);
     const view=new AIStatsView.View(()=>{}), original=structuredClone(current.result);
     const state={period:'30-days',result:null};view.update(state);view.attach(parent);
-    const cards=[...parent.querySelectorAll('.ai-stat')];
-    const pending=()=>${require('../fixtures/stats_pending.cjs')('.ai-stat','parent')};
+     const cards=[...parent.querySelectorAll('.ai-stat[data-metric]')];
+     const pending=()=>${require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]','parent')};
      const cold=pending(), coldState=cards.map(c=>({metric:c.dataset.metric,text:c.textContent,
         values:[...c.querySelectorAll('.ai-stat-value')].map(n=>n.textContent),
        children:c.childNodes.length})),
@@ -24,7 +24,7 @@ module.exports = async ({evaluate,checks}) => {
      const knownCosts=Object.fromEntries(cards.filter(c=>['hourly-rate','total-cost','subagent-cost','average-cost','expensive-session'].includes(c.dataset.metric))
         .map(c=>[c.dataset.metric,[...c.querySelectorAll('.ai-stat-value')].map(n=>n.textContent)]));
      state.result=partial;view.update(state);
-     const qualifiedRetention=${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};
+      const qualifiedRetention=${require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]','parent','knownCosts')};
      state.result=original;view.update(state);
     const nodes=cards.map(c=>c.firstChild);view.update(state);
     const retained=cards.every((c,i)=>c.firstChild===nodes[i]);
@@ -39,13 +39,13 @@ module.exports = async ({evaluate,checks}) => {
          for(const loading of [false,true]) for(const phase of ['queued','deferred','parked','backoff','source_starting']) {
            Object.assign(state,{period:'30-days',result,failed:failedAttempt,interrupted,loading,phase});
              view.update(state);
-             const retainedCase=${require('../fixtures/stats_pending.cjs')('.ai-stat','parent','knownCosts')};
+              const retainedCase=${require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]','parent','knownCosts')};
              if(!retainedCase && !firstFailure) firstFailure={cases,scope:view.readyScope,
                values:cards.map(c=>[c.dataset.metric,c.textContent]),knownCosts};
              failed &&=retainedCase;cases++;
          }
     state.failed=false;state.result=original;state.period='30-days';view.update(state);
-     const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat')[i] && c.getBoundingClientRect().width===before[i].width &&
+      const stable=cards.every((c,i)=>c===parent.querySelectorAll('.ai-stat[data-metric]')[i] && c.getBoundingClientRect().width===before[i].width &&
        c.getBoundingClientRect().height===before[i].height);
      const unsupported=structuredClone(original);
      for(const row of unsupported.view.ai_stats) for(const metric of row.metrics) {

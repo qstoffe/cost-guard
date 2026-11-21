@@ -84,7 +84,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};
       current.result=${JSON.stringify(item.result)};current.period=current.result.view.ai_stats[0].period;current.stats.update(current);
       ReportView.setUnit(${JSON.stringify(unit)},output);`);
-    const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat')].map(card=>({
+    const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat[data-metric]')].map(card=>({
       metric:card.dataset.metric,value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
       state:!!card.querySelector('.ai-stat-state')}))`);
     const expected=item.result.view.ai_stats[0].metrics;
@@ -102,7 +102,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     if (item.name==='faster-robot') assert.equal(hourly.value,unit==='credits'?'120 CCost/h':'$1.20/h');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
-     assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),forbidden);
+     assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat[data-metric]')].map(c=>c.textContent).join(' ')`),forbidden);
     assert.equal(await evaluate(`document.getElementById('report-updating')`),null);
     for (const affected of theme==='classic' && unit==='credits' ?
         ['hourly-rate','total-cost','subagent-cost','working-time','average-cost','expensive-session',

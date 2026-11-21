@@ -80,7 +80,7 @@ async function main() {
     await until(`current?.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`location.hash`),'#/ai-stats');
     assert.equal(await evaluate(`current.period`),'30-days');
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),13);
+     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat[data-metric]').length`),13);
     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.ai-stats-periods button')].map(b=>b.textContent)`),
       ['Today','7 days','30 days','This month','All time']);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-view img').length`),0);
@@ -99,8 +99,15 @@ async function main() {
       evidence={outcome:'PASS',checks,runtimeErrors:errors};
       return;
     }
-    await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
-    await require('./probe_ai_stats_podium.cjs')({command,evaluate,until,fixture,tab,checks});
+     await require('./probe_ai_stats_database_sizes.cjs')({command,evaluate,until,fixture,tab,checks});
+     await require('./probe_ai_stats_loading.cjs')({evaluate,checks});
+     if (process.argv.includes('--database-sizes')) {
+       await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
+       assert.deepEqual(errors,[]);
+       evidence={outcome:'PASS',textLayouts,checks,runtimeErrors:errors};
+       return;
+     }
+     await require('./probe_ai_stats_podium.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_rate_help.cjs')({command,evaluate,until,fixture,tab,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
@@ -116,7 +123,7 @@ async function main() {
           headings:document.querySelectorAll('.ai-stat h4 .help-trigger').length,
           foreground:getComputedStyle(document.querySelector('[aria-pressed="true"]')).color,
           background:getComputedStyle(document.querySelector('[aria-pressed="true"]')).backgroundColor}; })()`);
-      assert.equal(layout.count,13); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
+       assert.equal(layout.count,14); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
       assert.equal(layout.headings,13);
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
@@ -238,7 +245,7 @@ async function main() {
       window.__realApi=api; api=async()=>{throw new Error('synthetic_failure')}; acquire(current);`);
     await until(`current.failed && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-value').length`),13,'all card shells remain during failure');
-    assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,
+     assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]','document','__failureCosts')),true,
       JSON.stringify(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>({
         metric:c.dataset.metric,text:c.textContent,values:[...c.querySelectorAll('.ai-stat-value,.ai-stat-rate-value')].map(n=>n.textContent),
         children:c.childNodes.length}))`)));
@@ -248,7 +255,7 @@ async function main() {
         'report_cache_unavailable','ai_stats_no_progress']) {
       await evaluate(`api=async()=>{throw new Error('${code}')}; void acquire(current)`);
       await until(`current.failed && !current.loading`);
-      assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat','document','__failureCosts')),true,code);
+       assert.equal(await evaluate(require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]','document','__failureCosts')),true,code);
       assert.equal(await evaluate(`notice.textContent==='' && notice.getAttribute('role')==='status' && !output.contains(notice)`),true,code);
     }
     await evaluate(`api=__realApi; current.checkedAt=Date.now()-CachedReports.cadences['ai-stats']-1; scheduleCachedReport()`);

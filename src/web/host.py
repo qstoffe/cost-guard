@@ -18,6 +18,7 @@ from .observations import WebObservations
 from .security import BrowserLinkUnavailable
 from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
+from .database_sizes import database_sizes
 
 
 class WebHost:
@@ -74,6 +75,11 @@ class WebHost:
                 "source_guard": self.guard.status,
                 "diagnostics": ("not_recorded" if not self.store else
                                 "unavailable" if self.observations.write_failed else "available")}
+
+    def database_sizes(self):
+        driver = getattr(self.live, 'driver', None)
+        selection = driver.coordinator.report_service.selection if driver else None
+        return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database)
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:
