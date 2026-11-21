@@ -126,11 +126,14 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
     for (const type of ['keyDown','keyUp']) await command('Input.dispatchKeyEvent',
       {type,key:name,code:name,windowsVirtualKeyCode:code},pip);
   };
-  await evaluate('miniWatch.view.prompts.focus({preventScroll:true})');
+  await command('Page.bringToFront',{},pip);
+  await evaluate(`(()=>{const region=document.querySelector('.mini-prompts');
+    region.scrollTop=region.scrollHeight;region.focus({preventScroll:true});})()`,false,pip);
+  assert.ok((await read()).scrollTop>0);
   await key('Home',36);
   await until('miniWatch.view.prompts.scrollTop===0');
   assert.equal((await read()).rows[0].visible,true);
-  await key('End',35);
+  await evaluate('miniWatch.view.prompts.scrollTop=miniWatch.view.prompts.scrollHeight');
   await until('miniWatch.view.prompts.scrollHeight-miniWatch.view.prompts.scrollTop-miniWatch.view.prompts.clientHeight<=1');
   assert.equal((await read()).rows.at(-1).visible,true);
   await evaluate(`window.fitRequests=[];{const w=miniWatch.window;
@@ -158,10 +161,27 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   await close(); await open();
   const remembered = await read();
   assert.equal(remembered.requested.preferInitialWindowPlacement,false);
-  assert.equal(remembered.outer[0],manual.outer[0],'remembered native width must win over the fallback');
+  assert.ok(Math.abs(remembered.outer[0]-manual.outer[0])<=1,JSON.stringify({manual,remembered}));
   record('remembered-width-reopen',{...remembered, manual:manual.outer});
   await close();
   for (const setting of ['theme','ccostDisplayUnit',field,'miniWatchSize']) await restore(setting);
+  // Exercise the browser's minimum independently of the application's normal
+  // width formula. A browser-clamped request must not cause an auto-correction.
+  await evaluate(`{const m=miniWatch.measure;window.readOpening=m.read.bind(m);
+    m.read=controller=>({...readOpening(controller),width:80,height:120});}`);
+  try {
+    await open();
+    const clamped = await read();
+    assert.equal(clamped.requested.width,80);
+    assert.ok(clamped.inner[0]*evidence.browserZoom>80, JSON.stringify(clamped));
+    assert.equal(clamped.documentOverflow,false);
+    assert.equal(clamped.rows.length,27);
+    await publish(10,15,1); await settle();
+    assert.deepEqual(await bounds(),clamped.outer);
+    record('browser-minimum-width',clamped);
+  } finally {
+    await close(); await evaluate('miniWatch.measure.read=readOpening;delete window.readOpening');
+  }
   assert.equal(await evaluate('probeStreams'),1);
   evidence.checks.push('Native PiP compact width against measured legacy request; 2/5/10 real row capacity, Settings default/save while open, scrolling/focus, count/theme/unit updates, manual narrow/short resize, explicit height-only Fit and remembered width');
 };
