@@ -146,7 +146,8 @@ const ReportView = (() => {
   function metric(node, field, {value, reason, help, label, onHelpLost} = {}) {
     const render = () => {
       const shown = typeof value === 'function' ? value() : value;
-      const absence = shown == null && reason === 'complete_empty_history' ? emptyHistoryHelp[field] : '';
+      const absence = shown != null ? '' : reason === 'complete_empty_history' ? emptyHistoryHelp[field] :
+        reason === 'source-history-missing' ? `The ${metricLabels[field]} was not cached, and its source history is no longer available.` : '';
       const pending = shown == null && !absence;
       const hint = absence || (shown != null && help);
       if (hint) ContextHelp.value(node, hint);

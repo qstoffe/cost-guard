@@ -447,6 +447,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None
+                    value["cached_sessions"] = getattr(self.server.lifecycle, "cached_sessions_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)
@@ -539,7 +540,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(429, {"error": "catalog_busy"})
 
     def cached_sessions(self, value):
-        if set(value) - {"period", "sort", "direction", "offset"}:
+        if set(value) - {"period", "sort", "direction", "offset", "known"}:
             self.reply(400, {"error": "invalid_request"})
             return
         owner = self.server.lifecycle

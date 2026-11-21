@@ -49,7 +49,7 @@ const LiveConnection = (() => {
         onCache(values.cache);
       } else {
         if (validate) health();
-        if (kind === null) onCache(values.cache);
+        if (kind === null) onCache(values.cache, true);
         update(values.live, values.progress);
       }
     }

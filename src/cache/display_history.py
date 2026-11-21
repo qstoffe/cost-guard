@@ -361,6 +361,13 @@ class DisplayHistory:
                 return SessionChanges(generation, resync=True)
         return SessionChanges(generation, oldest_activity_ms=oldest, latest_activity_ms=latest)
 
+    def has_session_clock(self, source, start_ms, end_ms):
+        """Indexed bound check when wall time advances without a cache write."""
+        with self._connect(read=True) as db:
+            return db.execute(f"""
+                SELECT 1 FROM sessions WHERE source=? AND {PERIOD_CLOCK}>=? AND {PERIOD_CLOCK}<? LIMIT 1
+            """, (source, start_ms, end_ms)).fetchone() is not None
+
     def session_page(self, source, *, sort="activity", direction=-1, start_ms=None, end_ms=None,
                      limit=25, offset=0):
         if (not source or sort not in SORT_COLUMNS or type(direction) is not int or direction not in (-1, 1)

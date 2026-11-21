@@ -8,6 +8,7 @@ import unittest
 
 from src.application.session_archive_projection import SessionPublication
 from src.application.session_archive_owner import SessionArchiveOwner
+from src.application.cached_session_views import CachedSessionViews
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.reports.models import SessionUsageRow
 
@@ -19,6 +20,28 @@ class DisplayHistoryTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.history = DisplayHistory(self.root)
         self.history.initialize()
+
+    def test_conditional_page_ignores_other_periods_but_not_a_clock_entering_the_scope(self):
+        clock = 1_700_006_400_000  # UTC midnight
+        views = CachedSessionViews(self.history, "source", "UTC", "binding")
+        self.history.commit_sessions("source", (
+            SessionChange(SessionFact("future", "r1", "Future", activity_ms=clock + 5000), None),
+        ))
+        results = views.page(now_ms=clock + 1000)
+        fields = ("binding", "generation", "start_ms", "end_ms", "period", "sort", "direction", "offset")
+        known = {name: results[name] for name in fields}
+        self.history.commit_sessions("source", (
+            SessionChange(SessionFact("past", "r1", "Past", activity_ms=clock - 1), None),
+        ))
+
+        unrelated = views.page(now_ms=clock + 3000, known=known)
+        eligible = views.page(now_ms=clock + 6000, known=known)
+
+        self.assertEqual(0, results["cached_total"])
+        self.assertEqual((True, 2), (unrelated["unchanged"], unrelated["generation"]))
+        self.assertEqual(["future"], [row["session_id"] for row in eligible["rows"]])
+        other = CachedSessionViews(self.history, "source", "UTC", "new-incarnation")
+        self.assertIn("rows", other.page(now_ms=clock + 1000, known=known))
 
     def test_cold_page_and_partial_sorts_order_nulls_last_then_id(self):
         self.assertEqual((), self.history.session_page("source", sort="ccost").rows)

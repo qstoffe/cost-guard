@@ -23,6 +23,10 @@ from .display_archive import DisplayArchive
 
 
 class WebHost:
+    # Keep the draft cutover explicit while current-host running/finish
+    # observations and the legacy migration are not yet ready.
+    cached_sessions_enabled = False
+
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
         self.store = store
