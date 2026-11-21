@@ -529,7 +529,7 @@ const ReportView = (() => {
   function modelHeadingHelp(view) {
     return ['The model’s developer/manufacturer.',
       'The model identity in the published catalog.',
-      'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%.',
+      'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 3%, Cached input 95%, Cache write 1%, Output 1%.',
       'The published/verified model release date.'];
   }
   function modelHeading(title, source, href) {

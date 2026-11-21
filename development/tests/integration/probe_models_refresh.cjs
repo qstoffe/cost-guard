@@ -286,7 +286,7 @@ async function main() {
         await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
         const text=await evaluate(id,`document.querySelector('#context-help').textContent`);
         assert.ok(!text.includes('Hold Shift')); assert.ok(text.length>20);
-        if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%.');
+        if(column===2) assert.equal(text,'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 3%, Cached input 95%, Cache write 1%, Output 1%.');
       }
        const layout=await evaluate(id,`(()=>{const r=document.querySelector('#context-help').getBoundingClientRect(),b=document.querySelector('.model-price-controls button').getBoundingClientRect(),t=document.querySelector('.model-price-controls').children[1].getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,helpFits:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,buttonFirst:b.top<=t.top};})()`);
       assert.equal(layout.overflow,false);assert.equal(layout.helpFits,true);assert.equal(layout.buttonFirst,true);

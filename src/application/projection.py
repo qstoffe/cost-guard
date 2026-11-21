@@ -8,6 +8,7 @@ import json
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
 from src.analysis.ai_stats import POLICY as STATS_POLICY
+from src.pricing.catalog import FIXED_REFERENCE_MIX
 from src.reports.models import ReportKind
 
 from .contracts import ObjectValue, record
@@ -229,7 +230,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         model_comparison_mix=report.model_comparison_mix,
         model_catalog=record(rows=model_rows(catalog.rows, set(catalog.selectable)),
             comparison_basis="fixed-statistical-average",
-            reference_token_weights=("0.02", "0.96", "0.01", "0.01"),
+            reference_token_weights=tuple(map(str, FIXED_REFERENCE_MIX)),
             promotion_notes=catalog.promotion_notes,
             recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,

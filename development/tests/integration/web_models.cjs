@@ -79,7 +79,7 @@ assert.equal(new Set(explanations).size, 4);
 assert.equal(explanations[0], 'The model’s developer/manufacturer.');
 assert.equal(explanations[1], 'The model identity in the published catalog.');
 assert.equal(explanations[3], 'The published/verified model release date.');
-assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%.');
+assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x); not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. This comparison uses a fixed statistical average: Input 3%, Cached input 95%, Cache write 1%, Output 1%.');
 assert.equal(explanations[2].split('\n\n').length, 2);
 assert.ok(rows().every(r => helpText(r.children[2].children[0]).startsWith('GitHub Copilot · USD / 1M tokens')));
 assert.equal(all(output, 'a')[0].href, 'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing');

@@ -26,7 +26,7 @@ const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].
 const click = title => all(output, 'button').find(n => n.textContent.startsWith(title)).events.click({});
 draw();
 const relativeHelp = helpText(all(output, 'th')[2].children[0]);
-assert.ok(relativeHelp.includes('fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%'));
+assert.ok(relativeHelp.includes('fixed statistical average: Input 3%, Cached input 95%, Cache write 1%, Output 1%'));
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative Price List Cost ↓', 'Release date']);

@@ -18,7 +18,7 @@ from .reference_diagnostics import reference_issue
 _COPILOT_PREFIX = re.compile(r"^github-copilot/")
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _UNRESOLVED = object()
-FIXED_REFERENCE_MIX = (Decimal("0.02"), Decimal("0.96"), Decimal("0.01"), Decimal("0.01"))
+FIXED_REFERENCE_MIX = (Decimal("0.03"), Decimal("0.95"), Decimal("0.01"), Decimal("0.01"))
 
 
 @lru_cache(maxsize=8192)
