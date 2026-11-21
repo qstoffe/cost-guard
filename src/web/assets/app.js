@@ -122,6 +122,7 @@ function connectionStatus(message, state = {}) {
     'registration_unreadable', 'unsupported_schema', 'unsupported_version', 'registration_invalid']
     .includes(hostState.sourceError);
   if (hostState.sourceBlocked) hostState.writable = false;
+  if (hostState.kind !== 'connected' || hostState.sourceBlocked) current?.detail?.updateInvocations();
   if (!wasWritable && hostState.writable) current?.detail?.catchUp();
   if (sourceNotice) {
     sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
@@ -584,7 +585,8 @@ function navigate() {
   }
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
-    current.detail = new SessionDetail.View(api, match[1]);
+    current.detail = new SessionDetail.View(api, match[1],
+      () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
     current.message = '';
   }
   if (match && current.detail) {
@@ -656,6 +658,7 @@ async function connect() {
         miniWatch?.update(liveValue);
         current?.catalog?.wake(value?.catalog_hint);
         current?.detail?.wake(value?.detail_hints);
+        current?.detail?.updateInvocations();
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
             if (current?.active === job.id && !ReportLoading.sections.includes(current.section)) {

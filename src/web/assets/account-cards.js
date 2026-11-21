@@ -243,9 +243,10 @@ const AccountCards = (() => {
       // failed empty read must not erase the last usable common observation.
       if (view.accounts && (view.accounts.accounts.length || !failed)) {
         const wanted = [], keep = new Set();
+        const day = ReportView.formatDateTime(view.now_ms ?? view.accounts.now_ms,
+          ReportView.DateTimeMode.DATE, view.timezone_id ?? ReportView.configuredTimezone());
         for (let item of view.accounts.accounts) {
           const key = JSON.stringify([item.observation.provider_id, item.observation.id]); keep.add(key);
-          const day = ReportView.timestamp(view.now_ms ?? view.accounts.now_ms).slice(0, 10);
           item = {...item, ccost_scopes: item.ccost_scopes.map(scope => ({...scope,
             cost: this.costs.select(scope.cost, /^\d{4}-\d{2}-\d{2}$/.test(day) ? [view.source_label, key, scope.name,
               scope.name === 'today' ? day : scope.name === 'this month' ? day.slice(0, 7) :

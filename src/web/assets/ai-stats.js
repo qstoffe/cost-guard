@@ -214,7 +214,8 @@ const AIStatsView = (() => {
         this.timezone = state.result.view.timezone_id;
       }
       const identity = state.statsIdentity ?? this.sourceIdentity;
-      const day = ReportView.timestamp(Date.now(), state.result?.view.timezone_id ?? this.timezone).slice(0, 10);
+      const day = ReportView.formatDateTime(Date.now(), ReportView.DateTimeMode.DATE,
+        state.result?.view.timezone_id ?? this.timezone ?? ReportView.configuredTimezone());
       const scope = JSON.stringify([identity, state.period,
         state.period === 'all' ? null : state.period === 'month' ? day.slice(0, 7) : day]);
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));

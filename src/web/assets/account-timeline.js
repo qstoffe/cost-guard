@@ -6,7 +6,7 @@ const AccountTimelineView = (() => {
   const ns = 'http://www.w3.org/2000/svg';
   const top = 27, bottom = 194, inset = 3, paletteSize = 12;
   const labelBaseline = 214, highlightBottom = 221, shadeTop = 4;
-  const englishWeekday = new Intl.DateTimeFormat('en', {weekday: 'long', timeZone: 'UTC'});
+  const {DATE, TIME} = ReportView.DateTimeMode;
   const shown = item => ReportView.display({
     display: {amount: item.display.credits},
     display_units: {usd: {amount: item.display.usd}}
@@ -40,7 +40,8 @@ const AccountTimelineView = (() => {
     const hourly = view.period === 'today', shortDates = view.period === '7-days';
     const group = (width - 2 * inset) / view.buckets.length;
     const slots = view.buckets.map(([start], index) => {
-      const [day, time] = view.slot_dates?.[index] ? [view.slot_dates[index]] :
+      const date = view.slot_dates?.[index];
+      const [day, time] = date ? [ReportView.formatDateTime(date, DATE)] :
         ReportView.timestamp(start, view.timezone_id).split(' ');
       const x = inset + index * group;
       return {index, key: hourly ? start : day, day, time, x, center: x + group / 2};
@@ -69,17 +70,18 @@ const AccountTimelineView = (() => {
       a.buckets.length === b.buckets.length && b.buckets.every(([start], i) => a.buckets[i][0] === start);
   }
   function rangeLabel(view, layout, future) {
-    const start = ReportView.timestamp(view.start_ms, view.timezone_id);
-    const end = ReportView.timestamp(view.end_ms, view.timezone_id);
+    const mode = layout.hourly ? ReportView.DateTimeMode.DATE_TIME : DATE;
+    const start = ReportView.formatDateTime(view.start_ms, mode, view.timezone_id);
+    const end = ReportView.formatDateTime(view.end_ms, layout.hourly ? TIME : DATE, view.timezone_id);
     if (start === 'N/A' || end === 'N/A') return '—';
     if (layout.hourly) {
       const occurrence = view.end_occurrence ? ` (${view.end_occurrence === 1 ? 'first' : 'second'})` : '';
-      return `${start}–${end.split(' ')[1]}${occurrence}`;
+      return `${start}–${end}${occurrence}`;
     }
     // Use the last represented date, not a reserved date or the next day's
     // midnight (the exclusive end of a rolling window on that boundary).
     const last = layout.slots.findLast(slot => !future.has(slot.index));
-    return `${start.split(' ')[0]} – ${last?.day ?? end.split(' ')[0]}`;
+    return `${start} – ${last?.day ?? end}`;
   }
   function axisLabels(layout, future, nonWorking) {
     const {slots, hourly, shortDates, months, group, crossYear} = layout;
@@ -100,9 +102,8 @@ const AccountTimelineView = (() => {
       const width = group * count;
       const [year, number] = month.split('-').map(Number);
       if (!year || !number) return;
-      const caption = new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
-        month: width < 85 ? 'short' : 'long', timeZone: 'UTC'
-      }).format(Date.UTC(year, number - 1, 1));
+      const caption = ReportView.calendarCaption(`${month}-01`, width < 85 ? 'month-short' : 'month-long',
+        document.documentElement.lang || 'en');
       if (index) labels.push(svg('rect', {x: x - .5, y: bottom + 6, width: 1, height: crossYear ? 51 : 38,
         class: 'account-timeline-month-divider'}));
       const attrs = {x: x + width / 2, y: 236, 'text-anchor': 'middle', class: 'account-timeline-month-label'};
@@ -558,11 +559,11 @@ const AccountTimelineView = (() => {
       const future = this.future.has(index), partial = this.partial.has(index);
       let heading = slot.day;
       if (this.layout.hourly && slot.time) {
-        const end = ReportView.timestamp(this.view.buckets[index][1], this.view.timezone_id).split(' ')[1];
+        const end = ReportView.formatDateTime(this.view.buckets[index][1], TIME, this.view.timezone_id);
         const repeat = slot.occurrence ? ` (${slot.occurrence === 1 ? 'first' : 'second'})` : '';
-        heading += ` ${slot.time}${partial ? '–Now' : end ? `–${end}` : ''}${repeat}`;
+        heading += ` ${slot.time}${partial ? '–Now' : end !== 'N/A' ? `–${end}` : ''}${repeat}`;
       } else if (!this.layout.hourly && slot.day !== 'N/A') {
-        heading += ` ${englishWeekday.format(new Date(`${slot.day}T00:00:00Z`))}`;
+        heading += ` ${ReportView.calendarCaption(slot.day, 'weekday')}`;
       }
       const state = [future && 'Upcoming', this.nonWorking.has(index) && 'Swedish non-working day'].filter(Boolean).join(' · ');
       const values = [], rows = [];

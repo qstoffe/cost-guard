@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from src.cache.repository import CacheRepository
 from src.analysis.models import PromptRecord
+from src.analysis.timezones import DateTimeMode, format_date_time
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.promotions import model_promotion
 from .models import ModelPromotion
@@ -148,7 +149,6 @@ def active_model_promotion(model, now_ms: int) -> ModelPromotion | None:
     promotion = model_promotion(model) if model is not None else None
     if promotion is None or not promotion.active(now_ms):
         return None
-    expires = datetime.fromtimestamp(promotion.expires_ms / 1000, tz=timezone.utc)
     description = "Temporary GitHub Copilot promotional pricing"
     if promotion.discount_percent:
         try:
@@ -159,8 +159,15 @@ def active_model_promotion(model, now_ms: int) -> ModelPromotion | None:
                 description = f"{text}% off standard GitHub Copilot rates"
         except (ValueError, ArithmeticError):
             pass
-    return ModelPromotion(model.model.display_name or model.model.model, description,
-        (expires - timedelta(days=1)).strftime("%Y-%m-%d"), expires.strftime("%Y-%m-%d"))
+    through, resumes = _promotion_dates(promotion.expires_ms)
+    return ModelPromotion(model.model.display_name or model.model.model, description, through, resumes)
+
+
+def _promotion_dates(expires_ms: int) -> tuple[str, str]:
+    # The provider's offer defines UTC calendar dates, not local reset times.
+    expires = datetime.fromtimestamp(expires_ms / 1000, tz=timezone.utc).date()
+    return (format_date_time(expires - timedelta(days=1), DateTimeMode.DATE),
+            format_date_time(expires, DateTimeMode.DATE))
 
 
 def active_promotion_notes(
@@ -185,9 +192,7 @@ def active_promotion_notes(
             if name:
                 markers[name] = marker
                 names.append(name)
-        expires = datetime.fromtimestamp(expires_ms / 1000, tz=timezone.utc)
-        through = (expires - timedelta(days=1)).strftime("%Y-%m-%d")
-        resumes = expires.strftime("%Y-%m-%d")
+        through, resumes = _promotion_dates(expires_ms)
         description = "temporary GitHub Copilot promotional pricing"
         if discount:
             try:

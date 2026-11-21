@@ -11,7 +11,7 @@ from typing import Mapping, TextIO
 
 from src.version import DISPLAY_VERSION, PRODUCT_NAME
 from src.numbers import ccost_amount, ccost_display, ccost_unit
-from src.analysis.timezones import format_local_timestamp, resolve_timezone
+from src.analysis.timezones import DateTimeMode, format_date_time, resolve_timezone
 from src.watch.models import ToolObservation, WatchProjection, WatchRow
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, wrap_prose
@@ -281,7 +281,7 @@ class WatchRenderer:
             return False
 
     def _watch_heading(self, mode: str, started_at_ms: int) -> str:
-        timestamp = format_local_timestamp(started_at_ms, self.timezone_id, "%Y-%m-%d %H:%M:%S")
+        timestamp = format_date_time(started_at_ms, DateTimeMode.DATE_TIME_SECONDS, self.timezone_id)
         return f"{PRODUCT_NAME} {DISPLAY_VERSION} (Watch started: {timestamp}) — {mode}"
 
     def _watch_title(self, source_label: str, title: str = "Cost Guard Watch", started_at_ms: int = 0) -> str:
@@ -364,14 +364,14 @@ class WatchRenderer:
             if running else [("  ", "watchSessionHeader")]
         )
         if row.session_latest_ms > 0:
-            pattern = "%H:%M"
+            mode = DateTimeMode.TIME
             if row.earlier and today is not None:
                 local = datetime.fromtimestamp(row.session_latest_ms / 1000, timezone.utc).astimezone(
                     resolve_timezone(self.timezone_id)
                 )
                 if local.date() != today:
-                    pattern = "%Y-%m-%d %H:%M"
-            segments.append((format_local_timestamp(row.session_latest_ms, self.timezone_id, pattern) + " ",
+                    mode = DateTimeMode.DATE_TIME
+            segments.append((format_date_time(row.session_latest_ms, mode, self.timezone_id) + " ",
                              "watchSessionHeader"))
         if row.earlier:
             segments.extend(((EARLIER_LABEL, WARNING_ROLE), (" ", "watchSessionHeader")))

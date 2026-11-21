@@ -35,14 +35,16 @@ const context = vm.createContext({
   document: {documentElement: {lang: 'en'}, addEventListener() {}, createElementNS: (_, tag) => new Node(tag)},
   innerWidth: 480, innerHeight: 640,
   setTimeout() {}, clearTimeout() {},
-  ReportView: {
+  fakeReportView: {
     element: (...args) => new Node(...args),
     text: (el, value) => { el.textContent = value; },
-    timestamp: ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' '),
     compare: (a, b) => Number(a) - Number(b),
     display: item => item.display_units?.[unit]?.amount ?? item.display.amount
   }
 });
+vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8').replace(
+  'const ReportView =', 'const formatter =') +
+  '; const ReportView = {...formatter, ...fakeReportView};', context);
 vm.runInContext(fs.readFileSync('src/web/assets/account-timeline.js', 'utf8') +
   '; globalThis.View = AccountTimelineView.View;', context);
 

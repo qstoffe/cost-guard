@@ -315,15 +315,32 @@ async function main() {
        if (mode === '--dates-only') {
          await evaluate(`location.hash='#/sessions'`);
          await until('current.catalog?.data?.view.session_usage.length===25');
-         const original = await evaluate(`({raw:current.catalog.data.view.session_usage[0].last_activity_ms,
-           zone:current.catalog.data.view.timezone_id,text:current.catalog.body.rows[0].cells[0].textContent})`);
+         const describedActivity = `(() => {
+           const row = current.catalog.body.rows[0], value = row.value;
+           return {raw:value.running ? value.prompt_started_ms ?? value.last_activity_ms :
+             value.catalog_activity_ms ?? value.last_activity_ms ?? value.prompt_started_ms,
+             zone:current.catalog.data.view.timezone_id, text:row.activity.textContent,
+             qualified:!value.running && value.activity_state !== 'unverified' &&
+               value.catalog_activity_ms == null && value.last_activity_ms != null};
+         })()`;
+         const original = await evaluate(describedActivity);
          assert.equal(original.zone,'UTC');
-         assert.equal(original.text,new Date(original.raw).toISOString().slice(0,16).replace('T',' '));
+         assert.equal(original.text,new Date(original.raw).toISOString().slice(0,16).replace('T',' ') +
+           (original.qualified ? '' : '*'));
+         const confirmed = await evaluate(`(() => {
+           const owner = current.catalog, row = owner.body.rows[0], original = row.value;
+           row.value = {...original, running:false, catalog_activity_ms:null, activity_state:'observed',
+             last_activity_ms:Date.parse('2026-11-21T14:35:27.123Z')};
+           owner.activity(row);
+           const result = {text:row.activity.textContent, help:!!row.activityHelp || row.activity.hasAttribute('title')};
+           row.value=original; owner.activity(row); return result;
+         })()`);
+         assert.deepEqual(confirmed,{text:'2026-11-21 14:35',help:false},'confirmed Last Activity has no tooltip');
          for (const locale of ['en-US','sv-SE']) for (const timezoneId of ['America/New_York','Asia/Tokyo']) {
            await command('Emulation.setLocaleOverride',{locale},sessionId);
            await command('Emulation.setTimezoneOverride',{timezoneId},sessionId);
            await evaluate('current.catalog.rows(current.catalog.data.view.session_usage)');
-           assert.equal(await evaluate('current.catalog.body.rows[0].cells[0].textContent'),original.text);
+           assert.deepEqual(await evaluate(describedActivity),original);
            assert.deepEqual(await evaluate(`['2026-03-29T00:30Z','2026-03-29T01:30Z','2026-10-25T00:30Z','2026-10-25T01:30Z']
              .map(value=>ReportView.timestamp(Date.parse(value),'Europe/Stockholm'))`),
              ['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30']);
@@ -337,6 +354,8 @@ async function main() {
          assert.doesNotMatch(values.body,forbidden);
          values.help.forEach(text=>assert.doesNotMatch(text,forbidden));
          assert.ok(values.help.some(text=>/1970-01-\d{2} \d{2}:\d{2}/.test(text)));
+         const shell = require('./probe_detail_shell_dates.cjs');
+         checks.push(...await shell({evaluate, until, fixture}));
          checks.push('real Sessions 25-row HTTP/DTO/DOM configured-UTC activity unchanged by two locales/two browser zones; Stockholm spring/fall DST');
          checks.push('complete 1001-row session detail and all clock help searched for 12-hour/date-order leaks');
          assert.deepEqual(errors,[]);

@@ -11,7 +11,9 @@ from unittest.mock import patch
 
 from development.tests.fixtures.compact_reports import rendered, report_service
 from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
+from development.tools.date_display_guard import date_display_bypasses, python_bypasses, web_bypasses
 from src.analysis.context import PriceWarningSeverity
+from src.analysis.timezones import DateTimeMode, TimezoneUnavailableError, format_date_time, resolve_timezone
 from src.application.contracts import record
 from src.application.display import with_display
 from src.application.live_projection import project_live
@@ -62,14 +64,64 @@ class WebDisplayTests(unittest.TestCase):
             self.assertEqual(total, dto["display"]["mix_total_cost"])
             self.assertEqual(tiny, dto["display_units"][unit]["mix_input_cost"])
 
-    def test_shipped_web_dates_have_no_implicit_locale_or_browser_zone_formatters(self):
-        assets = ROOT / 'src/web/assets'
-        for path in assets.glob('*.js'):
-            text = path.read_text(encoding='utf-8')
-            with self.subTest(asset=path.name):
-                self.assertNotRegex(text, r'\.toLocale(?:Date|Time)String\(')
-                self.assertNotRegex(text, r'new Date\([^\n]+\)\.toLocaleString\(')
-                self.assertNotRegex(text, r'\.get(?:FullYear|Month|Date|Hours|Minutes)\(')
+    def test_shipped_dates_have_no_display_formatter_bypasses(self):
+        self.assertEqual([], list(date_display_bypasses(ROOT)))
+
+    def test_date_guard_rejects_bypasses_but_accepts_central_calls_and_arithmetic(self):
+        asset = "src/web/assets/new-tool-panel.js"
+        module = "src/application/new_tool_panel.py"
+        for code in (
+            "new Intl.DateTimeFormat('sv-SE', {timeZone: zone}).format(value)",
+            "instant.toLocaleDateString()", "instant.toLocaleTimeString()", "instant.toUTCString()",
+            "instant.toString()", "new Date(value)", "instant.getUTCFullYear()",
+        ):
+            with self.subTest(code=code):
+                self.assertTrue(web_bypasses(asset, code))
+        self.assertEqual([], web_bypasses(asset, """
+            const at = Date.parse(source);
+            const age = Date.now() - at;
+            const shown = ReportView.formatDateTime(at, ReportView.DateTimeMode.DATE_TIME, zone);
+        """))
+        for code in (
+            "value.strftime('%Y-%m-%d')", "f'{value:%H:%M}'", "value.isoformat()",
+            "f'{value.year:04d}-{value.month:02d}-{value.day:02d}'",
+        ):
+            with self.subTest(code=code):
+                self.assertTrue(python_bypasses(module, code))
+        self.assertEqual([], python_bypasses(module, """
+day = date.fromisoformat(source) + timedelta(days=1)
+shown = format_date_time(day, DateTimeMode.DATE)
+"""))
+
+    def test_python_date_modes_match_shared_vectors(self):
+        self.check_python_date_vectors("Europe/Stockholm", "UTC", "Unknown/Timezone", None)
+
+    def test_python_date_modes_respect_another_configured_iana_zone(self):
+        try:
+            resolve_timezone("America/New_York")
+        except TimezoneUnavailableError as error:
+            self.assertEqual("unknown", format_date_time(1_795_219_200_123, DateTimeMode.DATE_TIME, "America/New_York"))
+            self.skipTest(str(error))
+        self.check_python_date_vectors("America/New_York")
+
+    def check_python_date_vectors(self, *zones):
+        vectors = json.loads((ROOT / "development/tests/fixtures/date_time_vectors.json").read_text())
+        for vector in vectors:
+            zone = vector["zone"]
+            if zone not in zones:
+                continue
+            value = (datetime.fromisoformat(vector["utc"]).timestamp() * 1000
+                     if "utc" in vector else vector["calendar"])
+            for mode, expected in vector["expected"].items():
+                with self.subTest(vector=vector, mode=mode):
+                    actual = format_date_time(value, DateTimeMode.__members__.get(mode), zone)
+                    self.assertEqual(expected or "unknown", actual)
+
+    @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
+    def test_web_date_modes_match_shared_vectors(self):
+        result = subprocess.run(["node", "development/tests/integration/web_date_time.cjs"],
+            text=True, capture_output=True, timeout=10, cwd=ROOT)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_web_observation_and_numeric_reset_leave_raw_and_cli_tokens_intact(self):
         now = int(datetime(2026, 3, 28, 12, tzinfo=timezone.utc).timestamp() * 1000)
@@ -91,11 +143,13 @@ class WebDisplayTests(unittest.TestCase):
         value = record(at_ms=start, completed_at_ms=finish, observed_at_ms=finish, now_ms=finish,
             ccost=Decimal(395), complete=False)
         for unit, amount in (('credits', '395'), ('usd', '$3.95')):
-            with self.subTest(unit=unit), patch.object(display, 'format_local_timestamp',
-                    wraps=display.format_local_timestamp) as stamp:
+            with self.subTest(unit=unit), patch.object(display, 'format_date_time',
+                    wraps=display.format_date_time) as stamp, patch.object(display, 'format_execution_boundary',
+                    wraps=display.format_execution_boundary) as boundary:
                 dto = with_display(value, 'Europe/Stockholm', ccost_display_unit=unit).to_json()
 
-            self.assertEqual(8, stamp.call_count)
+            self.assertEqual(6, stamp.call_count)
+            self.assertEqual(2, boundary.call_count)
             self.assertEqual({'ccost':amount, 'observed_at_ms':'2026-10-25 02:30',
                 'now_ms':'2026-10-25 02:30', 'clock':'02:30', 'date_time':'2026-10-25 02:30',
                 'start_date_time':'2026-10-25 02:30 +0200',

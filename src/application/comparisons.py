@@ -1,7 +1,7 @@
 """Allowlisted Comparisons DTOs and unit-aware display, never acquisition/pricing."""
 from decimal import Decimal
 
-from src.analysis.timezones import format_local_timestamp
+from src.analysis.timezones import DateTimeMode, format_date_time, format_execution_boundary
 from src.display import duration_text, context_tokens
 from src.numbers import ccost_amount
 from src.pricing.identities import unverified_alias
@@ -47,9 +47,9 @@ def page(value):
 def display_tokens(values, zone):
     if values.get('match_run'):
         start, end = values['started_at_ms'], values['completed_at_ms']
-        return dict(started=format_local_timestamp(start, zone, '%Y-%m-%d %H:%M'),
-            precise_start=format_local_timestamp(start, zone, '%Y-%m-%d %H:%M:%S %z'),
-            precise_end='Unknown' if end is None else format_local_timestamp(end, zone, '%Y-%m-%d %H:%M:%S %z'),
+        return dict(started=format_date_time(start, DateTimeMode.DATE_TIME, zone),
+            precise_start=format_execution_boundary(start, DateTimeMode.DATE_TIME_SECONDS, zone),
+            precise_end='Unknown' if end is None else format_execution_boundary(end, DateTimeMode.DATE_TIME_SECONDS, zone),
             ccost=ccost_amount(None if values['ccost'] is None else Decimal(values['ccost'])),
             context='N/A' if values['next_context_tokens'] is None else '~' + context_tokens(values['next_context_tokens']),
             totals='/'.join(str(item) for item in values['token_totals']))

@@ -1,0 +1,24 @@
+[
+  {"utc": "2026-11-21T13:35:27.123Z", "zone": "Europe/Stockholm", "expected":
+    {"DATE": "2026-11-21", "TIME": "14:35", "DATE_TIME": "2026-11-21 14:35", "DATE_TIME_SECONDS": "2026-11-21 14:35:27"}},
+  {"utc": "2026-06-01T22:00:00.999Z", "zone": "Europe/Stockholm", "expected":
+    {"DATE": "2026-06-02", "TIME": "00:00", "DATE_TIME": "2026-06-02 00:00", "DATE_TIME_SECONDS": "2026-06-02 00:00:00"}},
+  {"utc": "2026-03-29T00:59:59.999Z", "zone": "Europe/Stockholm", "expected":
+    {"TIME": "01:59", "DATE_TIME_SECONDS": "2026-03-29 01:59:59"}},
+  {"utc": "2026-03-29T01:00:00.001Z", "zone": "Europe/Stockholm", "expected":
+    {"TIME": "03:00", "DATE_TIME_SECONDS": "2026-03-29 03:00:00"}},
+  {"utc": "2026-10-25T00:30:27.123Z", "zone": "Europe/Stockholm", "expected":
+    {"DATE_TIME_SECONDS": "2026-10-25 02:30:27"}},
+  {"utc": "2026-10-25T01:30:27.123Z", "zone": "Europe/Stockholm", "expected":
+    {"DATE_TIME_SECONDS": "2026-10-25 02:30:27"}},
+  {"utc": "2026-11-21T00:00:00.123Z", "zone": "UTC", "expected":
+    {"DATE": "2026-11-21", "TIME": "00:00", "DATE_TIME": "2026-11-21 00:00", "DATE_TIME_SECONDS": "2026-11-21 00:00:00"}},
+  {"utc": "2026-11-21T00:00:00.123Z", "zone": "America/New_York", "expected":
+    {"DATE": "2026-11-20", "TIME": "19:00", "DATE_TIME": "2026-11-20 19:00", "DATE_TIME_SECONDS": "2026-11-20 19:00:00"}},
+  {"calendar": "2026-11-21", "zone": "America/New_York", "expected": {"DATE": "2026-11-21", "DATE_TIME": null}},
+  {"calendar": "2026-02-29", "zone": "UTC", "expected": {"DATE": null}},
+  {"utc": "2026-11-21T13:35:27.123Z", "zone": "Unknown/Timezone", "expected": {"DATE_TIME_SECONDS": null}},
+  {"utc": "2026-11-21T13:35:27.123Z", "zone": null, "expected": {"DATE_TIME": null}},
+  {"utc": "2026-11-21T13:35:27.123Z", "zone": "UTC", "expected": {"UNRECOGNIZED": null}},
+  {"calendar": null, "zone": "UTC", "expected": {"DATE_TIME_SECONDS": null}}
+]

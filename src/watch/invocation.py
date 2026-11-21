@@ -42,6 +42,11 @@ def _digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=True).encode()).hexdigest()
 
 
+def invocation_scope(origin):
+    """Opaque source identity for matching Watch evidence to Session Detail."""
+    return hashlib.sha256(repr(source_scope(origin)).encode()).hexdigest()
+
+
 def _format(inputs, shell, budget):
     """One privacy/size boundary for native parts and registry fallback alike."""
     lines, reasons = [], []

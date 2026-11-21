@@ -109,8 +109,8 @@ const SessionDetail = (() => {
          'CCost can reflect only the known priced portion. N/A: no nonzero token mix.')];
   }
   class View {
-    constructor(api, id) {
-      Object.assign(this, {api, id, token: null, data: null, busy: false, attached: false, generation: 0});
+    constructor(api, id, live = () => null) {
+      Object.assign(this, {api, id, live, token: null, data: null, busy: false, attached: false, generation: 0});
       this.root = el('div', undefined, 'session-detail'); this.root.setAttribute('aria-label', 'Session detail');
       const back = this.back = el('a', '↩ Back to Show All Sessions'); back.href = '#/sessions';
       back.setAttribute('aria-label', 'Back to Show All Sessions');
@@ -124,6 +124,7 @@ const SessionDetail = (() => {
       this.loader.status.setAttribute('aria-live', 'polite');
       this.progress = {percent: 0, stage: 'Opening session…', stageLabel: 'Opening session…'};
       this.context = new WatchView.ContextLine();
+      this.invocations = new WatchView.LiveInvocations();
       this.activityLimit = 25;
       this.activity = new WatchView.HistoryActivity(() => {
         if (this.busy) return;
@@ -143,7 +144,7 @@ const SessionDetail = (() => {
       this.values = new Values();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
-        this.retry, this.loader.root, scroll, this.context.root, this.activity.root);
+        this.retry, this.loader.root, scroll, this.context.root, this.invocations.root, this.activity.root);
       if (this.quotaUsage) this.root.append(this.quotaUsage.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
@@ -159,6 +160,7 @@ const SessionDetail = (() => {
       this.attached = false; this.generation++; clearTimeout(this.timer);
       this.showActivityFeedback(null);
       this.activity.update(null); this.activityLimit = 25;
+      this.invocations.update(null);
       if (this.data) this.data.activity = null;
       this.scroll.setAttribute('aria-busy', 'false'); this.loader.root.hidden = true;
       const token = this.token; this.token = null;
@@ -173,6 +175,9 @@ const SessionDetail = (() => {
     catchUp() {
       if (!this.attached || document.hidden) return;
       this.revalidate = true; this.poll();
+    }
+    updateInvocations(data = this.data) {
+      this.invocations.update(this.attached ? this.live() : null, this.id, data?.activity?.invocation_scope);
     }
     async poll() {
       if (!this.attached) return;
@@ -412,6 +417,7 @@ const SessionDetail = (() => {
       ContextHelp.dismiss(this.root);
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
+      this.invocations.update(null);
       this.exporter?.close(); this.freshness();
       this.quotaUsage?.update(null);
     }
@@ -432,7 +438,8 @@ const SessionDetail = (() => {
       this.pendingRender = false;
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
-      this.activity.update(data.activity);
+      this.activity.update(data.activity, data.result.view.timezone_id);
+      this.updateInvocations(data);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(block.rows.map(row => row.id));
       const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);

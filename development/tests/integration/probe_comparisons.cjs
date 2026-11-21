@@ -57,6 +57,26 @@ async function main() {
     assert.equal(await evaluate(`document.querySelectorAll('.comparison-group').length`),10, JSON.stringify({errors,
       state:await evaluate(`({message:current.message,withheld:current.withheld,groups:current.result.view.comparisons.groups.length,dom:output.innerHTML.slice(0,1200)})`)}));
     assert.equal(await evaluate(`document.querySelectorAll('.comparison-table tbody tr').length`),30);
+    if (process.argv.includes('--dates-only')) {
+      const expected = await evaluate(`(() => {
+        const first = current.result.view.comparisons.groups[0].runs[0];
+        return {zone:current.result.view.timezone_id, start:first.started_at_ms, end:first.completed_at_ms};
+      })()`);
+      assert.equal(expected.zone, 'UTC');
+      const stamp = value => new Date(value).toISOString().replace('T', ' ').slice(0, 19);
+      const selector = 'document.querySelector(".comparison-table tbody tr td:nth-child(2) button")';
+      const panel = 'document.getElementById("context-help")';
+      await command('Emulation.setLocaleOverride', {locale:'sv-SE'}, tab);
+      await command('Emulation.setTimezoneOverride', {timezoneId:'Asia/Tokyo'}, tab);
+      assert.equal(await evaluate(`${selector}.textContent`), stamp(expected.start).slice(0, 16));
+      await evaluate(`${selector}.focus()`);
+      await until(`${panel}.matches(':popover-open')`);
+      assert.match(await evaluate(`${panel}.textContent`), new RegExp(
+        `^${stamp(expected.start)} \\+0000\\nFinal execution boundary: ${stamp(expected.end)} \\+0000`));
+      assert.deepEqual(errors, []);
+      evidence = {outcome:'PASS', checks:['Rendered Comparisons start and focused precise execution-boundary help use configured UTC, not the emulated browser zone.']};
+      return;
+    }
      assert.equal(await evaluate(`document.querySelectorAll('.comparison-group img').length`),0);
      await emptyNotice();
      assert.equal(await evaluate(`(() => {const node=current.comparisons.status;return node.getAttribute('role')==='status' && node.getBoundingClientRect().height>0 && node.textContent.includes('root sessions checked')})()`),true);

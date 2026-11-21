@@ -102,29 +102,14 @@ const WatchView = (() => {
     target.jobs = new Map();
     return target;
   }
-  let shellClockZone, shellClock;
-  function shellTimestamp(value, zone, estimated = false) {
-    if (!Number.isFinite(value) || !zone) return 'Unavailable';
-    try {
-      if (zone !== shellClockZone) {
-        const options = {timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset'};
-        shellClock = [new Intl.DateTimeFormat('sv-SE', options),
-          new Intl.DateTimeFormat('sv-SE', {...options, second: '2-digit'}),
-          new Intl.DateTimeFormat('sv-SE', {...options, second: '2-digit', fractionalSecondDigits: 3})];
-        shellClockZone = zone;
-      }
-      return shellClock[estimated ? 0 : value % 1000 ? 2 : 1].format(value);
-    } catch (_) {
-      return 'Unavailable';
-    }
-  }
   function shellDuration(ms) {
     if (ms > 0 && ms < 1000) return '<1s';
     const seconds = Math.floor(ms / 1000);
     const values = [[Math.floor(seconds / 3600), 'h'], [Math.floor(seconds / 60) % 60, 'm'], [seconds % 60, 's']];
     return values.filter(([n]) => n).map(([n, unit]) => n + unit).join(' ') || '0s';
   }
+  const invocationTime = (at, zone) =>
+    ReportView.formatDateTime(at, ReportView.DateTimeMode.DATE_TIME_SECONDS, zone);
   function drawShellTiming(job, detail, clock) {
     const timing = detail?.shell_timing;
     if (!timing) {
@@ -136,26 +121,29 @@ const WatchView = (() => {
       return;
     }
     const {now, zone} = clock;
+    const stamp = at => invocationTime(at, zone);
     const start = timing.anchor ? detail.started_at_ms : null;
     const elapsed = Number.isFinite(now) && start != null ? now - start : null;
     const timeout = timing.timeout_ms;
     const deadline = timing.anchor === 'execution' && timeout != null ? start + timeout : null;
     const typical = timing.estimated_duration_ms;
+    const estimated = typical != null && elapsed != null && elapsed >= 0 && elapsed < typical ?
+      stamp(start + typical) : 'N/A';
     const matches = timing.sample_count === 1 ? '1 similar completed run' : `${timing.sample_count} similar completed runs`;
     const provenance = detail.mode === 'background' ? ' · native completion notices' : '';
     const anchor = timing.anchor === 'execution' ? 'native execution start' :
       timing.anchor === 'call_created' ? 'tool-call creation; execution start unrecorded' :
         'assistant message creation; execution start unrecorded';
     const rows = [
-      ['Started', start != null ? `${shellTimestamp(start, zone)} (${anchor})` : 'Execution start unrecorded'],
+      ['Started', start != null ? `${stamp(start)} (${anchor})` : 'Execution start unrecorded'],
       ['Elapsed', elapsed == null ? 'Unavailable' : elapsed < 0 ? 'Source start is ahead of the Watch clock' :
         shellDuration(elapsed) + (timing.anchor === 'execution' ? '' : ' since recorded creation')],
       ['Estimated finish', typical == null ? (timing.sample_count ? `Unavailable — only ${matches}` :
         'Unavailable — no qualified comparable history') : elapsed == null || elapsed < 0 ?
         'Unavailable — source and Watch clocks not aligned' : elapsed >= typical ?
           `Unavailable — past the historical typical duration (${matches})` :
-          `~${shellTimestamp(start + typical, zone, true)} (Low confidence · ${matches}${provenance})`],
-      ['Timeout deadline', deadline != null ? shellTimestamp(deadline, zone) :
+          estimated === 'N/A' ? 'Unavailable' : `~${estimated} (Low confidence · ${matches}${provenance})`],
+      ['Timeout deadline', deadline != null ? stamp(deadline) :
         timeout != null ? 'Unavailable — native execution start unrecorded' : null],
       ['Time to timeout', deadline == null ? null : elapsed == null || elapsed < 0 ? 'Unavailable' :
         deadline <= now ? 'Deadline passed; still running' : shellDuration(deadline - now)],
@@ -282,7 +270,7 @@ const WatchView = (() => {
     for (const key of target.rows.keys()) if (!keep.has(key)) target.rows.delete(key);
     reconcile(target.list, wanted);
   }
-  function drawTools(target, summary, groups, outcomes, failures, unidentified, state, paged = false, tail = []) {
+  function drawTools(target, summary, groups, outcomes, failures, unidentified, state, zone, paged = false, tail = []) {
     fragments(target.summary, summary);
     target.rows ||= new Map();
     const wanted = [], keep = new Set();
@@ -310,8 +298,10 @@ const WatchView = (() => {
         const call = group.jobs.get(detail.identity) || invocationDisclosure();
         call.node.className = 'watch-failed-call';
         group.jobs.set(detail.identity, call);
+        const created = detail.started_at_ms > 0 ? invocationTime(detail.started_at_ms, zone) : 'N/A';
         drawInvocation(call, `${item.outcome === 'cancelled' ? 'Cancelled' : 'Failed'} call ${index + 1} — ${item.tool_name}`, detail,
-          [detail.outcome ? `Recorded outcome: ${detail.outcome}; source status: ${detail.recorded_status || 'unavailable'}.` : '',
+          [created === 'N/A' ? '' : `Tool-call creation: ${created}.`,
+            detail.outcome ? `Recorded outcome: ${detail.outcome}; source status: ${detail.recorded_status || 'unavailable'}.` : '',
             detail.owner ? `${detail.owner} ${detail.agent_id}; prompt ${detail.prompt_number != null ? '#' + detail.prompt_number : detail.prompt_id || 'unavailable'}.` : '',
             detail.reason || 'Failure reason unavailable'].filter(Boolean).join(' '));
         calls.push(call.node);
@@ -359,7 +349,7 @@ const WatchView = (() => {
       this.root.append(this.tools.node, this.skills.node);
       this.update(null);
     }
-    update(value) {
+    update(value, zone) {
       if (this.scope !== value?.scope) {
         this.tools.node.open = false; this.skills.node.open = false;
         drawTools(this.tools, [], [], [], [], 0, 'invalidated');
@@ -377,11 +367,42 @@ const WatchView = (() => {
       text(this.note, value?.unavailable ? `${value.unavailable} calls have unavailable source-qualified invocation details.` : '');
       this.note.hidden = !this.note.textContent;
       drawTools(this.tools, summary, groups, value?.outcomes || [], value?.failures || [], 0,
-        value ? 'observed' : 'invalidated', true, [this.more, this.note]);
+        value ? 'observed' : 'invalidated', zone, true, [this.more, this.note]);
       const parts = skill => [[skill.skill_id, ''], ...(skill.failed_count ?
         [[` (${skill.failed_count} failed)`, 'watch-activity-error']] : [])];
       drawDisclosure(this.skills, [[`Skills · ${skills.length} confirmed custom skills${value?.skills_partial ? ' · other skill origins unknown' : ''}`, '']],
         skills.map(parts), 'No confirmed custom skills');
+    }
+  }
+  function drawRunningActivity(running, backgroundDetail, tool, verified, state, clock) {
+    drawInvocations(running, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
+      tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state, clock);
+    const kinds = tool?.background_kinds || [];
+    const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
+    drawInvocations(backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
+      tool?.background_invocations, tool?.background_invocation_count || kinds.length, verified, 'background',
+      kinds.length === 1 ? tool?.background_invocation : null, state, clock);
+  }
+  class LiveInvocations {
+    constructor() {
+      this.root = el('div', undefined, 'watch-activity');
+      this.running = invocationDisclosure(); this.background = invocationDisclosure();
+      this.root.append(this.running.node, this.background.node);
+      this.update(null);
+    }
+    update(result, id, scope) {
+      // Only the source-qualified Watch focal for this exact Detail source and
+      // session may supply live inputs. Never infer execution from history.
+      const view = result?.view;
+      const card = scope && result?.state === 'running' ? view?.active_cards?.find(card =>
+        card.session_id === id && card.activity_scope === scope && card.invocation_verified === true) : null;
+      const row = card?.rows.find(row => row.prompt.event_id === card.focal_id &&
+        row.prompt.in_progress && !row.prompt.execution_unverified);
+      const tool = row?.tool;
+      if (!tool && this.root.hidden) return;
+      drawRunningActivity(this.running, this.background, tool, !!row, tool?.detail_state,
+        {now: view?.now_ms, zone: view?.timezone_id});
+      this.root.hidden = this.running.node.hidden && this.background.node.hidden;
     }
   }
   function daily(parent, value, state) {
@@ -632,15 +653,10 @@ const WatchView = (() => {
       if (skills.length > 5) summary.push([` · ${skills.length - 5} other`, '']);
       const outcomes = tool?.outcomes || [];
       const unidentified = outcomeTotal - outcomes.reduce((sum, item) => sum + item.count, 0);
-      drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [], unidentified, state);
+      drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [],
+        unidentified, state, clock?.zone);
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
-      drawInvocations(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
-        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state, clock);
-      const kinds = tool?.background_kinds || [];
-      const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
-      drawInvocations(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
-        tool?.background_invocations, tool?.background_invocation_count || kinds.length, verified, 'background',
-        kinds.length === 1 ? tool?.background_invocation : null, state, clock);
+      drawRunningActivity(this.runningDetail, this.backgroundDetail, tool, verified, state, clock);
     }
   }
   class View {
@@ -704,6 +720,6 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine, HistoryActivity, historyNotice, finishedCards, retainContext, retainSummary,
+  return {View, ContextLine, HistoryActivity, LiveInvocations, historyNotice, finishedCards, retainContext, retainSummary,
     costProjection, costGroups, promptDetails};
 })();

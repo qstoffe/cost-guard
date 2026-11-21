@@ -5,9 +5,8 @@ ranking or arbitrary object introspection. CLI and Web consume shared primitives
 """
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-import math
 
-from src.analysis.timezones import format_local_timestamp, resolve_timezone
+from src.analysis.timezones import DateTimeMode, format_date_time, format_execution_boundary, resolve_timezone
 from src.display import (TOKEN_CATEGORIES, TOKEN_CATEGORY_LEGEND, compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage, token_volume)
 from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, ccost_unit, remaining_capacity
@@ -23,6 +22,11 @@ from .reference_cost import cost_help_tokens
 from .model_help import session_model_tokens
 from .mini_costs import mini_cost_tokens
 from .web_costs import unavailable_tokens
+
+
+def _recorded_instant(value):
+    """Older frozen DTOs may use nonpositive clock values for missing evidence."""
+    return value if type(value) in (int, float) and value > 0 else None
 
 
 def decimal(value):
@@ -123,11 +127,12 @@ def web_quota_reset(values, timezone_id, now_ms, *, mini=False):
     deadline = values.get("reset_at_ms")
     if values.get("window_active") is False and deadline is None:
         return "Window not started"
-    if isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0:
+    if type(deadline) not in (int, float) or deadline <= 0:
+        return "N/A" if mini else "Reset unknown"
+    clock = format_date_time(deadline, DateTimeMode.TIME, timezone_id)
+    if clock == "unknown":
         return "N/A" if mini else "Reset unknown"
     try:
-        if not math.isfinite(deadline):
-            return "N/A" if mini else "Reset unknown"
         zone = resolve_timezone(timezone_id)
         target = datetime.fromtimestamp(deadline / 1000, timezone.utc).astimezone(zone)
         current = datetime.fromtimestamp(now_ms / 1000, timezone.utc).astimezone(zone)
@@ -136,15 +141,14 @@ def web_quota_reset(values, timezone_id, now_ms, *, mini=False):
     remaining = deadline - now_ms
     if remaining <= 0:
         return "Reset expired"
-    clock = target.strftime("%H:%M")
     if mini:
-        day = (target.strftime("%Y-%m-%d") if remaining > 604_800_000 else
+        day = (format_date_time(target.date(), DateTimeMode.DATE) if remaining > 604_800_000 else
                "today" if target.date() == current.date() else
                "tomorrow" if target.date() == current.date() + timedelta(days=1) else
                ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()])
         return f"in {duration_text(remaining)} · {clock} {day}"
     if remaining > 604_800_000:
-        return f"Reset at {clock}, {target:%Y-%m-%d}"
+        return f"Reset at {clock}, {format_date_time(target.date(), DateTimeMode.DATE)}"
     day = ("today" if target.date() == current.date() else
            ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()])
     return f"Reset in {duration_text(remaining)}, {clock} {day}"
@@ -155,15 +159,7 @@ def metric_time_tokens(values, timezone_id, now_ms):
     tokens = {}
     for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms", "start_ms", "end_ms"):
         if key in values:
-            if key == "reset_at_ms":
-                deadline = values[key]
-                try:
-                    tokens[key] = (format_local_timestamp(deadline, timezone_id) if
-                        not isinstance(deadline, bool) and isinstance(deadline, (int, float)) and math.isfinite(deadline) else "unknown")
-                except (OverflowError, OSError, ValueError):
-                    tokens[key] = "unknown"
-            else:
-                tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
+            tokens[key] = format_date_time(_recorded_instant(values[key]), DateTimeMode.DATE_TIME, timezone_id)
     if "reset_at_ms" in values and now_ms is not None:
         tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
                            else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
@@ -261,20 +257,23 @@ def history_time_tokens(values, timezone_id):
     tokens = {}
     if "activity_ms" in values:
         at = values["activity_ms"]
-        tokens["activity_clock"] = "Loading…" if at is None else format_local_timestamp(at, timezone_id, "%H:%M")
-        tokens["activity_date_time"] = "" if at is None else format_local_timestamp(at, timezone_id, "%Y-%m-%d %H:%M")
+        at = _recorded_instant(at)
+        tokens["activity_clock"] = "Loading…" if values["activity_ms"] is None else format_date_time(at, DateTimeMode.TIME, timezone_id)
+        tokens["activity_date_time"] = "" if values["activity_ms"] is None else format_date_time(at, DateTimeMode.DATE_TIME, timezone_id)
     if "at_ms" in values:
-        tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
-        tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")
-        tokens["start_date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M %z")
+        at = _recorded_instant(values["at_ms"])
+        tokens["clock"] = format_date_time(at, DateTimeMode.TIME, timezone_id)
+        tokens["date_time"] = format_date_time(at, DateTimeMode.DATE_TIME, timezone_id)
+        tokens["start_date_time"] = format_execution_boundary(at, DateTimeMode.DATE_TIME, timezone_id)
         tokens["mini_start_date_time"] = tokens["date_time"]
     if "completed_at_ms" in values:
         finished = values["completed_at_ms"]
-        tokens["finished_clock"] = "—" if finished is None else format_local_timestamp(finished, timezone_id, "%H:%M")
-        tokens["finished_date_time"] = "Unknown finish time" if finished is None else format_local_timestamp(finished, timezone_id, "%Y-%m-%d %H:%M %z")
-        tokens["mini_finished_date_time"] = "Unknown finish time" if finished is None else format_local_timestamp(finished, timezone_id, "%Y-%m-%d %H:%M")
+        at = _recorded_instant(finished)
+        tokens["finished_clock"] = "—" if finished is None else format_date_time(at, DateTimeMode.TIME, timezone_id)
+        tokens["finished_date_time"] = "Unknown finish time" if finished is None else format_execution_boundary(at, DateTimeMode.DATE_TIME, timezone_id)
+        tokens["mini_finished_date_time"] = "Unknown finish time" if finished is None else format_date_time(at, DateTimeMode.DATE_TIME, timezone_id)
     if values.get("aborted") and values.get("abort_at_ms"):
-        tokens["abort_clock"] = format_local_timestamp(values["abort_at_ms"], timezone_id, "%H:%M")
+        tokens["abort_clock"] = format_date_time(_recorded_instant(values["abort_at_ms"]), DateTimeMode.TIME, timezone_id)
     return tokens
 
 
@@ -297,7 +296,7 @@ def history_tokens(values, timezone_id, *, times=None):
             tokens["warning_cost"] = ""
         if values.get('guidance_state') == 'refreshing':
             at = values.get('guidance_sample_at_ms')
-            sample = format_local_timestamp(at, timezone_id, '%Y-%m-%d %H:%M') if at is not None else 'earlier'
+            sample = format_date_time(_recorded_instant(at), DateTimeMode.DATE_TIME, timezone_id) if at is not None else 'earlier'
             tokens['warning_cost'] += f' (Price sample {sample}; updating)'
     tokens.update(history_time_tokens(values, timezone_id) if times is None else times)
     if "next_context_tokens" in values:
