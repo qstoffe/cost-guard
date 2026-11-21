@@ -14,7 +14,8 @@ module.exports = async ({vm, context, Node, timers}) => {
     view:{session_usage:[{session_id:'new',title:'Actual source title',metric_state:'pending'},row]}};
   view.update(pending);
   assert.equal(view.body.children[0].titleNode.textContent,'Actual source title');
-  assert.equal(view.body.children[0].metrics[0].textContent,'Loading…');
+  assert.equal(view.body.children[0].metrics[0].textContent,'');
+  assert.equal(view.body.children[0].metrics[0].children[0].attributes['aria-label'],'Loading model');
   assert.equal(view.body.children[1],kept);
   assert.equal(view.status.hidden,true);
   const calls = [];

@@ -94,7 +94,7 @@ module.exports = async function help({evaluate,until,fixture,command,pip,checks}
   await evaluate(`window.sourceRow=miniWatch.view.promptRows.get('root');sourceRow.cells[4].focus()`);
   assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
   assert.equal(await evaluate(`document.querySelector('.watch-card .watch-prompt-table')?.textContent.includes('+12k')`),true,'Full Watch uses same canonical delta');
-  for(const [phase,next,delta] of [['later','117k','+17k'],['boundary','N/A','N/A'],
+  for(const [phase,next,delta] of [['later','117k','+17k'],['boundary','','N/A'],
       ['running','112k','+12k'],['history','300k','+12k'],['zero','300k','0'],['waiting','300k','N/A']]) {
     await fixture('context-'+phase);
     await contextReady(phase,`miniWatch.view.promptRows.get('root')?.cells[4].textContent===${JSON.stringify(next)} &&

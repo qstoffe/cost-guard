@@ -204,6 +204,10 @@ def main():
                         preview_fixture.warm()
                     if action == "upgrade":
                         preview_fixture.upgrade()
+                    if action == "empty":
+                        preview_fixture.empty()
+                    if action == "revise":
+                        preview_fixture.revise()
                     if action != "counts":
                         publish(value=preview_fixture.frame(frame, running=2 if action == "two-running" else 0))
                     print(json.dumps(dict(ok=True, **preview_fixture.counts())), flush=True)

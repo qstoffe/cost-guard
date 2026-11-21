@@ -9,6 +9,7 @@ from .prompt_costs import cost_detail, mini_cost_detail, watch_calls
 from .mini_costs import mini_groups
 from .reference_cost import issue_records
 from .model_help import prompt_display_help
+from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
@@ -142,7 +143,8 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         earlier_previews=tuple(record(session_id=item.session_id, title=item.title,
             activity_ms=item.activity_ms, activity_origin=item.activity_origin, total_ccost=item.total_ccost,
             comparison_cost_complete=item.complete, hydration_state=item.hydration_state,
-            hydration_reason=item.hydration_reason, total_state=item.total_state)
+            hydration_reason=item.hydration_reason, total_state=item.total_state,
+            metric_absences=record(prompt_ccost=EMPTY_HISTORY, ctx=EMPTY_HISTORY) if item.empty_history else None)
             for item in value.earlier_previews),
         earlier_cards=tuple(card(item, value.now_ms) for item in value.earlier_cards),
         cards_state=value.cards_state, history_state=value.history_state,

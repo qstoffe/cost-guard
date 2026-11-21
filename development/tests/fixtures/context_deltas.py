@@ -80,7 +80,7 @@ def context_frame(frame, snapshot, prices, *, historical=False, session_next=Non
     prompt = block.rows[0]
     context = block.session_context
     if session_next is not None:
-        context = replace(context, tokens=session_next)
+        context = replace(context, tokens=session_next, context_state='historical')
     card = WatchCard("root", "Context example", "" if historical else prompt.event_id,
         (WatchRow("root", "Context example", prompt),), "observed", session_context=context)
     active, history = ((), (card,)) if historical else ((card,), ())

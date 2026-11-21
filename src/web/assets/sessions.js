@@ -498,33 +498,19 @@ const SessionsCatalog = (() => {
       if (value.running) {
         label = render(value.prompt_started_ms ?? value.last_activity_ms);
         help = ReportView.activityHelp(value.prompt_started_ms ?? value.last_activity_ms, this.renderTimezone, true);
-      } else if (value.activity_state === 'unverified') {
-        label = '—';
-        help = '* Execution could not be confirmed.';
       } else if (value.catalog_activity_ms != null) {
         label = render(value.catalog_activity_ms);
         help = '* Preliminary activity from the OpenCode session catalog. Prompt time is not yet verified.';
-      } else if (value.last_activity_ms == null) {
-        label = value.prompt_started_ms == null ? '—' : render(value.prompt_started_ms);
-        if (value.prompt_started_ms != null) {
-          help = '* Showing the recorded prompt start. Finish time is not verified.';
-        } else if (value.activity_state === 'pending' || value.activity_state === 'partial') {
-          help = '* Prompt activity has not been verified yet.';
-        }
+      } else if (value.last_activity_ms == null || value.activity_state === 'unverified') {
+        label = render(value.prompt_started_ms);
+        help = '* Showing the recorded prompt start. Finish time is not verified.';
       } else {
         label = render(value.last_activity_ms);
       }
-      ReportView.text(row.activity, label + (help ? '*' : ''));
-      if (help && help !== row.activityHelp) ContextHelp.value(row.activity, help);
-      if (!help && row.activityHelp) {
-        const focused = document.activeElement === row.activity;
-        ContextHelp.clearValue(row.activity);
-        if (focused) {
-          row.name.focus?.({preventScroll: true});
-          ContextHelp.dismiss(row.name);
-        }
-      }
-      row.activityHelp = help;
+      ReportView.metric(row.activity, 'activity', {
+        value: label === 'N/A' ? null : label + (help ? '*' : ''), help,
+        reason: value.metric_absences?.activity, onHelpLost: row.metricHelpLost
+      });
       row.className = value.running ? 'session-running' : '';
       ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' :
         value.activity_state === 'unverified' ? '[UNVERIFIED] ' : value.new_arrival ? '[NEW · Loading] ' : '');
@@ -549,39 +535,38 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-          row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
-            const node = el('span');
-            if (['duration', 'prompts'].includes(key)) return node;
-            ContextHelp.value(node, () => {
-               const current = row.value;
-              if (key === 'ccost') return ReportView.sessionCostHelp(current, current);
-               if (key === 'ctx') return current.context_tokens == null ? '' : `~${current.context_tokens.toLocaleString()} tokens`;
-               if (key !== 'model') return '';
-                return ReportView.display(current, 'model_help');
-            });
-            return node;
-          });
+          row.metricHelpLost = () => {
+            row.name.focus?.({preventScroll: true});
+            ContextHelp.dismiss(row.name);
+          };
+          row.metrics = Array.from({length: 5}, () => el('span'));
           const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
         }
         this.activity(row);
         ReportView.text(row.titleNode, value.title);
-        const texts = [(value.model !== 'N/A' && value.model || value.selected_display_model || 'N/A') + (value.has_model_details ? '*' : ''),
-          () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
-          () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];
+        const model = (value.model !== 'N/A' && value.model) || value.selected_display_model;
+        const amounts = [
+          model ? model + (value.has_model_details ? '*' : '') : null,
+          () => value.has_summary || value.indexed || value.metric_states?.ccost === 'retained' ?
+            ReportView.metricToken(value, 'ccost') : null,
+          value.prompt_count,
+          ReportView.metricToken(value, 'duration_ms'),
+          ReportView.metricToken(value, 'context_tokens')
+        ];
+        const current = value;
+        const helps = [
+          () => ReportView.metricToken(value, 'model_help'),
+          () => ReportView.sessionCostHelp(value, value), null, null,
+          current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
+        ];
         row.metrics.forEach((node, index) => {
           const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
           const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
-          const missing = ((!value.has_summary && !value.indexed && state !== 'retained') ||
-            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A') && !value.selected_display_model) ||
-            (key === 'ctx' && state === 'pending' && value.context_tokens == null));
-          ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
-          node.className = (['duration', 'prompts'].includes(key) ? '' : 'help-value') +
-            (missing || state === 'retained' || key === 'ctx' && state !== 'ready' ? ' session-metric-pending' : '');
-          if (state === 'retained') node.setAttribute('aria-label', `Retained value: ${node.textContent}`);
-          else node.removeAttribute('aria-label');
-          if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');
-          else node.removeAttribute('aria-busy');
+          node.classList.toggle('session-metric-pending', state === 'retained' || key === 'ctx' && state !== 'ready');
+          ReportView.metric(node, key, {value: amounts[index], reason: value.metric_absences?.[key],
+            help: helps[index], label: state === 'retained' ? shown => `Retained value: ${shown}` : null,
+            onHelpLost: row.metricHelpLost});
         });
         ContextHelp.refresh(row);
         if (this.body.children[index] !== row) {

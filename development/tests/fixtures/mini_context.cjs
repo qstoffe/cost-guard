@@ -15,11 +15,15 @@ module.exports = function(controller, view, input, helpText) {
   const prior=card('A','p1',230000), pending=card('A','p2',null,'pending');
   const show=(cards,extra={})=>{input.view={...saved,now_ms:++now,active_cards:cards,history_cards:[],...extra};controller.update(input);};
   const cell=id=>view.promptRows.get(id).children[4];
+  const pendingContext=(id,message)=>{
+    assert.equal(cell(id).textContent,'',message);
+    assert.equal(cell(id).children[0].attributes['aria-label'],'Loading context');
+  };
   show([prior]);assert.equal(cell('A').textContent,'230k');
   for(const state of ['observed','partial','retrying','loading','observed']) {
     const early=structuredClone(pending);early.state=state;
     show([early,card('B','new',null,'pending')]);controller.render();
-    assert.equal(cell('A').textContent,'230k');assert.equal(cell('B').textContent,'N/A');
+    assert.equal(cell('A').textContent,'230k');pendingContext('B');
     assert.equal(view.promptRows.get('A').contextHelp,'');
     assert.equal(cell('A').tabIndex,-1);
   }
@@ -31,19 +35,19 @@ module.exports = function(controller, view, input, helpText) {
   show([card('A','p3',null,'pending')]);assert.equal(cell('A').textContent,'235k');
   show([card('A','p3',235000)]);assert.equal(view.promptRows.get('A').contextHelp,'');
   show([card('A','p4',null,'pending')]);assert.equal(cell('A').textContent,'235k');
-  show([card('A','p4',null,'invalidated')]);assert.equal(cell('A').textContent,'N/A');
-  show([pending]);assert.equal(cell('A').textContent,'N/A','explicit invalidation cannot revive');
-  show([prior]);show([card('A','p2',null,'pending','compacted')]);assert.equal(cell('A').textContent,'N/A');
-  show([prior]);show([pending],{source_label:'another source'});assert.equal(cell('A').textContent,'N/A');
-  show([prior]);show([],{history_state:'observed'});show([pending]);assert.equal(cell('A').textContent,'N/A','removed session cannot leak retained context');
+  show([card('A','p4',null,'invalidated')]);pendingContext('A');
+  show([pending]);pendingContext('A','explicit invalidation cannot revive');
+  show([prior]);show([card('A','p2',null,'pending','compacted')]);pendingContext('A');
+  show([prior]);show([pending],{source_label:'another source'});pendingContext('A');
+  show([prior]);show([],{history_state:'observed'});show([pending]);pendingContext('A','removed session cannot leak retained context');
   const newSource=structuredClone(pending);newSource.session_summary.context.context_scope='replacement-source';
-  show([prior]);show([newSource]);assert.equal(cell('A').textContent,'N/A','source instance replacement invalidates immediately');
+  show([prior]);show([newSource]);pendingContext('A','source instance replacement invalidates immediately');
   const unverified=structuredClone(pending);unverified.rows[0].prompt.execution_unverified=true;
   show([prior]);show([unverified]);assert.equal(cell('A').textContent,'230k','execution uncertainty alone is pending');
   const summary=card('A','p2',230000,'pending');show([summary]);
   view.drawSessions(null);controller.render();assert.equal(cell('A').textContent,'230k','fresh row uses qualified summary');
   show([prior]);const older=structuredClone(input.view);show([card('A','p2',235000)]);
   controller.update({state:'running',view:older});assert.equal(cell('A').textContent,'235k','late HTTP cannot rewind');
-  controller.settings({miniWatchPlacement:'remember-last'},'changed-host');show([pending]);assert.equal(cell('A').textContent,'N/A');
+  controller.settings({miniWatchPlacement:'remember-last'},'changed-host');show([pending]);pendingContext('A');
   controller.settings({miniWatchPlacement:'remember-last'},'fixture-host');input.view=saved;controller.update(input);
 };

@@ -27,7 +27,8 @@ module.exports = async ({evaluate,until,fixture,command,checks,layouts}) => {
   await evaluate("location.hash='#/sessions?period=all'");
   await until("current?.catalog?.body.rows.length===1 && current.catalog.body.rows[0].cells[2].textContent==='Claude Sonnet 5.5'");
   const catalogModel='.sessions-table tbody td:nth-child(3) span';
-  assert.deepEqual(await evaluate("[...current.catalog.body.rows[0].cells].slice(4).map(c=>c.textContent)"),['2','0s','N/A']);
+  assert.deepEqual(await evaluate("[...current.catalog.body.rows[0].cells].slice(4).map(c=>c.textContent)"),['2','0s','']);
+  assert.equal(await evaluate(`current.catalog.body.rows[0].cells[6].querySelector('.metric-spinner').getAttribute('aria-label')`),'Loading context');
   assert.equal(await evaluate(`(()=>{const n=current.catalog.body.rows[0].cells[4].firstChild;return !n.classList.contains('help-value') &&
     !n.hasAttribute('tabindex') && !n.hasAttribute('aria-describedby')})()`),true);
   for(const mode of ['hover','focus','touch']) {
@@ -60,7 +61,7 @@ module.exports = async ({evaluate,until,fixture,command,checks,layouts}) => {
   await until("current.detail.body.rows[1].cells[1].textContent==='N/A'");
   assert.equal(await evaluate("current.detail.body.rows[0].cells[1].textContent"),'Claude Sonnet 5.5');
   await evaluate("document.activeElement?.blur();location.hash='#/sessions?period=all&sort=model&direction=1'");
-  await until("current?.catalog?.data && current.catalog.body.rows[0].cells[2].textContent==='N/A'");
+  await until(`current?.catalog?.data && current.catalog.body.rows[0].cells[2].querySelector('.metric-spinner')`);
   checks.push('Two same-minute canonical cancellations through HTTP: own Model/Low, selection-only help in both units at 360/1280 using actual hover/focus/touch, zero duration rounding and unknown Ctx; latest unknown never borrows first model');
   checks.push('Prompts=2 is plain non-focusable text; genuine heading help remains; no cost parts produces truthful no-usage copy and no execution star');
 };

@@ -204,6 +204,7 @@ class SessionUsageRow:
     subagent_ccost: Decimal = Decimal(0)
     cost_groups: tuple[SessionCostGroup, ...] = ()
     unverified_agent_count: int = 0
+    empty_history: bool = False
 
 
 @dataclass(frozen=True, slots=True)

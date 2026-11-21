@@ -47,13 +47,13 @@ module.exports = async ({vm, context, Node, timers}) => {
    cold.configure(new URLSearchParams('period=today'));
    const candidate = {...previous,offset:0,total:159,order_state:'provisional',membership_pending:true,
      candidate_navigation:true,pending_sort:true,passive:true,progress:{status:'pending',completed:0,total:159},
-     view:{session_usage:[{...row,last_activity_ms:null,catalog_activity_ms:1000000}]}};
+     view:{timezone_id:'UTC',session_usage:[{...row,last_activity_ms:null,catalog_activity_ms:1000000}]}};
    cold.update(candidate);
    assert.equal(cold.data,candidate,'cold entry must apply the preliminary table');
    assert.equal(cold.operation,null);
    assert.equal(cold.next.disabled,false);
    assert.match(cold.label.textContent,/159 catalog candidates \(preliminary\)/);
-    assert.match(cold.body.children[0].activity.textContent,/\*$/);
+     assert.equal(cold.body.children[0].activity.textContent,'1970-01-01 00:16*');
     cold.update({...candidate,progress:{status:'pending',reason:'concurrent_source_change',completed:0,total:159}});
     assert.equal(cold.status.textContent,'');
    assert.equal(cold.next.disabled,false);

@@ -15,10 +15,13 @@ module.exports = async ({evaluate,until,fixture,command,zoom}) => {
     await evaluate(`window.catalogRow=[...current.catalog.body.rows].find(row=>row.value.session_id===${JSON.stringify('details-'+name)})`);
     await until(`catalogRow.value.has_model_details===${catalogStar}`);
     const catalog=await evaluate(`({text:catalogRow.cells[2].textContent,
+      pending:!!catalogRow.cells[2].querySelector('.metric-spinner'),
       model:catalogRow.value.model,sort:current.catalog.data.sort})`);
-    assert.equal(catalog.text,catalog.model+(catalogStar?'*':''));
     assert.equal(catalog.sort,'model');
-    if(name==='unknown-main')assert.equal(catalog.text,'N/A*');
+    if(name==='unknown-main') {
+      assert.equal(catalog.text,'');
+      assert.equal(catalog.pending,true);
+    } else assert.equal(catalog.text,catalog.model+(catalogStar?'*':''));
     await evaluate("catalogRow.cells[2].firstChild.focus()");
     const catalogHelp=await evaluate("document.getElementById('context-help').textContent");
     if(name.startsWith('child-'))assert.match(catalogHelp,/Main models[\s\S]*Subagents/);

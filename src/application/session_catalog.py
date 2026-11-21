@@ -11,6 +11,7 @@ import time
 from uuid import uuid4
 
 from src.analysis.cache import dependency_signature
+from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.model_identity import payload_current
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
@@ -908,7 +909,7 @@ class SessionCatalog:
             # Reusing the same issued order must not freeze the metadata clock
             # on the live page. Explicitly pinned slices keep their own window.
             metadata_window = current_window if live_page and not pinned else window
-            for row in result["session_usage"]:
+            for row, usage in zip(result["session_usage"], selected):
                 key = row["session_id"]
                 current = key in self.roots and self._current(key)
                 row["indexed"] = current
@@ -945,6 +946,11 @@ class SessionCatalog:
                     row["metric_states"]["effort"] = "retained" if self.rows[key].effort_key is not None else "pending"
                 if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].effort_pending:
                     row["metric_states"]["effort"] = "pending"
+                if (usage.empty_history and current and not unavailable and self.state == "observed"
+                        and key not in self.active and not row["running"]
+                        and (not frozen or key in facts and facts[key][1] is not None
+                             and facts[key][1] == self.revisions.get(key))):
+                    row["metric_absences"] = dict.fromkeys(("model", "ctx", "activity"), EMPTY_HISTORY)
                 if key in facts:
                     row['snapshot_revision'] = facts[key][1]
                     if facts[key][1] is None:

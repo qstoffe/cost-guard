@@ -53,7 +53,7 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
         assert.equal(value.cls==='mini-running',running);assert.deepEqual(value.headers,headers);
         assert.deepEqual(value.text.slice(1,4),initial.text.slice(1,4),'session and both cost scopes are unchanged');
         if(state==='ready-current')assert.equal(value.text[4],'230k');
-        if(state==='invalidated')assert.equal(value.text[4],'N/A');
+        if(state==='invalidated')assert.equal(value.text[4],'');
         await evaluate('miniWatch.render();miniWatch.syncTheme()');
         assert.deepEqual((await read()).values,value.values,'refresh does not retain obsolete foreground');
       }
@@ -69,7 +69,8 @@ module.exports=async function({evaluate,command,sessionId,pip,layouts,checks}) {
     }
     await publish('running','none','ready','invalidated');
     await publish('new','none','pending','pending');
-    const unknown=await read();assert.equal(unknown.text[4],'N/A');
+    const unknown=await read();assert.equal(unknown.text[4],'');
+    assert.equal(await evaluate(`colorRow.cells[4].querySelector('.metric-spinner').getAttribute('aria-label')`),'Loading context');
     assert.ok(unknown.values.flat().every(color=>color===unknown.running),'unseeded pending Ctx is yellow too');
     assert.equal(unknown.help,'');assert.equal(unknown.tab,-1);
     // Same warning remains accessible through native keyboard, hover and touch in both categories.

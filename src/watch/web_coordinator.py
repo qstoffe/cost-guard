@@ -172,7 +172,8 @@ class WebWatchCoordinator(WatchCoordinator):
         published = []
         for item in previews:
             state, reason = self.cards.preview_status(item.session_id, frame.now_ms)
-            published.append(replace(item, hydration_state=state, hydration_reason=reason))
+            published.append(replace(item, hydration_state=state, hydration_reason=reason,
+                empty_history=catalog.state == "observed" and self.cards.preview_empty_history(item.session_id)))
         return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 

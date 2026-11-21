@@ -49,7 +49,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     current.catalog.periodButtons[2].button.click()`);
   await until('window.releasePeriod && current.catalog.operation?.pending');
   assert.equal(await evaluate('current.catalog.pan.hidden'),false);
-  assert.match(await evaluate('current.catalog.status.textContent'),/^Loading sessions in 30 days\./);
+  assert.equal(await evaluate('current.catalog.status.textContent'),'Loading sessions in 30 days…');
   assert.equal(await evaluate('current.catalog.root.querySelectorAll("progress,.report-loading,.sessions-candidate-scope").length'),0);
   await evaluate('history.back()');
   await until('current.catalog.period==="7-days" && !current.catalog.busy');
@@ -69,17 +69,27 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.data.period==="today" && !current.catalog.operation && !current.catalog.busy');
   await evaluate(`location.hash='#/sessions?period=today&sort=activity&direction=-1'`);
    await until('current.catalog.data.sort==="activity" && !current.catalog.busy');
-   // All/name expands discovery cheaply. All/activity intentionally needs every
-   // event key and is covered by source-counted bounded-index tests, not a false
-   // instantaneous metadata order.
+   // Explicit expansion must not replace Today until the broader cohort has
+   // qualified. Simulate completed historical indexing after observing the wait.
    await evaluate(`location.hash='#/sessions?period=today&sort=name&direction=1'`);
    await until('current.catalog.data.sort==="name" && !current.catalog.operation && !current.catalog.busy');
-  await command('Emulation.setTouchEmulationEnabled',{enabled:true});
-  const point = await evaluate(`(()=>{const b=current.catalog.periodButtons[4].button;b.scrollIntoView();
-    const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
-  await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
-  await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await until('current.catalog.data.period==="all" && current.catalog.data.total===5000 && !current.catalog.operation && !current.catalog.busy');
+   await command('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});
+   await command('Emulation.setTouchEmulationEnabled',{enabled:true});
+   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+   const hit = await evaluate(`(()=>{const b=current.catalog.periodButtons[4].button;b.scrollIntoView({block:'center'});
+     const r=b.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;
+     return {point:{x,y},button:b.contains(document.elementFromPoint(x,y))};})()`);
+   assert.equal(hit.button,true,'All time button must be the native tap target');
+   const point = hit.point;
+   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+   await until('new URLSearchParams(location.hash.split("?")[1]).get("period")==="all"',2000);
+   await until('current.catalog.operation?.pending');
+   assert.equal(await evaluate('current.catalog.data.period'),'today');
+   assert.equal(await evaluate('current.catalog.data.total'),30);
+   await fixture('catalog-period-warm-history');
+   await until('current.catalog.data.period==="all" && current.catalog.data.total===5000 && !current.catalog.operation && !current.catalog.busy');
   await command('Emulation.setTouchEmulationEnabled',{enabled:false});
   await evaluate(`location.hash='#/ai-stats'`);
   await until('current.section==="ai-stats"');

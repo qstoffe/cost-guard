@@ -174,6 +174,7 @@ class SessionPreview:
     hydration_state: str = "queued"
     hydration_reason: str = ""
     total_state: str = "pending"
+    empty_history: bool = False
 
 
 @dataclass(frozen=True, slots=True)
