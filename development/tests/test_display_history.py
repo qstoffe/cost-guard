@@ -103,6 +103,51 @@ class DisplayHistoryTests(unittest.TestCase):
             self.assertEqual("A", page.rows[0].title)
         self.assertEqual("A", self.history.session_page("source").rows[0].title)
 
+    def test_change_hint_covers_both_old_and_new_clock_and_ignores_other_sources(self):
+        original = SessionFact("id", "r1", "Title", activity_ms=10)
+        self.history.commit_sessions("source", (SessionChange(original, None),))
+        moved = SessionFact("id", "r2", "Title", activity_ms=35)
+        self.history.commit_sessions("source", (SessionChange(moved, "r1"),))
+        unrelated = SessionFact("id", "r1", "Other", activity_ms=80)
+        self.history.commit_sessions("other", (SessionChange(unrelated, None),))
+
+        changes = self.history.session_changes("source", 1)
+
+        self.assertEqual((2, 10, 35), (changes.generation, changes.oldest_activity_ms, changes.latest_activity_ms))
+        self.assertTrue(changes.affects(1, start_ms=10, end_ms=11))
+        self.assertTrue(changes.affects(1, start_ms=35, end_ms=36))
+        self.assertFalse(changes.affects(1, start_ms=36, end_ms=80))
+        self.assertFalse(self.history.session_changes("source", 2).affects(2))
+
+    def test_later_linked_activity_controls_membership_but_not_displayed_activity(self):
+        fact = SessionFact("root", "rev", "Title", activity_ms=99, latest_activity_ms=105)
+        self.history.commit_sessions("source", (SessionChange(fact, None),))
+
+        page = self.history.session_page("source", start_ms=100, end_ms=106)
+        changes = self.history.session_changes("source", 0)
+
+        row, = page.rows
+        self.assertEqual((99, 105), (row.activity_ms, row.latest_activity_ms))
+        self.assertTrue(changes.affects(0, start_ms=100, end_ms=106))
+        self.assertFalse(changes.affects(0, start_ms=99, end_ms=100))
+
+    def test_lost_change_window_triggers_resync_even_for_a_narrow_period(self):
+        self.history.commit_sessions("source", (SessionChange(SessionFact("id", "r1", "Title"), None),))
+        for revision in range(2, 67):
+            fact = SessionFact("id", f"r{revision}", "Title", activity_ms=50)
+            self.history.commit_sessions("source", (SessionChange(fact, f"r{revision - 1}"),))
+        restarted = DisplayHistory(self.root)
+
+        changes = restarted.session_changes("source", 1)
+        recent = restarted.session_changes("source", 2)
+
+        self.assertEqual(66, changes.generation)
+        self.assertTrue(changes.resync)
+        self.assertTrue(changes.affects(1, start_ms=500))
+        self.assertFalse(recent.resync)
+        self.assertFalse(recent.affects(2, start_ms=500))
+        self.assertTrue(restarted.session_changes("source", 67).resync)
+
     def test_unavailable_or_foreign_database_is_not_empty_history(self):
         missing = DisplayHistory(self.root / "absent")
         with self.assertRaises(sqlite3.OperationalError):

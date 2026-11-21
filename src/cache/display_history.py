@@ -11,11 +11,14 @@ SCHEMA_VERSION = 1
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
+CHANGE_WINDOW = 64
 SORT_COLUMNS = {
     "activity": "activity_ms", "name": "title_key", "model": "model_key",
     "ccost": "cost_key", "prompts": "prompts", "duration": "duration_ms", "ctx": "context_tokens",
 }
-SAVED_FIELDS = frozenset(("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens"))
+METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens", "latest_activity_ms")
+SAVED_FIELDS = frozenset(METRIC_FIELDS)
+PERIOD_CLOCK = "coalesce(latest_activity_ms, activity_ms)"
 
 
 def decimal_key(value: Decimal | None) -> bytes | None:
@@ -48,6 +51,10 @@ class SessionFact:
     prompts: int | None = None
     duration_ms: int | None = None
     context_tokens: int | None = None
+    # Membership and the displayed finish/start clock are distinct. The
+    # canonical source summary can observe later linked work with the same
+    # displayed activity. Fall back only when this clock was not supplied.
+    latest_activity_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +80,7 @@ class SessionSnapshot:
     duration_ms: int | None
     context_tokens: int | None
     source_present: bool
+    latest_activity_ms: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +88,25 @@ class SessionPage:
     generation: int
     total: int
     rows: tuple[SessionSnapshot, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionChanges:
+    generation: int
+    resync: bool = False
+    oldest_activity_ms: int | None = None
+    latest_activity_ms: int | None = None
+
+    def affects(self, previous, *, start_ms=None, end_ms=None):
+        if self.resync:
+            return True
+        if previous == self.generation:
+            return False
+        if start_ms is None and end_ms is None:
+            return True  # All time includes rows with no known activity clock.
+        return (self.oldest_activity_ms is not None
+                and (start_ms is None or self.latest_activity_ms >= start_ms)
+                and (end_ms is None or self.oldest_activity_ms < end_ms))
 
 
 class DisplayHistory:
@@ -120,12 +147,19 @@ class DisplayHistory:
                     source TEXT NOT NULL PRIMARY KEY,
                     generation INTEGER NOT NULL DEFAULT 0
                 ) WITHOUT ROWID;
+                CREATE TABLE IF NOT EXISTS session_changes (
+                    source TEXT NOT NULL REFERENCES sources(source),
+                    generation INTEGER NOT NULL,
+                    oldest_activity_ms INTEGER,
+                    latest_activity_ms INTEGER,
+                    PRIMARY KEY (source, generation)
+                ) WITHOUT ROWID;
                 CREATE TABLE IF NOT EXISTS sessions (
                     source TEXT NOT NULL REFERENCES sources(source),
                     session_id TEXT NOT NULL,
                     revision TEXT NOT NULL,
                     title TEXT NOT NULL, title_key TEXT NOT NULL,
-                    activity_ms INTEGER,
+                    activity_ms INTEGER, latest_activity_ms INTEGER,
                     model TEXT, model_key TEXT,
                     ccost TEXT, cost_key BLOB,
                     prompts INTEGER, duration_ms INTEGER, context_tokens INTEGER,
@@ -143,7 +177,7 @@ class DisplayHistory:
             f"CREATE INDEX IF NOT EXISTS sessions_{sort}_{direction.lower()} "
             f"ON sessions(source, ({column} IS NULL), {column} {direction}, session_id);"
             for sort, column in SORT_COLUMNS.items() for direction in ("ASC", "DESC")
-        ) + "\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, activity_ms);"
+        ) + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
 
     def commit_sessions(self, source, updates=(), *, missing=()):
         """Apply qualified facts and membership changes, without deleting old values.
@@ -159,16 +193,31 @@ class DisplayHistory:
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
-            changed = sum(self._apply_session(db, source, change) for change in updates)
+            clocks = []
+            changed = False
+            for change in updates:
+                session_id = change.fact.session_id
+                previous = self._activity(db, source, session_id)
+                if self._apply_session(db, source, change):
+                    changed = True
+                    clocks.extend((previous, self._activity(db, source, session_id)))
             for session_id, revision in missing:
-                changed += db.execute("""
+                previous = self._activity(db, source, session_id)
+                if db.execute("""
                     UPDATE sessions SET source_present=0
                     WHERE source=? AND session_id=? AND revision=? AND source_present=1
-                """, (source, session_id, revision)).rowcount
+                """, (source, session_id, revision)).rowcount:
+                    changed = True
+                    clocks.append(previous)
             generation = None
             if changed:
                 db.execute("UPDATE sources SET generation=generation+1 WHERE source=?", (source,))
                 generation = self._generation(db, source)
+                known = [clock for clock in clocks if clock is not None]
+                db.execute("INSERT INTO session_changes VALUES(?, ?, ?, ?)",
+                           (source, generation, min(known, default=None), max(known, default=None)))
+                db.execute("DELETE FROM session_changes WHERE source=? AND generation<=?",
+                           (source, generation - CHANGE_WINDOW))
             db.commit()
             return generation
 
@@ -179,40 +228,63 @@ class DisplayHistory:
             raise ValueError("invalid_session_evidence")
         if change.observed_fields != SAVED_FIELDS:
             previous = db.execute("""
-                SELECT activity_ms, model, ccost, prompts, duration_ms, context_tokens
+                SELECT activity_ms, model, ccost, prompts, duration_ms, context_tokens, latest_activity_ms
                 FROM sessions WHERE source=? AND session_id=? AND revision=?
             """, (source, fact.session_id, change.previous_revision)).fetchone()
-            names = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens")
-            retained = dict(zip(names, previous)) if previous is not None else {}
+            retained = dict(zip(METRIC_FIELDS, previous)) if previous is not None else {}
             metrics = {name: getattr(fact, name) if name in change.observed_fields else retained.get(name)
-                       for name in names}
+                       for name in METRIC_FIELDS}
             if isinstance(metrics["ccost"], str):
                 metrics["ccost"] = Decimal(metrics["ccost"])
             fact = SessionFact(fact.session_id, fact.revision, fact.title, **metrics)
         values = (fact.revision, fact.title, fact.title.casefold(), fact.activity_ms,
                   fact.model, fact.model.casefold() if fact.model is not None else None,
                   str(fact.ccost) if fact.ccost is not None else None, decimal_key(fact.ccost),
-                  fact.prompts, fact.duration_ms, fact.context_tokens)
+                  fact.prompts, fact.duration_ms, fact.context_tokens, fact.latest_activity_ms)
         if change.previous_revision is None:
             return db.execute("""
                 INSERT INTO sessions(source, session_id, revision, title, title_key, activity_ms,
-                    model, model_key, ccost, cost_key, prompts, duration_ms, context_tokens, source_present)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    model, model_key, ccost, cost_key, prompts, duration_ms, context_tokens,
+                    latest_activity_ms, source_present)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT(source, session_id) DO NOTHING
             """, (source, fact.session_id, *values)).rowcount
         return db.execute("""
             UPDATE sessions SET revision=?, title=?, title_key=?, activity_ms=?, model=?, model_key=?,
-                ccost=?, cost_key=?, prompts=?, duration_ms=?, context_tokens=?, source_present=1
+                ccost=?, cost_key=?, prompts=?, duration_ms=?, context_tokens=?, latest_activity_ms=?, source_present=1
             WHERE source=? AND session_id=? AND revision=?
                 AND (revision, title, title_key, activity_ms, model, model_key, ccost, cost_key,
-                     prompts, duration_ms, context_tokens, source_present)
-                    IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     prompts, duration_ms, context_tokens, latest_activity_ms, source_present)
+                    IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (*values, source, fact.session_id, change.previous_revision, *values)).rowcount
+
+    @staticmethod
+    def _activity(db, source, session_id):
+        row = db.execute(f"SELECT {PERIOD_CLOCK} FROM sessions WHERE source=? AND session_id=?",
+                         (source, session_id)).fetchone()
+        return row[0] if row else None
 
     @staticmethod
     def _generation(db, source):
         row = db.execute("SELECT generation FROM sources WHERE source=?", (source,)).fetchone()
         return row[0] if row else 0
+
+    def session_changes(self, source, previous):
+        """Read compact committed hints, or signal a requery across a replay gap."""
+        if not source or type(previous) is not int or previous < 0:
+            raise ValueError("invalid_change_cursor")
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            generation = self._generation(db, source)
+            if not 0 <= generation - previous <= CHANGE_WINDOW:
+                return SessionChanges(generation, resync=True)
+            count, oldest, latest = db.execute("""
+                SELECT count(*), min(oldest_activity_ms), max(latest_activity_ms)
+                FROM session_changes WHERE source=? AND generation>?
+            """, (source, previous)).fetchone()
+            if count != generation - previous:
+                return SessionChanges(generation, resync=True)
+        return SessionChanges(generation, oldest_activity_ms=oldest, latest_activity_ms=latest)
 
     def session_page(self, source, *, sort="activity", direction=-1, start_ms=None, end_ms=None,
                      limit=25, offset=0):
@@ -224,10 +296,10 @@ class DisplayHistory:
         order = "ASC" if direction == 1 else "DESC"
         conditions, params = ["source=?"], [source]
         if start_ms is not None:
-            conditions.append("activity_ms>=?")
+            conditions.append(f"{PERIOD_CLOCK}>=?")
             params.append(start_ms)
         if end_ms is not None:
-            conditions.append("activity_ms<?")
+            conditions.append(f"{PERIOD_CLOCK}<?")
             params.append(end_ms)
         where = " AND ".join(conditions)
         with self._connect(read=True) as db:
@@ -236,9 +308,9 @@ class DisplayHistory:
             total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
             rows = db.execute(f"""
                 SELECT session_id, revision, title, activity_ms, model, ccost,
-                    prompts, duration_ms, context_tokens, source_present
+                    prompts, duration_ms, context_tokens, latest_activity_ms, source_present
                 FROM sessions WHERE {where}
                 ORDER BY ({column} IS NULL), {column} {order}, session_id
                 LIMIT ? OFFSET ?
             """, (*params, limit, offset)).fetchall()
-        return SessionPage(generation, total, tuple(SessionSnapshot(*row[:-1], bool(row[-1])) for row in rows))
+        return SessionPage(generation, total, tuple(SessionSnapshot(*row[:-2], bool(row[-1]), row[-2]) for row in rows))

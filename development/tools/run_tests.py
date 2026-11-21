@@ -246,6 +246,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_domain.py",
     "test_config.py",
     "test_ci_web_beta.py",
+    "test_display_history.py",
     "test_mini_ci.py",
     "test_session_tree.py",
     "test_analysis_core.py",
