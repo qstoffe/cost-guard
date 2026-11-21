@@ -6,7 +6,9 @@ import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 
+from src.application.session_archive_projection import SessionPublication
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+from src.reports.models import SessionUsageRow
 
 
 class DisplayHistoryTests(unittest.TestCase):
@@ -159,3 +161,50 @@ class DisplayHistoryTests(unittest.TestCase):
 
         with self.assertRaisesRegex(sqlite3.DatabaseError, "unsupported_display_history_schema"):
             missing.initialize()
+
+    def test_confirmed_clear_is_source_scoped_and_rejects_pre_clear_work(self):
+        first = SessionChange(SessionFact("id", "r1", "Old"), None)
+        self.history.commit_sessions("chosen", (first,))
+        self.history.commit_sessions("other", (first,))
+        stale_confirmation = self.history.source_state("chosen")
+        second = SessionChange(SessionFact("id", "r2", "Different"), "r1")
+        self.history.commit_sessions("chosen", (second,))
+        self.assertIsNone(self.history.clear_confirmed_sessions("chosen", stale_confirmation))
+        self.assertEqual(1, self.history.session_page("chosen").total)
+        confirmed = self.history.source_state("chosen")
+
+        cleared = self.history.clear_confirmed_sessions("chosen", confirmed)
+        rejected = self.history.commit_sessions("chosen", (first,), archive_epoch=confirmed.archive_epoch)
+
+        self.assertIsNone(rejected)
+        self.assertEqual((3, 1), (cleared.generation, cleared.archive_epoch))
+        self.assertEqual(0, self.history.session_page("chosen").total)
+        self.assertEqual(1, self.history.session_page("other").total)
+        self.assertTrue(self.history.session_changes("chosen", confirmed.generation).resync)
+        self.assertEqual(4, self.history.commit_sessions("chosen", (first,), archive_epoch=cleared.archive_epoch))
+
+    def test_qualified_new_revision_from_partial_summary_retains_existing_fields(self):
+        self.history.commit_sessions("source", (SessionChange(
+            SessionFact("session", "old", "First title", ccost=Decimal("2.43"), context_tokens=48), None),))
+        revisions = self.history.session_revisions("source", ("missing", "session"))
+        proof = SessionPublication("session", "new", "observation", revisions["session"])
+        row = SessionUsageRow("session", "Current title", "Current model", False, Decimal("0.3"), 1,
+            complete=False, context_qualified=False, last_activity_ms=498, activity_latest_ms=500)
+
+        update = proof.project(row, current_revision="new", current_epoch="observation")
+        self.history.commit_sessions("source", (update,))
+        snapshot, = self.history.session_page("source", start_ms=500, end_ms=501).rows
+
+        self.assertEqual({"session": "old"}, revisions)
+        self.assertEqual(("Current title", "Current model", "2.43", None, 48, 498, 500),
+                         (snapshot.title, snapshot.model, snapshot.ccost, snapshot.prompts, snapshot.context_tokens,
+                          snapshot.activity_ms, snapshot.latest_activity_ms))
+
+    def test_rejected_revision_or_live_summary_never_becomes_archived_history(self):
+        proof = SessionPublication("session", "r2", "observation", "persisted")
+        settled = SessionUsageRow("session", "Title", "Model", False, Decimal("1"), 1)
+        running = SessionUsageRow("session", "Title", "Model", False, Decimal("0"), 1, running=True)
+
+        self.assertIsNone(proof.project(settled, current_revision="r3", current_epoch="observation"))
+        self.assertIsNone(proof.project(settled, current_revision="r2", current_epoch="other"))
+        self.assertIsNone(proof.project(running, current_revision="r2", current_epoch="observation"))

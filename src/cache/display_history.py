@@ -91,6 +91,12 @@ class SessionPage:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoryState:
+    generation: int = 0
+    archive_epoch: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class SessionChanges:
     generation: int
     resync: bool = False
@@ -146,7 +152,8 @@ class DisplayHistory:
                 CREATE TABLE IF NOT EXISTS sources (
                     source TEXT NOT NULL PRIMARY KEY,
                     generation INTEGER NOT NULL DEFAULT 0,
-                    session_count INTEGER NOT NULL DEFAULT 0
+                    session_count INTEGER NOT NULL DEFAULT 0,
+                    archive_epoch INTEGER NOT NULL DEFAULT 0
                 ) WITHOUT ROWID;
                 CREATE TABLE IF NOT EXISTS session_changes (
                     source TEXT NOT NULL REFERENCES sources(source),
@@ -181,19 +188,22 @@ class DisplayHistory:
             for sort, column in SORT_COLUMNS.items() for direction in ("ASC", "DESC")
         ) + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
 
-    def commit_sessions(self, source, updates=(), *, missing=()):
+    def commit_sessions(self, source, updates=(), *, missing=(), archive_epoch=0):
         """Apply qualified facts and membership changes, without deleting old values.
 
         `missing` entries are (session_id, expected_revision) from a qualified
         source membership observation, not a failed source request. Return the
         durable generation only when visible data changed, and only after COMMIT.
         """
-        if not source or len(updates) + len(missing) > BATCH_LIMIT:
+        if not source or type(archive_epoch) is not int or archive_epoch < 0 or len(updates) + len(missing) > BATCH_LIMIT:
             raise ValueError("invalid_display_batch")
         if not updates and not missing:
             return None
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            state = self._state(db, source)
+            if state.archive_epoch != archive_epoch:
+                return None
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             clocks = []
             changed = False
@@ -217,7 +227,7 @@ class DisplayHistory:
             if changed:
                 db.execute("UPDATE sources SET generation=generation+1, session_count=session_count+? WHERE source=?",
                            (inserted, source))
-                generation = self._generation(db, source)
+                generation = state.generation + 1
                 known = [clock for clock in clocks if clock is not None]
                 db.execute("INSERT INTO session_changes VALUES(?, ?, ?, ?)",
                            (source, generation, min(known, default=None), max(known, default=None)))
@@ -225,6 +235,30 @@ class DisplayHistory:
                            (source, generation - CHANGE_WINDOW))
             db.commit()
             return generation
+
+    def clear_confirmed_sessions(self, source, expected_state):
+        """Storage step after external confirmation and acquisition quiescence.
+
+        Only the bound archive is changed. An obsolete snapshot is not consent
+        to clear newly committed data. Pending producers must make a fresh
+        observation in the new archive epoch before accepting any writes.
+        """
+        if not source or not isinstance(expected_state, HistoryState):
+            raise ValueError("invalid_clear_state")
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._state(db, source) != expected_state:
+                return None
+            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+            db.execute("DELETE FROM sessions WHERE source=?", (source,))
+            db.execute("DELETE FROM session_changes WHERE source=?", (source,))
+            db.execute("""
+                UPDATE sources SET generation=generation+1, session_count=0, archive_epoch=archive_epoch+1
+                WHERE source=?
+            """, (source,))
+            state = self._state(db, source)
+            db.commit()
+            return state
 
     @staticmethod
     def _apply_session(db, source, change):
@@ -270,9 +304,28 @@ class DisplayHistory:
         return row[0] if row else None
 
     @staticmethod
-    def _generation(db, source):
-        row = db.execute("SELECT generation FROM sources WHERE source=?", (source,)).fetchone()
-        return row[0] if row else 0
+    def _state(db, source):
+        row = db.execute("SELECT generation, archive_epoch FROM sources WHERE source=?", (source,)).fetchone()
+        return HistoryState(*row) if row else HistoryState()
+
+    def source_state(self, source):
+        if not source:
+            raise ValueError("invalid_source")
+        with self._connect(read=True) as db:
+            return self._state(db, source)
+
+    def session_revisions(self, source, session_ids):
+        """Read only the persisted revisions needed for a bounded publication."""
+        if not source or len(session_ids) > BATCH_LIMIT:
+            raise ValueError("invalid_revision_query")
+        if not session_ids:
+            return {}
+        marks = ",".join("?" for _ in session_ids)
+        with self._connect(read=True) as db:
+            return dict(db.execute(f"""
+                SELECT session_id, revision FROM sessions
+                WHERE source=? AND session_id IN ({marks})
+            """, (source, *session_ids)))
 
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""
@@ -280,7 +333,7 @@ class DisplayHistory:
             raise ValueError("invalid_change_cursor")
         with self._connect(read=True) as db:
             db.execute("BEGIN")
-            generation = self._generation(db, source)
+            generation = self._state(db, source).generation
             if not 0 <= generation - previous <= CHANGE_WINDOW:
                 return SessionChanges(generation, resync=True)
             count, oldest, latest = db.execute("""
