@@ -9,7 +9,7 @@ class Node {
       clientWidth: 480, scrollLeft: 0, offsetWidth: 200, offsetHeight: 100,
       classList: {toggle() {}}, style: {setProperty() {}}});
   }
-  append(...nodes) { for (const node of nodes) this.insertBefore(node, null); }
+  append(...nodes) { for (const node of nodes) this.insertBefore(typeof node === 'string' ? new Node('#text', node) : node, null); }
   insertBefore(node, before) {
     node.remove();
     this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, node);
@@ -47,7 +47,7 @@ vm.runInContext(fs.readFileSync('src/web/assets/account-timeline.js', 'utf8') +
 
 const point = {amount: '100', display: {credits: '100', usd: '$1.00'}};
 const first = {id: '00000000', account: 'Account A',
-  points: [point, null], peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
+  points: [point, null], total: point, peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
 const second = {...first, id: '00000008', account: 'Account B'};
 const start = Date.UTC(2026, 10, 1), day = 86_400_000;
 const frame = (scope, revision, pending, series, initial = pending, acquiring = true, price = 'price') =>
@@ -88,16 +88,21 @@ async function check() {
   await stalled;
   assert.equal(rings(), 0);
   assert.equal(chart.shades.children.length, 1, 'stalled history remains distinguishable');
+  assert.ok(chart.layers.children.some(node => node.attributes.class === 'account-timeline-hourglass'));
   chart.choose(1);
-  assert.equal(chart.tipTitle.textContent, '2026-11-02');
+  assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday');
   assert.equal(chart.tipState.textContent, '');
-  assert.equal(chart.announce.textContent, '2026-11-02. Account A: —. Account B: —');
+  assert.equal(chart.announce.textContent, '2026-11-02 Monday. Account A: —. Account B: —');
+  assert.equal(chart.selectedLegend.children[0].children[2].textContent, '100');
+  chart.inspect(null);
+  assert.equal(chart.selectedLegend.children[0].children[2].textContent, '100', 'closing the tooltip never clears totals');
+  chart.choose(1);
   const check = chart.entries.get(second.id).input;
   assert.equal(check.checked, true, 'every available account starts selected');
   check.checked = false;
   check.events.change();
   assert.equal(demand, 2, 'selection is frontend-only');
-  assert.equal(chart.tipTitle.textContent, '2026-11-02', 'selection retains the inspected date');
+  assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday', 'selection retains the inspected date');
   assert.equal(chart.layers.children.filter(node => node.attributes.class === 'account-timeline-bar').length, 1);
   assert.equal(chart.selectedLegend.children.length, 1);
   const originalInk = chart.colors.get(second.id);
@@ -107,7 +112,7 @@ async function check() {
   calls.at(-1).resolve(frame('current', 4, [], [{...second, account: 'Renamed account'}, first]));
   await settled;
   assert.equal(chart.shades.children.length, 0);
-  assert.equal(chart.tipTitle.textContent, '2026-11-02', 'a compatible update retains the inspected date');
+  assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday', 'a compatible update retains the inspected date');
   assert.equal(chart.tipState.textContent, '');
   assert.equal(chart.entries.get(second.id).input, check);
   assert.equal(chart.colors.get(second.id), originalInk);
@@ -154,4 +159,45 @@ async function check() {
   assert.equal(chart.view.series[0].points[0], null, 'never reuse a last-good amount with an incompatible valuation');
 }
 
-check().catch(error => { console.error(error); process.exitCode = 1; });
+async function checkWaitingProgress() {
+  let response;
+  const chart = new context.View(async () => response, () => {});
+  chart.setScope('current');
+  chart.active(true);
+  const zero = {...point, amount: '0', display: {credits: '0', usd: '$0.00'}};
+  const estimated = {...point, display: {credits: '~100', usd: '~$1.00'}};
+  const cues = () => chart.layers.children
+    .filter(node => /ring|hourglass/.test(node.attributes.class))
+    .map(node => [Number(node.attributes['data-bucket']), node.attributes.class.split('-').at(-1)]);
+  for (const period of ['today', '7-days', '30-days', 'month']) {
+    chart.setScope(null);
+    chart.setScope('current');
+    chart.select(period);
+    const slot = period === 'today' ? 3_600_000 : day;
+    const publish = async (revision, waiting, points, acquiring = true) => {
+      response = {scope: 'current', revision, acquiring, view: {period, timezone_id: 'UTC', start_ms: start,
+        end_ms: start + 4 * slot, buckets: Array.from({length: 5}, (_, i) => [start + i * slot, start + (i + 1) * slot]),
+        future_buckets: [4], partial_buckets: [0, 3], pending_buckets: waiting, initial_pending_buckets: waiting,
+        series: [{...first, points}]}};
+      await chart.refresh();
+      assert.equal(chart.layers.children.filter(node => node.tag === 'circle').length, 0);
+      assert.equal(chart.shades.children.filter(node => node.attributes.class === 'account-timeline-future').length, 1);
+    };
+    await publish(1, [0, 1, 2, 3], [null, null, estimated, null, null]);
+    assert.deepEqual(cues(), [[0, 'ring'], [1, 'hourglass'], [3, 'hourglass']], period);
+    chart.choose(3);
+    chart.inspect(1);
+    assert.deepEqual(cues(), [[0, 'ring'], [1, 'hourglass'], [3, 'hourglass']], 'inspection does not advance acquisition');
+    response = {scope: 'current', unchanged: true, acquiring: false};
+    await chart.refresh();
+    assert.deepEqual(cues(), [[0, 'hourglass'], [1, 'hourglass'], [3, 'hourglass']]);
+    await publish(2, [0, 2, 3], [null, zero, estimated, null, null]);
+    assert.deepEqual(cues(), [[0, 'ring'], [3, 'hourglass']], 'an out-of-order settled zero leaves the cursor in place');
+    await publish(3, [2, 3], [point, zero, estimated, null, null]);
+    assert.deepEqual(cues(), [[3, 'ring']], 'a settled first slot moves the cursor to the last unread slot');
+    await publish(4, [], [point, zero, point, zero, null]);
+    assert.deepEqual(cues(), []);
+  }
+}
+
+check().then(checkWaitingProgress).catch(error => { console.error(error); process.exitCode = 1; });

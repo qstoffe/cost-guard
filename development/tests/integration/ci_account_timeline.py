@@ -21,7 +21,8 @@ from development.tests.fixtures.watch_runtime import make_service
 from development.tests.integration.serve_data_dispatch import DispatchJobs
 from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
-from src.analysis.account_timeline import DAY_MS, timeline_window
+from src.analysis.account_timeline import DAY_MS
+from src.application.account_timeline import timeline_view
 from src.domain import QuotaComponent, TokenUsage
 from src.sources.errors import SourceConcurrentChangeError
 from src.watch.account_timeline import ROOTS_PER_TURN
@@ -34,6 +35,7 @@ from src.web.host import WebHost
 class ChartSource(SyntheticMonthSource):
     def __init__(self, accounts):
         super().__init__(0, 0, month_start_ms=NOV_1)
+        self.clock_offset_ms = 0
         self.timeline_reads = Counter()
         self.first_read = Event()
         self.continue_history = Event()
@@ -65,7 +67,7 @@ class ChartSource(SyntheticMonthSource):
 
 
 def replace_geometry(page, period, now, zone, width=20):
-    window = timeline_window(period, now, zone)
+    view = timeline_view(period, now, zone, (), None, first_covered_ms=None, gaps=()).to_json()
     page.evaluate('''({period, zone, window, width}) => {
         const chart = current.accountTimeline;
         clearTimeout(chart.timer);
@@ -83,9 +85,7 @@ def replace_geometry(page, period, now, zone, width=20):
         chart.inspect(null);
         chart.focusKey = null;
         chart.draw();
-    }''', dict(period=period, zone=zone, width=width,
-              window=dict(buckets=window.buckets, slot_dates=window.dates, partial_buckets=window.partial,
-                          future_buckets=window.future, start_ms=window.start, end_ms=now)))
+    }''', dict(period=period, zone=zone, width=width, window=view))
 
 
 def assert_geometry(plot, series_count):
@@ -106,11 +106,49 @@ def assert_geometry(plot, series_count):
     assert result == {'ticks': 30, 'cells': 30, 'bars': 30 * series_count, 'fit': True}, result
 
 
+def assert_highlight(plot, index):
+    bounds = plot.evaluate('''(plot, index) => {
+        const band = plot.querySelector('.account-timeline-highlight').getBoundingClientRect();
+        const text = plot.querySelector(`.account-timeline-slot-label[data-bucket="${index}"]`).getBoundingClientRect();
+        const slot = plot.querySelector(`.account-timeline-target[data-slot="${index}"]`).getBoundingClientRect();
+        const section = plot.querySelector('.account-timeline-month-label')?.getBoundingClientRect();
+        return {left: band.left - slot.left, right: slot.right - band.right,
+            labelLeft: text.left - band.left, labelRight: band.right - text.right, padding: band.bottom - text.bottom,
+            clearance: (section?.top ?? plot.getBoundingClientRect().bottom) - band.bottom};
+    }''', index)
+    assert bounds['left'] > 0 and bounds['right'] > 0, (index, bounds)
+    assert bounds['labelLeft'] >= 0 and bounds['labelRight'] >= 0, (index, bounds)
+    assert bounds['padding'] >= 2 and bounds['clearance'] >= 0, (index, bounds)
+
+
+def assert_loading_cues(plot, waiting, active=None):
+    actual = plot.evaluate('''plot => {
+        const shades = [...plot.querySelectorAll('.account-timeline-loading')];
+        const cues = [...plot.querySelectorAll('path.account-timeline-ring, path.account-timeline-hourglass')];
+        return {
+            waiting: shades.map(node => +node.dataset.bucket),
+            active: cues.find(node => node.matches('.account-timeline-ring'))?.dataset.bucket ?? null,
+            correct: cues.length === shades.length && shades.every(shade => {
+                const items = cues.filter(node => node.dataset.bucket === shade.dataset.bucket);
+                if (items.length !== 1) return false;
+                const [cue] = items, a = cue.getBBox(), b = shade.getBBox();
+                return Math.abs((a.x + a.width / 2) - (b.x + b.width / 2)) < .05
+                    && Math.abs((a.y + a.height / 2) - (b.y + b.height / 2)) < .05
+                    && getComputedStyle(cue).pointerEvents === 'none';
+            }),
+            dots: plot.querySelectorAll('.account-timeline-partial').length
+        };
+    }''')
+    assert actual == dict(waiting=waiting, active=None if active is None else str(active), correct=True, dots=0), actual
+
+
 def assert_hover(page, plot, scroller, dates):
     # Real mouse movement across both edges and the middle of every cell. Bring
     # its center into the scrollport when needed, then probe each of its bars.
     targets = plot.locator('.account-timeline-target')
-    for index, expected in enumerate(dates):
+    for index, day in enumerate(dates):
+        weekdays = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+        expected = f'{day} {weekdays[date.fromisoformat(day).weekday()]}'
         target = targets.nth(index)
         points = target.evaluate('''(cell, index) => {
             const svg = cell.ownerSVGElement;
@@ -136,6 +174,7 @@ def assert_hover(page, plot, scroller, dates):
                 return [chart.tipTitle.textContent, cell?.dataset.slot, !chart.tooltip.hidden];
             }''')
             assert actual == [expected, str(index), True], (index, x, y, actual)
+        assert_highlight(plot, index)
     assert scroller.evaluate('el => Math.abs(el.scrollWidth - el.clientWidth - el.scrollLeft) < 2')
 
 
@@ -158,7 +197,7 @@ def stress_plot(page, chart, screenshots):
     assert labels.all_text_contents() == [str(int(day[-2:])) for day in dates]
     assert bands.all_text_contents() == ['October', 'November']
 
-    chart.evaluate('chart => chart.scrollIntoView({block:"center"})')
+    chooser.scroll_into_view_if_needed()
     chooser.click()
     inputs = legend.get_by_role('checkbox')
     slots = plot.locator('.account-timeline-target')
@@ -187,6 +226,7 @@ def stress_plot(page, chart, screenshots):
     page.keyboard.press('Escape')
 
     layouts = []
+    holiday_inks = []
     for theme, scheme in [('web', 'light'), ('web', 'dark'), ('classic', 'light')]:
         page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
         page.emulate_media(color_scheme=scheme, reduced_motion='reduce')
@@ -194,6 +234,10 @@ def stress_plot(page, chart, screenshots):
             page.set_viewport_size({'width': width, 'height': 900})
             expect(labels).to_have_count(30)
             assert_geometry(plot, 20)
+            holiday, ordinary = plot.locator('.account-timeline-non-working').first, labels.first
+            holiday_ink = holiday.evaluate('el => getComputedStyle(el).fill')
+            assert holiday_ink != ordinary.evaluate('el => getComputedStyle(el).fill')
+            holiday_inks.append(holiday_ink)
             inspect_layout = '''chart => {
                 const chooser = chart.querySelector('.account-timeline-chooser').getBoundingClientRect();
                 const graph = chart.querySelector('.account-timeline-graph').getBoundingClientRect();
@@ -223,18 +267,20 @@ def stress_plot(page, chart, screenshots):
                 assert layout['fill'] == layout['bar'] != 'rgba(0, 0, 0, 0)', layout
                 layouts.append(layout)
             chart.evaluate("el => el.style.removeProperty('zoom')")
-            chart.evaluate('el => el.scrollIntoView({block:"center"})')
+            scroller.evaluate('el => el.scrollIntoView({block:"center"})')
             plot.focus()
             page.keyboard.press('Home')
             expect(tip).to_contain_text('2026-10-22')
+            assert_highlight(plot, 0)
             if screenshots:
                 page.screenshot(path=screenshots / f'02-{theme}-{scheme}-{width}.png', animations='disabled')
     assert layouts[0]['fill'] != layouts[12]['fill'], layouts
+    assert len(set(holiday_inks)) == 3, holiday_inks
     page.set_viewport_size({'width': 360, 'height': 850})
-    chart.evaluate('el => el.scrollIntoView({block:"center"})')
+    scroller.evaluate('el => el.scrollIntoView({block:"center"})')
     plot.focus()
     page.keyboard.press('End')
-    expect(status).to_contain_text('2026-11-20. Account')
+    expect(status).to_contain_text('2026-11-20 Friday. Account')
     assert scroller.evaluate('el => el.scrollLeft > 0')
     assert axis.is_visible()
     assert tip.evaluate('''el => {
@@ -252,12 +298,12 @@ def stress_plot(page, chart, screenshots):
     for zoom in (1, 1.5, 2):
         page.set_viewport_size({'width': 900, 'height': 960})
         plot.evaluate('(plot, zoom) => plot.style.zoom = zoom', zoom)
-        chart.evaluate('el => el.scrollIntoView({block:"center"})')
+        scroller.evaluate('el => el.scrollIntoView({block:"center"})')
         assert_hover(page, plot, scroller, dates)
     plot.evaluate("plot => plot.style.removeProperty('zoom')")
     page.mouse.move(8, 8)
     page.set_viewport_size({'width': 360, 'height': 850})
-    chart.evaluate('el => el.scrollIntoView({block:"center"})')
+    scroller.evaluate('el => el.scrollIntoView({block:"center"})')
     cdp = page.context.new_cdp_session(page)
     cdp.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 2})
     try:
@@ -276,15 +322,54 @@ def stress_plot(page, chart, screenshots):
 
     replace_geometry(page, '30-days', stamp('2027-01-02T11:00:00+01:00'), 'Europe/Stockholm')
     assert bands.all_text_contents() == ['December', '2026', 'Jan', '2027']
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-04 – 2027-01-02')
+    replace_geometry(page, '7-days', stamp('2026-11-22T00:15:00+01:00'), 'Europe/Stockholm')
+    expect(labels.first).to_have_text('15/11')
+    expect(labels.first.locator('.account-timeline-non-working')).to_have_text('15')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-11-15 – 2026-11-22')
+    assert page.evaluate('current.accountTimeline.view.partial_buckets') == [0, 7]
+    assert_loading_cues(plot, [])
+    plot.focus()
+    page.keyboard.press('End')
+    expect(tip.locator('strong')).to_have_text('2026-11-22 Sunday')
+    expect(status).to_contain_text('Swedish non-working day')
+    assert_highlight(plot, 7)
+    scroller.evaluate('el => el.scrollIntoView({block:"center"})')
+    plot.locator('.account-timeline-target[data-slot="7"]').tap()
+    expect(tip.locator('strong')).to_have_text('2026-11-22 Sunday')
+    replace_geometry(page, '7-days', stamp('2027-01-01T00:00:00+01:00'), 'Europe/Stockholm')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-25 – 2026-12-31')
+    replace_geometry(page, 'today', stamp('2026-10-25T02:25:00+01:00'), 'Europe/Stockholm')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-10-25 00:00–02:25 (second)')
     replace_geometry(page, 'today', stamp('2026-10-25T23:50:00+01:00'), 'Europe/Stockholm')
     expect(labels).to_have_count(25)
     assert labels.all_text_contents()[2:4] == ['02¹', '02²']
+    expect(plot.locator('.account-timeline-non-working')).to_have_count(0)
     plot.focus()
     page.keyboard.press('Home')
     for title in ('2026-10-25 01:00–02:00', '2026-10-25 02:00–02:00 (first)',
                   '2026-10-25 02:00–03:00 (second)'):
         page.keyboard.press('ArrowRight')
         expect(tip.locator('strong')).to_have_text(title)
+    assert_highlight(plot, 3)
+    page.evaluate('''() => {
+        const chart = current.accountTimeline;
+        const view = chart.view;
+        view.initial_pending_buckets = [2, 3];
+        for (const row of view.series) row.points[2] = row.points[3] = null;
+        chart.working = true;
+        chart.draw();
+    }''')
+    for theme, scheme in [('web', 'light'), ('web', 'dark'), ('classic', 'light')]:
+        page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
+        page.emulate_media(color_scheme=scheme, reduced_motion='reduce')
+        page.set_viewport_size({'width': 360, 'height': 900})
+        plot.evaluate("plot => plot.style.zoom = 1.5")
+        assert_loading_cues(plot, [2, 3], active=2)
+    page.evaluate("() => { current.accountTimeline.working = false; current.accountTimeline.draw(); }")
+    assert_loading_cues(plot, [2, 3])
+    plot.evaluate("plot => plot.style.removeProperty('zoom')")
+    page.set_viewport_size({'width': 900, 'height': 960})
     replace_geometry(page, 'today', stamp('2026-03-29T23:50:00+02:00'), 'Europe/Stockholm')
     expect(labels).to_have_count(23)
     assert '02' not in labels.all_text_contents()
@@ -306,7 +391,7 @@ def chart_fixture(browser, root, source_setup=ChartSource):
     accounts = (high, low, subscription())
     source = source_setup(accounts)
     started = time.monotonic()
-    clock = lambda: NOV_5 + int(1000 * (time.monotonic() - started))
+    clock = lambda: NOV_5 + source.clock_offset_ms + int(1000 * (time.monotonic() - started))
     provider_refreshes = []
     config, selection, service, _ = make_service(str(root), source, now_ms=clock())
     config['sessionWatchIntervalSeconds'] = 'auto'
@@ -393,6 +478,7 @@ def check(browser, root, screenshots=None):
         expect(chooser).to_be_focused()
         expect(legend).not_to_be_visible()
         expect(rings).to_have_count(1)
+        assert_loading_cues(plot, [0, 1, 2, 3], active=0)
         page.emulate_media(reduced_motion='reduce')
         assert rings.first.evaluate("el => getComputedStyle(el).animationName") == 'none'
         expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
@@ -416,6 +502,7 @@ def check(browser, root, screenshots=None):
 
         expect(rings).to_have_count(0, timeout=8000)
         expect(shades).to_have_count(0)
+        assert_loading_cues(plot, [])
         assert len(source.timeline_reads) == 12
         source.continue_history.set()
         expect(shades).to_have_count(0, timeout=20_000)
@@ -446,6 +533,14 @@ def check(browser, root, screenshots=None):
         expect(axis.locator('span').last).to_have_text('$1200.00')
         expect(selected.get_by_text(high_label, exact=True)).to_be_visible()
         expect(selected.get_by_text(low_label, exact=True)).to_be_visible()
+        rows = selected.get_by_role('listitem')
+        total = selected.locator('.account-timeline-legend-value')
+        range_line = chart.locator('.account-timeline-range')
+        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05')
+        assert rows.evaluate_all('''rows => rows.every((row, i) => row.getBoundingClientRect().top >=
+            (i ? rows[i - 1] : row.parentElement.previousElementSibling).getBoundingClientRect().bottom)''')
+        expect(rows.filter(has_text=low_label)).to_have_text(f'{low_label}$601.00')
+        stable_totals = total.all_text_contents()
         assert 'checkbox' in chart.aria_snapshot()
         page.keyboard.press('Escape')
         first = plot.locator('.account-timeline-bar[data-bucket="0"]')
@@ -496,14 +591,17 @@ def check(browser, root, screenshots=None):
         expect(tip).to_contain_text(f'{low_label}$1.00')
         target.tap()
         expect(tip).to_contain_text(f'{today_label}$1.00')
-        expect(selected).to_contain_text(f'{low_label}$1.00')
+        assert total.all_text_contents() == stable_totals
+        expect(tip.locator('strong')).to_have_text('2026-11-03 Tuesday')
         chart.get_by_role('button', name='Accounts 3 selected').click()
         for checkbox in legend.locator('input:checked').all()[::-1]:
             checkbox.uncheck()
         expect(chart.get_by_text('Select an account to show its usage.')).to_be_visible()
         expect(selected).not_to_be_visible()
+        expect(range_line).not_to_be_visible()
         chart.get_by_role('checkbox', name=today_label, exact=True).check()
         expect(selected.get_by_role('listitem')).to_have_count(1)
+        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05')
         chart.get_by_role('heading', name='CCost').click()
         expect(legend).not_to_be_visible()
         # Accept normal passive lookup cadence, but never let a legend toggle
@@ -517,10 +615,11 @@ def check(browser, root, screenshots=None):
             page.wait_for_function("(period) => current.accountTimeline.view?.period === period",
                                    arg=period, timeout=18_000)
             assert page.evaluate('current.accountTimeline.view.buckets.length') == count
+            expect(plot.locator('.account-timeline-partial')).to_have_count(0)
         plot.focus()
         page.keyboard.press('End')
-        expect(tip).to_have_text('2026-11-30Upcoming')
-        expect(status).to_have_text('2026-11-30. Upcoming')
+        expect(tip).to_have_text('2026-11-30 MondayUpcoming')
+        expect(status).to_have_text('2026-11-30 Monday. Upcoming')
         chart.get_by_role('button', name='Accounts 1 selected').click()
         expect(chart.get_by_role('checkbox', name=today_label, exact=True)).to_be_checked()
         page.keyboard.press('Escape')
@@ -537,6 +636,8 @@ def check(browser, root, screenshots=None):
 
         chart.get_by_role('button', name='Today', exact=True).click()
         page.wait_for_function("() => current.accountTimeline.view?.period === 'today'")
+        expect(range_line).to_have_text('Range: 2026-11-05 00:00–05:00')
+        before_total = total.inner_text()
         before = page.evaluate('''() => {
             const chart = current.accountTimeline;
             const point = chart.view.series.find(row => Number(row.peak) > 0);
@@ -552,12 +653,20 @@ def check(browser, root, screenshots=None):
         source.replace_usage(14, NOV_1 + 4 * DAY_MS + 14_000, 100_000_000, accounts[2].ref)
         fact = source.snapshots[live_key]
         live_root = replace(fact.root, active=True)
+        source.clock_offset_ms = 75_000
         source.snapshots[live_key] = replace(fact, root=live_root, sessions=(live_root,), source_revision='revised-today')
         page.wait_for_function("""before => {
             const chart = current.accountTimeline, value = chart.cache.get('today');
             return value?.revision > before.revision &&
                 Number(value.view.series.find(row => row.id === before.id)?.peak) > before.peak;
         }""", arg=before, timeout=30_000)
+        expect(range_line).to_have_text('Range: 2026-11-05 00:00–05:01')
+        assert total.inner_text() != before_total
+        usd_total = total.inner_text()
+        page.evaluate("() => { ReportView.setUnit('credits'); current.accountTimeline.draw(); }")
+        assert '$' not in total.inner_text()
+        page.evaluate("() => { ReportView.setUnit('usd'); current.accountTimeline.draw(); }")
+        expect(total).to_have_text(usd_total)
         assert page.evaluate('window.liveCueFlashes') == 0
         assert source.timeline_reads[live_key] == 1 and sum(source.timeline_reads.values()) == 15
 
