@@ -1,7 +1,7 @@
 """Prepared benchmark display, independent of canonical reference valuation."""
 from decimal import Decimal
 
-from src.analysis.timezones import format_local_timestamp
+from src.analysis.timezones import DateTimeMode, format_date_time
 from src.reports.semantics import model_is_recent
 
 
@@ -45,7 +45,7 @@ def benchmark_view(snapshot, reference_rows=(), *, now_ms, timezone_id='UTC'):
             relative_text=f'{relative:.1f}x' if relative is not None else 'N/A', usd_text=usd,
             solved_text=f'{row.solved:.1f}%',
             task_help=f'Terminal-Bench 4.0 · Harbor Hub\nUSD/Task: {usd} per attempted task (failures included)',
-            configuration_help=f'Coding Client: {row.client}\nSource date: {row.date}'))
+            configuration_help=f'Coding Client: {row.client}\nSource date: {format_date_time(row.date, DateTimeMode.DATE)}'))
     efforts = sorted({row.effort or '' for row in snapshot.rows})
     return dict(fetched_at_ms=snapshot.fetched_at_ms,
-        fetched_text=format_local_timestamp(snapshot.fetched_at_ms, timezone_id), efforts=efforts, rows=result)
+        fetched_text=format_date_time(snapshot.fetched_at_ms, DateTimeMode.DATE_TIME, timezone_id), efforts=efforts, rows=result)

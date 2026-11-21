@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from src.domain.progress import observe_work
 from src.reports.session_history import SessionHistory
-from src.watch.invocation import terminal_invocation
+from src.watch.invocation import invocation_scope, terminal_invocation
 from src.watch.tools import classified_name, observe_tools, session_calls, tool_outcome
 from src.watch.tool_contracts import (
     is_skill_tool, skill_tool_id, verified_skill_origin,
@@ -73,7 +73,8 @@ def build_activity(snapshot, source, rows=()):
         observe_work("publishing", 1)
     return dict(scope=identity((snapshot.root.provenance.source_type,
         snapshot.root.provenance.source_generation, snapshot.root.provenance.source_instance,
-        getattr(source, "observation_epoch", None), snapshot.root.session_id)), complete=snapshot.complete,
+        getattr(source, "observation_epoch", None), snapshot.root.session_id)),
+        invocation_scope=invocation_scope(snapshot.root.provenance), complete=snapshot.complete,
         counts=observation.tool_counts, failed_count=observation.failed_count,
         failed_or_cancelled_count=observation.failed_or_cancelled_count,
         outcomes=tuple(dict(tool_name=item.tool_name, outcome=item.outcome, count=item.count)

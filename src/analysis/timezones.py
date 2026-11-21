@@ -12,6 +12,8 @@ from __future__ import annotations
 import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
+from enum import Enum
+import math
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -169,11 +171,87 @@ def utc_month_start_ms(*, now_ms: int | None = None) -> int:
     return int(datetime(now.year, now.month, 1, tzinfo=timezone.utc).timestamp() * 1000)
 
 
+class DateTimeMode(Enum):
+    DATE = "DATE"
+    TIME = "TIME"
+    DATE_TIME = "DATE_TIME"
+    DATE_TIME_SECONDS = "DATE_TIME_SECONDS"
+
+
+_DISPLAY_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_UNKNOWN_DATE_TIME = "unknown"
+
+
+def _display_datetime(instant: object, configured_zone: str | None) -> datetime | None:
+    if type(instant) not in (int, float) or not isinstance(configured_zone, str):
+        return None
+    try:
+        zone = resolve_timezone(configured_zone)
+        # Floor before converting: no float-to-microsecond rounding at a minute/DST boundary.
+        return (_DISPLAY_EPOCH + timedelta(seconds=math.floor(instant / 1000))).astimezone(zone)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _wall_text(value: datetime, mode: DateTimeMode) -> str:
+    day = value.date().isoformat()
+    clock = f"{value.hour:02d}:{value.minute:02d}"
+    if mode is DateTimeMode.DATE:
+        return day
+    if mode is DateTimeMode.TIME:
+        return clock
+    stamp = f"{day} {clock}"
+    return f"{stamp}:{value.second:02d}" if mode is DateTimeMode.DATE_TIME_SECONDS else stamp
+
+
+def format_date_time(
+    instant: object, mode: DateTimeMode, configured_zone: str | None = None,
+) -> str:
+    """Project epoch milliseconds to configured wall time, or display a source calendar day.
+
+    A date object or exact YYYY-MM-DD string is eligible only for DATE. It has
+    no timezone or time of day. Use ReportView.formatDateTime for the same Web modes.
+    """
+    if not isinstance(mode, DateTimeMode):
+        return _UNKNOWN_DATE_TIME
+    if mode is DateTimeMode.DATE:
+        if type(instant) is date:
+            return instant.isoformat()
+        if isinstance(instant, str) and len(instant) == 10:
+            try:
+                day = date.fromisoformat(instant).isoformat()
+                return day if day == instant else _UNKNOWN_DATE_TIME
+            except ValueError:
+                return _UNKNOWN_DATE_TIME
+    value = _display_datetime(instant, configured_zone)
+    return _UNKNOWN_DATE_TIME if value is None else _wall_text(value, mode)
+
+
+def format_execution_boundary(instant: object, mode: DateTimeMode, configured_zone: str) -> str:
+    """Legacy Watch/Comparisons boundary help: distinguish repeated DST wall times."""
+    if mode not in (DateTimeMode.DATE_TIME, DateTimeMode.DATE_TIME_SECONDS):
+        return _UNKNOWN_DATE_TIME
+    value = _display_datetime(instant, configured_zone)
+    return _UNKNOWN_DATE_TIME if value is None else f"{_wall_text(value, mode)} {value:%z}"
+
+
 def format_local_timestamp(ms: int, timezone_id: str, pattern: str = "%Y-%m-%d %H:%M") -> str:
-    if ms <= 0:
-        return "unknown"
-    value = datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(resolve_timezone(timezone_id))
-    return value.strftime(pattern)
+    """Compatibility for the old call signature and its nonpositive sentinel."""
+    if type(ms) not in (int, float) or ms <= 0:
+        return _UNKNOWN_DATE_TIME
+    mode = {
+        "%Y-%m-%d": DateTimeMode.DATE,
+        "%H:%M": DateTimeMode.TIME,
+        "%Y-%m-%d %H:%M": DateTimeMode.DATE_TIME,
+        "%Y-%m-%d %H:%M:%S": DateTimeMode.DATE_TIME_SECONDS,
+        "%Y-%m-%d %H:%M %z": DateTimeMode.DATE_TIME,
+        "%Y-%m-%d %H:%M:%S %z": DateTimeMode.DATE_TIME_SECONDS,
+    }.get(pattern) if isinstance(pattern, str) else None
+    if mode is None:
+        return _UNKNOWN_DATE_TIME
+    if pattern.endswith(" %z"):
+        return format_execution_boundary(ms, mode, timezone_id)
+    return format_date_time(ms, mode, timezone_id)
 
 
 def easter_sunday(year: int) -> date:

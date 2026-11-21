@@ -67,6 +67,7 @@ class FixtureRuntime:
         self.catalog.clock = lambda: time.monotonic() + self.catalog_clock_offset
         self.live_root = None
         self.parity = False
+        self.date_shell = None
         self.quota_fixture = None
         self.observation_lock = Lock()
         self.detail_mode = None
@@ -127,7 +128,25 @@ class FixtureRuntime:
                 state="observed", observed_at_ms=self.service.now_ms)
             frame = replace(frame, now_ms=self.service.now_ms, active_cards=(), history_cards=(card,),
                 recent_finished_cards=())
-        view = project_live(frame, self.service.timezone_id).to_json()
+        zone = self.service.timezone_id
+        if self.date_shell:
+            from datetime import datetime
+            from src.watch.invocation import invocation_scope
+            from src.watch.models import ShellTiming, ToolInvocation, ToolObservation
+            zone, elapsed = self.date_shell
+            start = int(datetime.fromisoformat('2026-03-29T00:45:20.123Z').timestamp() * 1000)
+            identity = invocation_scope(self.service.source.snapshots['root-0000'].root.provenance)
+            call = ToolInvocation('fixture-call', 'fixture-observation', 'command:\npython fixture_task.py',
+                'Sensitive argument/value redacted.', 'shell', start,
+                shell_timing=ShellTiming('execution', 3_220_000, 1_200_000, 2))
+            tool = ToolObservation(running_tool='shell', running_ms=elapsed, running_invocations=(call,),
+                running_invocation_count=1)
+            base = frame.active_cards[0]
+            card = replace(base, session_id='root-0000', invocation_verified=True, activity_scope=identity,
+                rows=(replace(base.rows[0], session_id='root-0000', tool=tool),),
+                focal_id=base.rows[0].prompt.event_id)
+            frame = replace(frame, now_ms=start + elapsed, active_cards=(card,))
+        view = project_live(frame, zone).to_json()
         self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms,
             catalog_hint=self.catalog.live_hint(), detail_hints=self.details.live_hints()))
 
@@ -181,6 +200,13 @@ def main():
             command = json.loads(line)["command"]
             if command == "arrive":
                 source.snapshots["root-0120"] = replace(make_root_snapshot(120, 1, month_start_ms=1000), complete=True)
+            elif command.startswith("date-shell-"):
+                cases = {"date-shell-open": ("Europe/Stockholm", 60_000),
+                         "date-shell-tick": ("Europe/Stockholm", 61_000),
+                         "date-shell-zone": ("America/New_York", 62_000),
+                         "date-shell-clear": None}
+                with host.live.observation_lock:
+                    host.live.date_shell = cases[command]
             elif command.startswith("quick-aborts"):
                 from development.tests.fixtures.quick_aborts import quick_aborts
                 from development.tests.fixtures.claude_alias import catalog

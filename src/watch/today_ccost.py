@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterable, Sequence
 
 from src.analysis.models import TraceEntry
-from src.analysis.timezones import local_day_start_ms, resolve_timezone
+from src.analysis.timezones import DateTimeMode, format_date_time, local_day_start_ms, resolve_timezone
 from src.analysis.period_ccost import reconcile_usage
 from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.domain.ccost import ReferenceValuation
@@ -143,7 +143,7 @@ class WatchTodayCCost:
     def label(self, now_ms: int) -> str:
         """`Today`, or the explicit local date from midnight until 03:00 local wall time."""
         local = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc).astimezone(resolve_timezone(self.timezone_id))
-        return local.date().isoformat() if local.hour < NIGHT_DATE_LABEL_END_HOUR else "Today"
+        return format_date_time(local.date(), DateTimeMode.DATE) if local.hour < NIGHT_DATE_LABEL_END_HOUR else "Today"
 
     def project_from_report(self, report_service: ReportService, now_ms: int) -> ComparisonCost:
         self._rollover(local_day_start_ms(self.timezone_id, now_ms=now_ms))

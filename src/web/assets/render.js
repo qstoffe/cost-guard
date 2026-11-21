@@ -7,6 +7,7 @@ const ReportView = (() => {
   let quotaMode = 'used';
   let timezone = null;
   function setTimezone(value) { timezone = value; }
+  function configuredTimezone() { return timezone; }
   const headerHelp = {
     model: '• Main model — The model shown in this column.\n• Linked subagents, multiple models or different effort levels — If marked *, hover, focus or tap the Model value for details.',
     calls: 'Model requests for this prompt, including linked subagents.\nNot tool calls.',
@@ -38,19 +39,60 @@ const ReportView = (() => {
     return costGroups(cost, true) + (Number.isFinite(summary?.duration_ms) ?
       '\n\nDuration: ' + display(summary, 'duration_ms') : '');
   }
+  const DateTimeMode = Object.freeze({DATE: 'DATE', TIME: 'TIME', DATE_TIME: 'DATE_TIME',
+    DATE_TIME_SECONDS: 'DATE_TIME_SECONDS'});
   let timestampZone, timestampFormatter;
-  function timestamp(value, zone = timezone) {
-    if (!Number.isSafeInteger(value) || value < 0 || typeof zone !== 'string') return 'N/A';
+  function calendarDateKey(value) {
+    if (typeof value !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const instant = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(instant) && new Date(instant).toISOString().slice(0, 10) === value ? instant : null;
+  }
+  function formatDateTime(instant, mode, configuredZone) {
+    if (mode === DateTimeMode.DATE && typeof instant === 'string')
+      return calendarDateKey(instant) === null ? 'N/A' : instant;
+    if (mode !== DateTimeMode.DATE && mode !== DateTimeMode.TIME &&
+        mode !== DateTimeMode.DATE_TIME && mode !== DateTimeMode.DATE_TIME_SECONDS) return 'N/A';
+    if (!Number.isFinite(instant) || typeof configuredZone !== 'string') return 'N/A';
+    const zone = configuredZone.trim();
+    // Do not accept the fixed-offset syntax supported by newer Intl engines.
+    if (!/^[A-Za-z][A-Za-z0-9_+/-]*$/.test(zone)) return 'N/A';
     try {
       if (zone !== timestampZone) {
-        timestampFormatter = new Intl.DateTimeFormat('sv-SE', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
-          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+        timestampFormatter = new Intl.DateTimeFormat('en-US', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+          second: '2-digit', era: 'short', hourCycle: 'h23'});
         timestampZone = zone;
       }
-      const parts = timestampFormatter.formatToParts(value);
+      const parts = timestampFormatter.formatToParts(Math.floor(instant / 1000) * 1000);
       const fields = Object.fromEntries(parts.map(part => [part.type, part.value]));
-      return `${fields.year}-${fields.month}-${fields.day} ${fields.hour}:${fields.minute}`;
+      if (fields.era !== 'AD' || fields.year.length > 4) return 'N/A';
+      const day = `${fields.year.padStart(4, '0')}-${fields.month}-${fields.day}`;
+      const clock = `${fields.hour}:${fields.minute}`;
+      if (mode === DateTimeMode.DATE) return day;
+      if (mode === DateTimeMode.TIME) return clock;
+      return `${day} ${clock}${mode === DateTimeMode.DATE_TIME_SECONDS ? `:${fields.second}` : ''}`;
     } catch (_) { return 'N/A'; } // Never substitute the browser's timezone for missing configuration.
+  }
+  function timestamp(value, zone = timezone) {
+    return Number.isSafeInteger(value) && value >= 0 ? formatDateTime(value, DateTimeMode.DATE_TIME, zone) : 'N/A';
+  }
+  const calendarWeekday = new Intl.DateTimeFormat('en', {weekday: 'long', timeZone: 'UTC'});
+  let monthLanguage, calendarMonths;
+  function calendarCaption(day, kind, language = 'en') {
+    // Axis captions describe a calendar day, not an absolute UTC timestamp.
+    const key = calendarDateKey(day);
+    if (key === null) return 'N/A';
+    if (kind === 'weekday') return calendarWeekday.format(key);
+    if (kind !== 'month-short' && kind !== 'month-long') return 'N/A';
+    try {
+      if (language !== monthLanguage) {
+        calendarMonths = ['short', 'long'].map(month => new Intl.DateTimeFormat(language, {
+          month, timeZone: 'UTC', calendar: 'gregory'
+        }));
+        monthLanguage = language;
+      }
+      return calendarMonths[kind === 'month-short' ? 0 : 1].format(key);
+    } catch (_) { return 'N/A'; }
   }
   const bindings = new WeakMap();
   const effects = new WeakMap();
@@ -520,15 +562,10 @@ const ReportView = (() => {
     head.append(header);
     const empty = element('p', undefined, 'warning');
     const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
-    function dateKey(value) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
-      const timestamp = Date.parse(value + 'T00:00:00Z');
-      return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value ? timestamp : null;
-    }
     function key(row, index) {
       return [row.publisher || null, row.model || null,
         row.relative_levels?.length ? row.relative_levels.map(level => level.relative_cost) : [row.relative_cost],
-        dateKey(row.release_date)][index];
+        calendarDateKey(row.release_date)][index];
     }
     const rows = new Map();
     function draw() {
@@ -562,7 +599,7 @@ const ReportView = (() => {
           row.setAttribute('role', 'row');
           const name = element('span', model.model, model.recent ? 'new' : '');
           for (const value of [model.publisher || 'N/A', name, modelRelative(model),
-            element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
+            element('span', formatDateTime(model.release_date, DateTimeMode.DATE), model.recent ? 'new' : '')]) {
             const cell = element('td'); cell.setAttribute('role', 'cell');
             cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
           }
@@ -837,5 +874,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

@@ -20,8 +20,10 @@ from typing import Iterable
 # Direct CLI execution puts tools/ on sys.path; package imports use the absolute route.
 if __package__:
     from development.tools.code_inventory import import_targets, module_name
+    from development.tools.date_display_guard import date_display_bypasses
 else:
     from code_inventory import import_targets, module_name
+    from date_display_guard import date_display_bypasses
 
 REQUIRED_FILES = {
     ".gitignore",
@@ -490,6 +492,11 @@ def validate(root: Path) -> Results:
     check_version_consistency(root, results)
     check_entrypoint(root, results)
     check_architecture_imports(root, results)
+    bypasses = list(date_display_bypasses(root))
+    if bypasses:
+        results.fail("Date/time display ownership", "\n".join(bypasses))
+    else:
+        results.ok("Date/time display ownership")
     return results
 
 

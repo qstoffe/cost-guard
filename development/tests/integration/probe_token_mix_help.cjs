@@ -78,9 +78,21 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   const surfaces = [];
   for (const section of ['models','watch','accounts','ai-stats','comparisons','settings']) {
     await evaluate(`location.hash='#/${section}'`);
-    await until(`current.section==='${section}' && !current.loading && document.getElementById('result').textContent.length>0`);
-    if (['models','ai-stats','comparisons'].includes(section)) await until(`!!current.result`);
-    assert.doesNotMatch(await evaluate(`document.getElementById('result').textContent`), forbidden, section+' visible dates');
+     await until(`current.section==='${section}' && !current.loading && document.getElementById('result').textContent.length>0`);
+     if (['models','ai-stats','comparisons'].includes(section)) await until(`!!current.result`);
+     assert.doesNotMatch(await evaluate(`document.getElementById('result').textContent`), forbidden, section+' visible dates');
+     if (section === 'models') {
+       const day = await evaluate(`(() => {
+         const parent = document.createElement('div'), result = structuredClone(current.result);
+         result.view.timezone_id = 'America/New_York';
+         const model = {publisher:'Fixture', model:'Calendar day', selectable:true,
+           release_date:'2026-11-21', display:{relative_cost:'N/A'}};
+         result.view.model_catalog = {...result.view.model_catalog, rows:[model]};
+         ReportView.render(parent, result, {section:'models'});
+         return parent.querySelector('.overview-model-table tbody tr td:nth-child(4)').textContent;
+       })()`);
+       assert.equal(day, '2026-11-21', 'Models release day never shifts to the prior configured-local day');
+     }
     const texts = await evaluate(`(()=>{const texts=[];for(const node of document.querySelectorAll('#result .help-value,#result .help-action')){
       if(node.getClientRects().length && node.tabIndex>=0){node.focus();ContextHelp.refresh(node);const help=document.getElementById('context-help');if(help?.matches(':popover-open'))texts.push(help.textContent);}}
       document.activeElement?.blur();return texts;})()`);

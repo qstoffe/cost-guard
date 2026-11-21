@@ -66,14 +66,14 @@ class ChartSource(SyntheticMonthSource):
         return super().load_session_snapshot(key)
 
 
-def replace_geometry(page, period, now, zone, width=20):
+def replace_geometry(page, period, now, zone, width=20, *, sample=None):
     view = timeline_view(period, now, zone, (), None, first_covered_ms=None, gaps=()).to_json()
-    page.evaluate('''({period, zone, window, width}) => {
+    page.evaluate('''({period, zone, window, width, seed}) => {
         const chart = current.accountTimeline;
         clearTimeout(chart.timer);
         chart.generation++;
         chart.schedule = () => {};
-        const sample = chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
+        const sample = seed ?? chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
         const peak = sample.points.find(point => Number(point?.amount) > 0);
         const totals = [
             {amount: '123456', display: {credits: '123456', usd: '$1234.56'}},
@@ -94,7 +94,7 @@ def replace_geometry(page, period, now, zone, width=20):
         chart.inspect(null);
         chart.focusKey = null;
         chart.draw();
-    }''', dict(period=period, zone=zone, width=width, window=view))
+    }''', dict(period=period, zone=zone, width=width, window=view, seed=sample))
 
 
 def assert_geometry(plot, series_count):
@@ -221,7 +221,7 @@ def assert_hover(page, plot, scroller, dates):
     assert scroller.evaluate('el => Math.abs(el.scrollWidth - el.clientWidth - el.scrollLeft) < 2')
 
 
-def stress_plot(page, chart, screenshots):
+def stress_plot(page, chart, screenshots, *, sample):
     from playwright.sync_api import expect
 
     plot = chart.locator('.account-timeline-plot')
@@ -235,7 +235,7 @@ def stress_plot(page, chart, screenshots):
     axis = chart.locator('.account-timeline-axis')
     status = chart.get_by_role('status')
     now = stamp('2026-11-20T10:15:00+01:00')
-    replace_geometry(page, '30-days', now, 'Europe/Stockholm')
+    replace_geometry(page, '30-days', now, 'Europe/Stockholm', sample=sample)
     dates = [(date(2026, 10, 22) + timedelta(days=i)).isoformat() for i in range(30)]
     assert labels.all_text_contents() == [str(int(day[-2:])) for day in dates]
     assert bands.all_text_contents() == ['October', 'November']
@@ -481,7 +481,8 @@ def chart_fixture(browser, root, source_setup=ChartSource):
     host.live.timeline_demand = host.dispatcher.account_timeline_demand
     host.start()
     host.publish_ready()
-    context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True, device_scale_factor=2)
+    context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True, device_scale_factor=2,
+                                  locale='en-US', timezone_id='America/New_York')
     context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(host.server.origin + '/') else route.abort())
     page = context.new_page()
     errors, lookups, interests = [], [], []
@@ -711,7 +712,8 @@ def check(browser, root, screenshots=None):
                     if (node.matches?.('path.account-timeline-ring')) window.liveCueFlashes++;
             });
             observer.observe(chart.layers, {childList: true});
-            return {id: point.id, peak: Number(point.peak), revision: chart.cache.get('today').revision};
+            return {id: point.id, peak: Number(point.peak), revision: chart.cache.get('today').revision,
+                sample: structuredClone(point)};
         }''')
         live_key = 'root-0014'
         source.replace_usage(14, NOV_1 + 4 * DAY_MS + 14_000, 100_000_000, accounts[2].ref)
@@ -734,9 +736,9 @@ def check(browser, root, screenshots=None):
         assert page.evaluate('window.liveCueFlashes') == 0
         assert source.timeline_reads[live_key] == 1 and sum(source.timeline_reads.values()) == 15
 
-        chart.get_by_role('button', name='30 days', exact=True).click()
-        page.wait_for_function("() => current.accountTimeline.view?.period === '30-days'")
-        layouts = stress_plot(page, chart, screenshots)
+        # Seed the synthetic geometry from the verified Today view, not from
+        # a live period switch whose background acquire can evict a cached view.
+        layouts = stress_plot(page, chart, screenshots, sample=before['sample'])
 
         page.get_by_role('link', name='Watch', exact=True).click()
         expect(page.locator('body')).to_have_attribute('data-section', 'watch')

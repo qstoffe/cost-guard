@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import math
 import re
 
-from src.analysis.timezones import resolve_timezone
+from src.analysis.timezones import DateTimeMode, format_date_time, resolve_timezone
 from src.numbers import consumed_capacity, exact_number, remaining_capacity
 
 TOKEN_CATEGORIES = (("input", "Input"), ("cache", "Cached input"),
@@ -30,13 +30,16 @@ def format_reset(reset_at_ms: object, timezone_id: str, *, now_ms: int, compact:
         return "Reset unknown"
     if remaining <= 0:
         return "Reset expired"
-    clock = target.strftime("%H:%M")
+    clock = format_date_time(reset_at_ms, DateTimeMode.TIME, timezone_id)
+    if clock == "unknown":
+        return "Reset unknown"
     if remaining < 86_400_000:
         return f"Reset@{clock}" if compact else f"Reset in {int(remaining // 60_000)}min, {clock}"
     if remaining < 604_800_000:
         when = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()] + " " + clock
         return "Reset@" + when if compact else f"Reset in {int(remaining // 3_600_000)}h, {when}"
-    return ("Reset@" if compact else "Reset at ") + target.strftime("%Y-%m-%d %H:%M")
+    return ("Reset@" if compact else "Reset at ") + format_date_time(
+        reset_at_ms, DateTimeMode.DATE_TIME, timezone_id)
 
 
 def money(value: Decimal | None) -> str:

@@ -1,7 +1,7 @@
 """Web history membership and prompt-card lifecycle; no CLI retention changes."""
 from dataclasses import dataclass, field, replace
-import hashlib
 
+from .invocation import invocation_scope
 from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
 from .session_costs import SessionCostState
@@ -442,8 +442,7 @@ class WatchCards:
             context_handoff=(dict(capture.context_handoffs).get(focal.event_id)
                 if focal is not None and state == 'observed' and not capture.retained
                 and entry.verified_generation == entry.generation else None),
-            activity_scope=hashlib.sha256(repr((entry.root.provenance.source_type,
-                entry.root.provenance.source_generation, entry.root.provenance.source_instance)).encode()).hexdigest(),
+            activity_scope=invocation_scope(entry.root.provenance),
             invocation_verified=invocation_verified,
             session_duration_ms=accumulated_duration((start,
                 max(duration or 0, now_ms - start) if running and (state == 'observed' or invocation_verified) else duration)

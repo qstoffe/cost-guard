@@ -478,7 +478,9 @@ const MiniWatch = (() => {
     }
     drawSessions(view, now = Date.now()) {
       const wanted = [], seen = new Set(), text = ReportView.text, display = ReportView.display;
-      const localNow = ReportView.timestamp(now), today = localNow === 'N/A' ? null : localNow.slice(0, 10);
+      const localNow = ReportView.formatDateTime(now, ReportView.DateTimeMode.DATE,
+        view?.timezone_id ?? ReportView.configuredTimezone());
+      const today = localNow === 'N/A' ? null : localNow;
       const values = sessions(view);
       const needsHistory = values.filter(value => value.running).length < 5;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }

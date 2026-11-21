@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Iterable, Mapping, TextIO
 import sys
 
-from src.analysis.timezones import format_local_timestamp
+from src.analysis.timezones import DateTimeMode, format_date_time
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.token_mix import TokenMix
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
@@ -119,7 +119,8 @@ class ReportRenderer:
         for line in concept_lines(report.token_mix, report.model_comparison_sample_size, self.table_width, self.styler):
             self._write(line)
         self._write()
-        self._prose(f"Pricing/cache metadata: {format_local_timestamp(report.pricing_retrieved_at_ms, self.timezone_id)}")
+        self._prose("Pricing/cache metadata: " + format_date_time(
+            report.pricing_retrieved_at_ms, DateTimeMode.DATE_TIME, self.timezone_id))
         rows = []
         styles = []
         aligned_prices = _aligned_price_summaries(item.price_summary for item in report.model_comparison)
@@ -127,7 +128,8 @@ class ReportRenderer:
         all_models = report.kind == ReportKind.ALL_MODELS
         for item, price_text, relative in zip(report.model_comparison, aligned_prices, relatives):
             rows.append((item.publisher or "N/A", item.model, relative,
-                         *((price_text,) if all_models else ()), item.release_date or "N/A"))
+                         *((price_text,) if all_models else ()),
+                         "N/A" if not item.release_date else format_date_time(item.release_date, DateTimeMode.DATE)))
             promo = "modelComparisonPromotion" if item.promotional else None
             recent = "modelComparisonNew" if item.recent else None
             styles.append((None, recent, promo, *((promo,) if all_models else ()), recent))
@@ -205,11 +207,11 @@ class ReportRenderer:
         table_has_additional = False
         for _at, _order, kind, item in timeline:
             if kind == "abort":
-                clock = format_local_timestamp(item.abort_at_ms or item.at_ms, self.timezone_id, "%H:%M")
+                clock = format_date_time(item.abort_at_ms or item.at_ms or None, DateTimeMode.TIME, self.timezone_id)
                 rows.append((f"{clock} #{item.prompt_number} [ABORTED]", "", "", "", "", "", "", ""))
                 styles.append((None,) * 8)
                 continue
-            clock = format_local_timestamp(item.at_ms, self.timezone_id, "%H:%M")
+            clock = format_date_time(item.at_ms or None, DateTimeMode.TIME, self.timezone_id)
             current_model = (item.model_effort, item.has_additional_model)
             if item.model_effort and (not item.is_compaction or item.model_effort != "N/A") and current_model != last_model:
                 model_text = "Model: " + item.model_effort + (" *" if item.has_additional_model else "")

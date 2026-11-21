@@ -55,3 +55,11 @@ and run all registered regressions with
 start, not a version binding. Git retains release history; no prose history or
 root documentation tree is shipped. The validator rejects retired root wrappers
 and documentation while retaining package/privacy, import and size gates.
+
+Human date/time text uses `ReportView.formatDateTime` in
+[`src/web/assets/render.js`](../src/web/assets/render.js) and `format_date_time`
+in [`src/analysis/timezones.py`](../src/analysis/timezones.py). Use a named
+`DateTimeMode` and the effective configured IANA zone for epoch milliseconds;
+pass source calendar days directly in `DATE` mode. The ordinary package
+validator and Web display tests check formatter ownership. See the
+[date/time presentation rule](https://github.com/qstoffe/cost-guard-backlog/blob/main/development/architecture/USER_FACING_UX_POLICY.md#date-and-time-presentation).

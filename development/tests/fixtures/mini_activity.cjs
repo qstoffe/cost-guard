@@ -3,7 +3,11 @@ const assert = require('node:assert/strict');
 module.exports = function activity(vm, context, controller, view, input, helpText, clock) {
   const saved = structuredClone(input), savedNow = clock.get(), base = saved.view.active_cards[0];
   const hour = 3600000, day = 24 * hour, now = Date.parse('2026-11-10T00:00:00Z');
-  const zone = value => vm.runInContext(`ReportView.setTimezone(${JSON.stringify(value)})`, context);
+  let timezone;
+  const zone = value => {
+    timezone = value;
+    vm.runInContext(`ReportView.setTimezone(${JSON.stringify(value)})`, context);
+  };
   const card = (id, at, flags = {}, full) => {
     const value = structuredClone(base), local = full || new Date(at).toISOString().slice(0, 16).replace('T', ' ') + ' +0000';
     Object.assign(value, {session_id:id, focal_id:id});
@@ -15,7 +19,8 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
     return value;
   };
   const show = (active, history = []) => {
-    input.view = {...saved.view, active_cards:active, history_cards:history, history_state:'observed', history_epoch:1};
+    input.view = {...saved.view, timezone_id:timezone, active_cards:active, history_cards:history,
+      history_state:'observed', history_epoch:1};
     controller.update(input);
   };
   const time = id => view.promptRows.get(id).children[0].textContent;
