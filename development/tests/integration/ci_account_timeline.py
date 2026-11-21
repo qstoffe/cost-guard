@@ -21,7 +21,7 @@ from development.tests.fixtures.watch_runtime import make_service
 from development.tests.integration.serve_data_dispatch import DispatchJobs
 from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
-from src.analysis.account_timeline import DAY_MS
+from src.analysis.account_timeline import DAY_MS, PERIODS
 from src.application.account_timeline import timeline_view
 from src.domain import QuotaComponent, TokenUsage
 from src.sources.errors import SourceConcurrentChangeError
@@ -478,7 +478,7 @@ def chart_fixture(browser, root, source_setup=ChartSource):
         service_factory=workers, clock_ms=clock, record_observations=False)
     host = WebHost(root, jobs=DispatchJobs(), live_factory=lambda: LiveAcquisition(coordinator))
     host.dispatcher = DataDispatcher(host.jobs)
-    host.live.timeline_demand = host.dispatcher.account_timeline_demand
+    host.live.timeline_demand = host.dispatcher.account_timeline_foreground
     host.start()
     host.publish_ready()
     context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True, device_scale_factor=2,
@@ -746,12 +746,46 @@ def check(browser, root, screenshots=None):
         while_tabs = len(lookups)
         page.wait_for_timeout(1000)
         assert while_tabs == len(lookups)
-        assert not host.dispatcher.account_timeline_demand()
+        assert not host.dispatcher.account_timeline_foreground()
         assert host.failure is None and host.live.failure is None and not errors, errors
         print(f'Accounts timeline PASS: {layouts} layouts, four periods, staged acquisition and quiet live revision, '
               f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh; '
               f'card-ready → first paint {(first_paint - card_seen) * 1000:.0f} ms, '
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
+
+
+def check_unvisited(browser, root):
+    from playwright.sync_api import expect
+
+    with chart_fixture(browser, root) as (page, host, coordinator, source, _, _, errors, lookups, interests):
+        lane = coordinator.account_timeline
+        page.goto(host.browser_url())
+        page.get_by_role('link', name='Models', exact=True).click()
+        expect(page.locator('body')).to_have_attribute('data-section', 'models')
+        source.first_read.set()
+        source.continue_history.set()
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            views = [lane.lookup(period)['view'] for period in PERIODS]
+            if all(view and not view['pending_buckets'] and not view['initial_pending_buckets'] for view in views):
+                break
+            page.wait_for_timeout(100)
+        else:
+            raise AssertionError('host did not warm all four chart periods without Accounts')
+        warmed = sum(source.timeline_reads.values())
+        assert warmed > 0 and not lookups and not any(interests)
+        assert not host.dispatcher.account_timeline_foreground()
+        source.clock_offset_ms += 3_600_000
+        start = time.monotonic()
+        page.get_by_role('link', name='Accounts', exact=True).click()
+        page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row =>
+            +row.points[2]?.amount > 0) && !current.accountTimeline.view.pending_buckets.length""", timeout=5000)
+        chart = page.get_by_role('region', name='CCost', exact=True)
+        expect(chart.locator('.account-timeline-plot .account-timeline-loading, .account-timeline-ring:visible')).to_have_count(0)
+        assert sum(source.timeline_reads.values()) == warmed and not errors, errors
+        assert host.failure is None and host.live.failure is None
+        print(f'Unvisited Accounts PASS: {warmed} historical reads, four prepared periods; '
+              f'entry to populated month {(time.monotonic() - start) * 1000:.0f} ms, zero replayed reads')
 
 
 def check_best_effort(browser, root):
@@ -831,6 +865,9 @@ def main():
             best_effort = root / 'best-effort'
             best_effort.mkdir()
             check_best_effort(browser, best_effort)
+            unvisited = root / 'unvisited'
+            unvisited.mkdir()
+            check_unvisited(browser, unvisited)
         finally:
             browser.close()
 

@@ -11,9 +11,13 @@ import time
 from src.analysis.cache import dependency_signature
 from src.analysis.ai_stats import POLICY as STATS_POLICY
 from src.reports import ReportKind, ReportRequest
+from .jobs import MAX_PENDING
 from .report_control import ManagedReport
 
 FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)
+DEFAULT_REQUESTS = tuple(ReportRequest(kind) for kind in FINITE)
+BACKGROUND_STAGGER = 15
+RECENT_SECONDS = 1800
 SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'comparisons', 'settings'}
 MAX_ENTRIES = 12
 LEASE_SECONDS = 90
@@ -85,13 +89,13 @@ class DataDispatcher:
     def _entry(self, request):
         if request not in self.entries:
             while len(self.entries) >= MAX_ENTRIES:
-                victim = next((key for key, value in self.entries.items()
-                               if not value['job'] and key not in self._foreground()), None)
+                victim = next((key for key, value in self.entries.items() if not value['job']
+                               and key not in DEFAULT_REQUESTS and key not in self._foreground()), None)
                 if victim is None:
                     raise RuntimeError('busy')
                 del self.entries[victim]
             self.entries[request] = dict(job=None, result=None, result_id=None, due=0,
-                failures=0, terminal=False, requested=False, error=None, finished=0)
+                failures=0, terminal=False, requested=False, error=None, finished=0, visited=None)
         self.entries.move_to_end(request)
         return self.entries[request]
 
@@ -105,17 +109,15 @@ class DataDispatcher:
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
+                if visible:
+                    entry['visited'] = self.clock()
                 if visible and entry['job'] and request.kind is ReportKind.AI_STATS and hasattr(self.jobs, 'select_scope'):
                     self.jobs.select_scope(entry['job'], request.stats_scope)
                 if entry['result'] and not entry['failures']:
                     entry['due'] = min(entry['due'], entry['finished'] + cadence(request, entry['result'], True))
-            if not self.initialized:
-                self.initialized = True
-                for kind in FINITE:
-                    self._entry(ReportRequest(kind))
             return {'lease_seconds': LEASE_SECONDS}
 
-    def account_timeline_demand(self):
+    def account_timeline_foreground(self):
         with self.lock:
             self._expire()
             return frozenset(tab['account_period'] for tab in self.tabs.values()
@@ -157,6 +159,9 @@ class DataDispatcher:
         managed = ManagedReport(**{name: getattr(request, name) for name in ReportRequest.__dataclass_fields__},
                                 source_identity=self.identity)
         entry['job'] = self.jobs.submit(managed)
+        if (request in self._foreground() and request.kind is ReportKind.AI_STATS
+                and hasattr(self.jobs, 'select_scope')):
+            self.jobs.select_scope(entry['job'], request.stats_scope)
 
     def _collect(self):
         for request, entry in self.entries.items():
@@ -235,6 +240,7 @@ class DataDispatcher:
                 self.source_error = None
                 self.source_terminal = False
                 if recovered_source:
+                    self.next_background = self.clock() + BACKGROUND_STAGGER
                     for entry in self.entries.values():
                         if entry['terminal'] and entry['error'] in SOURCE_BLOCKERS:
                             entry.update(terminal=False, due=0, error=None, failures=0)
@@ -243,6 +249,12 @@ class DataDispatcher:
                 self.warm_allowed = False
                 self._prioritize(foreground)
                 return
+            if not self.initialized:
+                self.initialized = True
+                self.next_background = self.clock() + BACKGROUND_STAGGER
+                for request in DEFAULT_REQUESTS:
+                    self._entry(request)
+            self.warm_allowed = True
             for request in foreground:
                 entry = self._entry(request)
                 if entry['result'] and not usable(entry['result'], int(self.wall_clock() * 1000)) and not entry['failures']:
@@ -252,32 +264,42 @@ class DataDispatcher:
                         self._submit(request, entry)
                     except RuntimeError:
                         break
-            # Never start speculative work ahead of incomplete foreground demand.
-            waiting = any(not usable(self._entry(request)['result'], int(self.wall_clock() * 1000))
-                          for request in foreground)
-            # A foreground refresh still owns the shared source budget when a
-            # usable last-good report already makes the page look complete.
-            self.warm_allowed = self.initialized and not waiting and not any(
-                self._entry(request)['job'] for request in foreground)
-            background = any(entry['job'] and request not in foreground for request, entry in self.entries.items())
-            if self.initialized and not waiting and not background and self.clock() >= self.next_background:
-                due = [(request, entry) for request, entry in self.entries.items()
-                       if request not in foreground and not entry['job'] and not entry['terminal']
-                       and self.clock() >= entry['due']]
-                if due:
-                    request, entry = min(due, key=lambda pair: pair[1]['due'])
-                    try:
-                        self._submit(request, entry)
-                        self.next_background = self.clock() + 15
-                    except RuntimeError:
-                        pass  # Reserved admission remains with requested work.
+            self._warm(foreground)
             self._prioritize(foreground)
+
+    def _warm(self, foreground):
+        now = self.clock()
+        if now < self.next_background:
+            return
+        active = {entry['job'] for request, entry in self.entries.items() if request in foreground}
+        background = {entry['job'] for request, entry in self.entries.items()
+                      if request not in foreground and entry['job']} - active
+        if len(background) >= MAX_PENDING - 1:
+            return  # Keep room for newly visible work (coalesced scopes count once).
+        due = []
+        for request, entry in self.entries.items():
+            default = request in DEFAULT_REQUESTS
+            recent = entry['visited'] is not None and now - entry['visited'] < RECENT_SECONDS
+            optional = recent and ((request.kind is ReportKind.AI_STATS and request.stats_scope != 'all')
+                                   or (request.kind is ReportKind.TOKEN_MIX and request.token_mix_scope != 'all'))
+            if (request not in foreground and not entry['job'] and not entry['terminal']
+                    and now >= entry['due'] and (default or optional)):
+                due.append((not default, entry['due'], request, entry))
+        if not due:
+            return
+        _, _, request, entry = min(due, key=lambda item: item[:2])
+        try:
+            self._submit(request, entry)
+            self.next_background = now + BACKGROUND_STAGGER
+        except RuntimeError:
+            pass  # Do not displace admitted work.
 
     def _prioritize(self, foreground):
         priorities = {}
+        chart_visible = any(tab['visible'] and tab['account_period'] for tab in self.tabs.values())
         for request, entry in self.entries.items():
             key = entry['job']
             if key:
-                priority = 0 if request in foreground else 1 if entry['requested'] else 2
+                priority = 0 if request in foreground else 1 if entry['requested'] and not chart_visible else 2
                 priorities[key] = min(priorities.get(key, 3), priority) if self.ready else 3
         self.jobs.prioritize(priorities)

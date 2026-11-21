@@ -20,6 +20,7 @@ from .report_control import ManagedReport, Quantum
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_JOBS = 16
 MAX_PENDING = 4
+BACKGROUND_TURN_SECONDS = 3
 
 
 class ReportWorkerStopError(RuntimeError):
@@ -189,6 +190,7 @@ class ReportJobs:
         self._jobs = OrderedDict()
         self._active = None
         self._parked = {}
+        self._background_due = None
         # Children that already delivered valid terminal IPC; reaped without
         # delaying publication. Exact owners stay here until exit is confirmed.
         self._retiring = []
@@ -214,7 +216,8 @@ class ReportJobs:
                         # At most the five validated scopes; priority never erases
                         # an earlier logical goal or creates another job/worker.
                         job['goals'] = tuple(dict.fromkeys((*job['goals'], request.stats_scope)))
-                        job['request'] = request
+                        if not isinstance(request, ManagedReport):
+                            job['request'] = request
                         return key
                     if (not isinstance(request, ManagedReport) and job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
                             and time.monotonic() - job.get('finished_at', 0) < 60):
@@ -287,7 +290,8 @@ class ReportJobs:
         elapsed = max(0, time.monotonic() - started)
         job['worker_ms'] = job.get('worker_ms', 0) + elapsed * 1000
         job['served_at'] = time.monotonic()
-        job['not_before'] = time.monotonic() + (min(1, elapsed * 4) if job['priority'] >= 2 else 0)
+        paced = job['priority'] >= 2 or job.get('paced_turn')
+        job['not_before'] = time.monotonic() + (min(1, elapsed * 4) if paced else 0)
         job['status'] = 'queued'
         job['admitted'] = True  # Parked work is never a startup interruption candidate.
         self._parked[key] = process, receiver
@@ -329,6 +333,7 @@ class ReportJobs:
         now = time.monotonic()
         job = self._jobs[key]
         job['worker_ms'] = job.get('worker_ms', 0) + max(0, now - started) * 1000
+        job['served_at'] = now
         self._retiring.append(dict(process=process, receiver=receiver, stage=0, deadline=now + 1))
         self._active = None
 
@@ -400,7 +405,7 @@ class ReportJobs:
         """
         key, process, receiver, started = self._active
         job = self._jobs[key]
-        if job.get('admitted', True) or job.get('priority', 1) < 2 or job.get('startup_interrupted'):
+        if job.get('admitted', True) or job['priority'] < 2 or job.get('startup_interrupted') or job.get('paced_turn'):
             return False
         if not self._runnable_waiting(key, 0):
             return False
@@ -409,15 +414,31 @@ class ReportJobs:
                    startup_interruptions=job.get('startup_interruptions', 0) + 1)
         return True
 
+    def _runnable(self, now):
+        can_spawn = self._can_spawn()
+        return [(key, job) for key, job in self._jobs.items()
+                if job['status'] == 'queued' and job['priority'] < 3
+                and ('not_before' not in job or now >= job['not_before'])
+                and (key in self._parked or can_spawn)]
+
     def _runnable_waiting(self, active, priority):
-        now = time.monotonic()
-        return any(key != active and job['status'] == 'queued' and job.get('priority', 1) <= priority
-                   and now >= job.get('not_before', 0) and (key in self._parked or self._can_spawn())
-                   for key, job in self._jobs.items())
+        return any(key != active and job['priority'] <= priority
+                   for key, job in self._runnable(time.monotonic()))
+
+    def _background_turn(self, priority, waiting, now):
+        """Occasionally give the least recently served lower lane one managed quantum."""
+        lower = [(key, job) for key, job in waiting if job['priority'] > priority]
+        if not lower or any(not isinstance(job['request'], ManagedReport) for _, job in waiting):
+            return None
+        if self._background_due is None:
+            self._background_due = now + BACKGROUND_TURN_SECONDS
+        if now >= self._background_due:
+            return min(lower, key=lambda item: (item[1]['served_at'], item[1]['queued_at']))
+        return None
 
     def _grant(self, job, receiver):
         """Requested work runs unparked until contention; background stays paced every quantum."""
-        free = job.get('priority', 1) < 2
+        free = job['priority'] < 2 and not job.get('paced_turn')
         receiver.send('free' if free else 'run')
         job.update(admitted=True, free=free, yield_requested=False)
 
@@ -428,8 +449,11 @@ class ReportJobs:
         job = self._jobs[key]
         finished = False
         try:
+            now = time.monotonic()
+            relief = (job.get('free') and isinstance(job['request'], ManagedReport)
+                      and self._background_turn(job['priority'], self._runnable(now), now) is not None)
             if job.get('free') and not job.get('yield_requested') and (
-                    job.get('priority', 1) >= 2 or self._runnable_waiting(key, job.get('priority', 1))):
+                    relief or job['priority'] >= 2 or self._runnable_waiting(key, job['priority'])):
                 receiver.send('yield')  # At most one outstanding request; honored at the next quantum.
                 job['yield_requested'] = True
             if receiver.poll():
@@ -504,13 +528,17 @@ class ReportJobs:
         return False
 
     def _start_next(self):
-        for key, job in sorted(self._jobs.items(), key=lambda item: (
-                item[1].get('priority', 1), item[1].get('served_at', 0),
-                item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
-                item[1]['queued_at'])):
-            if (job['status'] != 'queued' or job.get('priority', 1) >= 3
-                    or 'not_before' in job and time.monotonic() < job['not_before']):
-                continue
+        now = time.monotonic()
+        waiting = sorted(self._runnable(now), key=lambda item: (
+            item[1]['priority'], item[1]['served_at'],
+            item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
+            item[1]['queued_at']))
+        if waiting:
+            key, job = waiting[0]
+            relief = self._background_turn(job['priority'], waiting, now)
+            if relief:
+                key, job = relief
+            job['paced_turn'] = relief is not None
             if key in self._parked:
                 process, receiver = self._parked[key]
                 # Transfer ownership before the uncertain write. A broken pipe
@@ -524,9 +552,9 @@ class ReportJobs:
                     self._stop()
                     return
                 job['status'] = 'running'
-                break
-            if not self._can_spawn():
-                continue
+                if relief:
+                    self._background_due = time.monotonic() + BACKGROUND_TURN_SECONDS
+                return
             receiver, sender = self._context.Pipe(duplex=isinstance(job['request'], ManagedReport))
             request = stats_jobs.request(job, key)
             if request.kind is ReportKind.TOKEN_MIX:
@@ -565,13 +593,14 @@ class ReportJobs:
             self.analysis = 'loading'
             # Requested work is admitted up front; only background startup awaits its grant.
             job.update(admitted=not isinstance(request, ManagedReport), free=False, yield_requested=False)
-            if isinstance(request, ManagedReport) and job.get('priority', 1) < 2:
+            if relief:
+                self._background_due = now + BACKGROUND_TURN_SECONDS
+            if isinstance(request, ManagedReport) and job['priority'] < 2 and not relief:
                 try:
                     self._grant(job, receiver)
                 except (EOFError, OSError, ValueError):
                     job.update(status='failed', error='report_unavailable')
                     self._stop()
-            break
 
     def close(self):
         with self._lock:

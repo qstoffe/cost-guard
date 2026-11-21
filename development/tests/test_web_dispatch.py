@@ -59,20 +59,31 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.tick(identity='source')
         self.models = ReportRequest()
 
-    def test_no_speculative_launch_before_interest_and_foreground_completes_first(self):
+    def test_healthy_host_staggers_defaults_without_any_browser_interest(self):
         self.dispatch.tick()
         self.assertEqual({}, self.jobs.values)
-        self.dispatch.interest('tab', 'models', True, self.models)
-        self.dispatch.tick(identity='source')
-        self.assertFalse(self.dispatch.warm_allowed)
-        self.assertEqual(1, len(self.jobs.values))
-        self.assertEqual(ReportKind.NORMAL, self.jobs.values['0']['request'].kind)
-        self.assertEqual('source', self.jobs.values['0']['request'].source_identity)
-        self.jobs.values['0'].update(status='complete', result=result(1_000_000))
-        self.dispatch.tick(identity='source')
+
+        self.now += 15
+        self.dispatch.tick()
+
         self.assertTrue(self.dispatch.warm_allowed)
-        self.assertEqual(2, len(self.jobs.values))
-        self.assertEqual(ReportKind.AI_STATS, self.jobs.values['1']['request'].kind)
+        self.assertEqual([ReportKind.NORMAL], [job['request'].kind for job in self.jobs.values.values()])
+        self.assertEqual('source', self.jobs.values['0']['request'].source_identity)
+        self.assertEqual({'0': 2}, self.jobs.priorities)
+
+    def test_all_default_reports_are_admitted_while_foreground_remains_unfinished(self):
+        self.dispatch.interest('tab', 'models', True, self.models)
+        self.dispatch.tick()
+        self.assertEqual(1, len(self.jobs.values))
+
+        for _ in range(3):
+            self.now += 15
+            self.dispatch.tick()
+
+        self.assertTrue(self.dispatch.warm_allowed)
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS},
+                         {job['request'].kind for job in self.jobs.values.values()})
+        self.assertEqual({'0': 0, '1': 2, '2': 2, '3': 2}, self.jobs.priorities)
 
     def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -87,7 +98,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual({}, self.dispatch.tabs)
         self.assertEqual('queued', self.jobs.values[key]['status'])
 
-    def test_usable_foreground_report_refresh_still_defers_inactive_sessions_warming(self):
+    def test_foreground_report_refresh_keeps_the_bounded_sessions_warm_lane_enabled(self):
         request = ReportRequest(ReportKind.AI_STATS)
         self.dispatch.interest('tab', 'ai-stats', True, request)
         self.dispatch.tick(identity='source')
@@ -103,7 +114,7 @@ class DispatcherTests(unittest.TestCase):
 
         self.dispatch.tick(identity='source')
 
-        self.assertFalse(self.dispatch.warm_allowed)
+        self.assertTrue(self.dispatch.warm_allowed)
         key = self.dispatch._entry(request)['job']
         self.assertEqual(0, self.jobs.priorities[key])
 
@@ -422,8 +433,9 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(1, len(self.jobs.values))
         self.assertEqual(ReportKind.NORMAL, self.jobs.values['0']['request'].kind)
         self.assertIsNone(self.dispatch.lookup(self.models)['error'])
-        self.assertFalse(self.dispatch.warm_allowed)
+        self.assertTrue(self.dispatch.warm_allowed)
         self.dispatch.tick(ready=False)
+        self.assertFalse(self.dispatch.warm_allowed)
         self.now += 2 * 86400
         self.dispatch.tick(ready=False)
         lookup = self.dispatch.lookup(self.models)
@@ -480,6 +492,23 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.entries[inactive]['job'] = key
         self.dispatch.tick()
         self.assertEqual(0, self.jobs.priorities[key])
+
+    def test_optional_default_stats_goal_does_not_replace_a_foreground_scope(self):
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        dispatch = DataDispatcher(jobs, clock=lambda: self.now)
+        focus = ReportRequest(ReportKind.AI_STATS, stats_scope='7-days')
+        dispatch.interest('tab', 'ai-stats', True, focus)
+        dispatch.tick(identity='source')
+        key = dispatch.entries[focus]['job']
+        self.now += 15
+        dispatch.tick()  # Models.
+        self.now += 15
+        dispatch.tick()  # Default Stats.
+
+        self.assertEqual(key, dispatch.entries[ReportRequest(ReportKind.AI_STATS)]['job'])
+        self.assertEqual('7-days', jobs._jobs[key]['request'].stats_scope)
+        self.assertEqual(('7-days', '30-days'), jobs._jobs[key]['goals'])
 
     def test_managed_terminal_jobs_never_override_dispatcher_invalidation(self):
         jobs = ReportJobs()
@@ -608,6 +637,33 @@ class DispatcherTests(unittest.TestCase):
 
 
 class QuantumProcessTests(unittest.TestCase):
+    def test_two_background_reports_make_real_progress_during_a_long_foreground_scan(self):
+        jobs = ReportJobs(target=quantum_report)
+        self.addCleanup(jobs.close)
+        foreground = jobs.submit(ManagedReport(ReportKind.COMPARISONS, comparison_offset=20))
+        requested = jobs.submit(ManagedReport())
+        warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.prioritize({foreground: 0, requested: 1, warm: 2})
+        before = time.monotonic()
+        deadline = before + 12
+        first_foreground = None
+        background_progress = set()
+
+        with patch('src.web.jobs.BACKGROUND_TURN_SECONDS', .15):
+            while time.monotonic() < deadline and jobs.snapshot(foreground)['status'] != 'complete':
+                jobs.tick()
+                if jobs.snapshot(foreground)['progress']['completed'] and first_foreground is None:
+                    first_foreground = time.monotonic() - before
+                for key in (requested, warm):
+                    if jobs.snapshot(key)['progress']['completed']:
+                        background_progress.add(key)
+                time.sleep(.01)
+
+        self.assertIsNotNone(first_foreground)
+        self.assertEqual({requested, warm}, background_progress)
+        self.assertEqual('complete', jobs.snapshot(foreground)['status'])
+        self.assertEqual(1, jobs.snapshot(foreground)['work']['slices'], 'foreground resumes its original stack')
+
     def test_background_paced_finite_work_really_parks_then_finishes_on_the_same_stack(self):
         jobs = ReportJobs(target=quantum_report)
         self.addCleanup(jobs.close)

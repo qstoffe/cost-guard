@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
+from src.analysis.account_timeline import PERIODS
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_quota import source_scope
@@ -73,18 +74,19 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def tick_account_timeline(self, frame, demand, *, available, terminal):
         service = self.report_service
-        periods = demand()
+        foreground = demand()
         source = source_scope(service.source)
         observation = self.catalog_observation
         available = available and observation is not None and observation.source_epoch == source[-1]
         identified = source[0] != 'opencode-v2' or source[-1] is not None
         return self.account_timeline.tick(source=source if identified else None, observation=observation,
-            accounts=frame.quota.accounts if frame and frame.quota else (), periods=periods,
+            accounts=frame.quota.accounts if frame and frame.quota else (), periods=frozenset(PERIODS),
             zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
             prices=getattr(service.comparison_pricing_provider, 'cached_catalog', lambda: None),
             migration_gap=service.selection.migration_gap, now_ms=int(self.clock_ms()),
             available=available, terminal=terminal, card_today=self.card_today,
-            shared_roots=self.history_roots if self.history_source == source else None)
+            shared_roots=self.history_roots if self.history_source == source else None,
+            foreground=foreground, require_background_prices=True)
 
     def _record_refresh_duration(self, seconds):
         if not self.card_timing_observed:
