@@ -401,6 +401,7 @@ def current_union_message_to_legacy_bundle(
             state = dict(part.get("state")) if isinstance(part.get("state"), Mapping) else {}
             state_time = dict(state.get("time")) if isinstance(state.get("time"), Mapping) else {}
             part["execution_started_at_ms"] = native_time.get("ran", state_time.get("start"))
+            part["execution_ended_at_ms"] = native_time.get("completed", state_time.get("end"))
             created = native_time.get("ran", native_time.get("created", part["time"].get("start")))
             completed = native_time.get("completed", part["time"].get("end"))
             if created is not None:

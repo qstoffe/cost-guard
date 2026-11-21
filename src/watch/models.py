@@ -28,6 +28,15 @@ class ToolOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class ShellTiming:
+    """Running-only source anchors and qualified historical summary, never input."""
+    anchor: str = ""
+    timeout_ms: int | float | None = None
+    estimated_duration_ms: int | None = None
+    sample_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class ToolInvocation:
     """Bounded, privacy-filtered source input; never raw tool data or output."""
     identity: str
@@ -37,6 +46,7 @@ class ToolInvocation:
     kind: str = ""
     started_at_ms: int = 0
     mode: str = "foreground"
+    shell_timing: ShellTiming | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,6 +15,10 @@ def observe_invocations(view):
                     assert card["state"] == "observed" and row["prompt"]["in_progress"]
                     assert not row["prompt"]["execution_unverified"]
                     expected = base | {"kind", "started_at_ms", "mode", "display"} if plural else base
+                    timing = detail.get("shell_timing")
+                    if plural and timing:
+                        expected = expected | {"shell_timing"}
+                        assert set(timing) == {"anchor", "timeout_ms", "estimated_duration_ms", "sample_count"}
                     assert set(detail) == expected
                     assert len(detail["identity"]) == len(detail["revision"]) == 64
                     assert len(json.dumps(detail)) < 10_000

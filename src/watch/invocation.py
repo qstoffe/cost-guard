@@ -13,6 +13,7 @@ from dataclasses import replace
 
 from .models import ToolFailure, ToolInvocation
 from .invocation_redaction import redact
+from .shell_timing import SHELL_TOOLS, foreground_start, native_timeout, physical_key, shell_kind, source_scope
 from .tool_contracts import tool_input
 
 MAX_INPUT_TEXT = 4096  # ASCII-escaped formatted text; wire escaping is bounded.
@@ -23,7 +24,6 @@ _FIELDS = (
     "pattern", "path", "include", "glob", "filePath", "offset", "limit",
     "literal", "caseSensitive", "hidden", "recursive", "maxResults",
 )
-_SHELL = frozenset({'shell', 'bash', 'functions.shell', 'functions.bash'})
 _SECRET_FIELDS = frozenset({'env', 'environment', 'headers', 'authorization', 'cookie',
                             'password', 'secret', 'token', 'api_key', 'apiKey', 'credentials'})
 
@@ -94,18 +94,36 @@ def _format(inputs, shell, budget):
     return text, qualification
 
 
-def invocation(part, *, budget=MAX_INPUT_TEXT) -> ToolInvocation:
-    """Copy only small, supported scalar input fields; never inspect huge values."""
-    kind = str(part.data.get('tool') or part.data.get('name') or '').lower()
-    text, qualification = _format(tool_input(part.data), kind in _SHELL, budget)
+def _part_detail(part, kind, inputs, budget, start, timing=None):
+    if timing and timing.timeout_ms is not None:
+        inputs = {key: value for key, value in inputs.items() if key != 'timeout'}
+    text, qualification = _format(inputs, kind in SHELL_TOOLS, budget)
     origin = part.provenance
     call_id = part.data.get("callID")
     has_call = isinstance(call_id, str) and bool(call_id)
     physical = ("call", call_id) if has_call else ("part", part.part_id)
     identity = _digest((origin.source_type, origin.source_generation, origin.source_instance,
                         part.session_id, physical))
-    revision = _digest((part.updated_at_ms, text, qualification))
-    return ToolInvocation(identity, revision, text, qualification, kind, part.created_at_ms)
+    revision = _digest((part.updated_at_ms, text, qualification, start, repr(timing)))
+    return ToolInvocation(identity, revision, text, qualification, kind, start, shell_timing=timing)
+
+
+def invocation(part, *, budget=MAX_INPUT_TEXT) -> ToolInvocation:
+    """Copy only small, supported scalar input fields; never inspect huge values."""
+    return _part_detail(part, shell_kind(part), tool_input(part.data), budget, part.created_at_ms)
+
+
+def running_invocation(part, origin, history, *, budget, fallback_start):
+    if source_scope(part.provenance) != source_scope(origin) or not physical_key(part):
+        return None
+    kind = shell_kind(part)
+    inputs = tool_input(part.data)
+    if kind not in SHELL_TOOLS:
+        return _part_detail(part, kind, inputs, budget, fallback_start)
+    start, anchor = foreground_start(part)
+    timing = history.timing(part, inputs, start=start, anchor=anchor, mode='foreground',
+                            comparable=inputs.get('background') is not True and not part.data.get('detached_job'))
+    return _part_detail(part, kind, inputs, budget, start or fallback_start, timing)
 
 
 def failed_invocations(parts, origin, *, budget=MAX_INPUT_TEXT):
@@ -153,7 +171,7 @@ def terminal_invocation(name, outcome, part, origin):
            ("identity", "revision", "text", "qualification", "started_at_ms")})
 
 
-def background_invocations(snapshot, messages, parts, *, other_count=0):
+def background_invocations(snapshot, messages, parts, history, *, other_count=0):
     """Separate live jobs using prompt-qualified origins, never kind/time guesses."""
     owners = {(message.session_id, message.message_id) for message in messages}
     jobs = {}
@@ -164,7 +182,8 @@ def background_invocations(snapshot, messages, parts, *, other_count=0):
                 jobs[key] = job
             elif jobs[key] != job:
                 jobs[key] = replace(job, tool_call_id='', tool_part_id='', invocation_input=(),
-                                    invocation_reason='Conflicting job origins; command withheld.')
+                                    invocation_reason='Conflicting job origins; command withheld.',
+                                    invocation_start_kind='')
     ordered = sorted(jobs.values(), key=lambda job: (job.started_at_ms, job.session_id, job.activity_id))
     budget = MAX_INPUT_TEXT // max(1, min(len(ordered), MAX_INVOCATIONS) + other_count)
     details = []
@@ -178,35 +197,52 @@ def background_invocations(snapshot, messages, parts, *, other_count=0):
         fallback = dict(job.invocation_input)
         reason = job.invocation_reason
         native_command, registry_command = inputs.get('command'), fallback.get('command')
+        part = matched[0] if len(matched) == 1 else None
+        if len(matched) > 1:
+            reason = 'Conflicting call links; command withheld.'
         if len(matched) == 1:
-            part = matched[0]
             source = part.provenance
             if ((job.tool_part_id and part.part_id != job.tool_part_id)
-                    or (source.source_type, source.source_generation, source.source_instance) !=
-                       (origin.source_type, origin.source_generation, origin.source_instance)):
+                    or source_scope(source) != source_scope(origin)
+                    or job.kind in SHELL_TOOLS and shell_kind(part) != job.kind):
                 reason = 'Conflicting source identity; command withheld.'
-        command_mismatch = native_command and registry_command and native_command != registry_command
+        command_mismatch = isinstance(native_command, str) and native_command and registry_command and native_command != registry_command
+        directory = inputs.get('workdir') or inputs.get('cwd')
+        launch_mismatch = (directory and fallback.get('cwd') and directory != fallback['cwd']
+                           or inputs.get('shell') and fallback.get('shell') and inputs['shell'] != fallback['shell'])
+        shell = job.kind in SHELL_TOOLS
+        # Even if the executed command differs, the exact linked launch input
+        # can still provide its outer timeout. Never join a registry timeout.
+        timing = (history.timing(part, inputs, start=job.started_at_ms, anchor=job.invocation_start_kind,
+                                mode='background', comparable=not (command_mismatch or launch_mismatch))
+                  if shell and not reason and (job.invocation_start_kind or native_timeout(inputs) is not None)
+                  else None)
+        public_inputs = ({key: value for key, value in inputs.items() if key != 'timeout'}
+                         if timing and timing.timeout_ms is not None else inputs)
         if reason:
             text, qualification = '', reason
-        elif command_mismatch:
+        elif command_mismatch or launch_mismatch:
             # Original input and the executed registry representation can differ
             # (e.g. runtime wrappers). Never guess equivalence or mix their fields.
-            text, qualification = _format(inputs, job.kind in _SHELL, budget)
+            text, qualification = _format(public_inputs, shell, budget)
+            mismatch = 'command' if command_mismatch else 'shell or workdir'
             qualification = ' '.join(filter(None, (qualification,
-                'Original tool input shown; registry command differs. Registry details withheld; executed form not verified.')))
+                f'Original tool input shown; registry {mismatch} differs. Registry details withheld; executed form not verified.')))
         elif len(matched) == 1 or fallback:
             # Registry fields are supplemental only after the adapter proves the
             # exact job + session + assistant-message join. Native input wins.
-            combined = {**fallback, **inputs}
-            if not inputs.get('command') and registry_command:
+            combined = {**fallback, **public_inputs}
+            if (not isinstance(native_command, str) or not native_command) and registry_command:
                 combined['command'] = registry_command
-            text, qualification = _format(combined, job.kind in _SHELL, budget)
+            text, qualification = _format(combined, shell, budget)
         else:
             text, qualification = '', 'Original call link missing; only background activity is observable.'
+        if not reason and job.invocation_registry_unlinked and not (isinstance(native_command, str) and native_command):
+            qualification += ' Registry command not safely linked to this session.'
         identity = _digest((origin.source_type, origin.source_generation, origin.source_instance,
                             job.session_id, 'background', job.activity_id))
         revision = _digest((job.owner_message_id, job.tool_part_id, job.tool_call_id,
-                            text, qualification, job.started_at_ms))
+                             text, qualification, job.started_at_ms, repr(timing)))
         details.append(ToolInvocation(identity, revision, text, qualification, job.kind,
-                                      job.started_at_ms, 'background'))
+                                       job.started_at_ms, 'background', timing))
     return tuple(details), len(ordered)
