@@ -348,8 +348,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                            dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False,
                                 acquiring=False))
                 return
-            if self.path == '/api/detail/export':
-                self.server.exports.handle(self, value)
+            if self.path in ('/api/detail/export', '/api/cache/session-detail/export'):
+                self.server.exports.handle(self, value, cached=self.path == '/api/cache/session-detail/export')
                 return
             if self.path == '/api/models/benchmark/refresh':
                 lane = getattr(self.server.lifecycle, 'benchmark', None)
@@ -407,6 +407,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/cache/session-detail":
                 self.cached_sessions(value, detail=True)
+                return
+            if self.path == "/api/cache/session-detail/demand":
+                self.cached_detail_demand(value)
                 return
             if self.path == "/api/cache/sessions/clear":
                 self.clear_cached_sessions(value)
@@ -570,6 +573,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(503, {"error": "cache_source_unbound"})
             else:
                 self.reply(200, result)
+
+    def cached_detail_demand(self, value):
+        if (set(value) != {"session_id", "binding"} or not isinstance(value["session_id"], str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", value["session_id"])
+                or not isinstance(value["binding"], str) or not re.fullmatch(r"[a-f0-9]{32}", value["binding"])):
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        catalog = getattr(getattr(owner, "live", None), "catalog", None)
+        if archive is None or catalog is None or not getattr(owner, "cached_sessions_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        prioritized = archive.prioritize_detail(catalog, value["binding"], value["session_id"])
+        if prioritized is None:
+            self.reply(409, {"error": "cache_source_unbound"})
+        else:
+            self.reply(202, {"prioritized": prioritized})
 
     def clear_cached_sessions(self, value=None):
         owner = self.server.lifecycle

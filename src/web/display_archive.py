@@ -84,7 +84,8 @@ class DisplayArchive:
               or observation is None or observation is self._observing[1]
               or isinstance(source, OpenCodeV2Source) and observation.source_epoch != binding.source_epoch):
             return
-        self._set_binding(binding, service.timezone_id, coverage_supported=isinstance(source, OpenCodeV1Source))
+        self._set_binding(binding, service.timezone_id, coverage_supported=isinstance(source, OpenCodeV1Source),
+                          native_export_supported=isinstance(source, OpenCodeV2Source))
 
     def unbind(self):
         self._set_binding(None)
@@ -119,7 +120,7 @@ class DisplayArchive:
             return False  # No failed or partial transaction becomes a cache event.
         return True
 
-    def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False):
+    def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False, native_export_supported=False):
         if binding == self._binding:
             return
         self.views = None
@@ -129,7 +130,8 @@ class DisplayArchive:
             return
         epoch = uuid4().hex
         self.views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
-                                        coverage_supported=coverage_supported)
+                                        coverage_supported=coverage_supported,
+                                        native_export_supported=native_export_supported)
         self.sessions.bind(binding.scope, epoch, announce=True)
 
     def _writer_binding(self, service):
@@ -196,6 +198,23 @@ class DisplayArchive:
         return (self.views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
                 and self.sessions.observation_fence(catalog.observation_sequence) is not None
                 and self.sweep.priority_due(catalog))
+
+    def prioritize_detail(self, catalog, binding, session_id):
+        views = self.views
+        if views is None or views.binding != binding:
+            return None
+        def eligible():
+            return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) is not None
+        return self.sweep.prioritize_detail(catalog, session_id, eligible=eligible)
+
+    def export_epoch(self, service, views):
+        """Only the currently authorized V2 partition can authorize native export."""
+        if (views.native_export_supported and self.views is views
+                and self._writer_binding(service) == (views.source, views.binding)):
+            binding = self._binding
+            if binding is not None and binding.scope == views.source and self.views is views:
+                return binding.source_epoch
+        return None
 
     def coverage_pending(self, catalog):
         views = self.views

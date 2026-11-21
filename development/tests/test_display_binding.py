@@ -283,7 +283,7 @@ class DisplayBindingTests(unittest.TestCase):
             with database.connect() as db:
                 self.assertEqual(0, db.execute("SELECT count(*) FROM cache_entries").fetchone()[0])
 
-    def test_unreadable_first_root_does_not_starve_later_roots(self):
+    def test_unreadable_first_root_does_not_starve_later_roots_without_typed_proof(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             driver = v1_driver(root)
@@ -317,8 +317,40 @@ class DisplayBindingTests(unittest.TestCase):
                 archive.acquire_summaries(catalog, service)
                 archive.acquire_summaries(catalog, service)
 
-            self.assertEqual(["a", "b", "c", "a"], calls)
+            # Scalar-only b/c results can be displayed, but cannot create a
+            # completion marker that permanently skips their typed acquisition.
+            self.assertEqual(["a", "b", "c", "a", "b"], calls)
             self.assertEqual(["b", "c"], [row["session_id"] for row in archive.views.page(period="all")["rows"]])
+            self.assertEqual("pending", archive.views.detail(session_id="b")["history_coverage"])
+
+    def test_detail_priority_is_source_bound_coalesced_and_keeps_existing_cooldown(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = DisplayArchive(root, lambda *_: None)
+            self.addCleanup(archive.close)
+            archive.initialize()
+            archive.observe(v1_driver(root), before_tick=True)
+            binding = archive.views.binding
+            catalog = SessionCatalog(clock=lambda: 100, clock_ms=lambda: 50_000)
+            roots = tuple(NormalizedSession(key, key, 1, 2, Provenance("fixture", key), SessionCapabilities())
+                          for key in ("a", "b"))
+            catalog.observe(CatalogObservation(roots, (), {}, {"a": "r1", "b": "r2"}))
+            with catalog.lock:
+                catalog._archive_priority("a")
+                catalog._archive_priority("b", delay=15, attempts=2)
+
+            wrong_binding = archive.prioritize_detail(catalog, "retired", "a")
+            prioritized = archive.prioritize_detail(catalog, binding, "b")
+            duplicate = archive.prioritize_detail(catalog, binding, "b")
+            absent = archive.prioritize_detail(catalog, binding, "missing")
+            queued = tuple(catalog.archive_urgent.items())
+            first = archive.sweep._urgent(catalog, (binding, 0))
+
+            self.assertIsNone(wrong_binding)
+            self.assertTrue(prioritized and duplicate)
+            self.assertFalse(absent)
+            self.assertEqual((("b", (115, 2)), ("a", (100, 0))), queued)
+            self.assertEqual("a", first[0])
 
     def test_same_revision_terminal_waits_for_linked_work_and_retries_without_losing_the_prior_clock(self):
         with TemporaryDirectory() as tmp:

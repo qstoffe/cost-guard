@@ -527,6 +527,7 @@ const SessionDetail = (() => {
       this.root.setAttribute('aria-label', 'Session detail');
       this.back = el('a', '↩ Back to Show All Sessions'); this.back.href = '#/sessions';
       this.heading = el('h1', 'Session detail');
+      this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id, true);
       this.summary = el('p'); this.status = el('p');
       this.status.setAttribute('role', 'status');
       const table = el('table'), head = el('thead'), header = el('tr');
@@ -540,6 +541,11 @@ const SessionDetail = (() => {
       this.previous = this.pageButton('Previous', -1); this.next = this.pageButton('Next', 1);
       this.range = el('span'); this.pager.append(this.previous, this.range, this.next);
       this.root.append(this.back, this.heading, this.summary, this.status, this.table, this.pager);
+      if (this.exporter) this.heading.after(this.exporter.root);
+      this.resumePaint = () => queueMicrotask(() => {
+        if (this.attached && this.pendingRender && this.data) this.paint(this.data);
+      });
+      this.root.addEventListener('focusout', this.resumePaint);
       this.reset('No cached detail yet.');
     }
     pageButton(label, delta) {
@@ -554,20 +560,26 @@ const SessionDetail = (() => {
     }
     attach(parent) {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
-      if (!this.attached) { this.attached = true; this.catchUp(); }
+      if (!this.attached) {
+        this.attached = true; document.addEventListener('selectionchange', this.resumePaint); this.catchUp();
+      }
     }
-    detach() { this.attached = false; this.retire(); }
+    detach() {
+      this.attached = false; this.retire(); this.exporter?.close(); this.demanded = null;
+      document.removeEventListener('selectionchange', this.resumePaint);
+    }
     retire() {
       this.flight?.abort(); this.flight = null;
       clearTimeout(this.timer); this.timer = null;
     }
     reset(message) {
-      this.data = null; this.heading.textContent = 'Session detail';
+      this.data = null; this.pendingRender = false; this.heading.textContent = 'Session detail';
+      this.exporter?.close();
       ReportView.text(this.summary, ''); ReportView.text(this.status, message); this.range.textContent = '';
       ContextHelp.dismiss(this.body); this.body.replaceChildren();
       this.previous.disabled = this.next.disabled = true;
     }
-    invalidateValues() { this.retire(); this.hint = null; this.reset('Session cache unavailable.'); }
+    invalidateValues() { this.retire(); this.hint = null; this.demanded = null; this.reset('Session cache unavailable.'); }
     updateInvocations() {} // Committed history cannot assert active invocation state.
     wake() {} // Source signals never supply facts to the cache-only view.
     cacheHint(hint, resync = false) {
@@ -610,8 +622,15 @@ const SessionDetail = (() => {
     paint(data) {
       const summary = data.summary, previous = this.data;
       this.data = data;
-      if (previous?.binding === data.binding && previous.generation === data.generation &&
+      this.exporter?.update(data.binding, data.export_supported === true, summary?.title);
+      if (['pending', 'retained'].includes(data.history_coverage) && summary?.source_present !== false &&
+          data.binding && this.demanded !== data.binding) {
+        this.demanded = data.binding;
+        this.api('/api/cache/session-detail/demand', {binding: data.binding, session_id: this.id}).catch(() => {});
+      }
+      if (!this.pendingRender && previous?.binding === data.binding && previous.generation === data.generation &&
           previous.offset === data.offset) return;
+      this.pendingRender = false;
       ReportView.text(this.heading, summary?.title || 'Session detail');
       ReportView.text(this.summary, () => summary ?
         `Total CCost: ${ReportView.display(summary, 'ccost')} · Ctx: ${ReportView.display(summary, 'context_tokens')}` : '');
@@ -622,12 +641,18 @@ const SessionDetail = (() => {
         !data.cached_total ? (data.history_coverage === 'as-of' ? 'No cached prompts for this session.' : 'No cached detail yet.') : '';
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(data.rows.map(row => row.event_id));
-      for (const [id, row] of old) if (!wanted.has(id)) { ContextHelp.dismiss(row); row.remove(); }
+      const protectedNode = protection();
+      let deferOrder = false;
+      for (const [id, row] of old) if (!wanted.has(id)) {
+        if (protectedNode(row)) { this.pendingRender = true; deferOrder = true; }
+        else { ContextHelp.dismiss(row); row.remove(); }
+      }
       data.rows.forEach((value, index) => {
         const row = old.get(value.event_id) || el('tr');
         row.dataset.id = value.event_id;
         const signature = JSON.stringify(value);
-        if (row.signature !== signature && !protection()(row)) {
+        if (row.signature !== signature && protectedNode(row)) this.pendingRender = true;
+        else if (row.signature !== signature) {
           const detail = {...value, prompt_number: value.number, watch_model: value.model, watch_effort: value.effort,
             label: value.kind === 'compaction' ? 'Compaction' : value.kind === 'subtask' ? 'Subtask' : 'Prompt',
             in_progress: false, execution_unverified: value.outcome === 'unverified'};
@@ -636,10 +661,13 @@ const SessionDetail = (() => {
           }));
           row.signature = signature;
         }
-        if (this.body.children[index] !== row) {
+        if (deferOrder) {
+          if (!row.parentNode) this.body.append(row);
+        } else if (this.body.children[index] !== row) {
           const before = this.body.children[index] || null;
           if (row.parentNode && this.body.moveBefore) this.body.moveBefore(row, before);
-          else if (!protection()(row)) this.body.insertBefore(row, before);
+          else if (!protectedNode(row)) this.body.insertBefore(row, before);
+          else this.pendingRender = true;
         }
       });
       this.range.textContent = data.rows.length ? `${data.offset + 1}–${data.offset + data.rows.length} of ${data.cached_total} cached events` : '';

@@ -16,7 +16,7 @@ SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
-PROJECTION_REVISION = "sessions-countable-requests-5"
+PROJECTION_REVISION = "sessions-qualified-detail-6"
 
 
 def scalar_dependency(service):
@@ -65,6 +65,20 @@ class SessionArchiveSweep:
         with catalog.lock:
             now = catalog.clock()
             return any(ready <= now for ready, _ in catalog.archive_urgent.values())
+
+    def prioritize_detail(self, catalog, key, *, eligible):
+        """A view hint can reorder existing work, but never open the source."""
+        if not catalog.lock.acquire(blocking=False):
+            return False
+        try:
+            if catalog.state != "observed" or not eligible() or self._candidate(catalog, key) is None:
+                return False
+            if key not in catalog.archive_urgent:
+                catalog._archive_priority(key)
+            catalog.archive_urgent.move_to_end(key, last=False)
+            return True
+        finally:
+            catalog.lock.release()
 
     @staticmethod
     def _catalog_key(catalog, binding):
@@ -222,6 +236,7 @@ class SessionArchiveSweep:
 
         published = actual == revision and archive.publish_summary(
             service, admission, row, actual, eligible=eligible,
-            dependency=checkpoint_dependency(base, authorities, candidate.terminal), usage=usage)
-        return (published and not row.running and not row.ccost_unavailable and row.complete
-                and row.activity_qualified and row.context_qualified and not row.model_pending)
+            dependency=checkpoint_dependency(base, authorities, candidate.terminal) if usage is not None else None,
+            usage=usage)
+        return (published and usage is not None and not row.running and not row.ccost_unavailable and row.complete
+                 and row.activity_qualified and row.context_qualified and not row.model_pending)

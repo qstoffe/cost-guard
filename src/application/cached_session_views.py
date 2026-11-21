@@ -45,6 +45,7 @@ class CachedSessionViews:
     timezone_id: str
     binding: str = ""
     coverage_supported: bool = False
+    native_export_supported: bool = False
 
     def detail(self, *, session_id, offset=0):
         if (not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id)
@@ -66,7 +67,9 @@ class CachedSessionViews:
             token_mix_percent=tuple(map(int, row.mix.split(","))) if row.mix else None), self.timezone_id).to_json()
             for row in rows]
         return dict(binding=self.binding, generation=generation, session_id=session_id, offset=offset,
-                    size=PAGE_SIZE, cached_total=count, summary=summary, history_coverage=status, rows=displayed)
+                    size=PAGE_SIZE, cached_total=count, summary=summary, history_coverage=status, rows=displayed,
+                    export_supported=(self.native_export_supported and bool(summary and summary["source_present"])
+                                      and bool(re.fullmatch(r"ses_[A-Za-z0-9_-]{1,160}", session_id))))
 
     def page(self, *, period="today", sort="activity", direction=-1, offset=0, known=None, now_ms=None):
         if (period not in PERIODS or sort not in SORT_COLUMNS or type(direction) is not int

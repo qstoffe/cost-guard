@@ -664,6 +664,12 @@ class DisplayHistory:
             """, (source, root)).fetchone()[0]
             return state.generation, header, count, prompt_page(db, source, root, limit, offset)
 
+    def has_present_session(self, source, root):
+        with self._connect(read=True) as db:
+            return db.execute("""
+                SELECT 1 FROM sessions WHERE source=? AND session_id=? AND source_present=1
+            """, (source, root)).fetchone() is not None
+
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""
         if not source or type(previous) is not int or previous < 0:
