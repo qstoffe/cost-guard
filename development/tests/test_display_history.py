@@ -1,5 +1,6 @@
 """Exercise the real display-history database without an OpenCode installation."""
 from contextlib import closing
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 import sqlite3
@@ -9,7 +10,8 @@ import unittest
 from src.application.session_archive_projection import SessionPublication
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.cached_session_views import CachedSessionViews
-from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+from src.cache.display_history import DisplayHistory, SessionChange, SessionCheckpoint, SessionFact
+from src.domain.reference_cost import ReferenceCostIssue
 from src.reports.models import SessionUsageRow
 
 
@@ -75,9 +77,9 @@ class DisplayHistoryTests(unittest.TestCase):
         self.history.commit_sessions("other", (SessionChange(SessionFact("id", "r1", "Other"), None),))
         provisional = SessionChange(SessionFact("id", "r2", "Renamed"), "r1", frozenset())
         self.history.commit_sessions("first", (provisional,))
-        self.assertIsNone(self.history.commit_sessions("first", missing=(("id", "r1"),)))
+        self.assertIsNone(self.history.commit_sessions("first", missing=(("id", SessionCheckpoint("r1", 0)),)))
 
-        self.assertEqual(3, self.history.commit_sessions("first", missing=(("id", "r2"),)))
+        self.assertEqual(3, self.history.commit_sessions("first", missing=(("id", SessionCheckpoint("r2", 0)),)))
         restarted = DisplayHistory(self.root)
         restarted.initialize()
         page = restarted.session_page("first", start_ms=123, end_ms=124)
@@ -107,7 +109,7 @@ class DisplayHistoryTests(unittest.TestCase):
 
     def test_failed_batch_does_not_publish_partial_rows_or_generation(self):
         self.history.commit_sessions("source", (SessionChange(SessionFact("a", "r1", "A"), None),))
-        good = SessionChange(SessionFact("b", "r1", "B"), None)
+        good = SessionChange(SessionFact("b", "r1", "B"), None, dependency="pricing", previous_progress=0)
         invalid = SessionChange(SessionFact("c", "r1", "C", ccost=Decimal("NaN")), None)
 
         with self.assertRaisesRegex(ValueError, "invalid_cost"):
@@ -116,6 +118,7 @@ class DisplayHistoryTests(unittest.TestCase):
 
         self.assertEqual(1, page.generation)
         self.assertEqual(["a"], [row.session_id for row in page.rows])
+        self.assertEqual(set(), self.history.completed_sessions("source", {"b": "r1"}, "pricing"))
 
     def test_reader_stays_on_committed_snapshot_while_writer_holds_wal_lock(self):
         self.history.commit_sessions("source", (SessionChange(SessionFact("a", "r1", "A"), None),))
@@ -187,7 +190,7 @@ class DisplayHistoryTests(unittest.TestCase):
             missing.initialize()
 
     def test_confirmed_clear_is_source_scoped_and_rejects_pre_clear_work(self):
-        first = SessionChange(SessionFact("id", "r1", "Old"), None)
+        first = SessionChange(SessionFact("id", "r1", "Old"), None, dependency="pricing", previous_progress=0)
         self.history.commit_sessions("chosen", (first,))
         self.history.commit_sessions("other", (first,))
         stale_confirmation = self.history.source_state("chosen")
@@ -204,14 +207,16 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual((3, 1), (cleared.generation, cleared.archive_epoch))
         self.assertEqual(0, self.history.session_page("chosen").total)
         self.assertEqual(1, self.history.session_page("other").total)
+        self.assertEqual(set(), self.history.completed_sessions("chosen", {"id": "r1"}, "pricing"))
+        self.assertEqual({"id"}, self.history.completed_sessions("other", {"id": "r1"}, "pricing"))
         self.assertTrue(self.history.session_changes("chosen", confirmed.generation).resync)
         self.assertEqual(4, self.history.commit_sessions("chosen", (first,), archive_epoch=cleared.archive_epoch))
 
     def test_qualified_new_revision_from_partial_summary_retains_existing_fields(self):
         self.history.commit_sessions("source", (SessionChange(
             SessionFact("session", "old", "First title", ccost=Decimal("2.43"), context_tokens=48), None),))
-        revisions = self.history.session_revisions("source", ("missing", "session"))
-        proof = SessionPublication("session", "new", "observation", revisions["session"])
+        checkpoints = self.history.session_checkpoints("source", ("missing", "session"))
+        proof = SessionPublication("session", "new", "observation", checkpoints["session"])
         row = SessionUsageRow("session", "Current title", "Current model", False, Decimal("0.3"), 1,
             complete=False, context_qualified=False, last_activity_ms=498, activity_latest_ms=500)
 
@@ -219,19 +224,78 @@ class DisplayHistoryTests(unittest.TestCase):
         self.history.commit_sessions("source", (update,))
         snapshot, = self.history.session_page("source", start_ms=500, end_ms=501).rows
 
-        self.assertEqual({"session": "old"}, revisions)
+        self.assertEqual({"session": SessionCheckpoint("old", 0)}, checkpoints)
         self.assertEqual(("Current title", "Current model", "2.43", None, 48, 498, 500),
                          (snapshot.title, snapshot.model, snapshot.ccost, snapshot.prompts, snapshot.context_tokens,
                           snapshot.activity_ms, snapshot.latest_activity_ms))
 
     def test_rejected_revision_or_live_summary_never_becomes_archived_history(self):
-        proof = SessionPublication("session", "r2", "observation", "persisted")
+        proof = SessionPublication("session", "r2", "observation", SessionCheckpoint("persisted", 0))
         settled = SessionUsageRow("session", "Title", "Model", False, Decimal("1"), 1)
         running = SessionUsageRow("session", "Title", "Model", False, Decimal("0"), 1, running=True)
 
         self.assertIsNone(proof.project(settled, current_revision="r3", current_epoch="observation"))
         self.assertIsNone(proof.project(settled, current_revision="r2", current_epoch="other"))
         self.assertIsNone(proof.project(running, current_revision="r2", current_epoch="observation"))
+
+    def test_version_one_upgrade_keeps_rows_without_inventing_work_progress(self):
+        original = SessionFact("root", "r1", "Saved title", ccost=Decimal("2.43"))
+        self.history.commit_sessions("source", (SessionChange(original, None),))
+        with closing(sqlite3.connect(self.history.path, isolation_level=None)) as db:
+            db.executescript("DROP TABLE session_progress; PRAGMA user_version=1;")
+
+        reopened = DisplayHistory(self.root)
+        reopened.initialize()
+
+        page = reopened.session_page("source", sort="ccost")
+        self.assertEqual((1, "Saved title", "2.43"), (page.generation, page.rows[0].title, page.rows[0].ccost))
+        self.assertEqual({"root": SessionCheckpoint("r1", 0)}, reopened.session_checkpoints("source", ("root",)))
+        self.assertEqual(set(), reopened.completed_sessions("source", {"root": "r1"}, "pricing"))
+
+    def test_dependency_only_publication_survives_restart_and_rejects_stale_same_revision(self):
+        root = SessionFact("id", "r1", "Original", ccost=Decimal("2.43"))
+        self.history.commit_sessions("source", (SessionChange(root, None, dependency="price-a", previous_progress=0),))
+        update = SessionChange(root, "r1", dependency="price-b", previous_progress=1)
+        stale = SessionChange(replace(root, ccost=Decimal("0")), "r1", dependency="price-a", previous_progress=1)
+
+        self.assertIsNone(self.history.commit_sessions("source", (update,)))
+        self.assertIsNone(self.history.commit_sessions("source", (stale,)))
+        restarted = DisplayHistory(self.root)
+
+        self.assertEqual({"id"}, restarted.completed_sessions("source", {"id": "r1"}, "price-b"))
+        self.assertEqual(set(), restarted.completed_sessions("source", {"id": "r1"}, "price-a"))
+        self.assertEqual(set(), restarted.completed_sessions("source", {"id": "r2"}, "price-b"))
+        page = restarted.session_page("source")
+        self.assertEqual((1, "2.43"), (page.generation, page.rows[0].ccost))
+
+    def test_partial_same_revision_cost_proof_invalidates_the_marker_not_the_as_of_cost(self):
+        owner = SessionArchiveOwner(self.history, lambda *_: None)
+        owner.bind("source", "observation")
+        revisions = {"id": "r"}
+        settled = SessionUsageRow("id", "Original", "Model", False, Decimal("2.43"), 1)
+        owner.commit(owner.admit(revisions), {"id": settled}, revisions, dependency="price-a")
+        self.assertEqual({"id"}, self.history.completed_sessions("source", revisions, "price-a"))
+        partial = replace(settled, ccost=Decimal(0), ccost_unavailable=(ReferenceCostIssue("rate"),))
+
+        owner.commit(owner.admit(revisions), {"id": partial}, revisions, dependency="price-a")
+
+        self.assertEqual(set(), self.history.completed_sessions("source", revisions, "price-a"))
+        page = self.history.session_page("source")
+        self.assertEqual((1, "2.43"), (page.generation, page.rows[0].ccost))
+
+    def test_absence_invalidates_in_flight_progress_even_if_the_same_revision_returns(self):
+        root = SessionFact("id", "r1", "Original")
+        initial = SessionChange(root, None, dependency="pricing", previous_progress=0)
+        self.history.commit_sessions("source", (initial,))
+        stale = SessionChange(root, "r1", dependency="pricing", previous_progress=1)
+
+        self.history.commit_sessions("source", missing=(("id", SessionCheckpoint("r1", 1)),))
+        self.assertEqual(set(), self.history.completed_sessions("source", {"id": "r1"}, "pricing"))
+        self.history.commit_sessions("source", present=(("id", SessionCheckpoint("r1", 2)),))
+        self.history.commit_sessions("source", (stale,))
+
+        self.assertEqual(set(), self.history.completed_sessions("source", {"id": "r1"}, "pricing"))
+        self.assertTrue(self.history.session_page("source").rows[0].source_present)
 
     def test_owner_announces_only_committed_observations_and_refuses_old_binding(self):
         notifications = []

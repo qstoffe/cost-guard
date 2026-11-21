@@ -161,15 +161,15 @@ class DisplayArchive:
                 if (catalog.state != "observed" or catalog.last_observation is not observed
                         and self._catalog_key != (binding[1], catalog.membership_generation)):
                     return
-                missing = {key: revision for key, revision, present in batch if present and key not in catalog.roots}
+                missing = {key: checkpoint for key, checkpoint, present in batch if present and key not in catalog.roots}
             if self._writer_binding(service) != binding:
                 return
-            admission = self.sessions.admit(missing, binding=binding)
+            admission = self.sessions.admit({key: checkpoint.revision for key, checkpoint in missing.items()}, binding=binding)
             if admission is not None:
-                # Preserve the revision from the membership slice. Do not
+                # Preserve the checkpoint from the membership slice. Do not
                 # mark a later write absent on the strength of an old scan.
                 absent = tuple(proof.session_id for proof in admission.facts
-                               if proof.archived_revision == missing[proof.session_id])
+                               if proof.checkpoint == missing[proof.session_id])
                 self.sessions.commit(admission, {}, {}, missing=absent)
                 self._membership_after = batch[-1][0] if len(batch) == BATCH_LIMIT else None
 
@@ -188,7 +188,7 @@ class DisplayArchive:
         self._cache_write(admit)
         return admission
 
-    def publish_summary(self, service, admission, row, revision):
+    def publish_summary(self, service, admission, row, revision, *, dependency=None):
         if (admission is not None and self._writer_binding(service) == (admission.source, admission.epoch)):
             self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
-                                                           {row.session_id: revision}))
+                                                           {row.session_id: revision}, dependency=dependency))

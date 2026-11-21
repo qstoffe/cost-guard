@@ -7,7 +7,7 @@ from threading import Lock
 
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -66,6 +66,17 @@ class SessionChange:
     # Omitted fields carry forward as-of values; an explicitly observed None
     # can replace a field when a qualified correction says it is unknown.
     observed_fields: frozenset[str] = SAVED_FIELDS
+    # A complete scalar projection for an exact dependency, not history coverage.
+    dependency: str | None = None
+    # Guard same-revision changes, including dependency-only updates and
+    # observed gaps that leave the display row intact.
+    previous_progress: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SessionCheckpoint:
+    revision: str
+    progress: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +159,14 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
+            if (app_id, version) == (APPLICATION_ID, 1):
+                db.executescript(f"""
+                    BEGIN IMMEDIATE;
+                    {self._progress_schema()}
+                    PRAGMA user_version={SCHEMA_VERSION};
+                    COMMIT;
+                """)
+                return
             if (app_id, version) != (0, 0) or db.execute("SELECT 1 FROM sqlite_schema LIMIT 1").fetchone():
                 raise sqlite3.DatabaseError("unsupported_display_history_schema")
             db.execute("PRAGMA journal_mode=WAL")
@@ -181,9 +200,24 @@ class DisplayHistory:
                     PRIMARY KEY (source, session_id)
                 ) WITHOUT ROWID;
                 {self._sort_indexes()}
+                {self._progress_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
+
+    @staticmethod
+    def _progress_schema():
+        return """
+            CREATE TABLE IF NOT EXISTS session_progress (
+                source TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                revision TEXT NOT NULL,
+                dependency TEXT,
+                progress INTEGER NOT NULL,
+                PRIMARY KEY (source, session_id),
+                FOREIGN KEY (source, session_id) REFERENCES sessions(source, session_id) ON DELETE CASCADE
+            ) WITHOUT ROWID;
+        """
 
     @staticmethod
     def _sort_indexes():
@@ -196,7 +230,7 @@ class DisplayHistory:
     def commit_sessions(self, source, updates=(), *, missing=(), present=(), archive_epoch=0):
         """Apply qualified facts and membership changes, without deleting old values.
 
-        `missing` entries are (session_id, expected_revision) from a qualified
+        `missing` entries are (session_id, expected_checkpoint) from a qualified
         source membership observation, not a failed source request. Return the
         durable generation only when visible data changed, and only after COMMIT.
         """
@@ -216,19 +250,38 @@ class DisplayHistory:
             inserted = 0
             for change in updates:
                 session_id = change.fact.session_id
-                previous = self._activity(db, source, session_id)
-                if self._apply_session(db, source, change):
+                if change.dependency is not None and (not change.dependency or change.previous_progress is None
+                                                     or change.observed_fields != SAVED_FIELDS):
+                    raise ValueError("invalid_session_progress")
+                before = db.execute(f"""
+                    SELECT s.revision, s.{PERIOD_CLOCK}, coalesce(p.progress, 0)
+                    FROM sessions AS s LEFT JOIN session_progress AS p USING (source, session_id)
+                    WHERE s.source=? AND s.session_id=?
+                """, (source, session_id)).fetchone()
+                revision, clock, progress = before or (None, None, 0)
+                if (change.previous_revision != revision or
+                        change.previous_progress is not None and change.previous_progress != progress):
+                    continue
+                visible = self._apply_session(db, source, change)
+                if visible:
                     changed = True
-                    inserted += int(change.previous_revision is None)
-                    clocks.extend((previous, self._activity(db, source, session_id)))
+                    inserted += int(before is None)
+                    clocks.extend((clock, self._activity(db, source, session_id)))
+                if change.previous_progress is not None or (visible and progress):
+                    self._advance_progress(db, source, session_id, change.fact.revision, change.dependency)
             for membership, entries in ((0, missing), (1, present)):
-                for session_id, revision in entries:
+                for session_id, checkpoint in entries:
                     if db.execute("""
                         UPDATE sessions SET source_present=?
                         WHERE source=? AND session_id=? AND revision=? AND source_present<>?
-                    """, (membership, source, session_id, revision, membership)).rowcount:
+                            AND coalesce((SELECT progress FROM session_progress AS p
+                                WHERE p.source=sessions.source AND p.session_id=sessions.session_id), 0)=?
+                    """, (membership, source, session_id, checkpoint.revision, membership, checkpoint.progress)).rowcount:
                         changed = True
                         clocks.append(self._activity(db, source, session_id))
+                        # Returning under the same revision must not revive a
+                        # prior completion or accept an in-flight pre-gap read.
+                        self._advance_progress(db, source, session_id, checkpoint.revision, None)
             generation = None
             if changed:
                 db.execute("UPDATE sources SET generation=generation+1, session_count=session_count+? WHERE source=?",
@@ -241,6 +294,15 @@ class DisplayHistory:
                            (source, generation - CHANGE_WINDOW))
             db.commit()
             return generation
+
+    @staticmethod
+    def _advance_progress(db, source, session_id, revision, dependency):
+        db.execute("""
+            INSERT INTO session_progress(source, session_id, revision, dependency, progress)
+            VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT(source, session_id) DO UPDATE
+            SET revision=excluded.revision, dependency=excluded.dependency, progress=progress+1
+        """, (source, session_id, revision, dependency))
 
     def clear_confirmed_sessions(self, source, expected_state):
         """Storage step after external confirmation and acquisition quiescence.
@@ -320,29 +382,46 @@ class DisplayHistory:
         with self._connect(read=True) as db:
             return self._state(db, source)
 
-    def session_revisions(self, source, session_ids):
-        """Read only the persisted revisions needed for a bounded publication."""
+    def session_checkpoints(self, source, session_ids):
+        """Read the revision and scalar write guard for a bounded publication."""
         if not source or len(session_ids) > BATCH_LIMIT:
             raise ValueError("invalid_revision_query")
         if not session_ids:
             return {}
         marks = ",".join("?" for _ in session_ids)
         with self._connect(read=True) as db:
-            return dict(db.execute(f"""
-                SELECT session_id, revision FROM sessions
-                WHERE source=? AND session_id IN ({marks})
-            """, (source, *session_ids)))
+            return {key: SessionCheckpoint(revision, progress) for key, revision, progress in db.execute(f"""
+                SELECT s.session_id, s.revision, coalesce(p.progress, 0)
+                FROM sessions AS s LEFT JOIN session_progress AS p USING (source, session_id)
+                WHERE s.source=? AND s.session_id IN ({marks})
+            """, (source, *session_ids))}
 
     def session_membership_slice(self, source, after):
         """Keyset walk for restart-safe reconciliation, independent of UI paging."""
         if not source or not isinstance(after, str):
             raise ValueError("invalid_membership_query")
         with self._connect(read=True) as db:
-            return tuple(db.execute("""
-                SELECT session_id, revision, source_present FROM sessions
-                WHERE source=? AND session_id>?
-                ORDER BY session_id LIMIT ?
-            """, (source, after, BATCH_LIMIT)))
+            rows = db.execute("""
+                SELECT s.session_id, s.revision, coalesce(p.progress, 0), s.source_present
+                FROM sessions AS s LEFT JOIN session_progress AS p USING (source, session_id)
+                WHERE s.source=? AND s.session_id>?
+                ORDER BY s.session_id LIMIT ?
+            """, (source, after, BATCH_LIMIT))
+            return tuple((key, SessionCheckpoint(revision, progress), present) for key, revision, progress, present in rows)
+
+    def completed_sessions(self, source, revisions, dependency):
+        """Match exact dependency evidence, never infer freshness from revision alone."""
+        if not source or not dependency or len(revisions) > BATCH_LIMIT:
+            raise ValueError("invalid_archive_progress_query")
+        if not revisions:
+            return frozenset()
+        marks = ",".join("?" for _ in revisions)
+        with self._connect(read=True) as db:
+            return frozenset(key for key, revision in db.execute(f"""
+                SELECT p.session_id, p.revision FROM session_progress AS p
+                JOIN sessions AS s USING (source, session_id, revision)
+                WHERE p.source=? AND p.dependency=? AND p.session_id IN ({marks}) AND s.source_present=1
+            """, (source, dependency, *revisions)) if revisions[key] == revision)
 
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""

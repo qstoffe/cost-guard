@@ -1,7 +1,7 @@
 """Project only qualified Sessions presentation facts, without re-reading history."""
 from dataclasses import dataclass
 
-from src.cache.display_history import SessionChange, SessionFact
+from src.cache.display_history import SAVED_FIELDS, SessionChange, SessionCheckpoint, SessionFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,9 +11,9 @@ class SessionPublication:
     session_id: str
     source_revision: str
     observation_epoch: str
-    archived_revision: str | None
+    checkpoint: SessionCheckpoint | None
 
-    def project(self, row, *, current_revision, current_epoch):
+    def project(self, row, *, current_revision, current_epoch, dependency=None):
         if (row.session_id != self.session_id or not self.source_revision or not self.observation_epoch
                 or self.source_revision != current_revision or self.observation_epoch != current_epoch):
             return None
@@ -27,7 +27,9 @@ class SessionPublication:
         if not row.model_pending:
             fields.add("model")
         if row.complete:
-            fields.update(("ccost", "prompts", "duration_ms"))
+            fields.update(("prompts", "duration_ms"))
+            if not row.ccost_unavailable:
+                fields.add("ccost")
         if row.context_qualified:
             fields.add("context_tokens")
         fact = SessionFact(
@@ -36,4 +38,7 @@ class SessionPublication:
             model=(row.model if row.model != "N/A" else row.selected_display_model) or None,
             ccost=row.ccost, prompts=row.prompt_count, duration_ms=row.duration_ms, context_tokens=row.context_tokens,
         )
-        return SessionChange(fact, self.archived_revision, frozenset(fields))
+        complete = fields == SAVED_FIELDS
+        return SessionChange(fact, self.checkpoint.revision if self.checkpoint else None,
+                             frozenset(fields), dependency if complete else None,
+                             self.checkpoint.progress if self.checkpoint else 0)

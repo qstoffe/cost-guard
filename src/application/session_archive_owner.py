@@ -47,12 +47,12 @@ class SessionArchiveOwner:
             if not source or binding is not None and (source, epoch) != binding:
                 return None
             state = self.history.source_state(source)
-            previous = self.history.session_revisions(source, tuple(revisions))
+            previous = self.history.session_checkpoints(source, tuple(revisions))
             return ArchiveAdmission(source, epoch, state.archive_epoch, tuple(
                 SessionPublication(session_id, revision, epoch, previous.get(session_id))
                 for session_id, revision in revisions.items()))
 
-    def commit(self, admission, rows, current_revisions, *, missing=()):
+    def commit(self, admission, rows, current_revisions, *, missing=(), dependency=None):
         """Publish compact facts and notify only after the SQLite commit succeeded."""
         with self._lock:
             if (admission.source, admission.epoch) != self._binding:
@@ -62,11 +62,11 @@ class SessionArchiveOwner:
                 session_id = proof.session_id
                 if session_id in rows:
                     row = proof.project(rows[session_id], current_revision=current_revisions.get(session_id),
-                                         current_epoch=admission.epoch)
+                                         current_epoch=admission.epoch, dependency=dependency)
                     if row is not None:
                         updates.append(row)
-                elif session_id in missing and session_id not in current_revisions and proof.archived_revision:
-                    absent.append((session_id, proof.archived_revision))
+                elif session_id in missing and session_id not in current_revisions and proof.checkpoint:
+                    absent.append((session_id, proof.checkpoint))
             return self._commit(admission, tuple(updates), tuple(absent))
 
     def publish_catalog(self, admission, titles, current_revisions):
@@ -76,10 +76,10 @@ class SessionArchiveOwner:
                 return None
             updates = tuple(SessionChange(SessionFact(proof.session_id, proof.source_revision, titles[proof.session_id]),
                                     None, frozenset()) for proof in admission.facts
-                            if proof.archived_revision is None and proof.session_id in titles
+                             if proof.checkpoint is None and proof.session_id in titles
                             and current_revisions.get(proof.session_id) == proof.source_revision)
-            present = tuple((proof.session_id, proof.source_revision) for proof in admission.facts
-                            if proof.archived_revision == proof.source_revision
+            present = tuple((proof.session_id, proof.checkpoint) for proof in admission.facts
+                             if proof.checkpoint and proof.checkpoint.revision == proof.source_revision
                             and current_revisions.get(proof.session_id) == proof.source_revision)
             return self._commit(admission, updates, present=present)
 
