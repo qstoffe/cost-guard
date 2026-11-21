@@ -79,12 +79,14 @@ class CachedSessionViews:
             tokens = with_display(record(ccost=row.ccost, duration_ms=row.duration_ms, context_tokens=row.context_tokens),
                                   window.timezone_id, now_ms).to_json()
             rows.append(dict(session_id=row.session_id, title=row.title, activity_ms=row.activity_ms, model=row.model,
+                               model_help=row.model_help, has_model_details=bool(row.has_model_details),
                                running=row.running,
                                activity_origin=row.activity_origin, prompt_started_ms=row.prompt_started_ms,
                                catalog_activity_ms=(row.catalog_activity_ms if row.source_present
                                    and row.activity_origin is None and row.activity_ms is None else None),
                               ccost=row.ccost, prompts=row.prompts, duration_ms=row.duration_ms,
-                              context_tokens=row.context_tokens, source_present=row.source_present, fields=states,
+                               context_tokens=row.context_tokens, context_detail=row.context_detail,
+                               source_present=row.source_present, fields=states,
                               display=tokens["display"], display_units=tokens.get("display_units")))
         # Cached membership/count is not historical source completeness.
         if result.coverage is not None:

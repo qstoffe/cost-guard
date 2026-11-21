@@ -15,7 +15,7 @@ SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
-PROJECTION_REVISION = "sessions-field-evidence-1"
+PROJECTION_REVISION = "sessions-model-context-help-2"
 
 
 def scalar_dependency(service):

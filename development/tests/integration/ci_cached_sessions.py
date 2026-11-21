@@ -10,7 +10,9 @@ from urllib.parse import urlsplit
 
 from src.application.session_catalog import SessionCatalog
 from src.cache.display_history import RunningSession, SessionCoverage
+from src.domain.effort import EffortEvidence
 from src.reports.models import SessionUsageRow
+from src.reports.session_models import SessionModel
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
 from src.web.host import WebHost
@@ -66,7 +68,10 @@ def check_cached_sessions(browser, evidence, product_root):
             def commit(offset, amount):
                 rows = {f"s-{index:03d}": SessionUsageRow(f"s-{index:03d}", f"Session {index}", "Example",
                     False, Decimal(index), index, last_activity_ms=now - 1000, activity_qualified=True,
-                    context_qualified=index != 27)
+                    context_qualified=index != 27, context_tokens=773 if index == 28 else None,
+                    context_detail="Provisional text estimate." if index == 28 else "No supported context.",
+                    main_models=(SessionModel("provider", "recorded-selector", efforts=(
+                        EffortEvidence("default", "medium", "current-configuration"),)),) if index == 28 else ())
                     for index in range(offset, offset + amount)}
                 revisions = dict.fromkeys(rows, "revision")
                 owner.commit(owner.admit(revisions), rows, revisions)
@@ -93,6 +98,15 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(first.get_by_text("The source did not provide context for this session.", exact=True)).to_be_visible()
             first.keyboard.press("Escape")
             expect(first.locator('tr[data-id="s-027"]').get_by_role("img", name="Loading context")).to_be_visible()
+            archived = first.locator('tr[data-id="s-028"]')
+            owner.commit(owner.admit({"s-028": "revision"}), {}, {}, missing=("s-028",))
+            archived.locator("td:nth-child(3) span").first.focus()
+            expect(first.get_by_text("provider/recorded-selector", exact=False)).to_be_visible()
+            expect(first.get_by_text("historical settings may differ", exact=False)).to_be_visible()
+            first.keyboard.press("Escape")
+            archived.locator("td:last-child span").first.focus()
+            expect(first.get_by_text("Provisional text estimate.", exact=False)).to_be_visible()
+            first.keyboard.press("Escape")
             first.go_back()
             expect(pager).to_contain_text("1–25 of 30 cached sessions")
             first.go_forward()

@@ -560,7 +560,8 @@ const SessionsCatalog = (() => {
           () => ReportView.metricToken(value, 'model_help'),
           () => value.cache_only ? (value.ccost == null ? null : 'Last committed session reference cost.') :
             ReportView.sessionCostHelp(value, value), null, null,
-          current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
+          current.context_tokens == null ? null :
+            [`~${current.context_tokens.toLocaleString()} tokens`, current.context_detail].filter(Boolean).join('\n')
         ];
         row.metrics.forEach((node, index) => {
           const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
