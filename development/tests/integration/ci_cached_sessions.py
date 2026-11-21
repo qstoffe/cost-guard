@@ -3,10 +3,12 @@ from decimal import Decimal
 from pathlib import Path
 import shutil
 import tempfile
+from threading import Event
 import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
+from src.application.session_catalog import SessionCatalog
 from src.cache.display_history import RunningSession
 from src.reports.models import SessionUsageRow
 from src.sources.opencode_v1 import OpenCodeV1Source
@@ -38,6 +40,8 @@ def check_cached_sessions(browser, evidence, product_root):
         owner = host.display_archive.sessions
         now = int(time.time() * 1000)
         host.start()
+        host.live = SimpleNamespace(catalog=SessionCatalog(), driver=driver, stopping=Event(),
+                                    close=host.display_archive.close)
         host.publish_ready()
         context = browser.new_context(viewport={"width": 1100, "height": 800})
         try:
@@ -92,19 +96,29 @@ def check_cached_sessions(browser, evidence, product_root):
             assert "/api/cache/sessions" in requests and "/api/sessions" not in requests and "/api/reports" not in requests
             assert host.display_archive.history.session_page(views.source).total == 40
             owner.commit_running(views.source, views.binding, (RunningSession("running", "Live fixture", now - 1000,
-                                                                             int(time.time() * 1000)),))
+                                                                             int(time.time() * 1000)),), clear_fence=0)
             expect(pager).to_contain_text("26–41 of 41 cached sessions")
             expect(second.locator(".sessions-catalog .page-navigation")).to_contain_text("26–41 of 41 cached sessions")
             first.get_by_role("button", name="Previous", exact=True).click()
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("[RUNNING] Live fixture")
-            owner.commit_running(views.source, views.binding, ())
+            owner.commit_running(views.source, views.binding, (), clear_fence=0)
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("Session 1")
             assert "offset=25" in second.url
+            clear = first.get_by_role("button", name="Clear local Sessions history")
+            expect(clear).to_be_hidden()
+            first.get_by_text("Clear saved Sessions history…", exact=True).click()
+            expect(clear).to_be_visible()
+            expect(pager).to_contain_text("of 40 cached sessions")
+            clear.click()
+            expect(first.get_by_text("Saved Sessions history cleared.", exact=True)).to_be_visible()
+            expect(pager).to_contain_text("No cached sessions yet")
+            expect(second.locator(".sessions-catalog .page-navigation")).to_contain_text("No cached sessions yet")
+            assert source_path.read_bytes() == b"fixture identity; intentionally not an OpenCode database"
             host.display_archive.unbind()
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, reactive page two in two tabs, running, source unbind")
+                checked="cold empty, held source, period/sort/page, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()

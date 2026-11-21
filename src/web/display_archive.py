@@ -103,15 +103,15 @@ class DisplayArchive:
         views = self.views
         if views is None or time.monotonic() < self._running_retry_at:
             return
-        offered = views.source, views.binding, running
+        offered = views.source, views.binding, self.sessions.clear_fence, running
         if self._running_committed == offered:
             return
         self._running_offered = offered
         self._running_write = self._running_writer.submit(self._write_running, *offered)
 
-    def _write_running(self, source, binding, running):
+    def _write_running(self, source, binding, fence, running):
         try:
-            self.sessions.commit_running(source, binding, running)
+            self.sessions.commit_running(source, binding, running, clear_fence=fence)
         except (OSError, sqlite3.Error):
             return False  # No failed or partial transaction becomes a cache event.
         return True
@@ -147,20 +147,50 @@ class DisplayArchive:
             return False
         return True
 
+    def clear_snapshot(self):
+        """Called only by the explicit confirmation flow, not normal page reads."""
+        views = self.views
+        if views is None:
+            return None
+        state = self.history.source_state(views.source)
+        if self.views is views:
+            return dict(binding=views.binding, generation=state.generation, archive_epoch=state.archive_epoch)
+        return None
+
+    def clear_confirmed(self, binding, expected, catalog, service, *, eligible):
+        views = self.views
+        if views is None or binding != views.binding:
+            return None
+
+        def current_observation():
+            with catalog.lock:
+                return catalog.observation_sequence
+
+        state = self.sessions.clear(views.source, binding, expected, current_observation=current_observation,
+            eligible=lambda: self.views is views and eligible() and
+            self._writer_binding(service) == (views.source, binding))
+        if state is not None:
+            return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
+        return None
+
     def catalog_pending(self, catalog):
         """Cheap scheduling hint, checked on Live without scanning or writing."""
         views = self.views
+        fence = self.sessions.observation_fence(catalog.observation_sequence)
         return (views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
-                and (self._catalog_key != (views.binding, catalog.membership_generation)
-                      or self._pending is not None or self._membership_after is not None))
+                and fence is not None and
+                (self._catalog_key != (views.binding, fence, catalog.membership_generation)
+                 or self._pending is not None or self._membership_after is not None))
 
     def summary_pending(self, catalog):
         views = self.views
         return (views is not None and time.monotonic() >= self._retry_at
-                and self.sweep.due(catalog, views.binding))
+                and self.sessions.observation_fence(catalog.observation_sequence) is not None
+                and self.sweep.due(catalog, (views.binding, self.sessions.clear_fence)))
 
     def priority_summary_pending(self, catalog):
         return (self.views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
+                and self.sessions.observation_fence(catalog.observation_sequence) is not None
                 and self.sweep.priority_due(catalog))
 
     def completed_summary_keys(self, binding, revisions, dependency):
@@ -177,8 +207,9 @@ class DisplayArchive:
 
     def acquire_summaries(self, catalog, service):
         binding = self._writer_binding(service)
-        if binding is not None and time.monotonic() >= self._retry_at:
-            self.sweep.tick(catalog, self, service, binding)
+        fence = self.sessions.observation_fence(catalog.observation_sequence)
+        if binding is not None and fence is not None and time.monotonic() >= self._retry_at:
+            self.sweep.tick(catalog, self, service, binding, fence)
 
     def publish_catalog(self, catalog, service):
         """One bounded write slice on the existing Sessions acquisition lane."""
@@ -188,8 +219,12 @@ class DisplayArchive:
         with catalog.lock:
             if catalog.state != "observed":
                 return
-            key = (binding[1], catalog.membership_generation)
-            if self._catalog_key != key and (not self._catalog_key or self._catalog_key[0] != binding[1]
+            fence = self.sessions.observation_fence(catalog.observation_sequence)
+            observed = catalog.last_observation
+            if fence is None:
+                return
+            key = (binding[1], fence, catalog.membership_generation)
+            if self._catalog_key != key and (not self._catalog_key or self._catalog_key[:2] != key[:2]
                     or self._pending is None and self._membership_after is None):
                 self._catalog_key = key
                 self._catalog_iter = iter(catalog.roots)
@@ -201,20 +236,19 @@ class DisplayArchive:
                          if key in catalog.roots and catalog.revisions.get(key)}
             titles = {key: catalog.roots[key].title or "Untitled session" for key in revisions}
             activity = {key: catalog.activity.get(key) for key in revisions}
-            observed = catalog.last_observation
         if self._pending is None:
-            self._mark_missing(catalog, service, binding, observed)
+            self._mark_missing(catalog, service, binding, observed, fence)
             return
 
         def write():
-            admission = self.sessions.admit(revisions, binding=binding)
+            admission = self.sessions.admit(revisions, binding=binding, clear_fence=fence)
             if admission is not None:
                 self.sessions.publish_catalog(admission, titles, revisions, activity=activity)
 
         if self._cache_write(write):
             self._pending = ()
 
-    def _mark_missing(self, catalog, service, binding, observed):
+    def _mark_missing(self, catalog, service, binding, observed, fence):
         if self._membership_after is None:
             return
 
@@ -224,12 +258,13 @@ class DisplayArchive:
                 # An auth/load failure or a different membership snapshot
                 # cannot be treated as a deletion, even for the same source.
                 if (catalog.state != "observed" or catalog.last_observation is not observed
-                        and self._catalog_key != (binding[1], catalog.membership_generation)):
+                        and self._catalog_key != (binding[1], fence, catalog.membership_generation)):
                     return
                 missing = {key: checkpoint for key, checkpoint, present in batch if present and key not in catalog.roots}
             if self._writer_binding(service) != binding:
                 return
-            admission = self.sessions.admit({key: checkpoint.revision for key, checkpoint in missing.items()}, binding=binding)
+            admission = self.sessions.admit({key: checkpoint.revision for key, checkpoint in missing.items()},
+                                            binding=binding, clear_fence=fence)
             if admission is not None:
                 # Preserve the checkpoint from the membership slice. Do not
                 # mark a later write absent on the strength of an old scan.
@@ -240,15 +275,16 @@ class DisplayArchive:
 
         self._cache_write(reconcile)
 
-    def admit_summary(self, service, session_id, revision):
+    def admit_summary(self, service, session_id, revision, *, observation_sequence):
         binding = self._writer_binding(service)
-        if binding is None or not revision:
+        fence = self.sessions.observation_fence(observation_sequence)
+        if binding is None or fence is None or not revision:
             return None
         admission = None
 
         def admit():
             nonlocal admission
-            admission = self.sessions.admit({session_id: revision}, binding=binding)
+            admission = self.sessions.admit({session_id: revision}, binding=binding, clear_fence=fence)
 
         self._cache_write(admit)
         return admission

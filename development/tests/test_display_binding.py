@@ -5,6 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+import time
 from types import SimpleNamespace
 import sqlite3
 import unittest
@@ -14,7 +15,7 @@ from development.tests.fixtures.catalog_prompt_activity import at, finished_snap
 from development.tests.fixtures.opencode_v1_database import create_v1_database
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from src.cache import CacheDatabase, CacheRepository
-from src.cache.display_history import RunningSession, SessionChange, SessionFact
+from src.cache.display_history import HistoryState, RunningSession, SessionChange, SessionFact
 from src.application.session_catalog import SessionCatalog
 from src.domain import BackgroundActivity, NormalizedSession, Provenance, SessionCapabilities, TerminalOutcome
 from src.reports.models import SessionUsageRow
@@ -37,11 +38,11 @@ class DisplayBindingTests(unittest.TestCase):
             committed = archive.sessions.commit_running
             started, release = Event(), Event()
 
-            def held_write(*args):
+            def held_write(*args, **kwargs):
                 started.set()
                 if not release.wait(5):
                     raise AssertionError("fixture did not release the SQLite writer")
-                committed(*args)
+                committed(*args, **kwargs)
 
             try:
                 with patch.object(archive.sessions, "commit_running", side_effect=held_write) as writes:
@@ -211,7 +212,7 @@ class DisplayBindingTests(unittest.TestCase):
             archive.observe(driver, before_tick=True)
             service = driver.coordinator.report_service
             row = SessionUsageRow("root", "Settled", "Model", False, Decimal("7.32"), 9)
-            admission = archive.admit_summary(service, "root", "r1")
+            admission = archive.admit_summary(service, "root", "r1", observation_sequence=1)
 
             archive.publish_summary(service, admission, row, "r2")
             self.assertEqual(0, archive.views.page(period="all")["cached_total"])
@@ -344,14 +345,14 @@ class DisplayBindingTests(unittest.TestCase):
             stop = (live_root, revision, now_ms - 200, event.event_id, event.created_at_ms)
             catalog.observe_prompts(((*start, True, None, False),))
             archive.sessions.commit_running(archive.views.source, archive.views.binding,
-                catalog.archive_running(((*start, True, None, False),)))
+                catalog.archive_running(((*start, True, None, False),)), clear_fence=0)
             running, = archive.views.page(period="all", now_ms=now_ms)["rows"]
 
             with (patch.object(source, "get_session_tree_revision", return_value=revision),
                   patch.object(source, "load_session_snapshot",
                               side_effect=(SourceUnavailableError("fixture"), unsettled, settled)) as load):
                 catalog.observe_prompts(((*stop, False, None, True),))
-                archive.sessions.commit_running(archive.views.source, archive.views.binding, ())
+                archive.sessions.commit_running(archive.views.source, archive.views.binding, (), clear_fence=0)
                 archive.acquire_summaries(catalog, service)
                 failed, = archive.views.page(period="all", now_ms=now_ms)["rows"]
                 clock[0] = 102
@@ -414,6 +415,40 @@ class DisplayBindingTests(unittest.TestCase):
 
             self.assertEqual(0, stale["cached_total"])
             self.assertEqual(("old", "3"), (current["session_id"], current["ccost"]))
+
+    def test_confirmed_clear_fences_pending_writers_and_requires_a_fresh_catalog(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive, service, catalog, roots = archive_sweep_fixture(root)
+            self.addCleanup(archive.close)
+            observation = CatalogObservation(roots, roots, {}, dict.fromkeys(("old", "recent"), "r0"))
+            catalog.observe(observation)
+            archive.publish_catalog(catalog, service)
+            views = archive.views
+            other = "other-source"
+            archive.history.commit_sessions(other, (SessionChange(SessionFact("other", "r1", "Other"), None),))
+            admission = archive.admit_summary(service, "old", "late", observation_sequence=1)
+            start = int(time.time() * 1000)
+            offered = (RunningSession("pending", "Pending", start - 10, start),)
+            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=0)
+            saved = archive.clear_snapshot()
+
+            archive.clear_confirmed(saved["binding"], HistoryState(saved["generation"], saved["archive_epoch"]),
+                                    catalog, service, eligible=lambda: True)
+            archive.publish_summary(service, admission,
+                SessionUsageRow("old", "Pre-clear", "Model", False, Decimal("4"), 1), "late")
+            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=0)
+            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=1)
+            archive.publish_catalog(catalog, service)
+            blank = archive.views.page(period="all", now_ms=start + 1)
+            catalog.observe(replace(observation))
+            archive.publish_catalog(catalog, service)
+            rewarmed = archive.views.page(period="all", now_ms=start + 1)
+
+            self.assertEqual(0, blank["cached_total"])
+            self.assertEqual(["old", "recent"], [row["session_id"] for row in rewarmed["rows"]])
+            self.assertEqual(1, archive.history.session_page(other).total)
+            self.assertEqual(b"test source identity only", (root / "source").read_bytes())
 
 
 def archive_sweep_fixture(root):

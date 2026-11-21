@@ -279,6 +279,51 @@ class WebRuntimeTests(unittest.TestCase):
             submit.assert_not_called()
         source_startup.report_status.assert_not_called()
 
+    def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
+        from src.application.session_catalog import SessionCatalog
+        from src.cache.display_history import SessionChange, SessionFact
+        from src.sources.opencode_v1 import OpenCodeV1Source
+        from src.web.display_archive import DisplayArchive
+
+        endpoint = "/api/cache/sessions/clear"
+        self.assertEqual(401, self.request(endpoint)[0])
+        self.login()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = root / "fixture.db"
+            original.write_bytes(b"synthetic source")
+            service = SimpleNamespace(selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(original)),
+                                      timezone_id="UTC")
+            driver = SimpleNamespace(terminal=False, error=None,
+                                     coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
+            archive = DisplayArchive(root, lambda *_: None)
+            self.addCleanup(archive.close)
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            bound = archive.views.source
+            self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
+                display_archive=archive, cached_sessions_enabled=True, live=SimpleNamespace(
+                    driver=driver, catalog=SessionCatalog()))
+            snapshot = json.loads(self.request(endpoint)[2])
+            archive.history.commit_sessions(bound, (SessionChange(SessionFact("saved", "r1", "Saved"), None),))
+
+            stale = self.request(endpoint, dict(snapshot, confirm=True))[0]
+            current = json.loads(self.request(endpoint)[2])
+            unconfirmed = self.request(endpoint, current)[0]
+            csrf_missing = self.request(endpoint, dict(current, confirm=True), headers={"X-CG-CSRF": ""})[0]
+            remaining = archive.history.session_page(bound).total
+            cleared, _, result = self.request(endpoint, dict(current, confirm=True))
+            replay = self.request(endpoint, dict(current, confirm=True))[0]
+            replacement = root / "replacement"
+            replacement.write_bytes(b"another source")
+            replacement.replace(original)
+            retired = self.request(endpoint, dict(json.loads(result), confirm=True))[0]
+
+            self.assertEqual((409, 400, 403, 1, 200, 409, 409),
+                             (stale, unconfirmed, csrf_missing, remaining, cleared, replay, retired))
+            self.assertEqual(0, archive.history.session_page(bound).total)
+            self.assertEqual(b"another source", original.read_bytes())
+
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()
         delivered = Event()

@@ -1,6 +1,7 @@
 """Single source-qualified Sessions publication owner."""
 from dataclasses import dataclass
 from threading import Lock
+import time
 
 from src.cache.display_history import BATCH_LIMIT, SessionChange, SessionFact
 
@@ -28,6 +29,15 @@ class SessionArchiveOwner:
         self._lock = Lock()
         self._signal = Lock()
         self._binding = ("", "")
+        self._clear_fence = (0, 0, -1)
+
+    @property
+    def clear_fence(self):
+        return self._clear_fence[0]
+
+    def observation_fence(self, sequence):
+        fence, _, cutoff = self._clear_fence
+        return fence if sequence > cutoff else None
 
     def bind(self, source, epoch, *, announce=False):
         if bool(source) != bool(epoch):
@@ -39,12 +49,13 @@ class SessionArchiveOwner:
             if announce:
                 self.publish("cache", {"view": "sessions", "binding": epoch or None})
 
-    def admit(self, revisions, *, binding=None):
+    def admit(self, revisions, *, binding=None, clear_fence=None):
         if len(revisions) > BATCH_LIMIT or any(not session_id or not revision for session_id, revision in revisions.items()):
             raise ValueError("invalid_archive_admission")
         with self._lock:
             source, epoch = self._binding
-            if not source or binding is not None and (source, epoch) != binding:
+            if (not source or binding is not None and (source, epoch) != binding
+                    or clear_fence is not None and clear_fence != self.clear_fence):
                 return None
             state = self.history.source_state(source)
             previous = self.history.session_checkpoints(source, tuple(revisions))
@@ -92,13 +103,26 @@ class SessionArchiveOwner:
         self._announce(admission.source, admission.epoch, generation)
         return generation
 
-    def commit_running(self, source, epoch, running):
+    def commit_running(self, source, epoch, running, *, clear_fence):
         with self._lock:
-            if (source, epoch) != self._binding:
+            fence, cleared_ms, _ = self._clear_fence
+            if (source, epoch) != self._binding or clear_fence != fence:
                 return
             archive_epoch = self.history.source_state(source).archive_epoch
-            generation = self.history.replace_running(source, epoch, running, archive_epoch=archive_epoch)
+            fresh = tuple(item for item in running if item.observed_ms > cleared_ms)
+            generation = self.history.replace_running(source, epoch, fresh, archive_epoch=archive_epoch)
             self._announce(source, epoch, generation)
+
+    def clear(self, source, epoch, expected, *, eligible, current_observation):
+        """Serialize with both archive producers without holding the Live lock."""
+        with self._lock:
+            if (source, epoch) != self._binding or not eligible():
+                return None
+            state = self.history.clear_confirmed_sessions(source, expected)
+            if state is not None:
+                self._clear_fence = (self.clear_fence + 1, int(time.time() * 1000), current_observation())
+                self._announce(source, epoch, state.generation)
+            return state
 
     def _announce(self, source, epoch, generation):
         if generation is not None:

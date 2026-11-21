@@ -12,6 +12,7 @@ from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
 from src.analysis.account_timeline import PERIODS as ACCOUNT_PERIODS
+from src.cache.display_history import HistoryState
 from src.reports import ReportKind
 from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
@@ -404,12 +405,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/sessions":
                 self.cached_sessions(value)
                 return
+            if self.path == "/api/cache/sessions/clear":
+                self.clear_cached_sessions(value)
+                return
             match = JOB_PATH.fullmatch(self.path)
             if match and match[2] and not value:
                 found = self.server.jobs.cancel(match[1])
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
+            if self.path == "/api/cache/sessions/clear":
+                self.clear_cached_sessions()
+                return
             if self.path == '/api/database-sizes':
                 sizes = getattr(self.server.lifecycle, 'database_sizes', None)
                 self.reply(200, sizes() if sizes else {'opencode_bytes': None, 'cache_bytes': None})
@@ -559,6 +566,38 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(503, {"error": "cache_source_unbound"})
             else:
                 self.reply(200, result)
+
+    def clear_cached_sessions(self, value=None):
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        live = getattr(owner, "live", None)
+        catalog = getattr(live, "catalog", None)
+        driver = getattr(live, "driver", None)
+        service = getattr(getattr(driver, "coordinator", None), "report_service", None)
+        if archive is None or catalog is None or service is None or not getattr(owner, "cached_sessions_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        try:
+            if value is None:
+                result = archive.clear_snapshot()
+                self.reply(200 if result is not None else 503, result or {"error": "cache_source_unbound"})
+                return
+            if (set(value) != {"confirm", "binding", "generation", "archive_epoch"} or value["confirm"] is not True
+                    or not isinstance(value["binding"], str) or len(value["binding"]) != 32
+                    or any(type(value[key]) is not int or not 0 <= value[key] <= 2**53 - 1
+                           for key in ("generation", "archive_epoch"))):
+                self.reply(400, {"error": "invalid_request"})
+                return
+
+            def eligible():
+                return (not owner.stopping.is_set() and live.driver is driver and not driver.terminal
+                        and self.server.session.authenticated(self.headers.get("Cookie")))
+
+            expected = HistoryState(value["generation"], value["archive_epoch"])
+            result = archive.clear_confirmed(value["binding"], expected, catalog, service, eligible=eligible)
+            self.reply(200 if result is not None else 409, result or {"error": "cache_clear_changed"})
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
 
     def stream_events(self):
         if not self.server._streams.acquire(blocking=False):

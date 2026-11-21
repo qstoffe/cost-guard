@@ -601,6 +601,39 @@ const SessionsCatalog = (() => {
       super(api, {cached: true});
       this.hint = null;
       this.blocked = false;
+      this.clearEndpoint = '/api/cache/sessions/clear';
+      this.clearControls = el('details', undefined, 'sessions-clear-cache');
+      const toggle = el('summary', 'Clear saved Sessions history…');
+      const text = el('p', 'This removes Sessions history saved by Cost Guard for the current source. It never deletes OpenCode data. History no longer in OpenCode may be lost; current source sessions can be cached again.');
+      this.clearConfirm = el('button', 'Clear local Sessions history'); this.clearConfirm.type = 'button';
+      this.clearMessage = el('p'); this.clearMessage.setAttribute('role', 'status');
+      this.clearConfirm.addEventListener('click', () => this.clearLocalHistory());
+      this.clearControls.append(toggle, text, this.clearConfirm, this.clearMessage);
+      this.clearControls.hidden = true;
+      this.root.append(this.clearControls);
+    }
+    async clearLocalHistory() {
+      if (!this.data || this.clearPending) return;
+      const binding = this.data.binding;
+      this.clearPending = true;
+      this.clearConfirm.setAttribute('aria-disabled', 'true');
+      ReportView.text(this.clearMessage, '');
+      try {
+        const snapshot = await this.api(this.clearEndpoint);
+        if (!this.attached || this.blocked || !this.clearControls.open || snapshot.binding !== binding ||
+            this.data?.binding !== binding) return;
+        const result = await this.api(this.clearEndpoint, {...snapshot, confirm: true});
+        if (this.attached && !this.blocked && this.data?.binding === result.binding) {
+          ReportView.text(this.clearMessage, 'Saved Sessions history cleared.');
+          this.cacheHint({view: 'sessions', binding: result.binding, generation: result.generation}, true);
+        }
+      } catch (error) {
+        ReportView.text(this.clearMessage, error?.message === 'cache_clear_changed'
+          ? 'The archive changed. Review the warning and try again.' : 'Could not confirm the clear. Check the current cache before trying again.');
+      } finally {
+        this.clearPending = false;
+        this.clearConfirm.removeAttribute('aria-disabled');
+      }
     }
     navigateTo(target) {
       if (target !== location.hash) location.hash = target;
@@ -673,6 +706,9 @@ const SessionsCatalog = (() => {
     }
     unavailable() {
       this.data = null;
+      this.clearControls.open = false;
+      this.clearControls.hidden = true;
+      ReportView.text(this.clearMessage, '');
       this.costs = null;
       this.rows([]);
       ReportView.text(this.label, 'Session cache unavailable.');
@@ -713,6 +749,7 @@ const SessionsCatalog = (() => {
     }
     paint(data) {
       this.data = data;
+      this.clearControls.hidden = false;
       clearTimeout(this.runningTimer);
       this.runningTimer = null;
       if (Number.isSafeInteger(data.running_refresh_ms) && data.running_refresh_ms > 0) {

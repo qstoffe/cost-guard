@@ -487,6 +487,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-table .session-running, .sessions-table .session-running :is(td, a, span, button) { color: var(--watch-running); }
 .sessions-table .session-activity-feedback td { grid-column: 1 / -1; color: var(--muted); white-space: normal; }
 .sessions-action-status { margin-block: .45rem; color: var(--muted); }
+.sessions-clear-cache { max-inline-size: 40rem; margin-block-start: 1rem; }
+.sessions-clear-cache summary { cursor: pointer; }
+.sessions-clear-cache [role="status"]:empty { margin: 0; }
 .session-metric-pending { color: var(--muted); }
 .metric-spinner { display: inline-block; box-sizing: border-box; inline-size: .625rem; block-size: .625rem;
   border: .125rem solid currentColor; border-inline-end-color: transparent; border-radius: 50%;

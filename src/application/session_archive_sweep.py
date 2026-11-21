@@ -9,6 +9,7 @@ from src.pricing.base import PricingUnavailableError
 from src.reports.session_summary import ALGORITHM, EFFORT_REVISION, session_summary
 from src.sources.errors import SourceError
 
+from .session_catalog_lifecycle import is_running, terminal_prompt
 
 SCAN_WINDOW = 32
 RETRY_SECONDS = 60
@@ -74,11 +75,11 @@ class SessionArchiveSweep:
     @staticmethod
     def _candidate(catalog, key):
         root, revision = catalog.roots.get(key), catalog.revisions.get(key)
-        if root is None or not revision or catalog._running(key):
+        if root is None or not revision or is_running(catalog, key):
             return None
         # A captured terminal clears the Running overlay first. Whole-session
         # finish still requires the canonical scalar/linked activity function.
-        terminal = catalog.archive_terminal(key)
+        terminal = terminal_prompt(catalog, key)
         if key in catalog.active and terminal is None:
             return None
         return SummaryCandidate(root, revision, catalog.archive_incarnation, terminal)
@@ -128,8 +129,9 @@ class SessionArchiveSweep:
                     return key, candidate, attempts
             return None
 
-    def tick(self, catalog, archive, service, binding):
-        urgent = self._urgent(catalog, binding[1])
+    def tick(self, catalog, archive, service, binding, fence):
+        cohort = binding[1], fence
+        urgent = self._urgent(catalog, cohort)
         if urgent is not None:
             key, candidate, attempts = urgent
             try:
@@ -140,7 +142,7 @@ class SessionArchiveSweep:
             if not self._try_acquire(catalog, archive, service, binding, base, key, candidate):
                 self._retry(catalog, key, candidate, attempts)
             return
-        candidates = self._candidates(catalog, binding[1])
+        candidates = self._candidates(catalog, cohort)
         if not candidates:
             self._queue.clear()
             return
@@ -187,7 +189,11 @@ class SessionArchiveSweep:
 
     def _acquire(self, catalog, archive, service, base, key, candidate):
         revision = candidate.revision
-        admission = archive.admit_summary(service, key, revision)
+        with catalog.lock:
+            if catalog.state != "observed" or self._candidate(catalog, key) != candidate:
+                return False
+            sequence = catalog.observation_sequence
+        admission = archive.admit_summary(service, key, revision, observation_sequence=sequence)
         if admission is None:
             return False
         authorities = []
