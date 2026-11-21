@@ -201,6 +201,7 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertIn(b'progress max="100" value="0"', body)
         self.assertIn(b'href="#/watch">Watch</a>', body)
         self.assertNotIn(b'href="#/live">Live</a>', body)
+        self.assertNotIn(b'href="#/comparisons"', body)
         self.assertIn(b'aria-valuetext="0 percent"', body)
         self.assertNotIn('≈'.encode(), body)
         self.assertIn(b'/reports.js', body)
@@ -212,6 +213,28 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual({"http": "ready"}, json.loads(self.request("/health")[2]))
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
+
+    def test_parked_comparisons_cannot_admit_a_web_report(self):
+        self.login()
+        dispatcher = Mock(identity='source')
+        self.server.lifecycle = SimpleNamespace(dispatcher=dispatcher,
+            stopping=Event(), nonce='test-instance', observations=Mock())
+        report = {'kind': 'comparisons'}
+        attempts = (
+            ('/api/reports', report),
+            ('/api/data', {'request': report, 'retry': True}),
+            ('/api/interest', {'tab': 'a' * 32, 'section': 'comparisons', 'visible': True, 'request': report}),
+        )
+
+        with patch.object(self.jobs, 'submit') as submit:
+            for path, request in attempts:
+                with self.subTest(path=path):
+                    status, _, body = self.request(path, request)
+                    self.assertEqual(400, status)
+                    self.assertEqual({'error': 'invalid_request'}, json.loads(body))
+            submit.assert_not_called()
+        dispatcher.lookup.assert_not_called()
+        dispatcher.interest.assert_not_called()
 
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()

@@ -7,7 +7,7 @@ from .dispatch import FINITE, SECTIONS
 from .jobs import ReportWorkerStopError, parse_report
 
 SECTION_KIND = {'models': ReportKind.NORMAL, 'token-mix': ReportKind.TOKEN_MIX,
-                'ai-stats': ReportKind.AI_STATS, 'comparisons': ReportKind.COMPARISONS}
+                'ai-stats': ReportKind.AI_STATS}
 
 
 def handle(handler, value):

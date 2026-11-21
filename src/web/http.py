@@ -12,6 +12,7 @@ from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
 from src.analysis.account_timeline import PERIODS as ACCOUNT_PERIODS
+from src.reports import ReportKind
 from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
@@ -370,6 +371,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                         request = ModelsPriceRefresh()
                     else:
                         request = parse_report(value)
+                        if request.kind is ReportKind.COMPARISONS:
+                            raise ValueError("invalid_request")
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})
                     return

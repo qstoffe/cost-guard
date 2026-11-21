@@ -76,14 +76,14 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.tick()
         self.assertEqual(1, len(self.jobs.values))
 
-        for _ in range(3):
+        for _ in range(4):
             self.now += 15
             self.dispatch.tick()
 
         self.assertTrue(self.dispatch.warm_allowed)
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS},
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX},
                          {job['request'].kind for job in self.jobs.values.values()})
-        self.assertEqual({'0': 0, '1': 2, '2': 2, '3': 2}, self.jobs.priorities)
+        self.assertEqual({'0': 0, '1': 2, '2': 2}, self.jobs.priorities)
 
     def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -419,7 +419,7 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.interest('one', 'watch', False)
         self.now += 7200
         seen = []
-        for number in range(4):
+        for number in range(3):
             self.dispatch.tick()
             pending = [(key, value) for key, value in self.jobs.values.items() if value['status'] == 'queued']
             self.assertEqual(1, len(pending))
@@ -432,9 +432,9 @@ class DispatcherTests(unittest.TestCase):
             self.dispatch.tick()
             self.assertEqual(number + 1, len(self.jobs.values), 'no simultaneous due-product stampede')
             self.now += 1
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}, set(seen))
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX}, set(seen))
         self.dispatch.tick()
-        self.assertEqual(4, len(self.jobs.values), 'missed periods are not replayed')
+        self.assertEqual(3, len(self.jobs.values), 'missed periods are not replayed')
 
     def test_source_terminal_error_preserves_valid_result_but_never_launches_new_work(self):
         self.dispatch.interest('one', 'models', True, self.models)
