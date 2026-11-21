@@ -21,7 +21,7 @@ from development.tests.fixtures.watch_runtime import make_service
 from development.tests.integration.serve_data_dispatch import DispatchJobs
 from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
-from src.analysis.account_timeline import DAY_MS
+from src.analysis.account_timeline import DAY_MS, PERIODS
 from src.application.account_timeline import timeline_view
 from src.domain import QuotaComponent, TokenUsage
 from src.sources.errors import SourceConcurrentChangeError
@@ -36,6 +36,7 @@ class ChartSource(SyntheticMonthSource):
     def __init__(self, accounts):
         super().__init__(0, 0, month_start_ms=NOV_1)
         self.clock_offset_ms = 0
+        self.clock_scale = 1
         self.timeline_reads = Counter()
         self.first_read = Event()
         self.continue_history = Event()
@@ -455,7 +456,7 @@ def chart_fixture(browser, root, source_setup=ChartSource):
     accounts = (high, low, subscription())
     source = source_setup(accounts)
     started = time.monotonic()
-    clock = lambda: NOV_5 + source.clock_offset_ms + int(1000 * (time.monotonic() - started))
+    clock = lambda: NOV_5 + source.clock_offset_ms + int(1000 * source.clock_scale * (time.monotonic() - started))
     provider_refreshes = []
     config, selection, service, _ = make_service(str(root), source, now_ms=clock())
     config['sessionWatchIntervalSeconds'] = 'auto'
@@ -478,7 +479,7 @@ def chart_fixture(browser, root, source_setup=ChartSource):
         service_factory=workers, clock_ms=clock, record_observations=False)
     host = WebHost(root, jobs=DispatchJobs(), live_factory=lambda: LiveAcquisition(coordinator))
     host.dispatcher = DataDispatcher(host.jobs)
-    host.live.timeline_demand = host.dispatcher.account_timeline_demand
+    host.live.timeline_demand = host.dispatcher.account_timeline_foreground
     host.start()
     host.publish_ready()
     context = browser.new_context(viewport={'width': 1280, 'height': 900}, has_touch=True, device_scale_factor=2,
@@ -746,12 +747,55 @@ def check(browser, root, screenshots=None):
         while_tabs = len(lookups)
         page.wait_for_timeout(1000)
         assert while_tabs == len(lookups)
-        assert not host.dispatcher.account_timeline_demand()
+        assert not host.dispatcher.account_timeline_foreground()
         assert host.failure is None and host.live.failure is None and not errors, errors
         print(f'Accounts timeline PASS: {layouts} layouts, four periods, staged acquisition and quiet live revision, '
               f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh; '
               f'card-ready → first paint {(first_paint - card_seen) * 1000:.0f} ms, '
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
+
+
+def check_unvisited(browser, root):
+    from playwright.sync_api import expect
+
+    class MonthSource(ChartSource):
+        def __init__(self, accounts):
+            super().__init__(accounts)
+            self.clock_scale = 4
+            for index in range(25, 217):
+                at = NOV_1 + index % 4 * DAY_MS + index * 1000
+                self.replace_usage(index, at, 1000, accounts[index % 3].ref)
+
+    with chart_fixture(browser, root, MonthSource) as (page, host, coordinator, source, _, _, errors, lookups, interests):
+        lane = coordinator.account_timeline
+        page.goto(host.browser_url())
+        page.get_by_role('link', name='Models', exact=True).click()
+        expect(page.locator('body')).to_have_attribute('data-section', 'models')
+        source.first_read.set()
+        source.continue_history.set()
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            views = [lane.lookup(period)['view'] for period in PERIODS]
+            if all(view and not view['pending_buckets'] and not view['initial_pending_buckets'] for view in views):
+                break
+            page.wait_for_timeout(100)
+        else:
+            raise AssertionError('host did not warm all four chart periods without Accounts')
+        warmed = sum(source.timeline_reads.values())
+        assert sum(source.timeline_reads.values()) == 206 and len(source.timeline_reads) == 206
+        assert not lookups and not any(interests)
+        assert not host.dispatcher.account_timeline_foreground()
+        source.clock_offset_ms += 3_600_000
+        start = time.monotonic()
+        page.get_by_role('link', name='Accounts', exact=True).click()
+        page.wait_for_function("""() => current.accountTimeline?.view?.series.some(row =>
+            +row.points[2]?.amount > 0) && !current.accountTimeline.view.pending_buckets.length""", timeout=5000)
+        chart = page.get_by_role('region', name='CCost', exact=True)
+        expect(chart.locator('.account-timeline-plot .account-timeline-loading, .account-timeline-ring:visible')).to_have_count(0)
+        assert sum(source.timeline_reads.values()) == warmed and not errors, errors
+        assert host.failure is None and host.live.failure is None
+        print(f'Unvisited Accounts PASS: {warmed} historical reads, four prepared periods; '
+              f'entry to populated month {(time.monotonic() - start) * 1000:.0f} ms, zero replayed reads')
 
 
 def check_best_effort(browser, root):
@@ -831,6 +875,9 @@ def main():
             best_effort = root / 'best-effort'
             best_effort.mkdir()
             check_best_effort(browser, best_effort)
+            unvisited = root / 'unvisited'
+            unvisited.mkdir()
+            check_unvisited(browser, unvisited)
         finally:
             browser.close()
 

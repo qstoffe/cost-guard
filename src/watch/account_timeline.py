@@ -1,4 +1,4 @@
-"""Demand-driven account history, isolated from Live's native quota and card lanes."""
+"""Host-warmed account history, isolated from Live's native quota and card lanes."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import Decimal
@@ -31,6 +31,9 @@ RETRY_MS = 30_000
 PARTIAL_MS = 15_000
 FOREGROUND_SLICE_MS = 200
 FOREGROUND_PARTIAL_MS = 400
+BACKGROUND_SLICE_MS = 2_000
+BACKGROUND_REFRESH_MS = 60_000
+BACKGROUND_START_MS = 3_000
 ACTIVE_CUE_SECONDS = 4
 REFRESH_MS = 15_000
 NO_PUBLISHED_RATES = PricingCatalog(())
@@ -101,6 +104,7 @@ class TimelineHistory:
         self.partial_at = {}
         self.covered_periods = set()
         self.initial_periods = set()
+        self.pending_periods = set()
         self.observation = None
         self.prices = None
         self.prices_due_ms = 0
@@ -204,7 +208,7 @@ class TimelineHistory:
             return {}
 
     def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *,
-             foreground=False, shared_roots=None):
+             foreground=False, preferred=(), shared_roots=None, require_prices=False):
         if self.source != scope:
             self.source = scope
             self.roots.clear()
@@ -217,6 +221,7 @@ class TimelineHistory:
             self.partial_at.clear()
             self.covered_periods.clear()
             self.initial_periods.clear()
+            self.pending_periods.clear()
             self.price_revision = self.value_usage = None
             self.prices, self.prices_due_ms = None, 0
         if now_ms >= self.prices_due_ms:
@@ -226,6 +231,9 @@ class TimelineHistory:
             except (OSError, sqlite3.Error):
                 pass  # Existing price observation remains usable on a cache miss.
         catalog = self.prices or catalog
+        if require_prices and not (catalog and catalog.models):
+            self.pending_periods.clear()
+            return {}, False, False
         price_revision = catalog.diagnostic_signature if catalog else None
         price_changed = self.price_revision != price_revision
         if price_changed or self.value_usage is None:
@@ -266,7 +274,7 @@ class TimelineHistory:
         self.seen.difference_update(retired)
         self.roots = {key: value for key, value in self.roots.items()
                       if key not in retired}
-        if self.repository is not None:
+        if self.repository is not None and foreground:
             self._restore(roots, observation, active, scope, now_ms)
         # Use the card lane's already-acquired stable trees only at the same
         # source revision. Active/incomplete trees still get normal chart reads.
@@ -283,12 +291,20 @@ class TimelineHistory:
         pending = [root for root in roots if root.session_id in observation.revisions and (
             (saved := self.roots.get(root.session_id)) is None
             or saved.revision != observation.revisions[root.session_id] or 0 < saved.retry_at_ms <= now_ms)]
-        pending.sort(key=lambda item: (item.session_id in self.seen, item.session_id in self.roots,
-                                       -activity[item.session_id], item.session_id))
+        preferred_start = min((starts[period] for period in preferred), default=cutoff)
+        pending.sort(key=lambda item: (item.session_id in self.seen,
+                                        item.session_id not in active and activity[item.session_id] < preferred_start,
+                                        item.session_id in self.roots,
+                                        -activity[item.session_id], item.session_id))
         batch, remaining = pending[:ROOTS_PER_TURN], pending[ROOTS_PER_TURN:]
+        if self.repository is not None and not foreground:
+            self._restore(batch, observation, active, scope, now_ms)
+            batch = [root for root in batch if not ((saved := self.roots.get(root.session_id))
+                        and saved.complete and saved.revision == observation.revisions[root.session_id])]
         if batch:
             if not self._load(batch, observation, scope, now_ms):
                 self.initial_periods.clear()
+                self.pending_periods.clear()
                 return {}, False, removed
             self.seen.update(root.session_id for root in batch)
 
@@ -299,6 +315,7 @@ class TimelineHistory:
         newest_initial = max((now_ms if root.session_id in active else activity[root.session_id]
                               for root in remaining if root.session_id not in self.seen), default=-1)
         self.initial_periods = {period for period in periods if starts[period] <= newest_initial}
+        self.pending_periods = {period for period in periods if starts[period] <= newest_pending}
         covered = {period for period in periods if not remaining or starts[period] > newest_pending}
         partial_ms = FOREGROUND_PARTIAL_MS if foreground else PARTIAL_MS
         ready = tuple(period for period in periods if not remaining or removed or price_changed
@@ -374,15 +391,19 @@ class AccountTimeline:
         self.job = None
         self.fast = False
         self.initial_periods = set()
+        self.pending_periods = set()
         self.active_periods = frozenset()
         self.active_until = 0
         self.price_revision = None
         self.demand = frozenset()
+        self.foreground = frozenset()
         self.roster = ()
         self.public_roster = ()
         self.public_ready = False
         self.source = None
         self.due = self.last_started = 0
+        self.retry_at = 0
+        self.background_start = None
         self.closed = False
 
     def lookup(self, period, revision=None):
@@ -396,7 +417,9 @@ class AccountTimeline:
                      acquiring=acquiring)
 
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
-             now_ms, available=True, terminal=False, card_today=None, shared_roots=None):
+             now_ms, available=True, terminal=False, card_today=None, shared_roots=None,
+             foreground=None, require_background_prices=False):
+        foreground = periods if foreground is None else foreground
         changed_source = source is not None and source != self.source
         if changed_source:
             self.source = source
@@ -428,9 +451,12 @@ class AccountTimeline:
                 self.seed_input = None
                 self.frame_revision += 1
                 self.due = 0
+                self.retry_at = 0
                 self.initial_periods.clear()
+                self.pending_periods.clear()
                 self.active_periods = frozenset()
                 self.price_revision = None
+                self.background_start = None
             rolled = tuple(period for period, start in starts.items()
                            if period in self.results and self.results[period]['start_ms'] != start)
             if rolled:
@@ -443,9 +469,9 @@ class AccountTimeline:
 
         if self.job is not None and self.job.done():
             try:
-                job_marker, values, more, removed, initial = self.job.result()
+                job_marker, values, more, removed, initial, pending, elapsed = self.job.result()
                 if job_marker == marker and available:
-                    self.initial_periods = initial
+                    self.initial_periods, self.pending_periods = initial, pending
                     values = {period: value for period, value in values.items()
                               if period_start('today', value['end_ms'], zone) == day
                               and value['start_ms'] == starts.get(period, value['start_ms'])}
@@ -459,15 +485,21 @@ class AccountTimeline:
                             self.results.update(values)
                             self.frame_revision += 1
                             self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
-                    self.due = self.last_started + (FOREGROUND_SLICE_MS if more else REFRESH_MS)
+                    if foreground:
+                        delay = FOREGROUND_SLICE_MS if pending & foreground else (
+                            BACKGROUND_SLICE_MS if more else REFRESH_MS)
+                    else:
+                        rest = max(BACKGROUND_SLICE_MS, min(15_000, 3 * elapsed))
+                        delay = elapsed + (rest if more else BACKGROUND_REFRESH_MS)
+                    self.due = self.last_started + delay
                     if rolled:
                         self.due = 0
                 recovered('account-timeline')
             except SourceError:
-                self.due = self.last_started + RETRY_MS
+                self.retry_at = self.last_started + RETRY_MS
             except Exception as error:
                 recoverable(error, 'account-timeline')
-                self.due = self.last_started + RETRY_MS
+                self.retry_at = self.last_started + RETRY_MS
             self.job = None
             with self.lock:
                 self.active_periods = frozenset()
@@ -475,6 +507,14 @@ class AccountTimeline:
         if periods != self.demand or self.roster != roster:
             self.demand, self.roster = periods, roster
             self.due = 0
+        if foreground - self.foreground:
+            if foreground - self.results.keys() or foreground & self.pending_periods:
+                self.due = 0  # Promote incomplete work without bypassing source-error backoff.
+            else:
+                self.due = min(self.due, self.last_started + REFRESH_MS)
+        if not foreground and self.foreground:
+            self.due = max(self.due, self.last_started + BACKGROUND_SLICE_MS)
+        self.foreground = foreground
         if available and not terminal:
             with self.lock:
                 self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
@@ -483,20 +523,27 @@ class AccountTimeline:
             with self.lock:
                 self.active_periods = frozenset()
             return marker
-        cold = (periods - self.results.keys()) | (periods & self.initial_periods)
+        if self.background_start is None:
+            self.background_start = now_ms + BACKGROUND_START_MS
+        cold = (foreground - self.results.keys()) | (foreground & self.initial_periods)
+        fast = cold or foreground & self.pending_periods
+        due = max(self.due, self.retry_at, self.background_start if not foreground else 0)
         with self.lock:
-            self.active_periods &= cold
-        self.fast = bool(cold and (self.job is not None or self.due <= now_ms + FOREGROUND_SLICE_MS))
-        minimum = FOREGROUND_SLICE_MS if cold else 1000
-        if self.job is not None or now_ms < max(self.due, self.last_started + minimum):
+            self.active_periods = cold if self.job is not None else frozenset()
+        self.fast = bool(fast and (self.job is not None or due <= now_ms + FOREGROUND_SLICE_MS))
+        minimum = FOREGROUND_SLICE_MS if fast else 1000 if foreground else BACKGROUND_SLICE_MS
+        if self.job is not None or now_ms < max(due, self.last_started + minimum):
             return marker
         self.last_started = now_ms
 
         def step():
+            started = monotonic()
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
-                zone, catalog, prices, migration_gap, now_ms, foreground=bool(cold), shared_roots=shared_roots)
+                zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
+                shared_roots=shared_roots, require_prices=require_background_prices and not foreground)
             return (marker, {period: value.to_json() for period, value in values.items()}, more, removed,
-                    self.history.initial_periods.copy())
+                     self.history.initial_periods.copy(), self.history.pending_periods.copy(),
+                     int((monotonic() - started) * 1000))
 
         self.job = self.pool.submit(step)
         with self.lock:

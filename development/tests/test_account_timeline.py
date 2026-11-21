@@ -13,7 +13,7 @@ from development.tests.fixtures.account_periods import request, subscription
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from src.analysis.account_timeline import DAY_MS, timeline_window
+from src.analysis.account_timeline import DAY_MS, PERIODS, timeline_window
 from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.period_ccost import PeriodCCostIndex
 from src.application.account_timeline import account_roster, timeline_view
@@ -25,7 +25,9 @@ from src.sources.errors import SourceConcurrentChangeError
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
-from src.watch.account_timeline import AccountTimeline, CardToday, TimelineHistory, FOREGROUND_SLICE_MS, ROOTS_PER_TURN
+from src.watch.account_timeline import (
+    AccountTimeline, BACKGROUND_SLICE_MS, CardToday, TimelineHistory, FOREGROUND_SLICE_MS, ROOTS_PER_TURN,
+)
 from src.web.dispatch import DataDispatcher
 
 
@@ -481,27 +483,27 @@ class TimelineDemandTests(unittest.TestCase):
             self.assertIn('ses_current_child', {entry.session_id for entry in evidence.entries})
             self.assertEqual(observation.revisions['ses_current'], evidence.revision)
 
-    def test_one_chart_lane_coalesces_periods_and_expires_hidden_demand(self):
+    def test_one_chart_lane_coalesces_foreground_periods_and_expires_leases(self):
         now = 1
         dispatch = DataDispatcher(None, clock=lambda: now)
         dispatch.interest('one', 'accounts', True, account_period='month')
         dispatch.interest('two', 'accounts', True, account_period='month')
-        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_foreground())
         now = 18
         dispatch.interest('one', 'accounts', True, account_period='month')
-        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_foreground())
         now = 25
         dispatch.interest('one', 'accounts', True, account_period='30-days')
-        self.assertEqual({'month', '30-days'}, dispatch.account_timeline_demand())
+        self.assertEqual({'month', '30-days'}, dispatch.account_timeline_foreground())
         dispatch.interest('one', 'accounts', False, account_period='30-days')
-        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_foreground())
         dispatch.interest('two', 'watch', True)
-        self.assertEqual(set(), dispatch.account_timeline_demand())
+        self.assertEqual(set(), dispatch.account_timeline_foreground())
         dispatch.interest('two', 'accounts', True, account_period='month')
         now = 100
-        self.assertEqual({'month'}, dispatch.account_timeline_demand())
+        self.assertEqual({'month'}, dispatch.account_timeline_foreground())
         now = 116
-        self.assertEqual(set(), dispatch.account_timeline_demand())
+        self.assertEqual(set(), dispatch.account_timeline_foreground())
 
     def test_bounded_slices_reuse_unchanged_root_facts_across_periods_and_retire_removed_roots(self):
         source = SyntheticMonthSource(217, 5, month_start_ms=NOV_1)
@@ -586,8 +588,8 @@ class TimelineDemandTests(unittest.TestCase):
         self.assertIsNone(final['view']['series'][0]['points'][0])
         self.assertGreater(Decimal(final['view']['series'][0]['points'][2]['amount']), Decimal(points[2]['amount']))
 
-    def test_visible_cold_slices_keep_priority_past_fifteen_seconds_and_withdraw(self):
-        source = SyntheticMonthSource(49, 1, month_start_ms=NOV_1)
+    def test_visible_priority_survives_long_lease_then_demotes_and_resumes_existing_work(self):
+        source = SyntheticMonthSource(61, 1, month_start_ms=NOV_1)
         source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
         lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
             progress=lambda *_: None), SourceReads())
@@ -600,7 +602,7 @@ class TimelineDemandTests(unittest.TestCase):
         dispatch.interest('tab', 'accounts', True, account_period='month')
 
         def tick(now):
-            lane.tick(**args, periods=dispatch.account_timeline_demand(), now_ms=now)
+            lane.tick(**args, periods=frozenset(PERIODS), foreground=dispatch.account_timeline_foreground(), now_ms=now)
 
         tick(NOV_5)
         lane.job.result(2)
@@ -620,14 +622,91 @@ class TimelineDemandTests(unittest.TestCase):
         self.assertFalse(lane.lookup('month')['acquiring'])
         self.assertIsNone(lane.job)
         self.assertEqual(36, source.load_count)
-        dispatch.interest('tab', 'accounts', True, account_period='month')
-        tick(NOV_5 + 18_000)
+        hidden_at = NOV_5 + 16_000 + FOREGROUND_SLICE_MS + BACKGROUND_SLICE_MS + 50
+        tick(hidden_at)
         lane.job.result(2)
-        tick(NOV_5 + 18_000 + FOREGROUND_SLICE_MS)
-        lane.job.result(2)
-        tick(NOV_5 + 18_001 + FOREGROUND_SLICE_MS)
-        self.assertEqual(49, source.load_count)
+        tick(hidden_at + 1)
+        self.assertEqual(48, source.load_count)
         self.assertFalse(lane.fast)
+        dispatch.interest('tab', 'accounts', True, account_period='month')
+        tick(hidden_at + 200)
+        lane.job.result(2)
+        tick(hidden_at + 200 + FOREGROUND_SLICE_MS)
+        lane.job.result(2)
+        tick(hidden_at + 201 + FOREGROUND_SLICE_MS)
+        self.assertEqual(61, source.load_count)
+        self.assertFalse(lane.fast)
+        self.assertFalse(lane.lookup('month')['acquiring'])
+
+    def test_unvisited_month_warms_all_periods_and_reentry_does_not_replay_root_reads(self):
+        source = SyntheticMonthSource(217, 3, month_start_ms=NOV_1)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+        self.addCleanup(lane.close)
+        args = dict(source=source_scope(source), observation=observe_catalog(source),
+            accounts=projected(subscription('github-copilot')), zone='UTC', catalog=FakePricingProvider().catalog,
+            prices=lambda: None, migration_gap=None, periods=frozenset(PERIODS), require_background_prices=True)
+
+        lane.tick(**args, foreground=frozenset(), now_ms=NOV_5 - 3_000)
+        self.assertIsNone(lane.job, 'background waits for the protected startup lanes')
+        for index in range(19):
+            now = NOV_5 + index * 15_000
+            lane.tick(**args, foreground=frozenset(), now_ms=now)
+            lane.job.result(3)
+            lane.tick(**args, foreground=frozenset(), now_ms=now + 1)
+            self.assertFalse(lane.fast)
+            self.assertEqual(min(217, (index + 1) * 12), source.load_count)
+
+        lane.tick(**args, foreground=frozenset({'month'}), now_ms=NOV_5 + 3_600_000)
+        if lane.job:
+            lane.job.result(3)
+        for period in PERIODS:
+            view = lane.lookup(period)['view']
+            self.assertEqual([], view['pending_buckets'], period)
+            self.assertEqual([], view['initial_pending_buckets'], period)
+            self.assertEqual(period, view['period'])
+        self.assertGreater(Decimal(lane.lookup('month')['view']['series'][0]['peak']), 0)
+        self.assertEqual(217, source.load_count)
+
+    def test_background_waits_for_healthy_pricing_context_and_refreshes_only_a_revised_root(self):
+        source = SyntheticMonthSource(3, 1, month_start_ms=NOV_1)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+        self.addCleanup(lane.close)
+        options = dict(source=source_scope(source), accounts=projected(subscription('github-copilot')),
+            zone='UTC', prices=lambda: None, migration_gap=None, periods=frozenset(PERIODS),
+            foreground=frozenset(), require_background_prices=True, observation=observe_catalog(source), catalog=None)
+
+        lane.tick(**options, available=False, now_ms=NOV_5)
+        self.assertIsNone(lane.job)
+        lane.tick(**options, now_ms=NOV_5 + 1_000)
+        lane.tick(**options, now_ms=NOV_5 + 5_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 5_001)
+        self.assertEqual(0, source.load_count)
+        self.assertIsNone(lane.lookup('month')['view'])
+
+        options['catalog'] = FakePricingProvider().catalog
+        lane.tick(**options, now_ms=NOV_5 + 70_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 70_001)
+        old = lane.lookup('month')
+        self.assertEqual(3, source.load_count)
+
+        changed = source.snapshots['root-0001']
+        source.snapshots['root-0001'] = replace(changed, source_revision='new-root-revision')
+        options['observation'] = observe_catalog(source)
+        lane.tick(**options, now_ms=NOV_5 + 72_000)
+        self.assertIsNone(lane.job, 'off-page changes do not turn refresh into continuous acquisition')
+        self.assertEqual(old, lane.lookup('month'))
+
+        lane.tick(**options, now_ms=NOV_5 + 135_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 135_001)
+        self.assertEqual(4, source.load_count)
+        self.assertGreater(lane.lookup('month')['revision'], old['revision'])
         self.assertFalse(lane.lookup('month')['acquiring'])
 
     def test_live_revision_is_quiet_pending_and_historical_roots_are_not_reacquired(self):

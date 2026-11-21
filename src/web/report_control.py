@@ -49,7 +49,7 @@ class Quantum:
 
     def _resume(self, grant):
         # 'run' parks after every quantum (background pacing); 'free' parks only
-        # when the host has requested a yield for waiting equal/higher-priority work.
+        # when the host requests a yield for contention or a paced background turn.
         if grant not in ('run', 'free'):
             raise RuntimeError('invalid_worker_control')
         self.free = grant == 'free'
