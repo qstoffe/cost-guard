@@ -262,6 +262,59 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(Decimal(0), Decimal(rows[0]['ticks'][0]['amount']))
         self.assertGreater(Decimal(rows[0]['ticks'][-1]['amount']), Decimal('.00001'))
 
+    def test_range_totals_add_unrounded_qualified_buckets_for_distinct_ids(self):
+        a, b, c = (subscription(identity=name) for name in ('first', 'second', 'third'))
+        accounts = tuple(AccountProjection(account, 'Same name') for account in (a, b, c))
+        facts = (request('1', NOV_1 + 5, amount=1, ref=a.ref),
+                 request('2', NOV_1 + DAY_MS + 5, amount=2, ref=a.ref),
+                 request('3', NOV_1 + DAY_MS + 6, amount=1, ref=b.ref),
+                 request('future', NOV_5, amount=10_000, ref=a.ref))
+        rows = self.view(accounts, facts, value=lambda _, tokens: Decimal('.004') * tokens.input)
+
+        self.assertEqual(3, len({row['id'] for row in rows}))
+        self.assertEqual({'amount': '0.012', 'display': {'credits': '<0.1', 'usd': '<$0.01'}}, rows[0]['total'])
+        self.assertEqual(Decimal('.004'), Decimal(rows[1]['total']['amount']))
+        self.assertEqual({'credits': '0', 'usd': '$0.00'}, rows[2]['total']['display'])
+
+    def test_total_preserves_uncertainty_without_faking_zero(self):
+        a, b = subscription(identity='first'), subscription(identity='second')
+        calls = (request('allocated', NOV_1 + 5, amount=50),
+                 request('known', NOV_1 + 6, amount=15, ref=a.ref))
+        rows = self.view(projected(a, b), calls, gaps=((NOV_1 + DAY_MS, NOV_1 + 2 * DAY_MS),))
+
+        self.assertEqual(['~40', '~25'], [row['total']['display']['credits'] for row in rows])
+        self.assertIsNone(self.view(projected(a), (), start=None)[0]['total'])
+        self.assertIsNone(self.view(projected(a), (), start=None, now=NOV_1)[0]['total'])
+
+    def test_non_working_days_follow_displayed_swedish_dates_in_all_daily_windows(self):
+        cases = (
+            ('7-days', '2027-01-02T00:30:00+01:00',
+             ('2026-12-26', '2026-12-27', '2027-01-01', '2027-01-02')),
+            ('30-days', '2027-01-02T00:30:00+01:00',
+             ('2026-12-05', '2026-12-06', '2026-12-12', '2026-12-13', '2026-12-19', '2026-12-20',
+              '2026-12-25', '2026-12-26', '2026-12-27', '2027-01-01', '2027-01-02')),
+            ('month', '2026-04-01T12:00:00+02:00',
+             ('2026-04-03', '2026-04-04', '2026-04-05', '2026-04-06', '2026-04-11', '2026-04-12',
+              '2026-04-18', '2026-04-19', '2026-04-25', '2026-04-26')),
+        )
+        for period, end, expected in cases:
+            with self.subTest(period=period):
+                zone = 'Europe/Stockholm'
+                view = timeline_view(period, stamp(end), zone, (), None, first_covered_ms=None, gaps=()).to_json()
+                offset = datetime.fromisoformat(end).tzinfo  # these fixtures have constant offsets across the ticks
+                dates = view['slot_dates'] or [datetime.fromtimestamp(start / 1000, offset).date().isoformat()
+                                              for start, _ in view['buckets']]
+                self.assertEqual(expected, tuple(dates[i] for i in view['non_working_buckets']))
+
+    def test_hourly_range_disambiguates_repeated_endpoint_without_marking_ticks(self):
+        for end, occurrence in (('2026-10-25T02:25:00+02:00', 1), ('2026-10-25T02:25:00+01:00', 2),
+                                ('2026-10-25T03:25:00+01:00', None)):
+            with self.subTest(end=end):
+                view = timeline_view('today', stamp(end), 'Europe/Stockholm', (), None,
+                                     first_covered_ms=None, gaps=()).to_json()
+                self.assertEqual(occurrence, view['end_occurrence'])
+                self.assertEqual([], view['non_working_buckets'])
+
     def test_pending_overlap_allows_only_provisional_positive_and_preserves_nonpending_gaps(self):
         native = subscription()
         index = PeriodCCostIndex((request('one', NOV_1 + DAY_MS + 5, amount=100, ref=native.ref),),
@@ -312,6 +365,7 @@ class TimelineProjectionTests(unittest.TestCase):
         view = timeline_view('30-days', now, 'Europe/Stockholm', account_roster(projected(account)), index,
                              first_covered_ms=first - DAY_MS, gaps=()).to_json()
         self.assertEqual(['1', '2'] + ['0'] * 27 + ['3'], [point['amount'] for point in view['series'][0]['points']])
+        self.assertEqual({'amount': '6', 'display': {'credits': '6', 'usd': '$0.06'}}, view['series'][0]['total'])
 
 
 class TimelineDOMTests(unittest.TestCase):
@@ -345,6 +399,7 @@ class TimelineDemandTests(unittest.TestCase):
             points = view['series'][0]['points']
             self.assertEqual('42.123', points[current]['amount'])
             self.assertEqual('~$0.42', points[current]['display']['usd'])
+            self.assertEqual(points[current], view['series'][0]['total'])
             self.assertEqual([current], [i for i, point in enumerate(points) if point is not None])
             self.assertIn(current - 1, view['initial_pending_buckets'])
         self.assertIsNone(lane.lookup('today')['view'])

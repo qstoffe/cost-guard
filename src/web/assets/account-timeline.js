@@ -5,6 +5,8 @@ const AccountTimelineView = (() => {
   const e = (...args) => ReportView.element(...args);
   const ns = 'http://www.w3.org/2000/svg';
   const top = 27, bottom = 194, inset = 3, paletteSize = 12;
+  const labelBaseline = 214, highlightBottom = 221, shadeTop = 4;
+  const englishWeekday = new Intl.DateTimeFormat('en', {weekday: 'long', timeZone: 'UTC'});
   const shown = item => ReportView.display({
     display: {amount: item.display.credits},
     display_units: {usd: {amount: item.display.usd}}
@@ -66,14 +68,31 @@ const AccountTimelineView = (() => {
     return a && b && a.period === b.period && a.timezone_id === b.timezone_id &&
       a.buckets.length === b.buckets.length && b.buckets.every(([start], i) => a.buckets[i][0] === start);
   }
-  function axisLabels(layout, future) {
+  function rangeLabel(view, layout, future) {
+    const start = ReportView.timestamp(view.start_ms, view.timezone_id);
+    const end = ReportView.timestamp(view.end_ms, view.timezone_id);
+    if (start === 'N/A' || end === 'N/A') return '—';
+    if (layout.hourly) {
+      const occurrence = view.end_occurrence ? ` (${view.end_occurrence === 1 ? 'first' : 'second'})` : '';
+      return `${start}–${end.split(' ')[1]}${occurrence}`;
+    }
+    // Use the last represented date, not a reserved date or the next day's
+    // midnight (the exclusive end of a rolling window on that boundary).
+    const last = layout.slots.findLast(slot => !future.has(slot.index));
+    return `${start.split(' ')[0]} – ${last?.day ?? end.split(' ')[0]}`;
+  }
+  function axisLabels(layout, future, nonWorking) {
     const {slots, hourly, shortDates, months, group, crossYear} = layout;
     const labels = slots.map(slot => {
-      const tick = hourly ? slot.time?.slice(0, 2) :
-        shortDates ? `${Number(slot.day.slice(8))}/${Number(slot.day.slice(5, 7))}` : Number(slot.day.slice(8));
-      const node = svg('text', {x: slot.center, y: 214, class: 'account-timeline-slot-label',
+      const tick = hourly ? slot.time?.slice(0, 2) : Number(slot.day.slice(8));
+      const node = svg('text', {x: slot.center, y: labelBaseline, class: 'account-timeline-slot-label',
         'data-bucket': slot.index, 'data-future': future.has(slot.index), 'text-anchor': 'middle'},
-        slot.day === 'N/A' ? '—' : tick);
+        slot.day === 'N/A' ? '—' : undefined);
+      if (slot.day !== 'N/A') {
+        if (nonWorking.has(slot.index)) node.append(svg('tspan', {class: 'account-timeline-non-working'}, tick));
+        else node.textContent = tick;
+        if (shortDates) node.append(`/${Number(slot.day.slice(5, 7))}`);
+      }
       if (slot.occurrence) node.append(svg('tspan', {class: 'account-timeline-fold'}, slot.occurrence === 1 ? '¹' : '²'));
       return node;
     });
@@ -91,6 +110,12 @@ const AccountTimelineView = (() => {
       if (crossYear) labels.push(svg('text', {...attrs, y: 250}, year));
     });
     return labels;
+  }
+  function loadingCue(index, x, active) {
+    const y = (shadeTop + bottom) / 2;
+    const d = active ? `M${x + 4},${y}a4,4 0 1 1 -4,-4` :
+      `M${x - 3},${y - 4}h6l-6,8h6Z`;
+    return svg('path', {class: active ? 'account-timeline-ring' : 'account-timeline-hourglass', 'data-bucket': index, d});
   }
 
   class View {
@@ -127,13 +152,14 @@ const AccountTimelineView = (() => {
       this.plot = svg('svg', {role: 'group', 'aria-label': 'Usage by time. Use Left and Right arrows for bucket values.',
         tabindex: '0', class: 'account-timeline-plot', preserveAspectRatio: 'none'});
       this.shades = svg('g', {'aria-hidden': 'true'});
-      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: 4, height: bottom + 17,
+      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: shadeTop, height: highlightBottom - shadeTop,
         rx: 4, visibility: 'hidden', 'aria-hidden': 'true'});
       this.layers = svg('g', {'aria-hidden': 'true'});
       this.labels = svg('g', {'aria-hidden': 'true'});
       this.targets = svg('g', {'aria-hidden': 'true'});
       this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
+      this.range = e('p', undefined, 'account-timeline-range');
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
       this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
@@ -153,7 +179,7 @@ const AccountTimelineView = (() => {
       this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
-      this.frame.append(this.axis, this.scroller, this.selectedLegend, this.tooltip);
+      this.frame.append(this.axis, this.scroller, this.range, this.selectedLegend, this.tooltip);
       graph.append(this.frame, this.empty, this.announce);
       this.chooser = e('button', undefined, 'account-timeline-chooser');
       this.chooser.type = 'button';
@@ -372,13 +398,19 @@ const AccountTimelineView = (() => {
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
       this.selectedLegend.hidden = !view || !selectedSeries.length;
-      const legend = selectedSeries.map(item => [this.colors.get(item.id), item.account]);
+      const legend = this.series.map(item => [this.colors.get(item.id), item.account, item.total ? shown(item.total) : '—']);
       const legendKey = JSON.stringify(legend);
       if (legendKey !== this.legendKey) {
         this.legendKey = legendKey;
-        this.selectedLegend.replaceChildren(...legend.map(([ink, name]) => {
+        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total]) => {
           const row = e('li');
-          row.append(swatch(ink), e('span', name), e('span', '', 'account-timeline-legend-value'));
+          const value = e('span', total === '—' ? undefined : total, 'account-timeline-legend-value');
+          if (total === '—') {
+            const dash = e('span', total);
+            dash.setAttribute('aria-hidden', 'true');
+            value.append(dash, e('span', 'Total unavailable', 'sr-only'));
+          }
+          row.append(swatch(ink), e('span', name), value);
           return row;
         }));
       }
@@ -387,6 +419,7 @@ const AccountTimelineView = (() => {
       this.shown = cached?.shown;
       this.partial = new Set(view?.partial_buckets);
       this.future = new Set(view?.future_buckets);
+      this.nonWorking = new Set(view?.non_working_buckets);
       const scale = visibleScale(this.series.filter(item => item.points.some(point => point !== null)));
       const unselected = roster.length && !selectedSeries.length;
       const loading = !view && !unselected && this.initial && this.visible;
@@ -418,6 +451,9 @@ const AccountTimelineView = (() => {
       const sameGeometry = equalSlots(previous, view) && this.layout?.width === width;
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
+      this.range.hidden = !!unselected;
+      this.range.title = layout.shortDates ? 'A rolling seven-day window; dates at either end may be partial.' : '';
+      ReportView.text(this.range, `Range: ${rangeLabel(view, layout, this.future)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);
@@ -431,7 +467,7 @@ const AccountTimelineView = (() => {
         this.highlight.setAttribute('width', group - 2);
       }
       if (!sameGeometry || previous.future_buckets?.length !== view.future_buckets?.length)
-        this.labels.replaceChildren(...axisLabels(layout, this.future));
+        this.labels.replaceChildren(...axisLabels(layout, this.future, this.nonWorking));
 
       const shades = [], nodes = [];
       let cue = false;
@@ -440,16 +476,15 @@ const AccountTimelineView = (() => {
         const waiting = this.unread.has(index) && !this.shown?.has(view.buckets[index][0]);
         if (future || waiting) shades.push(svg('rect', {
           class: future ? 'account-timeline-future' : 'account-timeline-loading',
-          'data-bucket': index, x: x + 1, y: 4, width: group - 2, height: bottom - 4, rx: 4
+          'data-bucket': index, x: x + 1, y: shadeTop, width: group - 2, height: bottom - shadeTop, rx: 4
         }));
         // This is a neutral cue in a backed unread region, not a claim that
         // the source is reading one specific day (a tree can span many).
-        if (!cue && !future && waiting && this.visible && this.working) {
-          nodes.push(svg('path', {class: 'account-timeline-ring', d: `M${center + 4},14a4,4 0 1 1 -4,-4`}));
-          cue = true;
+        if (!future && waiting) {
+          const active = !cue && this.visible && this.working;
+          nodes.push(loadingCue(index, center, active));
+          cue ||= active;
         }
-        else if (this.partial.has(index)) nodes.push(svg('circle', {class: 'account-timeline-partial', cx: center,
-          cy: 14, r: 2, 'data-bucket': index}));
       }
       const bar = Math.min(28, group - 6);
       const max = Number(scale.at(-1)?.amount);
@@ -512,7 +547,6 @@ const AccountTimelineView = (() => {
       this.tooltip.classList.toggle('interactive', interactive);
       this.tooltip.classList.toggle('pinned', pinned);
       if (!slot || this.frame.hidden) {
-        for (const row of this.selectedLegend.children) ReportView.text(row.children[2], '');
         this.tooltip.hidden = true;
         this.highlight.setAttribute('visibility', 'hidden');
         return;
@@ -525,13 +559,14 @@ const AccountTimelineView = (() => {
         const end = ReportView.timestamp(this.view.buckets[index][1], this.view.timezone_id).split(' ')[1];
         const repeat = slot.occurrence ? ` (${slot.occurrence === 1 ? 'first' : 'second'})` : '';
         heading += ` ${slot.time}${partial ? '–Now' : end ? `–${end}` : ''}${repeat}`;
+      } else if (!this.layout.hourly && slot.day !== 'N/A') {
+        heading += ` ${englishWeekday.format(new Date(`${slot.day}T00:00:00Z`))}`;
       }
-      const state = future ? 'Upcoming' : '';
+      const state = [future && 'Upcoming', this.nonWorking.has(index) && 'Swedish non-working day'].filter(Boolean).join(' · ');
       const values = [], rows = [];
-      for (const [ordinal, item] of this.series.entries()) {
+      for (const item of this.series) {
         const point = item.points[index];
         const value = point ? shown(point) : '—';
-        ReportView.text(this.selectedLegend.children[ordinal].children[2], future ? '' : value);
         if (future) continue;
         const name = item.account, row = e('div', undefined, 'account-timeline-tip-row');
         const text = e('span', name, 'account-timeline-tip-name');

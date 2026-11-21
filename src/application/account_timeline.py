@@ -2,10 +2,13 @@
 from bisect import bisect_left
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 
 from src.analysis.account_timeline import timeline_window
 from src.analysis.period_ccost import account_usage_routes
+from src.analysis.quota_pace import is_workday
+from src.analysis.timezones import resolve_timezone
 from src.numbers import ccost_amount
 
 from .contracts import record
@@ -52,6 +55,27 @@ def _point(amount, mark=''):
                                                 usd=mark + ccost_amount(amount, unit='usd')))
 
 
+def _range_total(amounts):
+    subtotal = sum((point[0] for point in amounts if point is not None), Decimal(0))
+    uncertain = any(point is None or point[1] for point in amounts)
+    if not amounts or (uncertain and not subtotal):
+        return None
+    return _point(subtotal, '~' if uncertain else '')
+
+
+def _calendar_details(period, window, end_ms, zone):
+    zone = resolve_timezone(zone)
+    if period == 'today':
+        end = datetime.fromtimestamp(end_ms // 1000, zone)
+        # A published endpoint in the repeated wall-clock interval needs a fold
+        # hint even if the other occurrence isn't plotted yet.
+        repeated = end.replace(fold=0).utcoffset() != end.replace(fold=1).utcoffset()
+        return (), end.fold + 1 if repeated else None
+    days = (map(date.fromisoformat, window.dates) if window.dates else
+            (datetime.fromtimestamp(start // 1000, zone).date() for start, _ in window.buckets))
+    return tuple(i for i, day in enumerate(days) if not is_workday(day, 'SE')), None
+
+
 def _ticks(peak):
     step = _nice_scale(peak)
     return tuple(_point(step * i) for i in range(5))
@@ -73,7 +97,13 @@ def seed_today(view, day, amounts):
         points = item['points'].copy()
         points[index] = _point(amount, '~').to_json()
         peak = max(Decimal(point['amount']) for point in points if point is not None)
-        series.append(dict(item, points=points, peak=str(peak), ticks=[tick.to_json() for tick in _ticks(peak)]))
+        # The compatible card seed replaces a bucket, not the whole summary or
+        # an additional day's usage. Only the replacement delta is new.
+        subtotal = Decimal(item['total']['amount']) if item['total'] else Decimal(0)
+        subtotal += amount - (Decimal(point['amount']) if point else Decimal(0))
+        total = _point(subtotal, '~').to_json() if subtotal else None
+        series.append(dict(item, points=points, total=total, peak=str(peak),
+                           ticks=[tick.to_json() for tick in _ticks(peak)]))
     return dict(view, series=series)
 
 
@@ -113,6 +143,7 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
     initial = acquiring if initial_pending is None else _overlap(initial_pending, elapsed)
     partial = tuple(gap or waiting or first_covered_ms is None or left < first_covered_ms
                     for (left, _), gap, waiting in zip(elapsed, missing, acquiring))
+    non_working, end_occurrence = _calendar_details(period, window, now_ms, zone)
     series = []
     for item in roster:
         amounts = tuple(_bucket_cost(index, item, left, right, partial=uncertain)
@@ -120,11 +151,15 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
                         for (left, right), uncertain in zip(elapsed, partial))
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
+        # Ignore reserved dates and zero-duration boundary slots; neither adds
+        # time in the published window nor makes it incomplete.
+        total = _range_total(tuple(point for (left, right), point in zip(elapsed, amounts) if left < right))
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
-        series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points))
+        series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points, total=total))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,
                   slot_dates=window.dates, future_buckets=window.future, partial_buckets=window.partial,
+                  non_working_buckets=non_working, end_occurrence=end_occurrence,
                   pending_buckets=tuple(i for i, waiting in enumerate(acquiring) if waiting),
                   initial_pending_buckets=tuple(i for i, waiting in enumerate(initial) if waiting),
                   price_revision=price_revision, series=tuple(series))

@@ -279,27 +279,32 @@ section > label input { min-width: 0; }
   fill: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .015em;
 }
 .account-timeline-slot-label[data-future="true"], .account-timeline-fold { fill: var(--muted); }
+.account-timeline-non-working { fill: var(--error); }
 .account-timeline-axis { position: relative; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .account-timeline-tick {
   position: relative; display: block; height: 0; line-height: 1rem; padding-inline: 0 .32rem;
   transform: translateY(-.5rem); text-align: end; white-space: nowrap;
 }
-.account-timeline-selected {
-  grid-column: 2; display: flex; flex-wrap: wrap; gap: .35rem 1rem;
-  margin: .65rem 0 0; padding: 0; list-style: none; min-width: 0;
-  color: var(--ink); font-size: .76rem; line-height: 1.35;
+.account-timeline-range, .account-timeline-selected {
+  grid-column: 2; margin: .4rem 0 0; font-size: .76rem; line-height: 1.35;
 }
-.account-timeline-selected li { display: flex; align-items: baseline; gap: .35rem; min-width: 0; overflow-wrap: anywhere; }
-.account-timeline-selected .account-timeline-swatch { flex: none; }
-.account-timeline-legend-value { color: var(--muted); font-variant-numeric: tabular-nums; }
-.account-timeline-legend-value:empty { display: none; }
+.account-timeline-range { color: var(--muted); font-variant-numeric: tabular-nums; }
+.account-timeline-selected { display: grid; gap: .3rem; padding: 0; list-style: none; min-width: 0; }
+.account-timeline-selected li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline;
+  gap: .4rem; min-width: 0; overflow-wrap: anywhere;
+}
+.account-timeline-legend-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: end; }
 .account-timeline-target { fill: transparent; }
 .account-timeline-loading { fill: color-mix(in srgb, var(--muted) 9%, transparent); }
 .account-timeline-future { fill: color-mix(in srgb, var(--muted) 4%, transparent); }
 .account-timeline-highlight { fill: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
-.account-timeline-partial, .account-timeline-month-divider { fill: var(--control-line); }
+.account-timeline-month-divider { fill: var(--control-line); }
 .account-timeline-ring {
   color: var(--muted); animation: account-timeline-turn .95s linear infinite; pointer-events: none;
+}
+path.account-timeline-hourglass {
+  fill: none; stroke: var(--muted); stroke-width: 1.25; stroke-linejoin: round; pointer-events: none;
 }
 path.account-timeline-ring {
   fill: none; stroke: currentColor; stroke-width: 1.5;
