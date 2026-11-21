@@ -159,6 +159,10 @@ class DisplayArchive:
         return (views is not None and time.monotonic() >= self._retry_at
                 and self.sweep.due(catalog, views.binding))
 
+    def priority_summary_pending(self, catalog):
+        return (self.views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
+                and self.sweep.priority_due(catalog))
+
     def completed_summary_keys(self, binding, revisions, dependency):
         completed = None
 
@@ -249,8 +253,17 @@ class DisplayArchive:
         self._cache_write(admit)
         return admission
 
-    def publish_summary(self, service, admission, row, revision, *, dependency=None):
-        if (admission is not None and self._writer_binding(service) == (admission.source, admission.epoch)):
-            return self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
-                                                                  {row.session_id: revision}, dependency=dependency))
+    def publish_summary(self, service, admission, row, revision, *, dependency=None, eligible=None):
+        if admission is None or self._writer_binding(service) != (admission.source, admission.epoch):
+            return False
+        accepted = False
+
+        def check():
+            nonlocal accepted
+            accepted = eligible is None or eligible()
+            return accepted
+
+        if self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
+                {row.session_id: revision}, dependency=dependency, eligible=check)):
+            return accepted
         return False

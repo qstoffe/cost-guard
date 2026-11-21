@@ -171,7 +171,9 @@ class WebWatchCoordinator(WatchCoordinator):
             self.catalog_turn += 1
             # Reserve bounded progress even under continuous legacy demand. Both
             # jobs share the original lane; Watch/Mini observation never waits here.
-            sweep = sweep_needed and (not scalar_needed or self.catalog_turn % 4 == 0)
+            turn = self.catalog_turn % 4
+            sweep = sweep_needed and (not scalar_needed or turn == 0
+                                      or turn != 3 and archive.priority_summary_pending(catalog))
             self.catalog_job = self.catalog_pool.submit(
                 self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep)
 

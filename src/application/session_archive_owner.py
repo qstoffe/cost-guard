@@ -52,10 +52,11 @@ class SessionArchiveOwner:
                 SessionPublication(session_id, revision, epoch, previous.get(session_id))
                 for session_id, revision in revisions.items()))
 
-    def commit(self, admission, rows, current_revisions, *, missing=(), dependency=None):
+    def commit(self, admission, rows, current_revisions, *, missing=(), dependency=None, eligible=None):
         """Publish compact facts and notify only after the SQLite commit succeeded."""
         with self._lock:
-            if (admission.source, admission.epoch) != self._binding:
+            if ((admission.source, admission.epoch) != self._binding
+                    or eligible is not None and not eligible()):
                 return None
             updates, absent = [], []
             for proof in admission.facts:

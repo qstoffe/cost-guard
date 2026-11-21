@@ -21,7 +21,7 @@ from src.sources.errors import SourceError
 from src.watch.models import SessionPreview
 
 from .projection import project
-from .session_archive_sweep import checkpoint_dependency, scalar_dependency
+from .session_archive_sweep import checkpoint_dependency, scalar_dependency, verified_finish
 from .session_navigation import Navigation
 from .session_catalog_scope import (
     CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population,
@@ -135,6 +135,8 @@ class SessionCatalog:
         self.activity_index = ()
         self.activity_valid = {}
         self.changed_roots = set()
+        self.archive_urgent = OrderedDict()
+        self.archive_incarnation = 0
         self.active = frozenset()
         self.prompt_activity = {}
         self.running_roots = set()
@@ -257,8 +259,10 @@ class SessionCatalog:
                     self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
+                self.archive_urgent.clear()
                 if self.state != "source_unavailable" or source_interrupted and not self.interrupted:
                     self.wake_revision += 1
+                    self.archive_incarnation += 1
                 if source_interrupted and not self.interrupted:
                     # Recovery must supply new prompt evidence, not replay a
                     # capture that predates the confirmed outage.
@@ -271,6 +275,8 @@ class SessionCatalog:
             source_changed = bool(self.last_observation
                 and self.last_observation.source_epoch != observation.source_epoch)
             if source_changed:
+                self.archive_urgent.clear()
+                self.archive_incarnation += 1
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'running_roots', 'model_dependencies', 'orders'):
@@ -319,10 +325,21 @@ class SessionCatalog:
                     or self.revisions.keys() != previous_revisions.keys()):
                 self.membership_generation += 1
             self.changed_roots.intersection_update(self.roots)
-            self.changed_roots.update(key for key in self.roots
-                if key in previous_revisions and previous_revisions[key] != self.revisions.get(key))
+            revised = {key for key in self.roots if key in previous_roots
+                       and (previous_revisions.get(key) != self.revisions.get(key)
+                            or previous_roots[key].provenance != self.roots[key].provenance)}
+            self.changed_roots.update(revised)
             if self.observed is not None:
-                self.changed_roots.update(self.roots.keys() - previous_roots.keys())
+                new = self.roots.keys() - previous_roots.keys()
+                self.changed_roots.update(new)
+                if self.display_archive is not None and not source_changed:
+                    for key in tuple(self.archive_urgent):
+                        if key not in self.roots or key in revised:
+                            del self.archive_urgent[key]
+                    newest = nsmallest(BATCH_LIMIT, (key for key in revised | new if self.revisions.get(key)),
+                                       key=lambda key: (-self.activity.get(key, 0), key))
+                    for key in newest:
+                        self._archive_priority(key, now=now)
             if (source_changed or self.state != "observed" or previous_active != self.active
                     or tuple(previous_roots) != tuple(self.roots) or any(
                     key not in previous_roots or previous_roots[key] != root
@@ -373,8 +390,25 @@ class SessionCatalog:
                 if (key not in self.roots or root.provenance != self.roots[key].provenance
                         or revision != self.revisions.get(key) or not 0 <= now - captured_at <= 15_000):
                     continue
+                before = self.archive_terminal(key)
                 self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
                                     wake=True)
+                after = self.archive_terminal(key)
+                if self.display_archive is not None and after is not None and before != after:
+                    self._archive_priority(key)
+
+    def archive_terminal(self, key):
+        prompt = self.prompt_activity.get(key)
+        if (prompt is not None and prompt.ended and not prompt.running and
+                prompt.revision == self.revisions.get(key) and prompt.observed_ms > self.lifecycle_cutoff_ms):
+            return prompt.identity
+        return None
+
+    def _archive_priority(self, key, *, now=None, delay=0, attempts=0):
+        self.archive_urgent[key] = ((self.clock() if now is None else now) + delay, attempts)
+        self.archive_urgent.move_to_end(key)
+        if len(self.archive_urgent) > BATCH_LIMIT:
+            self.archive_urgent.popitem(last=False)
 
     def archive_running(self, evidence):
         """Only currently proven, same-revision starts from the shared observer."""
@@ -416,8 +450,9 @@ class SessionCatalog:
                         or not evidence.running and not evidence.ended
                         or evidence.observed_ms == previous.observed_ms and evidence.running):
                     return
-                if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
-                    evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
+                if (evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None
+                        and evidence.revision == previous.revision and previous.observed_ms > self.lifecycle_cutoff_ms):
+                    evidence = replace(evidence, finish_ms=previous.finish_ms)
         self.prompt_activity[key] = evidence
         if evidence.running:
             self.running_roots.add(key)
@@ -565,7 +600,8 @@ class SessionCatalog:
                     break
                 root, revision = self.roots[key], self.revisions.get(key)
                 epoch = self.last_observation.source_epoch
-                active = key in self.active or key in self.running_roots
+                incarnation = self.archive_incarnation
+                active = key in self.active or self._running(key) or self.archive_terminal(key) is not None
                 captured_at = self.clock_ms()
                 self.attempted[key] = self.clock()
                 self.metrics['attempts'] += 1
@@ -637,8 +673,18 @@ class SessionCatalog:
                 # Native model identity can change without a root revision.
                 # A checkpoint must name the exact observed identity authority;
                 # callers cannot use it as a revision-only restart shortcut.
-                archive.publish_summary(service, admission, row, actual,
-                                        dependency=checkpoint_dependency(dependencies, identity_values))
+                with self.lock:
+                    terminal = self.archive_terminal(key)
+                def eligible():
+                    with self.lock:
+                        return (self.state == "observed" and self.archive_incarnation == incarnation
+                                and self.roots.get(key) == root and self.revisions.get(key) == actual
+                                and not self._running(key) and terminal == self.archive_terminal(key))
+
+                if terminal is None or verified_finish(row, terminal):
+                    archive.publish_summary(service, admission, row, actual,
+                                             eligible=eligible,
+                                             dependency=checkpoint_dependency(dependencies, identity_values, terminal))
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:

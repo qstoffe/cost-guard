@@ -1,5 +1,6 @@
 """The archive cannot be rebound from a client hint or a reused local path."""
 from contextlib import closing
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,12 +10,13 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
+from development.tests.fixtures.catalog_prompt_activity import at, finished_snapshot
 from development.tests.fixtures.opencode_v1_database import create_v1_database
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from src.cache import CacheDatabase, CacheRepository
 from src.cache.display_history import RunningSession, SessionChange, SessionFact
 from src.application.session_catalog import SessionCatalog
-from src.domain import NormalizedSession, Provenance, SessionCapabilities
+from src.domain import BackgroundActivity, NormalizedSession, Provenance, SessionCapabilities, TerminalOutcome
 from src.reports.models import SessionUsageRow
 from src.reports.service import ReportService
 from src.sources.errors import FailureCode, SourceUnavailableError
@@ -303,6 +305,131 @@ class DisplayBindingTests(unittest.TestCase):
 
             self.assertEqual(["a", "b", "c", "a"], calls)
             self.assertEqual(["b", "c"], [row["session_id"] for row in archive.views.page(period="all")["rows"]])
+
+    def test_same_revision_terminal_waits_for_linked_work_and_retries_without_losing_the_prior_clock(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            driver = v1_driver(root)
+            archive = DisplayArchive(root, lambda *_: None)
+            self.addCleanup(archive.close)
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            source = driver.coordinator.report_service.selection.source
+            database = CacheDatabase(root)
+            database.initialize()
+            now_ms = at("02:00:00")
+            service = ReportService(selection=SourceSelection(source, "v1", (), None),
+                pricing_provider=FakePricingProvider(), account_provider=None, cache_repository=CacheRepository(database),
+                config={"timezone": "UTC"}, now_ms=now_ms, progress=lambda _: None)
+            clock = [100]
+            catalog = SessionCatalog(clock=lambda: clock[0], clock_ms=lambda: now_ms, display_archive=archive)
+            base = finished_snapshot()
+            live_root = replace(base.root, active=True)
+            key = live_root.session_id
+            work = BackgroundActivity("fixture-shell", key, "shell", at("01:17:59"),
+                base.messages[-1].message_id, running=True)
+            # The catalog still advertises a live candidate, but the fresh
+            # hydrated snapshot independently sees the parent's idle state.
+            unsettled = replace(base, background=(work,))
+            finish = at("01:52:00")
+            settled = replace(unsettled, background=(replace(work, running=False, ended_at_ms=finish,
+                                                             outcome=TerminalOutcome.SUCCESS),))
+            revision = unsettled.source_revision
+            catalog.observe(CatalogObservation((live_root,), (live_root,), {}, {key: revision},
+                                               live_candidates=frozenset({key})))
+            archive.history.commit_sessions(archive.views.source, (SessionChange(
+                SessionFact(key, "prior", "Prior", activity_ms=at("01:02:00"), ccost=Decimal("2.15")), None),))
+            event = base.events[0]
+            start = (live_root, revision, now_ms - 400, event.event_id, event.created_at_ms)
+            stop = (live_root, revision, now_ms - 200, event.event_id, event.created_at_ms)
+            catalog.observe_prompts(((*start, True, None, False),))
+            archive.sessions.commit_running(archive.views.source, archive.views.binding,
+                catalog.archive_running(((*start, True, None, False),)))
+            running, = archive.views.page(period="all", now_ms=now_ms)["rows"]
+
+            with (patch.object(source, "get_session_tree_revision", return_value=revision),
+                  patch.object(source, "load_session_snapshot",
+                              side_effect=(SourceUnavailableError("fixture"), unsettled, settled)) as load):
+                catalog.observe_prompts(((*stop, False, None, True),))
+                archive.sessions.commit_running(archive.views.source, archive.views.binding, ())
+                archive.acquire_summaries(catalog, service)
+                failed, = archive.views.page(period="all", now_ms=now_ms)["rows"]
+                clock[0] = 102
+                archive.acquire_summaries(catalog, service)
+                pending, = archive.views.page(period="all", now_ms=now_ms)["rows"]
+                clock[0] = 107
+                archive.acquire_summaries(catalog, service)
+                done, = archive.views.page(period="all", now_ms=now_ms)["rows"]
+                catalog.observe_prompts(((*stop, False, None, True), (*start, True, None, False)))
+                archive.acquire_summaries(catalog, service)
+
+            self.assertTrue(running["running"])
+            self.assertFalse(failed["running"])
+            self.assertEqual((at("01:02:00"), "2.15"), (failed["activity_ms"], failed["ccost"]))
+            self.assertEqual(failed, pending)
+            self.assertEqual(("finish", finish, event.created_at_ms),
+                             (done["activity_origin"], done["activity_ms"], done["prompt_started_ms"]))
+            self.assertEqual(3, load.call_count)
+
+    def test_recent_corrections_do_not_starve_unvisited_old_roots(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, catalog, roots = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            calls = []
+
+            def summary(_service, root, revision, **_):
+                calls.append((root.session_id, revision))
+                return SessionUsageRow(root.session_id, root.title, "Model", False, Decimal("1"), 1), revision
+
+            revisions = dict.fromkeys(("old", "recent"), "r0")
+            catalog.observe(CatalogObservation(roots, roots, {}, revisions))
+            with patch("src.application.session_archive_sweep.session_summary", side_effect=summary):
+                for number in range(1, 6):
+                    revisions = {**revisions, "recent": f"r{number}"}
+                    catalog.observe(CatalogObservation(roots, roots, {}, revisions))
+                    archive.acquire_summaries(catalog, service)
+
+            self.assertEqual([("recent", "r1"), ("recent", "r2"), ("recent", "r3"),
+                              ("old", "r0"), ("recent", "r5")], calls)
+
+    def test_outage_during_acquisition_rejects_old_result_even_after_same_revision_recovery(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, catalog, roots = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            observation = CatalogObservation(roots, roots, {}, dict.fromkeys(("old", "recent"), "r0"))
+            catalog.observe(observation)
+
+            def crossed_gap(_service, root, revision, **_):
+                catalog.observe(None, unavailable=True)
+                catalog.observe(replace(observation))
+                return SessionUsageRow(root.session_id, root.title, "Model", False, Decimal("50"), 1), revision
+
+            with patch("src.application.session_archive_sweep.session_summary", side_effect=crossed_gap):
+                archive.acquire_summaries(catalog, service)
+                stale = archive.views.page(period="all")
+            with patch("src.application.session_archive_sweep.session_summary",
+                       return_value=(SessionUsageRow("old", "old", "Model", False, Decimal("3"), 1), "r0")):
+                archive.acquire_summaries(catalog, service)
+                current, = archive.views.page(period="all")["rows"]
+
+            self.assertEqual(0, stale["cached_total"])
+            self.assertEqual(("old", "3"), (current["session_id"], current["ccost"]))
+
+
+def archive_sweep_fixture(root):
+    driver = v1_driver(root)
+    service = driver.coordinator.report_service
+    service._load_catalog = lambda: None
+    service._load_comparison_catalog = lambda: SimpleNamespace(diagnostic_signature="pricing")
+    service._dependencies = lambda _: "config"
+    service.retain_derived_cache_read_only = lambda: None
+    archive = DisplayArchive(root, lambda *_: None)
+    archive.initialize()
+    archive.observe(driver, before_tick=True)
+    catalog = SessionCatalog(clock=lambda: 100, display_archive=archive)
+    roots = tuple(NormalizedSession(key, key, 1, 2, Provenance("fixture", key), SessionCapabilities())
+                  for key in ("old", "recent"))
+    return archive, service, catalog, roots
 
 
 def v1_driver(root):

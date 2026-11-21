@@ -1,8 +1,11 @@
 """Fair bounded Sessions history slices on the existing scalar acquisition lane."""
 from collections import deque
+from dataclasses import dataclass
 from itertools import islice
 
 from src.analysis.cache import dependency_signature
+from src.domain import NormalizedSession
+from src.pricing.base import PricingUnavailableError
 from src.reports.session_summary import ALGORITHM, EFFORT_REVISION, session_summary
 from src.sources.errors import SourceError
 
@@ -10,6 +13,7 @@ from src.sources.errors import SourceError
 SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
+PRIORITY_BACKOFF = (2, 5, 15)
 PROJECTION_REVISION = "sessions-activity-provenance-1"
 
 
@@ -18,9 +22,22 @@ def scalar_dependency(service):
         service._dependencies(service._load_catalog()), service._load_comparison_catalog().diagnostic_signature))
 
 
-def checkpoint_dependency(base, model_authorities):
-    return dependency_signature((PROJECTION_REVISION, base,
-                                 sorted(dependency_signature(value) for value in model_authorities)))
+def checkpoint_dependency(base, model_authorities, terminal=None):
+    values = (PROJECTION_REVISION, base, sorted(dependency_signature(value) for value in model_authorities))
+    return dependency_signature(values if terminal is None else (*values, terminal))
+
+
+def verified_finish(row, terminal):
+    return (row.activity_qualified and not row.running and row.last_activity_ms is not None
+            and (row.prompt_started_ms, row.activity_prompt_id) == terminal)
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryCandidate:
+    root: NormalizedSession
+    revision: str
+    incarnation: int
+    terminal: tuple[int, str] | None
 
 
 class SessionArchiveSweep:
@@ -35,17 +52,43 @@ class SessionArchiveSweep:
         self._queue = deque()
         self._next_walk = 0
         self._incomplete = False
+        self._urgent_turn = 0
 
     def due(self, catalog, binding):
         return (catalog.state == "observed" and binding is not None and
-                (self._snapshot != (binding, catalog.membership_generation) or catalog.clock() >= self._next_walk))
+                (self.priority_due(catalog) or self._background_due(catalog, binding)))
+
+    @staticmethod
+    def priority_due(catalog):
+        with catalog.lock:
+            now = catalog.clock()
+            return any(ready <= now for ready, _ in catalog.archive_urgent.values())
+
+    @staticmethod
+    def _catalog_key(catalog, binding):
+        return binding, catalog.archive_incarnation, catalog.membership_generation
+
+    def _background_due(self, catalog, binding):
+        return self._snapshot != self._catalog_key(catalog, binding) or catalog.clock() >= self._next_walk
+
+    @staticmethod
+    def _candidate(catalog, key):
+        root, revision = catalog.roots.get(key), catalog.revisions.get(key)
+        if root is None or not revision or catalog._running(key):
+            return None
+        # A captured terminal clears the Running overlay first. Whole-session
+        # finish still requires the canonical scalar/linked activity function.
+        terminal = catalog.archive_terminal(key)
+        if key in catalog.active and terminal is None:
+            return None
+        return SummaryCandidate(root, revision, catalog.archive_incarnation, terminal)
 
     def _candidates(self, catalog, binding):
         with catalog.lock:
-            if not self.due(catalog, binding):
+            if catalog.state != "observed" or not self._background_due(catalog, binding):
                 return {}
-            snapshot = binding, catalog.membership_generation
-            if self._snapshot is None or self._snapshot[0] != binding or self._walk is None:
+            snapshot = self._catalog_key(catalog, binding)
+            if self._snapshot is None or self._snapshot[:2] != snapshot[:2] or self._walk is None:
                 self._snapshot = snapshot
                 self._walk = iter(catalog.roots)
                 self._queue.clear()
@@ -57,19 +100,46 @@ class SessionArchiveSweep:
                     self._walk = None
                     self._next_walk = catalog.clock() + (RETRY_SECONDS if self._incomplete else RECHECK_SECONDS)
                     return {}
-            observation = catalog.last_observation
             results = {}
             for key in self._queue:
-                revision = catalog.revisions.get(key)
                 if key not in catalog.roots:
                     continue
-                if not revision or key in catalog.active or key in catalog.running_roots:
+                candidate = self._candidate(catalog, key)
+                if candidate is None:
                     self._incomplete = True
                     continue
-                results[key] = catalog.roots[key], revision, observation.source_epoch
+                if key not in catalog.archive_urgent:
+                    results[key] = candidate
             return results
 
+    def _urgent(self, catalog, binding):
+        with catalog.lock:
+            now = catalog.clock()
+            ready = tuple((key, attempts) for key, (due, attempts) in catalog.archive_urgent.items() if due <= now)
+            if catalog.state != "observed" or not ready:
+                return None
+            self._urgent_turn += 1
+            if self._urgent_turn % 4 == 0 and self._background_due(catalog, binding):
+                return None  # Bounded burst of recent revisions, then old history.
+            for key, attempts in islice(ready, SCAN_WINDOW):
+                del catalog.archive_urgent[key]
+                candidate = self._candidate(catalog, key)
+                if candidate is not None:
+                    return key, candidate, attempts
+            return None
+
     def tick(self, catalog, archive, service, binding):
+        urgent = self._urgent(catalog, binding[1])
+        if urgent is not None:
+            key, candidate, attempts = urgent
+            try:
+                base = scalar_dependency(service)
+            except (PricingUnavailableError, SourceError):
+                self._retry(catalog, key, candidate, attempts)
+                raise
+            if not self._try_acquire(catalog, archive, service, binding, base, key, candidate):
+                self._retry(catalog, key, candidate, attempts)
+            return
         candidates = self._candidates(catalog, binding[1])
         if not candidates:
             self._queue.clear()
@@ -78,7 +148,7 @@ class SessionArchiveSweep:
         # v1 has no separate mutable model registry to validate. A v2 digest
         # alone cannot revalidate its native provider model observations.
         completed = archive.completed_summary_keys(binding, {
-            key: revision for key, (_, revision, _) in candidates.items()
+            key: candidate.revision for key, candidate in candidates.items() if candidate.terminal is None
         }, checkpoint_dependency(base, ())) if service.selection.selected == "v1" else frozenset()
         if completed is None:
             self._incomplete = True
@@ -87,26 +157,57 @@ class SessionArchiveSweep:
             key = self._queue.popleft()
             if key in completed or key not in candidates:
                 continue
-            root, revision, epoch = candidates[key]
-            admission = archive.admit_summary(service, key, revision)
-            if admission is None:
-                self._incomplete = True
-                return
-            authorities = []
-            service.retain_derived_cache_read_only()
-            try:
-                row, actual = session_summary(service, root, revision, on_dependencies=authorities.extend,
-                                              persist_legacy=False)
-            except SourceError:
-                # A temporarily unreadable root must not starve other roots.
-                self._incomplete = True
-                return
-            with catalog.lock:
-                current = (catalog.state == "observed" and catalog.roots.get(key) == root and actual == revision
-                           and catalog.revisions.get(key) == revision and catalog.last_observation.source_epoch == epoch
-                           and key not in catalog.active and key not in catalog.running_roots)
-            published = current and archive.publish_summary(
-                service, admission, row, actual, dependency=checkpoint_dependency(base, authorities))
-            self._incomplete |= (not published or row.running or bool(row.ccost_unavailable) or not row.complete
-                                 or not row.activity_qualified or not row.context_qualified or row.model_pending)
+            candidate = candidates[key]
+            if candidate.terminal is None:
+                settled = self._acquire(catalog, archive, service, base, key, candidate)
+            else:
+                settled = self._try_acquire(catalog, archive, service, binding, base, key, candidate)
+            self._incomplete |= not settled
             return
+
+    def _try_acquire(self, catalog, archive, service, binding, base, key, candidate):
+        if service.selection.selected == "v1":
+            complete = archive.completed_summary_keys(binding, {key: candidate.revision},
+                                                      checkpoint_dependency(base, (), candidate.terminal))
+            if complete is None:
+                return False
+            if key in complete:
+                return True
+        return self._acquire(catalog, archive, service, base, key, candidate)
+
+    def _retry(self, catalog, key, candidate, attempts):
+        self._incomplete = True
+        self._next_walk = min(self._next_walk, catalog.clock() + RETRY_SECONDS)
+        if attempts >= len(PRIORITY_BACKOFF):
+            return
+        with catalog.lock:
+            if (catalog.state == "observed" and self._candidate(catalog, key) == candidate
+                    and key not in catalog.archive_urgent):
+                catalog._archive_priority(key, delay=PRIORITY_BACKOFF[attempts], attempts=attempts + 1)
+
+    def _acquire(self, catalog, archive, service, base, key, candidate):
+        revision = candidate.revision
+        admission = archive.admit_summary(service, key, revision)
+        if admission is None:
+            return False
+        authorities = []
+        service.retain_derived_cache_read_only()
+        try:
+            row, actual = session_summary(service, candidate.root, revision, active=candidate.terminal is not None,
+                                          on_dependencies=authorities.extend, persist_legacy=False)
+        except (PricingUnavailableError, SourceError):
+            # A temporarily unreadable root must not starve other roots.
+            return False
+        if candidate.terminal is not None and not verified_finish(row, candidate.terminal):
+            # A parent stop is not proof that its linked work also finished.
+            # Preserve the previous as-of snapshot while final activity is unknown.
+            return False
+        def eligible():
+            with catalog.lock:
+                return catalog.state == "observed" and self._candidate(catalog, key) == candidate
+
+        published = actual == revision and archive.publish_summary(
+            service, admission, row, actual, eligible=eligible,
+            dependency=checkpoint_dependency(base, authorities, candidate.terminal))
+        return (published and not row.running and not row.ccost_unavailable and row.complete
+                and row.activity_qualified and row.context_qualified and not row.model_pending)
