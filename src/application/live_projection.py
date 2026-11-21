@@ -141,7 +141,8 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         recent_finished_cards=tuple(card(item, value.now_ms) for item in value.recent_finished_cards),
         earlier_previews=tuple(record(session_id=item.session_id, title=item.title,
             activity_ms=item.activity_ms, activity_origin=item.activity_origin, total_ccost=item.total_ccost,
-            comparison_cost_complete=item.complete)
+            comparison_cost_complete=item.complete, hydration_state=item.hydration_state,
+            hydration_reason=item.hydration_reason, total_state=item.total_state)
             for item in value.earlier_previews),
         earlier_cards=tuple(card(item, value.now_ms) for item in value.earlier_cards),
         cards_state=value.cards_state, history_state=value.history_state,

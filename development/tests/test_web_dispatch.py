@@ -87,6 +87,26 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual({}, self.dispatch.tabs)
         self.assertEqual('queued', self.jobs.values[key]['status'])
 
+    def test_usable_foreground_report_refresh_still_defers_inactive_sessions_warming(self):
+        request = ReportRequest(ReportKind.AI_STATS)
+        self.dispatch.interest('tab', 'ai-stats', True, request)
+        self.dispatch.tick(identity='source')
+        key = self.dispatch.lookup(request)['id']
+        report = result(1_000_000, sample=0)
+        report['view']['ai_stats'] = [{'period': request.stats_scope}]
+        self.jobs.values[key].update(status='complete', result=report)
+        self.dispatch.tick(identity='source')
+        self.assertTrue(self.dispatch.warm_allowed)
+        refreshed_at = self.dispatch._entry(request)['due']
+        self.now = refreshed_at
+        self.dispatch.interest('tab', 'ai-stats', True, request)
+
+        self.dispatch.tick(identity='source')
+
+        self.assertFalse(self.dispatch.warm_allowed)
+        key = self.dispatch._entry(request)['job']
+        self.assertEqual(0, self.jobs.priorities[key])
+
     def test_visible_earlier_history_demand_does_not_demote_hidden_requested_reports(self):
         self.dispatch.interest('models', 'models', True, self.models)
         self.dispatch.tick()

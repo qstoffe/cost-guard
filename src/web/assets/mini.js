@@ -126,7 +126,8 @@ const MiniWatch = (() => {
     const catalog = new Map((view?.earlier_previews || []).map(value => [value.session_id, value]));
     const start = value => [value.item?.prompt?.at_ms ?? 0, value.item?.prompt?.event_id || ''];
     const activity = value => value.preview ? value.card.activity_ms :
-      value.running ? value.item.prompt.at_ms : value.item?.prompt?.completed_at_ms;
+      value.running ? value.item.prompt.at_ms :
+        value.item?.prompt?.completed_at_ms ?? catalog.get(value.card.session_id)?.activity_ms;
     const compare = (a, b) => (activity(a) ?? -Infinity) - (activity(b) ?? -Infinity) ||
       a.card.session_id.localeCompare(b.card.session_id) || start(a)[1].localeCompare(start(b)[1]);
     const add = (pool, value, newer) => {
@@ -172,6 +173,15 @@ const MiniWatch = (() => {
     if (age < 365 * day) return Math.floor(age / (30 * day)) + 'm ago';
     return Math.floor(age / (365 * day)) + 'y ago';
   }
+  const hydrationLabels = {
+    queued: ['Loading…', 'Waiting for an available history slot.'],
+    reading: ['Loading…', 'Reading this session’s prompt history.'],
+    waiting: ['Reading…', 'This source read is taking longer than usual.'],
+    retrying: ['Retrying', 'Source evidence is incomplete or delayed; another read will be attempted.'],
+    unknown: ['Unknown', 'No representative prompt is available in the observed session.'],
+    unavailable: ['Unavailable', 'The source cannot supply details for this revision.']
+  };
+  const hydration = value => hydrationLabels[value?.hydration_state] || hydrationLabels.queued;
   // Five real styled row metrics, plus the header and any horizontal scrollbar.
   // This changes only the internal viewport, never native window bounds.
   function measurementRow(view) {
@@ -391,8 +401,14 @@ const MiniWatch = (() => {
     }
     drawCost(row, card, prompt, catalog) {
       const summary = card.session_summary, cost = summary?.cost;
-      const total = cost?.known_ccost != null || !catalog ? ReportView.display(cost, 'account_ccost') :
-        catalog.total_ccost == null ? 'Loading…' : ReportView.display(catalog, 'total_ccost');
+      const useCatalog = catalog?.total_ccost != null && (summary?.state !== 'observed' || !cost?.complete);
+      const total = useCatalog ? ReportView.display(catalog, 'total_ccost') :
+        cost?.known_ccost == null && catalog ? summary?.state === 'unavailable' ? 'Unavailable' :
+          summary?.state === 'partial' ? 'Unknown' : 'Loading…' : ReportView.display(cost, 'account_ccost');
+      if (useCatalog) row.totalCostHelp = 'Whole-session reference CCost from the shared Sessions index.' +
+        (catalog.total_state === 'retained' ? ' Last qualified value; refresh pending.' : '');
+      else if (cost?.known_ccost != null && ['checking', 'unavailable'].includes(summary?.state))
+        row.totalCostHelp += '\nLast qualified value; refresh pending.';
       const amount = ReportView.display(prompt, 'ccost');
       ReportView.text(row.children[2].children[0], amount);
       ReportView.text(row.children[3].children[0], total);
@@ -401,8 +417,11 @@ const MiniWatch = (() => {
     }
     drawPreview(row, card, now, today) {
       const text = ReportView.text, session = this.drawSession(row.children[1], card);
+      const [state, help] = hydration(card);
+      const reason = card.hydration_reason === 'http_auth_failure' ? ' Source authorization is required.' : '';
       row.className = ''; row.setAttribute('aria-label', session + ' · Session activity');
-      row.sessionHelp = session; row.costHelp = 'Prompt reference CCost';
+      row.sessionHelp = `${session}\n${help}${reason}`;
+      row.costHelp = `Prompt reference CCost · ${help}${reason}`;
       row.totalCostHelp = 'The entire session’s reference cost, including attributed linked subagents.';
       row.contextHelp = ''; row.children[4].className = 'mini-context'; row.children[4].tabIndex = -1;
       row.children[4].dataset.guidance = 'pending'; ContextHelp.dismiss(row.children[4]);
@@ -410,17 +429,22 @@ const MiniWatch = (() => {
       text(time.children[0], '');
       // Generic activity only; no synthetic prompt, event ID or finish outcome.
       const full = card.display?.activity_date_time;
-      const label = card.display?.activity_clock || 'Loading…';
+      const label = card.display?.activity_clock || '—';
       const age = now - at, day = 86400000;
       text(time.children[1], at == null || age < 43200000 || !today || full?.startsWith(today + ' ') ? label :
         age < day ? Math.floor(age / 3600000) + 'h ago' : age < 30 * day ? Math.floor(age / day) + 'd ago' :
         age < 365 * day ? Math.floor(age / (30 * day)) + 'm ago' : Math.floor(age / (365 * day)) + 'y ago');
-      row.activityHelp = full ? 'Session activity · ' + full : 'Session activity';
-      const total = card.total_ccost == null ? 'Loading…' : ReportView.display(card, 'total_ccost');
-      text(row.children[2].children[0], 'Loading…'); text(row.children[3].children[0], total);
-      row.children[2].children[0].setAttribute('aria-label', 'Prompt reference CCost: Loading…');
-      row.children[3].children[0].setAttribute('aria-label', 'Whole-session reference CCost: ' + total);
-      text(row.children[4], 'Loading…');
+      row.activityHelp = 'Session activity' + (full ? ' · ' + full : '') +
+        (card.activity_origin === 'catalog' ? '\nSource catalog activity, not a prompt finish.' : '');
+      const total = card.total_ccost != null ? ReportView.display(card, 'total_ccost') :
+        {retrying: 'Retrying', unavailable: 'Unavailable', partial: 'Unknown'}[card.total_state] || state;
+      const retained = card.total_state === 'retained';
+      if (retained) row.totalCostHelp += ' Last qualified value; refresh pending.';
+      text(row.children[2].children[0], state); text(row.children[3].children[0], total);
+      row.children[2].children[0].setAttribute('aria-label', 'Prompt reference CCost: ' + state);
+      row.children[3].children[0].setAttribute('aria-label', 'Whole-session reference CCost: ' + total + (retained ? ' (retained)' : ''));
+      row.children[4].setAttribute('aria-label', 'Next incoming context: ' + state);
+      text(row.children[4], state);
     }
     costGroups(value, session = false) {
       return WatchView.costGroups(value, session);
@@ -473,7 +497,7 @@ const MiniWatch = (() => {
         const session = this.drawSession(row.children[1], card);
         const summaryContext = card.session_summary?.context;
         const source = historical || summaryContext?.context_scope ? summaryContext : item?.live_context;
-        let context = display(source, 'watch_next_context_tokens');
+        const context = display(source, 'watch_next_context_tokens');
         this.rowHelp(row, session, item, card, historical);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
@@ -490,6 +514,15 @@ const MiniWatch = (() => {
           row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
         if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;
         this.drawCost(row, card, prompt, catalog);
+        row.children[4].removeAttribute('aria-label');
+        if (catalog && ['refreshing', 'retrying', 'unavailable', 'partial'].includes(card.state)) {
+          const [state, detail] = hydration(catalog);
+          row.sessionHelp += `\n${detail} Available prompt details may be retained.`;
+          row.costHelp += '\nProvisional or retained while prompt details are rechecked.';
+          if (source?.watch_next_context_tokens != null)
+            row.children[4].setAttribute('aria-label', `Next incoming context: ${context} (retained or partial)`);
+          else row.children[4].setAttribute('aria-label', `Next incoming context: ${state}`);
+        }
         text(row.children[4], context); wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;

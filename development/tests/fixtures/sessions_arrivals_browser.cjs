@@ -69,8 +69,42 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.ok(after-before<=2,'unchanged Live clock publications do not produce HTTP churn');
   assert.equal(await evaluate('arrivalLabelChanges'),0,'unchanged polite pager text is not rewritten/announced');
   const source = await fixture('arrival-observe');
+  await fixture('arrival-seed');
+  await evaluate("location.hash='#/sessions?period=today'");
+  await until('current.catalog?.data?.period==="today" && !current.catalog.operation');
+  const warm = await evaluate('current.catalog.data.epoch');
+  await evaluate("location.hash='#/watch'");
+  await until('current?.section==="watch"');
+  await fixture('arrival-burst-100');
+  await until('liveValue?.view?.earlier_previews?.some(row=>row.session_id==="ses_arrival_100")');
+  await evaluate("document.querySelector('a[href=\"#/sessions\"]').click()");
+  await until('current?.catalog?.data?.epoch!=='+JSON.stringify(warm)+
+    ' && document.querySelector("tr[data-id=ses_arrival_100]")?.value.catalog_activity_ms>0');
+  const burstMeasurements = [];
+  const beforeBurst = (await fixture('arrival-observe')).metrics.attempts;
+  for (let burst=1;burst<=9;burst++) {
+    const key = 'ses_arrival_'+(100+25*burst);
+    await fixture('arrival-burst-'+(100+25*burst));
+    await until(`document.querySelector("tr[data-id=${key}]")?.value.catalog_activity_ms>0`,10000);
+    burstMeasurements.push({key, visible:await evaluate('Date.now()')});
+    assert.equal(await evaluate('current.catalog.body.rows.length'),25);
+    assert.equal(await evaluate('current.catalog.next.disabled'),false);
+  }
+  const sustained = await fixture('arrival-observe');
+  assert.equal(sustained.metrics.attempts,beforeBurst,'scalar acquisition remained held throughout the burst');
+  for (const item of burstMeasurements) item.observation_to_dom_ms = item.visible - sustained.observed[item.key].title_ms;
+  await evaluate(`window.firstBurstPage=[...current.catalog.body.rows].map(row=>row.dataset.id);
+    current.catalog.next.click();`);
+  await until('current.catalog?.data?.offset===25 && !current.catalog.operation');
+  assert.match(await evaluate('current.catalog.label.textContent'),/catalog candidates \(preliminary\)/);
+  assert.equal(await evaluate('[...current.catalog.body.rows].some(row=>firstBurstPage.includes(row.dataset.id))'),false);
+  await evaluate('history.back()');
+  await until('current.catalog?.data?.offset===0 && !current.catalog.operation');
+  assert.equal(await evaluate('JSON.stringify([...current.catalog.body.rows].map(row=>row.dataset.id))===JSON.stringify(firstBurstPage)'),true);
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
-    'title and five Loading cells; Watch-qualified running top/yellow; in-place real summary hydration',
-    'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery'],
-    measurements,requests:await evaluate('arrivalRequests.length'),source};
+     'title and five Loading cells; Watch-qualified running top/yellow; in-place real summary hydration',
+     'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery',
+     'warm Today return and 250 nonrunning inserts, alternating lost hints, no scalar reads; provisional paging and Back'],
+    measurements, burst_ms:burstMeasurements.map(item=>item.observation_to_dom_ms),
+    requests:await evaluate('arrivalRequests.length'),source};
 };

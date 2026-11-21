@@ -53,7 +53,7 @@ class SessionCostSchedulerTests(unittest.TestCase):
                 patch.object(self.costs, 'submit', wraps=self.costs.submit) as submissions:
             for now in range(3000, 244001, 1000):
                 observation = SimpleNamespace(roots=(root,), revisions={root.session_id: snapshot.source_revision},
-                    active_candidates=frozenset(), live_candidates=frozenset())
+                    active_candidates=frozenset(), live_candidates=frozenset(), source_epoch="synthetic")
                 cards.catalog(observation)
                 entry.generation += 1  # A recapture's lifecycle is not a cost revision.
                 if now % 17000 == 0:

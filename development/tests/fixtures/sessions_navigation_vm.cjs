@@ -42,6 +42,24 @@ module.exports = async ({vm, context, Node, timers}) => {
   singlePage.update({...previous,total:1,offset:0});
   labelOnlyPager(singlePage);
    assert.equal(singlePage.previous.disabled,true); assert.equal(singlePage.next.disabled,true);
+   vm.runInContext('globalThis.coldCatalog = new SessionsCatalog.View(navigationApi)', context);
+   const cold = context.coldCatalog;
+   cold.configure(new URLSearchParams('period=today'));
+   const candidate = {...previous,offset:0,total:159,order_state:'provisional',membership_pending:true,
+     candidate_navigation:true,pending_sort:true,passive:true,progress:{status:'pending',completed:0,total:159},
+     view:{session_usage:[{...row,last_activity_ms:null,catalog_activity_ms:1000000}]}};
+   cold.update(candidate);
+   assert.equal(cold.data,candidate,'cold entry must apply the preliminary table');
+   assert.equal(cold.operation,null);
+   assert.equal(cold.next.disabled,false);
+   assert.match(cold.label.textContent,/159 catalog candidates \(preliminary\)/);
+   assert.match(cold.body.children[0].activity.textContent,/Catalog/);
+   cold.indexProgress.at = Date.now()-45001;
+   cold.update(candidate);
+   assert.match(cold.status.textContent,/waiting for indexing/);
+   assert.equal(cold.next.disabled,false);
+   cold.update({...candidate,progress:{status:'pending',completed:2,total:159}});
+   assert.equal(cold.status.hidden,true,'real settled work clears stale notice');
    // Expiry must retire stale destinations before awaiting the new lease.
    vm.runInContext('globalThis.idleCatalog = new SessionsCatalog.View(navigationApi)', context);
    const idle = context.idleCatalog, latest = {...previous,offset:0,total:26};
@@ -139,7 +157,8 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(view.operation.kind,'page'); assert.equal(view.operation.percent,23);
    assert.equal(view.status.textContent,'Loading Sessions page 5 · 4 of 17 sessions');
   assert.equal(view.operation.completed,4);
-  view.update({...previous,offset:100,progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
+   view.update({...previous,offset:100,state:'source_unavailable',
+     progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
      assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Check your access, then reopen Sessions\.$/);
    assert.doesNotMatch(view.status.textContent,/Cancel/);
    assert.equal(view.operation.pending,false);
@@ -196,7 +215,11 @@ module.exports = async ({vm, context, Node, timers}) => {
     view.operation.advanced=Date.now()-90001;
     view.update(progress(50,23));
     assert.equal(view.operation.failed,true,'90s without admitted progress ends the explicit action truthfully');
-    assert.match(view.status.textContent,/Could not load\. Reopen Sessions to try again\./);
+    assert.match(view.status.textContent,/Returning to an available page/);
+    assert.equal(view.terminal,false);
+    view.recoverNavigation();
+    assert.equal(view.operation,null);
+    assert.equal(view.sort,'duration','resume the last applied order rather than replay a failed action');
      view.detach();
      await require('./sessions_wake_vm.cjs')({vm, context, Node, timers});
 };

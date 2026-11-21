@@ -30,6 +30,21 @@ module.exports = (controller, view, input, helpText) => {
   const qualified={...previews[0],total_ccost:'0',display:{...previews[0].display,total_ccost:'0'}};
   show([],[],[qualified,...previews.slice(1)]);
   assert.equal(view.promptRows.get('preview-0'),row);assert.equal(row.children[3].textContent,'0');
+  for(const [minutes,state,reason,label] of [
+    [7,'waiting','capture_in_progress','Reading…'],
+    [12,'retrying','http_timeout','Retrying'],
+    [30,'unavailable','http_auth_failure','Unavailable']
+  ]) {
+    const retained={...qualified,total_state:'retained',hydration_state:state,hydration_reason:reason};
+    const arriving=[1,2,3].map(i=>({...previews[i],session_id:`burst-${minutes}-${i}`,activity_ms:200+i}));
+    show([],[],[retained,previews[4],...arriving]);
+    assert.equal(view.promptRows.get('preview-0'),row);
+    assert.equal(view.promptRows.size,5);
+    assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),[label,'0',label]);
+    assert.match(helpText(row.children[3].children[0]),/Last qualified value/);
+  }
+  show([],[],[{...previews[0],hydration_state:'unknown',total_state:'partial'},...previews.slice(1)]);
+  assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),['Unknown','Unknown','Unknown']);
   const real={...structuredClone(base),session_id:'preview-0',title:'Catalog session 0',focal_id:'',
     rows:[{...structuredClone(base.rows[0]),prompt:{...structuredClone(base.rows[0].prompt),
       in_progress:false,completed_at_ms:50,completed_successfully:true}}]};

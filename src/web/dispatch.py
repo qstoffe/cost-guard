@@ -255,7 +255,10 @@ class DataDispatcher:
             # Never start speculative work ahead of incomplete foreground demand.
             waiting = any(not usable(self._entry(request)['result'], int(self.wall_clock() * 1000))
                           for request in foreground)
-            self.warm_allowed = self.initialized and not waiting
+            # A foreground refresh still owns the shared source budget when a
+            # usable last-good report already makes the page look complete.
+            self.warm_allowed = self.initialized and not waiting and not any(
+                self._entry(request)['job'] for request in foreground)
             background = any(entry['job'] and request not in foreground for request, entry in self.entries.items())
             if self.initialized and not waiting and not background and self.clock() >= self.next_background:
                 due = [(request, entry) for request, entry in self.entries.items()
