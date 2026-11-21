@@ -13,17 +13,24 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       this.api=async(url,request,signal)=>{
         if(request.action || bannerMode==='normal')return bannerApi(url,request,signal);
         if(bannerMode==='retry')throw new Error('source_unavailable');
-        if(bannerMode==='terminal')throw new Error('permission_denied');
-        const data=structuredClone(bannerBase);
-        Object.assign(data,{period:request.period,requested_sort:request.sort,requested_direction:request.direction,
-          offset:request.offset,pending_sort:bannerMode==='pending',state:'observed',progress:{...bannerWork}});
+         if(bannerMode==='terminal')throw new Error('permission_denied');
+         const data=structuredClone(bannerBase);
+         Object.assign(data,{period:request.period,requested_sort:request.sort,requested_direction:request.direction,
+           offset:request.offset,epoch:request.epoch||data.epoch,navigation:request.navigation,
+           passive:request.passive,page_reused:false,pending_sort:bannerMode==='pending',state:'observed',progress:{...bannerWork}});
+         if (request.passive) {
+           Object.assign(data,{sort:request.sort,direction:request.direction,
+             order_state:data.pending_sort?'provisional':'verified',candidate_navigation:data.pending_sort,
+             membership_pending:data.pending_sort});
+         }
         if(bannerHold){bannerHold=false;return new Promise(resolve=>{releaseBanner=()=>resolve(data);});}
         return data;
       };return load.call(this);
     };
     location.hash='#/sessions'`);
-  await until('current.catalog?.operation?.pending && !current.catalog.busy');
-  assert.equal(await evaluate('current.catalog.operation.count'),null);
+   await until('current.catalog?.data?.candidate_navigation && !current.catalog.busy');
+   assert.equal(await evaluate('current.catalog.operation'),null,'cold entry does not invent a user action');
+   assert.equal(await evaluate('current.catalog.next.disabled'),false);
   const quiet = async () => {
     assert.equal(await evaluate('current.catalog.status.hidden'),true);
     assert.equal(await evaluate('current.catalog.status.textContent'),'');
@@ -31,7 +38,6 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     assert.equal(await evaluate('current.catalog.root.querySelectorAll("progress,.report-loading,.sessions-candidate-scope").length'),0);
   };
   await quiet();
-  assert.equal(await evaluate('current.catalog.operation.userInitiated'),false,'first acquisition does not invent a user action');
   for (const completed of [3,4,5]) {
     await run(`bannerWork={phase:'index',status:'pending',generation:${completed},completed:${completed},total:100};
       await current.catalog.load()`);
@@ -114,10 +120,10 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate('current.catalog.operation.userInitiated'),false); await quiet();
   await run(`bannerMode='retry';await current.catalog.load()`);
   await quiet();
-  await run(`bannerMode='pending';await current.catalog.load()`); await quiet();
-  await run(`bannerMode='terminal';await current.catalog.load()`);
-  await quiet();
-  assert.equal(await evaluate('current.catalog.operation.failed'),true);
+   await run(`bannerMode='pending';await current.catalog.load()`); await quiet();
+   await run(`bannerMode='terminal';await current.catalog.load()`);
+   assert.equal(await evaluate('current.catalog.operation.failed'),true);
+   assert.match(await evaluate('current.catalog.status.textContent'),/Check your access, then reopen Sessions/);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
   const ax = await command('Accessibility.getFullAXTree');
   assert.ok(ax.nodes.some(node=>node.role?.value==='status'));
