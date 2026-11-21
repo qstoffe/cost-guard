@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from .display_mix_groups import record_group_marks
 from .display_usage_reader import UsageVersion, retained_usage_version, usage_version
 
 
@@ -39,6 +40,7 @@ class MixTotalRow:
 class MixRefresh:
     end_ms: int
     changed: bool
+    grouped: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +56,7 @@ def mix_total_schema():
         CREATE TABLE IF NOT EXISTS archive_mix_state (
             source TEXT PRIMARY KEY REFERENCES sources(source),
             archive_epoch INTEGER NOT NULL, usage_revision INTEGER NOT NULL, timezone_id TEXT NOT NULL,
-            end_ms INTEGER NOT NULL
+            end_ms INTEGER NOT NULL, group_run TEXT
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS archive_mix_totals (
             source TEXT NOT NULL REFERENCES archive_mix_state(source) ON DELETE CASCADE,
@@ -66,7 +68,7 @@ def mix_total_schema():
     """
 
 
-def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows):
+def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows, *, group_run=None, group_marks=None):
     if (not source or not timezone_id or len(rows) != len(MIX_PERIODS)
             or {row.period for row in rows} != MIX_PERIODS or len({row.end_ms for row in rows}) != 1):
         raise ValueError("invalid_mix_totals")
@@ -82,31 +84,32 @@ def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows):
     values = tuple(row.values() for row in rows)
     # As-of clock alone is not a content change. A changed start, qualification
     # gap, prompt count or any contribution belongs to the affected period.
-    changed = tuple(row[0] for row in values if prior.get(row[0]) != (row[1], *row[3:]))
+    changed = {row[0] for row in values if prior.get(row[0]) != (row[1], *row[3:])}
     db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
     db.execute("""
-        INSERT INTO archive_mix_state VALUES(?,?,?,?,?)
-        ON CONFLICT(source) DO UPDATE SET (archive_epoch,usage_revision,timezone_id,end_ms)=
-            (excluded.archive_epoch,excluded.usage_revision,excluded.timezone_id,excluded.end_ms)
-    """, (source, expected.archive_epoch, expected.revision, timezone_id, end_ms))
+        INSERT INTO archive_mix_state VALUES(?,?,?,?,?,?)
+        ON CONFLICT(source) DO UPDATE SET (archive_epoch,usage_revision,timezone_id,end_ms,group_run)=
+            (excluded.archive_epoch,excluded.usage_revision,excluded.timezone_id,excluded.end_ms,excluded.group_run)
+    """, (source, expected.archive_epoch, expected.revision, timezone_id, end_ms, group_run))
     db.execute("DELETE FROM archive_mix_totals WHERE source=?", (source,))
     marks = ",".join("?" for _ in range(11 + len(_METRICS)))
     db.executemany(f"INSERT INTO archive_mix_totals VALUES({marks})", ((source, *row) for row in values))
-    return MixPublication(expected, end_ms, changed)
+    changed.update(record_group_marks(db, source, group_marks or {}))
+    return MixPublication(expected, end_ms, tuple(row[0] for row in values if row[0] in changed))
 
 
 def mix_refresh(db, source, timezone_id, now_ms):
-    row = db.execute("SELECT archive_epoch,usage_revision,timezone_id,end_ms "
+    row = db.execute("SELECT archive_epoch,usage_revision,timezone_id,end_ms,group_run "
                      "FROM archive_mix_state WHERE source=?", (source,)).fetchone()
     if row is None:
         return None
-    epoch, revision, zone, end_ms = row
+    epoch, revision, zone, end_ms, groups = row
     changed = zone != timezone_id or UsageVersion(epoch, revision) != usage_version(db, source)
     if not changed and end_ms < now_ms:
         changed = db.execute("""
             SELECT 1 FROM archive_requests WHERE source=? AND clock_ms>? AND clock_ms<=? LIMIT 1
         """, (source, end_ms, now_ms)).fetchone() is not None
-    return MixRefresh(end_ms, changed)
+    return MixRefresh(end_ms, changed, groups is not None)
 
 
 def read_mix_total(db, source, timezone_id, period, start_ms, end_ms):

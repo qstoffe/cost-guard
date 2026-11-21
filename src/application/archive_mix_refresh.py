@@ -8,26 +8,27 @@ from .archive_mix_build import ArchiveMixBuild, MixBuildState
 
 
 class ArchiveMixRefresh:
-    def __init__(self, *, clock=time.monotonic):
+    def __init__(self, *, clock=time.monotonic, grouped=False):
         self._clock = clock
         self._probe_at = 0
         self._binding = None
         self._build = None
+        self._grouped = grouped
 
     def due(self, binding):
         """In-memory admission hint only; safe on the Live observer."""
         return binding != self._binding or binding is not None and self._clock() >= self._probe_at
 
-    def advance(self, history, source, timezone_id, binding, now_ms, *, eligible):
+    def advance(self, history, source, timezone_id, binding, now_ms, *, eligible, reference=lambda: None):
         """Run one slice or one cheap due-check, never acquire source or prices."""
         try:
-            return self._advance(history, source, timezone_id, binding, now_ms, eligible)
+            return self._advance(history, source, timezone_id, binding, now_ms, eligible, reference)
         except (OSError, sqlite3.Error):
             self.close()
             self._probe_at = self._clock() + 5
             return None
 
-    def _advance(self, history, source, timezone_id, binding, now_ms, eligible):
+    def _advance(self, history, source, timezone_id, binding, now_ms, eligible, reference):
         if self._binding != binding:
             self.close()
             self._binding = binding
@@ -42,10 +43,18 @@ class ArchiveMixRefresh:
         if self._build is None:
             stamp = history.mix_refresh(source, timezone_id, now_ms)
             if stamp is not None and (stamp.end_ms > now_ms or
-                    not stamp.changed and windows(timezone_id, stamp.end_ms) == scopes):
+                    not stamp.changed and (stamp.grouped or not self._grouped) and
+                    windows(timezone_id, stamp.end_ms) == scopes):
+                if self._grouped:
+                    history.reclaim_mix_groups(source)
                 self._probe_at = self._clock() + 5
                 return None
-            self._build = ArchiveMixBuild(source, timezone_id, now_ms)
+            if self._grouped:
+                history.reclaim_mix_groups(source)
+            catalog = reference() if self._grouped else None
+            self._build = ArchiveMixBuild(source, timezone_id, now_ms,
+                                          pricing=getattr(catalog, "analysis_signature", None),
+                                          grouped=self._grouped, reference=catalog)
         state = self._build.step(history, eligible=eligible)
         if state == MixBuildState.MORE:
             return None

@@ -33,7 +33,7 @@ def check_cached_mix(browser, evidence, product_root):
             coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
         host = WebHost(root, jobs=ReportJobs(target=current_report))
         host.cached_mix_enabled = True
-        archive = host.display_archive = DisplayArchive(root, host.events.publish, mix_enabled=True)
+        archive = host.display_archive = DisplayArchive(root, host.events.publish, mix_enabled=True, mix_groups=True)
         host.start()
         host.publish_ready()
         archive.observe(driver, before_tick=True)
@@ -64,8 +64,12 @@ def check_cached_mix(browser, evidence, product_root):
                             known=0b1111, category_costs=None)
             archive.history.commit_sessions(archive.views.source, (SessionChange(SessionFact("root", "r1", "Root"),
                 None, previous_progress=0, request_roster=replace(roster, requests=(entry,), attribution=())),))
-            archive.advance_mix(now, active=lambda: True)
+            for _ in range(3):
+                archive.advance_mix(now, active=lambda: True)
             expect(view.get_by_role("heading", name="Cached Token Mix · 40 tokens")).to_be_visible()
+            expect(view.get_by_role("region", name="Cached Token Mix by model").locator("tbody tr")).to_have_count(1)
+            expect(view.get_by_role("region", name="Cached Token Mix by publisher").locator("tbody")).to_contain_text(
+                "Unknown / unverified")
 
             today = view.get_by_role("button", name="Today", exact=True)
             start = time.perf_counter()

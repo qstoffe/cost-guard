@@ -177,7 +177,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self._catalog_archive = archive
             self._catalog_history_turns = 0
             self.catalog_job = self.catalog_pool.submit(archive.advance_mix, int(self.clock_ms()),
-                                                       active=lambda: not self._closed)
+                active=lambda: not self._closed, reference=lambda: getattr(self.report_service, "comparison_pricing_catalog", None))
         elif history_needed:
             # Reserve projection work without removing any turns from the
             # scalar vs. urgent/older archive acquisition pattern below.

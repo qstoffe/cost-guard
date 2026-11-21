@@ -411,8 +411,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/session-detail":
                 self.cached_sessions(value, detail=True)
                 return
-            if self.path == "/api/cache/token-mix":
-                self.cached_mix_total(value)
+            if self.path in {"/api/cache/token-mix", "/api/cache/token-mix/groups"}:
+                self.cached_mix_total(value, grouped=self.path.endswith("/groups"))
                 return
             if self.path == "/api/cache/session-detail/demand":
                 self.cached_detail_demand(value)
@@ -603,20 +603,29 @@ class RequestHandler(BaseHTTPRequestHandler):
         else:
             self.reply(202, {"prioritized": prioritized})
 
-    def cached_mix_total(self, value):
+    def cached_mix_total(self, value, *, grouped):
         from src.cache.display_mix_totals import MIX_PERIODS
 
         period = value.get("period")
-        if set(value) != {"period"} or type(period) is not str or period not in MIX_PERIODS:
+        fields = {"period", "kind", "after", "known"} if grouped else {"period"}
+        if set(value) - fields or type(period) is not str or period not in MIX_PERIODS:
             self.reply(400, {"error": "invalid_request"})
             return
+        options = {}
+        if grouped:
+            kind, after, known = value.get("kind"), value.get("after", ""), value.get("known")
+            if (kind not in ("model", "publisher") or not isinstance(after, str) or len(after) > 256 or
+                    known is not None and (type(known) is not str or not re.fullmatch(r"[a-f0-9]{32}", known))):
+                self.reply(400, {"error": "invalid_request"})
+                return
+            options = dict(kind=kind, after=after, known=known)
         owner = self.server.lifecycle
         archive = getattr(owner, "display_archive", None)
         if archive is None or not getattr(owner, "cached_mix_enabled", False):
             self.reply(503, {"error": "cache_unavailable"})
             return
         try:
-            result = archive.mix_total(period)
+            result = archive.mix_total(period, **options)
         except (OSError, sqlite3.Error):
             self.reply(503, {"error": "cache_unavailable"})
             return

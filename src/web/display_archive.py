@@ -7,7 +7,7 @@ import time
 from uuid import uuid4
 
 from src.application.archive_mix_refresh import ArchiveMixRefresh
-from src.application.cached_mix_view import cached_mix_view
+from src.application.cached_mix_view import cached_mix_groups, cached_mix_view
 from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
@@ -23,12 +23,12 @@ from .display_binding import selected_display_binding
 
 
 class DisplayArchive:
-    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False):
+    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
         self._publish = publish
         self.watch_enabled = watch_enabled
-        self.mix_refresh = ArchiveMixRefresh() if mix_enabled else None
+        self.mix_refresh = ArchiveMixRefresh(grouped=mix_groups) if mix_enabled else None
         self._mix_signal = Lock()
         self._mix_marks = {}
         self.sweep = SessionArchiveSweep()
@@ -184,12 +184,14 @@ class DisplayArchive:
                 value["view"] = cached_watch_view(value, views.timezone_id)
         return value if self.views is views else None
 
-    def mix_total(self, period):
+    def mix_total(self, period, **groups):
         views = self.views
         if views is None:
             return None
         fence = self.sessions.clear_fence
-        snapshot = cached_mix_view(self.history, views.source, views.timezone_id, period, int(time.time() * 1000))
+        now = int(time.time() * 1000)
+        args = self.history, views.source, views.timezone_id, period, now
+        snapshot = cached_mix_groups(*args, **groups) if groups else cached_mix_view(*args)
         if self.views is views and self.sessions.clear_fence == fence:
             return dict(binding=views.binding, **snapshot)
         return None
@@ -199,7 +201,7 @@ class DisplayArchive:
         return self.mix_refresh is not None and self.mix_refresh.due(
             (views.binding, self.sessions.clear_fence) if views is not None else None)
 
-    def advance_mix(self, now_ms, *, active):
+    def advance_mix(self, now_ms, *, active, reference=lambda: None):
         if self.mix_refresh is None:
             return
         views = self.views
@@ -212,7 +214,7 @@ class DisplayArchive:
             return self.views is views and self.sessions.clear_fence == fence and active()
 
         published = self.mix_refresh.advance(self.history, views.source, views.timezone_id,
-            (views.binding, fence), now_ms, eligible=eligible)
+            (views.binding, fence), now_ms, eligible=eligible, reference=reference)
         if published is not None and published.changed_periods:
             with self._mix_signal:
                 if not eligible():

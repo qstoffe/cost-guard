@@ -371,8 +371,8 @@ class WebRuntimeTests(unittest.TestCase):
                     invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
                 read = archive.history.mix_total
 
-                def read_after_auth_revoked(*args):
-                    saved = read(*args)
+                def read_after_auth_revoked(*args, **kwargs):
+                    saved = read(*args, **kwargs)
                     authenticated.return_value = False
                     return saved
 
@@ -380,8 +380,8 @@ class WebRuntimeTests(unittest.TestCase):
                     with patch.object(archive.history, "mix_total", side_effect=read_after_auth_revoked):
                         expired = self.request(endpoint, {"period": "today"})
 
-                def revoke_binding(*args):
-                    saved = read(*args)
+                def revoke_binding(*args, **kwargs):
+                    saved = read(*args, **kwargs)
                     archive.unbind()
                     return saved
 

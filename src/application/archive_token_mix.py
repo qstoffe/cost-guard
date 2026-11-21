@@ -33,7 +33,7 @@ class _ExactCost:
 
 
 @dataclass(slots=True)
-class _Totals:
+class MixAccumulator:
     counts: list[int] = field(default_factory=lambda: [0] * 4)
     observed: list[int] = field(default_factory=lambda: [0] * 4)
     costs: tuple[_ExactCost, ...] = field(default_factory=lambda: tuple(_ExactCost() for _ in range(4)))
@@ -68,6 +68,17 @@ class _Totals:
         return replace(mix, costs=tuple(cost.amount() for cost in self.costs) if self.priced else None,
                        priced_requests=self.priced)
 
+    def merge(self, other):
+        for index, count in enumerate(other.counts):
+            self.counts[index] += count
+            self.observed[index] += other.observed[index]
+            self.costs[index].add(other.costs[index].amount())
+        self.known &= other.known
+        self.requests += other.requests
+        self.priced += other.priced
+        self.observed_any |= other.observed_any
+        self.stale_prices += other.stale_prices
+
 
 @dataclass(frozen=True, slots=True)
 class ArchiveMixTotal:
@@ -98,10 +109,10 @@ class ArchiveMixRollup:
         self.end_ms = end_ms
         self.pricing = pricing
         self.scopes = windows(timezone_id, end_ms)
-        self.totals = {period: _Totals() for period, _ in self.scopes}
+        self.totals = {period: MixAccumulator() for period, _ in self.scopes}
         self.undated_calls = 0
 
-    def _periods(self, clock):
+    def periods_for(self, clock):
         if clock is None:
             return ("all",)
         if clock > self.end_ms:
@@ -111,11 +122,11 @@ class ArchiveMixRollup:
     def add_slice(self, usage):
         prompt_keys = set()
         for clock in usage.unqualified_clocks:
-            for period in self._periods(clock):
+            for period in self.periods_for(clock):
                 self.totals[period].uncertain_forks += 1
         for item in usage.entries:
             self.undated_calls += item.clock_ms is None
-            for period in self._periods(item.clock_ms):
+            for period in self.periods_for(item.clock_ms):
                 self.totals[period].add(item, self.pricing)
                 if item.logical_prompt_id:
                     prompt_keys.add((period, item.session_id, item.logical_prompt_id))

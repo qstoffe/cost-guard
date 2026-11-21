@@ -281,7 +281,8 @@ function show(state) {
     ReportView.defaultUnit();
     if (state.cachedMix) {
       output.setAttribute('aria-busy', 'false');
-      state.cachedMixView ||= new CachedMix.View(period => selectTokenMix(state, period));
+      state.cachedMixView ||= new CachedMix.View(period => selectTokenMix(state, period),
+        (kind, after, signal) => mixCache.page(kind, after, signal));
       state.cachedMixView.attach(output, state.period, mixCache.snapshot());
       return;
     }

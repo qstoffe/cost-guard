@@ -10,12 +10,13 @@ import time
 
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
+from .display_mix_groups import inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
 from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_totals, read_mix_total
-from .display_usage_reader import read_usage_slice, usage_schema
+from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -245,6 +246,7 @@ class DisplayHistory:
                 requests = request_schema() if version < 8 else ""
                 prompts = prompt_schema() if version < 9 else ""
                 countable = countable_schema(upgrade=version >= 8) if version < 10 else ""
+                mix_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_mix_state)")}
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
@@ -257,8 +259,9 @@ class DisplayHistory:
                     {prompts}
                     {countable}
                      {watch_schema(upgrade=version == 11) if version < 12 else ""}
-                     {usage_schema(existing_revision=version == 13)}
+                     {usage_schema(existing_revision=version == 13) if version < 14 else ""}
                      {mix_total_schema()}
+                     {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -308,6 +311,7 @@ class DisplayHistory:
                 {watch_schema()}
                 {usage_schema()}
                 {mix_total_schema()}
+                {mix_groups_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -493,11 +497,13 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_usage_slice(db, source, expected=expected, after=after)
 
-    def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True):
+    def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
+                           group_run=None, group_marks=None):
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if eligible():
-                published = publish_mix_totals(db, source, expected, timezone_id, rows)
+                published = publish_mix_totals(db, source, expected, timezone_id, rows,
+                                               group_run=group_run, group_marks=group_marks)
                 if published is not None and eligible():
                     db.commit()
                     return published
@@ -509,10 +515,50 @@ class DisplayHistory:
             db.execute("BEGIN")
             return mix_refresh(db, source, timezone_id, now_ms)
 
-    def mix_total(self, source, timezone_id, period, start_ms, end_ms):
+    def mix_total(self, source, timezone_id, period, start_ms, end_ms, *, include_groups=False):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
-            return read_mix_total(db, source, timezone_id, period, start_ms, end_ms)
+            totals = read_mix_total(db, source, timezone_id, period, start_ms, end_ms)
+            if totals is None or not include_groups:
+                return totals
+            run, = db.execute("SELECT group_run FROM archive_mix_state WHERE source=?", (source,)).fetchone()
+            groups = {kind: read_groups(db, source, run, period, kind, "") for kind in ("model", "publisher")} if run else {}
+            return *totals, run, groups
+
+    def stage_mix_groups(self, source, expected, run, rows, *, eligible):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not eligible() or retained_usage_version(db, source, expected) is None:
+                return False
+            stage_groups(db, source, run, rows)
+            if not eligible():
+                return False
+            db.commit()
+            return True
+
+    def reclaim_mix_groups(self, source):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            run = inactive_run(db, source)
+        if run is None:
+            return 0
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            reclaimed = remove_inactive_groups(db, source, run)
+            db.commit()
+            return reclaimed
+
+    def mix_group_page(self, source, timezone_id, period, start_ms, end_ms, kind, after="", *, known=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            state = db.execute("""
+                SELECT group_run,state.end_ms FROM archive_mix_state AS state JOIN archive_mix_totals USING(source)
+                WHERE source=? AND timezone_id=? AND period=? AND start_ms IS ? AND state.end_ms<=?
+            """, (source, timezone_id, period, start_ms, end_ms)).fetchone()
+            if state is None or state[0] is None:
+                return None
+            cursor = after if known == state[0] else ""
+            return state[0], state[1], *read_groups(db, source, state[0], period, kind, cursor)
 
     @staticmethod
     def _advance_progress(db, source, session_id, revision, dependency):
@@ -541,6 +587,7 @@ class DisplayHistory:
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))
             db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
