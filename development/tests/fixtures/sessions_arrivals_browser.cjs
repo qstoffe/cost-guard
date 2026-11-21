@@ -24,7 +24,9 @@ module.exports = async ({evaluate, until, fixture}) => {
     const row = `document.querySelector('tr[data-id="ses_arrival_${trial}"]')`;
     await until(`${row}?.titleNode?.textContent==='Real source title ${trial}'`,4500);
     const titleMs = await evaluate('Date.now()');
-    assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>cell.textContent)`),Array(5).fill('Loading…'));
+    assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>[cell.textContent,
+      cell.querySelector('.metric-spinner')?.getAttribute('aria-label')])`),
+      ['model','CCost','prompt count','duration','context'].map(label=>['','Loading '+label]));
     assert.equal(await evaluate(`${row}.value.running`),false);
     await evaluate(`window.keptArrival=${row};window.keptArrivalLink=keptArrival.name;keptArrivalLink.focus();`);
     await fixture('arrival-running-'+trial);
@@ -89,6 +91,13 @@ module.exports = async ({evaluate, until, fixture}) => {
     const selection=getSelection(), span=burstRoots[0].titleNode.firstChild;
     selection.setBaseAndExtent(span,0,span,span.length);
     window.burstSelection=selection.toString();window.burstScroll=scrollY;`);
+  const layout = () => evaluate(`(()=>{
+    const view=current.catalog,rect=node=>node.getBoundingClientRect();
+    return {columns:view.headers.map(({th})=>rect(th).width),
+      heights:[...view.body.rows].map(row=>rect(row).height),
+      pan:[view.pan.scrollWidth,view.pan.clientWidth,view.pan.scrollHeight,view.pan.clientHeight]};
+  })()`);
+  const burstGeometry=await layout();
   assert.deepEqual(await evaluate('burstRoots.map(row=>row.dataset.id)'),['ses_arrival_2','ses_arrival_1','ses_arrival_0']);
   await fixture('arrival-omit-running-hint');
   const burstMeasurements = [];
@@ -103,6 +112,7 @@ module.exports = async ({evaluate, until, fixture}) => {
     assert.equal(await evaluate(`burstRoots.every((row,i)=>current.catalog.body.rows[i]===row &&
       row.value.running && row.activity.textContent===burstClocks[i]) &&
       document.activeElement===burstRoots[0].name && getSelection().toString()===burstSelection && scrollY===burstScroll`),true);
+    assert.deepEqual(await layout(),burstGeometry);
   }
   assert.deepEqual(await evaluate('removedRunning'),[]);
   assert.deepEqual(await evaluate('quietViolations'),[]);
@@ -123,9 +133,9 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.deepEqual(await evaluate('Array.from(current.catalog.body.rows).filter(row=>row.value.running).map(row=>row.dataset.id)'),
     ['ses_arrival_2','ses_arrival_0']);
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
-     'title and five Loading cells; Watch-qualified running top/yellow; in-place real summary hydration',
+     'title and five labelled spinners; Watch-qualified running top/yellow; in-place real summary hydration',
      'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery',
-     'warm Today return and 250 nonrunning inserts, alternating lost hints, no scalar reads; provisional paging and Back'],
+     'warm Today return and 250 nonrunning inserts with stable column/row/scroll geometry; alternating lost hints, no scalar reads; provisional paging and Back'],
     measurements, burst_ms:burstMeasurements.map(item=>item.observation_to_dom_ms),
     requests:await evaluate('arrivalRequests.length'),source};
 };

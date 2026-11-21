@@ -130,6 +130,53 @@ const ReportView = (() => {
     return costKeys.has(key) && (value == null || ['', 'N/A', 'Not Applicable', '—', '-', 'Loading…', 'Unavailable'].includes(value)) ?
       'N/A' : value ?? 'N/A';
   };
+  const metricLabels = {activity: 'last activity', model: 'model', ccost: 'CCost',
+    prompts: 'prompt count', duration: 'duration', ctx: 'context', prompt_ccost: 'prompt CCost', total: 'total CCost'};
+  const emptyHistoryHelp = {
+    activity: 'No prompt activity is recorded for this session.',
+    model: 'No model is recorded for this session.',
+    ctx: 'No recorded context is available for this session.',
+    prompt_ccost: 'No prompt is recorded for this session.'
+  };
+  const metricIndicators = new WeakMap();
+  const metricToken = (row, key) => {
+    const token = display(row, key);
+    return token === 'N/A' || token === '' ? null : token;
+  };
+  function metric(node, field, {value, reason, help, label, onHelpLost} = {}) {
+    const render = () => {
+      const shown = typeof value === 'function' ? value() : value;
+      const absence = shown == null && reason === 'complete_empty_history' ? emptyHistoryHelp[field] : '';
+      const pending = shown == null && !absence;
+      const hint = absence || (shown != null && help);
+      if (hint) ContextHelp.value(node, hint);
+      else {
+        ContextHelp.clearValue(node);
+        if (node.ownerDocument.activeElement === node) onHelpLost?.();
+      }
+      if (shown != null && label) node.setAttribute('aria-label', label(shown));
+      else node.removeAttribute('aria-label');
+      if (!pending) {
+        metricIndicators.get(node)?.remove();
+        text(node, absence ? '?' : shown);
+        return;
+      }
+      let spinner = metricIndicators.get(node);
+      if (!spinner) {
+        spinner = node.ownerDocument.createElement('span');
+        spinner.className = 'metric-spinner';
+        spinner.setAttribute('role', 'img');
+        spinner.setAttribute('aria-label', 'Loading ' + metricLabels[field]);
+        metricIndicators.set(node, spinner);
+      }
+      if (spinner.parentNode !== node) {
+        text(node, '');
+        node.append(spinner);
+      }
+    };
+    if (typeof value === 'function') bind(node, render);
+    else { effects.delete(node); render(); }
+  }
   // AI Stats prepares concise provider/model + By Effort help. Do not route it
   // through the generic prompt identity shortener above or lose the effort rows.
   const aiStatsModelHelp = row => row?.display_units?.[unit]?.model_help ??
@@ -874,5 +921,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

@@ -7,6 +7,7 @@ class Node {
   replaceChildren(...nodes){for(const node of [...this.children])node.remove();this.append(...nodes);}
   remove(){if(this.parentNode){const a=this.parentNode.children;a.splice(a.indexOf(this),1);this.parentNode=null;}}
   contains(node){return this===node||this.children.some(child=>child.contains(node));}
+  classList={toggle(){}};
   setAttribute(k,v){this.attributes[k]=v;} removeAttribute(k){delete this.attributes[k];} addEventListener(){}
 }
 async function replay(script, input){
@@ -17,7 +18,8 @@ async function replay(script, input){
     location:{hash:'#/sessions?period=all'},history:{replaceState(){}},
     setTimeout:(fn,delay)=>{const id=++sequence;timers.set(id,{fn,at:clock+delay});return id;},clearTimeout:id=>timers.delete(id),
     ReportView:{element:(tag,text)=>new Node(tag,text),text:(node,text)=>{node.textContent=text;},
-      headerHelp:{},timestamp:()=>'',display:()=>'',CostDisplay:class{select(value){return value;}}},
+      headerHelp:{},timestamp:()=>null,display:()=>'',metricToken:()=>null,metric(){},
+      CostDisplay:class{select(value){return value;}}},
     ContextHelp:{heading:node=>node,value(){},refresh(){}},
     api:async(_,request)=>{
       if(request.action)return {};

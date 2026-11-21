@@ -112,13 +112,14 @@ function setup() {
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   assert.match(view.body.children[0].children[0].textContent, /^▶ /);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
-  for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
+  for (const formatted of ['123 456', '234 567', '0', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
     controller.update(input);
      assert.equal(view.body.children[0].children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
   }
   contextItem.live_context = null; controller.update(input);
-    assert.equal(view.body.children[0].children[4].textContent, 'N/A');
+  assert.equal(view.body.children[0].children[4].textContent, '');
+  assert.equal(view.body.children[0].children[4].children[0].attributes['aria-label'], 'Loading context');
   contextItem.live_context = originalContext; controller.update(input);
   const guidanceWarning=input.view.active_cards[0].session_summary.context.warning;
   const originalWarning=structuredClone(guidanceWarning);

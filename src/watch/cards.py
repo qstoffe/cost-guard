@@ -14,6 +14,7 @@ from src.reports.watch_context import retain_session_context
 from src.reports.watch_capture import running_context_rows
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 from src.analysis.duration import accumulated_duration
+from src.analysis.metric_evidence import empty_history
 
 PREVIEW_SLOW_MS = 30_000
 
@@ -277,6 +278,15 @@ class WatchCards:
         if entry.verified_generation == entry.generation and entry.capture is not None:
             return ("ready", "") if entry.capture.history_row is not None else ("unknown", "no_representative_prompt")
         return "queued", "waiting_for_card_slot"
+
+    def preview_empty_history(self, key):
+        entry = self.sessions.get(key)
+        return bool(entry is not None and key not in self.active_candidates
+            and entry.verified_generation == entry.generation and entry.capture is not None
+            and entry.capture.authoritative and not entry.capture.retained
+            and entry.source_status.failed_at is None
+            and entry.snapshot is not None and entry.snapshot.source_revision == entry.revision
+            and empty_history(entry.snapshot))
 
     def _ranked_ids(self, now_ms):
         # Unknown-ended history sorts before known finishes and fills spare slots;

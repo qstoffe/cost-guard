@@ -233,26 +233,52 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertEqual((), catalog.previews(limit=0))
 
     def test_metadata_only_preview_settles_after_a_complete_empty_capture(self):
-        source, catalog, observation = observed_catalog(1)
+        source = SyntheticMonthSource(1, 0, month_start_ms=1000)
+        key, snapshot = next(iter(source.snapshots.items()))
+        root = replace(snapshot.root, active=False)
+        source.snapshots[key] = replace(snapshot, complete=True, root=root, sessions=(root,))
+        observation = observe_catalog(source)
+        catalog = SessionCatalog(clock_ms=lambda: NOW)
+        catalog.observe(observation)
         cards = WatchCards(ManualWorkers())
         cards.catalog(observation)
         owner = SimpleNamespace(cards=cards)
         frame = WatchProjection("Watch", "Synthetic", (), now_ms=NOW)
-        WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+        initial = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+        self.assertIsNone(project_live(initial).to_json()["earlier_previews"][0]["metric_absences"])
         cards.tick(NOW)
-        root = next(iter(catalog.roots.values()))
+
         with tempfile.TemporaryDirectory() as directory:
             service = make_service(directory, source, now_ms=NOW)[2]
             capture, item = capture_rows(service, root)
-            capture = replace(capture, rows=(), authoritative=True, retained=False)
-            del cards.workers.jobs[root.session_id]
-            cards.accept(CardResult(root.session_id, cards.sessions[root.session_id].generation,
+            self.assertEqual("complete_empty_history", self._settle_empty(catalog, service)["ctx"])
+            del cards.workers.jobs[key]
+            cards.accept(CardResult(key, cards.sessions[key].generation,
                 "rows", (capture, (), item.snapshot)), NOW)
 
         result = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
 
         self.assertEqual((), result.earlier_cards)
         self.assertEqual("unknown", result.earlier_previews[0].hydration_state)
+        self.assertEqual({"prompt_ccost": "complete_empty_history", "ctx": "complete_empty_history"},
+            project_live(result).to_json()["earlier_previews"][0]["metric_absences"])
+        revised = replace(observation, revisions={key: "new-revision"})
+        cards.catalog(revised)
+        catalog.observe(revised)
+        newer = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+        self.assertIsNone(project_live(newer).to_json()["earlier_previews"][0]["metric_absences"])
+        self.assertNotIn("metric_absences", catalog.page(period="all")["view"]["session_usage"][0])
+
+    def _settle_empty(self, catalog, service):
+        page = catalog.page(period="all")
+        catalog.tick(service)
+
+        row = catalog.page(token=page["token"], period="all")["view"]["session_usage"][0]
+
+        self.assertEqual(0, row["prompt_count"])
+        self.assertEqual("0", row["ccost"])
+        self.assertIsNone(row["context_tokens"])
+        return row["metric_absences"]
 
     def test_visible_preview_recovers_after_long_read_revision_churn_and_retry(self):
         now = NOW

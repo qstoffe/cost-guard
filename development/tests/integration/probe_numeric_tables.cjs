@@ -27,7 +27,12 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         const text=await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`);
         // The whole-session fixture includes one supported zero-cost compaction.
         // Mini intentionally uses its priced subtotal, not prompt unknownness.
-        if(mode==='absent') assert.equal(text,selector===total ? unit==='usd'?'$0.00':'0' : 'N/A',`${unit} ${mode} ${selector}`);
+        if(mode==='absent') {
+          const expected=selector===total ? unit==='usd'?'$0.00':'0' : id===mini?'':'N/A';
+          assert.equal(text,expected,`${unit} ${mode} ${selector}`);
+          if(id===mini && selector===prompt)
+            assert.equal(await evaluate(mini,`document.querySelector('${prompt} .metric-spinner')?.getAttribute('aria-label')`),'Loading prompt CCost');
+        }
         else if(mode==='zero') assert.equal(text,unit==='usd'?'$0.00':'0',`${unit} ${mode} ${selector}`);
         else {
           assert.match(text,unit==='usd'?/^<?\$\d/:/^[<\d]/);
@@ -80,10 +85,15 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       })()`);
       const wanted=expected===null?'N/A':unit==='usd'?'$'+(expected/100).toFixed(2):String(expected);
       for(const [id,selector] of [[owner,full],[mini,retainedPrompt]]) {
-        assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`),wanted,
+        const shown=id===mini && expected===null?'':wanted;
+        assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).textContent`),shown,
           `${unit} retention raw=${raw} complete=${complete} ${selector}`);
-        if(id===mini) assert.equal(await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).getAttribute('aria-label')`),
-          'Prompt reference CCost: '+wanted);
+        if(id===mini) {
+          const name=expected===null
+            ? `document.querySelector(${JSON.stringify(selector+' .metric-spinner')})?.getAttribute('aria-label')`
+            : `document.querySelector(${JSON.stringify(selector)}).getAttribute('aria-label')`;
+          assert.equal(await evaluate(id,name),expected===null?'Loading prompt CCost':'Prompt reference CCost: '+wanted);
+        }
       }
     }
     await evaluate(owner,`(() => {
@@ -92,7 +102,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       r.display_units={credits:{ccost:'N/A'},usd:{ccost:'N/A'}};
       p.view.active_cards[0].focal_id=r.event_id;current.watch.update(p);miniWatch.update(p);
     })()`);
-    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(retainedPrompt)}).textContent`),'N/A',
+    assert.equal(await evaluate(mini,`document.querySelector(${JSON.stringify(retainedPrompt+' .metric-spinner')})?.getAttribute('aria-label')`),'Loading prompt CCost',
       `${unit} new prompt isolation`);
   }
   checks.push('Unknown → positive partial → observed unresolved zero/retry retains → lower correction → verified zero; new prompt isolation and Mini accessible cost label in both units');
@@ -110,11 +120,13 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       const cells=await evaluate(owner,`['.sessions-catalog tbody td:nth-child(4)',
         '.session-detail tbody td:nth-child(4)','.session-detail tfoot td:nth-child(4)']
         .map(selector=>document.querySelector(selector).textContent)`);
-      for(const text of cells) {
-        if(mode==='absent') assert.equal(text,'N/A',`${unit} ${mode} Sessions/detail/footer`);
+      for(const [index,text] of cells.entries()) {
+        if(mode==='absent') assert.equal(text,index===0?'':'N/A',`${unit} ${mode} Sessions/detail/footer`);
         else assert.match(text,unit==='usd'?/^<?\$\d/:/^[<\d]/);
         assert.doesNotMatch(text,/\?|Partial /);
       }
+      if(mode==='absent')
+        assert.equal(await evaluate(owner,`numericSessions.root.querySelector('tbody td:nth-child(4) .metric-spinner')?.getAttribute('aria-label')`),'Loading CCost');
       layouts.push({unit,mode,surface:'Sessions/detail/footer',cells});
     }
   }

@@ -11,13 +11,23 @@ module.exports = (controller, view, input, helpText) => {
       earlier_previews:values,earlier_cards:earlier,history_state:'loading',history_epoch:0,
       history_checked:20,history_total:3217}; controller.update(input);
   };
-  for(const count of [0,1,2,5]) {
+  const indicators = row => row.children.slice(2).map(cell =>
+    cell.querySelectorAll('span').find(node => node.className === 'metric-spinner'));
+  const assertPending = (row, indices) => {
+    const spinners = indicators(row);
+    for (const index of indices) {
+      assert.equal(row.children[index + 2].textContent, '');
+      assert.equal(spinners[index]?.attributes['aria-label'], ['Loading prompt CCost', 'Loading total CCost', 'Loading context'][index]);
+      assert.equal(spinners[index].tabIndex, undefined);
+    }
+  };
+  for(const count of [0,1,2,3,5]) {
     const active=Array.from({length:count},(_,i)=>({...structuredClone(base),session_id:'running-'+i}));
     show(active);
     assert.equal(view.promptRows.size,5);
     assert.equal(view.body.children.length,5,'no fake sixth loading/status row');
     for(const row of view.body.children.filter(r=>r.dataset.id.startsWith('preview-'))) {
-      assert.equal(row.children[2].textContent,'Loading…');assert.equal(row.children[4].textContent,'Loading…');
+      assertPending(row,[0,2]);
       assert.equal(row.className,'');assert.doesNotMatch(row.attributes['aria-label'],/Prompt|Completed|Ended|Running/);
       assert.equal(row.children[0].textContent,'14:26');
       assert.match(helpText(row.children[0].children[0]),/^Session activity · /);
@@ -26,31 +36,44 @@ module.exports = (controller, view, input, helpText) => {
   }
   show();
   const row=view.promptRows.get('preview-0');
-  assert.equal(row.children[3].textContent,'Loading…','missing Total is not zero');
+  assertPending(row,[0,1,2]);
+  const [promptSpinner,,contextSpinner] = indicators(row);
   const qualified={...previews[0],total_ccost:'0',display:{...previews[0].display,total_ccost:'0'}};
   show([],[],[qualified,...previews.slice(1)]);
   assert.equal(view.promptRows.get('preview-0'),row);assert.equal(row.children[3].textContent,'0');
-  for(const [minutes,state,reason,label] of [
-    [7,'waiting','capture_in_progress','Reading…'],
-    [12,'retrying','http_timeout','Retrying'],
-    [30,'unavailable','http_auth_failure','Unavailable']
+  for(const [minutes,state,reason] of [
+    [7,'waiting','capture_in_progress'],
+    [12,'retrying','http_timeout'],
+    [30,'unavailable','http_auth_failure']
   ]) {
     const retained={...qualified,total_state:'retained',hydration_state:state,hydration_reason:reason};
     const arriving=[1,2,3].map(i=>({...previews[i],session_id:`burst-${minutes}-${i}`,activity_ms:200+i}));
     show([],[],[retained,previews[4],...arriving]);
     assert.equal(view.promptRows.get('preview-0'),row);
     assert.equal(view.promptRows.size,5);
-    assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),[label,'0',label]);
+    assertPending(row,[0,2]);
+    assert.equal(indicators(row)[0],promptSpinner);
+    assert.equal(indicators(row)[2],contextSpinner);
+    assert.equal(row.children[3].textContent,'0');
     assert.match(helpText(row.children[3].children[0]),/Last qualified value/);
   }
   show([],[],[{...previews[0],hydration_state:'unknown',total_state:'partial'},...previews.slice(1)]);
-  assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),['Unknown','Unknown','Unknown']);
+  assertPending(row,[0,1,2]);
+  const absent={...qualified,metric_absences:{prompt_ccost:'complete_empty_history',ctx:'complete_empty_history'}};
+  show([],[],[absent,...previews.slice(1)]);
+  assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),['?','0','?']);
+  assert.equal(helpText(row.children[2].children[0]),'No prompt is recorded for this session.');
+  assert.equal(helpText(row.children[4]),'No recorded context is available for this session.');
+  show();
+  assertPending(row,[0,1,2]);
+  assert.equal(row.children[4].attributes['aria-describedby'],undefined);
   const real={...structuredClone(base),session_id:'preview-0',title:'Catalog session 0',focal_id:'',
     rows:[{...structuredClone(base.rows[0]),prompt:{...structuredClone(base.rows[0].prompt),
       in_progress:false,completed_at_ms:50,completed_successfully:true}}]};
   show([],[real]);
   assert.equal(view.promptRows.get('preview-0'),row);
-  assert.notEqual(row.children[2].textContent,'Loading…');
+  assert.ok(row.children[2].textContent);
+  assert.equal(indicators(row)[0],undefined);
   assert.match(row.attributes['aria-label'],/Completed/);
   assert.equal([...view.promptRows.keys()].filter(id=>id==='preview-0').length,1);
   real.session_summary.cost=null;

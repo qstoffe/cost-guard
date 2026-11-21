@@ -28,8 +28,12 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: center; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
-/* Both cost scopes and the other metrics set intrinsic minima. Only the title flexes. */
-.mini-prompt-table th:not(.mini-session-cell) { width: 1%; }
+/* Reserve room for ordinary values even when every metric is pending. Exceptional
+   amounts can still widen the table and pan inside Mini rather than be clipped. */
+.mini-prompt-table th:first-child { width: 8ch; }
+.mini-prompt-table th:nth-child(3), .mini-prompt-table th:nth-child(4) { width: 9ch; }
+.mini-prompt-table th:last-child { width: 6ch; }
+.mini-prompt-table td:has(.metric-spinner) { text-align: center; }
 .mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr); }
 .mini-session-cell { min-width: 4rem !important; }
 .mini-daily-note { display: block; font-size: .7rem; color: var(--warn); }

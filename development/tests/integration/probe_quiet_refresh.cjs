@@ -112,19 +112,20 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
   // rendered through the actual Sessions route without replacing the row/help node.
   await run(`window.quietContext=quietRow.cells[6].firstChild;
     catalogRows[0].context_tokens=null;catalogRows[0].metric_states={ctx:'pending'};
+    catalogRows[0].display.context_tokens='N/A';
     current.catalog.poll()`);
-  assert.equal(await run(`quietContext.textContent`),'Loading…');
+  assert.equal(await run(`quietContext.querySelector('.metric-spinner')?.getAttribute('aria-label')`),'Loading context');
   for(const [tokens,state,label] of [[42000,'ready','42k'],[42000,'retained','42k'],
       [42000,'retained','42k'],[47000,'ready','47k'],[0,'ready','0'],[null,'ready','N/A']]) {
     await run(`catalogRows[0].context_tokens=${JSON.stringify(tokens)};
       catalogRows[0].metric_states={ctx:'${state}'};
       catalogRows[0].display.context_tokens='${label}';current.catalog.poll()`);
-    assert.equal(await run(`quietContext.textContent`),label);
+    assert.equal(await run(`quietContext.textContent`),tokens===null?'':label);
     assert.equal(await run(`current.catalog.body.firstChild===quietRow &&
       quietRow.cells[6].firstChild===quietContext && !quietContext.hasAttribute('aria-busy') &&
       document.activeElement===quietFocus && scrollY===quietScroll`),true);
   }
-  layouts.push({route:'sessions',context:['cold','42k','retained','retained','47k','0','authoritative-unknown'],
+  layouts.push({route:'sessions',context:['cold','42k','retained','retained','47k','0','unanalyzed-absence'],
     stableRowAndHelp:true});
   await run(`location.hash='#/sessions/quiet-0'`);await ready(`current.detail?.data?.revision==='quiet-revision'`);await audit();
   await run(`current.detail.sourceStatus({state:'history_retained'});current.detail.sourceStatus({state:'source_unavailable'})`);await audit();

@@ -358,8 +358,8 @@ async function main() {
      last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
    catalog.update({...catalogData,total:26,view:{session_usage:cold}});
    assert.equal(catalog.body.children.length, 25);
-    assert.ok(catalog.body.children.every(row => row.children.slice(2).every(cell =>
-      cell.textContent === 'Loading…')));
+    assert.ok(catalog.body.children.every(row => row.metrics.every(node =>
+      node.textContent === '' && node.children[0].attributes['aria-label'].startsWith('Loading '))));
    assert.equal(catalog.previous.tag, 'button'); assert.equal(catalog.previous.disabled,true); assert.equal(catalog.next.disabled,false);
    catalog.next.events.click(); assert.match(context.location.hash, /offset=25/);
    const known = {...cold[0],indexed:true,has_summary:true,metric_state:'ready',running:true,prompt_count:0,model:'N/A',display:{ccost:'0.00',duration_ms:'0s'}};
@@ -367,7 +367,7 @@ async function main() {
    assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
    assert.equal(catalog.body.children[0].className,'session-running');
    assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
-     assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s','N/A']);
+     assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['','0.00','0','0s','']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
     assert.equal(catalog.body.children[0].className,'');
@@ -496,11 +496,13 @@ async function main() {
     assert.match(document.body.children.at(-1).textContent,/child\/model/,'open help refreshes without losing its target');
     document.activeElement=null;
     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,metric_states:{model:'pending'},duration_ms:null}]} });
-    assert.equal(liveRow.children[2].textContent,'Loading…');
+     assert.equal(liveRow.children[2].textContent,'');
+     assert.equal(model.children[0].attributes['aria-label'],'Loading model');
      assert.equal(liveRow.children[4].textContent,'0','known zero count remains independent of pending model');
     catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
-    assert.ok(catalog.body.children[0].children.slice(2).every(cell =>
-      cell.textContent === 'Unavailable'));
+     assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell => [
+       cell.textContent, cell.children[0].children[0].attributes['aria-label']
+     ]), ['model','CCost','prompt count','duration','context'].map(field => ['',`Loading ${field}`]));
    assert.equal(catalog.body.children[0].className,'');
     await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
     const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';

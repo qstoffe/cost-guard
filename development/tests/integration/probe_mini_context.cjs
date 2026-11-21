@@ -4,6 +4,7 @@ module.exports=async function({evaluate,until,fixture,command,pip,open,close,che
   const show=async phase=>{const {published}=await fixture('handoff-'+phase);
     await until(`liveValue.view.now_ms===${published} && miniWatch.publication.view.now_ms===${published}`);};
   const read=()=>evaluate(`(()=>{const r=miniWatch.view.promptRows.get('root');return {text:r?.children[4].textContent,help:r?.contextHelp,
+    pending:r?.children[4].querySelector('.metric-spinner')?.getAttribute('aria-label'),
     running:r?.classList.contains('mini-running'),raw:liveValue.view.active_cards[0]?.rows[0]?.live_context.watch_next_context_tokens,
     handoff:liveValue.view.active_cards[0]?.context_handoff,
     full:document.querySelector('.watch-active [data-session="root"] .watch-session-summary')?.textContent,
@@ -57,7 +58,10 @@ module.exports=async function({evaluate,until,fixture,command,pip,open,close,che
   await show('tools');assert.equal((await read()).text,'235k');
   for(const phase of ['reset','model-selection','model','move','inactive']) {
     await show('prior');await show('early');assert.equal((await read()).text,'230k');
-    await show(phase);assert.equal((await read()).text,'N/A',phase+' is positive incompatibility');
+    await show(phase);
+    const value=await read();
+    assert.equal(value.text,'',phase+' withdraws the incompatible last-good value');
+    assert.equal(value.pending,'Loading context');
   }
   await show('prior');await show('unverified');assert.equal((await read()).text,'230k','execution uncertainty is not a context reset');
   await show('prior');await show('early');await close();await open();

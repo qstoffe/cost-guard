@@ -469,7 +469,10 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 [data-section="ai-stats"] main, [data-section="token-mix"] main { padding-top: .65rem; }
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
-.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(5, max-content); }
+.session-catalog-table { grid-template-columns: 19ch minmax(12rem, 1fr) 24ch 14ch 9ch 12ch 8ch; }
+.session-catalog-table td:not(:nth-child(2)) > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.session-catalog-table td:not(:nth-child(2)) > span:focus-visible { outline-offset: -2px; }
+.session-catalog-table td:has(.metric-spinner) { text-align: center; }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
   width: max-content; min-width: 0; max-width: 100%; }
 .session-detail > .sessions-table-pan { width: fit-content; max-width: 100%; }
@@ -485,6 +488,11 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-table .session-activity-feedback td { grid-column: 1 / -1; color: var(--muted); white-space: normal; }
 .sessions-action-status { margin-block: .45rem; color: var(--muted); }
 .session-metric-pending { color: var(--muted); }
+.metric-spinner { display: inline-block; box-sizing: border-box; inline-size: .625rem; block-size: .625rem;
+  border: .125rem solid currentColor; border-inline-end-color: transparent; border-radius: 50%;
+  vertical-align: .02em; pointer-events: none; animation: metric-spin .8s linear infinite; }
+@keyframes metric-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .metric-spinner { animation: none; } }
 .page-navigation { display: grid; grid-template-columns: 1fr auto 1fr; margin-block: .8rem; gap: .5rem; }
 .page-navigation > span { text-align: center; min-width: 0; }
 .page-navigation > button:first-child { justify-self: start; }

@@ -6,6 +6,7 @@ import sqlite3
 from src.analysis.cache import dependency_signature
 from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.context import ContextEpochs
+from src.analysis.metric_evidence import empty_history
 from src.analysis.session_context import session_context_observation
 from src.analysis.session_cost import session_cost_groups
 from src.analysis.session_activity import activity_fields
@@ -86,6 +87,10 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
             models = (value.split("/", 1) for value in values.get("contributor_models", ()))
             if not identity_cache_current(semantics, models):
                 raise ValueError("outdated_model_identity")
+            if "empty_history" not in values:
+                if values.get("prompt_count") == 0:
+                    raise ValueError("missing_empty_history_evidence")
+                values["empty_history"] = False
             if set(values) != {field.name for field in fields(SessionUsageRow)}:
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
@@ -124,6 +129,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                     and (row.prompt_started_ms is None or type(row.prompt_started_ms) is int and row.prompt_started_ms > 0)
                     and (row.activity_latest_ms is None or type(row.activity_latest_ms) is int and row.activity_latest_ms > 0)
                     and row.context_qualified
+                    and type(row.empty_history) is bool
+                    and (not row.empty_history or row.prompt_count == 0 and row.context_tokens is None
+                         and row.model == "N/A" and not row.selected_display_model)
                     and (row.context_tokens is None or type(row.context_tokens) is int and row.context_tokens >= 0)
                     and isinstance(row.context_detail, str) and len(row.context_detail) <= 128
                     and len(row.contributor_models) <= 64
@@ -159,6 +167,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     # just to obtain its presentation groups.
     groups = session_cost_groups(item.bundle.trace_entries, root.session_id, service._load_comparison_catalog())
     row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=groups,
+                  empty_history=empty_history(item.snapshot),
                   **activity_fields(item, on_activity=on_activity))
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")

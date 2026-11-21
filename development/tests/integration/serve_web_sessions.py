@@ -311,9 +311,13 @@ def main():
                         for history in host.live.details.histories.values():
                             history["due"] = 0
             elif command in ("models-source", "models-update"):
-                from development.tests.fixtures.sessions_models import models_source
-                models_source(source, updated=command == "models-update")
-                host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                from development.tests.fixtures.sessions_models import MODELS_DAY_START, model_fixture_prices, models_source
+                with host.live.observation_lock:
+                    service.now_ms = MODELS_DAY_START + 3_600_000
+                    models_source(source, updated=command == "models-update")
+                    service.catalog = service.comparison_pricing_catalog = model_fixture_prices(
+                        service.pricing_provider.get_catalog(), source)
+                    host.live.catalog.observe(observe_catalog(source, include_archived_revisions=True))
             elif command == "period-source":
                 now, day = 1_794_571_200_000, 86_400_000  # 2026-11-13 12:00 UTC
                 service.now_ms = now
@@ -404,13 +408,16 @@ def main():
                     if command == 'catalog-clear':
                         catalog.valid.clear()
                         catalog.activity_valid.clear()
-                    if command in ('catalog-partial', 'catalog-index', 'catalog-navigation-partial', 'catalog-navigation-finish'):
+                    if command in ('catalog-partial', 'catalog-index', 'catalog-period-warm-history',
+                                   'catalog-navigation-partial', 'catalog-navigation-finish'):
                         for number, (key, root) in enumerate(catalog.roots.items()):
                             if command == 'catalog-partial' and number >= 428:
                                 break
                             if command == 'catalog-navigation-partial' and number >= 20:
                                 break
                             if command == 'catalog-navigation-finish' and (number < 20 or number >= 324):
+                                continue
+                            if command == 'catalog-period-warm-history' and key in catalog.valid:
                                 continue
                             catalog.rows[key] = SessionUsageRow(key, root.title, f'Model {number:04}', False,
                                 Decimal(number) / 1000, number, duration_ms=number * 1000, context_tokens=number,
@@ -466,10 +473,14 @@ def main():
                     snapshot = replace(snapshot, invocations=tuple(replace(item,
                         model=ModelRef("other-provider", "gpt-test", "Long localized model display name"))
                         if index else item for index, item in enumerate(snapshot.invocations)))
-                source.snapshots[snapshot.root.session_id] = replace(snapshot,
-                    sessions=(snapshot.root,), source_revision=command, complete=True)
-                host.live.live_root = snapshot.root.session_id
-                host.live.scalar_hold = command == "live-cold"
+                with host.live.observation_lock:
+                    if command == "live-resume":
+                        # A recovered capture must be newer than the outage cutoff.
+                        service.now_ms += 1000
+                    source.snapshots[snapshot.root.session_id] = replace(snapshot,
+                        sessions=(snapshot.root,), source_revision=command, complete=True)
+                    host.live.live_root = snapshot.root.session_id
+                    host.live.scalar_hold = command == "live-cold"
             elif command == "live-hydrate":
                 host.live.scalar_hold = False
             elif command == "stop":

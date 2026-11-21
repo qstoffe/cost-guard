@@ -3,11 +3,13 @@ from dataclasses import replace
 from .synthetic_month import make_root_snapshot
 from src.domain import ModelRef
 
+MODELS_DAY_START = 1_794_528_000_000  # 2026-11-13 00:00 UTC
+
 
 def models_source(source, *, updated=False):
     values = {}
     for index in range(30):
-        snapshot = make_root_snapshot(index, 2, month_start_ms=1000)
+        snapshot = make_root_snapshot(index, 2, month_start_ms=MODELS_DAY_START)
         main = f"Model-{index:02}"
         if index == 4:
             main += "-" + "long-model-name-" * 12
@@ -29,3 +31,10 @@ def models_source(source, *, updated=False):
         values[snapshot.root.session_id] = replace(snapshot, sessions=sessions, invocations=requests,
             source_revision=f"models-{index}-{updated}", complete=True)
     source.snapshots = values
+
+
+def model_fixture_prices(base, source):
+    models = {request.model.model: request.model for snapshot in source.snapshots.values()
+              for request in snapshot.invocations}
+    prices = tuple(replace(base.models[0], model=model) for model in models.values())
+    return replace(base, models=base.models + prices, source_revision="sessions-model-fixture-prices")

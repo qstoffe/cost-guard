@@ -3,7 +3,7 @@ from dataclasses import replace
 from threading import Event
 from types import SimpleNamespace
 
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.watch_runtime import make_service
 from src.application.session_catalog import SessionCatalog
 from src.application.session_detail import SessionDetails
@@ -86,11 +86,28 @@ class CatalogPreviewFixture:
             history_cards=(), recent_finished_cards=(), earlier_cards=(), now_ms=self.now,
             history_state="loading", history_epoch=0, history_checked=20, history_total=3217))
 
-    def upgrade(self):
-        key = self.catalog.previews()[0].session_id
+    def upgrade(self, key=None):
+        key = key or self.catalog.previews()[0].session_id
         entry = self.cards.sessions[key]
         capture, item = capture_rows(self.service, entry.root)
         self.cards.accept(CardResult(key, entry.generation, "rows", (capture, (), item.snapshot)), self.now)
+
+    def empty(self):
+        snapshot = _today_snapshot(make_root_snapshot(3217, 1, month_start_ms=self.now), 25, self.now)
+        root = replace(snapshot.root, active=False)
+        self.original = snapshot = replace(snapshot, complete=True, root=root, sessions=(root,))
+        self._observe_revision(replace(snapshot, messages=(), parts=(), events=(),
+            invocations=(), source_revision="empty-history"))
+        self.upgrade(root.session_id)
+
+    def revise(self):
+        self._observe_revision(replace(self.original, source_revision="history-returned"))
+
+    def _observe_revision(self, snapshot):
+        self.source.snapshots[snapshot.root.session_id] = snapshot
+        self.observation = observe_catalog(self.source, include_archived_revisions=True)
+        self.catalog.observe(self.observation)
+        self.cards.catalog(self.observation)
 
     def counts(self):
         return dict(reads=self.source.load_count, catalogs=self.source.catalog_count,

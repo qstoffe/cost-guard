@@ -11,13 +11,14 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   const row = 'document.querySelector("tr[data-id=root-0121]")';
   assert.equal(await evaluate(`${row}.querySelector('a').getAttribute('href')`),'#/sessions/root-0121');
   assert.match(await evaluate(`${row}.cells[1].textContent`),/\[RUNNING\] Synthetic 0121/);
-  assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>cell.textContent)`),Array(5).fill('Loading…'));
+  assert.deepEqual(await evaluate(`[...${row}.cells].slice(2).map(cell=>[cell.textContent,
+    cell.querySelectorAll('.metric-spinner').length])`),Array.from({length:5},()=>['',1]));
   await evaluate(`window.keptRow=${row}; window.keptLink=keptRow.querySelector('a'); keptLink.focus();`);
   await fixture('live-hydrate');
   await until(`${row}.cells[4].textContent === '1'`);
   assert.equal(await evaluate('keptLink.isConnected && document.activeElement===keptLink'),true);
   const initial = await evaluate(`[...${row}.cells].map(cell=>cell.textContent)`);
-  assert.notEqual(initial[2],'Loading…'); assert.notEqual(initial[3],'Loading…'); assert.notEqual(initial[5],'Loading…');
+  for (const column of [2,3,5]) assert.notEqual(initial[column],'');
   assert.equal(initial[6],'1000k');
   await fixture('live-progress');
   await until(`${row}.cells[4].textContent === '2' && ${row}.cells[2].textContent.endsWith('*')`);
@@ -65,8 +66,12 @@ module.exports = async function sessionsLive({evaluate, until, fixture, command}
   assert.equal(await evaluate('current.catalog.root.querySelectorAll("[title],td .help-trigger").length'),0);
   checks.push('shared text-target mouse hover/leave, touch pin and Escape; no native or duplicate help');
   await fixture('fail');
-  await until('current.catalog.data.state === "source_unavailable"');
-  assert.equal(await evaluate('keptRow.value.metric_states.ctx'),'retained');
+  await until(`api('/api/sessions',{token:current.catalog.token,period:'today'})
+    .then(data=>data.state==='source_unavailable')`);
+  await evaluate('current.catalog.poll()');
+  // A passive outage must not replace the last applied page with an error DTO.
+  assert.equal(await evaluate('current.catalog.data.state'),'observed');
+  assert.equal(await evaluate(`${row}===keptRow`),true);
   assert.doesNotMatch(await evaluate(`${row}.cells[1].textContent`),/RUNNING/);
   assert.deepEqual(await evaluate(`[...${row}.cells].slice(3).map(cell=>cell.textContent)`),ended);
   await fixture('recover'); await fixture('live-resume');
