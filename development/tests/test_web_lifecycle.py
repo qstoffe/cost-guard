@@ -622,6 +622,35 @@ class LifecycleTests(unittest.TestCase):
                     finally:
                         store.remove(state["nonce"])
 
+    def test_owned_child_status_transport_race_does_not_make_a_control_identity_mismatch_retryable(self):
+        for code, ready in (("instance_control_unavailable", True), ("instance_control_conflict", False)):
+            with self.subTest(control_failure=code):
+                store = self.store()
+                child = Mock(pid=9876, **{"poll.return_value": None})
+                state = self.state(store, pid=child.pid)
+
+                def spawn(root, private_store, nonce, module):
+                    state["nonce"] = nonce
+                    store.write(state)
+                    return child
+
+                answer = {"ready": True, "url": f"http://127.0.0.1:{state['port']}/#bootstrap=synthetic"}
+                with patch.object(lifecycle, "InstanceStore", return_value=store), \
+                        patch.object(lifecycle, "spawn_detached", side_effect=spawn), \
+                        patch.object(lifecycle, "process_identity", return_value=state["process"]), \
+                        patch.object(lifecycle, "control", side_effect=[InstanceConflict(code), answer, answer]) as control:
+                    if ready:
+                        result = lifecycle.launch(self.root, "src.web.native_macos", opener=lambda _: True)
+                        self.assertTrue(result.browser_opened)
+                        self.assertEqual(["status", "status", "open"], [call.args[1] for call in control.call_args_list])
+                        child.terminate.assert_not_called()
+                        store.remove(state["nonce"])
+                    else:
+                        with self.assertRaisesRegex(InstanceConflict, code):
+                            lifecycle.launch(self.root, "src.web.native_macos", opener=lambda _: True)
+                        self.assertEqual(["status"], [call.args[1] for call in control.call_args_list])
+                        child.terminate.assert_called_once()
+
     def test_two_simultaneous_launches_have_one_winner_and_do_not_kill_it(self):
         store = self.store()
         if os.name == "nt":

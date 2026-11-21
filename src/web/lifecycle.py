@@ -193,8 +193,12 @@ def launch(root, gui_module, *, opener=webbrowser.open, progress=lambda stage: N
                         try:
                             if control(state, "status").get("ready"):
                                 break
-                        except (OSError, http.client.HTTPException):
-                            pass  # Brief socket readiness race, still bounded by deadline.
+                        except InstanceConflict as error:
+                            # The owned child may have published readiness before
+                            # its socket answers. Keep the existing deadline and
+                            # recheck ownership; a bad control identity stays fatal.
+                            if str(error) != "instance_control_unavailable":
+                                raise
                     if time.monotonic() >= deadline:
                         raise InstanceConflict("instance_start_timeout")
                     time.sleep(0.05)
