@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--period', action='append', choices=('today', '7-days', '30-days', 'month', 'all'))
     parser.add_argument('--managed', action='store_true', help='Use the production Web partial-history/quantum path.')
     parser.add_argument('--synthetic', action='store_true', help='Measure the isolated 520-root fixture, never personal history.')
+    parser.add_argument('--trace-checkpoints', action='store_true', help='Print bounded numeric checkpoints instead of child timings.')
     args = parser.parse_args()
     if args.synthetic:
         from development.tests.integration.token_mix_measurements import measure
@@ -40,6 +41,8 @@ def main():
     temporary = tempfile.TemporaryDirectory(dir=os.environ['OPENCODE_TOOLKIT_SESSION_SCRATCH'], prefix='token-mix-probe-') if args.cold_and_warm else None
     if temporary:
         os.environ['COST_GUARD_PROBE_CACHE'] = temporary.name
+    if args.trace_checkpoints:
+        os.environ['COST_GUARD_PROBE_CHECKPOINTS'] = '1'
     jobs = ReportJobs(target=isolated_report if temporary else measured_report)
     try:
         for scope in args.period or ['all']:
@@ -58,13 +61,23 @@ def observe(jobs, attempt, budget, scope='all', managed=False):
     started = time.monotonic()
     request_type = ManagedReport if managed else ReportRequest
     key = jobs.submit(request_type(ReportKind.TOKEN_MIX, token_mix_scope=scope))
+    last_checkpoint = None
     while time.monotonic() - started < budget:
         jobs.tick()
         value = jobs.snapshot(key)
+        job = jobs._jobs[key]
+        if os.environ.get('COST_GUARD_PROBE_CHECKPOINTS') == '1':
+            proof = job.get('continued') or {}
+            marker = (value['work']['slices'], value['error'], proof.get('completed'))
+            if marker != last_checkpoint and marker[0]:
+                print(json.dumps(dict(job=key, period=scope, cutoff_ms=job.get('observation_ms'),
+                    slices=marker[0], error=marker[1], completed=marker[2], cohort=proof.get('total'),
+                    phase=value['progress'].get('stage', value['progress']['phase']))), flush=True)
+                last_checkpoint = marker
         if value['status'] not in {'queued', 'running'}:
             result = value.get('result') or {}
             view = result.get('view') or {}
-            print(json.dumps(dict(attempt=attempt, period=scope, seconds=round(time.monotonic() - started, 3),
+            print(json.dumps(dict(job=key, attempt=attempt, period=scope, seconds=round(time.monotonic() - started, 3),
                 status=value['status'], error=value['error'], result_error=result.get('error'),
                 model_rows=len(view.get('model_token_mix', [])),
                 publisher_rows=len(view.get('publisher_token_mix', [])),

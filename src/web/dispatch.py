@@ -9,7 +9,7 @@ from threading import RLock
 import time
 
 from src.analysis.cache import dependency_signature
-from src.analysis.ai_stats import POLICY as STATS_POLICY
+from src.analysis.ai_stats import POLICY as STATS_POLICY, windows
 from src.reports import ReportKind, ReportRequest
 from .jobs import MAX_PENDING
 from .report_control import ManagedReport
@@ -38,7 +38,32 @@ def usable(result, now_ms):
         return False  # A prior derived schema must regenerate, never relax browser validation.
     observed = result.get('source', {}).get('observed_at_ms')
     return (type(observed) is int and 0 <= observed <= now_ms
-            and result['source'].get('status') in {'acquired', 'partial'})
+             and result['source'].get('status') in {'acquired', 'partial'})
+
+
+def current_result(request, result, now_ms):
+    if not usable(result, now_ms):
+        return False
+    if request.kind is not ReportKind.TOKEN_MIX:
+        return True
+    view = result['view']
+    period = view.get('token_mix_period') or {}
+    if view.get('kind') != 'token-mix' or period.get('period') != request.token_mix_scope:
+        return False
+    if period.get('coverage') not in {None, 'partial', 'unknown'}:
+        return False
+    if request.token_mix_scope == 'all':
+        return True
+    try:
+        zone = view['timezone_id']
+        return isinstance(zone, str) and period.get('start_ms') == dict(windows(zone, now_ms))[request.token_mix_scope]
+    except (KeyError, ValueError, OverflowError):
+        return False
+
+
+def token_mix_coverage(result):
+    period = (result or {}).get('view', {}).get('token_mix_period') or {}
+    return {'unknown': 0, 'partial': 1}.get(period.get('coverage'), 2)
 
 
 def cadence(request, result, foreground):
@@ -58,6 +83,7 @@ class DataDispatcher:
         self.tabs = OrderedDict()
         self.initialized = False
         self.identity = ''
+        self.projection_epoch = 0
         self.next_background = 0
         self.source_error = None
         self.source_terminal = False
@@ -72,6 +98,7 @@ class DataDispatcher:
     def invalidate(self):
         """Known projection dependency changed; no stale completed-job reuse."""
         with self.lock:
+            self.projection_epoch += 1
             for entry in self.entries.values():
                 if entry['job']:
                     self.jobs.cancel(entry['job'])
@@ -136,15 +163,15 @@ class DataDispatcher:
             entry = self._entry(request)
             self._collect()
             entry['requested'] = not bool(entry['result'])
-            if entry['result'] and not usable(entry['result'], int(self.wall_clock() * 1000)) and not entry['failures']:
+            valid = current_result(request, entry['result'], int(self.wall_clock() * 1000))
+            if entry['result'] and not valid and not entry['failures']:
                 entry['due'] = 0
             if retry and not entry['job']:
                 entry.update(terminal=False, due=0, failures=0, error=None)
             if (self.ready and not entry['job'] and not entry['terminal'] and self.clock() >= entry['due']
-                    and (not entry['result'] or not usable(entry['result'], int(self.wall_clock() * 1000)) or retry)):
+                    and (not valid or retry)):
                 self._submit(request, entry)
             result = entry['result']
-            valid = usable(result, int(self.wall_clock() * 1000))
             blocked = self.source_error
             active = self.jobs.snapshot(entry['job']) if entry['job'] else None
             refresh = ('stopped' if self.source_terminal or entry['terminal'] else
@@ -153,7 +180,8 @@ class DataDispatcher:
             return dict(id=entry['job'] or (entry['result_id'] if valid else None), result=result if valid else None,
                 result_id=entry['result_id'] if valid else None, refresh=refresh,
                 stale=bool(result and not valid), error=blocked or entry['error'],
-                terminal=self.source_terminal or entry['terminal'])
+                terminal=self.source_terminal or entry['terminal'],
+                source_identity=self.identity, projection_epoch=self.projection_epoch)
 
     def _submit(self, request, entry):
         managed = ManagedReport(**{name: getattr(request, name) for name in ReportRequest.__dataclass_fields__},
@@ -183,7 +211,16 @@ class DataDispatcher:
             if request.kind is ReportKind.AI_STATS and scoped:
                 ready = ready and scoped.get(request.stats_scope, {}).get('ready') is True
             ready = ready and not old_schema
-            if ready:
+            replace_result, degraded = ready, False
+            token_mix = request.kind is ReportKind.TOKEN_MIX
+            if token_mix and ready:
+                now = int(self.wall_clock() * 1000)
+                ready = snapshot['status'] == 'complete' and current_result(request, result, now)
+                coverage = token_mix_coverage(result)
+                degraded = coverage < 2
+                replace_result = ready and (not current_result(request, entry['result'], now)
+                    or coverage == 2 or coverage > token_mix_coverage(entry['result']))
+            if replace_result:
                 entry.update(result=result, result_id=key, failures=0, error=None)
             if snapshot['status'] in {'queued', 'running'}:
                 continue
@@ -192,7 +229,18 @@ class DataDispatcher:
                 delay = cadence(request, result, request in self._foreground())
                 # Stable per-product spread; missed periods coalesce to one turn.
                 spread = int(dependency_signature(str(request))[:4], 16) % 90
+                if degraded:
+                    delay, spread = 30, spread % 15  # Reconcile coverage sooner on the low-priority lane.
                 entry.update(due=self.clock() + delay + spread, terminal=False, finished=self.clock(), requested=False)
+            elif token_mix and snapshot['status'] == 'complete' and result and not result.get('error'):
+                period = (result.get('view') or {}).get('token_mix_period') or {}
+                observed = result.get('source', {}).get('observed_at_ms')
+                if period.get('period') == request.token_mix_scope and type(observed) is int and current_result(request, result, observed):
+                    # An overnight slice may finish its original observation.
+                    # Do not display it under today's controls; admit a new one.
+                    entry.update(due=self.clock() + 2, terminal=False, error=None)
+                else:
+                    entry.update(terminal=True, error='report_invalid_result')
             else:
                 error = (result or {}).get('error') or {}
                 entry['error'] = error.get('code') or snapshot.get('error') or (
@@ -222,6 +270,7 @@ class DataDispatcher:
                     if entry['job']:
                         self.jobs.cancel(entry['job'])
                 self.entries.clear()
+                self.projection_epoch += 1
                 self.initialized = False
             self.identity = identity
             self._prices()
@@ -257,7 +306,7 @@ class DataDispatcher:
             self.warm_allowed = True
             for request in foreground:
                 entry = self._entry(request)
-                if entry['result'] and not usable(entry['result'], int(self.wall_clock() * 1000)) and not entry['failures']:
+                if entry['result'] and not current_result(request, entry['result'], int(self.wall_clock() * 1000)) and not entry['failures']:
                     entry['due'] = 0
                 if not entry['job'] and not entry['terminal'] and self.clock() >= entry['due']:
                     try:
@@ -300,6 +349,8 @@ class DataDispatcher:
         for request, entry in self.entries.items():
             key = entry['job']
             if key:
-                priority = 0 if request in foreground else 1 if entry['requested'] and not chart_visible else 2
+                ready_mix = request.kind is ReportKind.TOKEN_MIX and current_result(
+                    request, entry['result'], int(self.wall_clock() * 1000))
+                priority = 2 if ready_mix else 0 if request in foreground else 1 if entry['requested'] and not chart_visible else 2
                 priorities[key] = min(priorities.get(key, 3), priority) if self.ready else 3
         self.jobs.prioritize(priorities)

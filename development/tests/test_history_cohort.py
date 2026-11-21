@@ -25,9 +25,9 @@ class HistoryCohortTests(unittest.TestCase):
         service.history_checkpoint = lambda _proof: None
         return service
 
-    def build(self, service, kind):
-        return (service.build_token_mix_history(scope='all') if kind == 'token-mix' else
-                service.build(ReportRequest(ReportKind.AI_STATS, stats_scope='all')))
+    def build(self, service, kind, scope='all'):
+        return (service.build_token_mix_history(scope=scope) if kind == 'token-mix' else
+                service.build(ReportRequest(ReportKind.AI_STATS, stats_scope=scope)))
 
     def cohort(self, service, scan='test'):
         sessions = service.source.list_sessions()
@@ -111,18 +111,49 @@ class HistoryCohortTests(unittest.TestCase):
                 first = self.service(original)
                 first.history_slice_roots = first.history_batch_size = first.stats_slice_roots = 1
                 try:
-                    self.build(first, kind)
+                    self.build(first, kind, 'today')
                 except HistoryContinuation:
                     pass
                 source.snapshots[recent.root.session_id] = replace(recent, source_revision='recent-changed')
                 resumed = self.service(original)
                 resumed.history_slice_roots = resumed.stats_slice_roots = 100
 
-                with self.assertRaisesRegex((HistoryCheckpointError, StatsCheckpointError), 'revision_churn'):
-                    if kind == 'token-mix':
-                        resumed.build_token_mix_history(scope='today')
-                    else:
+                if kind == 'token-mix':
+                    report = resumed.build_token_mix_history(scope='today')
+                    self.assertEqual('unknown', report.token_mix_period['coverage'])
+                    self.assertEqual(1, report.history_omitted_roots)
+                else:
+                    with self.assertRaisesRegex(StatsCheckpointError, 'revision_churn'):
                         resumed.build(ReportRequest(ReportKind.AI_STATS, stats_scope='today'))
+
+    def test_all_time_succeeds_but_seven_days_has_no_verified_usage_after_a_root_changes(self):
+        from src.application.projection import project
+        source = SyntheticMonthSource(3, 2, month_start_ms=NOW - 60 * DAY)
+        recent = replace(make_root_snapshot(3, 2, month_start_ms=NOW - DAY), complete=True)
+        source.snapshots[recent.root.session_id] = recent
+        original = report_service(self, source)
+        all_time = self.service(original, scan='all').build_token_mix_history(scope='all')
+        for sid in ('root-0000', 'root-0001'):
+            source.snapshots[sid] = replace(source.snapshots[sid], source_revision='changed-before-selection')
+        first = self.service(original, scan='week')
+        first.history_slice_roots = first.history_batch_size = 1
+        proofs = []
+        first.history_checkpoint = proofs.append
+        with self.assertRaises(HistoryContinuation):
+            first.build_token_mix_history(scope='7-days')
+        source.snapshots[recent.root.session_id] = replace(recent, source_revision='changed-after-checkpoint')
+        resumed = self.service(original, scan='week')
+        resumed.history_resuming = True
+
+        selected = resumed.build_token_mix_history(scope='7-days')
+
+        self.assertGreater(all_time.token_mix.request_count, 0)
+        self.assertEqual(4, proofs[-1]['total'])
+        self.assertEqual(1, selected.history_omitted_roots)
+        self.assertEqual('7-days', selected.token_mix_period['period'])
+        self.assertEqual(NOW, selected.token_mix_period['end_ms'])
+        self.assertEqual('unknown', selected.token_mix_period['coverage'])
+        self.assertIsNone(project(selected).to_json()['token_mix'])
 
     def test_failed_omission_write_is_not_continuation_proof_and_expired_state_is_pruned(self):
         source = SyntheticMonthSource(2, 1, month_start_ms=NOW - DAY)
@@ -141,6 +172,56 @@ class HistoryCohortTests(unittest.TestCase):
 
         self.assertIsNone(original.cache_repository.get(NAMESPACE, initial.key))
         self.assertIsNone(original.cache_repository.get(TRANSIENT, 'old'))
+
+    def test_seven_day_cohort_reuses_verified_children_and_converges_after_arrivals(self):
+        for changes in (0, 1, 12):
+            with self.subTest(changes=changes):
+                source = SyntheticMonthSource(24, 2, month_start_ms=NOW - DAY, children_per_root=1)
+                source.snapshots = {sid: replace(tree, complete=True) for sid, tree in source.snapshots.items()}
+                sid = 'root-0023'
+                tree = source.snapshots[sid]
+                child = replace(tree.sessions[1], active=True)
+                source.snapshots[sid] = replace(tree, sessions=(tree.root, child))
+                future_root = make_root_snapshot(50, 2, month_start_ms=NOW)
+                source.snapshots[future_root.root.session_id] = future_root
+                original = report_service(self, source)
+                proofs = []
+                for slice_index in range(8):
+                    service = self.service(original)
+                    service.history_resuming = slice_index > 0
+                    service.history_checkpoint = proofs.append
+                    try:
+                        first = self.build(service, 'token-mix', '7-days')
+                        break
+                    except HistoryContinuation:
+                        if slice_index == 0:
+                            for index in range(changes):
+                                root_id = f'root-{index:04d}'
+                                source.snapshots[root_id] = replace(source.snapshots[root_id], source_revision='changed')
+                                arrival = make_root_snapshot(100 + index, 2, month_start_ms=NOW)
+                                source.snapshots[arrival.root.session_id] = replace(arrival, complete=True)
+                else:
+                    self.fail('initial 24-root cohort never completed')
+
+                self.assertEqual({24}, {proof['total'] for proof in proofs})
+                self.assertEqual(1, len({proof['signature'] for proof in proofs}))
+                self.assertEqual(changes, first.history_omitted_roots)
+                self.assertEqual(NOW, first.token_mix_period['end_ms'])
+                self.assertEqual(4 * (24 - changes), first.token_mix.request_count)
+                self.assertEqual(522 * (24 - changes), first.token_mix.total_tokens)
+                self.assertEqual(4 * (24 - changes), first.token_mix.sample_size)
+
+                refreshed = self.service(original, scan='catch-up')
+                refreshed.now_ms += DAY
+                refreshed.history_slice_roots = 100
+                settled = self.build(refreshed, 'token-mix', '7-days')
+                reference = report_service(self, source, now_ms=NOW + DAY)
+                expected = self.build(reference, 'token-mix', '7-days')
+
+                self.assertEqual(0, settled.history_omitted_roots)
+                self.assertEqual(4 * 24 + 2 * (1 + changes), settled.token_mix.request_count)
+                self.assertEqual(expected.token_mix, settled.token_mix)
+                self.assertEqual(expected.token_mix_observed_totals, settled.token_mix_observed_totals)
 
     def test_zero_one_and_ten_changing_roots_finish_and_next_observation_converges(self):
         self.measurements = []

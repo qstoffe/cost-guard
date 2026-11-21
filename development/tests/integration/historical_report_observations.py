@@ -1,6 +1,7 @@
 """Opt-in child-process report timings; numeric metadata only, never source rows."""
 from contextlib import ExitStack
 import json
+import os
 import sys
 import time
 from unittest.mock import patch
@@ -46,6 +47,8 @@ def measured_report(sender, request, *, sample_window=None):
     cpu_started = time.process_time()
 
     def report(event=None):
+        if os.environ.get('COST_GUARD_PROBE_CHECKPOINTS') == '1':
+            return
         now = time.monotonic()
         if event is not None and now - last[0] < 10:
             return

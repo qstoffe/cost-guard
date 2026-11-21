@@ -67,7 +67,10 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
             service.shared_web_evidence = True
             service.allow_partial_history = True
             service.history_batch_size = request.history_batch_size
-            service.history_slice_roots = 256
+            # Managed Token Mix yields cooperatively inside each cache/root
+            # batch. Fewer process boundaries avoid re-decoding the full
+            # verified prefix every 256 roots in large cold catalogs.
+            service.history_slice_roots = 1024 if request.kind is ReportKind.TOKEN_MIX else 256
             service.history_checkpoint = history_checkpoint
             service.history_scan = request.history_scan or None
         service.history_resuming = getattr(request, 'resuming', False)

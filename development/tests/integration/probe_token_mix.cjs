@@ -169,6 +169,7 @@ async function main() {
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
     await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
     await require('./probe_token_mix_periods.cjs')({evaluate,until,command,tab,checks});
+    await require('./probe_token_mix_recovery.cjs')({evaluate,until,checks});
     await require('./probe_token_mix_summary.cjs')({evaluate,until,command,tab,checks});
     await require('./probe_token_mix_width.cjs')({evaluate,command,tab,checks});
     await evaluate(`(()=>{const value=structuredClone(current.result);

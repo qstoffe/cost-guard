@@ -148,6 +148,8 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
     if scope == 'all':
         stamps = [entry.completed_at_ms for entry in shown_usage if entry.completed_at_ms > 0]
         period.update(start_ms=min(stamps) if stamps else None, end_ms=max(stamps) if stamps else None)
+    elif scope is not None and undated:
+        period['coverage'] = 'partial' if shown_usage else 'unknown'
     return ReportProjection(
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,
         notes=tuple(notes), model_token_mix=tuple(rows), publisher_token_mix=tuple(publishers), token_mix=total,

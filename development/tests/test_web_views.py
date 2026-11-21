@@ -169,6 +169,9 @@ class WebViewTests(unittest.TestCase):
             settings_root = Path(tmp).resolve() / "settings"
             (settings_root / "config").mkdir(parents=True)
             shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
+            # The browser must qualify historical results against the same calendar as the host.
+            (settings_root / "config/user-config.jsonc").write_text(
+                json.dumps({"timezone": config["timezone"]}), encoding="utf-8")
             catalog = SessionCatalog(clock_ms=lambda: now)
             details = SessionDetails(clock=lambda: now / 1000)
             # Finite report warming above cannot initialize SessionHistory's

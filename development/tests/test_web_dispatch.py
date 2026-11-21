@@ -285,6 +285,54 @@ class DispatcherTests(unittest.TestCase):
         self.assertFalse(self.dispatch.lookup(request)['terminal'])
         self.assertNotEqual(key, self.dispatch.lookup(request)['id'])
 
+    def test_token_mix_keeps_qualified_result_through_failed_and_partial_refresh(self):
+        from src.analysis.ai_stats import windows
+        request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='7-days')
+        self.now += 1_760_000_000
+        self.dispatch.interest('one', 'token-mix', True, request)
+
+        def next_report(coverage=None):
+            observed = int(self.now * 1000)
+            value = result(observed)
+            value['view'].update(kind='token-mix', timezone_id='UTC', token_mix_period=dict(
+                period='7-days', start_ms=dict(windows('UTC', observed))['7-days'],
+                end_ms=observed, coverage=coverage))
+            return value
+
+        first = self.dispatch.lookup(request)
+        accepted = next_report()
+        self.jobs.values[first['id']].update(status='complete', result=accepted)
+        self.dispatch.tick()
+        self.now = self.dispatch.entries[request]['due']
+        self.dispatch.interest('one', 'token-mix', True, request)
+        self.dispatch.tick()
+        refresh = self.dispatch.lookup(request)
+        self.assertEqual(2, self.jobs.priorities[refresh['id']])
+        self.jobs.values[refresh['id']].update(status='failed', result=dict(
+            error=dict(code='report_cache_busy', retryable=True)))
+        self.assertIs(accepted, self.dispatch.lookup(request)['result'])
+        self.now = self.dispatch.entries[request]['due']
+        self.dispatch.interest('one', 'token-mix', True, request)
+        self.dispatch.tick()
+        refresh = self.dispatch.lookup(request)
+        self.jobs.values[refresh['id']].update(status='complete', result=next_report('partial'))
+        self.assertIs(accepted, self.dispatch.lookup(request)['result'])
+        self.now = self.dispatch.entries[request]['due']
+        self.dispatch.interest('one', 'token-mix', True, request)
+        self.dispatch.tick()
+        refresh = self.dispatch.lookup(request)
+        replacement = next_report()
+        self.jobs.values[refresh['id']].update(status='complete', result=replacement)
+
+        self.assertIs(replacement, self.dispatch.lookup(request)['result'])
+        self.assertIsNone(self.dispatch.lookup(ReportRequest(ReportKind.TOKEN_MIX))['result'])
+        self.now += 86400
+        rolled = self.dispatch.lookup(request)
+        self.assertTrue(rolled['stale'])
+        self.assertIsNone(rolled['result'])
+        self.dispatch.invalidate()
+        self.assertGreater(self.dispatch.lookup(request)['projection_epoch'], first['projection_epoch'])
+
     def test_unready_completed_stats_are_not_cached_for_the_success_cadence(self):
         request = ReportRequest(ReportKind.AI_STATS)
         key = self.dispatch.lookup(request)['id']
@@ -895,7 +943,13 @@ class SharedEvidenceTests(unittest.TestCase):
                 service.cache_token_mix_history = True
                 with patch.object(source, 'load_session_snapshots_available', return_value={}, create=True):
                     value = ReportApplication(lambda *_: service, clock=lambda: NOW).execute(ReportRequest(kind)).to_json()
-                if kind is ReportKind.AI_STATS:
+                if kind is ReportKind.TOKEN_MIX:
+                    self.assertIsNone(value['error'])
+                    self.assertEqual('partial', value['source']['status'])
+                    self.assertEqual(1, value['source']['omitted_roots'])
+                    self.assertEqual('unknown', value['view']['token_mix_period']['coverage'])
+                    self.assertIsNone(value['view']['token_mix'])
+                elif kind is ReportKind.AI_STATS:
                     self.assertIsNone(value['error'])
                     self.assertEqual('partial', value['source']['status'])
                     self.assertEqual(1, value['source']['omitted_roots'])
@@ -1036,6 +1090,24 @@ class SharedEvidenceTests(unittest.TestCase):
 
 
 class HistoryJobTests(unittest.TestCase):
+    def test_token_mix_typed_retries_keep_cutoff_and_checkpoint_with_bounded_backoff(self):
+        from src.web.history_jobs import checkpoint, retry
+        job = dict(request=ManagedReport(ReportKind.TOKEN_MIX, token_mix_scope='7-days'),
+                   status='running', observation_ms=NOW)
+        proof = dict(signature='a' * 64, completed=32, total=80)
+        checkpoint(job, proof)
+        delays = []
+        for code in ('busy', 'history_revision_churn', 'concurrent_source_change',
+                     'history_checkpoint_busy', 'report_cache_busy') * 3:
+            self.assertTrue(retry(job, dict(code=code, retryable=True)))
+            delays.append(job['not_before'] - job['queued_at'])
+            self.assertEqual(code, job['error'])
+            self.assertEqual('queued', job['status'])
+            self.assertEqual(NOW, job['observation_ms'])
+            self.assertEqual(proof, job['continued'])
+        self.assertEqual([2, 4, 8, 16, 32] + [60] * 10, delays)
+        self.assertFalse(retry(job, dict(code='source_permission_denied', retryable=False)))
+
     def test_changing_catalog_keeps_durable_coverage_pending_with_backoff_then_recovers(self):
         from src.web.history_jobs import checkpoint, resume
         job = dict(request=ManagedReport(ReportKind.TOKEN_MIX), status='running')
@@ -1048,7 +1120,7 @@ class HistoryJobTests(unittest.TestCase):
             resume(job)
         self.assertEqual('queued', job['status'])
         self.assertGreater(job['not_before'], job['queued_at'])
-        self.assertNotIn('error', job)
+        self.assertIsNone(job['error'])
         checkpoint(job, dict(signature='c' * 64, completed=384, total=2700))
         resume(job)
         self.assertEqual(job['not_before'], job['queued_at'], 'verified progress removes churn backoff')

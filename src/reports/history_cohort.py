@@ -29,14 +29,14 @@ def identity(service):
 
 
 class HistoryCohort:
-    def __init__(self, service, scan, sessions, roots, versions, reference):
+    def __init__(self, service, scan, sessions, roots, versions, reference, *, period=None):
         self.service = service
         self.identity = identity(service)
         self.key = dependency_signature((NAMESPACE, scan))
-        self.binding = dependency_signature((identity(service), service.now_ms, service.timezone_id,
+        self.binding = dependency_signature((identity(service), service.now_ms, service.timezone_id, period,
             service._dependencies(service._load_catalog()), reference.analysis_signature,
             service.config, service.selection.warnings, service.selection.migration_gap))
-        self.members = structure(sessions)
+        members = structure(sessions)
         self.omitted = set()
         self.versions = versions
         if len(roots) > MAX_ROOTS:
@@ -47,7 +47,7 @@ class HistoryCohort:
                 if getattr(service, 'history_resuming', False):
                     raise HistoryCheckpointError('history_checkpoint_unavailable')
                 self.value = dict(binding=self.binding, identity=list(self.identity), roots={
-                    root.session_id: [versions[root.session_id], self.members[root.session_id],
+                    root.session_id: [versions[root.session_id], members[root.session_id],
                         [root.provenance.source_type, root.provenance.source_generation, root.provenance.source_instance]]
                     for root in roots}, omitted=[])
                 self.save()
@@ -57,7 +57,7 @@ class HistoryCohort:
                     raise HistoryCheckpointError('history_checkpoint_unavailable')
                 self.validate()
                 self.omitted = set(self.value['omitted'])
-            self.reconcile(sessions, roots, versions)
+            self.roots = self.reconcile(sessions, roots, versions, members=members)
         except (OSError, sqlite3.Error) as error:
             self.failed(error)
 
@@ -82,10 +82,11 @@ class HistoryCohort:
     def signature(self):
         return dependency_signature((self.binding, self.value['roots']))
 
-    def reconcile(self, sessions, roots, versions):
+    def reconcile(self, sessions, roots, versions, *, members=None):
         if identity(self.service) != self.identity:
             raise HistoryCheckpointError('source_identity_changed')
-        members = structure(sessions)
+        if members is None:
+            members = structure(sessions)
         current = {r.session_id: r for r in roots}
         omitted = set()
         for sid, (revision, membership, provenance) in self.value['roots'].items():

@@ -9,6 +9,15 @@ const TokenMixView = (() => {
   const tokenKey = 'mix_total_tokens';
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
   const display = (mix, key) => ReportView.display(mix, key);
+  function compatible(result, selected) {
+    const {token_mix_period: period, timezone_id: zone} = result.view;
+    const configured = ReportView.configuredTimezone();
+    if (period?.period !== selected || configured && result.scope?.timezone_id && zone !== configured) return false;
+    if (selected === 'all') return true;
+    const day = ms => ReportView.formatDateTime(ms, ReportView.DateTimeMode.DATE, zone);
+    const now = day(Date.now()), observed = day(period.end_ms);
+    return now !== 'N/A' && (selected === 'month' ? now.slice(0, 7) === observed.slice(0, 7) : now === observed);
+  }
   function titleHelp(result) {
     const {token_mix: mix, token_mix_period: period, timezone_id: zone} = result.view;
     const quantity = BigInt(mix.observed_total_tokens).toLocaleString('en-US');
@@ -106,7 +115,11 @@ const TokenMixView = (() => {
           ContextHelp.refresh(span);
         });
         // Never remove/reinsert unchanged rows: preserve focus, selection and scroll anchors.
-        if (this.body.children[index] !== node.root) this.body.insertBefore(node.root, this.body.children[index] || null);
+        if (this.body.children[index] !== node.root) {
+          const before = this.body.children[index] || null;
+          if (node.root.parentNode === this.body && this.body.moveBefore) this.body.moveBefore(node.root, before);
+          else this.body.insertBefore(node.root, before);
+        }
       });
       for (const [key, node] of this.nodes) if (!retained.has(key)) { node.root.remove(); this.nodes.delete(key); }
     }
@@ -122,17 +135,17 @@ const TokenMixView = (() => {
       });
       this.content = e('div');
       this.title = e('h2');
-      ContextHelp.value(this.title, () => this.result ? titleHelp(this.result) : '');
+      ContextHelp.value(this.title, () => this.result?.view.token_mix ? titleHelp(this.result) : '');
       this.summary = e('div', undefined, 'token-mix-summary');
       this.metrics = categories.map((key, index) => {
         const group = e('div'), label = e('span', names[index]), value = e('strong');
-        ReportView.text(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_share') : 'N/A');
-        ContextHelp.value(value, () => this.result ? display(this.result.view.token_mix, 'mix_' + key + '_cost_value') : '');
+        ReportView.text(value, () => this.result?.view.token_mix ? display(this.result.view.token_mix, 'mix_' + key + '_share') : '');
+        ContextHelp.value(value, () => this.result?.view.token_mix ? display(this.result.view.token_mix, 'mix_' + key + '_cost_value') : '');
         group.append(label, value); this.summary.append(group); return value;
       });
-      this.status = e('p', '', 'token-mix-status'); this.status.setAttribute('role', 'status');
+      this.status = e('p', '', 'token-mix-status');
       this.models = new Table('model'); this.publishers = new Table('publisher');
-      this.content.append(this.title, this.summary, this.status, this.models.root, this.publishers.root);
+      this.content.append(this.status, this.title, this.summary, this.models.root, this.publishers.root);
       this.root.append(this.selector, this.content);
     }
     selection(period, ready) {
@@ -142,12 +155,21 @@ const TokenMixView = (() => {
     update(result) {
       if (this.result === result) return;
       this.result = result;
-      ReportView.text(this.title, () => `Total Token Mix % · ${display(this.result.view.token_mix, tokenKey)} tokens`);
+      const view = result.view;
+      const coverage = view.token_mix_period?.coverage;
+      const hasUsage = !!view.model_token_mix.length || !!view.token_mix?.request_count;
+      const unknown = coverage === 'unknown' || !hasUsage && result.source.status === 'partial';
+      for (const node of [this.title, this.summary, this.models.root, this.publishers.root])
+        node.hidden = unknown;
+      ReportView.text(this.status, unknown ? 'Usage for this period could not be verified yet.' :
+        coverage === 'partial' ? 'Showing verified usage only. Some history could not be checked.' :
+          hasUsage ? '' : 'No usage yet.');
+      this.status.hidden = !this.status.textContent;
+      if (unknown) return;
+      ReportView.text(this.title, () => this.result.view.token_mix ?
+        `Total Token Mix % · ${display(this.result.view.token_mix, tokenKey)} tokens` : '');
       ContextHelp.refresh(this.title);
       this.metrics.forEach(value => ReportView.syncUnits(value));
-      const view = result.view;
-      this.status.textContent = view.model_token_mix.length ? '' : result.source?.status === 'partial' ? 'N/A' : 'No usage yet.';
-      this.status.hidden = !this.status.textContent;
       this.models.update(view.model_token_mix); this.publishers.update(view.publisher_token_mix);
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }
@@ -158,7 +180,12 @@ const TokenMixView = (() => {
     if (period != null && (!periods.some(([id]) => id === period.period) ||
         ![period.start_ms, period.end_ms].every(value => value === null || Number.isSafeInteger(value)) ||
         (period.period !== 'all' && (period.start_ms === null || period.end_ms === null)) ||
-        (period.start_ms !== null && period.end_ms !== null && period.start_ms > period.end_ms))) return false;
+         (period.start_ms !== null && period.end_ms !== null && period.start_ms > period.end_ms) ||
+         (period.coverage !== undefined && !['unknown', 'partial'].includes(period.coverage)))) return false;
+    if (!Number.isFinite(result?.observed_at_ms) || !['acquired', 'partial'].includes(result?.source?.status) ||
+        view?.kind !== 'token-mix') return false;
+    if (period?.coverage === 'unknown') return result.source.status === 'partial' && view.token_mix === null &&
+      ['model', 'publisher'].every(key => Array.isArray(view[key + '_token_mix']) && !view[key + '_token_mix'].length);
     const integer = value => typeof value === 'string' && /^\d+$/.test(value);
     const decimal = value => typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value);
     const count = value => Number.isSafeInteger(value) && value >= 0;
@@ -175,11 +202,10 @@ const TokenMixView = (() => {
         value.exact_totals.every(integer) && value.shares.every(share => share === null || BigInt(value.exact_total_tokens) > 0n)) &&
       ['mix_total_tokens', 'mix_total_cost', ...categories.flatMap(key => ['mix_' + key + '_share', 'mix_' + key + '_cost'])]
         .every(key => typeof value.display?.[key] === 'string');
-    return Number.isFinite(result?.observed_at_ms) && typeof result?.source?.status === 'string' &&
-      view?.kind === 'token-mix' && mix(view.token_mix) && ['model', 'publisher'].every(key =>
+    return mix(view.token_mix) && ['model', 'publisher'].every(key =>
         Array.isArray(view[key + '_token_mix']) && view[key + '_token_mix'].every(row =>
           typeof row[key] === 'string' && (key !== 'model' || typeof row.publisher === 'string' && typeof row.identity === 'string') &&
           count(row.prompts) && count(row.calls) && mix(row.mix)));
   }
-  return {View, compare, numeric, valid};
+  return {View, compare, numeric, valid, compatible};
 })();

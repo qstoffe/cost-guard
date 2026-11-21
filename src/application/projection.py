@@ -259,8 +259,9 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,
         recent_model_notice_highlight_spans=report.recent_model_notice_highlight_spans,
-        token_mix=token_mix(report.token_mix, category_help=report.kind is ReportKind.TOKEN_MIX,
-                            observed=report.token_mix_observed_totals),
+         token_mix=None if report.token_mix_period.get('coverage') == 'unknown' else
+             token_mix(report.token_mix, category_help=report.kind is ReportKind.TOKEN_MIX,
+                       observed=report.token_mix_observed_totals),
         token_mix_period=record(**report.token_mix_period) if report.token_mix_period else None,
         model_token_mix=tuple(record(model=item.web_model or item.model, publisher=item.publisher, identity=identity((item.identity,)),
             prompts=item.prompts, calls=item.calls,

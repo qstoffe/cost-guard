@@ -26,11 +26,12 @@ NAMESPACE = 'web-token-mix-evidence'
 BATCH_SIZE = 64
 
 
-def cache_key(service, root, reference):
+def cache_key(service, root, reference, *, dependencies=None):
     provenance = root.provenance
+    if dependencies is None:
+        dependencies = service._dependencies(service._load_catalog())
     return dependency_signature((ALGORITHM, provenance.source_type, provenance.source_generation,
-        provenance.source_instance, root.session_id, service._dependencies(service._load_catalog()),
-        reference.analysis_signature))
+        provenance.source_instance, root.session_id, dependencies, reference.analysis_signature))
 
 
 def encode(bundle, reference):
@@ -89,10 +90,17 @@ def load(cached, revision, source=None):
     try:
         if cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
             facts = decode(cached.payload)
-            return facts if current(source, (entry.model for entry, _prompt, _cost in facts)) else None
+            return facts if facts_current(source, facts) else None
     except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, InvalidOperation):
         pass
     return None
+
+
+def facts_current(source, facts):
+    # Effort is excluded from ModelRef equality but still participates in the
+    # source check. Avoid validating repeated catalog mappings per request.
+    models = {(entry.model, entry.model.effort_default): entry.model for entry, *_ in facts}
+    return not models or current(source, models.values())
 
 
 def observe(service, roots, versions):
@@ -109,15 +117,20 @@ def build_cached_token_mix(service, progress, *, scope=None):
     progress(WorkProgress('Checking history revisions', 'catalog'), None)
     sessions = tuple(service.source.list_sessions())
     roots = [root for root in sessions if root.parent_session_id is None]
+    if getattr(service, 'history_scan', None):
+        # The worker fixes `now_ms` once. A root created after that cutoff
+        # cannot enter an observation even if it arrived before catalog I/O.
+        roots = [root for root in roots if root.created_at_ms <= service.now_ms]
     versions = revisions(service, roots)
     cohort = None
     if getattr(service, 'history_scan', None):
         from .history_cohort import HistoryCohort, TRANSIENT
-        cohort = HistoryCohort(service, service.history_scan, sessions, roots, versions, reference)
-        roots = cohort.reconcile(sessions, roots, versions)
+        cohort = HistoryCohort(service, service.history_scan, sessions, roots, versions, reference, period=scope)
+        roots = cohort.roots
     work = HistoryWork(service, sessions, roots, versions, reference, cohort)
     active = active_roots(sessions)
-    keys = {root.session_id: cache_key(service, root, reference) for root in roots}
+    dependencies = service._dependencies(service._load_catalog())
+    keys = {root.session_id: cache_key(service, root, reference, dependencies=dependencies) for root in roots}
     reuse_key = reuse.signature(service, reference)
     prior = getattr(service, 'token_mix_reuse', None)
     retained = prior['roots'] if reuse.qualified(prior, reuse_key) else {}
@@ -219,7 +232,7 @@ def build_cached_token_mix(service, progress, *, scope=None):
         omitted = len(cohort.omitted) - omitted_before if cohort else 0
         work.checkpoint(len(writes) + omitted, processed=len(chunk), remaining=start + len(chunk) < len(pending), error=write_error)
     unavailable.update(work.verify())
-    if unavailable and len(unavailable) == work.total:
+    if scope is None and unavailable and len(unavailable) == work.total:
         raise HistoryCheckpointError('history_revision_churn')
     for sid in unavailable:
         payloads.pop(sid, None)
@@ -233,12 +246,15 @@ def build_cached_token_mix(service, progress, *, scope=None):
             if prompt is not None:
                 prompts.setdefault(entry, prompt)
             costs[entry.model, entry.tokens] = parts
-    if cohort and not current(service.source, (entry.model for entry in entries)):
-        raise HistoryCheckpointError('history_revision_churn')
+    if cohort:
+        models = {(entry.model, entry.model.effort_default): entry.model for entry in entries}
+        if models and not current(service.source, models.values()):
+            raise HistoryCheckpointError('history_revision_churn')
     report = history_projection(service, reference, entries, prompts, progress,
         valuation=lambda model, tokens: costs[model, tokens], scope=scope)
-    if cohort and unavailable and not report.token_mix.request_count:
-        raise HistoryCheckpointError('history_revision_churn')
+    if unavailable and report.token_mix_period:
+        coverage = 'partial' if report.token_mix.request_count else 'unknown'
+        report = replace(report, token_mix_period={**report.token_mix_period, 'coverage': coverage})
     reuse.publish(service, reuse_key, payloads)
     return replace(report, source_warnings=(*report.source_warnings, *history_warnings(unavailable)),
                    history_omitted_roots=len(unavailable), notes=(*report.notes,
