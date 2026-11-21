@@ -171,7 +171,7 @@ class WebHost:
                             if self.live:
                                 self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
-                        self.cache_housekeeping.tick(self)
+                        self.cache_housekeeping.tick()
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:
@@ -197,7 +197,6 @@ class WebHost:
                 self.stopped.set()  # GUI must observe this even on cleanup failure.
 
     def start(self):
-        self.cache_housekeeping.start()
         self.server = LoopbackServer(self.jobs, self)
         if self.live:
             self.live.start()

@@ -1,7 +1,6 @@
-"""Demand delivery and real SQLite work behind virtual host uptime/idle evidence."""
+"""Legacy cache usage bookkeeping and preservation until migration."""
 from dataclasses import replace
 from pathlib import Path
-from threading import Event
 from types import SimpleNamespace
 import tempfile
 import shutil
@@ -11,7 +10,6 @@ from unittest.mock import Mock, patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from src.application.session_catalog import SessionCatalog
-from src.application.session_detail import SessionDetails
 from src.cache import CacheDatabase, CacheRepository
 from src.cache.lifecycle import CacheLifecycle
 from src.cache.session_scope import SessionScope, root_key
@@ -51,27 +49,15 @@ class WebCacheHousekeepingTests(unittest.TestCase):
         self.lifecycle.flush()
         self.wall = NOW / 1000
         catalog = SessionCatalog(clock=lambda: self.now)
-        self.coordinator = SimpleNamespace(card_workers=SimpleNamespace(jobs={}),
-            session_costs=SimpleNamespace(job=None), history_job=None, detail_job=None, catalog_job=None,
-            report_service=SimpleNamespace(accounts_pending=False), _last_projection=None, catalog_observation=None)
-        driver = SimpleNamespace(coordinator=self.coordinator, error=None, resync=False, hints=set(),
-            monotonic=lambda: self.now, deadline=1_000_000, frame=None)
-        live = SimpleNamespace(driver=driver, catalog=catalog, details=SessionDetails(clock=lambda: self.now),
-            observed=Event(), working=Event())
-        live.observed.set()
+        live = SimpleNamespace(catalog=catalog)
         jobs = Mock()
         jobs.updates.return_value = {'jobs': []}
         dispatcher = DataDispatcher(jobs, clock=lambda: self.now)
         dispatcher.identity = 'source'
-        self.host = SimpleNamespace(live=live, dispatcher=dispatcher, jobs=jobs, stopping=Event(), cache_housekeeping=self.work)
-        self.fresh()
-        self.work.start()
-
-    def fresh(self, *, revision='r', active=False):
-        observation = CatalogObservation((self.root,), (self.root,), {self.root.session_id: self.root.session_id},
-            {self.root.session_id: revision}, frozenset({self.root.session_id}) if active else frozenset())
-        self.coordinator.catalog_observation = observation
-        self.host.live.catalog.observe(observation)
+        self.host = SimpleNamespace(live=live, dispatcher=dispatcher, jobs=jobs, cache_housekeeping=self.work)
+        observation = CatalogObservation((root,), (root,), {root.session_id: root.session_id},
+            {root.session_id: 'r'})
+        catalog.observe(observation)
 
     def cached(self):
         return self.repository.get('derived-analysis', 'key')
@@ -105,78 +91,14 @@ class WebCacheHousekeepingTests(unittest.TestCase):
         handle(handler, {'tab': 'a' * 32, 'section': 'models', 'visible': True, 'request': {'kind': 'normal'}})
         self.assertFalse(self.lifecycle.pending, 'source restart and headerless probes cannot renew unrelated cache')
 
-    def test_prune_waits_for_continuous_host_uptime_and_does_not_repeat_daily_attempt(self):
-        self.now = 3599
-        self.fresh()
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-        self.now = 3600
-        self.fresh()
-        self.work.tick(self.host)
-        self.assertIsNone(self.cached())
-        self.assertEqual(90000, self.work.due)
+    def test_legacy_facts_are_not_pruned_before_safe_extraction_even_after_a_year(self):
         with patch.object(self.lifecycle, 'prune') as prune:
-            self.now += 1
-            self.work.tick(self.host)
-        prune.assert_not_called()
-
-    def test_idle_defers_for_real_requests_live_foreground_acquisition_provider_pressure_and_stale_source(self):
-        self.now = 3600
-        self.fresh()
-        with self.work.request('/api/data'):
-            self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-        pressures = [(self.host.live, 'working', Event()), (self.coordinator, 'history_job', object()),
-            (self.coordinator, 'detail_job', object()), (self.coordinator, 'catalog_job', object()),
-            (self.coordinator.report_service, 'accounts_pending', True),
-            (self.coordinator.card_workers, 'jobs', {'pending': object()}),
-            (self.coordinator.session_costs, 'job', object()), (self.host.live.driver, 'resync', True)]
-        pressures[0][2].set()
-        for target, name, value in pressures:
-            with self.subTest(pressure=name), patch.object(target, name, value):
-                self.work.tick(self.host)
+            for elapsed in (3600, 31 * 86_400, 365 * 86_400):
+                self.now = elapsed
+                self.wall = NOW / 1000 + elapsed
+                self.work.tick()
                 self.assertIsNotNone(self.cached())
-        self.host.jobs.updates.return_value = {'jobs': [{'status': 'running'}]}
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-        self.host.jobs.updates.return_value = {'jobs': []}
-        self.host.dispatcher.tabs['tab'] = {'visible': True, 'request': ReportRequest(), 'section': 'models'}
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-        self.host.dispatcher.tabs.clear()
-        self.now += 16
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached(), 'repeated publication must not refresh the source observation age')
-        self.fresh()
-        with self.work.request('/api/events'):
-            self.work.tick(self.host)
-        self.assertIsNone(self.cached(), 'a permanent SSE stream is not foreground pressure')
-
-    def test_current_active_child_or_changed_revision_prevents_stale_eviction(self):
-        self.now = 3600
-        self.fresh(active=True)
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-        self.now = self.work.due
-        self.fresh(revision='changed-child')
-        self.work.tick(self.host)
-        self.assertIsNotNone(self.cached())
-
-    def test_shutdown_source_change_and_new_request_cancel_before_mutation(self):
-        self.now = 3600
-        self.fresh()
-        original = self.lifecycle.prune
-        for effect in (lambda: self.host.stopping.set(), lambda: self.fresh(revision='new'),
-                lambda: setattr(self.work, 'epoch', self.work.epoch + 1)):
-            self.work.due = self.now
-            self.host.stopping.clear()
-            self.fresh()
-            def interrupted(revisions, *, allowed):
-                effect()
-                return original(revisions, allowed=allowed)
-            with patch.object(self.lifecycle, 'prune', side_effect=interrupted):
-                self.work.tick(self.host)
-            self.assertIsNotNone(self.cached())
+        prune.assert_not_called()
 
     def test_normal_close_drains_queued_meaningful_use_without_waiting_for_next_host_tick(self):
         host = WebHost(self.repository.database.package_root, jobs=Mock())

@@ -239,7 +239,7 @@ class WebRuntimeTests(unittest.TestCase):
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()
         delivered = Event()
-        demand = SimpleNamespace(request=lambda _path: contextlib.nullcontext(), delivered=Mock(side_effect=lambda *_: delivered.set()))
+        demand = SimpleNamespace(delivered=Mock(side_effect=lambda *_: delivered.set()))
         result = {'id': 'a' * 32, 'status': 'complete', 'result': {'view': {'kind': 'normal'}}}
         dispatcher = Mock(identity='source')
         dispatcher.lookup.return_value = dict(result, terminal=False)

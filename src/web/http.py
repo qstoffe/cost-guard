@@ -1,6 +1,5 @@
 """Fixed-route, bounded loopback HTTP shell. No generic filesystem handler."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
@@ -208,9 +207,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not self.parse_request():
                 return
             self.close_connection = True
-            housekeeping = getattr(self.server.lifecycle, 'cache_housekeeping', None)
-            with housekeeping.request(self.path) if housekeeping else nullcontext():
-                self.route()
+            self.route()
         except ReportWorkerStopError as error:
             if self.server.lifecycle:
                 self.server.lifecycle.runtime_failed(error)
