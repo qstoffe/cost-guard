@@ -7,11 +7,14 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 from src.domain import EventKind, MessageRole
 from src.sources.discovery import default_opencode_data_dir, discover_v1_database_candidate
 from src.sources.errors import SourceDataError
 from src.sources.opencode_v1 import OpenCodeV1Source
+from src.sources.opencode_v1_revision import batch_revisions
+from src.watch.observers import observe_catalog
 from src.analysis.causal import build_prompt_records
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +52,26 @@ class V1DiscoveryTests(unittest.TestCase):
 
 
 class OpenCodeV1SourceTests(unittest.TestCase):
+    def test_archive_roster_and_tree_revisions_ignore_mid_observation_writer_commit(self):
+        with closing(sqlite3.connect(self.db_path)) as writer:
+            writer.execute("PRAGMA journal_mode=WAL")
+            original = self.source.get_session_tree_revision("ses_root")
+
+            def change_before_revision(reader, keys):
+                writer.execute("UPDATE session SET title='Changed title', time_updated=time_updated+1 WHERE id='ses_root'")
+                writer.commit()
+                return batch_revisions(reader, keys)
+
+            with patch("src.sources.opencode_v1.batch_revisions", side_effect=change_before_revision):
+                captured = observe_catalog(self.source, include_archived_revisions=True)
+            current = observe_catalog(self.source, include_archived_revisions=True)
+
+        self.assertTrue(captured.atomic_archive_roster)
+        self.assertEqual(original, captured.revisions["ses_root"])
+        self.assertNotEqual(original, current.revisions["ses_root"])
+        self.assertNotEqual("Changed title", next(item.title for item in captured.sessions if item.session_id == "ses_root"))
+        self.assertEqual("Changed title", next(item.title for item in current.sessions if item.session_id == "ses_root"))
+
     def test_single_prompt_context_pair_survives_sqlite_acquisition_and_live_projection(self):
         from development.tests.fixtures.context_deltas import context_v1_database, context_frame
         from development.tests.fixtures.pricing_catalog import catalog

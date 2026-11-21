@@ -490,6 +490,8 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-clear-cache { max-inline-size: 40rem; margin-block-start: 1rem; }
 .sessions-clear-cache summary { cursor: pointer; }
 .sessions-clear-cache [role="status"]:empty { margin: 0; }
+.sessions-history-spinner { align-self: center; margin-inline-start: .25rem; color: var(--muted); }
+.sessions-history-spinner[hidden] { display: none; }
 .session-metric-pending { color: var(--muted); }
 .metric-spinner { display: inline-block; box-sizing: border-box; inline-size: .625rem; block-size: .625rem;
   border: .125rem solid currentColor; border-inline-end-color: transparent; border-radius: 50%;

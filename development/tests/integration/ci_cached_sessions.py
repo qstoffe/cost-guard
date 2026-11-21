@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from src.application.session_catalog import SessionCatalog
-from src.cache.display_history import RunningSession
+from src.cache.display_history import RunningSession, SessionCoverage
 from src.reports.models import SessionUsageRow
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
@@ -56,6 +56,10 @@ def check_cached_sessions(browser, evidence, product_root):
             first.get_by_role("link", name="Sessions", exact=True).click()
             pager = first.locator(".sessions-catalog .page-navigation")
             expect(pager).to_contain_text("No cached sessions yet", timeout=5000)
+            older = first.get_by_role("img", name="Loading older history")
+            expect(older).to_be_visible()
+            first.emulate_media(reduced_motion="reduce")
+            assert older.evaluate("(element) => getComputedStyle(element).animationName") == "none"
             first_ms = (time.perf_counter() - start) * 1000
             expect(first.get_by_role("button", name="Next", exact=True)).to_be_disabled()
 
@@ -112,6 +116,9 @@ def check_cached_sessions(browser, evidence, product_root):
             owner.commit_running(views.source, views.binding, (), clear_fence=0)
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("Session 1")
             assert "offset=25" in second.url
+            owner.publish_coverage(views.source, views.binding, 0, SessionCoverage(now, False, False, None),
+                                   eligible=lambda: True)
+            expect(older).to_be_hidden()
             clear = first.get_by_role("button", name="Clear local Sessions history")
             expect(clear).to_be_hidden()
             first.get_by_text("Clear saved Sessions history…", exact=True).click()
@@ -120,13 +127,14 @@ def check_cached_sessions(browser, evidence, product_root):
             clear.click()
             expect(first.get_by_text("Saved Sessions history cleared.", exact=True)).to_be_visible()
             expect(pager).to_contain_text("No cached sessions yet")
+            expect(older).to_be_visible()
             expect(second.locator(".sessions-catalog .page-navigation")).to_contain_text("No cached sessions yet")
             assert source_path.read_bytes() == b"fixture identity; intentionally not an OpenCode database"
             host.display_archive.unbind()
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, field qualification, two-tab requery, running, confirmed clear, source unbind")
+                checked="cold empty, held source, period/sort/page, scoped spinner, field qualification, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()

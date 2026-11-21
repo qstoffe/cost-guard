@@ -28,6 +28,7 @@ from .session_catalog_scope import (
     CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population,
     event_members, in_window, live_activity_order, provisional_order, retained_positions,
 )
+from .session_coverage import in_recent_tail, older_roster_changed
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
@@ -124,6 +125,7 @@ class SessionCatalog:
         self.archive_urgent = OrderedDict()
         self.archive_incarnation = 0
         self.observation_sequence = 0
+        self.roster_sequence = 0
         self.active = frozenset()
         self.prompt_activity = {}
         self.running_roots = set()
@@ -235,6 +237,11 @@ class SessionCatalog:
         for lease in self.leases.values():
             lease['epochs'].clear()
 
+    def _archive_prompt_changed(self, key, now_ms):
+        observation = self.last_observation
+        if observation.atomic_archive_roster and not in_recent_tail((observation.activity_floor or {}).get(key, 0), now_ms):
+            self.roster_sequence += 1
+
     def observe(self, observation, *, unavailable=False, source_interrupted=True, timezone_id=None):
         with self.lock:
             if timezone_id is not None:
@@ -270,6 +277,8 @@ class SessionCatalog:
                     getattr(self, name).clear()
                 self._clear_epochs()
                 self.index_terminal = False
+            if self.display_archive is not None and older_roster_changed(self.last_observation, observation, self.clock_ms()):
+                self.roster_sequence += 1
             self.last_observation = observation
             previous_roots = self.roots
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions

@@ -32,11 +32,15 @@ def observe_prompts(catalog, evidence):
                     or revision != catalog.revisions.get(key) or not 0 <= now - captured_at <= RUNNING_FRESH_MS):
                 continue
             before = terminal_prompt(catalog, key)
+            was_running = is_running(catalog, key)
             record_prompt(catalog, key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
                           wake=True)
             after = terminal_prompt(catalog, key)
-            if catalog.display_archive is not None and after is not None and before != after:
-                catalog._archive_priority(key)
+            if catalog.display_archive is not None:
+                if after is not None and before != after:
+                    catalog._archive_priority(key)
+                if before != after or was_running != is_running(catalog, key):
+                    catalog._archive_prompt_changed(key, now)
 
 
 def terminal_prompt(catalog, key):

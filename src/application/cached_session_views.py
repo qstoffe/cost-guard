@@ -42,6 +42,7 @@ class CachedSessionViews:
     source: str
     timezone_id: str
     binding: str = ""
+    coverage_supported: bool = False
 
     def page(self, *, period="today", sort="activity", direction=-1, offset=0, known=None, now_ms=None):
         if (period not in PERIODS or sort not in SORT_COLUMNS or type(direction) is not int
@@ -86,7 +87,12 @@ class CachedSessionViews:
                               context_tokens=row.context_tokens, source_present=row.source_present, fields=states,
                               display=tokens["display"], display_units=tokens.get("display_units")))
         # Cached membership/count is not historical source completeness.
+        if result.coverage is not None:
+            coverage = "as-of" if result.coverage.covers(window.start_ms) else "pending"
+        else:
+            coverage = "pending" if self.coverage_supported else "unknown"
         return dict(**scope, generation=result.generation, cached_total=result.total, rows=rows,
+                    history_coverage=coverage,
                     running_refresh_ms=(result.running_expires_ms - now_ms if result.running_expires_ms else None))
 
     @staticmethod

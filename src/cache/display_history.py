@@ -1,4 +1,6 @@
 """Persistent, source-scoped Web history. Unlike cache v2 this is not disposable."""
+from __future__ import annotations
+
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
@@ -8,7 +10,7 @@ import time
 
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -132,6 +134,26 @@ class SessionPage:
     total: int
     rows: tuple[SessionSnapshot, ...]
     running_expires_ms: int | None = None
+    coverage: SessionCoverage | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SessionCoverage:
+    """An as-of proof for a fully enumerated supported source roster, not a row count."""
+    observed_ms: int
+    incomplete: bool
+    unknown_clock: bool
+    newest_gap_ms: int | None
+
+    def covers(self, start_ms):
+        if start_ms is None:
+            return not self.incomplete
+        return not self.unknown_clock and (self.newest_gap_ms is None or self.newest_gap_ms < start_ms)
+
+    def with_gaps_from(self, previous):
+        clocks = (value for value in (self.newest_gap_ms, previous.newest_gap_ms) if value is not None)
+        return SessionCoverage(self.observed_ms, self.incomplete or previous.incomplete,
+                               self.unknown_clock or previous.unknown_clock, max(clocks, default=None))
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,19 +214,21 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if app_id == APPLICATION_ID and version in (1, 2, 3, 4):
+            if app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5):
                 progress = self._progress_schema() if version == 1 else ""
                 clocks = """
                     ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
                     ALTER TABLE sessions ADD COLUMN activity_origin TEXT;
                     ALTER TABLE sessions ADD COLUMN catalog_activity_ms INTEGER;
                 """ if version < 3 else ""
+                evidence = "ALTER TABLE sessions ADD COLUMN field_evidence INTEGER NOT NULL DEFAULT 0;" if version < 5 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
                     {clocks}
                     {self._live_schema()}
-                    ALTER TABLE sessions ADD COLUMN field_evidence INTEGER NOT NULL DEFAULT 0;
+                    {evidence}
+                    {self._coverage_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -246,6 +270,7 @@ class DisplayHistory:
                 {self._sort_indexes()}
                 {self._progress_schema()}
                 {self._live_schema()}
+                {self._coverage_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -275,6 +300,18 @@ class DisplayHistory:
                 started_ms INTEGER NOT NULL,
                 observed_ms INTEGER NOT NULL,
                 PRIMARY KEY (source, session_id)
+            ) WITHOUT ROWID;
+        """
+
+    @staticmethod
+    def _coverage_schema():
+        return """
+            CREATE TABLE IF NOT EXISTS session_scope_coverage (
+                source TEXT NOT NULL PRIMARY KEY REFERENCES sources(source),
+                observed_ms INTEGER NOT NULL,
+                incomplete INTEGER NOT NULL,
+                unknown_clock INTEGER NOT NULL,
+                newest_gap_ms INTEGER
             ) WITHOUT ROWID;
         """
 
@@ -418,6 +455,7 @@ class DisplayHistory:
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
+            db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))
             db.execute("""
                 UPDATE sources SET generation=generation+1, session_count=0, archive_epoch=archive_epoch+1
@@ -528,6 +566,55 @@ class DisplayHistory:
                 WHERE p.source=? AND p.dependency=? AND p.session_id IN ({marks}) AND s.source_present=1
             """, (source, dependency, *revisions)) if revisions[key] == revision)
 
+    def session_coverage_slice(self, source, revisions):
+        """One bounded join against the exact roster's current revisions."""
+        if not source or len(revisions) > BATCH_LIMIT:
+            raise ValueError("invalid_coverage_slice")
+        if not revisions:
+            return {}
+        marks = ",".join("?" for _ in revisions)
+        activity_bit = FIELD_EVIDENCE_BITS["latest_activity_ms"]
+        with self._connect(read=True) as db:
+            return {key: (dep if revision == revisions[key] and present else None,
+                          revision == revisions[key] and present and bool(evidence & activity_bit), clock)
+                    for key, revision, dep, evidence, clock, present in db.execute(f"""
+                SELECT s.session_id,s.revision,p.dependency,s.field_evidence,s.{PERIOD_CLOCK},s.source_present
+                FROM sessions AS s LEFT JOIN session_progress AS p USING (source,session_id,revision)
+                WHERE s.source=? AND s.session_id IN ({marks})
+            """, (source, *revisions))}
+
+    @staticmethod
+    def _session_coverage(db, source):
+        value = db.execute("""
+            SELECT observed_ms,incomplete,unknown_clock,newest_gap_ms
+            FROM session_scope_coverage WHERE source=?
+        """, (source,)).fetchone()
+        return SessionCoverage(value[0], bool(value[1]), bool(value[2]), value[3]) if value is not None else None
+
+    def publish_session_coverage(self, source, proof, *, archive_epoch, widen_only=False):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = self._state(db, source)
+            if state.archive_epoch != archive_epoch:
+                return None
+            previous = self._session_coverage(db, source)
+            if widen_only and previous is not None:
+                proof = proof.with_gaps_from(previous)
+            if previous is not None and (proof.observed_ms < previous.observed_ms or
+                    (proof.incomplete, proof.unknown_clock, proof.newest_gap_ms) ==
+                    (previous.incomplete, previous.unknown_clock, previous.newest_gap_ms)):
+                return None
+            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+            db.execute("""
+                INSERT INTO session_scope_coverage VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(source) DO UPDATE SET observed_ms=excluded.observed_ms, incomplete=excluded.incomplete,
+                    unknown_clock=excluded.unknown_clock, newest_gap_ms=excluded.newest_gap_ms
+            """, (source, proof.observed_ms, proof.incomplete, proof.unknown_clock, proof.newest_gap_ms))
+            generation = state.generation + 1
+            self._append_change(db, source, generation, 0, 0, (1 << 63) - 1)
+            db.commit()
+            return generation
+
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""
         if not source or type(previous) is not int or previous < 0:
@@ -581,6 +668,7 @@ class DisplayHistory:
             if state is None:
                 return SessionPage(0, 0, ())
             generation, total = state
+            coverage = self._session_coverage(db, source)
             if len(params) > 1:
                 total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
             active, expires = self._running_page(db, source, live_binding, now_ms) if live_binding else ((), None)
@@ -594,7 +682,7 @@ class DisplayHistory:
                 params.extend(ids)
             running_slice = active[offset:offset + limit]
             if len(running_slice) == limit:
-                return SessionPage(generation, total, running_slice, expires)
+                return SessionPage(generation, total, running_slice, expires, coverage)
             # Select ordered keys first with the covering index. CROSS JOIN
             # keeps the small selected set outermost; a reordered join can
             # scan every historical row just to return the first page.
@@ -612,7 +700,7 @@ class DisplayHistory:
                 ORDER BY ({column} IS NULL), {column} {order}, s.session_id
             """, (*params, limit - len(running_slice), max(0, offset - len(active)), source)).fetchall()
         rows = tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:-1], field_evidence=row[-1]) for row in rows)
-        return SessionPage(generation, total, running_slice + rows, expires)
+        return SessionPage(generation, total, running_slice + rows, expires, coverage)
 
     @staticmethod
     def _running_page(db, source, binding, now_ms):

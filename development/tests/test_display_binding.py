@@ -17,6 +17,7 @@ from development.tests.fixtures.report_runtime import FakePricingProvider
 from src.cache import CacheDatabase, CacheRepository
 from src.cache.display_history import HistoryState, RunningSession, SessionChange, SessionFact
 from src.application.session_catalog import SessionCatalog
+from src.application.session_archive_sweep import checkpoint_dependency, scalar_dependency
 from src.domain import BackgroundActivity, NormalizedSession, Provenance, SessionCapabilities, TerminalOutcome
 from src.reports.models import SessionUsageRow
 from src.reports.service import ReportService
@@ -449,6 +450,84 @@ class DisplayBindingTests(unittest.TestCase):
             self.assertEqual(["old", "recent"], [row["session_id"] for row in rewarmed["rows"]])
             self.assertEqual(1, archive.history.session_page(other).total)
             self.assertEqual(b"test source identity only", (root / "source").read_bytes())
+
+    def test_coverage_needs_a_source_roster_and_current_field_proof_and_skips_proven_recent_tail(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, _, roots = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            now_ms = at("12:00:00")
+            old_ms = now_ms - 20 * 86_400_000
+            recent_ms = now_ms - 1_000
+            clock = [100]
+            catalog = SessionCatalog(display_archive=archive, clock=lambda: clock[0], clock_ms=lambda: now_ms)
+            revisions = {"old": "r1", "recent": "r1"}
+            observed = CatalogObservation(roots, roots, {}, revisions, atomic_archive_roster=True,
+                activity_floor={"old": old_ms, "recent": recent_ms})
+            catalog.observe(observed)
+            archive.publish_catalog(catalog, service)
+            full_metadata = archive.views.page(period="all", now_ms=now_ms)
+
+            for _ in range(2):
+                archive.check_coverage(catalog, service)
+            unknown = archive.views.page(period="today", now_ms=now_ms)
+            row = SessionUsageRow("old", "Old", "M", False, Decimal("2"), 1, last_activity_ms=old_ms,
+                                  context_qualified=False)
+            admission = archive.admit_summary(service, "old", "r1", observation_sequence=1)
+            dependency = checkpoint_dependency(scalar_dependency(service), ())
+            archive.publish_summary(service, admission, row, "r1", dependency=dependency)
+            clock[0] += 5
+            for _ in range(2):
+                archive.check_coverage(catalog, service)
+            today = archive.views.page(period="today", now_ms=now_ms)
+            all_time = archive.views.page(period="all", now_ms=now_ms)
+
+            admission = archive.admit_summary(service, "old", "r1", observation_sequence=1)
+            archive.publish_summary(service, admission, replace(row, context_qualified=True), "r1", dependency=dependency)
+            clock[0] += 5
+            for _ in range(2):
+                archive.check_coverage(catalog, service)
+            settled = archive.views.page(period="all", now_ms=now_ms)
+            recent_revision = replace(observed, revisions={"old": "r1", "recent": "r2"})
+            catalog.observe(recent_revision)
+            recent_recheck = archive.coverage_pending(catalog)
+
+            catalog.observe(replace(recent_revision, revisions={"old": "r2", "recent": "r2"}))
+            archive.check_coverage(catalog, service)
+            correcting = archive.views.page(period="all", now_ms=now_ms)
+
+            self.assertEqual((2, "pending"), (full_metadata["cached_total"], full_metadata["history_coverage"]))
+            self.assertEqual("pending", unknown["history_coverage"], "an unknown old clock can affect any period")
+            self.assertEqual("as-of", today["history_coverage"])
+            self.assertEqual("pending", all_time["history_coverage"])
+            self.assertEqual("as-of", settled["history_coverage"])
+            self.assertFalse(recent_recheck, "recent-tail churn must not restart the older walk")
+            self.assertEqual("pending", correcting["history_coverage"])
+            self.assertEqual("2", next(row["ccost"] for row in correcting["rows"] if row["session_id"] == "old"))
+
+    def test_coverage_does_not_certify_a_walk_across_pricing_dependencies(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, _, (root, _) = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            now_ms = at("12:00:00")
+            old_ms = now_ms - 86_400_000
+            pricing = ["initial"]
+            service._load_comparison_catalog = lambda: SimpleNamespace(diagnostic_signature=pricing[0])
+            catalog = SessionCatalog(display_archive=archive, clock=lambda: 100, clock_ms=lambda: now_ms)
+            catalog.observe(CatalogObservation((root,), (root,), {}, {"old": "r1"},
+                            atomic_archive_roster=True, activity_floor={"old": old_ms}))
+            archive.publish_catalog(catalog, service)
+            row = SessionUsageRow("old", "Old", "M", False, Decimal("2"), 1, last_activity_ms=old_ms)
+            admission = archive.admit_summary(service, "old", "r1", observation_sequence=1)
+            archive.publish_summary(service, admission, row, "r1",
+                                    dependency=checkpoint_dependency(scalar_dependency(service), ()))
+
+            archive.check_coverage(catalog, service)
+            pricing[0] = "changed"
+            archive.check_coverage(catalog, service)
+            page = archive.views.page(period="all", now_ms=now_ms)
+
+            self.assertEqual("pending", page["history_coverage"])
+            self.assertEqual("2", page["rows"][0]["ccost"])
 
 
 def archive_sweep_fixture(root):

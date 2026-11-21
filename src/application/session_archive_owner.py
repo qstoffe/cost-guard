@@ -124,6 +124,15 @@ class SessionArchiveOwner:
                 self._announce(source, epoch, state.generation)
             return state
 
+    def publish_coverage(self, source, epoch, fence, proof, *, eligible, widen_only=False):
+        with self._lock:
+            if self._binding != (source, epoch) or self.clear_fence != fence or not eligible():
+                return
+            state = self.history.source_state(source)
+            generation = self.history.publish_session_coverage(source, proof, archive_epoch=state.archive_epoch,
+                                                               widen_only=widen_only)
+            self._announce(source, epoch, generation)
+
     def _announce(self, source, epoch, generation):
         if generation is not None:
             with self._signal:

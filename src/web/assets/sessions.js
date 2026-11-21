@@ -601,6 +601,11 @@ const SessionsCatalog = (() => {
       super(api, {cached: true});
       this.hint = null;
       this.blocked = false;
+      this.olderHistory = el('span', undefined, 'metric-spinner sessions-history-spinner');
+      this.olderHistory.setAttribute('role', 'img');
+      this.olderHistory.setAttribute('aria-label', 'Loading older history');
+      this.olderHistory.hidden = true;
+      this.periods.append(this.olderHistory);
       this.clearEndpoint = '/api/cache/sessions/clear';
       this.clearControls = el('details', undefined, 'sessions-clear-cache');
       const toggle = el('summary', 'Clear saved Sessions history…');
@@ -706,6 +711,7 @@ const SessionsCatalog = (() => {
     }
     unavailable() {
       this.data = null;
+      this.olderHistory.hidden = true;
       this.clearControls.open = false;
       this.clearControls.hidden = true;
       ReportView.text(this.clearMessage, '');
@@ -749,6 +755,7 @@ const SessionsCatalog = (() => {
     }
     paint(data) {
       this.data = data;
+      this.olderHistory.hidden = data.history_coverage !== 'pending';
       this.clearControls.hidden = false;
       clearTimeout(this.runningTimer);
       this.runningTimer = null;
@@ -777,7 +784,8 @@ const SessionsCatalog = (() => {
       })));
       const count = data.rows.length;
       const range = count ? `Showing ${data.offset + 1}–${data.offset + count} of ${data.total} cached sessions` :
-        data.total ? `No rows on this page · ${data.total} cached sessions` : 'No cached sessions yet';
+        data.total ? `No rows on this page · ${data.total} cached sessions` :
+          data.history_coverage === 'as-of' ? 'No cached sessions in this period' : 'No cached sessions yet';
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       ReportView.text(this.label, data.offset < pages * data.size ?
         `${range} · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` : range);

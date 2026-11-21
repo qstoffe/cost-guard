@@ -167,7 +167,8 @@ class WebWatchCoordinator(WatchCoordinator):
         scalar_needed = catalog.needed()
         archive_needed = archive is not None and archive.catalog_pending(catalog)
         sweep_needed = archive is not None and archive.summary_pending(catalog)
-        if not self._closed and (scalar_needed or archive_needed or sweep_needed):
+        coverage_needed = archive is not None and archive.coverage_pending(catalog)
+        if not self._closed and (scalar_needed or archive_needed or sweep_needed or coverage_needed):
             self.catalog_turn += 1
             # Reserve bounded progress even under continuous legacy demand. Both
             # jobs share the original lane; Watch/Mini observation never waits here.
@@ -175,7 +176,7 @@ class WebWatchCoordinator(WatchCoordinator):
             sweep = sweep_needed and (not scalar_needed or turn == 0
                                       or turn != 3 and archive.priority_summary_pending(catalog))
             self.catalog_job = self.catalog_pool.submit(
-                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep)
+                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep, coverage_needed)
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
@@ -194,20 +195,22 @@ class WebWatchCoordinator(WatchCoordinator):
         return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
-    def _catalog_capture(self, catalog, now_ms, scalar_needed=True, sweep=False):
+    def _catalog_capture(self, catalog, now_ms, scalar_needed=True, sweep=False, coverage=False):
         service = None
         try:
             if catalog.display_archive is not None:
                 # Metadata was already observed by Live. Do not acquire source
                 # or prices again just to publish that bounded batch.
                 catalog.display_archive.publish_catalog(catalog, self.report_service)
-            if not scalar_needed and not sweep:
+            if not scalar_needed and not sweep and not coverage:
                 return
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
+                if coverage:
+                    catalog.display_archive.check_coverage(catalog, service)
                 if sweep:
                     catalog.display_archive.acquire_summaries(catalog, service)
-                else:
+                elif scalar_needed:
                     catalog.tick(service)
         except SourceError as error:
             catalog.index_failed(str(error.code), terminal=error.terminal)

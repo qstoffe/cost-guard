@@ -8,8 +8,10 @@ from uuid import uuid4
 from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
+from src.application.session_coverage import SessionCoverageSweep
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
 from src.sources.errors import SourceError
+from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 
 from .display_binding import selected_display_binding
@@ -20,6 +22,7 @@ class DisplayArchive:
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
         self.sweep = SessionArchiveSweep()
+        self.coverage = SessionCoverageSweep()
         self.views = None
         self._binding = None
         self._observing = None
@@ -81,7 +84,7 @@ class DisplayArchive:
               or observation is None or observation is self._observing[1]
               or isinstance(source, OpenCodeV2Source) and observation.source_epoch != binding.source_epoch):
             return
-        self._set_binding(binding, service.timezone_id)
+        self._set_binding(binding, service.timezone_id, coverage_supported=isinstance(source, OpenCodeV1Source))
 
     def unbind(self):
         self._set_binding(None)
@@ -116,7 +119,7 @@ class DisplayArchive:
             return False  # No failed or partial transaction becomes a cache event.
         return True
 
-    def _set_binding(self, binding, timezone_id="UTC"):
+    def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False):
         if binding == self._binding:
             return
         self.views = None
@@ -125,7 +128,8 @@ class DisplayArchive:
             self.sessions.bind("", "", announce=True)
             return
         epoch = uuid4().hex
-        self.views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch)
+        self.views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
+                                        coverage_supported=coverage_supported)
         self.sessions.bind(binding.scope, epoch, announce=True)
 
     def _writer_binding(self, service):
@@ -192,6 +196,31 @@ class DisplayArchive:
         return (self.views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
                 and self.sessions.observation_fence(catalog.observation_sequence) is not None
                 and self.sweep.priority_due(catalog))
+
+    def coverage_pending(self, catalog):
+        views = self.views
+        fence = self.sessions.observation_fence(catalog.observation_sequence)
+        return (views is not None and fence is not None and time.monotonic() >= self._retry_at
+                and self.coverage.due(catalog, (views.source, views.binding), fence))
+
+    def check_coverage(self, catalog, service):
+        binding = self._writer_binding(service)
+        fence = self.sessions.observation_fence(catalog.observation_sequence)
+        if binding is not None and fence is not None and self.coverage_pending(catalog):
+            self.coverage.tick(catalog, self, service, binding, fence)
+
+    def coverage_slice(self, binding, revisions):
+        views = self.views
+        if views is None or (views.source, views.binding) != binding:
+            return None
+        try:
+            return self.history.session_coverage_slice(views.source, revisions)
+        except (OSError, sqlite3.Error):
+            return None
+
+    def publish_coverage(self, binding, fence, proof, *, eligible, widen_only=False):
+        return self._cache_write(lambda: self.sessions.publish_coverage(*binding, fence, proof, eligible=eligible,
+                                                                       widen_only=widen_only))
 
     def completed_summary_keys(self, binding, revisions, dependency):
         completed = None
