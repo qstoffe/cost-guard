@@ -75,9 +75,18 @@ def replace_geometry(page, period, now, zone, width=20):
         chart.schedule = () => {};
         const sample = chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
         const peak = sample.points.find(point => Number(point?.amount) > 0);
+        const totals = [
+            {amount: '123456', display: {credits: '123456', usd: '$1234.56'}},
+            {amount: '123', display: {credits: '~123', usd: '~$1.23'}},
+            {amount: '0.01', display: {credits: '~<0.1', usd: '~<$0.01'}},
+            {amount: '0', display: {credits: '0', usd: '$0.00'}},
+            null,
+        ];
         const series = Array.from({length: width}, (_, i) => ({...sample,
             id: (i + 1).toString(16).padStart(8, '0'),
-            account: `Account ${i + 1} with a deliberately long heading to exercise clipping`,
+            account: i === width - 1 ? `Provider${'UnbrokenQuotaName'.repeat(4)}${i + 1}` :
+                i % 3 ? `Provider · ${i % 3 === 1 ? 'Weekly' : 'Model daily'} quota ${i + 1}` : `Account ${i + 1}`,
+            total: totals[i % totals.length],
             peak: sample.peak, ticks: sample.ticks, points: window.buckets.map(() => peak)}));
         const view = {period, timezone_id: zone, ...window, series, pending_buckets: []};
         chart.period = period;
@@ -104,6 +113,40 @@ def assert_geometry(plot, series_count):
             })};
     }''')
     assert result == {'ticks': 30, 'cells': 30, 'bars': 30 * series_count, 'fit': True}, result
+
+
+def assert_legend_geometry(selected, *, compact=False, wraps=False):
+    layout = selected.evaluate('''list => {
+        const plot = list.parentElement.querySelector('.account-timeline-scroll').getBoundingClientRect();
+        const bounds = list.getBoundingClientRect();
+        const range = document.createRange();
+        const rows = [...list.children].map(row => {
+            const [, name, value] = row.children;
+            const label = name.getBoundingClientRect(), cell = value.getBoundingClientRect();
+            range.selectNodeContents(name);
+            const lines = [...range.getClientRects()];
+            range.selectNodeContents(value.firstElementChild ?? value);
+            const cost = range.getBoundingClientRect();
+            return {column: cell.left, right: cost.right, labelRight: Math.max(...lines.map(line => line.right)),
+                wrapped: lines.length > 1,
+                fit: lines.every(line => line.left >= label.left - 1 && line.right <= label.right + 1) &&
+                    cost.width > 0 && cost.left >= cell.left - 1 && cost.right <= bounds.right + 1 &&
+                    getComputedStyle(value).fontVariantNumeric === 'tabular-nums'};
+        });
+        const [{column, right}] = rows;
+        return {
+            fit: bounds.right <= plot.right + 1 && rows.every(row => row.fit),
+            aligned: rows.every(row => Math.abs(row.right - right) < 1 && Math.abs(row.column - column) < 1),
+            gap: column - Math.max(...rows.map(row => row.labelRight)),
+            room: plot.right - bounds.right,
+            wrapped: rows.some(row => row.wrapped),
+        };
+    }''')
+    assert layout['fit'] and layout['aligned'] and layout['gap'] >= 3, layout
+    if compact:
+        assert layout['room'] >= 32 and layout['gap'] <= 16 and not layout['wrapped'], layout
+    if wraps:
+        assert layout['wrapped'], layout
 
 
 def assert_highlight(plot, index):
@@ -205,13 +248,14 @@ def stress_plot(page, chart, screenshots):
     x_positions = slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))")
     # The synthetic series start selected. Only drive inputs that change.
     selected_count = 20
-    for checked in (0, 1, 2, 5, 10, 20):
+    for checked in (0, 1, 3, 10, 20):
         for i in range(min(selected_count, checked), max(selected_count, checked)):
             inputs.nth(i).set_checked(i < checked)
         selected_count = checked
         if checked:
             assert_geometry(plot, checked)
             expect(selected.get_by_role('listitem')).to_have_count(checked)
+            assert_legend_geometry(selected, compact=True)
         else:
             expect(selected).not_to_be_visible()
         assert slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))") == x_positions
@@ -228,6 +272,14 @@ def stress_plot(page, chart, screenshots):
     if screenshots:
         page.screenshot(path=screenshots / '03-chooser.png', animations='disabled')
     page.keyboard.press('Escape')
+
+    totals = selected.locator('.account-timeline-legend-value')
+    for unit, expected in (
+        ('credits', ['123456', '123', '<0.1', '0', '—']),
+        ('usd', ['$1234.56', '$1.23', '<$0.01', '$0.00', '—']),
+    ):
+        page.evaluate('(unit) => { ReportView.setUnit(unit); current.accountTimeline.draw(); }', unit)
+        assert totals.evaluate_all("cells => cells.map(cell => (cell.firstElementChild ?? cell).textContent)") == expected * 4
 
     layouts = []
     holiday_inks = []
@@ -274,6 +326,7 @@ def stress_plot(page, chart, screenshots):
                 assert layout['gap'] >= 19 * zoom and 0 < layout['gutter'] - layout['widest'] < 13 * zoom, layout
                 assert layout['alignment'] < 2 and layout['under'], layout
                 assert layout['fill'] == layout['bar'] != 'rgba(0, 0, 0, 0)', layout
+                assert_legend_geometry(selected, compact=width == 1920, wraps=width == 360 and zoom == 2)
                 layouts.append(layout)
             chart.evaluate("el => el.style.removeProperty('zoom')")
             scroller.evaluate('el => el.scrollIntoView({block:"center"})')
@@ -726,9 +779,16 @@ def check_best_effort(browser, root):
         plot = chart.locator('.account-timeline-plot')
         bar = plot.locator('.account-timeline-bar[data-bucket="2"]')
         assert any(height > 0 for height in bar.evaluate_all("bars => bars.map(bar => bar.getBBox().height)"))
-        point = page.evaluate("""() => current.accountTimeline.view.series
-            .find(row => row.account.endsWith('account 2')).points[2]""")
+        low = page.evaluate("""() => current.accountTimeline.view.series
+            .find(row => row.account.endsWith('account 2'))""")
+        point = low['points'][2]
         assert 0 < float(point['amount']) < 0.1 and point['display'] == {'usd': '~<$0.01', 'credits': '~<0.1'}, point
+        total = chart.get_by_role('listitem').filter(has_text=low['account']).locator('.account-timeline-legend-value')
+        for unit in ('credits', 'usd'):
+            qualified = low['total']['display'][unit]
+            assert qualified.startswith('~') and float(low['total']['amount']) > 0, low['total']
+            page.evaluate('(unit) => { ReportView.setUnit(unit); current.accountTimeline.draw(); }', unit)
+            expect(total).to_have_text(qualified.removeprefix('~'))
         target = plot.locator('.account-timeline-target[data-slot="2"]')
         tip = chart.locator('.account-timeline-tip')
         status = chart.get_by_role('status')

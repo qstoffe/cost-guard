@@ -1,4 +1,4 @@
-// Deterministic response-order and retained selection checks against the shipped view.
+// Deterministic response-order, selection and presentation checks against the shipped view.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -30,6 +30,7 @@ class Node {
   getBoundingClientRect() { return {left: 0, top: 0, right: 480, bottom: 220}; }
 }
 
+let unit = 'credits';
 const context = vm.createContext({
   document: {documentElement: {lang: 'en'}, addEventListener() {}, createElementNS: (_, tag) => new Node(tag)},
   innerWidth: 480, innerHeight: 640,
@@ -39,7 +40,7 @@ const context = vm.createContext({
     text: (el, value) => { el.textContent = value; },
     timestamp: ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' '),
     compare: (a, b) => Number(a) - Number(b),
-    display: item => item.display.amount
+    display: item => item.display_units?.[unit]?.amount ?? item.display.amount
   }
 });
 vm.runInContext(fs.readFileSync('src/web/assets/account-timeline.js', 'utf8') +
@@ -200,4 +201,35 @@ async function checkWaitingProgress() {
   }
 }
 
-check().then(checkWaitingProgress).catch(error => { console.error(error); process.exitCode = 1; });
+async function checkLegendTotals() {
+  const cases = [
+    ['Exact', point, '100', '$1.00'],
+    ['Partial', {amount: '123', display: {credits: '~123', usd: '~$1.23'}}, '123', '$1.23'],
+    ['Tiny', {amount: '0.01', display: {credits: '~<0.1', usd: '~<$0.01'}}, '<0.1', '<$0.01'],
+    ['Zero', {amount: '0', display: {credits: '0', usd: '$0.00'}}, '0', '$0.00'],
+    ['Negative', {amount: '-100', display: {credits: '≈-100', usd: '≈$-1.00'}}, '-100', '$-1.00'],
+    ['Unavailable', null, '—', '—'],
+  ];
+  const series = cases.map(([account, total], i) => ({
+    ...first, id: i.toString(16).padStart(8, '0'), account, total, points: [total, null]
+  }));
+  const response = frame('current', 1, [], series);
+  const chart = new context.View(async () => response, () => {});
+  chart.setScope('current');
+  chart.active(true);
+  await chart.refresh();
+
+  for (const [displayUnit, column, qualifiedTiny] of [['credits', 2, '~<0.1'], ['usd', 3, '~<$0.01']]) {
+    unit = displayUnit;
+    chart.draw();
+    const cells = chart.selectedLegend.children.map(row => row.children[2]);
+    assert.deepEqual(cells.map(cell => cell.children[0]?.textContent ?? cell.textContent),
+      cases.map(row => row[column]), displayUnit);
+    assert.equal(cells.at(-1).children[1].textContent, 'Total unavailable');
+    chart.choose(0);
+    assert.ok(chart.announce.textContent.includes(`Tiny: ${qualifiedTiny}`), chart.announce.textContent);
+  }
+}
+
+check().then(checkWaitingProgress).then(checkLegendTotals)
+  .catch(error => { console.error(error); process.exitCode = 1; });
