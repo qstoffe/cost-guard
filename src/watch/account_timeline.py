@@ -11,15 +11,19 @@ from src.analysis.account_timeline import period_start, timeline_window
 from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.causal import trace_entries
 from src.analysis.coverage import snapshot_coverage_complete
+from src.analysis.model_identity import current
 from src.analysis.period_ccost import PeriodCCostIndex, reconcile_usage
 from src.analysis.valuation import physical_usage_key
 from src.application.account_timeline import account_roster, seed_today, timeline_view
 from src.application.session_quota import source_scope
+from src.cache.session_scope import snapshot_scope
 from src.domain.session_tree import root_activity
 from src.pricing.catalog import PricingCatalog
 from src.reports.history_snapshots import load as load_snapshots
+from src.reports.history_cohort import structure
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
+from . import account_timeline_warm as warm
 
 
 ROOTS_PER_TURN = 12
@@ -39,6 +43,7 @@ class RootUsage:
     entries: tuple
     complete: bool
     retry_at_ms: int = 0
+    membership: str | None = None
 
 
 def _reconcile_entries(previous, entries, *, complete):
@@ -83,8 +88,11 @@ def _migration_gaps(gap, now_ms):
 class TimelineHistory:
     """One isolated worker owns revision-keyed facts; only summary values leave it."""
 
-    def __init__(self, factory, reads):
+    def __init__(self, factory, reads, repository=None):
         self.factory, self.reads = factory, reads
+        self.repository = repository
+        self.attempted = {}
+        self.active = frozenset()
         self.source = None
         self.roots = {}
         self.seen = set()
@@ -101,6 +109,7 @@ class TimelineHistory:
 
     def _load(self, roots, observation, scope, now_ms):
         service = self.factory(now_ms)
+        writes = []
         try:
             with self.reads.using(service.source):
                 if source_scope(service.source) != scope:
@@ -131,11 +140,59 @@ class TimelineHistory:
                         0 < entry.completed_at_ms <= now_ms for entry in entries)
                     if saved:
                         entries = _reconcile_entries(saved, entries, complete=complete)
+                    membership = self.membership.get(key) if self.repository is not None else None
                     self.roots[key] = RootUsage(revision, root.provenance, entries, complete,
-                                                  0 if complete else now_ms + RETRY_MS)
+                                                0 if complete else now_ms + RETRY_MS, membership)
+                    if (membership and complete and key not in observation.active_candidates
+                            and key not in observation.live_candidates
+                            and membership == structure(snapshot.sessions).get(key)):
+                        lifecycle = snapshot_scope(snapshot)
+                        if lifecycle.activity_ms is not None and (item := warm.entry(root, revision, membership,
+                                entries, now_ms, lifecycle)) is not None:
+                            writes.append(item)
         finally:
             service.close_accounts()
+        if self.repository is not None:
+            warm.publish(self.repository, writes)
         return True
+
+    def _restore(self, roots, observation, active, scope, now_ms):
+        candidates = [root for root in roots if root.session_id not in active
+                      and observation.revisions.get(root.session_id) and root.session_id in self.membership
+                      and self.attempted.get(root.session_id) != (observation.revisions[root.session_id],
+                          self.membership[root.session_id]) and root.session_id not in self.roots]
+        if not candidates:
+            return
+        for root in candidates:
+            sid = root.session_id
+            self.attempted[sid] = observation.revisions[sid], self.membership[sid]
+        restored = dict(warm.restore(self.repository, candidates, observation.revisions, self.membership, now_ms))
+        if not restored:
+            return
+        service = self.factory(now_ms)
+        try:
+            with self.reads.using(service.source):
+                if source_scope(service.source) != scope:
+                    return
+                models = {(entry.model, entry.model.effort_default): entry.model
+                          for entries in restored.values() for entry in entries}
+                identities_current = current(service.source, models.values())
+                validated = {}
+                for root in candidates:
+                    sid = root.session_id
+                    entries = restored.get(sid)
+                    if entries is not None and (identities_current
+                            or current(service.source, (entry.model for entry in entries))):
+                        validated[sid] = RootUsage(observation.revisions[sid], root.provenance, entries, True,
+                                                   membership=self.membership[sid])
+                if source_scope(service.source) == scope:
+                    self.roots.update(validated)
+                    self.seen.update(validated)
+        except SourceError as error:
+            if error.terminal:
+                raise
+        finally:
+            service.close_accounts()
 
     @staticmethod
     def _available(service, roots):
@@ -155,6 +212,8 @@ class TimelineHistory:
             self.index_key = self.index = None
             self.index_facts = ()
             self.observation = None
+            self.attempted = {}
+            self.active = frozenset()
             self.partial_at.clear()
             self.covered_periods.clear()
             self.initial_periods.clear()
@@ -183,6 +242,10 @@ class TimelineHistory:
                 key = observation.root_by_session[session.session_id]
                 first[key] = min(first.get(key, session.created_at_ms), session.created_at_ms)
             self.first = first
+            if self.repository is not None:
+                self.membership = structure(observation.sessions)
+                self.attempted = {key: stamp for key, stamp in self.attempted.items()
+                                  if key in observation.revisions}
             self.observation = observation
         activity, first = self.activity, self.first
         active = observation.active_candidates | observation.live_candidates
@@ -193,12 +256,18 @@ class TimelineHistory:
         provenance = {root.session_id: root.provenance for root in observation.sessions
                       if root.parent_session_id is None}
         retired = {key for key, value in self.roots.items()
-                   if key not in provenance or provenance[key] != value.provenance}
+                   if key not in provenance or provenance[key] != value.provenance
+                   or self.repository is not None and value.membership is not None
+                   and value.membership != self.membership.get(key)}
+        retired.update((active - self.active) & self.roots.keys())
+        self.active = active
         removed = bool(retired)
         self.seen.intersection_update(observation.revisions)
         self.seen.difference_update(retired)
         self.roots = {key: value for key, value in self.roots.items()
                       if key not in retired}
+        if self.repository is not None:
+            self._restore(roots, observation, active, scope, now_ms)
         # Use the card lane's already-acquired stable trees only at the same
         # source revision. Active/incomplete trees still get normal chart reads.
         for root in roots:
@@ -208,7 +277,8 @@ class TimelineHistory:
                     and key not in active and not ((saved := self.roots.get(key)) and
                         saved.complete and saved.revision == shared[0])
                     and all(entry.completed_at_ms <= now_ms for entry in shared[1])):
-                self.roots[key] = RootUsage(shared[0], root.provenance, shared[1], True)
+                self.roots[key] = RootUsage(shared[0], root.provenance, shared[1], True,
+                    membership=self.membership.get(key) if self.repository is not None else None)
                 self.seen.add(key)
         pending = [root for root in roots if root.session_id in observation.revisions and (
             (saved := self.roots.get(root.session_id)) is None
@@ -262,23 +332,36 @@ class TimelineHistory:
         candidates = frozenset((route, item.account_key) for item in roster for route, _ in item.allocation)
         index_key = price_revision, candidates, tuple((key, id(value)) for key, value in used)
         if self.index_key != index_key:
-            self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
-                self.value_usage.reference, account_only=True, timeline_valuation=self.value_usage,
-                timeline_accounts=candidates)
+            binding = None
+            if (self.repository is not None and not active and not remaining and len(used) == len(roots)
+                    and self.value_usage.previous is None
+                    and all(value.complete and value.membership and value.revision == observation.revisions.get(key)
+                            for key, value in used)):
+                binding = warm.index_binding(scope, used, price_revision, candidates)
+            self.index = warm.restore_index(self.repository, binding, now_ms) if binding is not None else None
+            if self.index is None:
+                self.index = PeriodCCostIndex((entry for _, value in used for entry in value.entries),
+                    self.value_usage.reference, account_only=True, timeline_valuation=self.value_usage,
+                    timeline_accounts=candidates)
+                if binding is not None:
+                    warm.publish_index(self.repository, binding, self.index, now_ms)
             # Holding the facts also prevents object ID reuse in the index key.
             self.index_key, self.index_facts = index_key, used
         by_period = {period: timeline_view(period, now_ms, zone, roster, self.index,
             first_covered_ms=covered_from, gaps=gaps, pending=acquiring, initial_pending=initial,
             price_revision=price_revision) for period in ready}
         self.partial_at.update((period, now_ms) for period in ready if remaining)
+        if self.repository is not None and not remaining:
+            self.repository.lifecycle.note_use(warm.root_keys(roots, self.roots, observation.revisions))
+            self.repository.lifecycle.flush()
         return by_period, bool(remaining), removed
 
 
 class AccountTimeline:
     """Live schedules at most one small slice; HTTP reads detached summaries only."""
 
-    def __init__(self, factory, reads):
-        self.history = TimelineHistory(factory, reads)
+    def __init__(self, factory, reads, repository=None):
+        self.history = TimelineHistory(factory, reads, repository)
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None

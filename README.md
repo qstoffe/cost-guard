@@ -10,6 +10,11 @@ In Sessions, running prompts appear first. A star explains the displayed activit
 Requires Python 3.11+ and OpenCode on Windows and macOS.
 Use the tray/menu **Exit Cost Guard** action to stop the application.
 
+For an in-place update, keep the installation's `cache/` directory. To move an
+installation and keep its warm history, exit Cost Guard before moving the
+folder. A separate fresh installation starts cold; it does not search old
+folders for caches.
+
 ## Windows
 
 Start [windows/Cost-Guard-Web.cmd](windows/Cost-Guard-Web.cmd).

@@ -60,7 +60,7 @@ def _flat_fields(value: Any, nested: frozenset[str] = frozenset()) -> dict[str, 
     return {item.name: getattr(value, item.name) for item in fields(value) if item.name not in nested}
 
 
-def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
+def encode_trace_entry(entry: TraceEntry) -> dict[str, Any]:
     return {
         "session_id": entry.session_id,
         "parent_event_id": entry.parent_event_id,
@@ -87,7 +87,7 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
     }
 
 
-def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
+def decode_trace_entry(data: Mapping[str, Any]) -> TraceEntry:
     model = data["model"]
     return TraceEntry(
         session_id=str(data["session_id"]),
@@ -123,12 +123,12 @@ def _prompt_to_dict(record: PromptRecord) -> dict[str, Any]:
     scalar = _flat_fields(record, _PROMPT_NESTED)
     for key in ("cost", "main_cost", "subagent_cost"):
         scalar[key] = str(getattr(record, key))
-    scalar["entries"] = [_trace_to_dict(entry) for entry in record.entries]
+    scalar["entries"] = [encode_trace_entry(entry) for entry in record.entries]
     scalar["agent_coverage"] = [asdict(agent) for agent in record.agent_coverage]
     scalar["model_costs"] = {key: str(value) for key, value in record.model_costs.items()}
-    scalar["previous_entry"] = _trace_to_dict(record.previous_entry) if record.previous_entry else None
-    scalar["pre_prompt_entry"] = _trace_to_dict(record.pre_prompt_entry) if record.pre_prompt_entry else None
-    scalar["last_root_entry"] = _trace_to_dict(record.last_root_entry) if record.last_root_entry else None
+    scalar["previous_entry"] = encode_trace_entry(record.previous_entry) if record.previous_entry else None
+    scalar["pre_prompt_entry"] = encode_trace_entry(record.pre_prompt_entry) if record.pre_prompt_entry else None
+    scalar["last_root_entry"] = encode_trace_entry(record.last_root_entry) if record.last_root_entry else None
     return scalar
 
 
@@ -137,10 +137,10 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
     values["cost"] = Decimal(str(values["cost"]))
     values["main_cost"] = Decimal(str(values["main_cost"]))
     values["subagent_cost"] = Decimal(str(values["subagent_cost"]))
-    values["entries"] = tuple(_trace_from_dict(item) for item in values.get("entries", ()))
+    values["entries"] = tuple(decode_trace_entry(item) for item in values.get("entries", ()))
     values["model_costs"] = {str(key): Decimal(str(value)) for key, value in values.get("model_costs", {}).items()}
     for key in ("previous_entry", "pre_prompt_entry", "last_root_entry"):
-        values[key] = _trace_from_dict(values[key]) if values.get(key) else None
+        values[key] = decode_trace_entry(values[key]) if values.get(key) else None
     values["background_kinds"] = tuple(str(value) for value in values.get("background_kinds", ()))
     values["linked_session_ids"] = tuple(str(value) for value in values.get("linked_session_ids", ()))
     from .coverage import AgentCoverage
@@ -151,14 +151,14 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
 def _compaction_to_dict(record: CompactionRecord) -> dict[str, Any]:
     values = _flat_fields(record, frozenset({"entries"}))
     values["cost"] = str(record.cost)
-    values["entries"] = [_trace_to_dict(entry) for entry in record.entries]
+    values["entries"] = [encode_trace_entry(entry) for entry in record.entries]
     return values
 
 
 def _compaction_from_dict(data: Mapping[str, Any]) -> CompactionRecord:
     values = dict(data)
     values["cost"] = Decimal(str(values["cost"]))
-    values["entries"] = tuple(_trace_from_dict(item) for item in values.get("entries", ()))
+    values["entries"] = tuple(decode_trace_entry(item) for item in values.get("entries", ()))
     return CompactionRecord(**values)
 
 
@@ -171,7 +171,7 @@ def _bundle_to_dict(bundle: RootAnalysisBundle, dependencies: AnalysisDependenci
         "usage_coverage_complete": bundle.usage_coverage_complete,
         "config_signature": dependencies.config_signature,
         "pricing_signature": dependencies.pricing_signature,
-        "trace_entries": [_trace_to_dict(entry) for entry in bundle.trace_entries],
+        "trace_entries": [encode_trace_entry(entry) for entry in bundle.trace_entries],
         "prompts": [_prompt_to_dict(record) for record in bundle.prompts],
         "compactions": [_compaction_to_dict(record) for record in bundle.compactions],
     }
@@ -181,7 +181,7 @@ def _bundle_from_dict(data: Mapping[str, Any]) -> RootAnalysisBundle:
     return RootAnalysisBundle(
         root_session_id=str(data["root_session_id"]),
         source_revision=str(data["source_revision"]),
-        trace_entries=tuple(_trace_from_dict(item) for item in data.get("trace_entries", ())),
+        trace_entries=tuple(decode_trace_entry(item) for item in data.get("trace_entries", ())),
         prompts=tuple(_prompt_from_dict(item) for item in data.get("prompts", ())),
         compactions=tuple(_compaction_from_dict(item) for item in data.get("compactions", ())),
         cacheable=bool(data.get("cacheable", False)),

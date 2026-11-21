@@ -161,6 +161,28 @@ class PeriodCCostIndex:
         series = self._series.get((usage_provider(provider), identity, model))
         return series.between(start, end) if series else ComparisonCost()
 
+    def summary(self):
+        """Price- and roster-bound prefix sums, without session or prompt text."""
+        return dict(earliest=self.earliest_ms, series=[
+            [provider, list(identity) if isinstance(identity, tuple) else identity, model,
+             value.times, [str(amount) for amount in value.totals], value.priced, value.incomplete]
+            for (provider, identity, model), value in self._series.items()])
+
+    @classmethod
+    def from_summary(cls, value):
+        index = cls.__new__(cls)
+        index.earliest_ms = value['earliest']
+        index._series = {}
+        for provider, identity, model, times, amounts, priced, incomplete in value['series']:
+            totals = [Decimal(amount) for amount in amounts]
+            if (len(totals) != len(times) + 1 or len(priced) != len(totals) or len(incomplete) != len(totals)
+                    or any(not amount.is_finite() for amount in totals)):
+                raise ValueError('invalid period cost index')
+            if isinstance(identity, list):
+                identity = tuple(identity)
+            index._series[provider, identity, model] = _Series(times, totals, priced, incomplete)
+        return index
+
 
 def _eligible(entry, account_only):
     if account_only and entry.completed_at_ms <= 0:

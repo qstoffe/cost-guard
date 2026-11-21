@@ -20,6 +20,8 @@ from .migration_notice import migration_gap_notes
 from .models import ReportKind, ReportProjection
 from .token_mix_cache import cache_key
 from .history_snapshots import load as load_snapshots
+from .history_work import active_roots
+from . import ai_stats_warm
 
 BATCH_SIZE = 64
 SLICE_ROOTS = 256
@@ -67,6 +69,7 @@ class StatsAcquisition:
         self.periods = windows(service.timezone_id, service.now_ms)
         service.progress(WorkProgress('Checking history revisions', 'catalog'))
         sessions = service.session_catalog()
+        self.source_epoch = getattr(service.source, 'observation_epoch', None)
         self.roots, _activity = service._ordered_roots(sessions)
         self.provenance = {r.session_id: r.provenance for r in self.roots}
         ancestry = root_by_session(sessions)
@@ -76,10 +79,40 @@ class StatsAcquisition:
         self.revisions = _revisions(service, self.roots)
         self.scan = getattr(service, 'stats_scan', None)
         self.cohort = None
+        self.warm = None
+        self.memory_only = False
+        self.qualification = None
+        self.warm_enabled = bool(self.scan and getattr(service, 'shared_web_evidence', False))
+        if self.warm_enabled and not getattr(service, 'history_resuming', False) and self._warm_candidate():
+            qualification = ai_stats_warm.binding(service, sessions, self.revisions, self.reference)
+            if qualification and (rows := ai_stats_warm.restore(service, qualification, self.roots)) is not None:
+                latest = service.source.list_sessions()
+                current_roots, _ = service._ordered_roots(latest)
+                current_revisions = _revisions(service, current_roots)
+                if (not active_roots(latest)
+                        and self.source_epoch == getattr(service.source, 'observation_epoch', None) and qualification ==
+                        ai_stats_warm.binding(service, latest, current_revisions, self.reference)):
+                    service._acquisition.revisions.update(current_revisions)
+                    service.metrics.add('ai_stats_warm_projection_hits')
+                    self.warm = rows
+                    return
+                # A failed bracket must start cold from the newer observation.
+                sessions, self.roots, self.revisions = latest, current_roots, current_revisions
+                self.provenance = {root.session_id: root.provenance for root in self.roots}
+                self.active = active_roots(latest)
+                if len(self.roots) > MAX_ROOTS:
+                    raise StatsCheckpointError('ai_stats_resource_limit')
         if self.scan:
-            from .history_cohort import HistoryCohort
-            self.cohort = HistoryCohort(service, self.scan, sessions, self.roots, self.revisions, self.reference)
-            self.roots = self.cohort.reconcile(sessions, self.roots, self.revisions)
+            from .history_cohort import HistoryCohort, HistoryCheckpointError
+            try:
+                self.cohort = HistoryCohort(service, self.scan, sessions, self.roots, self.revisions, self.reference)
+                self.roots = self.cohort.reconcile(sessions, self.roots, self.revisions)
+            except HistoryCheckpointError as error:
+                if str(error) not in ('history_checkpoint_busy', 'history_checkpoint_unavailable'):
+                    raise
+                # The same child can still acquire cooperatively without a
+                # persistent continuation; an incomplete result is not a hit.
+                self.cohort, self.scan, self.memory_only = None, None, True
         self.keys = {r.session_id: dependency_signature((ALGORITHM, cache_key(service, r, self.reference))) for r in self.roots}
         self.bounds = {}
         self.evidence = {}
@@ -91,6 +124,10 @@ class StatsAcquisition:
         self.checkpoint_error = None
         with service.metrics.measure('ai_stats_restore'):
             self._restore()
+
+    def _warm_candidate(self):
+        return (not self.active and not self.service.selection.warnings
+                and not migration_gap_notes(self.service.selection.migration_gap))
 
     def _restore(self):
         # Volatile evidence belongs only to this pinned logical observation. It is
@@ -214,7 +251,7 @@ class StatsAcquisition:
 
     def acquire(self):
         service = self.service
-        limit = getattr(service, 'stats_slice_roots', None)
+        limit = None if self.memory_only else getattr(service, 'stats_slice_roots', None)
         count = min(len(self.pending), limit) if limit else len(self.pending)
         persisted = True
         size = getattr(service, 'stats_batch_size', BATCH_SIZE)
@@ -257,6 +294,10 @@ class StatsAcquisition:
             for root in self.roots:
                 if root.session_id in self.evidence:
                     service._acquisition.revisions[root.session_id] = self.revisions[root.session_id]
+            if (self.warm_enabled and not self.pending and not self.unavailable and self._warm_candidate()
+                    and self.source_epoch == getattr(service.source, 'observation_epoch', None)
+                    and not active_roots(sessions) and len(self.roots) == len(latest)):
+                self.qualification = ai_stats_warm.binding(service, sessions, versions, self.reference)
             return
         if len(latest) > MAX_ROOTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
@@ -285,6 +326,10 @@ class StatsAcquisition:
 
     def project(self):
         service = self.service
+        if self.warm is not None:
+            total = len(self.roots)
+            return self._report(self.warm, {name: dict(completed=total, total=total, ready=True)
+                for name, _ in self.periods}, total, (), 0, total, None)
         evidence, costs, matches = [], {}, []
         for root in self.roots:
             item = self.evidence.get(root.session_id)
@@ -322,19 +367,27 @@ class StatsAcquisition:
                 matched=period_fact([m for m in matches if m], start, service.now_ms,
                     complete=complete and all(r.source_complete for r in evidence) and all(matches)
                     and all(item.payload['matched'] for item in excluded))))
+        if self.qualification and len(evidence) == total and all(scope['ready'] for scope in scopes.values()):
+            ai_stats_warm.publish(service, self.qualification, evidence, matches, rows)
+        return self._report(rows, scopes, total, self.unavailable, len(self.pending),
+            len(self.evidence), self.checkpoint_error)
+
+    def _report(self, rows, scopes, total, unavailable, remaining, verified, error):
+        service = self.service
         gaps = migration_gap_notes(service.selection.migration_gap, start_ms=dict(self.periods)[self.scope])
         return ReportProjection(ReportKind.AI_STATS, 'AI Stats', service.selection.selected.upper(),
-            (*service.selection.warnings, *((f'AI Stats roots not verified: {len(self.unavailable)}',) if self.unavailable else ())),
+            (*service.selection.warnings, *((f'AI Stats roots not verified: {len(unavailable)}',) if unavailable else ())),
             notes=(*gaps, *(('Bounded initial catalog cohort; later observations reconcile arrivals and omitted roots.',)
                 if self.cohort else ())),
-             ai_stats=tuple(rows), history_omitted_roots=len(self.unavailable - self.evidence.keys()),
-              ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=total - len(self.pending),
-                                 total=total, checkpoint_error=self.checkpoint_error,
-                                 verified=len(self.evidence), omitted=len(self.unavailable)))
+             ai_stats=tuple(rows), history_omitted_roots=len(set(unavailable) - self.evidence.keys()) if unavailable else 0,
+             ai_stats_work=dict(scopes=scopes, remaining=remaining, completed=total - remaining,
+                               total=total, checkpoint_error=error, verified=verified,
+                               omitted=len(unavailable)))
 
 
 def build_ai_stats(service, scope):
     acquisition = StatsAcquisition(service, scope)
-    acquisition.acquire()
+    if acquisition.warm is None:
+        acquisition.acquire()
     with service.metrics.measure('ai_stats_projection'):
         return acquisition.project()

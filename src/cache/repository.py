@@ -107,7 +107,7 @@ class CacheRepository:
                         pass
         return result
 
-    def put_many(self, entries, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> None:
+    def put_many(self, entries, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS, capacity=None) -> None:
         """Atomically publish a caller-bounded batch of independent reconstructible entries."""
         entries = tuple(entries)
         rows = [(entry.namespace, entry.key,
@@ -116,6 +116,22 @@ class CacheRepository:
         if not rows:
             return
         with self.database.connect(operation="write", busy_timeout_ms=busy_timeout_ms) as connection:
+            if capacity is not None:
+                namespace, maximum = capacity
+                if any(entry.namespace != namespace for entry in entries):
+                    raise ValueError('cache capacity is namespace-specific')
+                connection.execute("BEGIN IMMEDIATE")
+                count = connection.execute("SELECT count(*) FROM cache_entries WHERE namespace=?", (namespace,)).fetchone()[0]
+                if count + len(rows) > maximum:
+                    admitted = set()
+                    for key in dict.fromkeys(entry.key for entry in entries):
+                        existing = connection.execute("SELECT 1 FROM cache_entries WHERE namespace=? AND cache_key=?",
+                                                      (namespace, key)).fetchone()
+                        if existing or count < maximum:
+                            admitted.add(key)
+                            count += existing is None
+                    entries = tuple(entry for entry in entries if entry.key in admitted)
+                    rows = [row for row in rows if row[1] in admitted]
             connection.executemany("""INSERT INTO cache_entries(
                 namespace,cache_key,payload_json,source_revision,algorithm_version,updated_at_utc)
                 VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(namespace,cache_key) DO UPDATE SET

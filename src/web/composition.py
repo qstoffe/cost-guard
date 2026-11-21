@@ -1,5 +1,6 @@
 """Fresh report/Live integrations; only host startup owns a service wake."""
 from pathlib import Path
+import sqlite3
 import time
 
 from src.application import ReportApplication
@@ -11,6 +12,16 @@ from src.sources.selection import SourceSelector
 
 from .jobs import ModelsPriceRefresh
 from .report_control import ManagedReport
+
+
+def open_cache(root):
+    """Do not repair, overwrite or block Web on an inaccessible disposable cache."""
+    database = CacheDatabase(root)
+    try:
+        database.initialize(busy_timeout_ms=50)
+    except (OSError, sqlite3.Error):
+        pass
+    return CacheRepository(database)
 
 
 def application(request, *, read_admission=None, history_checkpoint=None, publish_token_mix_reuse=None):
@@ -29,9 +40,7 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
             from src.reports.ai_stats import StatsCheckpointError
             if source_identity(selection) != request.source_identity:
                 raise StatsCheckpointError('source_identity_changed')
-        database = CacheDatabase(root)
-        database.initialize()
-        cache = CacheRepository(database)
+        cache = open_cache(root)
         refresh_prices = isinstance(request, ModelsPriceRefresh)
         price_options = dict(defer_metadata_refresh=True) if isinstance(request, ManagedReport) else {}
         provider = GitHubCopilotPricingProvider(cache=cache,
@@ -88,9 +97,7 @@ def live_acquisition(*, selection=None):
     config = load_configuration(root).values
     if selection is None:
         selection = SourceSelector().select(str(config["openCode"]["source"]))
-    database = CacheDatabase(root)
-    database.initialize()
-    cache = CacheRepository(database)
+    cache = open_cache(root)
     accounts = _account_providers(config, selection.selected)
     service = ReportService(selection=selection,
         pricing_provider=GitHubCopilotPricingProvider(cache=cache,
@@ -108,9 +115,7 @@ def live_acquisition(*, selection=None):
         inherit = getattr(card_selection.source, 'inherit_live_evidence', None)
         if reader is None and callable(inherit):
             inherit(selection.source)
-        card_database = CacheDatabase(root)
-        card_database.initialize()
-        card_cache = CacheRepository(card_database)
+        card_cache = CacheRepository(CacheDatabase(root))
         return ReportService(selection=card_selection,
             pricing_provider=GitHubCopilotPricingProvider(cache=card_cache,
                 max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
