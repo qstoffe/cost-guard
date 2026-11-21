@@ -141,7 +141,8 @@ class WebWatchCoordinator(WatchCoordinator):
         evidence = []
         for entry in self.cards.sessions.values():
             if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
-                    or entry.capture.retained or entry.source_status.failed_at is not None):
+                    or entry.capture.retained or entry.source_status.failed_at is not None
+                    or entry.verified_generation != entry.generation):
                 continue
             running = max((row for row in entry.capture.rows if row.in_progress and not row.execution_unverified),
                           key=lambda row: (row.at_ms, row.event_id), default=None)
@@ -152,8 +153,11 @@ class WebWatchCoordinator(WatchCoordinator):
         if self.catalog_job is not None:
             if not self.catalog_job.done():
                 return
-            self.catalog_job.result()
-            self.catalog_job = None
+            job, self.catalog_job = self.catalog_job, None
+            try:
+                job.result()
+            except Exception:
+                catalog.index_failed('scalar_worker_failed')
         if not self._closed and catalog.needed():
             self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
 
@@ -166,7 +170,11 @@ class WebWatchCoordinator(WatchCoordinator):
             if any(row.prompt.in_progress or row.prompt.execution_unverified for row in card.rows)}
         previews = catalog.previews(running, limit=5 - len(running))
         self.cards.preview_ids = tuple(item.session_id for item in previews)
-        return replace(frame, earlier_previews=previews,
+        published = []
+        for item in previews:
+            state, reason = self.cards.preview_status(item.session_id, frame.now_ms)
+            published.append(replace(item, hydration_state=state, hydration_reason=reason))
+        return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
     def _catalog_capture(self, catalog, now_ms):
@@ -175,8 +183,10 @@ class WebWatchCoordinator(WatchCoordinator):
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
                 catalog.tick(service)
-        except (SourceError, PricingUnavailableError):
-            catalog.index_failed()  # Failed acquisition is unavailable, not endless pending.
+        except SourceError as error:
+            catalog.index_failed(str(error.code), terminal=error.terminal)
+        except PricingUnavailableError:
+            catalog.index_failed('pricing_unavailable')
         finally:
             if service is not None:
                 service.close_accounts()

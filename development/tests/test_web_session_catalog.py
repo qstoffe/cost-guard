@@ -593,7 +593,8 @@ class SessionCatalogTests(unittest.TestCase):
         root = source.snapshots["root-0000"].root
         capture, item = capture_rows(service, root)
         self.assertTrue(any(row.in_progress for row in capture.rows))
-        entry = SimpleNamespace(capture=capture, snapshot=item.snapshot, source_status=SimpleNamespace(failed_at=None))
+        entry = SimpleNamespace(capture=capture, snapshot=item.snapshot, source_status=SimpleNamespace(failed_at=None),
+            verified_generation=1, generation=1)
         owner = SimpleNamespace(report_service=service, catalog_observation=observe_catalog(source, include_archived_revisions=True),
             cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
             catalog_job=None, _closed=True)

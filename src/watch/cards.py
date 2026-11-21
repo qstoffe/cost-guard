@@ -8,12 +8,14 @@ from .session_costs import SessionCostState
 from .history_publication import HistoryPublication
 from .recent_finished import RecentFinished
 from .card_workers import CardRequest
-from src.sources.errors import SourceConcurrentChangeError, SourceDataError
+from src.sources.errors import SourceConcurrentChangeError, SourceDataError, SourceError
 from src.reports.session_history import retain_unverified_row, unverified_refresh
 from src.reports.watch_context import retain_session_context
 from src.reports.watch_capture import running_context_rows
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 from src.analysis.duration import accumulated_duration
+
+PREVIEW_SLOW_MS = 30_000
 
 
 @dataclass(slots=True)
@@ -40,6 +42,10 @@ class CardSession:
     last_context: object = None
     inspect_recent: bool = False
     invocation_generation: int = 0
+    failures: int = 0
+    retry_at_ms: int = 0
+    admitted_at_ms: int | None = None
+    terminal_failure: bool = False
 
 
 class WatchCards:
@@ -60,6 +66,7 @@ class WatchCards:
         self.started_at_ms = started_at_ms
         self.catalogued = False
         self.source_identity = frozenset()
+        self.source_epoch = None
         self.catalog_revision = 0
         self.evidence_revision = 0
         self.completion_paused = False
@@ -68,12 +75,14 @@ class WatchCards:
     def catalog(self, observation):
         identity = frozenset((root.provenance.source_type, root.provenance.source_generation,
             root.provenance.source_instance) for root in observation.roots)
-        if identity and self.source_identity and identity != self.source_identity:
+        if (identity and self.source_identity and identity != self.source_identity or
+                self.catalogued and self.source_epoch != observation.source_epoch):
             self.sessions.clear()
             self.history = HistoryPublication()
             self.recent = RecentFinished()
         if identity:
             self.source_identity = identity
+        self.source_epoch = observation.source_epoch
         previous = (self.active_candidates, {key: entry.revision for key, entry in self.sessions.items()})
         self.active_candidates = observation.active_candidates | observation.live_candidates
         roots = {root.session_id: root for root in observation.roots}
@@ -84,7 +93,7 @@ class WatchCards:
         for key, root in roots.items():
             revision = observation.revisions.get(key)
             entry = self.sessions.get(key)
-            if entry is None:
+            if entry is None or entry.root.provenance != root.provenance:
                 self.generation += 1
                 self.sessions[key] = CardSession(root, revision, self.generation)
                 self.sessions[key].inspect_recent = self.catalogued
@@ -102,6 +111,10 @@ class WatchCards:
                         entry.latest_ms = None
                     entry.refresh_requested = True
                     entry.inspect_recent = True
+                    if entry.terminal_failure:
+                        entry.source_status.clear()
+                    entry.terminal_failure = False
+                    entry.retry_at_ms = entry.failures = 0
                 elif (entry.capture is not None and any(row.in_progress or row.execution_unverified for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
                     entry.refresh_requested = True
         self.catalogued = True
@@ -194,6 +207,8 @@ class WatchCards:
             if capture.authoritative and revision_matches:
                 entry.verified_generation = entry.generation
                 entry.retry_on_tick = False
+                entry.retry_at_ms = entry.failures = 0
+                entry.terminal_failure = False
                 self.evidence_revision += 1
                 entry.history_status.clear()
                 entry.failure_code = ""
@@ -207,11 +222,19 @@ class WatchCards:
                     SourceConcurrentChangeError("History revision changed during capture"))
                 entry.history_status.fail(error)
                 entry.failure_code = str(error.code)
+                self._backoff(entry, now_ms)
         else:
             entry.source_status.fail(result.value)
             entry.failure_code = str(getattr(result.value, "code", "unknown_source_failure"))
             entry.refresh_requested = True
             entry.retry_on_tick = True
+            entry.terminal_failure = isinstance(result.value, SourceError) and result.value.terminal
+            self._backoff(entry, now_ms)
+
+    @staticmethod
+    def _backoff(entry, now_ms):
+        entry.failures += 1
+        entry.retry_at_ms = now_ms + min(120_000, 5_000 * 2 ** min(5, entry.failures - 1))
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:
@@ -226,13 +249,34 @@ class WatchCards:
         return tuple(card.session_id for card in self.history.project(self, now_ms))
 
     def preview_cards(self, now_ms):
-        """Actual representatives for the small shortlist, not global winners."""
-        return tuple(self._card(entry, None, now_ms) for key in self.preview_ids or ()
-            if (entry := self.sessions.get(key)) is not None
-            and entry.verified_generation == entry.generation
-            and entry.source_status.failed_at is None and entry.capture is not None
-            and entry.capture.authoritative and not entry.capture.retained
-            and entry.capture.history_row is not None and not self._focals(entry, now_ms))
+        """Representatives and last-good same-source facts for the small shortlist."""
+        cards = []
+        for key in self.preview_ids or ():
+            entry = self.sessions.get(key)
+            if (entry is None or entry.capture is None or entry.capture.history_row is None
+                    or self._focals(entry, now_ms)):
+                continue
+            card = self._card(entry, None, now_ms)
+            if (card.state == "observed" and (entry.verified_generation != entry.generation
+                    or entry.source_status.failed_at is not None)):
+                card = replace(card, state="refreshing", observed_at_ms=None, invocation_verified=False)
+            cards.append(replace(card, title=entry.root.title or key))
+        return tuple(cards)
+
+    def preview_status(self, key, now_ms):
+        entry = self.sessions.get(key)
+        if entry is None:
+            return "unknown", "card_scope_unavailable"
+        if entry.terminal_failure:
+            return "unavailable", entry.failure_code
+        if key in self.workers.jobs:
+            slow = entry.admitted_at_ms is not None and now_ms - entry.admitted_at_ms >= PREVIEW_SLOW_MS
+            return ("waiting" if slow else "reading"), "capture_in_progress"
+        if entry.retry_on_tick:
+            return "retrying", entry.failure_code or "capture_replay"
+        if entry.verified_generation == entry.generation and entry.capture is not None:
+            return ("ready", "") if entry.capture.history_row is not None else ("unknown", "no_representative_prompt")
+        return "queued", "waiting_for_card_slot"
 
     def _ranked_ids(self, now_ms):
         # Unknown-ended history sorts before known finishes and fills spare slots;
@@ -258,6 +302,7 @@ class WatchCards:
                 entry.terminals = {key: seen for key, seen in entry.terminals.items()
                     if 0 <= now_ms - seen < self.recent_ms}
         historical = set(self._ranked_ids(now_ms)) | set(self.preview_ids or ())
+        preview_order = {key: index for index, key in enumerate(self.preview_ids or ())}
         active, history = [], []
         for key, entry in self.sessions.items():
             busy = bool(self._focals(entry, now_ms)) or (key in self.active_candidates
@@ -267,13 +312,14 @@ class WatchCards:
             needed = busy or unverified or key in historical
             if self.preview_ids is not None:
                 needed = busy or entry.inspect_recent or key in historical
-            if (due and needed and key not in self.workers.jobs
+            if (due and needed and not entry.terminal_failure and now_ms >= entry.retry_at_ms
+                    and key not in self.workers.jobs
                     and (not completed_only or not entry.retry_on_tick)):
-                (active if busy or entry.inspect_recent else history).append((entry.admission_order, key, entry))
+                (active if busy else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
         # Metadata is an admission hint only, never a finish bound/proof.
-        preview_order = {key: index for index, key in enumerate(self.preview_ids or ())}
-        history.sort(key=lambda item: (item[0], preview_order.get(item[1], 5),
+        history.sort(key=lambda item: (item[1] not in preview_order, not item[2].inspect_recent,
+            item[0], preview_order.get(item[1], 5),
             -(item[2].root.updated_at_ms or 0), item[1]))
         planned = []
         admission_turns = {}
@@ -302,10 +348,15 @@ class WatchCards:
             if not active and not history:
                 break
             candidates = history if history and history_slots > 0 and (not active or self.turn % 4 == 3) else active
-            _, _, entry = candidates.pop(0)
             historical_request = candidates is history
+            # Keep one deep-history turn even during sustained shortlist churn.
+            # Slots remain bounded; no all-root job queue or second reader.
+            index = min(range(len(history)), key=lambda i: (history[i][0], history[i][1])) if (
+                historical_request and self.turn % 16 == 15) else 0
+            _, _, entry = candidates.pop(index)
             planned.append(CardRequest(entry.root, entry.generation, entry.snapshot,
-                tuple(row.event_id for row in self._focals(entry, now_ms)), historical_request, entry.batchable))
+                tuple(row.event_id for row in self._focals(entry, now_ms)), historical_request,
+                entry.batchable and entry.root.session_id not in preview_order))
             history_slots -= historical_request
             self.turn += 1
             admission_turns[entry.root.session_id] = self.turn
@@ -319,6 +370,7 @@ class WatchCards:
             if request.root.session_id in accepted:
                 entry = self.sessions[request.root.session_id]
                 entry.refresh_requested = False
+                entry.admitted_at_ms = now_ms
                 # Revisions and rejected results must not reset queue position:
                 # otherwise changing early IDs can starve a stopped running card.
                 entry.admission_order = admission_turns[request.root.session_id]

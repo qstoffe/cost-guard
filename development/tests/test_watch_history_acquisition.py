@@ -103,9 +103,10 @@ class WatchHistoryAcquisitionTests(unittest.TestCase):
             cards = WatchCards(workers, monotonic=lambda: 0)
             cards.catalog(observe_catalog(source))
 
-            for _ in range(2700):
-                cards.tick(1_000_000_000)
-                history = cards.project(1_000_000_000)[1]
+            for step in range(2700):
+                now = 1_000_000_000 + step * 100
+                cards.tick(now)
+                history = cards.project(now)[1]
                 self.assertLessEqual(len(workers.jobs), 4)
                 if cards.history.checked < 2700:
                     self.assertEqual((), history, 'delayed candidate cannot be bypassed')

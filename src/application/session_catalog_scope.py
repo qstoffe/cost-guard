@@ -30,6 +30,8 @@ class CatalogEpoch:
     window: CatalogWindow
     provisional: bool = False
     facts: tuple = ()
+    browsable_candidates: bool = False
+    arrivals: frozenset = frozenset()
     served: OrderedDict = field(default_factory=OrderedDict, compare=False, repr=False)
 
     def remember_page(self, offset):
@@ -94,6 +96,15 @@ def provisional_order(rows, metadata):
     unknown = sorted((row for row in rows if not row.running and activity_time(row) is None),
         key=lambda row: (-(metadata.get(row.session_id) or 0), row.session_id))
     return live + tuple(unknown) + tuple(row for row in rows if not row.running and activity_time(row) is not None)
+
+
+def live_activity_order(rows, metadata, activity_current):
+    """Merge current event clocks with explicitly preliminary catalog clocks."""
+    running = tuple(row for row in rows if row.running)
+    def rank(row):
+        at = activity_time(row) if activity_current(row.session_id) else metadata.get(row.session_id)
+        return -(at or 0), row.session_id
+    return running + tuple(sorted((row for row in rows if not row.running), key=rank))
 
 
 def retained_positions(rows, positions, display):

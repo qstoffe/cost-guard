@@ -43,7 +43,11 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   };
   await route('today');
   await fixture('warm-pending');
-  await until('current.catalog.data.page_reused && current.catalog.data.progress.revalidating > 0');
+  await until(`current.catalog.data.order_state==='provisional' &&
+    current.catalog.data.progress.revalidating > 0 &&
+    document.querySelector('tr[data-id="root-0042"]')?.value.catalog_activity_ms > 0`);
+  assert.equal(await evaluate(`document.querySelector('tr[data-id="root-0042"]').value.metric_state`),'retained');
+  assert.equal(await evaluate('current.catalog.next.disabled'),false);
   assert.deepEqual(await evaluate('warmFlickers'),[]);
   assert.equal(await evaluate('current.catalog.body.rows[0].dataset.id'),'root-0000');
   assert.equal(await evaluate('current.catalog.status.hidden'),true);
@@ -104,7 +108,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   const final=await fixture('warm-observe');
   assert.equal(final.reads['root-0002'],1);
   return {checks:['60 warm header clicks: all seven columns/both directions, no banner/read/scalar admission',
-    '48 candidates/46 Today matches; quiet verified order retains old start-only row on page two',
+     'quiet preliminary update with retained values and usable pager; 46 confirmed Today matches after recovery',
     'exact single-star local timestamp and hover/focus/touch help; frozen page-two membership',
     '7-days/All time, rapid supersession; real finish waits with legitimate banner then retires Running'],
     measurements:{timings,http:await evaluate('warmReplies'),baseline,after,final}};

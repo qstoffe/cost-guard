@@ -190,18 +190,23 @@ def main():
                             last_activity_ms=catalog.activity[key], duration_ms=1000, context_tokens=100)
                         catalog.valid[key] = catalog.revisions[key], catalog.clock()
                         catalog.activity_valid[key] = catalog.revisions[key]
-            elif command.startswith("arrival-new-"):
-                number = int(command.rsplit("-", 1)[1])
-                key = f"ses_arrival_{number}"
+            elif command.startswith(("arrival-new-", "arrival-burst-")):
+                first = int(command.rsplit("-", 1)[1])
                 now = int(time.time() * 1000)
+                count = 25 if command.startswith("arrival-burst-") else 1
                 with owner.lock:
-                    owner.sessions.insert(0, dict(id=key, projectID="prj_fixture", title=f"Real source title {number}",
-                        location=dict(directory="/fixture/repository"), agent="build",
-                        model=dict(providerID="openai", id="gpt-test-1", variant="medium"),
-                        time=dict(created=now, updated=now)))
-                    owner.messages[key] = []
-                    owner.events.append(dict(type="session.created", data=dict(sessionID=key)))
-                events[key] = dict(title_event_ms=now)
+                    for number in range(first, first + count):
+                        key = f"ses_arrival_{number}"
+                        owner.sessions.insert(0, dict(id=key, projectID="prj_fixture", title=f"Real source title {number}",
+                            location=dict(directory="/fixture/repository"), agent="build",
+                            model=dict(providerID="openai", id="gpt-test-1", variant="medium"),
+                            time=dict(created=now, updated=now)))
+                        owner.messages[key] = []
+                        # Alternate announced and externally observed/coalesced
+                        # inserts. The latter intentionally has no source SSE.
+                        if count == 1 or first % 2 == 0:
+                            owner.events.append(dict(type="session.created", data=dict(sessionID=key)))
+                        events[key] = dict(title_event_ms=now)
             elif command.startswith("arrival-running-"):
                 number = int(command.rsplit("-", 1)[1])
                 key, now = f"ses_arrival_{number}", int(time.time() * 1000)

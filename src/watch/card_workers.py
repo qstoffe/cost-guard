@@ -50,6 +50,11 @@ class _BatchReplay(Exception):
     """Scheduling overrun, not evidence of a source outage."""
 
 
+class CardWorkerError(RuntimeError):
+    """Content-free failure confined to the card acquisition lane."""
+    code = "card_worker_failed"
+
+
 class CardWorkers:
     """No queued futures: admission is bounded, while logical cards are uncapped.
 
@@ -163,6 +168,8 @@ class CardWorkers:
                 self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
         except (SourceError, PricingUnavailableError) as error:
             self._publish(root, generation, "unavailable", error, now_ms)
+        except Exception:
+            self._publish(root, generation, "unavailable", CardWorkerError(), now_ms)
         finally:
             self._publish(root, generation, "timing", time.monotonic() - started)
 
@@ -174,6 +181,7 @@ class CardWorkers:
         started, hydration_started = time.monotonic(), None
         service = None
         pending = {request.root.session_id for request in requests}
+        settled = set()
         def progress(stage, completed, total):
             nonlocal hydration_started
             if stage != 'messages':
@@ -214,13 +222,21 @@ class CardWorkers:
                         if self.readers is not None:
                             self.readers.discard(service.source)
                         self._publish(root, generation, 'unavailable', error, now_ms)
+                    except Exception:
+                        self._publish(root, generation, 'unavailable', CardWorkerError(), now_ms)
+                    settled.add(root.session_id)
         except _BatchReplay:
             for request in requests:
                 self._publish(request.root, request.generation, 'replay',
                     request.root.session_id in pending, now_ms)
         except (SourceError, PricingUnavailableError) as error:
             for request in requests:
-                self._publish(request.root, request.generation, 'unavailable', error, now_ms)
+                if request.root.session_id not in settled:
+                    self._publish(request.root, request.generation, 'unavailable', error, now_ms)
+        except Exception:
+            for request in requests:
+                if request.root.session_id not in settled:
+                    self._publish(request.root, request.generation, 'unavailable', CardWorkerError(), now_ms)
         finally:
             for request in requests:
                 self._publish(request.root, request.generation, 'timing', time.monotonic() - started)

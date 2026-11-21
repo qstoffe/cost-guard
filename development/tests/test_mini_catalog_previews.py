@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import tempfile
 import unittest
 
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.catalog_previews import CatalogPreviewFixture
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.test_watch_cards import ManualWorkers
@@ -15,6 +15,7 @@ from src.application.live_projection import project_live
 from src.application.session_catalog import SessionCatalog
 from src.reports.models import SessionUsageRow
 from src.reports.watch_capture import capture_rows
+from src.sources.errors import http_failure, transport_failure
 from src.watch.card_workers import CardResult
 from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
@@ -140,7 +141,10 @@ class MiniCatalogPreviewTests(unittest.TestCase):
             "an incomplete scalar refresh cannot replace qualified Total with a fabricated zero")
         catalog.observe(None, unavailable=True)
         catalog.index_failed()
-        self.assertEqual(first, catalog.previews()[0], "temporary gaps retain qualified same-source values")
+        retained = catalog.previews()[0]
+        self.assertEqual(first, replace(retained, total_state="ready"),
+            "temporary gaps retain qualified same-source values")
+        self.assertEqual("retained", retained.total_state)
         changed = replace(observation, revisions={**observation.revisions, key: "changed"})
         catalog.observe(changed)
         self.assertIsNone(catalog.previews()[0].total_ccost)
@@ -207,7 +211,9 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertEqual((), cards.project(NOW)[1], "true global proof still requires every root")
         self.assertEqual(0, cards.history.epoch)
         cards.catalog(replace(observation, revisions={**observation.revisions, root.session_id: "new"}))
-        self.assertEqual((), cards.preview_cards(NOW))
+        retained = cards.preview_cards(NOW)[0]
+        self.assertEqual("refreshing", retained.state)
+        self.assertIsNone(retained.observed_at_ms)
 
     def test_shortlist_bounds_speculative_history_and_keeps_running_capacity(self):
         _, catalog, observation = observed_catalog(324)
@@ -225,6 +231,108 @@ class MiniCatalogPreviewTests(unittest.TestCase):
             tuple(workers.submissions))
         self.assertEqual(3, len(catalog.previews(("root-0323", "root-0322"), limit=3)))
         self.assertEqual((), catalog.previews(limit=0))
+
+    def test_metadata_only_preview_settles_after_a_complete_empty_capture(self):
+        source, catalog, observation = observed_catalog(1)
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(observation)
+        owner = SimpleNamespace(cards=cards)
+        frame = WatchProjection("Watch", "Synthetic", (), now_ms=NOW)
+        WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+        cards.tick(NOW)
+        root = next(iter(catalog.roots.values()))
+        with tempfile.TemporaryDirectory() as directory:
+            service = make_service(directory, source, now_ms=NOW)[2]
+            capture, item = capture_rows(service, root)
+            capture = replace(capture, rows=(), authoritative=True, retained=False)
+            del cards.workers.jobs[root.session_id]
+            cards.accept(CardResult(root.session_id, cards.sessions[root.session_id].generation,
+                "rows", (capture, (), item.snapshot)), NOW)
+
+        result = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+
+        self.assertEqual((), result.earlier_cards)
+        self.assertEqual("unknown", result.earlier_previews[0].hydration_state)
+
+    def test_visible_preview_recovers_after_long_read_revision_churn_and_retry(self):
+        now = NOW
+        source = SyntheticMonthSource(5, 1, month_start_ms=1000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+        catalog = SessionCatalog(clock_ms=lambda: now)
+        workers = ManualWorkers()
+        cards = WatchCards(workers, monotonic=lambda: now / 1000)
+        owner = SimpleNamespace(cards=cards)
+        target = "root-0004"
+
+        def publish():
+            frame = WatchProjection("Watch", "Synthetic", (), now_ms=now)
+            result = WebWatchCoordinator.catalog_frame(owner, catalog, frame)
+            return next(item for item in result.earlier_previews if item.session_id == target), result.earlier_cards
+
+        def observe():
+            observation = observe_catalog(source, include_archived_revisions=True)
+            catalog.observe(observation)
+            cards.catalog(observation)
+
+        observe()
+        self.assertEqual("queued", publish()[0].hydration_state)
+        cards.tick(now)
+        initial = workers.jobs[target]
+        self.assertEqual("reading", publish()[0].hydration_state)
+        with tempfile.TemporaryDirectory() as directory:
+            service = make_service(directory, source, now_ms=now)[2]
+            for minutes, indexes in ((7, (5, 6)), (12, (7, 8, 9)), (30, (10, 11))):
+                now = NOW + minutes * 60_000
+                for key in tuple(source.snapshots):
+                    if key > target:
+                        # Previously arrived short-lived sessions were removed.
+                        del source.snapshots[key]
+                        workers.jobs.pop(key, None)
+                for index in indexes:
+                    raw = make_root_snapshot(index, 1, month_start_ms=1000)
+                    source.snapshots[raw.root.session_id] = replace(raw, complete=True)
+                observe()
+                for sibling, generation in tuple(workers.jobs.items()):
+                    if sibling != target:
+                        capture, item = capture_rows(service, source.snapshots[sibling].root)
+                        del workers.jobs[sibling]
+                        cards.accept(CardResult(sibling, generation, "rows", (capture, (), item.snapshot)), now)
+                self.assertEqual("waiting", publish()[0].hydration_state)
+                cards.tick(now)
+                self.assertEqual(initial, workers.jobs[target])
+                self.assertLessEqual(len(workers.jobs), workers.limit)
+            old_capture, old_item = capture_rows(service, source.snapshots[target].root)
+            source.snapshots[target] = replace(source.snapshots[target], source_revision="new")
+            observe()
+            del workers.jobs[target]
+            cards.accept(CardResult(target, initial, "rows", (old_capture, (), old_item.snapshot)), now)
+            cards.tick(now)
+            current = workers.jobs.pop(target)
+            self.assertNotEqual(initial, current)
+            cards.accept(CardResult(target, current, "unavailable", transport_failure(TimeoutError(), phase="capture")), now)
+            self.assertEqual("retrying", publish()[0].hydration_state)
+            cards.tick(now + 1000)
+            self.assertNotIn(target, workers.jobs)
+            now += 5000
+            cards.tick(now)
+            current = workers.jobs.pop(target)
+            cards.accept(CardResult(target, current, "unavailable", http_failure(401, phase="capture")), now)
+            now += 300_000
+            cards.tick(now)
+            self.assertNotIn(target, workers.jobs)
+            self.assertEqual(("unavailable", "http_auth_failure"),
+                (publish()[0].hydration_state, publish()[0].hydration_reason))
+            source.snapshots[target] = replace(source.snapshots[target], source_revision="recovered")
+            observe()
+            cards.tick(now)
+            capture, item = capture_rows(service, source.snapshots[target].root)
+            cards.accept(CardResult(target, workers.jobs.pop(target), "rows", (capture, (), item.snapshot)), now)
+
+        preview, rich = publish()
+        self.assertEqual("ready", preview.hydration_state)
+        self.assertIsNone(preview.total_ccost, "card success alone is not scalar total proof")
+        self.assertEqual(capture.history_row, next(card.rows[0].prompt for card in rich if card.session_id == target))
+        self.assertTrue({"root-0005", "root-0006"} & set(workers.submissions))
 
 
 if __name__ == "__main__":

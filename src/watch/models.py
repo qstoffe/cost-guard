@@ -171,6 +171,9 @@ class SessionPreview:
     activity_origin: str = "catalog"
     total_ccost: Decimal | None = None
     complete: bool = False
+    hydration_state: str = "queued"
+    hydration_reason: str = ""
+    total_state: str = "pending"
 
 
 @dataclass(frozen=True, slots=True)

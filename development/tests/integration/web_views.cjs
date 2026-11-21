@@ -235,7 +235,7 @@ async function main() {
   navigate('models');
   assert.equal(ids.result.textContent, frozenModels, 'confirmed credits restores existing display tokens');
    navigate('sessions?period=all');
-    await until(() => ids.result.textContent.includes('1–25 of 55'));
+     await until(() => ids.result.textContent.includes('1–25 of 55 sessions'));
   assert.match(ids.result.textContent, /1–25 of 55/);
    assert.equal(all(ids.result, 'tbody')[0].children.length, 25);
    assert.ok(all(ids.result, 'a').some(node => node.href === '#/sessions/root-0000'),

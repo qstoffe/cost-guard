@@ -215,7 +215,8 @@ class SessionPeriodTests(unittest.TestCase):
         self.qualify(catalog)
         first = catalog.page(sort="ccost", direction=1)
         snapshot = make_root_snapshot(26, 1, month_start_ms=self.now - 26 * 60_000 - 1000)
-        source.snapshots[snapshot.root.session_id] = snapshot
+        root = replace(snapshot.root, updated_at_ms=self.now - 500)
+        source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=(root,))
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         running = source.snapshots["root-0025"].root
         catalog.observe_prompts(((running, True, 0, "real-prompt", self.now - 100),))
@@ -231,7 +232,7 @@ class SessionPeriodTests(unittest.TestCase):
                               offset=25, epoch=first["epoch"])
         self.assertEqual(frozen["total"], 26)
         self.assertEqual(frozen["view"]["session_usage"][0]["session_id"], "root-0025")
-        for sort in SORTS:
+        for sort in (*SORTS, "effort"):
             for direction in (-1, 1):
                 page = catalog.page(token=first["token"], sort=sort, direction=direction, passive=True)
                 self.assertEqual((page["sort"], page["direction"], page["offset"]), (sort, direction, 0))
@@ -239,8 +240,128 @@ class SessionPeriodTests(unittest.TestCase):
                 self.assertEqual(ids[0], "root-0025")
                 self.assertEqual(len(ids), 25)
                 if (sort, direction) != ("activity", -1):
-                    self.assertNotIn("root-0026", ids)
+                    self.assertEqual("root-0026", ids[1])
+                    self.assertTrue(page["view"]["session_usage"][1]["new_arrival"])
+        self.qualify(catalog)
+        catalog.rows["root-0026"] = replace(catalog.rows["root-0026"], model="ZZZ", effort_key="max",
+            duration_ms=999)
+        for sort in (*SORTS, "effort"):
+            for direction in (-1, 1):
+                page = catalog.page(token=first["token"], sort=sort, direction=direction, passive=True)
+                self.assertFalse(page["membership_pending"], sort)
+                self.assertTrue(all(not row["new_arrival"] for row in page["view"]["session_usage"]))
+                self.assertEqual("root-0025", page["view"]["session_usage"][0]["session_id"])
         self.assertEqual(source.load_count, 0, "passive pages and hints never acquire source history")
+
+    def test_warm_today_follows_sustained_nonrunning_arrivals_without_scalar_work(self):
+        self.now = timestamp("2026-11-13T04:01:00")
+        source, catalog = self.catalog([self.now - 60_000])
+        self.qualify(catalog)
+        first = catalog.page(passive=True)
+        catalog.interest(first["token"], False)
+        self.now = timestamp("2026-11-13T12:00:00")
+        self.clock += 120  # Simulate returning before this server lease expires.
+        pages = []
+        for burst in range(10):
+            for index in range(1 + 25 * burst, 26 + 25 * burst):
+                snapshot = make_root_snapshot(index, 1, month_start_ms=self.now - index * 60_000)
+                root = replace(snapshot.root, title=f"Burst root {index}", updated_at_ms=self.now - 1000)
+                source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=(root,))
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            latest = catalog.page(token=first["token"], passive=True, epoch=first["epoch"])
+            pages.append(latest)
+            self.now += 60_000
+            self.clock += 60
+        self.assertEqual(0, source.load_count, "the scalar worker never gets a turn")
+        for burst, latest in enumerate(pages):
+            ids = [row["session_id"] for row in latest["view"]["session_usage"]]
+            self.assertEqual([f"root-{index:04d}" for index in range(1 + 25 * burst, 26 + 25 * burst)], ids)
+            self.assertEqual("provisional", latest["order_state"])
+            self.assertEqual(1 + 25 * (burst + 1), latest["total"])
+            self.assertIsNone(latest["view"]["session_usage"][0]["last_activity_ms"])
+            self.assertIsNotNone(latest["view"]["session_usage"][0]["catalog_activity_ms"])
+        self.qualify(catalog)
+        ready = catalog.page(token=first["token"], passive=True, epoch=pages[-1]["epoch"])
+        self.assertEqual(("verified", 251), (ready["order_state"], ready["total"]))
+
+    def test_live_candidate_clock_advances_without_changing_page_membership(self):
+        source, catalog = self.catalog([self.now - 1000])
+        first = catalog_page(catalog, dict(passive=True))
+        self.now += 60_000
+        self.clock += 60
+        snapshot = source.snapshots["root-0000"]
+        root = replace(snapshot.root, updated_at_ms=self.now - 100, title="Renamed during activity")
+        source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=(root,), source_revision="new")
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+        latest = catalog_page(catalog, dict(token=first["token"], epoch=first["epoch"], passive=True))
+        pinned = catalog_page(catalog, dict(token=first["token"], epoch=first["epoch"], navigation=1))
+
+        self.assertEqual(first["epoch"], latest["epoch"])
+        row, = latest["view"]["session_usage"]
+        self.assertEqual(("Renamed during activity", self.now - 100), (row["title"], row["catalog_activity_ms"]))
+        self.assertIsNone(row["last_activity_ms"])
+        self.assertEqual(first["window"], pinned["window"])
+        self.assertEqual(0, source.load_count)
+
+    def test_running_overflow_precedes_unqualified_arrivals_and_retires_on_new_evidence(self):
+        source, catalog = self.catalog([self.now - 60_000] * 26)
+        self.qualify(catalog)
+        roots = tuple(snapshot.root for snapshot in source.snapshots.values())
+        proof = tuple((root, True, 0, f"prompt-{index}", self.now - 1000 - index)
+                      for index, root in enumerate(roots))
+        existing = {root.session_id for root in roots}
+        for count in (0, 1, 26):
+            with self.subTest(running=count):
+                catalog.observe_prompts(proof[:count])
+                if count == 0:
+                    snapshot = make_root_snapshot(26, 1, month_start_ms=self.now - 26 * 60_000)
+                    arrival = replace(snapshot.root, created_at_ms=self.now - 2000,
+                                      updated_at_ms=self.now - 10, active=True)
+                    source.snapshots[arrival.session_id] = replace(snapshot, root=arrival, sessions=(arrival,))
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                if count == 26:
+                    snapshot = make_root_snapshot(27, 1, month_start_ms=self.now - 27 * 60_000)
+                    later = replace(snapshot.root, created_at_ms=self.now - 2000, updated_at_ms=self.now - 1)
+                    source.snapshots[later.session_id] = replace(snapshot, root=later, sessions=(later,))
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+                first = catalog_page(catalog, dict(passive=True))
+                second = catalog_page(catalog, dict(token=first["token"], epoch=first["epoch"], offset=25,
+                                                     navigation=1))
+
+                head, tail = (page["view"]["session_usage"] for page in (first, second))
+                self.assertEqual(25, len(head))
+                self.assertEqual(first["total"], len({row["session_id"] for row in head + tail}))
+                self.assertEqual([True] * count + [False] * (first["total"] - count),
+                                 [row["running"] for row in head + tail])
+                hints = [row for row in head + tail if row["session_id"] not in existing]
+                self.assertEqual(["root-0027", "root-0026"] if count == 26 else ["root-0026"],
+                                 [row["session_id"] for row in hints])
+                self.assertTrue(all(row["last_activity_ms"] is None for row in hints))
+
+        self.clock += 1
+        catalog.observe_prompts((*proof[:25], (roots[25], False, 0, None, None)))
+        refreshed = catalog_page(catalog, dict(token=first["token"], epoch=first["epoch"], passive=True))
+        self.assertTrue(all(row["running"] for row in refreshed["view"]["session_usage"]))
+        following = catalog_page(catalog, dict(token=first["token"], epoch=refreshed["epoch"], offset=25,
+                                                navigation=2))
+        self.assertTrue(all(not row["running"] for row in following["view"]["session_usage"]))
+        self.assertEqual(0, source.load_count)
+
+    def test_cold_provisional_epoch_supports_paging_without_scalar_qualification(self):
+        _, catalog = self.catalog([self.now - 1000 - index for index in range(159)])
+        first = catalog_page(catalog, dict(passive=True))
+        pinned = dict(token=first["token"], epoch=first["epoch"], navigation=1)
+        second = catalog_page(catalog, dict(pinned, offset=25))
+
+        self.assertEqual(("provisional", 159, 25), (second["order_state"], second["total"], second["offset"]))
+        self.assertTrue(second["page_reused"], "apply already-issued order, not pending scalar work")
+        self.assertEqual([f"root-{i:04d}" for i in range(25, 50)],
+                         [row["session_id"] for row in second["view"]["session_usage"]])
+        returned = catalog_page(catalog, dict(pinned, navigation=2, applied=1))
+        self.assertEqual(first["epoch"], returned["epoch"])
+        self.assertEqual(first["view"]["session_usage"], returned["view"]["session_usage"])
 
     def test_live_hint_deduplicates_publications_not_source_or_prompt_changes(self):
         source, catalog = self.catalog([self.now - 1000])

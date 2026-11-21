@@ -696,7 +696,7 @@ if (sessionsNav) {
   sessionsNav.addEventListener('click', event => {
     if (rememberedSession || event.button > 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const catalog = views.get('sessions-catalog')?.catalog;
-    if (catalog?.rememberedDestination) { event.preventDefault(); location.hash = catalog.rememberedDestination(); }
+    if (catalog?.sectionDestination) { event.preventDefault(); location.hash = catalog.sectionDestination(); }
   });
 }
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
