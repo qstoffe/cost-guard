@@ -22,8 +22,8 @@ def cached_mix_view(history, source, timezone_id, period, now_ms):
     mix = replace(mix, costs=row.costs, priced_requests=row.priced)
     shaped = token_mix(mix) if row.calls else None
     result = record(scope=period, start_ms=start, end_ms=row.end_ms, coverage="partial" if row.calls else "unknown",
-                    current_archive_revision=current, token_mix=shaped,
-                    observed_category_totals=tuple(map(str, row.observed)) if row.calls else None,
-                    gaps=record(unqualified_forks=row.unqualified_forks, undated_calls=row.undated_calls,
-                                stale_prices=row.stale_prices))
+                     current_archive_revision=current, token_mix=shaped,
+                     observed_category_totals=tuple(map(str, row.observed)) if row.calls else None,
+                     gaps=record(unqualified_forks=row.unqualified_forks, undated_calls=row.undated_calls,
+                                 stale_prices=None))
     return with_display(result, timezone_id, row.end_ms).to_json()

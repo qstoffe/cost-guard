@@ -10,7 +10,7 @@ import time
 
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
-from .display_mix_totals import mix_total_schema, publish_mix_totals, read_mix_total
+from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_totals, read_mix_total
 from .display_usage_reader import read_usage_slice, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 
@@ -493,12 +493,21 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_usage_slice(db, source, expected=expected, after=after)
 
-    def replace_mix_totals(self, source, expected, timezone_id, rows):
+    def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True):
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            accepted = publish_mix_totals(db, source, expected, timezone_id, rows)
-            db.commit()
-            return accepted
+            if eligible():
+                published = publish_mix_totals(db, source, expected, timezone_id, rows)
+                if published is not None and eligible():
+                    db.commit()
+                    return published
+            db.rollback()
+            return None
+
+    def mix_refresh(self, source, timezone_id, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return mix_refresh(db, source, timezone_id, now_ms)
 
     def mix_total(self, source, timezone_id, period, start_ms, end_ms):
         with self._connect(read=True) as db:

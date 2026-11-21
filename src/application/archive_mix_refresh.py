@@ -1,0 +1,66 @@
+"""Cooperative Token Mix work for the existing serialized catalog lane."""
+import sqlite3
+import time
+
+from src.analysis.ai_stats import windows
+
+from .archive_mix_build import ArchiveMixBuild, MixBuildState
+
+
+class ArchiveMixRefresh:
+    def __init__(self, *, clock=time.monotonic):
+        self._clock = clock
+        self._probe_at = 0
+        self._binding = None
+        self._build = None
+
+    def due(self, binding):
+        """In-memory admission hint only; safe on the Live observer."""
+        return binding != self._binding or binding is not None and self._clock() >= self._probe_at
+
+    def advance(self, history, source, timezone_id, binding, now_ms, *, eligible):
+        """Run one slice or one cheap due-check, never acquire source or prices."""
+        try:
+            return self._advance(history, source, timezone_id, binding, now_ms, eligible)
+        except (OSError, sqlite3.Error):
+            self.close()
+            self._probe_at = self._clock() + 5
+            return None
+
+    def _advance(self, history, source, timezone_id, binding, now_ms, eligible):
+        if self._binding != binding:
+            self.close()
+            self._binding = binding
+            self._probe_at = 0
+        if not eligible():
+            self.close()
+            return None
+        scopes = windows(timezone_id, now_ms)
+        if self._build is not None and (self._build.reducer.scopes != scopes
+                                       or self._build.reducer.end_ms > now_ms):
+            self.close()
+        if self._build is None:
+            stamp = history.mix_refresh(source, timezone_id, now_ms)
+            if stamp is not None and (stamp.end_ms > now_ms or
+                    not stamp.changed and windows(timezone_id, stamp.end_ms) == scopes):
+                self._probe_at = self._clock() + 5
+                return None
+            self._build = ArchiveMixBuild(source, timezone_id, now_ms)
+        state = self._build.step(history, eligible=eligible)
+        if state == MixBuildState.MORE:
+            return None
+        publication = self._build.publication
+        self.close()
+        self._probe_at = self._clock() + (2 if state == MixBuildState.STALE else 5)
+        return publication
+
+    def close(self):
+        # Must be called in the catalog executor, even on shutdown or rebind.
+        if self._build is not None:
+            self._build.close()
+            self._build = None
+
+    def withdraw(self):
+        self.close()
+        self._binding = None
+        self._probe_at = 0

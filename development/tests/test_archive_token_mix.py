@@ -13,6 +13,7 @@ from src.analysis import analyze_snapshot
 from src.analysis.timezones import local_day_start_ms
 from src.analysis.token_mix import priced_token_mix
 from src.application.archive_mix_build import ArchiveMixBuild, MixBuildState
+from src.application.archive_mix_refresh import ArchiveMixRefresh
 from src.application.archive_token_mix import ArchiveMixRollup
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
@@ -160,3 +161,68 @@ class ArchiveTokenMixTests(unittest.TestCase):
         self.assertEqual((1, USAGE_SLICE + 4), (saved.prompts, saved.calls))
         self.assertEqual((Decimal("13.2"),) * 4, saved.costs)
         self.assertTrue(current)
+
+    def test_refresh_skips_writes_without_changes_and_detects_a_future_clock_becoming_eligible(self):
+        now = 1_750_000_000_000
+        snapshot = make_snapshot()
+        price = SimpleNamespace(analysis_signature="p1", reference_category_valuation=lambda *_: None)
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), price)
+        request = replace(roster.requests[0], clock_ms=now + 90_000, fork_key=None)
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r1", "Root"), None,
+            previous_progress=0, request_roster=replace(roster, requests=(request,), attribution=())),))
+        clock = [0]
+        refresh = ArchiveMixRefresh(clock=lambda: clock[0])
+
+        self.assertFalse(refresh.due(None))
+        original = refresh.advance(self.history, "bound", "UTC", "first", now, eligible=lambda: True)
+        self.assertFalse(refresh.due("first"))
+        clock[0] = 6
+        no_change = refresh.advance(self.history, "bound", "UTC", "first", now + 6_000, eligible=lambda: True)
+        clock[0] = 91
+        available = refresh.advance(self.history, "bound", "UTC", "first", now + 91_000, eligible=lambda: True)
+        saved, current = self.history.mix_total("bound", "UTC", "all", None, now + 91_000)
+        refresh.withdraw()
+
+        self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(original.changed_periods))
+        self.assertIsNone(no_change)
+        self.assertEqual(original.changed_periods, available.changed_periods)
+        self.assertEqual(original.version, available.version)
+        self.assertEqual((now + 91_000, 1, True), (saved.end_ms, saved.calls, current))
+        self.assertFalse(refresh.due(None))
+
+    def test_refresh_scopes_old_correction_and_recomputes_local_calendar_without_new_usage(self):
+        now = local_day_start_ms("Europe/Stockholm", now_ms=1792899000000) + 1000
+        snapshot = make_snapshot()
+        price = SimpleNamespace(analysis_signature="p1", reference_category_valuation=lambda *_: None)
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), price)
+        request = replace(roster.requests[0], clock_ms=now - 40 * 86_400_000, fork_key=None)
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r1", "Root"), None,
+            previous_progress=0, request_roster=replace(roster, requests=(request,), attribution=())),))
+        refresh = ArchiveMixRefresh()
+        initial = refresh.advance(self.history, "bound", "Europe/Stockholm", "one", now, eligible=lambda: True)
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r2", "Root"), "r1",
+            previous_progress=1, request_roster=replace(roster, requests=(
+                replace(request, tokens=(2, 0, 0, 3, 0), known=0b1111),), attribution=())),))
+
+        corrected = refresh.advance(self.history, "bound", "Europe/Stockholm", "one", now + 6000, eligible=lambda: True)
+        next_day = local_day_start_ms("Europe/Stockholm", now_ms=now, days_ago=-1)
+        rolled = refresh.advance(self.history, "bound", "Europe/Stockholm", "one", next_day, eligible=lambda: True)
+        refresh.withdraw()
+
+        self.assertGreater(corrected.version.revision, initial.version.revision)
+        self.assertEqual(("all",), corrected.changed_periods)
+        self.assertEqual(corrected.version, rolled.version)
+        self.assertEqual({"today", "7-days", "30-days"}, set(rolled.changed_periods))
+
+    def test_mix_publication_rolls_back_if_eligibility_changes_inside_the_transaction(self):
+        version = self.history.usage_inputs("bound").version
+        reducer = ArchiveMixRollup("UTC", 10_000)
+        rows = tuple(total.row() for total in reducer.result({}))
+        decisions = iter((True, False))
+
+        rejected = self.history.replace_mix_totals("bound", version, "UTC", rows,
+                                                   eligible=lambda: next(decisions))
+        saved = self.history.mix_total("bound", "UTC", "all", None, 10_000)
+
+        self.assertIsNone(rejected)
+        self.assertIsNone(saved)

@@ -23,6 +23,7 @@ class ArchiveMixBuild(AbstractContextManager):
         self.source = source
         self.timezone_id = timezone_id
         self.reducer = ArchiveMixRollup(timezone_id, end_ms, pricing=pricing)
+        self.publication = None
         self._version = self._cursor = None
         self._counts = dict.fromkeys(self.reducer.totals, 0)
         self._prompts = sqlite3.connect("")
@@ -64,7 +65,10 @@ class ArchiveMixBuild(AbstractContextManager):
         if self._cursor is not None:
             return MixBuildState.MORE
         rows = tuple(total.row() for total in self.reducer.result(self._counts))
-        if eligible() and history.replace_mix_totals(self.source, self._version, self.timezone_id, rows):
+        if eligible():
+            self.publication = history.replace_mix_totals(
+                self.source, self._version, self.timezone_id, rows, eligible=eligible)
+        if self.publication is not None:
             return MixBuildState.PUBLISHED
         return MixBuildState.STALE
 

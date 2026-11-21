@@ -50,7 +50,7 @@ class WebHost:
             self.dependencies = dispatch_dependencies(root)
         self.events = EventHub(self.nonce)
         self.display_archive = DisplayArchive(root, self.events.publish,
-            watch_enabled=self.cached_watch_enabled) if jobs is None else None
+             watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled) if jobs is None else None
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:

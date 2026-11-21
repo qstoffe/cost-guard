@@ -71,6 +71,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
         self.catalog_turn = 0
+        self._catalog_archive = None
+        self._catalog_history_turns = 3
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
 
@@ -168,7 +170,18 @@ class WebWatchCoordinator(WatchCoordinator):
         archive_needed = archive is not None and archive.catalog_pending(catalog)
         sweep_needed = archive is not None and archive.summary_pending(catalog)
         coverage_needed = archive is not None and archive.coverage_pending(catalog)
-        if not self._closed and (scalar_needed or archive_needed or sweep_needed or coverage_needed):
+        history_needed = scalar_needed or archive_needed or sweep_needed or coverage_needed
+        if self._closed:
+            return
+        if archive is not None and archive.mix_pending() and (not history_needed or self._catalog_history_turns >= 3):
+            self._catalog_archive = archive
+            self._catalog_history_turns = 0
+            self.catalog_job = self.catalog_pool.submit(archive.advance_mix, int(self.clock_ms()),
+                                                       active=lambda: not self._closed)
+        elif history_needed:
+            # Reserve projection work without removing any turns from the
+            # scalar vs. urgent/older archive acquisition pattern below.
+            self._catalog_history_turns = min(3, self._catalog_history_turns + 1)
             self.catalog_turn += 1
             # Reserve bounded progress even under continuous legacy demand. Both
             # jobs share the original lane; Watch/Mini observation never waits here.
@@ -357,7 +370,11 @@ class WebWatchCoordinator(WatchCoordinator):
             self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
-            self.catalog_pool.shutdown(wait=True, cancel_futures=True)
+            try:
+                if self._catalog_archive is not None:
+                    self.catalog_pool.submit(self._catalog_archive.close_catalog_work).result()
+            finally:
+                self.catalog_pool.shutdown(wait=True, cancel_futures=True)
             self.account_timeline.close()
             for future in (self.history_job, self.catalog_job):
                 if future is not None and not future.cancelled():

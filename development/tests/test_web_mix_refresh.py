@@ -1,0 +1,98 @@
+"""The archive projection shares the existing background history lane."""
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Event
+from types import SimpleNamespace
+import unittest
+from unittest.mock import Mock, patch
+
+from development.tests.fixtures.session_snapshots import make_snapshot
+from src.analysis import analyze_snapshot
+from src.application.request_archive_projection import request_roster
+from src.cache.display_history import SessionChange, SessionFact
+from src.cache.display_usage_reader import USAGE_SLICE
+from src.sources.opencode_v1 import OpenCodeV1Source
+from src.watch.web_coordinator import WebWatchCoordinator
+from src.web.display_archive import DisplayArchive
+
+
+class WebMixRefreshTests(unittest.TestCase):
+    def test_existing_lane_interleaves_scalar_with_bounded_mix_and_notifies_after_commit(self):
+        now = 1_750_000_000_000
+        ready, release = Event(), Event()
+        events = []
+        with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=1) as lane:
+            root = Path(tmp)
+            identity = root / "synthetic-source.db"
+            identity.write_bytes(b"not queryable source")
+            selection = SimpleNamespace(selected="v1", source=OpenCodeV1Source(identity))
+            service = SimpleNamespace(timezone_id="UTC", selection=selection)
+
+            def publish(kind, hint):
+                if kind == "token-mix-cache" and "periods" in hint:
+                    events.append((hint, archive.history.mix_total(archive.views.source, "UTC", "all", None, now)))
+
+            archive = DisplayArchive(root, publish, mix_enabled=True)
+            archive.initialize()
+            driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(
+                report_service=service, catalog_observation=None))
+            archive.observe(driver, before_tick=True)
+            snapshot = make_snapshot()
+            prices = SimpleNamespace(analysis_signature="p1", reference_category_valuation=lambda *_: None)
+            roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), prices)
+            request = roster.requests[0]
+            requests = tuple(replace(request, key=i.to_bytes(4, "big"), fork_key=None)
+                             for i in range(USAGE_SLICE + 1))
+            archive.history.commit_sessions(archive.views.source, (SessionChange(SessionFact("root", "r1", "Root"),
+                None, previous_progress=0, request_roster=replace(roster, requests=requests, attribution=())),))
+            catalog = Mock(display_archive=archive)
+            catalog.needed.return_value = True
+            catalog.archive_running.return_value = ()
+            order = []
+
+            def scalar(*_):
+                order.append("scalar")
+
+            owner = SimpleNamespace(report_service=service, catalog_observation=None, cards=SimpleNamespace(sessions={}),
+                catalog_job=None, clock_ms=lambda: now, _closed=False, catalog_pool=lane,
+                catalog_turn=0, _catalog_history_turns=3, _catalog_capture=scalar)
+            read = archive.history.usage_inputs
+
+            def hold_first_slice(*args, **kwargs):
+                order.append("mix")
+                if not ready.is_set():
+                    ready.set()
+                    if not release.wait(5):
+                        raise AssertionError("test failed to release the catalog lane")
+                return read(*args, **kwargs)
+
+            try:
+                with patch.object(archive, "catalog_pending", return_value=False), \
+                     patch.object(archive, "summary_pending", return_value=False), \
+                     patch.object(archive, "coverage_pending", return_value=False), \
+                     patch.object(archive, "publish_running"), \
+                     patch.object(archive.history, "usage_inputs", side_effect=hold_first_slice):
+                    WebWatchCoordinator.tick_catalog(owner, catalog)
+                    self.assertTrue(ready.wait(3))
+                    first = owner.catalog_job
+                    WebWatchCoordinator.tick_catalog(owner, catalog)
+                    self.assertIs(first, owner.catalog_job)
+                    self.assertIsNone(archive.history.mix_total(archive.views.source, "UTC", "all", None, now))
+                    release.set()
+                    first.result(timeout=3)
+                    for _ in range(4):
+                        WebWatchCoordinator.tick_catalog(owner, catalog)
+                        owner.catalog_job.result(timeout=3)
+            finally:
+                release.set()
+                lane.submit(archive.close_catalog_work).result(timeout=5)
+                archive.close()
+
+        self.assertEqual(["mix", "scalar", "scalar", "scalar", "mix"], order)
+        self.assertEqual(3, owner.catalog_turn)
+        self.assertEqual(1, len(events))
+        hint, (row, current) = events[0]
+        self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["periods"]))
+        self.assertEqual((USAGE_SLICE + 1, True), (row.calls, current))
