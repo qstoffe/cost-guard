@@ -329,7 +329,7 @@ def history_tokens(values, timezone_id, *, times=None):
                 shown = ccost_amount(amount) + ("" if ccost_unit() == "usd" else " Credits")
                 tokens["mix_" + name + "_cost_value"] = shown
                 tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {shown}"
-        tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
+        tokens["total_cost"] = ccost_amount(decimal(values["total_cost"]) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),

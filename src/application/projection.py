@@ -8,6 +8,7 @@ import json
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
 from src.analysis.ai_stats import POLICY as STATS_POLICY
+from src.numbers import exact_decimal_sum
 from src.pricing.catalog import FIXED_REFERENCE_MIX
 from src.reports.models import ReportKind
 
@@ -52,7 +53,7 @@ def token_mix(value, *, category_help=False, observed=None):
         exact_totals=tuple(None if item is None else str(item) for item in value.totals),
         exact_total_tokens=None if value.total_tokens is None else str(value.total_tokens),
         known_total_tokens=None if value.known_total_tokens is None else Decimal(value.known_total_tokens),
-        total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
+        total_cost=None if value.costs is None else exact_decimal_sum(value.costs),
         **({'category_cost_help': True} if category_help else {}),
         **({'observed_totals': tuple(str(item) for item in observed),
             'observed_total_tokens': str(sum(observed))} if observed is not None else {}),

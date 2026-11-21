@@ -604,21 +604,33 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(202, {"prioritized": prioritized})
 
     def cached_mix_total(self, value, *, grouped):
+        from src.cache.display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_SORTS, valid_group_revision
         from src.cache.display_mix_totals import MIX_PERIODS
 
         period = value.get("period")
-        fields = {"period", "kind", "after", "known"} if grouped else {"period"}
+        fields = {"period", "kind", "after", "known", "sort", "direction"} if grouped else {"period", "orders"}
         if set(value) - fields or type(period) is not str or period not in MIX_PERIODS:
             self.reply(400, {"error": "invalid_request"})
             return
-        options = {}
+        def valid_order(kind, sort, direction):
+            return (kind in ("model", "publisher") and sort in MIX_GROUP_SORTS and
+                    (sort != "model" or kind == "model") and direction in ("asc", "desc"))
+
         if grouped:
             kind, after, known = value.get("kind"), value.get("after", ""), value.get("known")
-            if (kind not in ("model", "publisher") or not isinstance(after, str) or len(after) > 256 or
-                    known is not None and (type(known) is not str or not re.fullmatch(r"[a-f0-9]{32}", known))):
+            sort, direction = value.get("sort", MIX_GROUP_DEFAULT[0]), value.get("direction", MIX_GROUP_DEFAULT[1])
+            if (not valid_order(kind, sort, direction) or not isinstance(after, str) or len(after) > 256 or
+                    known is not None and not valid_group_revision(known)):
                 self.reply(400, {"error": "invalid_request"})
                 return
-            options = dict(kind=kind, after=after, known=known)
+            options = dict(kind=kind, after=after, known=known, order=(sort, direction))
+        else:
+            orders = value.get("orders", {})
+            if type(orders) is not dict or any(type(order) is not list or len(order) != 2 or
+                    not valid_order(kind, *order) for kind, order in orders.items()):
+                self.reply(400, {"error": "invalid_request"})
+                return
+            options = dict(orders=orders)
         owner = self.server.lifecycle
         archive = getattr(owner, "display_archive", None)
         if archive is None or not getattr(owner, "cached_mix_enabled", False):

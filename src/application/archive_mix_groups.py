@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from src.cache.display_mix_groups import MixGroupRow
 from src.domain import ModelRef
-from src.reports.history_mix_identity import (UNKNOWN_PUBLISHER, history_model_key, history_publisher,
-                                              history_reference_model, web_model_label)
+from src.domain.model_identity import UNKNOWN_MODEL, UNKNOWN_PUBLISHER
+from src.reports.history_mix_identity import history_model_key, history_publisher, history_reference_model, web_model_label
 
 from .archive_token_mix import MixAccumulator
 
@@ -59,7 +59,7 @@ class ArchiveMixGroups:
         # No catalog observation is different from a verified lack of a match.
         # In either case a reseller/route name is not a publisher.
         publisher = history_publisher(model, matched, web=True) if self.reference is not None else UNKNOWN_PUBLISHER
-        label = web_model_label(model, matched) if matched else item.recorded_model or item.model or "Unknown model"
+        label = web_model_label(model, matched) if matched else item.recorded_model or item.model or UNKNOWN_MODEL
         return history_model_key(model) or "unknown", (label, publisher, matched is not None)
 
     def collect(self, entries):

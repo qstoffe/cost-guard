@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .display_mix_groups import record_group_marks
+from .display_mix_order import MIX_GROUP_ORDER_VERSION
 from .display_usage_reader import UsageVersion, retained_usage_version, usage_version
 
 
@@ -99,8 +100,11 @@ def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows, *,
 
 
 def mix_refresh(db, source, timezone_id, now_ms):
-    row = db.execute("SELECT archive_epoch,usage_revision,timezone_id,end_ms,group_run "
-                     "FROM archive_mix_state WHERE source=?", (source,)).fetchone()
+    row = db.execute("""
+        SELECT archive_epoch,usage_revision,timezone_id,end_ms,
+               (SELECT digest FROM archive_mix_group_marks WHERE source=state.source AND period='all')
+        FROM archive_mix_state AS state WHERE source=?
+    """, (source,)).fetchone()
     if row is None:
         return None
     epoch, revision, zone, end_ms, groups = row
@@ -109,7 +113,7 @@ def mix_refresh(db, source, timezone_id, now_ms):
         changed = db.execute("""
             SELECT 1 FROM archive_requests WHERE source=? AND clock_ms>? AND clock_ms<=? LIMIT 1
         """, (source, end_ms, now_ms)).fetchone() is not None
-    return MixRefresh(end_ms, changed, groups is not None)
+    return MixRefresh(end_ms, changed, groups is not None and groups.startswith(MIX_GROUP_ORDER_VERSION))
 
 
 def read_mix_total(db, source, timezone_id, period, start_ms, end_ms):

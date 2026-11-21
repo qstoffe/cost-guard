@@ -184,14 +184,14 @@ class DisplayArchive:
                 value["view"] = cached_watch_view(value, views.timezone_id)
         return value if self.views is views else None
 
-    def mix_total(self, period, **groups):
+    def mix_total(self, period, *, orders=None, **groups):
         views = self.views
         if views is None:
             return None
         fence = self.sessions.clear_fence
         now = int(time.time() * 1000)
         args = self.history, views.source, views.timezone_id, period, now
-        snapshot = cached_mix_groups(*args, **groups) if groups else cached_mix_view(*args)
+        snapshot = cached_mix_groups(*args, **groups) if groups else cached_mix_view(*args, orders=orders)
         if self.views is views and self.sessions.clear_fence == fence:
             return dict(binding=views.binding, **snapshot)
         return None

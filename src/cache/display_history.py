@@ -10,13 +10,15 @@ import time
 
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
-from .display_mix_groups import inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
+from .display_mix_groups import group_revision, inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
+from .display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_ORDER_VERSION
 from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_totals, read_mix_total
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
+from .display_sort_keys import decimal_key
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -44,25 +46,6 @@ EMPTY_HISTORY_EVIDENCE = 1 << 10
 def field_evidence(observed_fields, *, empty_history=False):
     return sum(FIELD_EVIDENCE_BITS[field] for field in observed_fields) | (
         EMPTY_HISTORY_EVIDENCE if empty_history else 0)
-
-
-def decimal_key(value: Decimal | None) -> bytes | None:
-    """SQLite BLOB order is exact decimal order (no REAL rounding of close costs)."""
-    if value is None:
-        return None
-    if not value.is_finite():
-        raise ValueError("invalid_cost")
-    if not value:
-        return b"\x01"
-    sign, digits, _ = value.as_tuple()
-    end = len(digits)
-    while digits[end - 1] == 0:
-        end -= 1
-    rank = (value.adjusted() + (1 << 63)).to_bytes(8, "big")
-    magnitude = rank + bytes(digit + 1 for digit in digits[:end]) + b"\x00"
-    if sign:
-        return b"\x00" + bytes(255 - byte for byte in magnitude)
-    return b"\x02" + magnitude
 
 
 @dataclass(frozen=True, slots=True)
@@ -515,15 +498,21 @@ class DisplayHistory:
             db.execute("BEGIN")
             return mix_refresh(db, source, timezone_id, now_ms)
 
-    def mix_total(self, source, timezone_id, period, start_ms, end_ms, *, include_groups=False):
+    def mix_total(self, source, timezone_id, period, start_ms, end_ms, *, group_orders=None):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
             totals = read_mix_total(db, source, timezone_id, period, start_ms, end_ms)
-            if totals is None or not include_groups:
+            if totals is None or group_orders is None:
                 return totals
             run, = db.execute("SELECT group_run FROM archive_mix_state WHERE source=?", (source,)).fetchone()
-            groups = {kind: read_groups(db, source, run, period, kind, "") for kind in ("model", "publisher")} if run else {}
-            return *totals, run, groups
+            revision = group_revision(db, source, period) if run else None
+            indexed = revision and revision.startswith(MIX_GROUP_ORDER_VERSION)
+            groups = {}
+            if revision:
+                for kind in ("model", "publisher"):
+                    order = group_orders.get(kind, MIX_GROUP_DEFAULT) if indexed else None
+                    groups[kind] = (*read_groups(db, source, run, period, kind, "", order), order)
+            return *totals, revision, groups
 
     def stage_mix_groups(self, source, expected, run, rows, *, eligible):
         with self._write_lock, self._connect() as db:
@@ -548,7 +537,7 @@ class DisplayHistory:
             db.commit()
             return reclaimed
 
-    def mix_group_page(self, source, timezone_id, period, start_ms, end_ms, kind, after="", *, known=None):
+    def mix_group_page(self, source, timezone_id, period, start_ms, end_ms, kind, after="", *, known=None, order=None):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
             state = db.execute("""
@@ -557,8 +546,15 @@ class DisplayHistory:
             """, (source, timezone_id, period, start_ms, end_ms)).fetchone()
             if state is None or state[0] is None:
                 return None
-            cursor = after if known == state[0] else ""
-            return state[0], state[1], *read_groups(db, source, state[0], period, kind, cursor)
+            revision = group_revision(db, source, period)
+            if not revision:
+                return None
+            if revision.startswith(MIX_GROUP_ORDER_VERSION):
+                order = order or MIX_GROUP_DEFAULT
+            else:
+                order = None  # Upgraded v15 snapshots still page by identity.
+            cursor = after if known == revision else ""
+            return revision, state[1], order, *read_groups(db, source, state[0], period, kind, cursor, order)
 
     @staticmethod
     def _advance_progress(db, source, session_id, revision, dependency):

@@ -222,8 +222,9 @@ class DisplayRequestTests(unittest.TestCase):
                 DROP INDEX archive_requests_revision;
                 ALTER TABLE archive_requests DROP COLUMN first_revision;
                 ALTER TABLE archive_usage_revisions DROP COLUMN invalidated_through;
-                DROP TABLE archive_mix_group_marks;
-                DROP TABLE archive_mix_groups;
+                 DROP TABLE archive_mix_group_marks;
+                 DROP TABLE archive_mix_group_order;
+                 DROP TABLE archive_mix_groups;
                 ALTER TABLE archive_mix_state DROP COLUMN group_run;
                 PRAGMA user_version=13;
             """)

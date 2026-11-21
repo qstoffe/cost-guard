@@ -2,6 +2,7 @@
 from contextlib import closing
 from dataclasses import replace
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
@@ -14,6 +15,8 @@ from src.application.archive_mix_build import ArchiveMixBuild, MixBuildState
 from src.application.archive_mix_groups import MixGroupStage
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+from src.cache.display_mix_groups import MixGroupRow, mix_groups_schema, read_groups, stage_groups
+from src.cache.display_mix_order import MIX_GROUP_SORTS
 from src.cache.display_usage_reader import UsageInput
 
 
@@ -85,9 +88,12 @@ class ArchiveMixGroupsTests(TestCase):
                     completed = build.step(history)
                     if completed is not MixBuildState.MORE:
                         break
-            token, as_of, rows, after = history.mix_group_page("bound", "UTC", "all", None, now, "model")
-            _, _, tail, end = history.mix_group_page("bound", "UTC", "all", None, now, "model", after, known=token)
-            _, _, reset, _ = history.mix_group_page("bound", "UTC", "all", None, now, "model", after, known="old")
+            order = ("model", "asc")
+            token, as_of, _, rows, after = history.mix_group_page("bound", "UTC", "all", None, now, "model", order=order)
+            _, _, _, tail, end = history.mix_group_page("bound", "UTC", "all", None, now, "model", after,
+                                                       known=token, order=order)
+            _, _, _, reset, _ = history.mix_group_page("bound", "UTC", "all", None, now, "model", after,
+                                                      known="old", order=order)
             foreign = history.mix_group_page("unbound", "UTC", "all", None, now, "model")
             summary, current = history.mix_total("bound", "UTC", "all", None, now)
             with ArchiveMixBuild("bound", "UTC", now + 1, grouped=True) as stale_build:
@@ -98,7 +104,16 @@ class ArchiveMixGroupsTests(TestCase):
                         requests=(replace(entries[0], clock_ms=now + 20),), attribution=())),))
                 rejected = stale_build.step(history)
             inactive = history.reclaim_mix_groups("bound")
-            retained = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model")
+            retained = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model", order=order)
+            with history._connect() as db:
+                db.executescript("""
+                    DROP TABLE archive_mix_group_order;
+                    UPDATE archive_mix_group_marks SET digest=substr(digest,5);
+                    PRAGMA user_version=15;
+                """)
+            history.initialize()
+            migrated = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model", order=order)
+            old_stamp = history.mix_refresh("bound", "UTC", now + 1)
             history.clear_confirmed_sessions("bound", history.source_state("bound"))
             deleted = history.mix_group_page("bound", "UTC", "all", None, now, "model")
 
@@ -108,9 +123,77 @@ class ArchiveMixGroupsTests(TestCase):
         self.assertIsNone(deleted)
         self.assertEqual(MixBuildState.STALE, rejected)
         self.assertEqual(32, inactive)
-        self.assertEqual((token, as_of, rows, after), retained)
+        self.assertEqual((token, as_of, order, rows, after), retained)
+        self.assertEqual((token.removeprefix("v16:"), as_of, None, rows, after), migrated)
+        self.assertFalse(old_stamp.grouped)
         self.assertEqual((25, 4, None), (len(rows), len(tail), end))
         self.assertEqual(rows, reset)
         self.assertEqual((now, True, 29), (as_of, current, summary.calls))
         self.assertEqual(tuple(f"model{i:02}" for i in range(29)), tuple(row.identity for row in (*rows, *tail)))
         self.assertEqual(sum(row.calls for row in (*rows, *tail)), summary.calls)
+
+    @staticmethod
+    def group_store(db):
+        db.executescript("""
+            PRAGMA foreign_keys=ON;
+            CREATE TABLE sources(source TEXT PRIMARY KEY);
+            CREATE TABLE archive_mix_state(source TEXT PRIMARY KEY);
+        """ + mix_groups_schema())
+
+    def test_every_sort_paginates_exact_values_and_leaves_unknowns_last(self):
+        huge = 10 ** 24
+        fixtures = [
+            MixGroupRow("all", "model", f"model-{i:02}",
+                        "Unknown model" if i % 13 == 0 else f"Name {i % 20:02}",
+                        "Unknown / unverified" if i % 12 == 0 else f"Publisher {i % 4}",
+                        i % 5, i % 7 + 1, int(i % 11 != 0), None if i % 9 == 0 else huge + (i * 7 % 59),
+                        (None, 1, 0, 1) if i % 8 == 0 else (huge + i % 3, huge + i % 5, i % 13, 2),
+                        None if i % 11 == 0 else
+                        (Decimal("1e24"), Decimal(i % 17).scaleb(-18), Decimal(0), Decimal(0)))
+            for i in range(64)
+        ]
+
+        def expected_value(row, sort):
+            index = {"input": 0, "cache": 1, "write": 2, "output": 3}.get(sort)
+            if index is not None:
+                return Fraction(row.totals[index], sum(row.totals)) if None not in row.totals else None
+            return {"publisher": None if row.publisher == "Unknown / unverified" else row.publisher.lower(),
+                    "model": None if row.label == "Unknown model" else row.label.lower(), "prompts": row.prompts,
+                    "calls": row.calls, "tokens": row.known_volume,
+                    "ccost": sum(map(Fraction, row.costs)) if row.costs is not None else None}[sort]
+
+        with closing(sqlite3.connect(":memory:")) as db:
+            self.group_store(db)
+            stage_groups(db, "source", "run", fixtures[:32])
+            stage_groups(db, "source", "run", fixtures[32:])
+            for sort in MIX_GROUP_SORTS:
+                keys = {row.identity: expected_value(row, sort) for row in fixtures}
+                for direction in ("asc", "desc"):
+                    with self.subTest(sort=sort, direction=direction):
+                        expected = sorted((key for key in keys if keys[key] is not None),
+                                          key=lambda key: (keys[key], key), reverse=direction == "desc")
+                        expected.extend(sorted((key for key in keys if keys[key] is None), reverse=direction == "desc"))
+                        received, cursor = [], ""
+                        for _ in range(3):
+                            page, cursor = read_groups(db, "source", "run", "all", "model", cursor, (sort, direction))
+                            received.extend(row.identity for row in page)
+                        self.assertIsNone(cursor)
+                        self.assertEqual(expected, received)
+
+    def test_deep_tied_seek_does_not_walk_skipped_rows(self):
+        common = MixGroupRow("all", "model", "", "Model", "Publisher", 1, 1, 0, 1, (1, 0, 0, 0), None)
+        with closing(sqlite3.connect(":memory:")) as db:
+            self.group_store(db)
+            for start in range(0, 8192, 32):
+                stage_groups(db, "source", "run", tuple(replace(common, identity=f"{i:05}") for i in range(start, start + 32)))
+            steps = []
+            db.set_progress_handler(lambda: steps.append(1) or 0, 100)
+
+            ascending, _ = read_groups(db, "source", "run", "all", "model", "07000", ("input", "asc"))
+            descending, _ = read_groups(db, "source", "run", "all", "model", "01000", ("input", "desc"))
+            unknown, _ = read_groups(db, "source", "run", "all", "model", "07000", ("ccost", "asc"))
+
+        self.assertEqual([f"{i:05}" for i in range(7001, 7026)], [row.identity for row in ascending])
+        self.assertEqual([f"{i:05}" for i in range(999, 974, -1)], [row.identity for row in descending])
+        self.assertEqual(ascending, unknown)
+        self.assertLess(len(steps), 100, "a deep seek must not scan the preceding thousands of ties")

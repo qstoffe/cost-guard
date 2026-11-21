@@ -8,15 +8,16 @@ async function main() {
   const Controller = vm.runInContext('CachedMix.Controller', context);
   const requests = [], paints = [];
   const a = 'a'.repeat(32), b = 'b'.repeat(32);
-  const view = new Controller((path, {period}, signal) => {
-    assert.equal(path, '/api/cache/token-mix');
-    return new Promise(resolve => requests.push({period, signal, resolve}));
+  const view = new Controller((path, input, signal) => {
+    assert.ok(['/api/cache/token-mix', '/api/cache/token-mix/groups'].includes(path));
+    return new Promise((resolve, reject) => requests.push({path, ...input, signal, resolve, reject}));
   }, () => paints.push(view.snapshot().value?.token_mix?.request_count ?? null));
   const hint = (binding, archive_epoch, usage_revision, periods, marks, cleared = false) =>
     ({binding, archive_epoch, usage_revision, end_ms: 100, periods, marks, cleared});
-  async function respond(read, binding, count) {
+  async function respond(read, binding, count, revision = 'revision') {
     read.resolve({binding, scope: read.period, start_ms: null, end_ms: 100,
-      coverage: 'partial', token_mix: {request_count: count, display: {mix_total_tokens: `${count}`}}});
+      coverage: 'partial', token_mix: {request_count: count, display: {mix_total_tokens: `${count}`}},
+      groups: {revision}});
     await new Promise(setImmediate);
   }
 
@@ -50,6 +51,32 @@ async function main() {
   await respond(preRebind, a, 900);
   await respond(requests.at(-1), b, 1);
   assert.equal(paints.at(-1), 1);
+
+  const descending = ['tokens', 'desc'];
+  view.orders.model = descending;
+  const oldPage = view.page('model', 'anchor', descending, new AbortController().signal);
+  const pageRead = requests.at(-1);
+  assert.equal(pageRead.after, 'anchor');
+  assert.equal(pageRead.direction, 'desc');
+  view.activate('7-days');
+  assert.equal(requests.at(-1).orders.model, descending);
+  await respond(requests.at(-1), b, 7);
+  pageRead.resolve({binding: b, scope: 'today', kind: 'model', revision: 'revision', order: descending, rows: []});
+  assert.equal(await oldPage, null, 'old period page must not paint after navigation');
+  const beforeHidden = requests.length;
+  view.activate(null);
+  view.committed(hint(b, 0, 2, ['7-days'], {'7-days': [2, 100]}));
+  assert.equal(requests.length, beforeHidden, 'no hidden-page SQL reads');
+  assert.equal(view.snapshot().value.scope, '7-days', 'anchor stays compatible while hidden');
+  view.activate('7-days');
+  await respond(requests.at(-1), b, 8);
+  assert.equal(paints.at(-1), 8, 'visible tab picks up the later cached snapshot');
+  const revoked = view.page('model', '', descending, new AbortController().signal);
+  requests.at(-1).reject(new Error('authentication_required'));
+  assert.equal(await revoked, null);
+  assert.equal(view.snapshot().error, 'authentication_required');
+  assert.equal(paints.at(-1), null, 'paging authorization loss withdraws the current snapshot');
+
   view.health(true);
   assert.equal(paints.at(-1), null);
   assert.equal(paints.includes(900), false);

@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from .display_mix_order import group_order_keys, group_order_schema, stage_group_order
+
 
 GROUP_BATCH = 32
 GROUP_PAGE = 25
@@ -46,6 +48,7 @@ def mix_groups_schema(*, add_run=False):
             source TEXT NOT NULL REFERENCES archive_mix_state(source) ON DELETE CASCADE,
             period TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(source,period)
         ) WITHOUT ROWID;
+        {group_order_schema()}
     """
 
 
@@ -55,6 +58,7 @@ def stage_groups(db, source, run, rows):
     db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
     marks = ",".join("?" for _ in range(11 + len(_METRICS)))
     db.executemany(f"INSERT INTO archive_mix_groups VALUES({marks})", ((source, run, *row.values()) for row in rows))
+    stage_group_order(db, source, run, rows)
 
 
 def inactive_run(db, source):
@@ -90,13 +94,24 @@ def record_group_marks(db, source, marks):
     return {period for period in previous.keys() | marks.keys() if previous.get(period) != marks.get(period)}
 
 
-def read_groups(db, source, run, period, kind, after):
-    rows = db.execute("""
-        SELECT period,kind,identity,label,publisher,prompts,calls,priced,known_volume,
-               """ + ",".join(_METRICS) + """
-        FROM archive_mix_groups WHERE source=? AND run=? AND period=? AND kind=? AND identity>?
-        ORDER BY identity LIMIT ?
-    """, (source, run, period, kind, after, GROUP_PAGE + 1)).fetchall()
+def group_revision(db, source, period):
+    row = db.execute("SELECT digest FROM archive_mix_group_marks WHERE source=? AND period=?", (source, period)).fetchone()
+    return row[0] if row else None
+
+
+def read_groups(db, source, run, period, kind, after, order):
+    prefix = source, run, period, kind
+    where = "(source,run,period,kind)=(?,?,?,?)"
+    selection = ("SELECT period,kind,identity,label,publisher,prompts,calls,priced,known_volume," +
+                 ",".join(_METRICS) + f" FROM archive_mix_groups WHERE {where}")
+    if order is None:
+        rows = db.execute(selection + " AND identity>? ORDER BY identity LIMIT ?",
+                          (*prefix, after, GROUP_PAGE + 1)).fetchall()
+    else:
+        keys = group_order_keys(db, prefix, *order, after, GROUP_PAGE + 1)
+        found = {row[2]: row for row in db.execute(selection +
+                 f" AND identity IN ({','.join('?' for _ in keys)})", (*prefix, *keys))} if keys else {}
+        rows = [found[key] for key in keys]
     values = tuple(MixGroupRow(*row[:8], None if row[8] is None else int(row[8]),
                    tuple(None if value is None else int(value) for value in row[9:13]),
                    tuple(map(Decimal, row[13:17])) if row[7] else None) for row in rows[:GROUP_PAGE])

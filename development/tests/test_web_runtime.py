@@ -334,7 +334,10 @@ class WebRuntimeTests(unittest.TestCase):
         from src.web.display_archive import DisplayArchive
 
         endpoint = "/api/cache/token-mix"
+        group_url = endpoint + "/groups"
+        group_request = {"period": "today", "kind": "model", "sort": "tokens", "direction": "desc"}
         self.assertEqual(401, self.request(endpoint, {"period": "today"})[0])
+        self.assertEqual(401, self.request(group_url, group_request)[0])
         self.login()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -363,12 +366,17 @@ class WebRuntimeTests(unittest.TestCase):
                 archive.history.commit_sessions(archive.views.source,
                     (SessionChange(SessionFact("root", "r1", "Fixture"), None, previous_progress=0,
                         request_roster=replace(roster, requests=(entry,), attribution=())),))
-                with ArchiveMixBuild(archive.views.source, "UTC", at) as build:
+                with ArchiveMixBuild(archive.views.source, "UTC", at, grouped=True) as build:
+                    self.assertEqual(MixBuildState.MORE, build.step(archive.history))
+                    self.assertEqual(MixBuildState.MORE, build.step(archive.history))
                     self.assertEqual(MixBuildState.PUBLISHED, build.step(archive.history))
                 with patch.object(archive.history, "usage_inputs", side_effect=AssertionError("request scanned usage")):
                     periods = ("today", "7-days", "30-days", "month", "all")
                     responses = {period: self.request(endpoint, {"period": period}) for period in periods}
+                    group_page = self.request(group_url, group_request)
                     invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
+                    invalid_sort = self.request(group_url, {**group_request, "sort": "activity"})
+                    invalid_kind = self.request(group_url, {**group_request, "sort": "model", "kind": "publisher"})
                 read = archive.history.mix_total
 
                 def read_after_auth_revoked(*args, **kwargs):
@@ -402,6 +410,12 @@ class WebRuntimeTests(unittest.TestCase):
                                  (mix["request_count"], mix["totals"], mix["shares"], mix["costs"]))
                 self.assertEqual("N/A", mix["display"]["mix_write_share"])
         self.assertEqual(400, invalid[0])
+        self.assertEqual(400, invalid_sort[0])
+        self.assertEqual(400, invalid_kind[0])
+        page = json.loads(group_page[2])
+        self.assertEqual((200, "today", "model", ["tokens", "desc"], 1),
+                         (group_page[0], page["scope"], page["kind"], page["order"], len(page["rows"])))
+        self.assertEqual(json.loads(responses["today"][2])["groups"]["revision"], page["revision"])
         self.assertEqual(401, expired[0])
         self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
 

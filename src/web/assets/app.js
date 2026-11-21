@@ -282,7 +282,8 @@ function show(state) {
     if (state.cachedMix) {
       output.setAttribute('aria-busy', 'false');
       state.cachedMixView ||= new CachedMix.View(period => selectTokenMix(state, period),
-        (kind, after, signal) => mixCache.page(kind, after, signal));
+         (kind, after, order, signal) => mixCache.page(kind, after, order, signal),
+         (kind, order) => { mixCache.orders[kind] = order; });
       state.cachedMixView.attach(output, state.period, mixCache.snapshot());
       return;
     }

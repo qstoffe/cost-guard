@@ -1,9 +1,7 @@
 """Shared historical grouping; provider routes are not publisher identities."""
+from src.domain.model_identity import UNKNOWN_PUBLISHER
 from src.pricing.identities import reference_identity, unverified_alias
 from src.pricing.publishers import model_publisher, token_mix_publisher
-
-
-UNKNOWN_PUBLISHER = "Unknown / unverified"
 
 
 def history_model_key(model):

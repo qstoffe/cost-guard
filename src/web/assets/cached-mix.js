@@ -1,15 +1,23 @@
 'use strict';
 // One local read for the visible scope; events are hints, never display facts.
 const CachedMix = (() => {
+  const defaultOrder = ['ccost', 'desc'];
+  const sameOrder = (left, right) => left?.[0] === right?.[0] && left?.[1] === right?.[1];
+  const revoked = ['cache_source_unbound', 'authentication_required', 'host_identity_changed'];
+
   class Controller {
     constructor(api, changed) {
       Object.assign(this, {api, changed, period: null, hint: null, stamp: null, flight: null,
-        value: null, error: null, blocked: false});
+        value: null, error: null, blocked: false, orders: {}});
     }
     activate(period) {
       if (period === this.period) return;
       this.period = period;
-      this.withdraw();
+      if (period === null || this.value?.scope === period) {
+        // Leave a compatible table's page anchor intact while hidden. The
+        // binding/clear/auth fences still withdraw snapshots immediately.
+        this.abortRead();
+      } else this.withdraw();
       this.read();
     }
     health(blocked) {
@@ -20,10 +28,14 @@ const CachedMix = (() => {
         this.withdraw();
       } else this.read();
     }
-    withdraw() {
+    abortRead() {
       this.flight?.abort();
       this.flight = null;
-      this.value = this.error = null;
+    }
+    withdraw(error = null) {
+      this.abortRead();
+      this.value = null;
+      this.error = error;
       this.changed();
     }
     committed(hint, resync = false) {
@@ -38,12 +50,12 @@ const CachedMix = (() => {
         JSON.stringify(this.hint?.marks?.[this.period]);
       this.stamp = stamp;
       this.hint = hint;
-      if (bindingChanged || cleared) this.withdraw();
       if (hint.binding == null) {
-        if (!bindingChanged) this.withdraw();
-        this.error = 'cache_source_unbound';
-        this.changed();
-      } else if (bindingChanged || cleared || missed || resync && this.error ||
+        this.withdraw('cache_source_unbound');
+        return;
+      }
+      if (bindingChanged || cleared) this.withdraw();
+      if (bindingChanged || cleared || missed || resync && this.error ||
           !hint.periods || hint.periods.includes(this.period)) {
         if (this.flight) this.refresh = true;
         else this.read();
@@ -54,7 +66,7 @@ const CachedMix = (() => {
       const period = this.period, flight = this.flight = new AbortController();
       this.refresh = false;
       try {
-        const value = await this.api('/api/cache/token-mix', {period}, flight.signal);
+        const value = await this.api('/api/cache/token-mix', {period, orders: {...this.orders}}, flight.signal);
         if (this.flight !== flight || this.period !== period) return;
         if (this.refresh) return; // A relevant commit arrived after this read began.
         if (!valid(value, period)) throw new Error('cache_unavailable');
@@ -69,8 +81,7 @@ const CachedMix = (() => {
       } catch (error) {
         if (this.flight !== flight) return;
         this.error = error.message;
-        if (['cache_source_unbound', 'authentication_required', 'host_identity_changed'].includes(this.error))
-          this.value = null;
+        if (revoked.includes(this.error)) this.value = null;
       } finally {
         if (this.flight === flight) {
           this.flight = null;
@@ -80,13 +91,27 @@ const CachedMix = (() => {
       }
     }
     snapshot() { return {value: this.value, error: this.error, blocked: this.blocked}; }
-    async page(kind, after, signal) {
+    async page(kind, after, order, signal) {
       const {binding, scope: period, groups} = this.value || {};
       if (!groups || this.blocked || period !== this.period) return null;
-      const page = await this.api('/api/cache/token-mix/groups', {period, kind, after, known: groups.run}, signal);
-      return this.value?.groups?.run === groups.run && page?.run === groups.run &&
-        page.binding === binding && page.scope === this.period && page.kind === kind &&
-        Array.isArray(page.rows) ? page : null;
+      const [sort, direction] = order || defaultOrder;
+      const current = () => !signal.aborted && this.value?.binding === binding && period === this.period &&
+        this.value?.groups?.revision === groups.revision;
+      let page;
+      try {
+        page = await this.api('/api/cache/token-mix/groups',
+          {period, kind, after, sort, direction, known: groups.revision}, signal);
+      } catch (error) {
+        if (current() && revoked.includes(error.message)) this.withdraw(error.message);
+        return null;
+      }
+      if (!current() || page?.binding !== binding ||
+          page.scope !== period || page.kind !== kind) return null;
+      if (page.revision !== groups.revision) {
+        this.read(); // The local commit may precede its scoped event.
+        return null;
+      }
+      return sameOrder(page.order, order) && Array.isArray(page.rows) ? page : null;
     }
   }
   function valid(value, period) {
@@ -97,22 +122,29 @@ const CachedMix = (() => {
         value.token_mix.request_count > 0 && typeof value.token_mix.display?.mix_total_tokens === 'string');
   }
   class GroupTable {
-    constructor(kind, read) {
+    constructor(kind, read, selectOrder) {
       const e = (...args) => ReportView.element(...args);
-      Object.assign(this, {kind, read, cursors: [''], run: null, nodes: new Map()});
+      Object.assign(this, {kind, read, selectOrder, cursors: [''], revision: null, order: defaultOrder, nodes: new Map()});
       this.root = e('section', undefined, 'token-mix-section');
-      this.root.hidden = true;
       const title = `Cached Token Mix by ${kind}`;
       const table = e('table', undefined, 'token-mix-table');
       const pan = e('div', undefined, 'token-mix-pan');
       pan.tabIndex = 0; pan.setAttribute('role', 'region'); pan.setAttribute('aria-label', title);
       const thead = e('thead'), tr = e('tr');
-      const labels = kind === 'model' ? ['Publisher', 'Model'] : ['Publisher'];
-      for (const label of [...labels, 'Prompts', 'Calls', 'Tokens', 'Input %', 'Cached %', 'Write %', 'Output %', 'CCost']) {
-        const th = e('th', label);
+      const labels = [['publisher', 'Publisher']];
+      if (kind === 'model') labels.push(['model', 'Model']);
+      const metrics = [['prompts', 'Prompts'], ['calls', 'Calls'], ['tokens', 'Tokens'],
+        ['input', 'Input %'], ['cache', 'Cached %'], ['write', 'Write %'], ['output', 'Output %'], ['ccost', 'CCost']];
+      this.headers = new Map([...labels, ...metrics].map(([key, label]) => {
+        const th = e('th'), button = e('button', label), arrow = e('span', '', 'sort-arrow');
         th.scope = 'col';
-        tr.append(th);
-      }
+        button.type = 'button';
+        arrow.setAttribute('aria-hidden', 'true');
+        button.append(arrow);
+        button.addEventListener('click', () => this.sort(key));
+        th.append(button); tr.append(th);
+        return [key, {th, arrow}];
+      }));
       thead.append(tr);
       this.body = e('tbody');
       table.append(thead, this.body);
@@ -123,60 +155,77 @@ const CachedMix = (() => {
         button.addEventListener('click', () => this.move(delta));
       }
       this.root.append(e('h3', title), pan, this.prev, this.next);
+      this.draw({rows: []}, this.order);
     }
-    update(run, page, scope) {
-      if (this.run === run) return;
+    update(revision, first, scope) {
+      if (this.revision === revision && this.scope === scope) return;
       this.flight?.abort();
       this.flight = null;
-      const preserve = run && this.scope === scope && this.cursors.length > 1;
-      this.run = run;
+      const preserve = revision && this.scope === scope && sameOrder(this.applied, this.order);
+      this.revision = revision;
       this.scope = scope;
-      this.root.hidden = run == null;
-      if (preserve) this.reload(page);
-      else {
-        this.cursors = [''];
-        if (page) this.draw(page);
-        else { this.body.replaceChildren(); this.nodes.clear(); this.page = null; }
+      this.canSort = !first || !!first.order;
+      if (!preserve) this.cursors = [''];
+      if (!first) this.draw({rows: []}, this.order);
+      else if (this.cursors.length === 1 && (!this.canSort || sameOrder(this.order, first.order))) {
+        this.draw(first, first.order);
+      } else {
+        // Keep the compatible displayed page through refresh, but never keep
+        // old source/period rows while fetching the new selection's sort.
+        if (!preserve) this.draw({rows: []}, this.order);
+        this.fetch(this.cursors, this.canSort ? this.order : null, true);
       }
     }
-    async reload(first) {
-      const flight = this.flight = new AbortController();
-      const after = this.cursors.at(-1);
-      try {
-        const page = await this.read(this.kind, after, flight.signal);
-        if (!page || this.flight !== flight) return;
-        if (page.rows.length) this.draw(page);
-        else {
-          // No cached successor at the retained anchor. Return to the first page.
-          this.cursors = [''];
-          this.draw(first);
-        }
-      } catch (_) { /* Preserve the visible rows through a local read failure. */ }
-      finally { if (this.flight === flight) this.flight = null; }
+    sort(key) {
+      this.order = [key, this.order[0] === key && this.order[1] === 'asc' ? 'desc' : 'asc'];
+      this.selectOrder(this.kind, this.order);
+      if (this.revision && this.canSort) this.fetch([''], this.order);
+      else if (!this.revision) this.draw({rows: []}, this.order);
     }
-    async move(delta) {
+    move(delta) {
       const after = delta === 1 ? this.page?.next : this.cursors.at(-2);
       if (after == null || this.flight) return;
-      const flight = this.flight = new AbortController();
-      try {
-        const page = await this.read(this.kind, after, flight.signal);
-        if (!page || this.flight !== flight) return;
-        if (delta === 1) this.cursors.push(after);
-        else this.cursors.pop();
-        this.draw(page);
-      } catch (_) { /* Preserve the last authorized page on a failed local read. */ }
-      finally { if (this.flight === flight) this.flight = null; }
+      this.fetch(delta === 1 ? [...this.cursors, after] : this.cursors.slice(0, -1), this.applied);
     }
-    draw(page) {
+    async fetch(cursors, order, refresh = false) {
+      this.flight?.abort();
+      const flight = this.flight = new AbortController();
+      this.navigation();
+      try {
+        const page = await this.read(this.kind, cursors.at(-1), order, flight.signal);
+        if (!page || this.flight !== flight) return;
+        if (refresh && !page.rows.length && cursors.length > 1) {
+          // A correction may remove the last cached destination.
+          this.fetch(cursors.slice(0, -1), order, true);
+          return;
+        }
+        this.cursors = cursors;
+        this.draw(page, order);
+      } catch (_) { /* Preserve the last authorized page on a failed local read. */ }
+      finally {
+        if (this.flight === flight) {
+          this.flight = null;
+          this.navigation();
+        }
+      }
+    }
+    draw(page, order) {
       const e = (...args) => ReportView.element(...args);
       this.page = page;
+      this.applied = order;
+      for (const [key, {th, arrow}] of this.headers) {
+        const selected = key === order?.[0];
+        th.setAttribute('aria-sort', selected ? order[1] === 'asc' ? 'ascending' : 'descending' : 'none');
+        ReportView.text(arrow, selected ? order[1] === 'asc' ? ' ↑' : ' ↓' : '');
+      }
       const retained = new Set();
       page.rows.forEach((row, index) => {
         const labels = [row.publisher];
         if (this.kind === 'model') labels.push(row.model);
         const keys = ['mix_total_tokens', 'mix_input_share', 'mix_cache_share', 'mix_write_share',
           'mix_output_share', 'mix_total_cost'];
-        const values = [...labels, row.prompts, row.calls, ...keys.map(key => ReportView.display(row.mix, key))];
+        const values = [...labels, row.prompts, row.calls, ...keys.map(key =>
+          key === 'mix_total_cost' && row.mix?.total_cost == null ? 'N/A' : ReportView.display(row.mix, key))];
         retained.add(row.identity);
         let tr = this.nodes.get(row.identity);
         if (!tr) {
@@ -192,12 +241,15 @@ const CachedMix = (() => {
         }
       });
       for (const [id, row] of this.nodes) if (!retained.has(id)) { row.remove(); this.nodes.delete(id); }
-      this.prev.setAttribute('aria-disabled', String(this.cursors.length < 2));
-      this.next.setAttribute('aria-disabled', String(!page.next));
+      this.navigation();
+    }
+    navigation() {
+      this.prev.setAttribute('aria-disabled', String(!!this.flight || this.cursors.length < 2));
+      this.next.setAttribute('aria-disabled', String(!!this.flight || !this.page?.next));
     }
   }
   class View {
-    constructor(select, read) {
+    constructor(select, read, selectOrder) {
       const e = (...args) => ReportView.element(...args);
       this.root = e('section', undefined, 'token-mix-view');
       const controls = e('div', undefined, 'ai-stats-periods');
@@ -222,15 +274,15 @@ const CachedMix = (() => {
       this.summary = e('div');
       this.summary.append(this.title, metrics);
       this.status = e('p', '', 'token-mix-status');
-      this.groups = [new GroupTable('publisher', read), new GroupTable('model', read)];
+      this.groups = ['publisher', 'model'].map(kind => new GroupTable(kind, read, selectOrder));
       this.root.append(controls, this.summary, this.status, ...this.groups.map(table => table.root));
     }
     attach(parent, period, {value, error, blocked}) {
       for (const [key, button] of this.buttons) button.setAttribute('aria-pressed', String(key === period));
       const mix = value?.token_mix;
       const groups = value?.groups;
-      for (const table of this.groups) table.update(groups?.run ?? null, groups?.[table.kind],
-        value && value.binding + ':' + value.scope);
+      for (const table of this.groups) table.update(groups?.revision ?? null, groups?.[table.kind],
+        value && value.binding + ':' + value.scope + ':' + value.start_ms);
       this.summary.hidden = !mix;
       if (mix) {
         ReportView.text(this.title, `Cached Token Mix · ${ReportView.display(mix, 'mix_total_tokens')} tokens`);
@@ -238,7 +290,9 @@ const CachedMix = (() => {
           ReportView.text(this.metrics[index], ReportView.display(mix, 'mix_' + key + '_share')));
       }
       const message = blocked ? 'Cached usage is unavailable.' : mix ?
-        groups ? 'Partial cached usage.' : 'Partial cached usage. Model and publisher breakdowns are still pending.' :
+        !groups ? 'Partial cached usage. Model and publisher breakdowns are still pending.' :
+          !groups.model?.order ? 'Partial cached usage. Model and publisher sort indexes are being prepared.' :
+          'Partial cached usage.' :
         error && error !== 'cache_source_unbound' ? 'Cached usage is unavailable.' : 'No cached usage yet.';
       ReportView.text(this.status, message);
       if (parent.firstChild !== this.root) parent.replaceChildren(this.root);

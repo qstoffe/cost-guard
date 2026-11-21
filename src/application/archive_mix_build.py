@@ -7,6 +7,7 @@ import sqlite3
 from uuid import uuid4
 
 from src.cache.display_mix_groups import GROUP_BATCH
+from src.cache.display_mix_order import MIX_GROUP_ORDER_VERSION
 
 from .archive_mix_groups import MixGroupStage
 from .archive_token_mix import ArchiveMixRollup
@@ -100,7 +101,8 @@ class ArchiveMixBuild(AbstractContextManager):
         if eligible():
             self.publication = history.replace_mix_totals(
                 self.source, self._version, self.timezone_id, rows, eligible=eligible, group_run=self._group_run,
-                group_marks={period: digest.hexdigest() for period, digest in self._group_hashes.items()})
+                group_marks={period: MIX_GROUP_ORDER_VERSION + digest.hexdigest()
+                             for period, digest in self._group_hashes.items()})
         if self.publication is not None:
             return MixBuildState.PUBLISHED
         return MixBuildState.STALE
