@@ -11,8 +11,9 @@ from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart
 from .models import SkillObservation, ToolObservation, ToolOutcome
 from .invocation import (
     MAX_INPUT_TEXT, MAX_INVOCATIONS, MAX_FAILED_INVOCATIONS,
-    background_invocations, failed_invocations, invocation,
+    background_invocations, failed_invocations, running_invocation,
 )
+from .shell_timing import ShellHistory
 from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
@@ -236,13 +237,17 @@ def observe_tools(
     failed_parts.sort(key=lambda item: _physical_order(item[1]))
     foreground_count = min(len(running_parts), MAX_INVOCATIONS)
     failure_count = min(len(failed_parts), MAX_FAILED_INVOCATIONS)
+    history = ShellHistory(snapshot) if include_invocations else None
     background_details, background_count = background_invocations(
-        snapshot, messages, physical, other_count=foreground_count + failure_count) if include_invocations else ((), 0)
+        snapshot, messages, physical, history, other_count=foreground_count + failure_count
+    ) if include_invocations else ((), 0)
     # One card-wide input budget keeps the existing 100-card SSE/replay bound
     # even when every card has maximum foreground, background and failed lists.
     budget = MAX_INPUT_TEXT // max(1, foreground_count + min(background_count, MAX_INVOCATIONS) + failure_count)
-    running_details = tuple(replace(invocation(part, budget=budget), started_at_ms=_part_start(part))
-                            for part in running_parts[:MAX_INVOCATIONS]) if include_invocations else ()
+    running_details = tuple(detail for part in running_parts[:MAX_INVOCATIONS] if
+        (detail := running_invocation(part, snapshot.root.provenance, history,
+                                      budget=budget, fallback_start=_part_start(part))) is not None
+    ) if include_invocations else ()
     summary = dict(
         tool_counts=tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0]))),
         tool_outcomes=tuple(ToolOutcome(name, outcome, count) for (name, outcome), count in sorted(

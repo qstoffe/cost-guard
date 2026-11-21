@@ -12,6 +12,14 @@ from .model_help import prompt_display_help
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
+def running_detail(item):
+    detail = fields(item, 'identity revision text qualification kind started_at_ms mode')
+    if not item.shell_timing:
+        return detail
+    return ObjectValue(detail.fields + (('shell_timing', fields(item.shell_timing,
+        'anchor timeout_ms estimated_duration_ms sample_count')),))
+
+
 def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
     tool = row.tool
     detail_state = detail_state if detail_state != "observed" or tool is None else tool.detail_state
@@ -53,10 +61,8 @@ def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
                 if invocation_verified and tool.running_invocation and len(tool.running_invocations) <= 1 else None),
             background_invocation=(fields(tool.background_invocation, "identity revision text qualification")
                 if invocation_verified and tool.background_invocation and len(tool.background_invocations) <= 1 else None),
-            running_invocations=tuple(fields(item, 'identity revision text qualification kind started_at_ms mode')
-                for item in tool.running_invocations) if invocation_verified else (),
-            background_invocations=tuple(fields(item, 'identity revision text qualification kind started_at_ms mode')
-                for item in tool.background_invocations) if invocation_verified else (),
+            running_invocations=tuple(map(running_detail, tool.running_invocations)) if invocation_verified else (),
+            background_invocations=tuple(map(running_detail, tool.background_invocations)) if invocation_verified else (),
             running_invocation_count=tool.running_invocation_count,
             background_invocation_count=tool.background_invocation_count,
             background_kinds=tool.background_kinds, background_ms=tool.background_ms,
@@ -146,7 +152,7 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         history_cause=value.history_cause,
         running=fields(value.running, "count ccost duration_ms complete unresolved_cost cost_estimated state"),
         rows=tuple(rows), active_count=value.active_count, status=value.status,
-        now_ms=value.now_ms, started_at_ms=value.watch_started_at_ms,
+        now_ms=value.now_ms, timezone_id=timezone_id, started_at_ms=value.watch_started_at_ms,
         run_origin="Web live engine start (not tab open)",
         run_total=token_mix(value.run_total), token_mix=token_mix(value.token_mix),
         run_ccost=None if value.run_total.costs is None else sum(value.run_total.costs),

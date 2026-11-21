@@ -732,6 +732,9 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-activity .watch-activity-error { color: var(--error); }
 .watch-activity .watch-running-tool { color: var(--watch-running); }
 .watch-invocation { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; min-width: 0; font: .8rem monospace; color: var(--ink); user-select: text; }
+.watch-shell-timing { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .2rem .6rem; color: var(--ink); font-size: .8rem; }
+.watch-shell-timing dt { font-weight: 600; }
+.watch-shell-timing dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .watch-activity details, .watch-activity p { margin-block: .2rem; }
 .watch-activity summary { width: fit-content; max-width: 100%; }
 .watch-activity-content { margin-inline-start: 1em; min-width: 0; }

@@ -173,6 +173,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_watch_rendering.py",
     "test_watch_tool_activity.py",
     "test_watch_invocation.py",
+    "test_watch_shell_timing.py",
     "test_watch_skills.py",
     "test_watch_activity_lifecycle.py",
     "test_watch_source_recovery.py",

@@ -42,10 +42,12 @@ class ProbeObservations:
                         files=sorted(added | removed | modified)[:20])
         return current
 
-    def observe_invocation(self, original, part, **options):
+    def observe_invocation(self, original, part, *args, **options):
         """Compare already-acquired native text in memory; retain only opaque IDs."""
         from src.watch.tool_contracts import tool_input
-        detail = original(part, **options)
+        detail = original(part, *args, **options)
+        if detail is None:
+            return None
         inputs = tool_input(part.data)
         command = inputs.get('command')
         if isinstance(command, str) and command and detail.text.startswith('command:\n' + command):
@@ -54,9 +56,13 @@ class ProbeObservations:
             timeout = inputs.get('timeout')
             if (str(part.data.get('tool') or part.data.get('name')).lower() in
                     {'shell', 'bash', 'functions.shell', 'functions.bash'} and
-                     type(timeout) in {int, float} and math.isfinite(timeout) and timeout > 0 and
-                     'timeout:\n' in detail.text):
-                assert f'timeout:\n{timeout} ms' in detail.text, 'observed native timeout units'
+                     type(timeout) in {int, float} and math.isfinite(timeout) and timeout > 0):
+                if detail.shell_timing and detail.shell_timing.timeout_ms is not None:
+                    assert detail.shell_timing.timeout_ms == timeout, 'observed native timeout in milliseconds'
+                elif 'timeout:\n' in detail.text:
+                    assert f'timeout:\n{timeout} ms' in detail.text, 'observed native timeout units'
+                else:
+                    return detail
                 with self.lock:
                     self.invocation_timeouts.add(detail.identity)
         return detail
@@ -111,10 +117,12 @@ class ProbeObservations:
                 lambda guard: self.guard_snapshot(original_snapshot, guard)))
             if self.tool_invocations:
                 from src.watch import tools, invocation
-                original = invocation.invocation
-                observed = lambda part, **options: self.observe_invocation(original, part, **options)
-                stack.enter_context(patch.object(tools, 'invocation', observed))
-                stack.enter_context(patch.object(invocation, 'invocation', observed))
+                original = tools.running_invocation
+                original_static = invocation.invocation
+                observed = lambda part, *args, **options: self.observe_invocation(original, part, *args, **options)
+                stack.enter_context(patch.object(tools, 'running_invocation', observed))
+                stack.enter_context(patch.object(invocation, 'invocation',
+                    lambda part, **options: self.observe_invocation(original_static, part, **options)))
             for owner, methods in (
                 (WebHost, ('close',)), (LiveRuntime, ('close', '_publish_frame')),
                 (AccountAcquisition, ('close',)), (AccountRefreshLoop, ('close',)),

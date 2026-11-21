@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
-from development.tests.fixtures.session_snapshots import make_snapshot, part
+from development.tests.fixtures.session_snapshots import make_snapshot, part, prov
 from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.watch_tool_outcomes import disclosure_publications, revision_observations
 from src.application.live_projection import project_live
@@ -393,7 +393,7 @@ class InvocationTests(unittest.TestCase):
     def test_linked_child_inputs_stay_inside_canonical_prompt_window(self):
         snapshot = make_snapshot(running=True)
         child_tool = replace(tool(inputs={"pattern": "child-only", "path": "src"}, start=1240, updated=1240),
-                             session_id="child", message_id="ca")
+                             session_id="child", message_id="ca", provenance=prov("child", "p"))
         messages = tuple(replace(message, parts=(child_tool,)) if message.message_id == "ca" else message
                          for message in snapshot.messages)
         snapshot = replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts))

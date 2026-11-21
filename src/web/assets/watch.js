@@ -102,6 +102,80 @@ const WatchView = (() => {
     target.jobs = new Map();
     return target;
   }
+  let shellClockZone, shellClock;
+  function shellTimestamp(value, zone, estimated = false) {
+    if (!Number.isFinite(value) || !zone) return 'Unavailable';
+    try {
+      if (zone !== shellClockZone) {
+        const options = {timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset'};
+        shellClock = [new Intl.DateTimeFormat('sv-SE', options),
+          new Intl.DateTimeFormat('sv-SE', {...options, second: '2-digit'}),
+          new Intl.DateTimeFormat('sv-SE', {...options, second: '2-digit', fractionalSecondDigits: 3})];
+        shellClockZone = zone;
+      }
+      return shellClock[estimated ? 0 : value % 1000 ? 2 : 1].format(value);
+    } catch (_) {
+      return 'Unavailable';
+    }
+  }
+  function shellDuration(ms) {
+    if (ms > 0 && ms < 1000) return '<1s';
+    const seconds = Math.floor(ms / 1000);
+    const values = [[Math.floor(seconds / 3600), 'h'], [Math.floor(seconds / 60) % 60, 'm'], [seconds % 60, 's']];
+    return values.filter(([n]) => n).map(([n, unit]) => n + unit).join(' ') || '0s';
+  }
+  function drawShellTiming(job, detail, clock) {
+    const timing = detail?.shell_timing;
+    if (!timing) {
+      if (job.timing) {
+        for (const [, value] of job.timing.rows) invocationText(value, '');
+        job.timing.node.remove();
+        job.timing = null;
+      }
+      return;
+    }
+    const {now, zone} = clock;
+    const start = timing.anchor ? detail.started_at_ms : null;
+    const elapsed = Number.isFinite(now) && start != null ? now - start : null;
+    const timeout = timing.timeout_ms;
+    const deadline = timing.anchor === 'execution' && timeout != null ? start + timeout : null;
+    const typical = timing.estimated_duration_ms;
+    const matches = timing.sample_count === 1 ? '1 similar completed run' : `${timing.sample_count} similar completed runs`;
+    const provenance = detail.mode === 'background' ? ' · native completion notices' : '';
+    const anchor = timing.anchor === 'execution' ? 'native execution start' :
+      timing.anchor === 'call_created' ? 'tool-call creation; execution start unrecorded' :
+        'assistant message creation; execution start unrecorded';
+    const rows = [
+      ['Started', start != null ? `${shellTimestamp(start, zone)} (${anchor})` : 'Execution start unrecorded'],
+      ['Elapsed', elapsed == null ? 'Unavailable' : elapsed < 0 ? 'Source start is ahead of the Watch clock' :
+        shellDuration(elapsed) + (timing.anchor === 'execution' ? '' : ' since recorded creation')],
+      ['Estimated finish', typical == null ? (timing.sample_count ? `Unavailable — only ${matches}` :
+        'Unavailable — no qualified comparable history') : elapsed == null || elapsed < 0 ?
+        'Unavailable — source and Watch clocks not aligned' : elapsed >= typical ?
+          `Unavailable — past the historical typical duration (${matches})` :
+          `~${shellTimestamp(start + typical, zone, true)} (Low confidence · ${matches}${provenance})`],
+      ['Timeout deadline', deadline != null ? shellTimestamp(deadline, zone) :
+        timeout != null ? 'Unavailable — native execution start unrecorded' : null],
+      ['Time to timeout', deadline == null ? null : elapsed == null || elapsed < 0 ? 'Unavailable' :
+        deadline <= now ? 'Deadline passed; still running' : shellDuration(deadline - now)],
+      ['Timeout', timeout == null ? 'Not recorded' : `${timeout.toLocaleString('en-US', {maximumFractionDigits: 20})} ms (${shellDuration(timeout)})`],
+      ['Progress', 'Unknown (no structured phase evidence)'],
+    ];
+    if (!job.timing) {
+      const node = el('dl', undefined, 'watch-shell-timing');
+      job.timing = {node, rows: rows.map(([label]) => {
+        const term = el('dt', label), value = el('dd'); node.append(term, value);
+        return [term, value];
+      })};
+      job.list.append(node);
+    }
+    rows.forEach(([, value], index) => {
+      const [term, node] = job.timing.rows[index];
+      term.hidden = node.hidden = value == null;
+      invocationText(node, value || '');
+    });
+  }
   function drawInvocation(target, label, detail, reason = '') {
     const identity = label ? detail?.identity || '' : '';
     const changed = identity !== target.identity;
@@ -110,7 +184,7 @@ const WatchView = (() => {
     if (changed || !label) target.node.open = false;
     target.identity = identity;
     invocationText(target.input, label ? detail?.text || '' : '');
-    text(target.note, label ? detail?.reason || '' : '');
+    invocationText(target.note, label ? [detail?.qualification, reason].filter(Boolean).join(' ') : '');
     target.note.hidden = !target.note.textContent;
     if (changed || !protectedNode(target.summary) || !label) text(target.summary, label);
     target.node.hidden = !label;
@@ -130,6 +204,7 @@ const WatchView = (() => {
   }
   function clearInvocation(job) {
     drawInvocation(job, '', null);
+    drawShellTiming(job, null);
     job.node.remove();
   }
   function withholdInvocation(job) {
@@ -138,8 +213,9 @@ const WatchView = (() => {
     invocationText(job.input, '');
     text(job.note, '');
     job.note.hidden = true;
+    drawShellTiming(job, null);
   }
-  function drawInvocations(target, label, details, total, verified, mode, legacy, state) {
+  function drawInvocations(target, label, details, total, verified, mode, legacy, state, clock) {
     const reason = !verified ? 'Awaiting verified live source; previous commands cleared.' :
       mode === 'background' ? 'Original call links missing; only background activity is observable.' :
       'Command not recorded in the current tool event.';
@@ -149,8 +225,8 @@ const WatchView = (() => {
       for (const job of target.jobs.values()) withholdInvocation(job);
       target.node.hidden = false;
       invocationText(target.summary, label);
-      text(target.note, '');
-      target.note.hidden = true;
+      text(target.note, reason);
+      target.note.hidden = false;
       reconcile(target.list, [...target.jobs.values()].map(job => job.node).concat(target.note));
       return;
     }
@@ -169,6 +245,7 @@ const WatchView = (() => {
       target.jobs.set(detail.identity, job);
       job.node.className = 'watch-running-tool' + (rows.length === 1 && total <= 1 ? ' watch-running-single' : '');
       drawInvocation(job, `${detail.kind || 'Tool'} ${index + 1} — ${mode}, running`, detail);
+      drawShellTiming(job, detail, clock);
       if (fresh) job.node.open = !continuing;
       wanted.push(job.node);
     });
@@ -180,7 +257,7 @@ const WatchView = (() => {
     if (!protectedNode(target.summary)) text(target.summary, label);
     const omitted = Math.max(0, total - Math.min(rows.length, 5));
     if (rows.length) target.input = target.jobs.get(rows[0].identity).input;
-    text(target.note, verified && rows.length && omitted ? `+${omitted} more running ${mode} items` : '');
+    text(target.note, rows.length ? (omitted ? `+${omitted} more running ${mode} items` : '') : reason);
     target.note.hidden = !target.note.textContent;
     wanted.push(target.note); reconcile(target.list, wanted);
   }
@@ -444,7 +521,7 @@ const WatchView = (() => {
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
-    update(value, historical, sourceNotice = false) {
+    update(value, historical, sourceNotice, clock) {
       this.value = value;
       this.root.dataset.session = value.session_id;
       text(this.title, value.title || value.session_id);
@@ -509,7 +586,7 @@ const WatchView = (() => {
         const detailsVerified = value.invocation_verified === true || value.invocation_verified == null && value.state === 'observed';
         this.drawActivity(row?.tool, !sourceNotice && detailsVerified &&
           row?.prompt.in_progress && !row.prompt.execution_unverified,
-          !sourceNotice && detailsVerified && row && !row.prompt.execution_unverified);
+          !sourceNotice && detailsVerified && row && !row.prompt.execution_unverified, clock);
       }
       this.drawSummary(value.session_summary);
     }
@@ -538,7 +615,7 @@ const WatchView = (() => {
       text(this.costStatus, '');
       ContextHelp.refresh(this.costHelp);
     }
-    drawActivity(tool, verified, activityVerified = verified) {
+    drawActivity(tool, verified, activityVerified = verified, clock) {
       const state = tool?.detail_state === 'pending' ? 'pending' :
         tool?.detail_state === 'invalidated' || !activityVerified ? 'invalidated' : 'observed';
       const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -558,11 +635,12 @@ const WatchView = (() => {
       drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [], unidentified, state);
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
       drawInvocations(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
-        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state);
+        tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state, clock);
       const kinds = tool?.background_kinds || [];
       const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
       drawInvocations(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
-        tool?.background_invocations, kinds.length, verified, 'background', kinds.length === 1 ? tool?.background_invocation : null, state);
+        tool?.background_invocations, tool?.background_invocation_count || kinds.length, verified, 'background',
+        kinds.length === 1 ? tool?.background_invocation : null, state, clock);
     }
   }
   class View {
@@ -603,11 +681,12 @@ const WatchView = (() => {
       text(this.empty, noRunning ? 'No running prompts' : '');
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
+      const clock = {now: view.now_ms, zone: view.timezone_id};
       for (const [parent, values, historical] of [[this.active, active, false]]) {
         const wanted = values.map(value => {
           const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history']); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
-          const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || !connected); return card.root;
+          const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || !connected, clock); return card.root;
         });
         reconcile(parent, wanted);
       }

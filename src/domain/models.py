@@ -290,6 +290,9 @@ class BackgroundActivity:
     # Consumers must apply the same privacy filter as canonical tool input.
     invocation_input: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     invocation_reason: str = ""
+    invocation_start_kind: str = ""
+    invocation_end_observed: bool = False
+    invocation_registry_unlinked: bool = False
 
 
 @dataclass(frozen=True, slots=True)

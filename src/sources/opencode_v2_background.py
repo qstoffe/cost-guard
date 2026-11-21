@@ -9,7 +9,6 @@ service's location-scoped shell registry lists it. Native identities stay here.
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -45,7 +44,7 @@ def _job_id(metadata: Any) -> str | None:
 
 
 def _time(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value < 253402300800000:
         return None
     return int(value)
 
@@ -66,6 +65,11 @@ def _outcome(metadata: Mapping[str, Any]) -> TerminalOutcome | None:
 def completion_notice_job(item: Mapping[str, Any]) -> str | None:
     """Return the job a persisted synthetic background-completion notice ends."""
     return _job_id(item.get("metadata")) if item.get("type") == "synthetic" else None
+
+
+def _identity_conflict(metadata, session_id):
+    identities = {metadata[key] for key in _JOB_KEYS if isinstance(metadata.get(key), str) and metadata[key]}
+    return len(identities) > 1 or metadata.get('sessionID') not in (None, session_id)
 
 
 def running_jobs(client: Any, directory: str, *, session_id: str = '', experimental: bool = False) -> ShellRegistry | None:
@@ -90,7 +94,7 @@ def running_jobs(client: Any, directory: str, *, session_id: str = '', experimen
     # This exact contract was checked on 2.2.7. The adapter opts in by source
     # version; unsupported/absent experimental routes remain a normal fallback.
     if experimental and session_id and not any(record.get('sessionID') == session_id
-                                              and record.get('command') for record in records.values()):
+                                               and record.get('command') for record in records.values()):
         try:
             value = client.json('/api/experimental/job', query={
                 'sessionID': session_id, 'kind': 'shell', 'status': 'running', 'descendants': 'false'})
@@ -113,7 +117,7 @@ def running_jobs(client: Any, directory: str, *, session_id: str = '', experimen
     return ShellRegistry(ids, records)
 
 
-def _starts(items: Iterable[Mapping[str, Any]], session_id: str) -> Iterable[tuple[str, str, int, str, str, str, bool, bool]]:
+def _starts(items: Iterable[Mapping[str, Any]], session_id: str):
     for item in items:
         if item.get("type") != "assistant" or not isinstance(item.get("id"), str):
             continue
@@ -124,6 +128,8 @@ def _starts(items: Iterable[Mapping[str, Any]], session_id: str) -> Iterable[tup
             state = part.get("state") if isinstance(part, Mapping) else None
             if not isinstance(state, Mapping):
                 continue
+            if part.get("sessionID") not in (None, session_id) or part.get("messageID") not in (None, item["id"]):
+                continue
             inputs = state.get('input') if isinstance(state.get('input'), Mapping) else {}
             if not (job := _job_id(state.get("metadata"))):
                 continue
@@ -132,16 +138,19 @@ def _starts(items: Iterable[Mapping[str, Any]], session_id: str) -> Iterable[tup
             if inputs.get('background') is not True and state.get('status') != 'completed':
                 continue
             part_time = part.get("time") if isinstance(part.get("time"), Mapping) else {}
-            started = _time(part_time.get("ran")) or _time(part_time.get("created")) or _time(message_time.get("created"))
+            state_time = state.get("time") if isinstance(state.get("time"), Mapping) else {}
+            execution = _time(part_time.get("ran")) or _time(state_time.get("start"))
+            created = _time(part_time.get("created"))
+            started = execution or created or _time(message_time.get("created"))
+            start_kind = "execution" if execution else "call_created" if created else "message_created"
             kind = str(part.get("name") or part.get("tool") or "").lower()
             if started:
                 part_id = part.get("id") if isinstance(part.get("id"), str) else ""
                 call_id = part.get("callID") if isinstance(part.get("callID"), str) else ""
-                metadata = state['metadata']
-                identities = {metadata[key] for key in _JOB_KEYS if isinstance(metadata.get(key), str) and metadata[key]}
-                yield (job, kind if _KIND.fullmatch(kind) else "job", started, item["id"], part_id, call_id,
-                       inputs.get('background') is not True,
-                       len(identities) > 1 or metadata.get('sessionID') not in (None, session_id))
+                yield (job, kind if _KIND.fullmatch(kind) or kind in {"functions.shell", "functions.bash"} else "job",
+                       started, item["id"], part_id, call_id,
+                       inputs.get('background') is not True, _identity_conflict(state['metadata'], session_id),
+                       start_kind)
 
 
 def background_activities(
@@ -153,21 +162,33 @@ def background_activities(
     location, or None when that cannot be observed; uncertainty keeps a job
     running rather than inventing an end. Also returns the notice message IDs.
     """
-    notices = {job: item for item in items if (job := completion_notice_job(item))}
+    notices, duplicate_notices = {}, set()
+    for item in items:
+        if job := completion_notice_job(item):
+            if job in notices:
+                duplicate_notices.add(job)
+            notices[job] = item
     notice_ids = frozenset(str(item["id"]) for item in notices.values() if isinstance(item.get("id"), str))
     activities: dict[str, BackgroundActivity] = {}
     registry: ShellRegistry | frozenset[str] | None = None
     registry_read = False
-    for job, kind, started, owner, part_id, call_id, recovered, identity_conflict in _starts(items, session_id):
+    for job, kind, started, owner, part_id, call_id, recovered, identity_conflict, start_kind in _starts(items, session_id):
         identity = "bg:" + hashlib.sha256(f"{session_id}\0{job}".encode("utf-8")).hexdigest()[:20]
         notice = notices.get(job)
         if notice is not None:
             metadata = notice.get("metadata")
             notice_time = notice.get("time") if isinstance(notice.get("time"), Mapping) else {}
+            qualified = (not recovered and not identity_conflict and job not in duplicate_notices
+                         and notice.get("sessionID") in (None, session_id)
+                         and not _identity_conflict(metadata, session_id)
+                         and metadata.get("source") == "shell"
+                         and isinstance(notice.get("id"), str) and bool(notice["id"]))
             activity = BackgroundActivity(
                 identity, session_id, kind, started, owner, running=False,
                 ended_at_ms=_time(notice_time.get("created")), outcome=_outcome(metadata),
                 completion_event_id=str(notice.get("id")) if notice.get("id") else None,
+                tool_part_id=part_id if qualified else "", tool_call_id=call_id if qualified else "",
+                invocation_start_kind=start_kind if qualified else "", invocation_end_observed=qualified,
             )
         else:
             if not registry_read:
@@ -178,17 +199,21 @@ def background_activities(
             record = registry.records.get(job, {}) if isinstance(registry, ShellRegistry) else {}
             conflict = identity_conflict or record.get('conflict') or record.get('sessionID') not in (None, session_id)
             supplemental = tuple((key, record[key]) for key in ('command', 'cwd', 'shell')
-                                 if isinstance(record.get(key), str)) if not conflict else ()
+                                 if isinstance(record.get(key), str)) if not conflict and record.get('sessionID') == session_id else ()
             activity = BackgroundActivity(identity, session_id, kind, started, owner,
                                           running=ids is None or job in ids,
                                           tool_part_id=part_id if registry is not None else "",
                                           tool_call_id=call_id if registry is not None else "",
                                           invocation_input=supplemental,
                                           invocation_reason=('Conflicting job ownership; command withheld.' if conflict else
-                                              'Running registry unobservable; awaiting verified live source.' if registry is None else ''))
+                                              'Running registry unobservable; awaiting verified live source.' if registry is None else ''),
+                                          invocation_start_kind=start_kind if not conflict and ids is not None and job in ids else '',
+                                          invocation_registry_unlinked=bool(not conflict and record.get('sessionID') is None
+                                              and isinstance(record.get('command'), str) and record['command']))
         previous = activities.get(identity)
-        if previous is not None and (previous.owner_message_id, previous.tool_part_id, previous.tool_call_id) != (owner, activity.tool_part_id, activity.tool_call_id):
+        if previous is not None and previous != activity:
             activity = replace(previous, tool_part_id="", tool_call_id="", invocation_input=(),
-                               invocation_reason='Conflicting job origins; command withheld.')
+                                invocation_reason='Conflicting job origins; command withheld.',
+                                invocation_start_kind="", invocation_end_observed=False)
         activities[identity] = activity
     return tuple(sorted(activities.values(), key=lambda value: (value.started_at_ms, value.activity_id))), notice_ids

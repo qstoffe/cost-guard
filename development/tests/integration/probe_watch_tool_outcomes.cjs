@@ -60,6 +60,12 @@ async function main() {
          await command('Target.closeTarget', {targetId});
          continue;
        }
+       if (args.includes('--shell-timing')) {
+         const timing = await require('./probe_watch_shell_timing.cjs')(evaluate, command, sessionId);
+         cases.push({theme, width, ...timing});
+         await command('Target.closeTarget', {targetId});
+         continue;
+       }
         const disclosures = await require('./probe_watch_disclosures.cjs')(evaluate);
         if (args.includes('--disclosures-only')) {
           cases.push({theme, width, disclosures}); await command('Target.closeTarget', {targetId}); continue;
@@ -129,6 +135,7 @@ async function main() {
     await fs.writeFile(path.join(output, 'results.json'), JSON.stringify({browser: version.product, cases}, null, 2));
     console.log(JSON.stringify({status: 'ok', browser: version.product, cases: cases.length,
       ...(args.includes('--stopped-parent') ? {stoppedParentFullMini: true} :
+        args.includes('--shell-timing') ? {runningShellTiming: true} :
         {keyboardDisclosure: true, accessibleHelp: true, themeColors: true, narrowLayout: true, terminalCleared: true})}));
   } finally {
     clearTimeout(deadline);

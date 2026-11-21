@@ -61,6 +61,11 @@ def _part_semantic_data(data: Mapping[str, Any]) -> dict[str, Any]:
     result = deepcopy(dict(data))
     for key in ("id", "messageID", "sessionID"):
         result.pop(key, None)
+    if data.get("type") == "tool":
+        state = data.get("state")
+        metadata = state.get("metadata") if isinstance(state, Mapping) else None
+        if isinstance(metadata, Mapping) and any(metadata.get(key) for key in ("shellID", "jobID")):
+            result["detached_job"] = True
     return result
 
 
