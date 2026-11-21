@@ -29,8 +29,12 @@ const WebSettings = (() => {
     {key: 'miniWatchSize', id: 'mini-size', label: 'Mini Watch size', endpoint: 'mini-size',
       choices: [['fit-on-open', 'Fit on open'], ['remember-last', 'Remember last size']],
       explanation: 'Opening size; live updates never resize the window.',
-      help: {'fit-on-open': 'Fit five session rows, the header and subscriptions when opening.',
+      help: {'fit-on-open': 'Open at a compact width and fit the session list, header and subscriptions within browser limits.',
          'remember-last': 'Reuse the browser’s last size in this tab.'}},
+    {key: 'miniWatchNonRunningRows', id: 'mini-non-running-rows', label: 'Mini Watch non-running rows',
+      endpoint: 'mini-non-running-rows', choices: Array.from({length: 9}, (_, i) => [i + 2, String(i + 2)]),
+      explanation: 'How many non-running sessions fit in the list before scrolling. Running sessions are counted separately.',
+      help: rows => `Allow ${rows} non-running rows before scrolling, as space permits.`},
     {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
       choices: [['used', 'Used'], ['remaining', 'Remaining']],
       explanation: 'Orientation of provider-native quotas in Web and Mini Watch. CCost used and the daily remaining allowance are unchanged.',
@@ -38,9 +42,10 @@ const WebSettings = (() => {
         remaining: 'Show the amount left when a quota limit is known. Unlimited plans still show Used.'}}
   ];
   function choiceHelp(field, choice, defaults) {
-    if (choice !== 'default') return field.help[choice];
+    const help = value => typeof field.help === 'function' ? field.help(value) : field.help[value];
+    if (choice !== 'default') return help(choice);
     const value = defaults?.[field.key], label = field.choices.find(([key]) => key === value)?.[1];
-    return label ? `Follow the shipped default, currently ${label}; do not pin this value. ${field.help[value]}` :
+    return label ? `Follow the shipped default, currently ${label}; do not pin this value. ${help(value)}` :
       'Follow the shipped default, rather than pinning an explicit value. Reading the current default…';
   }
   function enhancedPicker() {
@@ -117,7 +122,7 @@ const WebSettings = (() => {
         const cell = e('div', undefined, 'settings-value'); cell.append(select);
         const reference = e('dl', undefined, 'settings-choice-reference');
         for (const [value, text] of [['default', 'Default'], ...field.choices]) {
-          const option = e('option'); option.value = value; option.setAttribute('aria-label', text);
+          const option = e('option'); option.value = String(value); option.setAttribute('aria-label', text);
           const description = e(this.enhanced ? 'span' : 'dd', choiceHelp(field, value, this.defaults), 'settings-choice-help');
           // selectedcontent clones option children: keep description IDs outside that clone.
           const accessible = this.enhanced ? e('span', description.textContent) : description;
@@ -160,7 +165,7 @@ const WebSettings = (() => {
       this.busy = busy;
       ContextHelp.dismiss(this.root);
       for (const [key, select] of this.controls) {
-        select.disabled = busy || !this.loaded; select.value = this.confirmed[key];
+        select.disabled = busy || !this.loaded; select.value = String(this.confirmed[key]);
       }
     }
     confirm(value) {
@@ -187,7 +192,11 @@ const WebSettings = (() => {
       finally { this.lock(false); }
     }
     async save(field) {
-      const select = this.controls.get(field.key), value = select.value;
+      const select = this.controls.get(field.key);
+      // HTML option values are strings; use the original typed choice on the wire.
+      const value = select.value === 'default' ? 'default' :
+        field.choices.find(([choice]) => String(choice) === select.value)?.[0];
+      if (value === undefined) return;
       if (this.busy || !this.loaded || value === this.confirmed[field.key]) return;
       const focused = document.activeElement === select;
       this.lock(true);

@@ -84,12 +84,14 @@ module.exports = async ({evaluate,until,command,sessionId,targetId,restart,check
   await until("typeof miniWatch !== 'undefined' && hostState.kind === 'connected' && liveValue?.view?.running?.count === 2");
   assert.notEqual(await evaluate('hostInstance'),instance);
   const saved = await evaluate("api('/api/settings')");
-  assert.deepEqual(saved.webSettingsChoices,{theme:'classic',ccostDisplayUnit:'credits',miniWatchPlacement:'remember-last',quotaDisplayMode:'default'});
+  assert.deepEqual(saved.webSettingsChoices,{theme:'classic',ccostDisplayUnit:'credits',miniWatchPlacement:'remember-last',
+    miniWatchSize:'default',miniWatchNonRunningRows:'default',quotaDisplayMode:'default'});
   await open(); same((await measure('new-process-first-open')).bounds,initial);
   const newMoved = await alter('new-process-moved'); await close(false); await open(); same((await bounds()).bounds,newMoved);
   await change('theme','default'); await change('ccostDisplayUnit','default'); await change('miniWatchPlacement','default');
   const inheriting = await evaluate("api('/api/settings')");
-  assert.deepEqual(inheriting.webSettingsChoices,{theme:'default',ccostDisplayUnit:'default',miniWatchPlacement:'default',quotaDisplayMode:'default'});
+  assert.deepEqual(inheriting.webSettingsChoices,{theme:'default',ccostDisplayUnit:'default',miniWatchPlacement:'default',
+    miniWatchSize:'default',miniWatchNonRunningRows:'default',quotaDisplayMode:'default'});
   assert.deepEqual(await evaluate('({local:localStorage.length,session:sessionStorage.length})'),{local:0,session:0});
   checks.push('Four native selects preserve Default/explicit choices; real Python host restart keeps file-backed mode but first open resets native bounds; opener reload also starts standard, then remembers; no browser storage');
   // Restore the original initial state for the established layout/SSE probe.

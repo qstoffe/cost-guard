@@ -75,7 +75,12 @@ async function main() {
       if(await evaluate('!!document.querySelector(".mini-watch")',false,a.sessionId))return a.sessionId;}throw new Error('No PiP target');};
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
-     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:${JSON.stringify(value)}})))()`);
+     if(scope==='compact-only'||scope==='all') {
+       await require('./probe_mini_compact.cjs')({evaluate,until,fixture,open,close,settle,settings,
+         command,sessionId,pipSession,evidence});
+       if(scope!=='all') {evidence.outcome='PASS';return;}
+     }
      if(scope==='opening-baseline-only'||scope==='opening-only'||scope==='all') {
        await require('./probe_mini_opening.cjs')({evaluate,until,checks:evidence.checks,layouts:evidence.layouts,
          baseline:scope==='opening-baseline-only'});
@@ -152,17 +157,17 @@ async function main() {
       assert.equal(value.rows,count);assert.equal(value.accounts,accounts);assert.equal(value.documentOverflow,false);
       const clamped=value.outer[1]+2<value.desired;value.nativeHeightClamp=clamped;
       if(!clamped){assert.equal(value.documentVertical,false,JSON.stringify(value));assert.ok(value.accountsBottom<=value.inner[1]+1,JSON.stringify(value));}
-      assert.equal(value.table.vertical,count>5,JSON.stringify(value));
-      assert.ok(value.table.height>=value.table.header+5*(value.table.rowHeights[0]||0)-1,JSON.stringify(value));
+      assert.equal(value.table.vertical,false,JSON.stringify(value));
+      assert.ok(value.table.height>=value.table.header+value.table.rowHeights.reduce((a,b)=>a+b,0)-1,JSON.stringify(value));
       const before=value.outer;
       await fixture(`density-10-${accounts}`);await until('miniWatch.view.promptRows.size===10');await settle();
       assert.deepEqual((await read()).outer,before,'SSE cannot resize native PiP');
-      if(!clamped)assert.equal((await read()).documentVertical,false);
-      evidence.layouts.push({case:`five-row-${count}-${accounts}`,...value});await close();
+      assert.equal((await read()).rows,10);
+      evidence.layouts.push({case:`running-density-${count}-${accounts}`,...value});await close();
     }
-    evidence.checks.push('0/1/3/5/6/10 distinct sessions × 0/1/6 accounts: five-row capacity, internal overflow, no passive native resize; clamps recorded');
+    evidence.checks.push('0/1/3/5/6/10 running sessions × 0/1/6 accounts: no dropped rows or passive native resize; clamps recorded');
     await fixture('history-5-1-1');await until('liveValue.view.history_cards.length===5');await open();
-    assert.equal(await evaluate('miniWatch.view.promptRows.size'),5);
+    assert.equal(await evaluate('miniWatch.view.promptRows.size'),6);
     await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
      await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
      if(scope!=='layout-only')await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});
@@ -182,7 +187,7 @@ async function main() {
           else for(const type of ['mousePressed','mouseReleased'])await command('Input.dispatchMouseEvent',{type,button:'left',clickCount:1,...point},pip);}
         await settle();const fitted=await read(),calls=await evaluate('miniWatch.window.probeResizes');
         evidence.layouts.push({case:`fit-${mode}-${key||'pointer'}`,before,fitted,calls});
-        assert.ok(calls.length<=1);assert.equal(fitted.rows,10);assert.equal(fitted.table.vertical,true);
+        assert.ok(calls.length<=1);assert.equal(fitted.rows,10);
         if(before.outer[1]>before.desired+4)assert.ok(fitted.outer[1]<before.outer[1],JSON.stringify({before,fitted,calls}));
         else {
           assert.ok(before.outer[1]+4<before.desired,'not a shrink trial: actual native baseline is clamped below fit');

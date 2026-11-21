@@ -67,7 +67,7 @@ async function main() {
     await evaluate(`window.settingWrites=[];window.settingRequests=[];const originalFetch=window.fetch;window.fetch=(url,options)=>{settingRequests.push(String(url));if(options?.method==='POST')settingWrites.push(String(url));return originalFetch(url,options);}`);
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('.toolbar')).display`),'none');
     assert.equal(await evaluate(`document.querySelector('.web-settings h3, .web-settings .help-copy')===null`),true);
-    for (const id of ['web-theme','ccost-unit','mini-placement','mini-size','quota-display']) {
+    for (const id of ['web-theme','ccost-unit','mini-placement','mini-size','mini-non-running-rows','quota-display']) {
       await click('#'+id); await until(`document.getElementById('${id}').matches(':open')`);
       const values = await evaluate(`[...document.getElementById('${id}').options].map(o=>o.value)`);
       for (const value of values) {

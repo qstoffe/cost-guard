@@ -12,12 +12,12 @@ import stat
 import tempfile
 from threading import Lock
 
-from src.config import ConfigError, WEB_PREFERENCES, normalize_legacy_settings, read_jsonc, validated_values
+from src.config import (ConfigError, WEB_PREFERENCES, normalize_legacy_settings, read_jsonc,
+                        valid_web_preference, validated_values)
 from .instance_state import _private
 from .process_identity import InstanceConflict
 
 MAX_CONFIG_BYTES = 1024 * 1024
-WEB_FIELDS = {name: ("default", *values) for name, values in WEB_PREFERENCES.items()}
 JSONC_TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|//[^\r\n]*|/\*[\s\S]*?\*/')
 
 
@@ -47,7 +47,7 @@ def jsonc_document(raw):
 
 def replace_preference(raw, field, value):
     """Edit one allowlisted nested leaf, retaining comments and unrelated bytes."""
-    if field not in WEB_FIELDS or not isinstance(value, str) or value not in WEB_FIELDS[field]:
+    if not valid_web_preference(field, value, inherit=True):
         raise SettingsError("invalid_request")
     text, masked, _ = jsonc_document(raw)
     return _replace_member(text, masked, masked.index("{"), ("webSettings", field), value).encode("utf-8")
@@ -138,14 +138,14 @@ class WebSettings:
         effective = validated_values(defaults, overrides)
         web = normalize_legacy_settings(overrides).get("webSettings", {})
         return {"timezone_id": effective["timezone"], "webSettings": effective["webSettings"],
-                "webSettingsChoices": {name: web.get(name, "default") for name in WEB_FIELDS},
+                "webSettingsChoices": {name: web.get(name, "default") for name in WEB_PREFERENCES},
                 "webSettingsDefaults": defaults["webSettings"]}
 
     def read(self):
         return self._perform()
 
     def write(self, field, value, *, allowed=lambda: True):
-        if field not in WEB_FIELDS or not isinstance(value, str) or value not in WEB_FIELDS[field]:
+        if not valid_web_preference(field, value, inherit=True):
             raise SettingsError("invalid_request")
         return self._perform(field, value, allowed=allowed)
 

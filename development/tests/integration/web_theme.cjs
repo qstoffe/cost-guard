@@ -35,8 +35,8 @@ async function main() {
   }});
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
   const Settings = vm.runInContext('WebSettings', context);
-   const defaults = {theme: 'classic', ccostDisplayUnit: 'usd', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', quotaDisplayMode: 'used'};
-   const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default', miniWatchSize: 'default', quotaDisplayMode: 'default'};
+   const defaults = {theme: 'classic', ccostDisplayUnit: 'usd', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', miniWatchNonRunningRows: 5, quotaDisplayMode: 'used'};
+   const inherited = Object.fromEntries(Object.keys(defaults).map(key => [key, 'default']));
   const calls = []; let saved = {...inherited}, failure = null, release;
   const api = async (path, value) => {
     calls.push({path, value});
@@ -48,8 +48,9 @@ async function main() {
   const view = new Settings.View(api), output = new Node('div');
   const theme = view.controls.get('theme'), ccost = view.controls.get('ccostDisplayUnit'), placement = view.controls.get('miniWatchPlacement');
    const quota = view.controls.get('quotaDisplayMode');
-   assert.equal(view.controls.size, 5);
+   assert.equal(view.controls.size, 6);
    const size = view.controls.get('miniWatchSize');
+   const rows = view.controls.get('miniWatchNonRunningRows');
   assert.equal(view.root['aria-label'], 'Settings');
   assert.equal(view.root.querySelector('h3'), null);
   assert.equal(view.root.querySelector('label').htmlFor, theme.id);
@@ -76,7 +77,7 @@ async function main() {
       [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
   assert.match(help.get(theme)(), /Follow the shipped default, currently Classic; do not pin/);
    assert.equal(view.root.querySelector('#mini-size-fit-on-open-help').textContent,
-     'Fit five session rows, the header and subscriptions when opening.');
+     'Open at a compact width and fit the session list, header and subscriptions within browser limits.');
   assert.doesNotMatch(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /650|Earlier Sessions|two running prompts/);
    assert.equal(view.root.querySelector('#mini-size-remember-last-help').textContent,
      'Reuse the browser’s last size in this tab.');
@@ -106,6 +107,15 @@ async function main() {
      assert.equal(documentState.quotaMode, 'used');
   }
   failure = null;
+  assert.deepEqual(rows.children.map(option => option.value), ['default','2','3','4','5','6','7','8','9','10']);
+  assert.equal(rows.firstChild.textContent, 'Default (5)');
+  for (const choice of [2,3,4,5,6,7,8,9,10,'default']) {
+    rows.value = String(choice);
+    const pendingRows = save(rows);
+    assert.equal(calls.at(-1).value.miniWatchNonRunningRows, choice);
+    release(); await pendingRows;
+    assert.equal(rows.value, String(choice));
+  }
   ccost.focus(); ccost.value = 'credits'; const ccostPending = save(ccost);
   assert.equal(documentState.unit, 'usd', 'CCost applies only after confirmed success');
   release(); await ccostPending;
@@ -146,7 +156,7 @@ async function main() {
   failure = 'offline'; const unread = new Settings.View(api); await unread.read();
   assert.equal(unread.controls.get('theme').disabled, true, 'unconfirmed initial read cannot claim or write a choice');
   assert.throws(() => Settings.apply({webSettings: defaults}), /settings_unavailable/);
-   assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/mini-size', '/api/settings/quota-display'].includes(call.path)));
+   assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/mini-size', '/api/settings/mini-non-running-rows', '/api/settings/quota-display'].includes(call.path)));
   assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).length === 1));
   require('../fixtures/settings_wheel.cjs')(Settings,context);
   console.log('Web settings state machine passed');

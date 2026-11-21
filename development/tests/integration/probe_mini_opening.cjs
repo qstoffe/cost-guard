@@ -47,7 +47,7 @@ module.exports=async({evaluate,until,checks,layouts,baseline=false})=>{
         styles:t.styles.map(relative),usable:relative(t.usable),
         blankAfterNative:Math.round((t.content-t.native)*10)/10,
         feedback:miniWatch.feedback.textContent,adopted:miniWatch.window.document.adoptedStyleSheets.length,
-        geometry,clamped:geometry.desiredHeight>w.outerHeight+2||headerMinimum>geometry.contentWidth+1,
+        geometry,clamped:geometry.desiredHeight>w.outerHeight+2,
         feedbackHidden:miniWatch.feedback.className==='sr-only',
         violations:t.violations,paints:miniWatch.window.performance.getEntriesByType('paint').map(entry=>({
           name:entry.name,ms:Math.round((entry.startTime+miniWatch.window.performance.timeOrigin-performance.timeOrigin-t.click)*10)/10}))};

@@ -37,16 +37,31 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
   await command('Page.bringToFront',{},covered.sessionId);
   await until('document.hidden && !miniWatch.window.document.hidden');
   await evaluate(`window.leaseUpdate=miniWatch.update.bind(miniWatch);miniWatch.update=p=>leaseUpdate(window.leasePublication||p)`);
-  for(const count of [5,1,6,3]) {
+  const capacity=async count=>evaluate(`(async()=>applySettings(await api('/api/settings/mini-non-running-rows',
+    {miniWatchNonRunningRows:${JSON.stringify(count)}})))()`);
+  for(const {running,ended,rows,history} of [
+    {running:12,ended:2,rows:2,history:false},
+    {running:12,ended:2,rows:10,history:true},
+    {running:1,ended:10,rows:10,history:false},
+    {running:12,ended:0,rows:2,history:true},
+  ]) {
     const offset=interest.length;
+    await capacity(rows);
     await evaluate(`(()=>{const p=structuredClone(liveValue),base=p.view.active_cards[0];p.view.now_ms++;
-      p.view.active_cards=Array.from({length:${count}},(_,i)=>({...base,session_id:'lease-'+i}));
+      p.view.active_cards=Array.from({length:${running}},(_,i)=>({...base,session_id:'running-'+i}));
+      p.view.history_cards=Array.from({length:${ended}},(_,i)=>{
+        const card=structuredClone(base);
+        card.session_id='ended-'+i;card.focal_id='';
+        Object.assign(card.rows[0].prompt,{in_progress:false,execution_unverified:false,completed_at_ms:p.view.now_ms-i});
+        return card;
+      });
       window.leasePublication=p;miniWatch.update(p);})()`);
-    await until(`miniWatch.view.promptRows.size>=${count}`);
-    assert.equal(await evaluate('miniWatch.view.needsHistory'),count<5);
-    await accepted(firstTab,offset,true,count<5);
-    checks.push(`${count} distinct running sessions promptly ${count<5?'request':'release'} historical filler interest`);
+    await until(`miniWatch.view.promptRows.size===${running+ended}`);
+    assert.equal(await evaluate('miniWatch.view.needsHistory'),history);
+    await accepted(firstTab,offset,true,history);
+    checks.push(`${running} running + ${ended} non-running at capacity ${rows}: history interest ${history}`);
   }
+  await capacity('default');
   await evaluate(`miniWatch.update=window.leaseUpdate;delete window.leasePublication;delete window.leaseUpdate;miniWatch.update(liveValue)`);
   let offset = interest.length;
   await evaluate('miniWatch.close();true');

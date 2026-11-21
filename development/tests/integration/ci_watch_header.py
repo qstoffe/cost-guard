@@ -24,22 +24,25 @@ def main():
     results = ROOT / "ci-results"
     results.mkdir(exist_ok=True)
     environment = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
-    for scope in ("opening", "opening-races", "header", "dashboard", "previews"):
-        for zoom in (header_zooms() if scope == "header" else ("1",)):
-            label = f"watch-{scope}" + (f"-zoom-{zoom}" if zoom != "1" else "")
-            output = results / f"{label}.json"
-            result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
-                browser, str(output), "1", zoom, scope + "-only"],
-                cwd=ROOT, env=environment, timeout=150, check=False)
-            evidence = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
-            notice(label, dict(outcome=evidence.get("outcome", "FAIL"), zoom=zoom,
-                checks=evidence.get("checks", []), layouts=len(evidence.get("layouts", [])),
-                error=evidence.get("error"), phase=evidence.get("phase"),
-                diagnostic=evidence.get("diagnostic", dict(returncode=result.returncode)),
-                limitations=evidence.get("limitations", [])))
-            result.check_returncode()
-            if evidence.get("outcome") != "PASS":
-                raise SystemExit("Watch evidence did not pass")
+    cases = [("opening", "1"), ("opening-races", "1")]
+    cases += [("header", zoom) for zoom in header_zooms()]
+    cases += [("dashboard", "1"), ("previews", "1")]
+    cases += [("compact", zoom) for zoom in ("1", "1.25", "1.5")]
+    for scope, zoom in cases:
+        label = f"watch-{scope}" + (f"-zoom-{zoom}" if zoom != "1" else "")
+        output = results / f"{label}.json"
+        result = subprocess.run(["node", "development/tests/integration/probe_mini_fit.cjs",
+            browser, str(output), "1", zoom, scope + "-only"],
+            cwd=ROOT, env=environment, timeout=150, check=False)
+        evidence = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
+        notice(label, dict(outcome=evidence.get("outcome", "FAIL"), zoom=zoom,
+            checks=evidence.get("checks", []), layouts=len(evidence.get("layouts", [])),
+            error=evidence.get("error"), phase=evidence.get("phase"),
+            diagnostic=evidence.get("diagnostic", dict(returncode=result.returncode)),
+            limitations=evidence.get("limitations", [])))
+        result.check_returncode()
+        if evidence.get("outcome") != "PASS":
+            raise SystemExit("Watch evidence did not pass")
     if len(header_zooms()) == 1:
         notice("watch-header-extra-zooms", dict(outcome="NOT RUN", zooms=["1.25", "1.5", "2"],
             reason="Extra browser zoom matrices run on manual Full; ordinary coverage retains 100% zoom."))
