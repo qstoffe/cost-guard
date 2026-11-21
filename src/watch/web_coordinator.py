@@ -153,6 +153,9 @@ class WebWatchCoordinator(WatchCoordinator):
             evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
                              prompt, start, running, None, ended))
         catalog.observe_prompts(evidence)
+        archive = catalog.display_archive
+        if archive is not None:
+            archive.publish_running(() if unavailable else catalog.archive_running(evidence))
         if self.catalog_job is not None:
             if not self.catalog_job.done():
                 return
@@ -162,7 +165,6 @@ class WebWatchCoordinator(WatchCoordinator):
             except Exception:
                 catalog.index_failed('scalar_worker_failed')
         scalar_needed = catalog.needed()
-        archive = catalog.display_archive
         archive_needed = archive is not None and archive.catalog_pending(catalog)
         sweep_needed = archive is not None and archive.summary_pending(catalog)
         if not self._closed and (scalar_needed or archive_needed or sweep_needed):

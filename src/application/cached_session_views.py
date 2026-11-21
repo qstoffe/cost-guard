@@ -39,13 +39,15 @@ class CachedSessionViews:
             changes = self.history.session_changes(self.source, known["generation"])
             # Time advances even when no rows have been written. If a known
             # future clock has crossed the upper bound, issue a new page read.
-            if (not changes.affects(known["generation"], start_ms=window.start_ms, end_ms=end)
+            if (not self.history.has_running_snapshot(self.source, self.binding)
+                    and not changes.affects(known["generation"], start_ms=window.start_ms, end_ms=end)
                     and (end == known["end_ms"] or window.start_ms is not None
                          and end > known["end_ms"]
                          and not self.history.has_session_clock(self.source, known["end_ms"], end))):
                 return dict(**scope, generation=changes.generation, unchanged=True)
         result = self.history.session_page(self.source, sort=sort, direction=direction, limit=PAGE_SIZE,
-                                           offset=offset, start_ms=window.start_ms, end_ms=end)
+                                           offset=offset, start_ms=window.start_ms, end_ms=end,
+                                           live_binding=self.binding, now_ms=now_ms)
         rows = []
         for row in result.rows:
             values = {"model": row.model, "ccost": row.ccost, "prompts": row.prompts,
@@ -56,6 +58,7 @@ class CachedSessionViews:
             tokens = with_display(record(ccost=row.ccost, duration_ms=row.duration_ms, context_tokens=row.context_tokens),
                                   window.timezone_id, now_ms).to_json()
             rows.append(dict(session_id=row.session_id, title=row.title, activity_ms=row.activity_ms, model=row.model,
+                               running=row.running,
                                activity_origin=row.activity_origin, prompt_started_ms=row.prompt_started_ms,
                                catalog_activity_ms=(row.catalog_activity_ms if row.source_present
                                    and row.activity_origin is None and row.activity_ms is None else None),
@@ -63,7 +66,8 @@ class CachedSessionViews:
                               context_tokens=row.context_tokens, source_present=row.source_present, fields=states,
                               display=tokens["display"], display_units=tokens.get("display_units")))
         # Cached membership/count is not historical source completeness.
-        return dict(**scope, generation=result.generation, cached_total=result.total, rows=rows)
+        return dict(**scope, generation=result.generation, cached_total=result.total, rows=rows,
+                    running_refresh_ms=(result.running_expires_ms - now_ms if result.running_expires_ms else None))
 
     @staticmethod
     def _same_query(known, scope):

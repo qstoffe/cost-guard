@@ -10,7 +10,7 @@ import unittest
 from src.application.session_archive_projection import SessionPublication
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.cached_session_views import CachedSessionViews
-from src.cache.display_history import DisplayHistory, SessionChange, SessionCheckpoint, SessionFact
+from src.cache.display_history import DisplayHistory, RunningSession, SessionChange, SessionCheckpoint, SessionFact
 from src.domain.reference_cost import ReferenceCostIssue
 from src.reports.models import SessionUsageRow
 
@@ -285,6 +285,59 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(expected, {key: tuple(row[field] for field in fields) for key, row in by_key.items()})
         window = self.history.session_page("source", start_ms=1200, end_ms=1501)
         self.assertEqual(["known"], [row.session_id for row in window.rows])
+
+    def test_live_starts_sort_first_across_pages_only_for_the_current_binding(self):
+        midnight = 1_700_006_400_000
+        observed = midnight + 100
+        starts = tuple(RunningSession(f"live-{index:02}", "Running", midnight - index - 1, observed)
+                       for index in range(26))
+        self.history.commit_sessions("source", (
+            SessionChange(SessionFact("live-25", "prior", "Original", activity_ms=midnight + 2, ccost=Decimal(7)), None),
+            SessionChange(SessionFact("history", "r", "History", activity_ms=midnight + 2, ccost=Decimal(3)), None),
+        ))
+        active = CachedSessionViews(self.history, "source", "UTC", "current-host")
+        restarted = CachedSessionViews(self.history, "source", "UTC", "new-host")
+        initial = active.page(now_ms=observed)
+
+        self.history.replace_running("source", "current-host", starts, archive_epoch=0)
+        first = active.page(sort="ccost", direction=1, now_ms=observed + 10)
+        second = active.page(sort="ccost", direction=1, offset=25, now_ms=observed + 10)
+        after_restart = restarted.page(now_ms=observed + 10)
+        self.assertTrue(self.history.session_changes("source", initial["generation"]).affects(
+            initial["generation"], start_ms=midnight, end_ms=observed + 10))
+
+        self.assertEqual(27, first["cached_total"])
+        self.assertEqual([f"live-{index:02}" for index in range(25)], [row["session_id"] for row in first["rows"]])
+        self.assertEqual([("live-25", True, "7"), ("history", False, "3")],
+                         [(row["session_id"], row["running"], row["ccost"]) for row in second["rows"]])
+        self.assertEqual(14_990, first["running_refresh_ms"])
+        self.assertEqual({"history", "live-25"}, {row["session_id"] for row in after_restart["rows"]})
+        self.assertFalse(any(row["running"] for row in after_restart["rows"]))
+
+    def test_running_expiry_is_not_not_modified_or_a_new_durable_finish(self):
+        views = CachedSessionViews(self.history, "source", "UTC", "binding")
+        original = SessionFact("root", "r1", "Historical", activity_ms=900, prompt_started_ms=800,
+                               activity_origin="finish", ccost=Decimal(4))
+        self.history.commit_sessions("source", (SessionChange(original, None),))
+        self.history.replace_running("source", "binding", (RunningSession("root", "Working", 1000, 1200),),
+                                     archive_epoch=0)
+        first = views.page(period="all", now_ms=1300)
+        fields = ("binding", "generation", "start_ms", "end_ms", "period", "sort", "direction", "offset")
+        known = {key: first[key] for key in fields}
+
+        expired = views.page(period="all", now_ms=16_200, known=known)
+        generation = self.history.source_state("source")
+        self.history.clear_confirmed_sessions("source", generation)
+        rejected = self.history.replace_running("source", "binding", (RunningSession("root", "Working", 1000, 1200),),
+                                                archive_epoch=generation.archive_epoch)
+
+        self.assertTrue(first["rows"][0]["running"])
+        self.assertNotIn("unchanged", expired)
+        row, = expired["rows"]
+        self.assertEqual((False, "Historical", 900, "4"), (row["running"], row["title"], row["activity_ms"], row["ccost"]))
+        self.assertIsNone(expired["running_refresh_ms"])
+        self.assertIsNone(rejected)
+        self.assertEqual(0, views.page(period="all", now_ms=1300)["cached_total"])
 
     def test_dependency_only_publication_survives_restart_and_rejects_stale_same_revision(self):
         root = SessionFact("id", "r1", "Original", ccost=Decimal("2.43"))

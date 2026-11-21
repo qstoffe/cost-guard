@@ -1,4 +1,5 @@
 """One host's source authorization for the local display archive."""
+from concurrent.futures import ThreadPoolExecutor
 from itertools import islice
 import sqlite3
 import time
@@ -27,6 +28,11 @@ class DisplayArchive:
         self._pending = ()
         self._membership_after = None
         self._retry_at = 0
+        self._running_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-display-live")
+        self._running_write = None
+        self._running_offered = None
+        self._running_committed = None
+        self._running_retry_at = 0
 
     def initialize(self):
         try:
@@ -79,6 +85,36 @@ class DisplayArchive:
 
     def unbind(self):
         self._set_binding(None)
+
+    def close(self):
+        self.unbind()
+        self._running_writer.shutdown(wait=True, cancel_futures=True)
+
+    def publish_running(self, running):
+        """Offer the newest qualified observation without queueing future turns."""
+        if self._running_write is not None:
+            if not self._running_write.done():
+                return
+            if self._running_write.result():
+                self._running_committed = self._running_offered
+            else:
+                self._running_retry_at = time.monotonic() + 2
+            self._running_write = None
+        views = self.views
+        if views is None or time.monotonic() < self._running_retry_at:
+            return
+        offered = views.source, views.binding, running
+        if self._running_committed == offered:
+            return
+        self._running_offered = offered
+        self._running_write = self._running_writer.submit(self._write_running, *offered)
+
+    def _write_running(self, source, binding, running):
+        try:
+            self.sessions.commit_running(source, binding, running)
+        except (OSError, sqlite3.Error):
+            return False  # No failed or partial transaction becomes a cache event.
+        return True
 
     def _set_binding(self, binding, timezone_id="UTC"):
         if binding == self._binding:

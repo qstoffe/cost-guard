@@ -3,6 +3,7 @@ from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 from types import SimpleNamespace
 import sqlite3
 import unittest
@@ -11,7 +12,7 @@ from unittest.mock import patch
 from development.tests.fixtures.opencode_v1_database import create_v1_database
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from src.cache import CacheDatabase, CacheRepository
-from src.cache.display_history import SessionChange, SessionFact
+from src.cache.display_history import RunningSession, SessionChange, SessionFact
 from src.application.session_catalog import SessionCatalog
 from src.domain import NormalizedSession, Provenance, SessionCapabilities
 from src.reports.models import SessionUsageRow
@@ -25,6 +26,41 @@ from src.web.display_binding import selected_display_binding
 
 
 class DisplayBindingTests(unittest.TestCase):
+    def test_live_publisher_keeps_one_in_flight_snapshot_and_drops_intermediate_offers(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = DisplayArchive(root, lambda *_: None)
+            archive.initialize()
+            archive.observe(v1_driver(root), before_tick=True)
+            committed = archive.sessions.commit_running
+            started, release = Event(), Event()
+
+            def held_write(*args):
+                started.set()
+                if not release.wait(5):
+                    raise AssertionError("fixture did not release the SQLite writer")
+                committed(*args)
+
+            try:
+                with patch.object(archive.sessions, "commit_running", side_effect=held_write) as writes:
+                    archive.publish_running((RunningSession("a", "First", 100, 110),))
+                    self.assertTrue(started.wait(5))
+                    archive.publish_running((RunningSession("b", "Intermediate", 120, 130),))
+                    first_job = archive._running_write
+                    self.assertFalse(first_job.done())
+                    self.assertEqual(1, writes.call_count)
+                    release.set()
+                    first_job.result(timeout=5)
+                    archive.publish_running((RunningSession("c", "Latest", 140, 150),))
+                    archive._running_write.result(timeout=5)
+                    current = archive.views.page(period="all", now_ms=200)
+
+                self.assertEqual(["c"], [row["session_id"] for row in current["rows"]])
+                self.assertEqual(2, writes.call_count)
+            finally:
+                release.set()
+                archive.close()
+
     def test_local_mutation_keeps_scope_but_replacing_same_path_does_not(self):
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)

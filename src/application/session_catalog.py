@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.model_identity import payload_current
+from src.cache.display_history import BATCH_LIMIT, RUNNING_FRESH_MS, RunningSession
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -374,6 +375,24 @@ class SessionCatalog:
                     continue
                 self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
                                     wake=True)
+
+    def archive_running(self, evidence):
+        """Only currently proven, same-revision starts from the shared observer."""
+        with self.lock:
+            if self.state != "observed" or self.interrupted:
+                return ()
+            recent = {}
+            now = self.clock_ms()
+            for root, revision, captured_at, prompt_id, start, running, _, _ in evidence:
+                key = root.session_id
+                if (not running or not revision or key not in self.roots or not self._running(key)
+                        or root.provenance != self.roots[key].provenance
+                        or (start, prompt_id) != self.prompt_activity[key].identity
+                        or not 0 <= now - captured_at < RUNNING_FRESH_MS or not 0 < start <= captured_at
+                        or revision != self.revisions.get(key)):
+                    continue
+                recent[key] = RunningSession(key, root.title or "Untitled session", start, captured_at)
+            return tuple(nsmallest(BATCH_LIMIT, recent.values(), key=lambda item: (-item.started_ms, item.session_id)))
 
     def _record_prompt(self, key, evidence, *, wake=False):
         now = self.clock_ms()

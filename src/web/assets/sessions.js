@@ -49,7 +49,7 @@ const SessionsCatalog = (() => {
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
         const label = ContextHelp.heading(button, cached ? key === 'activity' ?
-          'Last verified finish, with separately marked start or preliminary catalog times when a finish is unknown. Unknown finishes sort last.' : help :
+          'Running prompts come first. Otherwise, sort by the verified finish. A star marks a start or preliminary catalog time when a finish is unknown.' : help :
           help + (key === 'activity' ? '' : '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
@@ -668,6 +668,8 @@ const SessionsCatalog = (() => {
       this.flight = null;
       clearTimeout(this.timer);
       this.timer = null;
+      clearTimeout(this.runningTimer);
+      this.runningTimer = null;
     }
     unavailable() {
       this.data = null;
@@ -711,6 +713,16 @@ const SessionsCatalog = (() => {
     }
     paint(data) {
       this.data = data;
+      clearTimeout(this.runningTimer);
+      this.runningTimer = null;
+      if (Number.isSafeInteger(data.running_refresh_ms) && data.running_refresh_ms > 0) {
+        // A held or offline source cannot leave a stale start marked Running.
+        // Re-query only at the committed observation's expiry, not on a poll loop.
+        this.runningTimer = setTimeout(() => {
+          this.needsRead = true;
+          this.poll();
+        }, data.running_refresh_ms);
+      }
       this.renderTimezone = data.timezone_id;
       Object.assign(data, {total: data.cached_total, state: 'observed', source: {identity: data.binding}});
       for (const {key, name, th, label} of this.headers) {

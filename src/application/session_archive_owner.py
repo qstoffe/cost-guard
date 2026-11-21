@@ -87,9 +87,20 @@ class SessionArchiveOwner:
 
     def _commit(self, admission, updates, missing=(), present=()):
         generation = self.history.commit_sessions(admission.source, updates, missing=missing, present=present,
-                                                   archive_epoch=admission.archive_epoch)
+                                                    archive_epoch=admission.archive_epoch)
+        self._announce(admission.source, admission.epoch, generation)
+        return generation
+
+    def commit_running(self, source, epoch, running):
+        with self._lock:
+            if (source, epoch) != self._binding:
+                return
+            archive_epoch = self.history.source_state(source).archive_epoch
+            generation = self.history.replace_running(source, epoch, running, archive_epoch=archive_epoch)
+            self._announce(source, epoch, generation)
+
+    def _announce(self, source, epoch, generation):
         if generation is not None:
             with self._signal:
-                if (admission.source, admission.epoch) == self._binding:
-                    self.publish("cache", {"view": "sessions", "binding": admission.epoch, "generation": generation})
-        return generation
+                if (source, epoch) == self._binding:
+                    self.publish("cache", {"view": "sessions", "binding": epoch, "generation": generation})

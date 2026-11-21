@@ -118,7 +118,7 @@ class LiveRuntime:
                 raise
         finally:
             if self.display_archive is not None:
-                self.display_archive.unbind()
+                self.display_archive.close()
             if driver is not None:
                 try:
                     driver.close()

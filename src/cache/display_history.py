@@ -4,14 +4,16 @@ from dataclasses import dataclass
 from decimal import Decimal
 import sqlite3
 from threading import Lock
+import time
 
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
 CHANGE_WINDOW = 64
+RUNNING_FRESH_MS = 15_000
 SORT_COLUMNS = {
     "activity": "activity_ms", "name": "title_key", "model": "model_key",
     "ccost": "cost_key", "prompts": "prompts", "duration": "duration_ms", "ctx": "context_tokens",
@@ -85,6 +87,14 @@ class SessionCheckpoint:
 
 
 @dataclass(frozen=True, slots=True)
+class RunningSession:
+    session_id: str
+    title: str
+    started_ms: int
+    observed_ms: int
+
+
+@dataclass(frozen=True, slots=True)
 class SessionSnapshot:
     session_id: str
     revision: str
@@ -100,6 +110,7 @@ class SessionSnapshot:
     prompt_started_ms: int | None
     activity_origin: str | None
     catalog_activity_ms: int | None
+    running: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +118,7 @@ class SessionPage:
     generation: int
     total: int
     rows: tuple[SessionSnapshot, ...]
+    running_expires_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,14 +179,18 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if app_id == APPLICATION_ID and version in (1, 2):
+            if app_id == APPLICATION_ID and version in (1, 2, 3):
                 progress = self._progress_schema() if version == 1 else ""
-                db.executescript(f"""
-                    BEGIN IMMEDIATE;
-                    {progress}
+                clocks = """
                     ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
                     ALTER TABLE sessions ADD COLUMN activity_origin TEXT;
                     ALTER TABLE sessions ADD COLUMN catalog_activity_ms INTEGER;
+                """ if version < 3 else ""
+                db.executescript(f"""
+                    BEGIN IMMEDIATE;
+                    {progress}
+                    {clocks}
+                    {self._live_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -214,6 +230,7 @@ class DisplayHistory:
                 ) WITHOUT ROWID;
                 {self._sort_indexes()}
                 {self._progress_schema()}
+                {self._live_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -229,6 +246,20 @@ class DisplayHistory:
                 progress INTEGER NOT NULL,
                 PRIMARY KEY (source, session_id),
                 FOREIGN KEY (source, session_id) REFERENCES sessions(source, session_id) ON DELETE CASCADE
+            ) WITHOUT ROWID;
+        """
+
+    @staticmethod
+    def _live_schema():
+        return """
+            CREATE TABLE IF NOT EXISTS session_running (
+                source TEXT NOT NULL REFERENCES sources(source),
+                binding TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                started_ms INTEGER NOT NULL,
+                observed_ms INTEGER NOT NULL,
+                PRIMARY KEY (source, session_id)
             ) WITHOUT ROWID;
         """
 
@@ -297,14 +328,51 @@ class DisplayHistory:
                         self._advance_progress(db, source, session_id, checkpoint.revision, None)
             generation = None
             if changed:
-                db.execute("UPDATE sources SET generation=generation+1, session_count=session_count+? WHERE source=?",
-                           (inserted, source))
                 generation = state.generation + 1
                 known = [clock for clock in clocks if clock is not None]
-                db.execute("INSERT INTO session_changes VALUES(?, ?, ?, ?)",
-                           (source, generation, min(known, default=None), max(known, default=None)))
-                db.execute("DELETE FROM session_changes WHERE source=? AND generation<=?",
-                           (source, generation - CHANGE_WINDOW))
+                self._append_change(db, source, generation, inserted, min(known, default=None), max(known, default=None))
+            db.commit()
+            return generation
+
+    @staticmethod
+    def _append_change(db, source, generation, inserted, earliest, latest):
+        db.execute("UPDATE sources SET generation=?, session_count=session_count+? WHERE source=?",
+                   (generation, inserted, source))
+        db.execute("INSERT INTO session_changes VALUES(?, ?, ?, ?)", (source, generation, earliest, latest))
+        db.execute("DELETE FROM session_changes WHERE source=? AND generation<=?", (source, generation - CHANGE_WINDOW))
+
+    def replace_running(self, source, binding, running, *, archive_epoch):
+        """Replace the whole bounded observation. Old host rows never become current."""
+        if (not source or not binding or len(running) > BATCH_LIMIT or
+                any(not item.session_id or type(item.started_ms) is not int or type(item.observed_ms) is not int
+                    or not 0 < item.started_ms <= item.observed_ms
+                    for item in running)):
+            raise ValueError("invalid_running_observation")
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = self._state(db, source)
+            if state.archive_epoch != archive_epoch:
+                return None
+            previous = tuple(db.execute("""
+                SELECT binding, session_id, title, started_ms, observed_ms FROM session_running
+                WHERE source=? ORDER BY session_id
+            """, (source,)))
+            replacement = tuple(sorted((binding, item.session_id, item.title, item.started_ms, item.observed_ms)
+                                       for item in running))
+            if previous == replacement:
+                return None
+            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+            db.execute("DELETE FROM session_running WHERE source=?", (source,))
+            db.executemany("INSERT INTO session_running VALUES(?, ?, ?, ?, ?, ?)",
+                           ((source, *row) for row in replacement))
+            generation = None
+            now = int(time.time() * 1000)
+            if (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
+                    or any(old[-1] + RUNNING_FRESH_MS <= now < new[-1] + RUNNING_FRESH_MS
+                           for old, new in zip(previous, replacement))):
+                generation = state.generation + 1
+                # Running sessions can cross midnight and affect every period.
+                self._append_change(db, source, generation, 0, 0, (1 << 63) - 1)
             db.commit()
             return generation
 
@@ -332,6 +400,7 @@ class DisplayHistory:
                 return None
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
+            db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))
             db.execute("""
                 UPDATE sources SET generation=generation+1, session_count=0, archive_epoch=archive_epoch+1
@@ -464,8 +533,14 @@ class DisplayHistory:
                 SELECT 1 FROM sessions WHERE source=? AND {PERIOD_CLOCK}>=? AND {PERIOD_CLOCK}<? LIMIT 1
             """, (source, start_ms, end_ms)).fetchone() is not None
 
+    def has_running_snapshot(self, source, binding):
+        with self._connect(read=True) as db:
+            return db.execute(
+                "SELECT 1 FROM session_running WHERE source=? AND binding=? LIMIT 1",
+                (source, binding)).fetchone() is not None
+
     def session_page(self, source, *, sort="activity", direction=-1, start_ms=None, end_ms=None,
-                     limit=25, offset=0):
+                     limit=25, offset=0, live_binding=None, now_ms=None):
         if (not source or sort not in SORT_COLUMNS or type(direction) is not int or direction not in (-1, 1)
                 or type(limit) is not int or not 1 <= limit <= PAGE_LIMIT
                 or type(offset) is not int or not 0 <= offset <= 1_000_000):
@@ -489,6 +564,18 @@ class DisplayHistory:
             generation, total = state
             if len(params) > 1:
                 total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
+            active, expires = self._running_page(db, source, live_binding, now_ms) if live_binding else ((), None)
+            if active:
+                marks = ", ".join("?" for _ in active)
+                ids = tuple(row.session_id for row in active)
+                overlap = db.execute(f"SELECT count(*) FROM sessions WHERE {where} AND session_id IN ({marks})",
+                                     (*params, *ids)).fetchone()[0]
+                total += len(active) - overlap
+                where += f" AND session_id NOT IN ({marks})"
+                params.extend(ids)
+            running_slice = active[offset:offset + limit]
+            if len(running_slice) == limit:
+                return SessionPage(generation, total, running_slice, expires)
             # Select ordered keys first with the covering index. CROSS JOIN
             # keeps the small selected set outermost; a reordered join can
             # scan every historical row just to return the first page.
@@ -504,5 +591,22 @@ class DisplayHistory:
                 FROM selected CROSS JOIN sessions AS s
                 WHERE s.source=? AND s.session_id=selected.session_id
                 ORDER BY ({column} IS NULL), {column} {order}, s.session_id
-            """, (*params, limit, offset, source)).fetchall()
-        return SessionPage(generation, total, tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:]) for row in rows))
+            """, (*params, limit - len(running_slice), max(0, offset - len(active)), source)).fetchall()
+        rows = tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:]) for row in rows)
+        return SessionPage(generation, total, running_slice + rows, expires)
+
+    @staticmethod
+    def _running_page(db, source, binding, now_ms):
+        if type(now_ms) is not int:
+            raise ValueError("invalid_running_clock")
+        rows = tuple(db.execute("""
+            SELECT r.session_id, r.title, r.started_ms, r.observed_ms, s.revision, s.model, s.ccost, s.prompts, s.duration_ms,
+                   s.context_tokens
+            FROM session_running AS r LEFT JOIN sessions AS s USING (source, session_id)
+            WHERE r.source=? AND r.binding=? AND r.observed_ms>? AND r.observed_ms<=?
+            ORDER BY r.started_ms DESC, r.session_id
+        """, (source, binding, now_ms - RUNNING_FRESH_MS, now_ms)))
+        expires = min((row[3] + RUNNING_FRESH_MS for row in rows), default=None)
+        return (tuple(SessionSnapshot(key, revision or "", title, start, model, cost, prompts, duration, context,
+                                      True, start, start, "running", None, True)
+                      for key, title, start, _, revision, model, cost, prompts, duration, context in rows), expires)
