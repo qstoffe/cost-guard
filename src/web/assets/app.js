@@ -580,11 +580,12 @@ function navigate() {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
   }
-  let route = ReportRoutes.resolve(location.hash);
+  const capabilities = {cachedSessions: cachedSessionsAvailable};
+  let route = ReportRoutes.resolve(location.hash, capabilities);
   const redirected = !!route.redirect;
   if (redirected) {
     history.replaceState(null, '', '/' + route.redirect);
-    route = ReportRoutes.resolve(location.hash);
+    route = ReportRoutes.resolve(location.hash, capabilities);
   }
   const match = route.session;
   if (match) rememberedSession = '#/sessions/' + match[1];
