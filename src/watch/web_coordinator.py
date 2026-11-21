@@ -160,8 +160,11 @@ class WebWatchCoordinator(WatchCoordinator):
                 job.result()
             except Exception:
                 catalog.index_failed('scalar_worker_failed')
-        if not self._closed and catalog.needed():
-            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
+        scalar_needed = catalog.needed()
+        archive = catalog.display_archive
+        archive_needed = archive is not None and archive.catalog_pending(catalog)
+        if not self._closed and (scalar_needed or archive_needed):
+            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed)
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
@@ -180,9 +183,15 @@ class WebWatchCoordinator(WatchCoordinator):
         return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
-    def _catalog_capture(self, catalog, now_ms):
+    def _catalog_capture(self, catalog, now_ms, scalar_needed=True):
         service = None
         try:
+            if catalog.display_archive is not None:
+                # Metadata was already observed by Live. Do not acquire source
+                # or prices again just to publish that bounded batch.
+                catalog.display_archive.publish_catalog(catalog, self.report_service)
+            if not scalar_needed:
+                return
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
                 catalog.tick(service)

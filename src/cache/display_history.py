@@ -128,19 +128,24 @@ class DisplayHistory:
         self._write_lock = Lock()
 
     @contextmanager
-    def _connect(self, *, read=False):
+    def _connect(self, *, read=False, initializing=False):
         target = self.path.as_uri() + "?mode=ro" if read else self.path
         with closing(sqlite3.connect(target, uri=read, timeout=0.15, isolation_level=None)) as db:
+            if not initializing and self._identity(db) != (APPLICATION_ID, SCHEMA_VERSION):
+                raise sqlite3.DatabaseError("unsupported_display_history_schema")
             db.execute("PRAGMA foreign_keys=ON")
             if read:
                 db.execute("PRAGMA query_only=ON")
             yield db
 
+    @staticmethod
+    def _identity(db):
+        return db.execute("PRAGMA application_id").fetchone()[0], db.execute("PRAGMA user_version").fetchone()[0]
+
     def initialize(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._write_lock, self._connect() as db:
-            app_id = db.execute("PRAGMA application_id").fetchone()[0]
-            version = db.execute("PRAGMA user_version").fetchone()[0]
+        with self._write_lock, self._connect(initializing=True) as db:
+            app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
             if (app_id, version) != (0, 0) or db.execute("SELECT 1 FROM sqlite_schema LIMIT 1").fetchone():
@@ -188,16 +193,17 @@ class DisplayHistory:
             for sort, column in SORT_COLUMNS.items() for direction in ("ASC", "DESC")
         ) + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
 
-    def commit_sessions(self, source, updates=(), *, missing=(), archive_epoch=0):
+    def commit_sessions(self, source, updates=(), *, missing=(), present=(), archive_epoch=0):
         """Apply qualified facts and membership changes, without deleting old values.
 
         `missing` entries are (session_id, expected_revision) from a qualified
         source membership observation, not a failed source request. Return the
         durable generation only when visible data changed, and only after COMMIT.
         """
-        if not source or type(archive_epoch) is not int or archive_epoch < 0 or len(updates) + len(missing) > BATCH_LIMIT:
+        if (not source or type(archive_epoch) is not int or archive_epoch < 0
+                or len(updates) + len(missing) + len(present) > BATCH_LIMIT):
             raise ValueError("invalid_display_batch")
-        if not updates and not missing:
+        if not updates and not missing and not present:
             return None
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -215,14 +221,14 @@ class DisplayHistory:
                     changed = True
                     inserted += int(change.previous_revision is None)
                     clocks.extend((previous, self._activity(db, source, session_id)))
-            for session_id, revision in missing:
-                previous = self._activity(db, source, session_id)
-                if db.execute("""
-                    UPDATE sessions SET source_present=0
-                    WHERE source=? AND session_id=? AND revision=? AND source_present=1
-                """, (source, session_id, revision)).rowcount:
-                    changed = True
-                    clocks.append(previous)
+            for membership, entries in ((0, missing), (1, present)):
+                for session_id, revision in entries:
+                    if db.execute("""
+                        UPDATE sessions SET source_present=?
+                        WHERE source=? AND session_id=? AND revision=? AND source_present<>?
+                    """, (membership, source, session_id, revision, membership)).rowcount:
+                        changed = True
+                        clocks.append(self._activity(db, source, session_id))
             generation = None
             if changed:
                 db.execute("UPDATE sources SET generation=generation+1, session_count=session_count+? WHERE source=?",
@@ -326,6 +332,17 @@ class DisplayHistory:
                 SELECT session_id, revision FROM sessions
                 WHERE source=? AND session_id IN ({marks})
             """, (source, *session_ids)))
+
+    def session_membership_slice(self, source, after):
+        """Keyset walk for restart-safe reconciliation, independent of UI paging."""
+        if not source or not isinstance(after, str):
+            raise ValueError("invalid_membership_query")
+        with self._connect(read=True) as db:
+            return tuple(db.execute("""
+                SELECT session_id, revision, source_present FROM sessions
+                WHERE source=? AND session_id>?
+                ORDER BY session_id LIMIT ?
+            """, (source, after, BATCH_LIMIT)))
 
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""

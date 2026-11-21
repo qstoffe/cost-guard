@@ -26,38 +26,43 @@ class SessionArchiveOwner:
         self.history = history
         self.publish = publish
         self._lock = Lock()
-        self._source = ""
-        self._epoch = ""
+        self._signal = Lock()
+        self._binding = ("", "")
 
-    def bind(self, source, epoch):
+    def bind(self, source, epoch, *, announce=False):
         if bool(source) != bool(epoch):
             raise ValueError("incomplete_archive_binding")
-        with self._lock:
-            self._source, self._epoch = source, epoch
+        # Live revocation must not wait on a SQLite write. Admissions carry
+        # an immutable incarnation; a detached partition is never exposed.
+        with self._signal:
+            self._binding = (source, epoch)
+            if announce:
+                self.publish("cache", {"view": "sessions", "binding": epoch or None})
 
-    def admit(self, revisions):
+    def admit(self, revisions, *, binding=None):
         if len(revisions) > BATCH_LIMIT or any(not session_id or not revision for session_id, revision in revisions.items()):
             raise ValueError("invalid_archive_admission")
         with self._lock:
-            if not self._source:
+            source, epoch = self._binding
+            if not source or binding is not None and (source, epoch) != binding:
                 return None
-            state = self.history.source_state(self._source)
-            previous = self.history.session_revisions(self._source, tuple(revisions))
-            return ArchiveAdmission(self._source, self._epoch, state.archive_epoch, tuple(
-                SessionPublication(session_id, revision, self._epoch, previous.get(session_id))
+            state = self.history.source_state(source)
+            previous = self.history.session_revisions(source, tuple(revisions))
+            return ArchiveAdmission(source, epoch, state.archive_epoch, tuple(
+                SessionPublication(session_id, revision, epoch, previous.get(session_id))
                 for session_id, revision in revisions.items()))
 
     def commit(self, admission, rows, current_revisions, *, missing=()):
         """Publish compact facts and notify only after the SQLite commit succeeded."""
         with self._lock:
-            if (admission.source, admission.epoch) != (self._source, self._epoch):
+            if (admission.source, admission.epoch) != self._binding:
                 return None
             updates, absent = [], []
             for proof in admission.facts:
                 session_id = proof.session_id
                 if session_id in rows:
                     row = proof.project(rows[session_id], current_revision=current_revisions.get(session_id),
-                                        current_epoch=self._epoch)
+                                         current_epoch=admission.epoch)
                     if row is not None:
                         updates.append(row)
                 elif session_id in missing and session_id not in current_revisions and proof.archived_revision:
@@ -67,17 +72,22 @@ class SessionArchiveOwner:
     def publish_catalog(self, admission, titles, current_revisions):
         """Store only metadata for newly discovered roots; never reset known facts."""
         with self._lock:
-            if (admission.source, admission.epoch) != (self._source, self._epoch):
+            if (admission.source, admission.epoch) != self._binding:
                 return None
             updates = tuple(SessionChange(SessionFact(proof.session_id, proof.source_revision, titles[proof.session_id]),
-                                   None, frozenset()) for proof in admission.facts
+                                    None, frozenset()) for proof in admission.facts
                             if proof.archived_revision is None and proof.session_id in titles
                             and current_revisions.get(proof.session_id) == proof.source_revision)
-            return self._commit(admission, updates)
+            present = tuple((proof.session_id, proof.source_revision) for proof in admission.facts
+                            if proof.archived_revision == proof.source_revision
+                            and current_revisions.get(proof.session_id) == proof.source_revision)
+            return self._commit(admission, updates, present=present)
 
-    def _commit(self, admission, updates, missing=()):
-        generation = self.history.commit_sessions(admission.source, updates, missing=missing,
-                                                  archive_epoch=admission.archive_epoch)
+    def _commit(self, admission, updates, missing=(), present=()):
+        generation = self.history.commit_sessions(admission.source, updates, missing=missing, present=present,
+                                                   archive_epoch=admission.archive_epoch)
         if generation is not None:
-            self.publish("cache", {"view": "sessions", "binding": admission.epoch, "generation": generation})
+            with self._signal:
+                if (admission.source, admission.epoch) == self._binding:
+                    self.publish("cache", {"view": "sessions", "binding": admission.epoch, "generation": generation})
         return generation

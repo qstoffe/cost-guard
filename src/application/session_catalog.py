@@ -111,9 +111,11 @@ def retain_pending_metrics(row, previous):
 
 
 class SessionCatalog:
-    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC"):
+    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC",
+                 display_archive=None):
         self.clock = clock
         self.clock_ms = clock_ms
+        self.display_archive = display_archive
         self.lock = Lock()
         self.roots = OrderedDict()
         self.rows = {}
@@ -124,6 +126,7 @@ class SessionCatalog:
         self.failure_counts = {}
         self.failure_reasons = {}
         self.generation = 0
+        self.membership_generation = 0
         self.metrics = dict(cache_hits=0, cache_misses=0, attempts=0, retries=0, settled=0)
         self.work = None
         self.work_sequence = 0
@@ -311,6 +314,9 @@ class SessionCatalog:
             previous_active, self.active = self.active, observation.live_candidates
             previous_revisions = self.revisions
             self.revisions = dict(observation.revisions)
+            if (source_changed or self.observed is None or self.roots.keys() != previous_roots.keys()
+                    or self.revisions.keys() != previous_revisions.keys()):
+                self.membership_generation += 1
             self.changed_roots.intersection_update(self.roots)
             self.changed_roots.update(key for key in self.roots
                 if key in previous_revisions and previous_revisions[key] != self.revisions.get(key))
@@ -484,6 +490,7 @@ class SessionCatalog:
         return min(candidates, key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
 
     def tick(self, service):
+        archive = self.display_archive
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
                                               service._load_comparison_catalog().diagnostic_signature))
         with self.lock:
@@ -552,6 +559,8 @@ class SessionCatalog:
                     and key in lease['navigation'].roots and key not in lease['navigation'].facts]
                 memberships = {}
                 windows = {nav.window for nav in navigations if nav.window.period != 'all'}
+            admission = archive.admit_summary(service, key, revision) if archive is not None else None
+            accepted = False
             try:
                 identity_values = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
@@ -575,6 +584,7 @@ class SessionCatalog:
                             and epoch == self.last_observation.source_epoch
                             and revision == self.revisions.get(key)):
                         if actual == revision:
+                            accepted = self.state == "observed"
                             self.rows[key] = retain_pending_metrics(row, self.rows.get(key))
                             self.model_dependencies[key] = identity_values
                             self.valid[key] = actual, self.clock()
@@ -605,6 +615,8 @@ class SessionCatalog:
                 with self.lock:
                     self.work = None
                     self.metrics['settled'] += 1
+            if accepted and admission is not None:
+                archive.publish_summary(service, admission, row, actual)
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:

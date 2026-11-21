@@ -18,6 +18,7 @@ class CachedSessionViews:
     history: DisplayHistory
     source: str
     timezone_id: str
+    binding: str = ""
 
     def page(self, *, period="today", sort="activity", direction=-1, offset=0, now_ms=None):
         if (period not in PERIODS or sort not in SORT_COLUMNS or type(direction) is not int
@@ -40,6 +41,6 @@ class CachedSessionViews:
                              ccost=row.ccost, prompts=row.prompts, duration_ms=row.duration_ms,
                              context_tokens=row.context_tokens, source_present=row.source_present, fields=states))
         # Cached membership/count is not historical source completeness.
-        return dict(period=period, sort=sort, direction=direction, offset=offset, size=PAGE_SIZE,
+        return dict(period=period, sort=sort, direction=direction, offset=offset, size=PAGE_SIZE, binding=self.binding,
                     generation=result.generation, cached_total=result.total, rows=rows,
                     timezone_id=window.timezone_id)

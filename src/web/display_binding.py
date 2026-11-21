@@ -25,9 +25,9 @@ def _file_identity(path):
 def selected_display_binding(selection):
     """Separate stable file ownership from a transient observation epoch.
 
-    For a service with no proven local database identity, never reuse a
-    partition after its registration/proof epoch changes. A path alone is
-    not proof that there is still the same database at that path.
+    The V2 registration identifies the service, but does not prove which DB
+    it opened. In particular, the inferred default DB path cannot authorize
+    reusing a partition after registration or authentication changes.
     """
     source = selection.source
     try:
@@ -41,8 +41,7 @@ def selected_display_binding(selection):
             source_epoch = source.observation_epoch
             if not source_epoch:
                 return None
-            file = _file_identity(source.local_database_path)
-            identity = dependency_signature(("opencode-v2-display", source.source_instance, file or source_epoch))
+            identity = dependency_signature(("opencode-v2-display", source_epoch))
             return DisplayBinding(identity, source_epoch)
     except (OSError, ValueError):
         return None  # Unavailable identity must not authorize an old snapshot.
