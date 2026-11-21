@@ -49,12 +49,16 @@ class CachedSessionViews:
         rows = []
         for row in result.rows:
             values = {"model": row.model, "ccost": row.ccost, "prompts": row.prompts,
-                      "duration": row.duration_ms, "ctx": row.context_tokens, "activity": row.activity_ms}
+                      "duration": row.duration_ms, "ctx": row.context_tokens,
+                      "activity": row.activity_ms if row.activity_ms is not None else row.prompt_started_ms}
             states = {name: "as-of" if value is not None else "pending" if row.source_present else "source-history-missing"
                       for name, value in values.items()}
             tokens = with_display(record(ccost=row.ccost, duration_ms=row.duration_ms, context_tokens=row.context_tokens),
                                   window.timezone_id, now_ms).to_json()
             rows.append(dict(session_id=row.session_id, title=row.title, activity_ms=row.activity_ms, model=row.model,
+                               activity_origin=row.activity_origin, prompt_started_ms=row.prompt_started_ms,
+                               catalog_activity_ms=(row.catalog_activity_ms if row.source_present
+                                   and row.activity_origin is None and row.activity_ms is None else None),
                               ccost=row.ccost, prompts=row.prompts, duration_ms=row.duration_ms,
                               context_tokens=row.context_tokens, source_present=row.source_present, fields=states,
                               display=tokens["display"], display_units=tokens.get("display_units")))

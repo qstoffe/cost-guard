@@ -10,6 +10,7 @@ from src.sources.errors import SourceError
 SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
+PROJECTION_REVISION = "sessions-activity-provenance-1"
 
 
 def scalar_dependency(service):
@@ -18,7 +19,8 @@ def scalar_dependency(service):
 
 
 def checkpoint_dependency(base, model_authorities):
-    return dependency_signature((base, sorted(dependency_signature(value) for value in model_authorities)))
+    return dependency_signature((PROJECTION_REVISION, base,
+                                 sorted(dependency_signature(value) for value in model_authorities)))
 
 
 class SessionArchiveSweep:

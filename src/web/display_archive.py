@@ -160,6 +160,7 @@ class DisplayArchive:
             revisions = {key: catalog.revisions[key] for key in self._pending or ()
                          if key in catalog.roots and catalog.revisions.get(key)}
             titles = {key: catalog.roots[key].title or "Untitled session" for key in revisions}
+            activity = {key: catalog.activity.get(key) for key in revisions}
             observed = catalog.last_observation
         if self._pending is None:
             self._mark_missing(catalog, service, binding, observed)
@@ -168,7 +169,7 @@ class DisplayArchive:
         def write():
             admission = self.sessions.admit(revisions, binding=binding)
             if admission is not None:
-                self.sessions.publish_catalog(admission, titles, revisions)
+                self.sessions.publish_catalog(admission, titles, revisions, activity=activity)
 
         if self._cache_write(write):
             self._pending = ()

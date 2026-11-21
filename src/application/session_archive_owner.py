@@ -69,13 +69,15 @@ class SessionArchiveOwner:
                     absent.append((session_id, proof.checkpoint))
             return self._commit(admission, tuple(updates), tuple(absent))
 
-    def publish_catalog(self, admission, titles, current_revisions):
+    def publish_catalog(self, admission, titles, current_revisions, *, activity=None):
         """Store only metadata for newly discovered roots; never reset known facts."""
         with self._lock:
             if (admission.source, admission.epoch) != self._binding:
                 return None
-            updates = tuple(SessionChange(SessionFact(proof.session_id, proof.source_revision, titles[proof.session_id]),
-                                    None, frozenset()) for proof in admission.facts
+            clocks = activity or {}
+            updates = tuple(SessionChange(SessionFact(proof.session_id, proof.source_revision, titles[proof.session_id],
+                                    catalog_activity_ms=clocks.get(proof.session_id)),
+                                    None, frozenset({"catalog_activity_ms"})) for proof in admission.facts
                              if proof.checkpoint is None and proof.session_id in titles
                             and current_revisions.get(proof.session_id) == proof.source_revision)
             present = tuple((proof.session_id, proof.checkpoint) for proof in admission.facts

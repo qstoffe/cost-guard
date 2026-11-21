@@ -49,7 +49,7 @@ const SessionsCatalog = (() => {
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
         const label = ContextHelp.heading(button, cached ? key === 'activity' ?
-          'Last cached prompt activity. Fields not yet known sort last.' : help :
+          'Last verified finish, with separately marked start or preliminary catalog times when a finish is unknown. Unknown finishes sort last.' : help :
           help + (key === 'activity' ? '' : '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
@@ -558,7 +558,8 @@ const SessionsCatalog = (() => {
         const current = value;
         const helps = [
           () => ReportView.metricToken(value, 'model_help'),
-          () => ReportView.sessionCostHelp(value, value), null, null,
+          () => value.cache_only ? (value.ccost == null ? null : 'Last committed session reference cost.') :
+            ReportView.sessionCostHelp(value, value), null, null,
           current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
         ];
         row.metrics.forEach((node, index) => {
@@ -718,7 +719,7 @@ const SessionsCatalog = (() => {
         ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ''));
       }
       this.rows(data.rows.map(row => ({
-        ...row, last_activity_ms: row.activity_ms, prompt_count: row.prompts,
+        ...row, cache_only: true, last_activity_ms: row.activity_ms, prompt_count: row.prompts,
         has_summary: row.ccost != null, complete: row.ccost != null,
         metric_states: Object.fromEntries(Object.entries(row.fields).map(([key, value]) =>
           [key, value === 'as-of' ? 'ready' : 'pending'])),

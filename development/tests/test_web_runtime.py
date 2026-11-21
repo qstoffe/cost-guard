@@ -238,7 +238,7 @@ class WebRuntimeTests(unittest.TestCase):
 
     def test_cached_sessions_reads_committed_sql_without_source_or_job_admission(self):
         from src.application.cached_session_views import CachedSessionViews
-        from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+        from src.cache.display_history import DisplayHistory, SessionChange, SessionCheckpoint, SessionFact
 
         endpoint = "/api/cache/sessions"
         request = {'sort': 'prompts', 'direction': -1, 'period': 'all', 'offset': 0}
@@ -264,7 +264,7 @@ class WebRuntimeTests(unittest.TestCase):
                 SessionChange(SessionFact('pending', 'known-rev', 'Pending'), None),
                 SessionChange(SessionFact('ready', 'ready-rev', 'Known', prompts=3), None),
             ))
-            history.commit_sessions('bound', missing=(('pending', 'known-rev'),))
+            history.commit_sessions('bound', missing=(('pending', SessionCheckpoint('known-rev', 0)),))
             history.commit_sessions('other', (SessionChange(SessionFact('other', 'r1', 'Not visible'), None),))
 
             status, _, body = self.request(endpoint, request)

@@ -7,7 +7,7 @@ from threading import Lock
 
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -16,8 +16,10 @@ SORT_COLUMNS = {
     "activity": "activity_ms", "name": "title_key", "model": "model_key",
     "ccost": "cost_key", "prompts": "prompts", "duration": "duration_ms", "ctx": "context_tokens",
 }
-METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens", "latest_activity_ms")
+METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens", "latest_activity_ms",
+                 "prompt_started_ms", "activity_origin", "catalog_activity_ms")
 SAVED_FIELDS = frozenset(METRIC_FIELDS)
+ACQUIRED_SCALAR_FIELDS = SAVED_FIELDS - {"catalog_activity_ms"}
 PERIOD_CLOCK = "period_clock_ms"
 
 
@@ -55,6 +57,9 @@ class SessionFact:
     # canonical source summary can observe later linked work with the same
     # displayed activity. Fall back only when this clock was not supplied.
     latest_activity_ms: int | None = None
+    prompt_started_ms: int | None = None
+    activity_origin: str | None = None
+    catalog_activity_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +97,9 @@ class SessionSnapshot:
     context_tokens: int | None
     source_present: bool
     latest_activity_ms: int | None
+    prompt_started_ms: int | None
+    activity_origin: str | None
+    catalog_activity_ms: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,10 +167,14 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if (app_id, version) == (APPLICATION_ID, 1):
+            if app_id == APPLICATION_ID and version in (1, 2):
+                progress = self._progress_schema() if version == 1 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
-                    {self._progress_schema()}
+                    {progress}
+                    ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
+                    ALTER TABLE sessions ADD COLUMN activity_origin TEXT;
+                    ALTER TABLE sessions ADD COLUMN catalog_activity_ms INTEGER;
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -196,6 +208,7 @@ class DisplayHistory:
                     model TEXT, model_key TEXT,
                     ccost TEXT, cost_key BLOB,
                     prompts INTEGER, duration_ms INTEGER, context_tokens INTEGER,
+                    prompt_started_ms INTEGER, activity_origin TEXT, catalog_activity_ms INTEGER,
                     source_present INTEGER NOT NULL,
                     PRIMARY KEY (source, session_id)
                 ) WITHOUT ROWID;
@@ -251,7 +264,7 @@ class DisplayHistory:
             for change in updates:
                 session_id = change.fact.session_id
                 if change.dependency is not None and (not change.dependency or change.previous_progress is None
-                                                     or change.observed_fields != SAVED_FIELDS):
+                                                     or not ACQUIRED_SCALAR_FIELDS <= change.observed_fields):
                     raise ValueError("invalid_session_progress")
                 before = db.execute(f"""
                     SELECT s.revision, s.{PERIOD_CLOCK}, coalesce(p.progress, 0)
@@ -331,11 +344,12 @@ class DisplayHistory:
     @staticmethod
     def _apply_session(db, source, change):
         fact = change.fact
-        if not change.observed_fields <= SAVED_FIELDS or not (fact.revision and fact.session_id):
+        if (not change.observed_fields <= SAVED_FIELDS or not (fact.revision and fact.session_id)
+                or fact.activity_origin not in (None, "finish", "start", "no-prompt")):
             raise ValueError("invalid_session_evidence")
         if change.observed_fields != SAVED_FIELDS:
-            previous = db.execute("""
-                SELECT activity_ms, model, ccost, prompts, duration_ms, context_tokens, latest_activity_ms
+            previous = db.execute(f"""
+                SELECT {", ".join(METRIC_FIELDS)}
                 FROM sessions WHERE source=? AND session_id=? AND revision=?
             """, (source, fact.session_id, change.previous_revision)).fetchone()
             retained = dict(zip(METRIC_FIELDS, previous)) if previous is not None else {}
@@ -347,22 +361,25 @@ class DisplayHistory:
         values = (fact.revision, fact.title, fact.title.casefold(), fact.activity_ms,
                   fact.model, fact.model.casefold() if fact.model is not None else None,
                   str(fact.ccost) if fact.ccost is not None else None, decimal_key(fact.ccost),
-                  fact.prompts, fact.duration_ms, fact.context_tokens, fact.latest_activity_ms)
+                   fact.prompts, fact.duration_ms, fact.context_tokens, fact.latest_activity_ms,
+                   fact.prompt_started_ms, fact.activity_origin, fact.catalog_activity_ms)
         if change.previous_revision is None:
             return db.execute("""
                 INSERT INTO sessions(source, session_id, revision, title, title_key, activity_ms,
                     model, model_key, ccost, cost_key, prompts, duration_ms, context_tokens,
-                    latest_activity_ms, source_present)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    latest_activity_ms, prompt_started_ms, activity_origin, catalog_activity_ms, source_present)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT(source, session_id) DO NOTHING
             """, (source, fact.session_id, *values)).rowcount
         return db.execute("""
             UPDATE sessions SET revision=?, title=?, title_key=?, activity_ms=?, model=?, model_key=?,
-                ccost=?, cost_key=?, prompts=?, duration_ms=?, context_tokens=?, latest_activity_ms=?, source_present=1
+                ccost=?, cost_key=?, prompts=?, duration_ms=?, context_tokens=?, latest_activity_ms=?,
+                prompt_started_ms=?, activity_origin=?, catalog_activity_ms=?, source_present=1
             WHERE source=? AND session_id=? AND revision=?
                 AND (revision, title, title_key, activity_ms, model, model_key, ccost, cost_key,
-                     prompts, duration_ms, context_tokens, latest_activity_ms, source_present)
-                    IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     prompts, duration_ms, context_tokens, latest_activity_ms, prompt_started_ms, activity_origin,
+                     catalog_activity_ms, source_present)
+                    IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (*values, source, fact.session_id, change.previous_revision, *values)).rowcount
 
     @staticmethod
@@ -482,9 +499,10 @@ class DisplayHistory:
                     LIMIT ? OFFSET ?
                 )
                 SELECT s.session_id, revision, title, activity_ms, model, ccost,
-                    prompts, duration_ms, context_tokens, latest_activity_ms, source_present
+                    prompts, duration_ms, context_tokens, source_present, latest_activity_ms,
+                    prompt_started_ms, activity_origin, catalog_activity_ms
                 FROM selected CROSS JOIN sessions AS s
                 WHERE s.source=? AND s.session_id=selected.session_id
                 ORDER BY ({column} IS NULL), {column} {order}, s.session_id
             """, (*params, limit, offset, source)).fetchall()
-        return SessionPage(generation, total, tuple(SessionSnapshot(*row[:-2], bool(row[-1]), row[-2]) for row in rows))
+        return SessionPage(generation, total, tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:]) for row in rows))

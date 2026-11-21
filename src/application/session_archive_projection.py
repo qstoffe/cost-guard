@@ -1,7 +1,7 @@
 """Project only qualified Sessions presentation facts, without re-reading history."""
 from dataclasses import dataclass
 
-from src.cache.display_history import SAVED_FIELDS, SessionChange, SessionCheckpoint, SessionFact
+from src.cache.display_history import ACQUIRED_SCALAR_FIELDS, SessionChange, SessionCheckpoint, SessionFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,8 +22,15 @@ class SessionPublication:
         if row.running:
             return None
         fields = set()
+        activity_origin = None
         if row.activity_qualified:
-            fields.update(("activity_ms", "latest_activity_ms"))
+            fields.update(("activity_ms", "latest_activity_ms", "prompt_started_ms", "activity_origin"))
+            if row.last_activity_ms is not None:
+                activity_origin = "finish"
+            elif row.prompt_started_ms is not None:
+                activity_origin = "start"
+            else:
+                activity_origin = "no-prompt"
         if not row.model_pending:
             fields.add("model")
         if row.complete:
@@ -37,8 +44,9 @@ class SessionPublication:
             activity_ms=row.last_activity_ms, latest_activity_ms=row.activity_latest_ms,
             model=(row.model if row.model != "N/A" else row.selected_display_model) or None,
             ccost=row.ccost, prompts=row.prompt_count, duration_ms=row.duration_ms, context_tokens=row.context_tokens,
+            prompt_started_ms=row.prompt_started_ms, activity_origin=activity_origin,
         )
-        complete = fields == SAVED_FIELDS
+        complete = fields == ACQUIRED_SCALAR_FIELDS
         return SessionChange(fact, self.checkpoint.revision if self.checkpoint else None,
                              frozenset(fields), dependency if complete else None,
                              self.checkpoint.progress if self.checkpoint else 0)

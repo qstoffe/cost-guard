@@ -242,7 +242,13 @@ class DisplayHistoryTests(unittest.TestCase):
         original = SessionFact("root", "r1", "Saved title", ccost=Decimal("2.43"))
         self.history.commit_sessions("source", (SessionChange(original, None),))
         with closing(sqlite3.connect(self.history.path, isolation_level=None)) as db:
-            db.executescript("DROP TABLE session_progress; PRAGMA user_version=1;")
+            db.executescript("""
+                DROP TABLE session_progress;
+                ALTER TABLE sessions DROP COLUMN prompt_started_ms;
+                ALTER TABLE sessions DROP COLUMN activity_origin;
+                ALTER TABLE sessions DROP COLUMN catalog_activity_ms;
+                PRAGMA user_version=1;
+            """)
 
         reopened = DisplayHistory(self.root)
         reopened.initialize()
@@ -251,6 +257,34 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual((1, "Saved title", "2.43"), (page.generation, page.rows[0].title, page.rows[0].ccost))
         self.assertEqual({"root": SessionCheckpoint("r1", 0)}, reopened.session_checkpoints("source", ("root",)))
         self.assertEqual(set(), reopened.completed_sessions("source", {"root": "r1"}, "pricing"))
+
+    def test_cache_distinguishes_catalog_time_from_prompt_start_and_causal_finish(self):
+        owner = SessionArchiveOwner(self.history, lambda *_: None)
+        owner.bind("source", "observation")
+        revisions = {"known": "r", "preliminary": "r", "no-finish": "r", "empty": "r"}
+        titles = dict.fromkeys(revisions, "Title")
+        owner.publish_catalog(owner.admit(revisions), titles, revisions, activity=dict.fromkeys(revisions, 500))
+        rows = {
+            "known": SessionUsageRow("known", "Title", "Model", False, Decimal(1), 1,
+                                      last_activity_ms=1000, activity_latest_ms=1500, prompt_started_ms=800),
+            "no-finish": SessionUsageRow("no-finish", "Title", "Model", False, Decimal(1), 1,
+                                         activity_latest_ms=810, prompt_started_ms=810),
+            "empty": SessionUsageRow("empty", "Title", "N/A", False, Decimal(0), 0, empty_history=True),
+        }
+        owner.commit(owner.admit(revisions), rows, revisions, dependency="pricing")
+
+        result = CachedSessionViews(self.history, "source", "UTC").page(period="all", now_ms=3000)
+        by_key = {row["session_id"]: row for row in result["rows"]}
+        expected = {
+            "known": ("finish", 800, 1000, None),
+            "preliminary": (None, None, None, 500),
+            "no-finish": ("start", 810, None, None),
+            "empty": ("no-prompt", None, None, None),
+        }
+        fields = ("activity_origin", "prompt_started_ms", "activity_ms", "catalog_activity_ms")
+        self.assertEqual(expected, {key: tuple(row[field] for field in fields) for key, row in by_key.items()})
+        window = self.history.session_page("source", start_ms=1200, end_ms=1501)
+        self.assertEqual(["known"], [row.session_id for row in window.rows])
 
     def test_dependency_only_publication_survives_restart_and_rejects_stale_same_revision(self):
         root = SessionFact("id", "r1", "Original", ccost=Decimal("2.43"))
