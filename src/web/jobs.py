@@ -236,7 +236,9 @@ class ReportJobs:
                 del self._jobs[victim]
             key = uuid4().hex
             self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None,
-                                   queued_at=time.monotonic(), priority=1, served_at=0)
+                                    queued_at=time.monotonic(), priority=1, served_at=0)
+            if isinstance(request, ManagedReport) and request.kind is ReportKind.TOKEN_MIX:
+                self._jobs[key]['observation_ms'] = int(time.time() * 1000)
             if request.kind is ReportKind.AI_STATS:
                 self._jobs[key]['goals'] = (request.stats_scope,)
             return key
@@ -501,8 +503,11 @@ class ReportJobs:
                 self._token_mix_evidence_at = time.monotonic()
             elif kind == 'result':
                 result = json.loads(payload)
-                if history_jobs.managed(job) and (result.get('error') or {}).get('code') == 'history_continue':
+                error = result.get('error') or {}
+                if history_jobs.managed(job) and error.get('code') == 'history_continue':
                     history_jobs.resume(job)
+                    return True
+                if history_jobs.retry(job, error):
                     return True
                 expected = getattr(job['request'], 'source_identity', '')
                 if expected and result.get('source', {}).get('identity') != expected and not result.get('error'):
@@ -590,6 +595,7 @@ class ReportJobs:
             job['slices'] = job.get('slices', 0) + 1
             self._active = key, process, receiver, now
             job['status'] = 'running'
+            job['error'] = None
             self.analysis = 'loading'
             # Requested work is admitted up front; only background startup awaits its grant.
             job.update(admitted=not isinstance(request, ManagedReport), free=False, yield_requested=False)

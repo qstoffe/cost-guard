@@ -77,11 +77,14 @@ const ReportLoading = (() => {
     }
     update(state) {
       const percent = state.percent || 0;
-      if (state.waitingReason) this.bar.removeAttribute('value');
+      const indeterminate = state.section === 'token-mix' || !!state.waitingReason;
+      if (indeterminate) this.bar.removeAttribute('value');
       else this.bar.value = percent;
-      this.bar.setAttribute('aria-valuetext', state.waitingReason ? state.simple ? 'Loading…' : state.stage : `${percent} percent`);
-      ReportView.text(this.percent, state.waitingReason ? 'Waiting' : `${percent}%`);
-      const label = state.userInitiated ? 'Loading report…' : 'Loading…';
+      const valueText = indeterminate ? state.simple ? 'Loading…' : state.stage : `${percent} percent`;
+      if (state.section !== 'token-mix' || this.bar.getAttribute('aria-valuetext') !== valueText)
+        this.bar.setAttribute('aria-valuetext', valueText);
+      ReportView.text(this.percent, state.section === 'token-mix' ? '' : state.waitingReason ? 'Waiting' : `${percent}%`);
+      const label = state.userInitiated && state.section !== 'token-mix' ? 'Loading report…' : 'Loading…';
       ReportView.text(this.stage, state.simple ? label : state.stage || label);
       // Announce stage transitions, not every count/poll/percentage mutation.
       ReportView.text(this.status, state.simple ? label : state.stageLabel || label);
@@ -92,7 +95,11 @@ const ReportLoading = (() => {
       state.loadingError ||= ReportView.element('p', '', 'error');
       if (state.userInitiated) state.loadingError.setAttribute('role', 'status');
       else state.loadingError.removeAttribute('role');
-      ReportView.text(state.loadingError, state.userInitiated ? 'Could not load. Try again.' : 'N/A');
+      const mixRecovery = ['http_auth_failure', 'source_permission_denied', 'permission_denied'].includes(state.mixFailure) ?
+        'Check OpenCode access, then reopen Cost Guard.' : ['unsupported_schema', 'unsupported_version'].includes(state.mixFailure) ?
+          'Update OpenCode, then reopen Cost Guard.' : 'Token Mix is unavailable. Reopen Cost Guard from the launcher to retry.';
+      ReportView.text(state.loadingError, state.section === 'token-mix' ? mixRecovery :
+        state.userInitiated ? 'Could not load. Try again.' : 'N/A');
       if (parent.firstChild !== state.loadingError) parent.replaceChildren(state.loadingError);
       return;
     }
@@ -180,8 +187,8 @@ const ReportLoading = (() => {
       // return here. An unlimited recovery lifetime needs no retired-ID ledger.
       this.woken = job; this.waiting.wake();
     }
-    async backoff(error) {
-      if (!retryable(error)) throw error;
+    async backoff(error, acceptTyped = false) {
+      if (!retryable(error) && !(acceptTyped && error.retryable === true)) throw error;
       if (this.paging && this.retries >= 3) throw new Error('comparison_page_retries');
       this.retries = Math.min(4, this.retries + 1);
       await this.pause(Math.min(4000, 500 * 2 ** (this.retries - 1)));

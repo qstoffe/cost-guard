@@ -24,6 +24,7 @@ let settingsView = null;
 let cachedReportTimer = null;
 let cachedReportOwner = null;
 let demand = null; // Enabled only after the authenticated host advertises it.
+let tokenMixBinding = null;
 const sourceNotice = document.getElementById('source-compatibility');
 function sourceNoticeGeometry() {
   document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
@@ -38,7 +39,8 @@ function firstReport(state = current) {
 }
 function scheduleCachedReport() {
   const state = current;
-  if (!historical(state) || !state.result && !(automaticHistory(state) && state.failed) || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
+  const recoverCold = automaticHistory(state) && state.failed && state.section !== 'token-mix';
+  if (!historical(state) || !state.result && !recoverCold || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
     clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
   }
   // Live health arrives more often than the lookup interval. Keep the existing
@@ -93,6 +95,15 @@ function selectTokenMix(state, period) {
   state.actionRequested = true;
   ReportLoading.reset(state); demand?.update();
   show(state); firstReport(state); scheduleCachedReport();
+}
+function bindTokenMix(state, admission) {
+  const binding = admission.source_identity ? `${admission.source_identity}:${admission.projection_epoch}` : null;
+  if (admission.stale || admission.error === 'source_identity_changed' ||
+      binding && state.mixBinding && binding !== state.mixBinding) {
+    state.result = null; state.dataRevision = null; state.withheld = false;
+    show(state);
+  }
+  if (binding) tokenMixBinding = state.mixBinding = binding;
 }
 const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
@@ -157,13 +168,15 @@ function connectionStatus(message, state = {}) {
   const blocked = hostState.terminal || hostState.sourceBlocked;
   for (const view of views.values()) {
     view.catalog?.sourceHealth(blocked || hostState.sourceOutage, blocked);
-    if (blocked) {
+  if (blocked) {
       view.detail?.invalidateValues(); view.detail?.detach();
       view.accountTimeline?.invalidate();
     }
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
+  if (!wasWritable && hostState.writable && current?.section === 'token-mix' && !current.loading)
+    enterCachedReport(current);
   scheduleCachedReport();
 }
 async function api(path, value, signal, attachment = false) {
@@ -187,7 +200,12 @@ async function api(path, value, signal, attachment = false) {
   else signal?.addEventListener('abort', aborted, {once: true});
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(path, options);
+    const response = await fetch(path, options).catch(cause => {
+      if (signal?.aborted || !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;
+      const error = new Error('report_transport_unavailable', {cause});
+      error.retryable = true;
+      throw error;
+    });
     const data = response.ok && attachment ? null : await response.json();
     const identity = response.headers?.get('X-CG-Instance');
     if (identity && hostInstance && identity !== hostInstance) {
@@ -229,13 +247,13 @@ function show(state) {
   notice.textContent = '';
   const finite = ReportLoading.sections.includes(state.section);
   if (finite) output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
-  state.interrupted = ReportLoading.interrupted(hostState) ?
+    state.interrupted = ReportLoading.interrupted(hostState) ?
     'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
   if (automaticHistory(state)) {
     refresh.hidden = true;
     heading.hidden = true;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
-     if (state.userInitiated && state.failed) notice.textContent = state.message;
+     if (state.section !== 'token-mix' && state.userInitiated && state.failed) notice.textContent = state.message;
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }
    if (state.section === 'models') { refresh.textContent = 'Try again'; refresh.hidden = !state.failed || !!state.result; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
@@ -250,13 +268,16 @@ function show(state) {
   if (state.section === 'token-mix') {
     ReportView.defaultUnit();
     state.tokenMix ||= new TokenMixView.View(period => selectTokenMix(state, period));
-    const ready = !!state.result && !state.withheld;
+    const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
+      (!state.mixBinding || state.mixBinding === tokenMixBinding);
+    output.setAttribute('aria-busy', String(!ready && !state.failed && !state.interrupted && !hostState.sourceBlocked));
     state.tokenMix.selection(state.period || 'all', ready);
     if (ready) state.tokenMix.update(state.result);
     state.tokenMix.attach(output);
     if (!ready) {
       state.mixLoading ||= ReportView.element('div');
-      state.tokenMix.root.append(state.mixLoading); ReportLoading.show(state.mixLoading, state);
+      if (state.mixLoading.parentNode !== state.tokenMix.root) state.tokenMix.root.append(state.mixLoading);
+      ReportLoading.show(state.mixLoading, state);
     } else state.mixLoading?.remove();
     return;
   }
@@ -360,6 +381,7 @@ async function acquire(state, background = false, prices = false) {
   const priceFocusEvents = priceFocus ? ['focusin', 'pointerdown'] : [];
   for (const event of priceFocusEvents) document.addEventListener(event, movedPriceFocus);
    const request = state.request;
+   const mix = state.section === 'token-mix';
    state.userInitiated = !background && (prices || state.actionRequested === true);
    state.actionRequested = false;
   let publication = null;
@@ -369,12 +391,21 @@ async function acquire(state, background = false, prices = false) {
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   state.dispatchError = null;
+  if (mix) state.mixFailure = null;
   ReportLoading.reset(state);
   state.lastWork = null;
   ReportLoading.observe(state, {phase: 'queued'});
    state.message = state.userInitiated ? 'Loading…' : '';
   show(state);
-  async function admit() {
+   let keepRetained = false;
+   function canRetry(error) {
+     return mix ? ReportLoading.retryable(error) || error.retryable === true : ReportLoading.retryable(error);
+   }
+   async function pause(error) {
+     ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
+     await attempt.backoff(error, mix);
+   }
+   async function admit() {
     while (true) {
       attempt.check(hostState, true);
       try {
@@ -383,7 +414,7 @@ async function acquire(state, background = false, prices = false) {
         retry = false; // Only the explicit user attempt may clear host backoff.
          const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
            demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
-         if (state.attempt !== attempt) return;
+        if (state.attempt !== attempt) return;
          state.active = admission.id;
          state.waitingReason = null;
         if (attempt.retries && !automaticHistory(state)) ReportLoading.reset(state);
@@ -391,12 +422,16 @@ async function acquire(state, background = false, prices = false) {
           // Retained publication identity is independent of an active refresh.
           state.dispatchRefresh = admission.refresh;
           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
-           if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
-              state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
-           }
+           if (mix) bindTokenMix(state, admission);
+           else if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
+               state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
+            }
            if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
-            publication_id: admission.result_id || admission.id};
+             publication_id: admission.result_id || admission.id};
+           else if (mix && state.result && !admission.terminal && TokenMixView.compatible(state.result, state.period)) {
+             keepRetained = true; return; // Let the host finish a quiet refresh.
+           }
            else if (!admission.id && !admission.terminal && automaticHistory(state)) {
              ReportLoading.waiting(state, admission.error || 'report_pending'); show(state);
              await attempt.poll(null, 5000); continue; // Host due/backoff owns readmission, not explicit Retry.
@@ -405,9 +440,9 @@ async function acquire(state, background = false, prices = false) {
         state.progressSequence = 0;
         return;
       } catch (error) {
-        if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
-        ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
-        await attempt.backoff(error);
+         if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !canRetry(error)) throw error;
+         if (mix && state.result && TokenMixView.compatible(state.result, state.period)) { keepRetained = true; return; }
+         await pause(error);
       }
     }
   }
@@ -417,16 +452,35 @@ async function acquire(state, background = false, prices = false) {
     if (state.section === 'ai-stats' && request.stats_scope !== state.request.stats_scope)
       AIStatsView.prioritize(state, api, !!demand);
     show(state);
-    while (true) {
+    while (!keepRetained) {
       // Poll the same logical work even after a long hidden/background period.
       attempt.check(hostState);
-       const job = publication || await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
+       const published = !!publication;
+       let job;
+       try {
+         job = publication || await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
+       } catch (error) {
+         if (!mix || state.attempt !== attempt) throw error;
+         if (demand && error.message === 'not_found') {
+           await attempt.poll(null, 5000); await admit(); continue;
+         }
+         if (!canRetry(error)) throw error;
+         await pause(error); continue; // A failed HTTP poll does not retire the host job.
+       }
         publication = null;
        if (state.attempt !== attempt) return;
       attempt.check(hostState);
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
+        if (mix && demand && !published) {
+          // Dispatcher owns calendar/identity qualification and the atomic
+          // swap. A finished worker may be stale or weaker than the last good result.
+          const finished = state.active;
+          state.active = null; await admit();
+          if (state.active === finished && !publication && !keepRetained) await attempt.poll(null, 5000);
+          continue;
+        }
           if (job.status !== 'complete' || !job.result || job.result.error) {
            if (demand && automaticHistory(state)) { state.active = null; await admit(); continue; }
           const error = new Error(job.result?.error?.code || job.error || job.status);
@@ -459,12 +513,13 @@ async function acquire(state, background = false, prices = false) {
           state.dataRevision = revision;
           if (demand && !prices && !job.publication_id) state.dispatchRefresh = 'scheduled';
          // A usable partial response finishes this attempt, not source coverage.
-          if (state.result) {
+           if (state.result && !mix) {
             state.percent = 100; state.stage = state.stageLabel = 'Report ready';
             if (initial && state === current && state.loader?.root.isConnected)
               await ReportLoading.paintCompletion(state, attempt.controller.signal);
           }
-        state.withheld = state.section !== 'ai-stats' && historical(state) && state.result &&
+         if (mix) state.percent = 100; // No completion paint on Token Mix's indeterminate loader.
+         state.withheld = state.section !== 'ai-stats' && historical(state) && state.result &&
           CachedReports.entry(state.result, state.section) === 'withhold';
         state.pages = {};
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
@@ -486,7 +541,8 @@ async function acquire(state, background = false, prices = false) {
       state.orderRetried = true;
       demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
     }
-   state.message = prices || state.userInitiated ? 'Could not load. Try again.' : '';
+    if (mix) state.mixFailure = error.message;
+    state.message = prices || state.userInitiated ? 'Could not load. Try again.' : '';
     if (prices) state.priceMessage = state.message;
     state.failed = !prices; // A retained price failure belongs only to its toolbar.
   } finally {
@@ -552,6 +608,7 @@ function navigate() {
     // Reuse only matching finite observations. Live Accounts never owns a job.
     const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
     views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
+      mixBinding: cached?.mixBinding,
       pages: {}, loading: false, active: null,
       message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ?
         (demand ? 'Reusing the last verified observation; the host checks freshness.' : 'Snapshot captured. Reused frozen observation.') :

@@ -48,7 +48,7 @@ for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);
   class View {constructor(){this.root=ReportView.element();} selection(){} update(){} attach(){}}
   class StatsView extends View {refreshDatabaseSizes(){this.databaseRefresh=(this.databaseRefresh || 0)+1;}}
-  const TokenMixView={valid:()=>true,View}, ComparisonsView={valid:()=>true,View};
+  const TokenMixView={valid:()=>true,compatible:()=>true,View}, ComparisonsView={valid:()=>true,View};
   const AIStatsView={valid:()=>true,View:StatsView,prioritize(){},observe(){return true;},remember(state,result){state.result=result;}};`,context);
 vm.runInContext(fs.readFileSync('src/web/assets/app.js','utf8'),context);
 const run = code=>vm.runInContext(code,context);
@@ -256,6 +256,15 @@ async function main(){
     assert.equal(ids.notice.textContent,'','passive cache failure has no technical announcement');
     assert.equal(ids.refresh.hidden,true);
     assert.equal(ids.toolbar.hidden,true,'no redundant toolbar after a cold history failure');
+    if (section==='token-mix') {
+      assert.equal(run('cachedReportTimer'),null,'a cold terminal Token Mix error does not loop');
+      managedResponse={id:'recovered',result_id:'recovered',result:retainedResult,refresh:'scheduled'};
+      run(`connectionStatus('blocked',{kind:'connected',writable:false,sourceError:'http_auth_failure'});
+        connectionStatus('connected',{kind:'connected',writable:true,sourceError:null})`);
+      await settle();
+      assert.equal(cold.result,retainedResult);assert.equal(cold.failed,false);
+      continue;
+    }
     const scheduled=run('cachedReportTimer');
     for(let i=0;i<8;i++) {
       now+=1000;

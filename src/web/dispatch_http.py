@@ -59,7 +59,7 @@ def handle(handler, value):
                 handler.reply(503, {'error': 'source_starting', 'retryable': True})
                 return True
             result = dispatcher.lookup(request, retry=value['retry'])
-            if not result['id'] and not result['terminal']:
+            if request.kind is not ReportKind.TOKEN_MIX and not result['id'] and not result['terminal']:
                 handler.reply(503, {'error': result['error'] or 'busy', 'retryable': True})
             else:
                 handler.reply(200, result)
