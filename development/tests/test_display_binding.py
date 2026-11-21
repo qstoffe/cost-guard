@@ -6,14 +6,20 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import sqlite3
 import unittest
+from unittest.mock import patch
 
+from development.tests.fixtures.opencode_v1_database import create_v1_database
+from development.tests.fixtures.report_runtime import FakePricingProvider
+from src.cache import CacheDatabase, CacheRepository
 from src.cache.display_history import SessionChange, SessionFact
 from src.application.session_catalog import SessionCatalog
-from src.sources.errors import FailureCode, SourceUnavailableError
-from src.sources.opencode_v1 import OpenCodeV1Source
 from src.domain import NormalizedSession, Provenance, SessionCapabilities
 from src.reports.models import SessionUsageRow
-from src.watch.observers import CatalogObservation
+from src.reports.service import ReportService
+from src.sources.errors import FailureCode, SourceUnavailableError
+from src.sources.opencode_v1 import OpenCodeV1Source
+from src.sources.selection import SourceSelection
+from src.watch.observers import CatalogObservation, observe_catalog
 from src.web.display_archive import DisplayArchive
 from src.web.display_binding import selected_display_binding
 
@@ -175,6 +181,92 @@ class DisplayBindingTests(unittest.TestCase):
             result, = archive.views.page(period="all")["rows"]
 
             self.assertEqual(("Settled", "7.32", 9), (result["title"], result["ccost"], result["prompts"]))
+
+    def test_unvisited_history_uses_one_root_per_slice_and_restores_qualified_v1_progress(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fixture.db"
+            create_v1_database(path)
+            # The stock fixture ends with a synthetic user message. End this
+            # disposable source at its earlier, terminal compaction summary.
+            with closing(sqlite3.connect(path)) as db:
+                db.execute("DELETE FROM part WHERE message_id='msg_synthetic'")
+                db.execute("DELETE FROM message WHERE id='msg_synthetic'")
+                db.commit()
+            source = OpenCodeV1Source(path)
+            selection = SourceSelection(source, "v1", (), source.probe())
+            database = CacheDatabase(root)
+            database.initialize()
+            repository = CacheRepository(database)
+            service = ReportService(selection=selection, pricing_provider=FakePricingProvider(),
+                account_provider=None, cache_repository=repository, config={"timezone": "UTC"},
+                now_ms=50_000, progress=lambda _: None)
+            driver = SimpleNamespace(coordinator=SimpleNamespace(report_service=service, catalog_observation=None),
+                                     error=None, terminal=False)
+            archive = DisplayArchive(root, lambda *_: None)
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            catalog = SessionCatalog(clock_ms=lambda: 50_000)
+            observation = observe_catalog(source, include_archived_revisions=True)
+            catalog.observe(observation)
+
+            archive.acquire_summaries(catalog, service)
+            first_slice = archive.views.page(period="all")
+            archive.acquire_summaries(catalog, service)
+            full = archive.views.page(period="all")
+            restarted = DisplayArchive(root, lambda *_: None)
+            restarted.initialize()
+            restarted.observe(driver, before_tick=True)
+            with patch.object(service, "_analyze", side_effect=AssertionError("unnecessary source read")) as read:
+                restarted.acquire_summaries(catalog, service)
+                read.assert_not_called()
+
+            self.assertFalse(catalog.leases)
+            self.assertEqual(1, first_slice["cached_total"])
+            self.assertEqual({"ses_root", "ses_other"}, {row["session_id"] for row in full["rows"]})
+            by_id = {row["session_id"]: row for row in full["rows"]}
+            self.assertEqual(0, by_id["ses_other"]["prompts"])
+            self.assertEqual(1, by_id["ses_root"]["prompts"])
+            self.assertEqual(full["generation"], restarted.views.page(period="all")["generation"])
+            with database.connect() as db:
+                self.assertEqual(0, db.execute("SELECT count(*) FROM cache_entries").fetchone()[0])
+
+    def test_unreadable_first_root_does_not_starve_later_roots(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            driver = v1_driver(root)
+            service = driver.coordinator.report_service
+            service._load_catalog = lambda: None
+            service._load_comparison_catalog = lambda: SimpleNamespace(diagnostic_signature="pricing")
+            service._dependencies = lambda _: "config"
+            service.retain_derived_cache_read_only = lambda: None
+            clock = [100]
+            archive = DisplayArchive(root, lambda *_: None)
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            catalog = SessionCatalog(clock=lambda: clock[0], clock_ms=lambda: 50_000)
+            roots = tuple(NormalizedSession(key, key, 1, 2, Provenance("fixture", key), SessionCapabilities())
+                          for key in ("a", "b", "c"))
+            catalog.observe(CatalogObservation(roots, (), {}, dict.fromkeys(("a", "b", "c"), "r")))
+            calls = []
+
+            def summary(_service, item, revision, **kwargs):
+                calls.append(item.session_id)
+                if item.session_id == "a":
+                    raise SourceUnavailableError("fixture")
+                return SessionUsageRow(item.session_id, item.title, "Model", False, Decimal("1"), 1), revision
+
+            with patch("src.application.session_archive_sweep.session_summary", side_effect=summary):
+                for _ in range(4):
+                    archive.acquire_summaries(catalog, service)
+                self.assertFalse(archive.summary_pending(catalog))
+                clock[0] = 160
+                self.assertTrue(archive.summary_pending(catalog))
+                archive.acquire_summaries(catalog, service)
+                archive.acquire_summaries(catalog, service)
+
+            self.assertEqual(["a", "b", "c", "a"], calls)
+            self.assertEqual(["b", "c"], [row["session_id"] for row in archive.views.page(period="all")["rows"]])
 
 
 def v1_driver(root):

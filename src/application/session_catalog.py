@@ -10,17 +10,17 @@ from threading import Lock
 import time
 from uuid import uuid4
 
-from src.analysis.cache import dependency_signature
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.model_identity import payload_current
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
-from src.reports.session_summary import ALGORITHM as SUMMARY_ALGORITHM, EFFORT_REVISION, session_summary
+from src.reports.session_summary import session_summary
 from src.sources.errors import SourceError
 from src.watch.models import SessionPreview
 
 from .projection import project
+from .session_archive_sweep import checkpoint_dependency, scalar_dependency
 from .session_navigation import Navigation
 from .session_catalog_scope import (
     CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population,
@@ -491,8 +491,7 @@ class SessionCatalog:
 
     def tick(self, service):
         archive = self.display_archive
-        dependencies = dependency_signature((SUMMARY_ALGORITHM, EFFORT_REVISION,
-            service._dependencies(service._load_catalog()), service._load_comparison_catalog().diagnostic_signature))
+        dependencies = scalar_dependency(service)
         with self.lock:
             self.checked_at = self.clock()
             if self.index_unavailable:
@@ -619,9 +618,8 @@ class SessionCatalog:
                 # Native model identity can change without a root revision.
                 # A checkpoint must name the exact observed identity authority;
                 # callers cannot use it as a revision-only restart shortcut.
-                identity_signature = sorted(dependency_signature(value) for value in identity_values)
-                checkpoint_dependency = dependency_signature((dependencies, identity_signature))
-                archive.publish_summary(service, admission, row, actual, dependency=checkpoint_dependency)
+                archive.publish_summary(service, admission, row, actual,
+                                        dependency=checkpoint_dependency(dependencies, identity_values))
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:

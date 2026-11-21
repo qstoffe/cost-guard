@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
+from src.application.session_archive_sweep import SessionArchiveSweep
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
 from src.sources.errors import SourceError
 from src.sources.opencode_v2 import OpenCodeV2Source
@@ -17,6 +18,7 @@ class DisplayArchive:
     def __init__(self, root, publish):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
+        self.sweep = SessionArchiveSweep()
         self.views = None
         self._binding = None
         self._observing = None
@@ -114,7 +116,29 @@ class DisplayArchive:
         views = self.views
         return (views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
                 and (self._catalog_key != (views.binding, catalog.membership_generation)
-                     or self._pending is not None or self._membership_after is not None))
+                      or self._pending is not None or self._membership_after is not None))
+
+    def summary_pending(self, catalog):
+        views = self.views
+        return (views is not None and time.monotonic() >= self._retry_at
+                and self.sweep.due(catalog, views.binding))
+
+    def completed_summary_keys(self, binding, revisions, dependency):
+        completed = None
+
+        def read():
+            nonlocal completed
+            views = self.views
+            if views is not None and (views.source, views.binding) == binding:
+                completed = self.history.completed_sessions(binding[0], revisions, dependency)
+
+        self._cache_write(read)
+        return completed
+
+    def acquire_summaries(self, catalog, service):
+        binding = self._writer_binding(service)
+        if binding is not None and time.monotonic() >= self._retry_at:
+            self.sweep.tick(catalog, self, service, binding)
 
     def publish_catalog(self, catalog, service):
         """One bounded write slice on the existing Sessions acquisition lane."""
@@ -190,5 +214,6 @@ class DisplayArchive:
 
     def publish_summary(self, service, admission, row, revision, *, dependency=None):
         if (admission is not None and self._writer_binding(service) == (admission.source, admission.epoch)):
-            self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
-                                                           {row.session_id: revision}, dependency=dependency))
+            return self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
+                                                                  {row.session_id: revision}, dependency=dependency))
+        return False

@@ -185,6 +185,10 @@ class ReportService:
         # readable; CLI and Live keep their original derived-cache ownership.
         self._derived.write_enabled = not enabled
 
+    def retain_derived_cache_read_only(self):
+        """Allow reuse of compatible derived rows without growing the legacy cache."""
+        self._derived.write_enabled = False
+
     def _load_catalog(self) -> PricingCatalog:
         if self.catalog is None:
             self.progress(WorkProgress("Loading pricing catalog", "pricing"))

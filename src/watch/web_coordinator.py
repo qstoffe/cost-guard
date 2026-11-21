@@ -70,6 +70,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_observation = None
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
+        self.catalog_turn = 0
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
 
@@ -163,8 +164,14 @@ class WebWatchCoordinator(WatchCoordinator):
         scalar_needed = catalog.needed()
         archive = catalog.display_archive
         archive_needed = archive is not None and archive.catalog_pending(catalog)
-        if not self._closed and (scalar_needed or archive_needed):
-            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed)
+        sweep_needed = archive is not None and archive.summary_pending(catalog)
+        if not self._closed and (scalar_needed or archive_needed or sweep_needed):
+            self.catalog_turn += 1
+            # Reserve bounded progress even under continuous legacy demand. Both
+            # jobs share the original lane; Watch/Mini observation never waits here.
+            sweep = sweep_needed and (not scalar_needed or self.catalog_turn % 4 == 0)
+            self.catalog_job = self.catalog_pool.submit(
+                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep)
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
@@ -183,18 +190,21 @@ class WebWatchCoordinator(WatchCoordinator):
         return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
-    def _catalog_capture(self, catalog, now_ms, scalar_needed=True):
+    def _catalog_capture(self, catalog, now_ms, scalar_needed=True, sweep=False):
         service = None
         try:
             if catalog.display_archive is not None:
                 # Metadata was already observed by Live. Do not acquire source
                 # or prices again just to publish that bounded batch.
                 catalog.display_archive.publish_catalog(catalog, self.report_service)
-            if not scalar_needed:
+            if not scalar_needed and not sweep:
                 return
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
-                catalog.tick(service)
+                if sweep:
+                    catalog.display_archive.acquire_summaries(catalog, service)
+                else:
+                    catalog.tick(service)
         except SourceError as error:
             catalog.index_failed(str(error.code), terminal=error.terminal)
         except PricingUnavailableError:
