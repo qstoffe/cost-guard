@@ -25,7 +25,7 @@ const SessionsCatalog = (() => {
     return '#/sessions?' + params;
   }
   class View {
-    constructor(api) {
+    constructor(api, {cached = false} = {}) {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', undefined, 'sessions-action-status'); this.status.setAttribute('role', 'status');
@@ -48,8 +48,9 @@ const SessionsCatalog = (() => {
       const head = el('thead'), header = el('tr'); this.headers = [];
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
-        const label = ContextHelp.heading(button, help + (key === 'activity' ? '' :
-          '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
+        const label = ContextHelp.heading(button, cached ? key === 'activity' ?
+          'Last cached prompt activity. Fields not yet known sort last.' : help :
+          help + (key === 'activity' ? '' : '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
           this.navigateTo(destination(0, null, key, direction, this.period), null, 'sort');
@@ -592,5 +593,157 @@ const SessionsCatalog = (() => {
       });
     }
   }
-  return {View};
+  // Committed-cache controller. No request token, source waiter, resumable
+  // navigation intent or admission path; the hash names just a local query.
+  class CachedView extends View {
+    constructor(api) {
+      super(api, {cached: true});
+      this.hint = null;
+      this.blocked = false;
+    }
+    navigateTo(target) {
+      if (target !== location.hash) location.hash = target;
+    }
+    configure(params) {
+      const requestedOffset = Number(params?.get('offset') || 0);
+      const query = {
+        offset: Number.isSafeInteger(requestedOffset) && requestedOffset >= 0 &&
+          requestedOffset <= 1000000 && requestedOffset % 25 === 0 ? requestedOffset : 0,
+        sort: columns.find(([key]) => key === params?.get('sort'))?.[0] || 'activity',
+        direction: params?.get('direction') === '1' ? 1 : -1,
+        period: periods.find(([key]) => key === params?.get('period'))?.[0] || 'today'
+      };
+      if (Object.keys(query).every(key => query[key] === this[key])) return;
+      this.retire();
+      Object.assign(this, query); this.periodSelection();
+      this.needsRead = true;
+      this.poll();
+    }
+    attach(parent) {
+      if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
+      if (!this.attached) {
+        this.attached = true;
+        this.needsRead = true;
+      }
+      if (this.needsRead) this.poll();
+    }
+    detach() {
+      this.attached = false;
+      this.retire();
+    }
+    interest() {} // No HTTP lease; display work never signals source demand.
+    sourceHealth(_unverified, blocked) {
+      if (this.blocked === blocked) return;
+      this.blocked = blocked;
+      if (blocked) {
+        this.retire();
+        this.unavailable();
+      } else {
+        this.needsRead = true;
+        this.poll();
+      }
+    }
+    wake() {} // Live source notifications do not authorize cached values.
+    cacheHint(hint, resync = false) {
+      if (hint?.view !== 'sessions') return;
+      const changed = this.hint?.binding !== hint.binding;
+      if (!resync && !changed && hint.generation === this.hint?.generation) return;
+      if (!changed && this.hint.generation > hint.generation) return;
+      this.hint = hint;
+      this.needsRead = Boolean(hint.binding);
+      if (changed && (!hint.binding || this.data && this.data.binding !== hint.binding)) {
+        this.retire();
+        this.unavailable();
+      }
+      if (this.needsRead && this.attached && !document.hidden && !this.flight && !this.timer) {
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          this.poll();
+        }, 50);
+      }
+    }
+    retire() {
+      this.flight?.abort();
+      this.flight = null;
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    unavailable() {
+      this.data = null;
+      this.costs = null;
+      this.rows([]);
+      ReportView.text(this.label, 'Session cache unavailable.');
+      this.pagerState();
+    }
+    async poll() {
+      if (!this.attached || document.hidden || this.blocked || this.flight) return;
+      clearTimeout(this.timer);
+      this.timer = null;
+      this.needsRead = false;
+      const request = {offset: this.offset, period: this.period, sort: this.sort, direction: this.direction};
+      const data = this.data;
+      if (data && Object.keys(request).every(key => data[key] === request[key])) {
+        request.known = Object.fromEntries([...Object.keys(request), 'generation', 'binding', 'start_ms', 'end_ms']
+          .map(key => [key, data[key]]));
+      }
+      const flight = new AbortController();
+      this.flight = flight;
+      const hint = this.hint;
+      try {
+        const result = await this.api('/api/cache/sessions', request, flight.signal);
+        if (this.flight !== flight || this.blocked) return;
+        const current = this.hint;
+        if (current !== hint && current?.binding !== result.binding) return;
+        if (current && current.binding === result.binding && current.generation > result.generation) this.needsRead = true;
+        if (result.unchanged && data?.binding === result.binding) this.data = {...data, ...result};
+        else this.paint(result);
+      } catch (_) {
+        if (this.flight === flight) this.unavailable();
+      } finally {
+        if (this.flight === flight) {
+          this.flight = null;
+          if (this.needsRead && this.attached && !document.hidden) {
+            this.timer = setTimeout(() => { this.timer = null; this.poll(); }, 50);
+          }
+        }
+      }
+    }
+    paint(data) {
+      this.data = data;
+      this.renderTimezone = data.timezone_id;
+      Object.assign(data, {total: data.cached_total, state: 'observed', source: {identity: data.binding}});
+      for (const {key, name, th, label} of this.headers) {
+        const active = key === data.sort;
+        th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
+        ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ''));
+      }
+      this.rows(data.rows.map(row => ({
+        ...row, last_activity_ms: row.activity_ms, prompt_count: row.prompts,
+        has_summary: row.ccost != null, complete: row.ccost != null,
+        metric_states: Object.fromEntries(Object.entries(row.fields).map(([key, value]) =>
+          [key, value === 'as-of' ? 'ready' : 'pending'])),
+        metric_absences: Object.fromEntries(Object.entries(row.fields)
+          .filter(([, value]) => value === 'source-history-missing'))
+      })));
+      const count = data.rows.length;
+      const range = count ? `Showing ${data.offset + 1}–${data.offset + count} of ${data.total} cached sessions` :
+        data.total ? `No rows on this page · ${data.total} cached sessions` : 'No cached sessions yet';
+      const pages = Math.max(1, Math.ceil(data.total / data.size));
+      ReportView.text(this.label, data.offset < pages * data.size ?
+        `${range} · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` : range);
+      this.pagerState();
+    }
+    pagerState() {
+      const data = this.data || {size: 25, total: 0, offset: this.offset || 0, period: this.period,
+        sort: this.sort, direction: this.direction};
+      const last = Math.max(0, Math.ceil(data.total / data.size) - 1) * data.size;
+      this.previous.destination = this.data && data.offset ? this.pageDestination(data, Math.min(last, data.offset - data.size)) : null;
+      this.next.destination = data.offset + data.size < data.total ? this.pageDestination(data, data.offset + data.size) : null;
+      this.numberedPages(data);
+      this.pagerBusy();
+    }
+    pageDestination(data, offset) { return destination(offset, null, data.sort, data.direction, data.period); }
+    sectionDestination() { return this.offset ? this.pageDestination(this, this.offset) : this.firstPageDestination(); }
+  }
+  return {View, CachedView};
 })();

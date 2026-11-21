@@ -201,6 +201,7 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertIn(b'progress max="100" value="0"', body)
         self.assertIn(b'href="#/watch">Watch</a>', body)
         self.assertNotIn(b'href="#/live">Live</a>', body)
+        self.assertNotIn(b'href="#/comparisons"', body)
         self.assertIn(b'aria-valuetext="0 percent"', body)
         self.assertNotIn('≈'.encode(), body)
         self.assertIn(b'/reports.js', body)
@@ -213,10 +214,75 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
 
+    def test_parked_comparisons_cannot_admit_a_web_report(self):
+        self.login()
+        dispatcher = Mock(identity='source')
+        self.server.lifecycle = SimpleNamespace(dispatcher=dispatcher,
+            stopping=Event(), nonce='test-instance', observations=Mock())
+        report = {'kind': 'comparisons'}
+        attempts = (
+            ('/api/reports', report),
+            ('/api/data', {'request': report, 'retry': True}),
+            ('/api/interest', {'tab': 'a' * 32, 'section': 'comparisons', 'visible': True, 'request': report}),
+        )
+
+        with patch.object(self.jobs, 'submit') as submit:
+            for path, request in attempts:
+                with self.subTest(path=path):
+                    status, _, body = self.request(path, request)
+                    self.assertEqual(400, status)
+                    self.assertEqual({'error': 'invalid_request'}, json.loads(body))
+            submit.assert_not_called()
+        dispatcher.lookup.assert_not_called()
+        dispatcher.interest.assert_not_called()
+
+    def test_cached_sessions_reads_committed_sql_without_source_or_job_admission(self):
+        from src.application.cached_session_views import CachedSessionViews
+        from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+
+        endpoint = "/api/cache/sessions"
+        request = {'sort': 'prompts', 'direction': -1, 'period': 'all', 'offset': 0}
+        self.assertEqual(401, self.request(endpoint, request)[0])
+        self.login()
+        source_startup = Mock()
+        self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(),
+            nonce='test-instance', source_startup=source_startup)
+        self.assertEqual(503, self.request(endpoint, request)[0])
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(self.jobs, 'submit') as submit:
+            root = Path(tmp)
+            history = DisplayHistory(root)
+            self.server.lifecycle.cached_session_views = CachedSessionViews(history, 'bound', 'UTC')
+            status, _, body = self.request(endpoint, request)
+            self.assertEqual((503, {'error': 'cache_unavailable'}), (status, json.loads(body)))
+            history.initialize()
+            status, _, body = self.request(endpoint, request)
+            self.assertEqual(200, status)
+            self.assertEqual((0, []), (json.loads(body)['cached_total'], json.loads(body)['rows']))
+
+            history.commit_sessions('bound', (
+                SessionChange(SessionFact('pending', 'known-rev', 'Pending'), None),
+                SessionChange(SessionFact('ready', 'ready-rev', 'Known', prompts=3), None),
+            ))
+            history.commit_sessions('bound', missing=(('pending', 'known-rev'),))
+            history.commit_sessions('other', (SessionChange(SessionFact('other', 'r1', 'Not visible'), None),))
+
+            status, _, body = self.request(endpoint, request)
+            result = json.loads(body)
+
+            self.assertEqual((200, 2, 2), (status, result['generation'], result['cached_total']))
+            self.assertEqual(['ready', 'pending'], [row['session_id'] for row in result['rows']])
+            self.assertEqual('source-history-missing', result['rows'][1]['fields']['prompts'])
+            self.assertNotIn('source_revision', result['rows'][0])
+            self.assertEqual(400, self.request(endpoint, dict(request, source='other'))[0])
+            self.assertEqual(400, self.request(endpoint, dict(request, offset=1))[0])
+            submit.assert_not_called()
+        source_startup.report_status.assert_not_called()
+
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()
         delivered = Event()
-        demand = SimpleNamespace(request=lambda _path: contextlib.nullcontext(), delivered=Mock(side_effect=lambda *_: delivered.set()))
+        demand = SimpleNamespace(delivered=Mock(side_effect=lambda *_: delivered.set()))
         result = {'id': 'a' * 32, 'status': 'complete', 'result': {'view': {'kind': 'normal'}}}
         dispatcher = Mock(identity='source')
         dispatcher.lookup.return_value = dict(result, terminal=False)

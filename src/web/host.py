@@ -19,9 +19,14 @@ from .security import BrowserLinkUnavailable
 from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
 from .database_sizes import database_sizes
+from .display_archive import DisplayArchive
 
 
 class WebHost:
+    # Keep the draft cutover explicit while current-host running/finish
+    # observations and the legacy migration are not yet ready.
+    cached_sessions_enabled = False
+
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
         self.store = store
@@ -42,6 +47,7 @@ class WebHost:
             from .composition import dispatch_dependencies
             self.dependencies = dispatch_dependencies(root)
         self.events = EventHub(self.nonce)
+        self.display_archive = DisplayArchive(root, self.events.publish) if jobs is None else None
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:
@@ -49,7 +55,8 @@ class WebHost:
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None) if live_factory else None
+            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
+            display_archive=self.display_archive) if live_factory else None
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)
@@ -80,6 +87,10 @@ class WebHost:
         driver = getattr(self.live, 'driver', None)
         selection = driver.coordinator.report_service.selection if driver else None
         return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database)
+
+    @property
+    def cached_session_views(self):
+        return self.display_archive.views if self.display_archive is not None else None
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:
@@ -171,7 +182,7 @@ class WebHost:
                             if self.live:
                                 self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
-                        self.cache_housekeeping.tick(self)
+                        self.cache_housekeeping.tick()
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:
@@ -197,7 +208,8 @@ class WebHost:
                 self.stopped.set()  # GUI must observe this even on cleanup failure.
 
     def start(self):
-        self.cache_housekeeping.start()
+        if self.display_archive is not None:
+            self.display_archive.initialize()
         self.server = LoopbackServer(self.jobs, self)
         if self.live:
             self.live.start()

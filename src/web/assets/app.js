@@ -16,6 +16,8 @@ let liveConnection = null;
 let liveValue = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
+let cachedSessionsAvailable = false;
+let sessionCacheHint = null;
 let accountTimelineAvailable = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
@@ -578,11 +580,12 @@ function navigate() {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
   }
-  let route = ReportRoutes.resolve(location.hash);
+  const capabilities = {cachedSessions: cachedSessionsAvailable};
+  let route = ReportRoutes.resolve(location.hash, capabilities);
   const redirected = !!route.redirect;
   if (redirected) {
     history.replaceState(null, '', '/' + route.redirect);
-    route = ReportRoutes.resolve(location.hash);
+    route = ReportRoutes.resolve(location.hash, capabilities);
   }
   const match = route.session;
   if (match) rememberedSession = '#/sessions/' + match[1];
@@ -652,16 +655,18 @@ function navigate() {
     const origin = history.state?.sessionsReturn;
     current.detail.back.href = origin?.detail === location.hash ? origin.list : '#/sessions';
   }
-   if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
-    if (!current.catalog) {
-      current.catalog = new SessionsCatalog.View(api);
-      const blocked = hostState.terminal || hostState.sourceBlocked;
-      current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+   if (route.catalog && csrf && (sessionDetailAvailable || cachedSessionsAvailable) && typeof SessionsCatalog !== 'undefined') {
+     if (!current.catalog) {
+       const Controller = cachedSessionsAvailable ? SessionsCatalog.CachedView : SessionsCatalog.View;
+       current.catalog = new Controller(api);
+       const blocked = hostState.terminal || hostState.sourceBlocked;
+       current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+       current.catalog.cacheHint?.(sessionCacheHint);
     }
     current.catalog.configure(route.params);
      current.request = null; current.message = '';
    }
-   if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
+   if ((match || route.catalog && !cachedSessionsAvailable) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
   if (csrf && !hostState.terminal && current.stats && (current !== previous || !current.stats.databaseRefresh))
@@ -701,6 +706,7 @@ async function connect() {
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
+    cachedSessionsAvailable = state.cached_sessions === true;
     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
@@ -731,7 +737,11 @@ async function connect() {
                 !['queued', 'running'].includes(job.status)) current.attempt.notify(job.id);
         }
          firstReport();
-      }, connectionStatus);
+      }, connectionStatus, undefined, undefined, (hint, resync) => {
+        if (hint?.view !== 'sessions') return;
+        sessionCacheHint = hint;
+        current?.catalog?.cacheHint?.(hint, resync);
+      });
     }
     navigate();
   } catch (_) {

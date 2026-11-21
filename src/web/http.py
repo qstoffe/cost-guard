@@ -1,17 +1,18 @@
 """Fixed-route, bounded loopback HTTP shell. No generic filesystem handler."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
 import re
 import socket
 from socketserver import TCPServer
+import sqlite3
 import time
 from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
 from src.analysis.account_timeline import PERIODS as ACCOUNT_PERIODS
+from src.reports import ReportKind
 from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
@@ -207,9 +208,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not self.parse_request():
                 return
             self.close_connection = True
-            housekeeping = getattr(self.server.lifecycle, 'cache_housekeeping', None)
-            with housekeeping.request(self.path) if housekeeping else nullcontext():
-                self.route()
+            self.route()
         except ReportWorkerStopError as error:
             if self.server.lifecycle:
                 self.server.lifecycle.runtime_failed(error)
@@ -370,6 +369,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                         request = ModelsPriceRefresh()
                     else:
                         request = parse_report(value)
+                        if request.kind is ReportKind.COMPARISONS:
+                            raise ValueError("invalid_request")
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})
                     return
@@ -399,6 +400,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/sessions" and self.server.lifecycle and self.server.lifecycle.live:
                 self.session_catalog(value)
+                return
+            if self.path == "/api/cache/sessions":
+                self.cached_sessions(value)
                 return
             match = JOB_PATH.fullmatch(self.path)
             if match and match[2] and not value:
@@ -443,6 +447,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None
+                    value["cached_sessions"] = getattr(self.server.lifecycle, "cached_sessions_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)
@@ -533,6 +538,27 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(410, {"error": "catalog_expired"})
         except RuntimeError:
             self.reply(429, {"error": "catalog_busy"})
+
+    def cached_sessions(self, value):
+        if set(value) - {"period", "sort", "direction", "offset", "known"}:
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        views = getattr(owner, "cached_session_views", None)
+        if views is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+            return
+        try:
+            result = views.page(**value)
+        except (TypeError, ValueError):
+            self.reply(400, {"error": "invalid_request"})
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+        else:
+            if views is not getattr(owner, "cached_session_views", None):
+                self.reply(503, {"error": "cache_source_unbound"})
+            else:
+                self.reply(200, result)
 
     def stream_events(self):
         if not self.server._streams.acquire(blocking=False):

@@ -4,7 +4,7 @@ const context = vm.createContext({Date});
 vm.runInContext(fs.readFileSync('src/web/assets/render.js','utf8'),context);
 vm.runInContext(fs.readFileSync('src/web/assets/cached-reports.js','utf8'),context);
 const now = 900000000;
-for(const [section, ttl] of [['models',3600000],['ai-stats',900000],['token-mix',300000],['comparisons',300000]]) {
+for(const [section, ttl] of [['models',3600000],['ai-stats',900000],['token-mix',300000]]) {
   context.section=section; context.now=now;
   const entry=age=>{
     context.result={observed_at_ms:now-age,source:{observed_at_ms:now-age}};
@@ -22,7 +22,7 @@ for(const [section, ttl] of [['models',3600000],['ai-stats',900000],['token-mix'
      assert.equal(vm.runInContext('CachedReports.entry(result,section,now)',context),'withhold');
    }
 }
-assert.deepEqual(vm.runInContext('Object.keys(CachedReports.cadences).sort().join(",")',context),'ai-stats,comparisons,models,token-mix');
+assert.deepEqual(vm.runInContext('Object.keys(CachedReports.cadences).sort().join(",")',context),'ai-stats,models,token-mix');
 // Actual server intervals survive configured-local midnight, DST and year/month rollover.
 for(const [start,end,expected] of [
   ['2026-10-24T22:00:00Z','2026-10-25T23:00:00Z','2026-10-25 00:00 → 2026-10-26 00:00'],

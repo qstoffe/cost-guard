@@ -58,7 +58,7 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None):
+                    on_activity=None, activity_end_ms=None, persist_legacy=True):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -176,7 +176,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         *(message for message in item.snapshot.messages if message.model is not None)))
     if on_dependencies is not None:
         on_dependencies(identity_values)
-    if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
+    if persist_legacy and item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = identity_values
