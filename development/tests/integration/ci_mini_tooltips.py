@@ -89,27 +89,29 @@ def probe(state, journey):
     changed = subprocess.run([*GIT, "diff", "--name-only", "HEAD^", "HEAD", "--",
         "src/web/assets/help.js", "src/web/assets/mini.js", "src/web/assets/watch.js",
         "src/application/mini_costs.py", "development/tests/integration/probe_hover_stationary.cjs",
+        "development/tests/integration/probe_mini_duration.cjs",
         "development/tests/integration/probe_web_help.cjs", "development/tests/integration/ci_mini_tooltips.py"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout
-    if not changed.strip() and os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
+    full = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    if not changed.strip() and not full:
         save("mini-tooltips-" + journey, dict(outcome="NOT RUN", journey=journey, reason="tooltip owners unchanged"))
         return 0
     state["stage"] = "image-browser-binding"
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
         browser = playwright.chromium.executable_path  # Full image-provided Chromium.
-    baseline = ROOT / "ci-results/baseline-help.js"
     revision = subprocess.run([*GIT, "rev-parse", "HEAD^"],
         cwd=ROOT, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
-    state["stage"] = "baseline-git-show"
-    original = subprocess.run([*GIT, "show", "HEAD^:src/web/assets/help.js"],
-        cwd=ROOT, capture_output=True, check=True, timeout=10).stdout
-    state["stage"] = "baseline-write"
-    baseline.write_bytes(original)
-    env = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable,
-        COST_GUARD_CI_BROWSER="1", COST_GUARD_BASELINE_HELP=str(baseline),
-        COST_GUARD_BASELINE_REVISION=revision)
     output = ROOT / f"ci-results/mini-tooltips-{journey}.json"
+    env = dict(os.environ, COST_GUARD_TEST_PYTHON=sys.executable, COST_GUARD_CI_BROWSER="1")
+    if journey == "mouse" and full:
+        state["stage"] = "baseline-git-show"
+        original = subprocess.run([*GIT, "show", "HEAD^:src/web/assets/help.js"],
+            cwd=ROOT, capture_output=True, check=True, timeout=10).stdout
+        state["stage"] = "baseline-write"
+        baseline = ROOT / "ci-results/baseline-help.js"
+        baseline.write_bytes(original)
+        env.update(COST_GUARD_BASELINE_HELP=str(baseline), COST_GUARD_BASELINE_REVISION=revision)
     state["stage"] = "native-pip-" + journey
     result = subprocess.run(["node", "development/tests/integration/probe_web_help.cjs",
         browser, str(output), "--mini-tooltips", journey], cwd=ROOT, env=env,

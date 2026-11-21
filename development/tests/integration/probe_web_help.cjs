@@ -157,7 +157,7 @@ async function main() {
           const fixture=async name=>{server.stdin.write(JSON.stringify({command:name})+'\n');
             return JSON.parse((await lines.next()).value);};
           if(replay==='mouse') {
-            phase='real-stationary-hover';
+            phase='native-hover-layout-and-stationary';
             mini=await require('./probe_hover_stationary.cjs')({command,evaluate,until,owner,mini,checks,layouts,output,fixture});
             await fixture('running');await until(owner,`liveValue.view.active_cards.length===2`);
             phase='rendered-cost-values';

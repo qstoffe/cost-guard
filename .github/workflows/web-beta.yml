@@ -110,8 +110,9 @@ jobs:
           if summary.get("outcome") != "PASS":
               raise SystemExit("Calm UI evidence did not pass")
           PY
-      - name: Selected detail native live, quota and token recovery journeys
-        if: ${{ !cancelled() }}
+      # Common smoke and Calm UI retain rendered Detail and recovery coverage.
+      - name: Deep Detail live, quota and token recovery journeys (manual Full)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
         env:
           COST_GUARD_CI_BROWSER: '1'
         run: |
@@ -156,9 +157,9 @@ jobs:
                              env={**os.environ, "COST_GUARD_TEST_PYTHON": sys.executable},
                              timeout=210, check=True)
           PY
-      # Ordinary affected-source coverage keeps one real 61s hold per document.
-      # Manual Full retains all twelve holds and the mixed/control diagnostics.
-      - name: Mini keyboard and mouse stationary regression (representative; Full on manual dispatch)
+      # Ordinary affected-source coverage retains real input and PiP layout.
+      # Manual Full adds one real 61s hold per document and mixed/control diagnostics.
+      - name: Mini keyboard and mouse regression (real stationary holds on manual Full)
         if: ${{ !cancelled() }}
         run: python development/tests/integration/ci_mini_tooltips.py mouse
       # All rendered checks remain; only manual Full waits five real minutes.

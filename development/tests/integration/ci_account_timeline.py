@@ -200,11 +200,15 @@ def stress_plot(page, chart, screenshots):
     chooser.scroll_into_view_if_needed()
     chooser.click()
     inputs = legend.get_by_role('checkbox')
+    expect(inputs).to_have_count(20)
     slots = plot.locator('.account-timeline-target')
     x_positions = slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))")
+    # The synthetic series start selected. Only drive inputs that change.
+    selected_count = 20
     for checked in (0, 1, 2, 5, 10, 20):
-        for i, checkbox in enumerate(inputs.all()):
-            checkbox.set_checked(i < checked)
+        for i in range(min(selected_count, checked), max(selected_count, checked)):
+            inputs.nth(i).set_checked(i < checked)
+        selected_count = checked
         if checked:
             assert_geometry(plot, checked)
             expect(selected.get_by_role('listitem')).to_have_count(checked)
@@ -234,9 +238,14 @@ def stress_plot(page, chart, screenshots):
             page.set_viewport_size({'width': width, 'height': 900})
             expect(labels).to_have_count(30)
             assert_geometry(plot, 20)
-            holiday, ordinary = plot.locator('.account-timeline-non-working').first, labels.first
-            holiday_ink = holiday.evaluate('el => getComputedStyle(el).fill')
-            assert holiday_ink != ordinary.evaluate('el => getComputedStyle(el).fill')
+            # Read both styles in the same attached SVG snapshot. Resize and
+            # redraw can replace a tspan between locator resolution and evaluation.
+            holiday_ink, ordinary_ink = plot.evaluate('''plot => {
+                const holiday = plot.querySelector('.account-timeline-non-working');
+                const ordinary = plot.querySelector('.account-timeline-slot-label:not(:has(.account-timeline-non-working))');
+                return [holiday, ordinary].map(label => label?.isConnected ? getComputedStyle(label).fill : '');
+            }''')
+            assert holiday_ink and ordinary_ink and holiday_ink != ordinary_ink, (holiday_ink, ordinary_ink)
             holiday_inks.append(holiday_ink)
             inspect_layout = '''chart => {
                 const chooser = chart.querySelector('.account-timeline-chooser').getBoundingClientRect();
