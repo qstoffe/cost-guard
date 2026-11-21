@@ -22,7 +22,7 @@ const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "models"})', context);
 const relativeHelp = helpText(all(output, 'th')[2].children[0]);
-assert.ok(relativeHelp.includes('fixed statistical average: Input 2%, Cached input 96%, Cache write 1%, Output 1%'));
+assert.ok(relativeHelp.includes('fixed statistical average: Input 3%, Cached input 95%, Cache write 1%, Output 1%'));
 assert.ok(relativeHelp.includes('\n\n') && relativeHelp.includes('not task performance'));
 assert.ok(!output.textContent.includes('More information'));
 assert.ok(output.textContent.includes('0.1x'));

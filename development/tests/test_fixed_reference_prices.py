@@ -20,10 +20,10 @@ from src.reports.model_comparison import compact_boundary, web_model_catalog, we
 class FixedReferenceTests(unittest.TestCase):
     def test_fixed_weights_and_full_denominator_ignore_history_and_selectable_scope(self):
         catalog = prices()
-        # Independent 2/96/1/1 formula, with source-supported zero cache-write.
-        units = {'gpt-test': D('.166'), 'gpt-other': D('.252'),
-                 'claude-test': D('.358'), 'untried': D('.156')}
-        expected = {name: value / D('.156') for name, value in units.items()}
+        # Independent 3/95/1/1 formula, with source-supported zero cache-write.
+        units = {'gpt-test': D('.175'), 'gpt-other': D('.270'),
+                 'claude-test': D('.385'), 'untried': D('.165')}
+        expected = {name: value / D('.165') for name, value in units.items()}
         selected = replace(catalog, models=catalog.models[:1])
         initial = None
         for count in (0, 1, 100, 10000):
@@ -32,7 +32,7 @@ class FixedReferenceTests(unittest.TestCase):
             rows = {row.model: row for row in frozen.rows}
             self.assertEqual(expected, {name: row.relative_cost for name, row in rows.items()})
             self.assertEqual((('OpenAI', 'gpt-test'),), frozen.selectable)
-            self.assertEqual(D('.266') / D('.156'), rows['gpt-test'].relative_levels[1].relative_cost)
+            self.assertEqual(D('.275') / D('.165'), rows['gpt-test'].relative_levels[1].relative_cost)
             self.assertTrue(all(row.evidence.global_prompts == 0 for row in rows.values()))
             if initial is not None:
                 self.assertEqual(initial, frozen)
@@ -42,6 +42,26 @@ class FixedReferenceTests(unittest.TestCase):
             raise AssertionError('fixed prices do not inspect history')
             yield
         self.assertTrue(model_comparison_rows(forbidden(), catalog, fixed_reference=True))
+
+    def test_new_weights_reverse_close_base_prices_and_price_the_higher_tier(self):
+        flat_tier = PricingTier(per_million_input=D(1), per_million_cache_read=D(1),
+                                per_million_cache_write=D(1), per_million_output=D(1))
+        flat = ModelPricing(ModelRef('github-copilot', 'flat'), 'USD', tiers=(flat_tier,))
+        base = replace(flat_tier, per_million_input=D(11), per_million_cache_read=D('.75'),
+                       per_million_cache_write=D(2), max_input_tokens=100)
+        higher = replace(base, min_input_tokens=101, max_input_tokens=None,
+                         per_million_cache_write=D(12), per_million_output=D(21))
+        input_heavy = replace(flat, model=ModelRef('github-copilot', 'input-heavy'),
+                              tiers=(base, higher))
+        catalog = PricingCatalog((flat, input_heavy))
+
+        rows = web_model_catalog((), catalog, catalog, now_ms=NOW, cache_repository=None).rows
+
+        # The old mix priced the input-heavy base at .97, below the flat $1.
+        self.assertEqual(('input-heavy', 'flat'), tuple(row.model for row in rows))
+        self.assertEqual((D('1.0725'), D('1.3725')),
+                         tuple(level.relative_cost for level in rows[0].relative_levels))
+        self.assertEqual(D(1), rows[1].relative_cost)
 
     def test_models_only_does_not_list_hydrate_analyze_or_sample_historical_roots(self):
         for count in (0, 1, 100, 5000):
@@ -60,7 +80,7 @@ class FixedReferenceTests(unittest.TestCase):
             self.assertIsNone(report.model_comparison_mix)
             dto = project(report).to_json()
             self.assertEqual('fixed-statistical-average', dto['model_catalog']['comparison_basis'])
-            self.assertEqual(['0.02', '0.96', '0.01', '0.01'], dto['model_catalog']['reference_token_weights'])
+            self.assertEqual(['0.03', '0.95', '0.01', '0.01'], dto['model_catalog']['reference_token_weights'])
             self.assertEqual('1', next(row['relative_cost'] for row in dto['model_catalog']['rows'] if row['model'] == 'untried'))
 
     def test_unknown_rates_stay_unknown_and_boundaries_are_exact(self):
@@ -112,7 +132,7 @@ class PromotionReferenceTests(unittest.TestCase):
             web_model_promotion(model, NOW).price_comparison)
         standard[0]['c'] = '2'
         changed_weights = replace(model, metadata={**model.metadata, 'promotion_standard_tiers': json.dumps(standard)})
-        self.assertIn('Base context tier: 44.35% of original price (55.65% off)',
+        self.assertIn('Base context tier: 45.37% of original price (54.63% off)',
                       web_model_promotion(changed_weights, NOW).price_comparison)
         standard[0]['c'] = None
         unknown = replace(model, metadata={**model.metadata, 'promotion_standard_tiers': json.dumps(standard)})
