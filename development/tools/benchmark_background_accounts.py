@@ -10,10 +10,10 @@ from time import perf_counter, process_time, sleep
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from development.tests.fixtures.account_periods import subscription
-from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from development.tests.test_account_timeline import NOV_1, NOV_5, projected
+from development.tests.test_account_timeline import NOV_1, projected
+from development.tests.test_warm_restart import report_service
 from src.analysis.account_timeline import DAY_MS, PERIODS
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
@@ -22,12 +22,16 @@ from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
 
 
+KICKOFF = NOV_1 + 29 * DAY_MS + 17 * 60 * 60_000
+
+
 class History(SyntheticMonthSource):
     def __init__(self, roots, busy):
         super().__init__(0, 0, month_start_ms=NOV_1)
         self.busy = busy
         for index in range(roots):
-            at = NOV_1 - (index % 29 - 3) * DAY_MS
+            at = KICKOFF - (index % 29 + 1) * DAY_MS + (index % 12) * 60_000
+            at -= index * 60_000  # The root factory already offsets by its identifier.
             snapshot = make_root_snapshot(index, 3, month_start_ms=at)
             self.snapshots[snapshot.root.session_id] = replace(snapshot, complete=True)
         self.bursts = 0
@@ -56,7 +60,7 @@ def run(folder, roots, warm):
     pricing = FakePricingProvider()
     lane = AccountTimeline(lambda now: report_service(source, repository, now, pricing),
                            SourceReads(), repository)
-    now = NOV_5 + 12 * 60 * 60_000
+    now = KICKOFF
     options = dict(source=source_scope(source), accounts=projected(subscription('github-copilot')),
                    periods=frozenset(PERIODS), zone='UTC', catalog=pricing.catalog, prices=lambda: None,
                    migration_gap=None, require_background_prices=True,
@@ -83,10 +87,10 @@ def run(folder, roots, warm):
         lane.tick(**options, foreground=interest, now_ms=now + 1)
         views = {period: lane.lookup(period)['view'] for period in PERIODS}
         if first_ms is None and views['month'] and any(float(row['peak']) > 0 for row in views['month']['series']):
-            first_ms = now + duration - NOV_5 - 12 * 60 * 60_000
+            first_ms = now + duration - KICKOFF
         done = [view and not view['pending_buckets'] and not view['initial_pending_buckets'] for view in views.values()]
-        if done[0] and all(done) or not warm and done[-1]:
-            full_ms = now + duration - NOV_5 - 12 * 60 * 60_000
+        if (all(done) if warm else done[-1]):
+            full_ms = now + duration - KICKOFF
             break
         now = max(now + (1000 if warm else 200), lane.due, prior_end)
 
@@ -95,7 +99,7 @@ def run(folder, roots, warm):
     before_open = source.load_count
     startup_wall = perf_counter() - started
     if warm:
-        open_at = NOV_5 + 13 * 60 * 60_000
+        open_at = KICKOFF + 3_600_000
         assert now < open_at
         entered = perf_counter()
         lane.tick(**options, foreground=frozenset({'month'}), now_ms=open_at)
@@ -105,14 +109,14 @@ def run(folder, roots, warm):
         if lane.job is not None:
             lane.job.result(30)
     else:
-        entry_ms = first_ms
+        entry_ms = None  # Cold timing comes from the fixture clock, not a wall-clock lookup.
     cpu_ms = round((process_time() - cpu) * 1000)
     hits = sum(value.complete for value in lane.history.roots.values())
     lane.close()
     return dict(roots=roots, mode='off-page' if warm else 'foreground', first_fixture_ms=first_ms,
                 full_fixture_ms=full_ms, observed_entry_ms=entry_ms, elapsed_harness_ms=round(startup_wall * 1000),
                 worker_wall_ms=worker_ms, max_worker_slice_ms=max_slice, pacing_wait_fixture_ms=schedule_wait,
-                process_cpu_ms=cpu_ms, new_source_reads_at_entry=source.load_count - before_open,
+                process_cpu_ms=cpu_ms, new_source_reads_at_entry=source.load_count - before_open if warm else None,
                 source_reads_before_entry=before_open if warm else 0, source_reads=source.load_count,
                 retained_complete_roots=hits, revised_root_bursts=source.bursts,
                 sqlite_bytes=sum(path.stat().st_size for path in folder.rglob('*.sqlite3*')))

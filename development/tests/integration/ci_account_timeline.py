@@ -36,6 +36,7 @@ class ChartSource(SyntheticMonthSource):
     def __init__(self, accounts):
         super().__init__(0, 0, month_start_ms=NOV_1)
         self.clock_offset_ms = 0
+        self.clock_scale = 1
         self.timeline_reads = Counter()
         self.first_read = Event()
         self.continue_history = Event()
@@ -455,7 +456,7 @@ def chart_fixture(browser, root, source_setup=ChartSource):
     accounts = (high, low, subscription())
     source = source_setup(accounts)
     started = time.monotonic()
-    clock = lambda: NOV_5 + source.clock_offset_ms + int(1000 * (time.monotonic() - started))
+    clock = lambda: NOV_5 + source.clock_offset_ms + int(1000 * source.clock_scale * (time.monotonic() - started))
     provider_refreshes = []
     config, selection, service, _ = make_service(str(root), source, now_ms=clock())
     config['sessionWatchIntervalSeconds'] = 'auto'
@@ -757,7 +758,15 @@ def check(browser, root, screenshots=None):
 def check_unvisited(browser, root):
     from playwright.sync_api import expect
 
-    with chart_fixture(browser, root) as (page, host, coordinator, source, _, _, errors, lookups, interests):
+    class MonthSource(ChartSource):
+        def __init__(self, accounts):
+            super().__init__(accounts)
+            self.clock_scale = 4
+            for index in range(25, 217):
+                at = NOV_1 + index % 4 * DAY_MS + index * 1000
+                self.replace_usage(index, at, 1000, accounts[index % 3].ref)
+
+    with chart_fixture(browser, root, MonthSource) as (page, host, coordinator, source, _, _, errors, lookups, interests):
         lane = coordinator.account_timeline
         page.goto(host.browser_url())
         page.get_by_role('link', name='Models', exact=True).click()
@@ -773,7 +782,8 @@ def check_unvisited(browser, root):
         else:
             raise AssertionError('host did not warm all four chart periods without Accounts')
         warmed = sum(source.timeline_reads.values())
-        assert warmed > 0 and not lookups and not any(interests)
+        assert sum(source.timeline_reads.values()) == 206 and len(source.timeline_reads) == 206
+        assert not lookups and not any(interests)
         assert not host.dispatcher.account_timeline_foreground()
         source.clock_offset_ms += 3_600_000
         start = time.monotonic()

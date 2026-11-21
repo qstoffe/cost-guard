@@ -669,6 +669,46 @@ class TimelineDemandTests(unittest.TestCase):
         self.assertGreater(Decimal(lane.lookup('month')['view']['series'][0]['peak']), 0)
         self.assertEqual(217, source.load_count)
 
+    def test_background_waits_for_healthy_pricing_context_and_refreshes_only_a_revised_root(self):
+        source = SyntheticMonthSource(3, 1, month_start_ms=NOV_1)
+        source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}
+        lane = AccountTimeline(lambda _: SimpleNamespace(source=source, close_accounts=lambda: None,
+            progress=lambda *_: None), SourceReads())
+        self.addCleanup(lane.close)
+        options = dict(source=source_scope(source), accounts=projected(subscription('github-copilot')),
+            zone='UTC', prices=lambda: None, migration_gap=None, periods=frozenset(PERIODS),
+            foreground=frozenset(), require_background_prices=True, observation=observe_catalog(source), catalog=None)
+
+        lane.tick(**options, available=False, now_ms=NOV_5)
+        self.assertIsNone(lane.job)
+        lane.tick(**options, now_ms=NOV_5 + 1_000)
+        lane.tick(**options, now_ms=NOV_5 + 5_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 5_001)
+        self.assertEqual(0, source.load_count)
+        self.assertIsNone(lane.lookup('month')['view'])
+
+        options['catalog'] = FakePricingProvider().catalog
+        lane.tick(**options, now_ms=NOV_5 + 70_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 70_001)
+        old = lane.lookup('month')
+        self.assertEqual(3, source.load_count)
+
+        changed = source.snapshots['root-0001']
+        source.snapshots['root-0001'] = replace(changed, source_revision='new-root-revision')
+        options['observation'] = observe_catalog(source)
+        lane.tick(**options, now_ms=NOV_5 + 72_000)
+        self.assertIsNone(lane.job, 'off-page changes do not turn refresh into continuous acquisition')
+        self.assertEqual(old, lane.lookup('month'))
+
+        lane.tick(**options, now_ms=NOV_5 + 135_000)
+        lane.job.result(3)
+        lane.tick(**options, now_ms=NOV_5 + 135_001)
+        self.assertEqual(4, source.load_count)
+        self.assertGreater(lane.lookup('month')['revision'], old['revision'])
+        self.assertFalse(lane.lookup('month')['acquiring'])
+
     def test_live_revision_is_quiet_pending_and_historical_roots_are_not_reacquired(self):
         source = SyntheticMonthSource(25, 2, month_start_ms=NOV_1, today_roots=1, now_ms=NOV_5)
         source.snapshots = {key: replace(snapshot, complete=True) for key, snapshot in source.snapshots.items()}

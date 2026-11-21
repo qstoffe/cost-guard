@@ -135,6 +135,18 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(3, self.jobs.priorities[key], 'existing source-outage suspension remains separate')
         self.assertEqual('queued', self.jobs.values[key]['status'])
 
+    def test_visible_accounts_keeps_off_page_requested_reports_on_paced_quanta(self):
+        request = ReportRequest(ReportKind.TOKEN_MIX)
+        self.dispatch.interest('tab', 'token-mix', True, request)
+        key = self.dispatch.lookup(request)['id']
+        self.dispatch.interest('tab', 'accounts', True, account_period='month')
+
+        self.dispatch.tick()
+
+        self.assertEqual(2, self.jobs.priorities[key])
+        self.assertTrue(self.dispatch.warm_allowed)
+        self.assertEqual({'month'}, self.dispatch.account_timeline_foreground())
+
     def test_interest_history_is_optional_strict_and_watch_only(self):
         from src.web.dispatch_http import handle
         replies = []
