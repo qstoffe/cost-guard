@@ -589,11 +589,18 @@ class SessionCatalog:
             # A newer negative lifecycle signal is not itself a finish clock.
             if value.running and value.prompt_started_ms is not None and not running:
                 activity = None
-            rows.append(replace(value, title=root.title or "Untitled session",
-                last_activity_ms=activity if type(activity) is int and 0 < activity <= now else None,
-                prompt_started_ms=value.prompt_started_ms if type(value.prompt_started_ms) is int
-                    and 0 < value.prompt_started_ms <= now else None,
-                running=running, archived=root.archived_at_ms is not None))
+            title = root.title or "Untitled session"
+            activity = activity if type(activity) is int and 0 < activity <= now else None
+            started = value.prompt_started_ms
+            started = started if type(started) is int and 0 < started <= now else None
+            archived = root.archived_at_ms is not None
+            # Bounded epochs share unchanged immutable facts instead of copying
+            # every qualified row again for each burst's new ordering.
+            if (title != value.title or activity != value.last_activity_ms or started != value.prompt_started_ms
+                    or running != value.running or archived != value.archived):
+                value = replace(value, title=title, last_activity_ms=activity, prompt_started_ms=started,
+                                running=running, archived=archived)
+            rows.append(value)
         return rows
 
     def _key_current(self, key, sort):
