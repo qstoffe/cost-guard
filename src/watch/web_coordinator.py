@@ -28,6 +28,13 @@ from .source_reads import SourceReads, cancel_source
 from .detail_capture import DetailWorkerStopError
 
 
+def _cached_mix_reference(service):
+    # On the catalog lane only: share the validated local cache written by
+    # the existing price owner. Do not ask for a provider fetch or wait on it.
+    cached = getattr(getattr(service, "comparison_pricing_provider", None), "cached_catalog", None)
+    return cached() if callable(cached) else getattr(service, "comparison_pricing_catalog", None)
+
+
 @dataclass(frozen=True, slots=True)
 class DailyAccountHistory:
     accounts: AccountPeriodHistory
@@ -177,7 +184,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self._catalog_archive = archive
             self._catalog_history_turns = 0
             self.catalog_job = self.catalog_pool.submit(archive.advance_mix, int(self.clock_ms()),
-                active=lambda: not self._closed, reference=lambda: getattr(self.report_service, "comparison_pricing_catalog", None))
+                 active=lambda: not self._closed, reference=lambda: _cached_mix_reference(self.report_service))
         elif history_needed:
             # Reserve projection work without removing any turns from the
             # scalar vs. urgent/older archive acquisition pattern below.

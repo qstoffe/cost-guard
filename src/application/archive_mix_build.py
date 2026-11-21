@@ -10,6 +10,7 @@ from src.cache.display_mix_groups import GROUP_BATCH
 from src.cache.display_mix_order import MIX_GROUP_ORDER_VERSION
 
 from .archive_mix_groups import MixGroupStage
+from .archive_mix_identity import ArchiveMixIdentities
 from .archive_token_mix import ArchiveMixRollup
 
 
@@ -30,6 +31,7 @@ class ArchiveMixBuild(AbstractContextManager):
         self.source = source
         self.timezone_id = timezone_id
         self.reducer = ArchiveMixRollup(timezone_id, end_ms, pricing=pricing)
+        self.reference = reference
         self.publication = None
         self._version = self._cursor = None
         self._group_cursor = None
@@ -43,7 +45,8 @@ class ArchiveMixBuild(AbstractContextManager):
                 CREATE TABLE prompts(period TEXT NOT NULL, session TEXT NOT NULL, id TEXT NOT NULL,
                     PRIMARY KEY(period, session, id)) WITHOUT ROWID
             """)
-            self._groups = MixGroupStage(self._prompts, self.reducer.periods_for, reference=reference) if grouped else None
+            self._groups = MixGroupStage(self._prompts, self.reducer.periods_for, pricing=pricing) if grouped else None
+            self._identities = ArchiveMixIdentities(reference) if grouped else None
         except BaseException:
             self.close()
             raise
@@ -70,13 +73,16 @@ class ArchiveMixBuild(AbstractContextManager):
             return MixBuildState.STALE
         self._version = batch.version
         self._cursor = batch.next_cursor
+        identities = self._identities.collect(history, self.source, batch, eligible) if self._identities else {}
+        if identities is None:
+            return MixBuildState.STALE
         keys = self.reducer.add_slice(batch)
         with self._prompts as db:
             for period in self._counts:
                 self._counts[period] += db.executemany("INSERT OR IGNORE INTO prompts VALUES(?,?,?)",
                     (key for key in keys if key[0] == period)).rowcount
             if self._groups is not None:
-                self._groups.add(batch.entries)
+                self._groups.add(batch.entries, identities)
         if self._cursor is not None:
             return MixBuildState.MORE
         if self._groups is not None:
@@ -102,7 +108,8 @@ class ArchiveMixBuild(AbstractContextManager):
             self.publication = history.replace_mix_totals(
                 self.source, self._version, self.timezone_id, rows, eligible=eligible, group_run=self._group_run,
                 group_marks={period: MIX_GROUP_ORDER_VERSION + digest.hexdigest()
-                             for period, digest in self._group_hashes.items()})
+                             for period, digest in self._group_hashes.items()},
+                reference=self.reference.stamp if self.reference else None)
         if self.publication is not None:
             return MixBuildState.PUBLISHED
         return MixBuildState.STALE

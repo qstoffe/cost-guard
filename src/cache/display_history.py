@@ -11,6 +11,7 @@ import time
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
 from .display_mix_groups import group_revision, inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
+from .display_mix_identity import mix_identity_schema, read_mix_identities, save_mix_identities
 from .display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_ORDER_VERSION
 from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_totals, read_mix_total
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
@@ -18,7 +19,7 @@ from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -245,6 +246,7 @@ class DisplayHistory:
                      {usage_schema(existing_revision=version == 13) if version < 14 else ""}
                      {mix_total_schema()}
                      {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
+                     {mix_identity_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -294,7 +296,8 @@ class DisplayHistory:
                 {watch_schema()}
                 {usage_schema()}
                 {mix_total_schema()}
-                {mix_groups_schema()}
+                 {mix_groups_schema()}
+                 {mix_identity_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -481,17 +484,36 @@ class DisplayHistory:
             return read_usage_slice(db, source, expected=expected, after=after)
 
     def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
-                           group_run=None, group_marks=None):
+                           group_run=None, group_marks=None, reference=None):
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if eligible():
                 published = publish_mix_totals(db, source, expected, timezone_id, rows,
-                                               group_run=group_run, group_marks=group_marks)
+                                                group_run=group_run, group_marks=group_marks, reference=reference)
                 if published is not None and eligible():
                     db.commit()
                     return published
             db.rollback()
             return None
+
+    def mix_identities(self, source, version, keys, *, candidates, observed_at, eligible):
+        if not candidates:
+            with self._connect(read=True) as db:
+                db.execute("BEGIN")
+                if eligible() and retained_usage_version(db, source, version) is not None:
+                    return read_mix_identities(db, source, keys)
+                return None
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not eligible() or retained_usage_version(db, source, version) is None:
+                return None
+            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+            save_mix_identities(db, source, candidates, observed_at)
+            found = read_mix_identities(db, source, keys)
+            if not eligible():
+                return None
+            db.commit()
+            return found
 
     def mix_refresh(self, source, timezone_id, now_ms):
         with self._connect(read=True) as db:
@@ -584,6 +606,7 @@ class DisplayHistory:
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_mix_identities WHERE source=?", (source,))
             db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))

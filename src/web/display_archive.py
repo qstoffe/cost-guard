@@ -219,8 +219,9 @@ class DisplayArchive:
             with self._mix_signal:
                 if not eligible():
                     return
-                mark = (published.version.revision, published.end_ms)
-                self._mix_marks.update(dict.fromkeys(published.changed_periods, mark))
+                self._mix_marks.update({period: (published.version.revision, published.end_ms,
+                                                published.group_marks.get(period))
+                                        for period in published.changed_periods})
                 self._publish("token-mix-cache", dict(binding=views.binding, archive_epoch=published.version.archive_epoch,
                     usage_revision=published.version.revision, end_ms=published.end_ms, periods=published.changed_periods,
                     marks=self._mix_marks.copy()))

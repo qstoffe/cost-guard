@@ -5,6 +5,7 @@ import time
 from src.analysis.ai_stats import windows
 
 from .archive_mix_build import ArchiveMixBuild, MixBuildState
+from .archive_mix_identity import qualified_mix_reference
 
 
 class ArchiveMixRefresh:
@@ -42,8 +43,17 @@ class ArchiveMixRefresh:
             self.close()
         if self._build is None:
             stamp = history.mix_refresh(source, timezone_id, now_ms)
+            # An optional unavailable local catalog must not stall the archive.
+            try:
+                catalog = qualified_mix_reference(reference(), now_ms) if self._grouped else None
+            except (OSError, sqlite3.Error):
+                catalog = None
+            previous = stamp.reference if stamp else None
+            if catalog and previous and catalog.stamp.observed_at < previous.observed_at:
+                catalog = None  # A cache fallback may not replace a newer proof.
+            reference_changed = catalog and (previous is None or catalog.stamp.signature != previous.signature)
             if stamp is not None and (stamp.end_ms > now_ms or
-                    not stamp.changed and (stamp.grouped or not self._grouped) and
+                     not stamp.changed and not reference_changed and (stamp.grouped or not self._grouped) and
                     windows(timezone_id, stamp.end_ms) == scopes):
                 if self._grouped:
                     history.reclaim_mix_groups(source)
@@ -51,10 +61,7 @@ class ArchiveMixRefresh:
                 return None
             if self._grouped:
                 history.reclaim_mix_groups(source)
-            catalog = reference() if self._grouped else None
-            self._build = ArchiveMixBuild(source, timezone_id, now_ms,
-                                          pricing=getattr(catalog, "analysis_signature", None),
-                                          grouped=self._grouped, reference=catalog)
+            self._build = ArchiveMixBuild(source, timezone_id, now_ms, grouped=self._grouped, reference=catalog)
         state = self._build.step(history, eligible=eligible)
         if state == MixBuildState.MORE:
             return None

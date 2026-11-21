@@ -40,7 +40,8 @@ const CachedMix = (() => {
     }
     committed(hint, resync = false) {
       if (!hint || this.blocked) return;
-      const stamp = JSON.stringify([hint.binding, hint.archive_epoch, hint.usage_revision, hint.end_ms, hint.cleared]);
+      const stamp = JSON.stringify([hint.binding, hint.archive_epoch, hint.usage_revision, hint.end_ms,
+        hint.cleared, hint.marks]);
       if (stamp === this.stamp && (!resync || !this.error)) return;
       const bindingChanged = this.value && this.value.binding !== hint.binding ||
         this.hint && this.hint.binding !== hint.binding;

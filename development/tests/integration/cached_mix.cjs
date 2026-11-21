@@ -42,6 +42,9 @@ async function main() {
   assert.equal(paints.at(-1), 10);
   await respond(requests.at(-1), a, 50);
   assert.equal(paints.at(-1), 50);
+  view.committed(hint(a, 0, 5, ['today'], {today: [5, 100, 'new-model-metadata']}));
+  assert.equal(requests.length, 5, 'group-only publication with the same usage revision and clock is not lost');
+  await respond(requests.at(-1), a, 50);
 
   view.committed(hint(a, 1, null, undefined, {}, true));
   assert.equal(paints.at(-1), null);

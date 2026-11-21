@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .display_mix_groups import record_group_marks
+from .display_mix_identity import MixReferenceStamp, read_mix_reference, save_mix_reference
 from .display_mix_order import MIX_GROUP_ORDER_VERSION
 from .display_usage_reader import UsageVersion, retained_usage_version, usage_version
 
@@ -42,6 +43,7 @@ class MixRefresh:
     end_ms: int
     changed: bool
     grouped: bool
+    reference: MixReferenceStamp | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +51,7 @@ class MixPublication:
     version: UsageVersion
     end_ms: int
     changed_periods: tuple[str, ...]
+    group_marks: dict[str, str]
 
 
 def mix_total_schema():
@@ -69,7 +72,8 @@ def mix_total_schema():
     """
 
 
-def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows, *, group_run=None, group_marks=None):
+def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows, *, group_run=None, group_marks=None,
+                       reference=None):
     if (not source or not timezone_id or len(rows) != len(MIX_PERIODS)
             or {row.period for row in rows} != MIX_PERIODS or len({row.end_ms for row in rows}) != 1):
         raise ValueError("invalid_mix_totals")
@@ -95,8 +99,11 @@ def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows, *,
     db.execute("DELETE FROM archive_mix_totals WHERE source=?", (source,))
     marks = ",".join("?" for _ in range(11 + len(_METRICS)))
     db.executemany(f"INSERT INTO archive_mix_totals VALUES({marks})", ((source, *row) for row in values))
-    changed.update(record_group_marks(db, source, group_marks or {}))
-    return MixPublication(expected, end_ms, tuple(row[0] for row in values if row[0] in changed))
+    if reference:
+        save_mix_reference(db, source, reference)
+    group_marks = group_marks or {}
+    changed.update(record_group_marks(db, source, group_marks))
+    return MixPublication(expected, end_ms, tuple(row[0] for row in values if row[0] in changed), group_marks)
 
 
 def mix_refresh(db, source, timezone_id, now_ms):
@@ -113,7 +120,8 @@ def mix_refresh(db, source, timezone_id, now_ms):
         changed = db.execute("""
             SELECT 1 FROM archive_requests WHERE source=? AND clock_ms>? AND clock_ms<=? LIMIT 1
         """, (source, end_ms, now_ms)).fetchone() is not None
-    return MixRefresh(end_ms, changed, groups is not None and groups.startswith(MIX_GROUP_ORDER_VERSION))
+    return MixRefresh(end_ms, changed, groups is not None and groups.startswith(MIX_GROUP_ORDER_VERSION),
+                      read_mix_reference(db, source))
 
 
 def read_mix_total(db, source, timezone_id, period, start_ms, end_ms):

@@ -5,9 +5,10 @@ from decimal import Decimal
 from src.cache.display_mix_groups import MixGroupRow
 from src.domain import ModelRef
 from src.domain.model_identity import UNKNOWN_MODEL, UNKNOWN_PUBLISHER
-from src.reports.history_mix_identity import history_model_key, history_publisher, history_reference_model, web_model_label
+from src.reports.history_mix_identity import history_model_key
 
 from .archive_token_mix import MixAccumulator
+from .archive_mix_identity import identity_key
 
 
 @dataclass(slots=True)
@@ -48,24 +49,22 @@ class GroupAccumulator:
 
 class ArchiveMixGroups:
     """Only one input slice is collected in memory; the caller persists it."""
-    def __init__(self, periods, *, reference=None):
+    def __init__(self, periods, *, pricing=None):
         self.periods = periods
-        self.reference = reference
-        self.pricing = getattr(reference, "analysis_signature", None)
+        self.pricing = pricing
 
-    def _identity(self, item):
+    @staticmethod
+    def _identity(item, identities):
         model = ModelRef(item.provider, item.model)
-        matched = history_reference_model(model, self.reference) if self.reference is not None else None
-        # No catalog observation is different from a verified lack of a match.
-        # In either case a reseller/route name is not a publisher.
-        publisher = history_publisher(model, matched, web=True) if self.reference is not None else UNKNOWN_PUBLISHER
-        label = web_model_label(model, matched) if matched else item.recorded_model or item.model or UNKNOWN_MODEL
-        return history_model_key(model) or "unknown", (label, publisher, matched is not None)
+        facts = identities.get(identity_key(item))
+        publisher = facts.publisher if facts and facts.publisher else UNKNOWN_PUBLISHER
+        label = facts.label if facts else item.recorded_model or item.model or UNKNOWN_MODEL
+        return history_model_key(model) or "unknown", (label, publisher, facts is not None)
 
-    def collect(self, entries):
+    def collect(self, entries, identities):
         groups, prompts = {}, set()
         for item in entries:
-            model_key, identity = self._identity(item)
+            model_key, identity = self._identity(item, identities)
             label, publisher, named = identity
             for scope in self.periods(item.clock_ms):
                 for key, facts in (((scope, "model", model_key), identity),
@@ -83,9 +82,9 @@ class ArchiveMixGroups:
 
 class MixGroupStage:
     """Disk-backed grouped reductions; each update touches only a slice's keys."""
-    def __init__(self, db, periods, *, reference=None):
+    def __init__(self, db, periods, *, pricing=None):
         self.db = db
-        self.input = ArchiveMixGroups(periods, reference=reference)
+        self.input = ArchiveMixGroups(periods, pricing=pricing)
         db.executescript("""
             CREATE TABLE groups (
                 period TEXT NOT NULL, kind TEXT NOT NULL, identity TEXT NOT NULL,
@@ -104,8 +103,8 @@ class MixGroupStage:
             ) WITHOUT ROWID;
         """)
 
-    def add(self, entries):
-        groups, keys = self.input.collect(entries)
+    def add(self, entries, identities=None):
+        groups, keys = self.input.collect(entries, identities or {})
         counts = dict.fromkeys(groups, 0)
         for prompt in keys:
             counts[prompt[:3]] += self.db.execute("INSERT OR IGNORE INTO group_prompts VALUES(?,?,?,?,?)", prompt).rowcount

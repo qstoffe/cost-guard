@@ -13,11 +13,15 @@ from development.tests.fixtures.session_snapshots import make_snapshot
 from src.analysis import analyze_snapshot
 from src.application.archive_mix_build import ArchiveMixBuild, MixBuildState
 from src.application.archive_mix_groups import MixGroupStage
+from src.application.archive_mix_refresh import ArchiveMixRefresh
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_mix_groups import MixGroupRow, mix_groups_schema, read_groups, stage_groups
+from src.cache.display_mix_identity import MixIdentity
 from src.cache.display_mix_order import MIX_GROUP_SORTS
 from src.cache.display_usage_reader import UsageInput
+from src.domain import ModelPricing, ModelRef
+from src.pricing.catalog import PricingCatalog
 
 
 def usage(provider, model, *, clock=100, prompt="one", session="root", amount="0.10000000000000000017"):
@@ -27,19 +31,16 @@ def usage(provider, model, *, clock=100, prompt="one", session="root", amount="0
 
 class ArchiveMixGroupsTests(TestCase):
     def test_cross_slice_prompt_counts_and_publisher_route_conflicts_stay_independent(self):
-        catalog = SimpleNamespace(analysis_signature="p1", resolve_reference=lambda model: (
-            SimpleNamespace(model=SimpleNamespace(model="gpt-5", display_name="GPT-5"),
-                            metadata={"publisher": "OpenAI"}) if model.lower() == "gpt-5" else None))
+        identities = {"gpt-5": MixIdentity("GPT-5", "OpenAI")}
         entries = (usage("github-copilot", "gpt-5"), usage("openrouter", "gpt-5"),
                    usage("github-copilot", "gpt-5", session="child"), usage("github-copilot", "gpt-5", clock=None),
                    usage("openrouter", "other"), usage("openai", "other"), usage("openai", "secret", clock=200))
 
         with closing(sqlite3.connect("")) as db:
-            stage = MixGroupStage(db, lambda clock: ("all",) if clock is None else ("all", "today") if clock <= 100 else (),
-                                  reference=catalog)
+            stage = MixGroupStage(db, lambda clock: ("all",) if clock is None else ("all", "today") if clock <= 100 else ())
             with db:
-                stage.add(entries[:2])
-                stage.add(entries[2:])
+                stage.add(entries[:2], identities)
+                stage.add(entries[2:], identities)
             rows = {}
             cursor = ("", "", "")
             while page := tuple(stage.page(cursor, 2)):
@@ -53,8 +54,8 @@ class ArchiveMixGroupsTests(TestCase):
         self.assertEqual(Decimal("0.40000000000000000068"), qualified[2].costs[0])
         ambiguous = rows["today", "model", "other"]
         self.assertEqual(("other", "Unknown / unverified", 2), (*ambiguous[:2], ambiguous[2].request_count))
-        self.assertEqual(4, rows["today", "publisher", "OpenAI"][2].request_count)
-        self.assertEqual(1, rows["today", "publisher", "Unknown / unverified"][2].request_count)
+        self.assertEqual(3, rows["today", "publisher", "OpenAI"][2].request_count)
+        self.assertEqual(2, rows["today", "publisher", "Unknown / unverified"][2].request_count)
         self.assertNotIn(("all", "model", "secret"), rows)
 
     def test_without_catalog_a_provider_route_does_not_supply_identity(self):
@@ -107,6 +108,8 @@ class ArchiveMixGroupsTests(TestCase):
             retained = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model", order=order)
             with history._connect() as db:
                 db.executescript("""
+                    DROP TABLE archive_mix_reference;
+                    DROP TABLE archive_mix_identities;
                     DROP TABLE archive_mix_group_order;
                     UPDATE archive_mix_group_marks SET digest=substr(digest,5);
                     PRAGMA user_version=15;
@@ -131,6 +134,82 @@ class ArchiveMixGroupsTests(TestCase):
         self.assertEqual((now, True, 29), (as_of, current, summary.calls))
         self.assertEqual(tuple(f"model{i:02}" for i in range(29)), tuple(row.identity for row in (*rows, *tail)))
         self.assertEqual(sum(row.calls for row in (*rows, *tail)), summary.calls)
+
+    def test_metadata_only_change_and_held_catalog_keep_scope_and_last_qualified_names(self):
+        now = 1_750_000_000_000
+        snapshot = make_snapshot()
+        price = SimpleNamespace(analysis_signature="p1", reference_category_valuation=lambda *_: None)
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), price)
+        entry = replace(roster.requests[0], key=b"base", model="fixture-77", recorded_model="fixture-77",
+                        clock_ms=now, fork_key=None, dedup_tree=None, category_costs=None)
+        model = ModelPricing(ModelRef("github-copilot", "fixture-77", display_name="Verified label"), "USD",
+                             per_million_input=Decimal(1), metadata={"manufacturer": "Original publisher"})
+        fresh = PricingCatalog((model,), retrieved_at_ms=now - 1, source_revision="verified")
+        new_names = replace(fresh, models=(replace(model, metadata={"manufacturer": "Revised publisher"}),))
+
+        def held():
+            raise sqlite3.OperationalError("synthetic held price cache")
+
+        def refresh(history, reference, time_ms, source="trusted"):
+            progress = ArchiveMixRefresh(grouped=True)
+            for _ in range(12):
+                published = progress.advance(history, source, "UTC", "scope", time_ms,
+                                             eligible=lambda: True, reference=reference)
+                if not progress.due("scope"):
+                    progress.withdraw()
+                    return published
+            self.fail("group projection did not terminate")
+
+        def commit(history, source, root_id, request):
+            history.commit_sessions(source, (SessionChange(SessionFact(root_id, "r1", root_id), None,
+                previous_progress=0, request_roster=replace(roster, requests=(request,), attribution=(), prompts=None)),),
+                archive_epoch=history.source_state(source).archive_epoch)
+
+        def groups(history, source, kind="model"):
+            return history.mix_group_page(source, "UTC", "all", None, now + 10, kind)[3]
+
+        with TemporaryDirectory() as directory:
+            history = DisplayHistory(Path(directory))
+            history.initialize()
+            commit(history, "trusted", "root", entry)
+            original = refresh(history, lambda: fresh, now)
+            previous, = groups(history, "trusted")
+
+            # Another process/restart sees a held catalog and a new request.
+            restarted = DisplayHistory(Path(directory))
+            restarted.initialize()
+            commit(restarted, "trusted", "new-root", replace(entry, key=b"new", clock_ms=now + 1))
+            held_commit = refresh(restarted, held, now + 2)
+            warm, = groups(restarted, "trusted")
+            other_source = replace(entry, provider="openai")
+            commit(restarted, "foreign", "root", other_source)
+            refresh(restarted, held, now + 2, source="foreign")
+            foreign, = groups(restarted, "foreign")
+
+            revised = refresh(restarted, lambda: new_names, now + 2)
+            changed, = groups(restarted, "trusted", "publisher")
+            no_change = refresh(restarted, lambda: new_names, now + 3)
+            older = replace(fresh, retrieved_at_ms=now - 5)
+            outdated = refresh(restarted, lambda: older, now + 3)
+            final, = groups(restarted, "trusted")
+            self.assertIsNotNone(restarted.clear_confirmed_sessions("trusted", restarted.source_state("trusted")))
+            commit(restarted, "trusted", "again", entry)
+            refresh(restarted, held, now + 3)
+            after_clear, = groups(restarted, "trusted")
+
+        self.assertEqual(fresh.analysis_signature, new_names.analysis_signature)
+        self.assertEqual(("Verified label", "Original Publisher", 1), (previous.label, previous.publisher, previous.calls))
+        self.assertEqual(("Verified label", "Original Publisher", 2), (warm.label, warm.publisher, warm.calls))
+        self.assertEqual(("fixture-77", "Unknown / unverified"), (foreign.label, foreign.publisher))
+        self.assertGreater(held_commit.version.revision, original.version.revision)
+        self.assertEqual(held_commit.version, revised.version)
+        self.assertEqual(held_commit.end_ms, revised.end_ms)
+        self.assertNotEqual(held_commit.group_marks["all"], revised.group_marks["all"])
+        self.assertEqual(("Revised Publisher", 2, None), (changed.label, changed.calls, changed.costs))
+        self.assertIsNone(no_change)
+        self.assertIsNone(outdated)
+        self.assertEqual(("Verified label", "Revised Publisher"), (final.label, final.publisher))
+        self.assertEqual(("fixture-77", "Unknown / unverified"), (after_clear.label, after_clear.publisher))
 
     @staticmethod
     def group_store(db):
