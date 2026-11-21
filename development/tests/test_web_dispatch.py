@@ -85,6 +85,30 @@ class DispatcherTests(unittest.TestCase):
                          {job['request'].kind for job in self.jobs.values.values()})
         self.assertEqual({'0': 0, '1': 2, '2': 2}, self.jobs.priorities)
 
+    def test_opt_in_cached_mix_does_not_admit_legacy_mix_even_when_requested_by_scope(self):
+        from src.web.dispatch_http import handle
+
+        jobs = RecordingJobs()
+        dispatch = DataDispatcher(jobs, clock=lambda: self.now, wall_clock=lambda: self.now, cache_only_mix=True)
+        dispatch.tick(identity='source')
+        owner = SimpleNamespace(dispatcher=dispatch, cached_mix_enabled=True)
+        results = []
+        handler = SimpleNamespace(path='/api/data', server=SimpleNamespace(lifecycle=owner),
+                                  reply=lambda status, _: results.append(status))
+        request = {'kind': 'token-mix', 'token_mix_scope': 'today'}
+
+        handle(handler, {'request': request, 'retry': False})
+        handler.path = '/api/interest'
+        interest = dict(tab='a' * 32, section='token-mix', visible=True, request=request)
+        handle(handler, interest)
+        handle(handler, dict(interest, request=None))
+        for _ in range(4):
+            self.now += 15
+            dispatch.tick()
+
+        self.assertEqual([400, 400, 200], results)
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS}, {job['request'].kind for job in jobs.values.values()})
+
     def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
         self.dispatch.interest('one', 'models', True, self.models)
         key = self.dispatch.lookup(self.models)['id']

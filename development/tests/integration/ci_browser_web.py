@@ -369,10 +369,12 @@ def main():
                 assert owner.stopped.wait(10)
                 assert not errors
                 evidence["checks"].append("terminal SSE and clean owned server shutdown; no JavaScript errors")
+                from development.tests.integration.ci_cached_mix import check_cached_mix
                 from development.tests.integration.ci_cached_sessions import check_cached_sessions
                 from development.tests.integration.ci_cached_watch import check_cached_watch
                 check_cached_sessions(browser, evidence, ROOT)
                 check_cached_watch(browser, evidence, ROOT)
+                check_cached_mix(browser, evidence, ROOT)
                 check_extended_browser(browser, evidence)
             finally:
                 browser.close()

@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from itertools import islice
 import sqlite3
+from threading import Lock
 import time
 from uuid import uuid4
 
@@ -28,6 +29,8 @@ class DisplayArchive:
         self._publish = publish
         self.watch_enabled = watch_enabled
         self.mix_refresh = ArchiveMixRefresh() if mix_enabled else None
+        self._mix_signal = Lock()
+        self._mix_marks = {}
         self.sweep = SessionArchiveSweep()
         self.coverage = SessionCoverageSweep()
         self.views = None
@@ -210,13 +213,27 @@ class DisplayArchive:
 
         published = self.mix_refresh.advance(self.history, views.source, views.timezone_id,
             (views.binding, fence), now_ms, eligible=eligible)
-        if published is not None and published.changed_periods and eligible():
-            self._publish("token-mix-cache", dict(binding=views.binding, archive_epoch=published.version.archive_epoch,
-                usage_revision=published.version.revision, end_ms=published.end_ms, periods=published.changed_periods))
+        if published is not None and published.changed_periods:
+            with self._mix_signal:
+                if not eligible():
+                    return
+                mark = (published.version.revision, published.end_ms)
+                self._mix_marks.update(dict.fromkeys(published.changed_periods, mark))
+                self._publish("token-mix-cache", dict(binding=views.binding, archive_epoch=published.version.archive_epoch,
+                    usage_revision=published.version.revision, end_ms=published.end_ms, periods=published.changed_periods,
+                    marks=self._mix_marks.copy()))
 
     def close_catalog_work(self):
         if self.mix_refresh is not None:
             self.mix_refresh.withdraw()
+
+    def _mix_reset(self, views, *, archive_epoch=None):
+        if self.mix_refresh is not None:
+            with self._mix_signal:
+                if self.views is views:
+                    self._mix_marks.clear()
+                    self._publish("token-mix-cache", dict(binding=views.binding if views else None,
+                        marks={}, archive_epoch=archive_epoch, cleared=archive_epoch is not None))
 
     def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False, native_export_supported=False):
         if binding == self._binding:
@@ -227,18 +244,16 @@ class DisplayArchive:
             self.sessions.bind("", "", announce=True)
             if self.watch_enabled:
                 self._publish("watch-cache", dict(binding=None))
-            if self.mix_refresh is not None:
-                self._publish("token-mix-cache", dict(binding=None))
+            self._mix_reset(None)
             return
         epoch = uuid4().hex
-        self.views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
-                                        coverage_supported=coverage_supported,
-                                        native_export_supported=native_export_supported)
+        views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
+                                   coverage_supported=coverage_supported, native_export_supported=native_export_supported)
+        self.views = views
         self.sessions.bind(binding.scope, epoch, announce=True)
         if self.watch_enabled:
             self._publish("watch-cache", dict(binding=epoch))
-        if self.mix_refresh is not None:
-            self._publish("token-mix-cache", dict(binding=epoch))
+        self._mix_reset(views)
 
     def _writer_binding(self, service):
         views = self.views
@@ -284,8 +299,7 @@ class DisplayArchive:
         if state is not None:
             if self.watch_enabled and self.views is views:
                 self._publish("watch-cache", dict(binding=binding, generation=0, archive_epoch=state.archive_epoch))
-            if self.mix_refresh is not None and self.views is views:
-                self._publish("token-mix-cache", dict(binding=binding, archive_epoch=state.archive_epoch, cleared=True))
+            self._mix_reset(views, archive_epoch=state.archive_epoch)
             return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
         return None
 

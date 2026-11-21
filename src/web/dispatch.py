@@ -76,7 +76,7 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, cache_only_mix=False):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -90,6 +90,8 @@ class DataDispatcher:
         self.price_actions = set()
         self.ready = False
         self.warm_allowed = False
+        self.default_requests = tuple(request for request in DEFAULT_REQUESTS
+                                      if not cache_only_mix or request.kind is not ReportKind.TOKEN_MIX)
 
     def price_refresh(self, key):
         with self.lock:
@@ -117,7 +119,7 @@ class DataDispatcher:
         if request not in self.entries:
             while len(self.entries) >= MAX_ENTRIES:
                 victim = next((key for key, value in self.entries.items() if not value['job']
-                               and key not in DEFAULT_REQUESTS and key not in self._foreground()), None)
+                               and key not in self.default_requests and key not in self._foreground()), None)
                 if victim is None:
                     raise RuntimeError('busy')
                 del self.entries[victim]
@@ -301,7 +303,7 @@ class DataDispatcher:
             if not self.initialized:
                 self.initialized = True
                 self.next_background = self.clock() + BACKGROUND_STAGGER
-                for request in DEFAULT_REQUESTS:
+                for request in self.default_requests:
                     self._entry(request)
             self.warm_allowed = True
             for request in foreground:
@@ -327,7 +329,7 @@ class DataDispatcher:
             return  # Keep room for newly visible work (coalesced scopes count once).
         due = []
         for request, entry in self.entries.items():
-            default = request in DEFAULT_REQUESTS
+            default = request in self.default_requests
             recent = entry['visited'] is not None and now - entry['visited'] < RECENT_SECONDS
             optional = recent and ((request.kind is ReportKind.AI_STATS and request.stats_scope != 'all')
                                    or (request.kind is ReportKind.TOKEN_MIX and request.token_mix_scope != 'all'))

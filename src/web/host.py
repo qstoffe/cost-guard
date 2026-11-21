@@ -43,7 +43,7 @@ class WebHost:
         self._source_identity = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
-        self.dispatcher = DataDispatcher(self.jobs) if jobs is None else None
+        self.dispatcher = DataDispatcher(self.jobs, cache_only_mix=self.cached_mix_enabled) if jobs is None else None
         self.dependencies = None
         if jobs is None:
             from .composition import dispatch_dependencies

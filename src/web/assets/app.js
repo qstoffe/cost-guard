@@ -15,6 +15,7 @@ let current = null;
 let liveConnection = null;
 let liveValue = null;
 let watchCache = null;
+let mixCache = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let cachedSessionsAvailable = false;
@@ -33,10 +34,10 @@ function sourceNoticeGeometry() {
   document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
 }
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
-function historical(state) { return !!CachedReports.cadences[state?.section]; }
+function historical(state) { return !state?.cachedMix && !!CachedReports.cadences[state?.section]; }
 function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
 function firstReport(state = current) {
-  if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
+  if (csrf && hostState.writable && state?.request && !state.cachedMix && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
 }
@@ -90,6 +91,12 @@ function selectStats(state, period) {
 }
 function selectTokenMix(state, period) {
   if (state.period === period) return;
+  if (state.cachedMix) {
+    state.period = period;
+    mixCache.activate(document.hidden ? null : period);
+    show(state);
+    return;
+  }
   // Retire only this browser attempt, not shared host work or another tab's demand.
   state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
   state.period = period; state.request = {kind: 'token-mix', token_mix_scope: period};
@@ -147,6 +154,7 @@ function connectionStatus(message, state = {}) {
   liveStatus = message;
   const blocked = hostState.terminal || hostState.sourceBlocked;
   watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind));
+  mixCache?.health(blocked);
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
   const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
@@ -271,6 +279,12 @@ function show(state) {
   }
   if (state.section === 'token-mix') {
     ReportView.defaultUnit();
+    if (state.cachedMix) {
+      output.setAttribute('aria-busy', 'false');
+      state.cachedMixView ||= new CachedMix.View(period => selectTokenMix(state, period));
+      state.cachedMixView.attach(output, state.period, mixCache.snapshot());
+      return;
+    }
     state.tokenMix ||= new TokenMixView.View(period => selectTokenMix(state, period));
     const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
       (!state.mixBinding || state.mixBinding === tokenMixBinding);
@@ -378,7 +392,7 @@ function failure(code, state) {
   return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
-  if (state.loading || !hostState.writable) return;
+  if (state.loading || state.cachedMix || !hostState.writable) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
   let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
@@ -642,8 +656,10 @@ function navigate() {
   }
   if (current.section === 'token-mix') {
     current.period ||= current.request?.token_mix_scope || 'all';
-    current.request = {kind: 'token-mix', token_mix_scope: current.period};
+    current.cachedMix = !!mixCache;
+    current.request = current.cachedMix ? null : {kind: 'token-mix', token_mix_scope: current.period};
   }
+  mixCache?.activate(current.cachedMix && !document.hidden ? current.period : null);
   if (route.section === 'models') {
     const models = current;
     models.refreshPrices = () => acquire(models, false, true);
@@ -722,6 +738,10 @@ async function connect() {
        });
        watchCache.catchUp();
      }
+     if (state.cached_mix === true && typeof CachedMix !== 'undefined') {
+       mixCache ||= new CachedMix.Controller(api, () => { if (current?.cachedMix) show(current); });
+       if (current?.section === 'token-mix') { current.cachedMix = true; current.request = null; }
+     }
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -756,7 +776,7 @@ async function connect() {
          sessionCacheHint = hint;
          current?.catalog?.cacheHint?.(hint, resync);
          current?.detail?.cacheHint?.(hint, resync);
-      }, (hint, resync) => watchCache?.cacheHint(hint, resync));
+       }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync));
     }
     navigate();
   } catch (_) {
@@ -807,6 +827,7 @@ window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
   current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
+  mixCache?.activate(!document.hidden && current?.cachedMix ? current.period : null);
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {

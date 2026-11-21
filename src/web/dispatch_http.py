@@ -19,6 +19,7 @@ def handle(handler, value):
         handler.reply(503, {'error': 'dispatcher_unavailable'})
         return True
     try:
+        cache_only_mix = getattr(owner, 'cached_mix_enabled', False)
         if handler.path == '/api/interest':
             required = {'tab', 'section', 'visible', 'request'}
             if (not required <= set(value) or set(value) - required - {'history', 'account_period'}
@@ -26,7 +27,8 @@ def handle(handler, value):
                     or value['section'] not in SECTIONS or type(value['visible']) is not bool):
                 raise ValueError('invalid_interest')
             request = parse_report(value['request']) if value['request'] is not None else None
-            if request is not None and SECTION_KIND.get(value['section']) is not request.kind:
+            if request is not None and (SECTION_KIND.get(value['section']) is not request.kind or
+                    cache_only_mix and request.kind is ReportKind.TOKEN_MIX):
                 raise ValueError('invalid_interest')
             if 'history' in value and (type(value['history']) is not bool or value['section'] != 'watch' or request is not None):
                 raise ValueError('invalid_interest')
@@ -47,7 +49,7 @@ def handle(handler, value):
             if set(value) != {'request', 'retry'} or type(value['retry']) is not bool:
                 raise ValueError('invalid_request')
             request = parse_report(value['request'])
-            if request.kind not in FINITE:
+            if request.kind not in FINITE or cache_only_mix and request.kind is ReportKind.TOKEN_MIX:
                 raise ValueError('invalid_request')
             startup = getattr(owner, 'source_startup', None)
             if startup is not None:
