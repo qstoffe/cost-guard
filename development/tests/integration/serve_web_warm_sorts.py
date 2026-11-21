@@ -24,9 +24,10 @@ class WarmRuntime(FixtureRuntime):
             unavailable=self.unavailable)
         snapshot = self.service.source.snapshots["root-0000"]
         capture, _ = capture_rows(self.service, snapshot.root, fresh=snapshot)
-        running = next((row for row in capture.rows if row.in_progress and not row.execution_unverified), None)
-        self.catalog.observe_prompts(((snapshot.root, running is not None, 0,
-            running.event_id if running else "", running.at_ms if running else None),))
+        if capture.catalog_prompt is not None:
+            prompt, start, running, ended = capture.catalog_prompt
+            self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
+                prompt, start, running, None, ended),))
         if not self.scalar_hold and self.catalog.needed():
             self.catalog.tick(self.service)
         view = project_live(summary_watch(), self.service.timezone_id).to_json()

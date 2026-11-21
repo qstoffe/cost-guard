@@ -294,9 +294,9 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(row["prompt_count"], 0)
         self.assertFalse(row["running"], "failed evidence cannot confirm currently running work")
         self.catalog.failures.clear()
-        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
         self.clock += 16
-        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"],
+                         "clearing a failure does not establish lifecycle evidence")
         self.catalog.observe(None, unavailable=True)
         self.assertEqual(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["metric_state"], "retained")
 
@@ -464,12 +464,16 @@ class SessionCatalogTests(unittest.TestCase):
             with self.subTest(request=request), self.assertRaises(ValueError):
                 catalog_page(self.catalog, request)
 
-    def test_cold_running_proof_survives_scalar_churn_but_not_age_outage_or_newer_finish(self):
+    def test_confirmed_running_survives_missing_proof_until_finish_or_outage(self):
         root = self.catalog.roots["root-0119"]
+        key = root.session_id
+        now = 10_000_000
+        self.catalog.clock_ms = lambda: now
         self.catalog.active = frozenset((root.session_id,))
         first = self.catalog.page()
         self.assertFalse(first["view"]["session_usage"][0]["running"], "a candidate alone is not proof")
-        self.catalog.observe_prompts(((root, True, 0, "prompt", 1000),))
+        running = (root, self.catalog.revisions[key], now, "prompt", 1000, True, None, False)
+        self.catalog.observe_prompts((running,))
         cold = self.catalog.page(token=first["token"])["view"]["session_usage"][0]
         self.assertTrue(cold["running"])
         self.assertEqual(cold["title"], root.title)
@@ -479,31 +483,42 @@ class SessionCatalogTests(unittest.TestCase):
         snapshot = self.source.snapshots[root.session_id]
         self.source.snapshots[root.session_id] = replace(snapshot, source_revision="streaming")
         self.clock = 5
+        now += 5000
         self.observe()
-        self.catalog.observe_prompts(((root, True, 5, "prompt", 1000),))
+        self.catalog.observe_prompts((running,))
         retained = self.catalog.page(token=first["token"])["view"]["session_usage"][0]
         self.assertTrue(retained["running"])
         self.assertEqual(retained["metric_state"], "retained")
         self.catalog.index_failed()
         self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"],
                         "pricing/index failure cannot erase independent prompt proof")
+        self.catalog.observe(None, unavailable=True, source_interrupted=False)
+        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
         self.catalog.observe(None, unavailable=True)
-        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        unavailable = self.catalog.page(token=first["token"], epoch=first["epoch"], passive=True)
+        stale = next(row for row in unavailable["view"]["session_usage"] if row["session_id"] == key)
+        self.assertEqual((False, "unverified", None),
+                         (stale["running"], stale["activity_state"], stale["last_activity_ms"]))
         self.observe()
         self.clock = 16
-        self.catalog.observe_prompts(((root, True, 16, "prompt", 1000),))
-        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"],
-                         "repeated publication must not renew stale proof")
-        self.catalog.prompt_activity[root.session_id] = (15, True)
-        self.catalog.observe_prompts(((root, False, 0, "", None),))
-        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        now += 11_000
+        revision = self.catalog.revisions[key]
+        self.catalog.observe_prompts(((root, revision, now - 11_000, "prompt", 1000, True, None, False),))
+        self.assertFalse(any(row["running"] for row in self.catalog.page(token=first["token"])["view"]["session_usage"]),
+                         "a pre-outage capture cannot restore live execution")
         self.clock = 17
-        self.catalog.observe_prompts(((root, True, 0, "prompt", 1000),))
+        now += 1000
+        self.catalog.observe_prompts(((root, revision, now, "prompt", 1000, True, None, False),))
         self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
-        foreign = replace(root, provenance=replace(root.provenance, source_instance="foreign"))
-        self.catalog.prompt_activity.clear()
-        self.catalog.observe_prompts(((foreign, True, 0, "prompt", 1000),))
-        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        now += 1000
+        self.catalog.observe_prompts(((root, revision, now, "prompt", 1000, False, None, False),))
+        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.catalog.observe_prompts(((root, revision, now, "prompt", 1000, False, 2000, True),))
+        ended = self.catalog._rows((key,))[0]
+        self.assertEqual((False, 2000), (ended.running, ended.last_activity_ms))
+        now += 1000
+        self.catalog.observe_prompts(((root, revision, now, "prompt", 1000, True, None, False),))
+        self.assertFalse(self.catalog._rows((key,))[0].running, "same finished prompt cannot be resurrected")
 
     def test_live_summary_fields_advance_independently_and_unknowns_are_not_zero(self):
         source = SyntheticMonthSource(1, 1, month_start_ms=1000, running_roots=1)
@@ -536,7 +551,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertIsNone(unknown["duration_ms"])
         self.assertEqual("2", unknown["display"]["ccost"])
         source.snapshots["root-0000"] = replace(SyntheticMonthSource(1, 3, month_start_ms=1000)
-            .snapshots["root-0000"], source_revision="finished")
+            .snapshots["root-0000"], source_revision="finished", complete=True)
         self.clock += 6
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         catalog.tick(service)
@@ -598,20 +613,20 @@ class SessionCatalogTests(unittest.TestCase):
         owner = SimpleNamespace(report_service=service, catalog_observation=observe_catalog(source, include_archived_revisions=True),
             cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
             catalog_job=None, _closed=True)
-        catalog = all_time_catalog(clock=lambda: self.clock)
+        catalog = SessionCatalog(clock=lambda: self.clock, clock_ms=lambda: 6000)
         loads = source.load_count
         WebWatchCoordinator.tick_catalog(owner, catalog)
-        cold = catalog.page()["view"]["session_usage"][0]
+        cold = catalog.page(period="all")["view"]["session_usage"][0]
         self.assertTrue(cold["running"])
         self.assertFalse(cold["has_summary"])
         self.assertEqual(source.load_count, loads)
         entry.source_status.failed_at = 0
         WebWatchCoordinator.tick_catalog(owner, catalog)
-        self.assertFalse(catalog.page()["view"]["session_usage"][0]["running"])
+        self.assertTrue(catalog.page(period="all")["view"]["session_usage"][0]["running"])
         entry.source_status.failed_at = None
         entry.capture = replace(capture, retained=True)
         WebWatchCoordinator.tick_catalog(owner, catalog)
-        self.assertFalse(catalog.page()["view"]["session_usage"][0]["running"])
+        self.assertTrue(catalog.page(period="all")["view"]["session_usage"][0]["running"])
 
     def test_pending_model_requires_pre_request_execution_not_an_unknown_physical_model(self):
         root = self.catalog.roots["root-0000"]

@@ -3,7 +3,7 @@
 const SessionsCatalog = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
-    ['activity', 'Last activity', 'Prompt start while running; supported finish time afterward. “Catalog” marks preliminary source activity, not a verified prompt finish. Running sessions appear first, regardless of sorting.'],
+    ['activity', 'Last activity', 'Prompt start while running; supported finish time afterward. A star offers details. Running sessions appear first, regardless of sorting.'],
     ['name', 'Session name', 'The session title. Open the name for its complete live prompt history.'],
     ['model', 'Model', ReportView.headerHelp.model],
     ['ccost', 'CCost', ReportView.headerHelp.sessionCost],
@@ -12,6 +12,7 @@ const SessionsCatalog = (() => {
     ['ctx', 'Ctx', ReportView.headerHelp.context]
   ];
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'], ['month', 'This month'], ['all', 'All time']];
+  const sharedRecovery = new Set(['authentication_required', 'csrf_required', 'host_identity_changed', 'instance_stopping']);
   function protectedNode(node) {
     const selected = window.getSelection?.();
     return node.contains(document.activeElement) || Boolean(selected && !selected.isCollapsed &&
@@ -27,7 +28,7 @@ const SessionsCatalog = (() => {
     constructor(api) {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
-      this.status = el('p', undefined, 'warning'); this.status.setAttribute('role', 'status');
+      this.status = el('p', undefined, 'sessions-action-status'); this.status.setAttribute('role', 'status');
       this.status.setAttribute('aria-atomic', 'false'); this.status.hidden = true;
       this.statusTask = el('span'); this.statusCount = el('span'); this.statusStage = el('span');
       // Counts remain readable in the accessibility tree, without speaking every
@@ -65,7 +66,7 @@ const SessionsCatalog = (() => {
       for (const button of [this.previous, this.next]) {
         button.disabled = true;
       }
-      this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.numbers, this.next);
+      pager.append(this.previous, this.label, this.numbers, this.next);
       for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
         if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
       });
@@ -89,10 +90,10 @@ const SessionsCatalog = (() => {
       this.userAction = {destination: target, button, kind};
       location.hash = target;
     }
-    setStatus(message = '') {
-      ReportView.text(this.statusTask, message);
+    clearStatus() {
+      ReportView.text(this.statusTask, '');
       ReportView.text(this.statusCount, ''); ReportView.text(this.statusStage, '');
-      this.status.hidden = !message;
+      this.status.hidden = true;
     }
     configure(params) {
       const offset = Number(params?.get('offset') || 0), epoch = params?.get('epoch') || null;
@@ -112,7 +113,7 @@ const SessionsCatalog = (() => {
       this.userAction = null;
       if (this.operation?.navigation) this.cancelledNavigation = this.operation.navigation;
       this.actionFocus = null; this.retire();
-      this.setStatus();
+      this.clearStatus();
       Object.assign(this, {offset, epoch, sort, direction, period});
       this.canonicalPeriod = !params?.has('period');
       this.periodSelection();
@@ -159,6 +160,19 @@ const SessionsCatalog = (() => {
       this.attached = false; this.actionFocus = null;
       if (this.userAction?.destination !== location.hash) this.userAction = null;
       this.interest(false); this.retire();
+    }
+    sourceHealth(unverified, blocked) {
+      const becameUnverified = unverified && !this.sourceUnverified;
+      this.sourceUnverified = unverified;
+      if (blocked) {
+        this.clearStatus();
+        if (this.attached) this.detach();
+      }
+      if (!becameUnverified) return;
+      for (const row of this.body.children) if (row.value.running) {
+        row.value = {...row.value, running: false, last_activity_ms: null, activity_state: 'unverified'};
+        this.activity(row);
+      }
     }
     wake(hint) {
       if (typeof hint !== 'string' || !hint || hint === this.liveHint) return;
@@ -253,8 +267,8 @@ const SessionsCatalog = (() => {
         if (opened) this.interest();
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
-        const terminal = ['authentication_required', 'csrf_required', 'host_identity_changed', 'instance_stopping',
-          'permission_denied', 'invalid_request', 'catalog_response_mismatch', 'unsupported_schema',
+        const terminal = sharedRecovery.has(error.message) ||
+          ['permission_denied', 'invalid_request', 'catalog_response_mismatch', 'unsupported_schema',
           'http_auth_failure', 'invalid_data'].includes(error.message) ||
           error.retryable === false && !['catalog_busy', 'request_unavailable', 'source_unavailable'].includes(error.message);
         if (terminal) {
@@ -266,15 +280,10 @@ const SessionsCatalog = (() => {
         }
         else {
           this.retryDelay = Math.min(30000, (this.retryDelay || 2500) * 2);
-          this.refreshFailures = (this.refreshFailures || 0) + 1;
-          this.setStatus(terminal ? 'Cannot refresh Sessions. Check access, then reopen Sessions.' :
-            this.refreshFailures < 3 ? '' : flight.timedOut ? 'Sessions request timed out · retrying' :
-              'Sessions refresh unavailable · retrying');
         }
         if (error.message === 'catalog_expired') {
           this.token = null; this.epoch = null; this.offset = 0; this.recovering = true;
         }
-        this.status.hidden = !this.status.textContent;
       } finally {
         if (this.flight === flight) {
           clearTimeout(this.admission); clearTimeout(this.requestDeadline);
@@ -286,7 +295,9 @@ const SessionsCatalog = (() => {
       if (!this.operation) return;
       const operation = this.operation;
       operation.pending = !operation.failed;
-      if (!operation.userInitiated) { this.setStatus(); this.pagerBusy(); return; }
+      if (!operation.userInitiated) { this.pagerBusy(); return; }
+      const before = operation.kind === 'page' ? null : this.pan;
+      if (this.status.nextSibling !== before) this.root.insertBefore(this.status, before);
       const name = columns.find(([key]) => key === this.sort)[1];
       const task = operation.kind === 'period' ? `Loading sessions in ${periods.find(([key]) => key === this.period)?.[1] || this.period}` :
         operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 25) + 1}` : `Sorting sessions by ${name}`;
@@ -304,19 +315,16 @@ const SessionsCatalog = (() => {
       this.operation.failed = true;
       this.operation.pending = false;
       if (terminal) this.interest(false);
-      const message = ['authentication_required', 'http_auth_failure', 'permission_denied', 'csrf_required'].includes(reason) ?
-        terminal ? 'Check your access, then reopen Sessions.' : 'Session details require source authorization.' :
-        terminal ? 'Could not load. Reopen Sessions to try again.' :
+      const message = terminal ? 'Could not load. Reload Cost Guard to try again.' :
           'Could not complete this request. Returning to an available page.';
-      if (this.operation.userInitiated) this.showProgress(message);
-      else { this.setStatus(message); this.pagerBusy(); }
+      if (this.operation.userInitiated && !sharedRecovery.has(reason)) this.showProgress(message);
+      else { this.clearStatus(); this.pagerBusy(); }
     }
     waitNavigation(reason) {
       this.retryDelay = Math.min(30000, (this.retryDelay || 500) * 2);
       if (this.operation?.userInitiated && Date.now() - this.operation.advanced >= 90000)
         this.failNavigation(reason, false);
       else if (this.operation?.userInitiated) this.showProgress();
-      else this.setStatus();
     }
     pendingNavigation(data) {
       if (!this.operation) return false;
@@ -362,15 +370,17 @@ const SessionsCatalog = (() => {
     }
     update(data) {
       if (data.navigation != null && data.navigation !== this.operation?.navigation) return;
-      // Even a deferred sort/outage must retire unsupported running indicators.
+      if (data.state !== 'observed') {
+        if (this.operation) this.pendingNavigation(data);
+        return;
+      }
+      if (this.sourceUnverified) return; // A pre-outage HTTP reply cannot restore Live.
       // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
       const provisional = !this.operation && this.offset === 0 && data.offset === 0 && data.passive &&
         data.state === 'observed' && data.order_state === 'provisional' &&
         data.period === this.period && data.sort === this.sort && data.direction === this.direction;
       if (this.pendingNavigation(data) || data.pending_sort && !provisional) {
-        this.retireUnsupportedRunning(data);
-        if (!this.operation) this.freshnessStatus(data);
         // A pending page is not applied: keep the last qualified rows with their
         // actual pager/order. Only cold entry has no valid page to retain.
         if (data.state === 'observed' && !this.data) {
@@ -379,14 +389,12 @@ const SessionsCatalog = (() => {
         return;
       }
       const values = data.view.session_usage;
-      this.refreshFailures = 0;
       const changedPage = this.recovering && (this.body.children.length !== values.length ||
         values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
       this.pan.hidden = this.pager.hidden = false;
       this.data = data;
       this.renderTimezone = data.view.timezone_id;
-      this.usable = data.state === 'observed' || data.view.session_usage.length > 0;
       this.offset = data.offset;
       if (this.recovering || this.canonicalPeriod || data.passive && this.epoch && data.epoch !== this.epoch) {
         this.epoch = data.offset || this.epoch && data.order_state === 'verified' ? data.epoch : null;
@@ -394,8 +402,7 @@ const SessionsCatalog = (() => {
         this.recovering = false;
         this.canonicalPeriod = false;
       }
-      // A safely applied replacement completes recovery, not a lasting warning.
-      this.freshnessStatus(data);
+      this.clearStatus();
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
@@ -425,44 +432,6 @@ const SessionsCatalog = (() => {
       if (completed?.navigation) this.appliedNavigation = completed.navigation;
       this.operation = null; clearTimeout(this.admission);
       this.pagerBusy();
-    }
-    freshnessStatus(data) {
-      const progress = data.progress;
-      if (data.state === 'source_unavailable') {
-        this.setStatus(data.total ? 'Live session source unavailable · showing last known data' : 'Live session source unavailable');
-      } else if (progress?.status === 'failed') {
-        this.setStatus(progress.reason === 'http_auth_failure' ?
-          'Session details require source authorization' : 'Some session details are unavailable from this source');
-      } else if (progress?.reason) {
-        this.setStatus('Some session details are pending a source retry');
-      } else if (data.membership_pending && progress?.status === 'pending') {
-        const now = Date.now(), prior = this.indexProgress;
-        if (!prior || progress.completed > prior.completed || data.period !== prior.period || data.sort !== prior.sort)
-          this.indexProgress = {at: now, completed: progress.completed, period: data.period, sort: data.sort};
-        const stalled = now - this.indexProgress.at >= 45000;
-        this.setStatus(stalled ? progress.work?.active ?
-          'Session details are taking longer than usual · reading source' :
-          'Session details are taking longer than usual · waiting for indexing' : '');
-      } else {
-        this.indexProgress = null; this.setStatus();
-      }
-    }
-    retireUnsupportedRunning(data) {
-      const observed = new Map(data.view.session_usage.map(value => [value.session_id, value]));
-      for (const row of this.body.children) {
-        const value = observed.get(row.dataset.id);
-        if (!row.value.running || data.state === 'observed' && value?.running) continue;
-        row.className = '';
-        ReportView.text(row.runningMarker, '');
-        row.value = {...row.value, running: false,
-          last_activity_ms: value && !value.running ? value.last_activity_ms : null};
-        ReportView.text(row.activity, row.value.catalog_activity_ms != null ?
-          ReportView.timestamp(row.value.catalog_activity_ms, this.renderTimezone) + ' · Catalog' :
-          row.value.last_activity_ms == null && row.value.prompt_started_ms != null ?
-          ReportView.timestamp(row.value.prompt_started_ms, this.renderTimezone) + '*' :
-          ReportView.timestamp(row.value.last_activity_ms, this.renderTimezone));
-        ContextHelp.refresh(row.activity);
-      }
     }
     pageDestination(data, offset) {
       return destination(offset, offset || data.order_state === 'verified' || data.candidate_navigation ? data.epoch : null,
@@ -522,6 +491,44 @@ const SessionsCatalog = (() => {
         this.actionFocus = null;
       }
     }
+    activity(row) {
+      const value = row.value;
+      const render = at => ReportView.timestamp(at, this.renderTimezone);
+      let label, help = '';
+      if (value.running) {
+        label = render(value.prompt_started_ms ?? value.last_activity_ms);
+        help = ReportView.activityHelp(value.prompt_started_ms ?? value.last_activity_ms, this.renderTimezone, true);
+      } else if (value.activity_state === 'unverified') {
+        label = '—';
+        help = '* Execution could not be confirmed.';
+      } else if (value.catalog_activity_ms != null) {
+        label = render(value.catalog_activity_ms);
+        help = '* Preliminary activity from the OpenCode session catalog. Prompt time is not yet verified.';
+      } else if (value.last_activity_ms == null) {
+        label = value.prompt_started_ms == null ? '—' : render(value.prompt_started_ms);
+        if (value.prompt_started_ms != null) {
+          help = '* Showing the recorded prompt start. Finish time is not verified.';
+        } else if (value.activity_state === 'pending' || value.activity_state === 'partial') {
+          help = '* Prompt activity has not been verified yet.';
+        }
+      } else {
+        label = render(value.last_activity_ms);
+      }
+      ReportView.text(row.activity, label + (help ? '*' : ''));
+      if (help && help !== row.activityHelp) ContextHelp.value(row.activity, help);
+      if (!help && row.activityHelp) {
+        const focused = document.activeElement === row.activity;
+        ContextHelp.clearValue(row.activity);
+        if (focused) {
+          row.name.focus?.({preventScroll: true});
+          ContextHelp.dismiss(row.name);
+        }
+      }
+      row.activityHelp = help;
+      row.className = value.running ? 'session-running' : '';
+      ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' :
+        value.activity_state === 'unverified' ? '[UNVERIFIED] ' : value.new_arrival ? '[NEW · Loading] ' : '');
+    }
     rows(values) {
       this.costs ||= new ReportView.CostDisplay();
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
@@ -542,10 +549,6 @@ const SessionsCatalog = (() => {
           row.name.append(row.runningMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
-          ContextHelp.value(row.activity, () => row.value.catalog_activity_ms != null ?
-            'Preliminary source catalog activity, not a verified prompt time.' :
-            ReportView.activityHelp(row.value.last_activity_ms, this.renderTimezone,
-              row.value.running, row.value.prompt_started_ms));
           row.metrics = ['model', 'ccost', 'prompts', 'duration', 'ctx'].map(key => {
             const node = el('span');
             if (['duration', 'prompts'].includes(key)) return node;
@@ -561,15 +564,8 @@ const SessionsCatalog = (() => {
           const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
         }
-        row.className = value.running ? 'session-running' : '';
-        ReportView.text(row.activity, value.catalog_activity_ms != null ?
-          ReportView.timestamp(value.catalog_activity_ms, this.renderTimezone) + ' · Catalog' :
-          value.last_activity_ms == null && value.activity_state === 'pending' ?
-          'Loading…' : value.last_activity_ms == null && value.prompt_started_ms != null ?
-            ReportView.timestamp(value.prompt_started_ms, this.renderTimezone) + '*' :
-            ReportView.timestamp(value.last_activity_ms, this.renderTimezone) + (value.running ? '*' : ''));
+        this.activity(row);
         ReportView.text(row.titleNode, value.title);
-        ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : value.new_arrival ? '[NEW · Loading] ' : '');
         const texts = [(value.model !== 'N/A' && value.model || value.selected_display_model || 'N/A') + (value.has_model_details ? '*' : ''),
           () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
           () => ReportView.display(value, 'duration_ms'), () => ReportView.display(value, 'context_tokens')];

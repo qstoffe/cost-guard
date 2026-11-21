@@ -29,6 +29,7 @@ class WatchCapture:
     context_handoffs: tuple = ()
     duration_intervals: tuple = ()
     context_comparable_ids: frozenset = frozenset()
+    catalog_prompt: tuple | None = None
 
     @property
     def history_row(self):
@@ -136,10 +137,20 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
     # not the six-row card slice. Reuse these intervals for clock-only ticks.
     intervals = (tuple((record.prompt_time_ms, record.execution_duration_ms, record.in_progress)
         for record in bundle.prompts) + tuple((record.created_at_ms, record.duration_ms, False)
-        for record in bundle.compactions)) if fresh.complete else ()
+                 for record in bundle.compactions)) if fresh.complete else ()
+    observed_ids = frozenset(event.event_id for event in fresh.events if event.session_id == root.session_id)
+    root_records = [record for record in records
+                    if record.session_id == root.session_id and record.prompt_id in observed_ids]
+    running = [record for record in root_records if record.in_progress and not record.execution_unverified]
+    focal = max(running or root_records, key=lambda record: (record.prompt_time_ms, record.prompt_id), default=None)
+    # A final root attempt is enough to stop claiming execution, but Watch's
+    # duration/part clocks are not the Sessions causal finish clock.
+    ended = focal is not None and not running and not focal.execution_unverified and bool(
+        focal.parent_outcome and focal.parent_terminal_time_ms >= focal.prompt_time_ms)
+    catalog_prompt = (focal.prompt_id, focal.prompt_time_ms, bool(running), ended) if focal is not None else None
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids)), item
+        intervals, frozenset(comparable_ids), catalog_prompt), item

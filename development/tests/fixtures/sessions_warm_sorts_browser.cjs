@@ -59,7 +59,7 @@ module.exports = async ({evaluate,until,fixture,command}) => {
   const old=`document.querySelector('tr[data-id="root-0001"]')`;
   assert.equal(await evaluate(`${old}.activity.textContent`),'2026-11-16 00:05*');
   assert.equal(await evaluate(`${old}.value.running`),false);
-  const expected='2026-11-16 00:05\nCompletion unverified. Showing recorded prompt start, not finish.';
+  const expected='* Showing the recorded prompt start. Finish time is not verified.';
   await evaluate(`${old}.activity.focus({preventScroll:true})`);
   await until('document.getElementById("context-help")?.matches(":popover-open")');
   assert.equal(await evaluate('document.getElementById("context-help").textContent'),expected);

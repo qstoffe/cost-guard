@@ -4,7 +4,7 @@ HTTP reads never acquire history. Metric ordering is admitted only with keys for
 every period-eligible root; an unindexed root is not a canonically unknown metric.
 """
 from collections import OrderedDict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from heapq import nsmallest
 from threading import Lock
 import time
@@ -33,6 +33,21 @@ INTERACTIVE_ATTEMPTS = 12
 INTERACTIVE_ADMISSION_SECONDS = 0.35
 ARRIVAL_SLOTS = 5
 ARRIVAL_SECONDS = 120
+
+
+@dataclass(frozen=True, slots=True)
+class PromptEvidence:
+    observed_ms: int
+    prompt_id: str
+    start_ms: int
+    running: bool
+    finish_ms: int | None
+    ended: bool = False
+    revision: str | None = None
+
+    @property
+    def identity(self):
+        return self.start_ms, self.prompt_id
 
 
 def effort_sort(key):
@@ -114,7 +129,9 @@ class SessionCatalog:
         self.changed_roots = set()
         self.active = frozenset()
         self.prompt_activity = {}
-        self.watch_activity = {}
+        self.running_roots = set()
+        self.interrupted = False
+        self.lifecycle_cutoff_ms = 0
         self.leases = OrderedDict()
         self.state = "loading"
         self.dependencies = None
@@ -138,7 +155,6 @@ class SessionCatalog:
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
-        self.prompt_signal = frozenset()
 
     def live_hint(self):
         """Constant-size wake hint, not row/membership or scalar-value proof."""
@@ -168,7 +184,9 @@ class SessionCatalog:
             # page does not prove that offscreen live candidates are absent.
             if not lease.get('pinned') or not lease.get('cohort_verified'):
                 selected.update(self.active)
-                selected.update(key for key, row in self.rows.items() if row.running)
+                selected.update(self.running_roots)
+                selected.update(key for key, proof in self.prompt_activity.items()
+                    if proof.ended and proof.finish_ms is None and not self._activity_current(key))
             navigation = lease.get('navigation')
             if navigation is not None:
                 if navigation.invalid:
@@ -196,9 +214,15 @@ class SessionCatalog:
 
     def _population(self, period):
         window = catalog_window(period, self.timezone_id, self.clock_ms())
+        lifecycle = self.running_roots | {key for key, proof in self.prompt_activity.items()
+            if in_window(proof.finish_ms or proof.start_ms, window)}
         return window, candidate_population(self.roots, self.activity, self.activity_index,
-            self.rows, self.changed_roots | self.active | {key for key, value in self.watch_activity.items()
-                if value[1] and 0 <= self.clock() - value[0] <= 15}, window)
+            self.rows, self.changed_roots | self.active | lifecycle, window)
+
+    def _finish_known(self, key):
+        proof = self.prompt_activity.get(key)
+        return (proof is not None and proof.finish_ms is not None
+                and proof.revision == self.revisions.get(key))
 
     def _activity_current(self, key):
         return (key in self.rows and self.rows[key].activity_qualified
@@ -214,7 +238,7 @@ class SessionCatalog:
         for lease in self.leases.values():
             lease['epochs'].clear()
 
-    def observe(self, observation, *, unavailable=False, timezone_id=None):
+    def observe(self, observation, *, unavailable=False, source_interrupted=True, timezone_id=None):
         with self.lock:
             if timezone_id is not None:
                 if timezone_id != self.timezone_id:
@@ -225,8 +249,13 @@ class SessionCatalog:
                     self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
-                if self.state != "source_unavailable":
+                if self.state != "source_unavailable" or source_interrupted and not self.interrupted:
                     self.wake_revision += 1
+                if source_interrupted and not self.interrupted:
+                    # Recovery must supply new prompt evidence, not replay a
+                    # capture that predates the confirmed outage.
+                    self.interrupted = True
+                    self.lifecycle_cutoff_ms = self.clock_ms()
                 self.state = "source_unavailable"
                 return
             if observation is self.last_observation:
@@ -236,7 +265,7 @@ class SessionCatalog:
             if source_changed:
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
-                             'failure_reasons', 'prompt_activity', 'watch_activity', 'model_dependencies', 'orders'):
+                             'failure_reasons', 'prompt_activity', 'running_roots', 'model_dependencies', 'orders'):
                     getattr(self, name).clear()
                 self._clear_epochs()
                 self.index_terminal = False
@@ -295,7 +324,7 @@ class SessionCatalog:
                              and previous_roots[key].provenance == self.roots[key].provenance}
             # An authoritative unchanged revision validates stable scalar facts;
             # navigation and failed observations never renew this proof.
-            self.valid = {key: (value[0], self.clock()) if key not in self.active and not self.rows[key].running
+            self.valid = {key: (value[0], self.clock()) if key not in self.active and key not in self.running_roots
                           else value for key, value in self.valid.items()}
             self.rows = {key: row for key, row in self.rows.items()
                            if previous_roots[key].provenance == self.roots[key].provenance}
@@ -304,7 +333,9 @@ class SessionCatalog:
             self.model_dependencies = {key: value for key, value in self.model_dependencies.items()
                                        if key in self.rows}
             self.prompt_activity = {key: value for key, value in self.prompt_activity.items()
-                if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance}
+                if key in self.roots and self.roots[key].archived_at_ms is None
+                and previous_roots[key].provenance == self.roots[key].provenance}
+            self.running_roots.intersection_update(self.prompt_activity)
             self.failures = {key: failure for key, failure in self.failures.items()
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
                               and failure[0] == self.revisions.get(key)}
@@ -313,32 +344,63 @@ class SessionCatalog:
             if self.state == 'source_unavailable':
                 self.index_terminal = False
             self.state = "observed"
+            self.interrupted = False
             self.observed = self.clock()
 
     def observe_prompts(self, evidence):
-        """Canonical Watch captures only: root identity, lifecycle and original age.
+        """Canonical Watch captures only: root identity, revision and original time.
 
-        Repeated publication never renews a capture. Candidates are admission hints,
-        not proof; scalar/pricing acquisition cannot invalidate independent proof.
+        An omitted prompt is not a lifecycle event. Resolve each supplied fact
+        against the same per-root evidence used by the scalar lane and page order.
         """
         with self.lock:
-            self.watch_activity = {root.session_id: (self.clock() - age, running, prompt_id, start)
-                for root, running, age, prompt_id, start in evidence if 0 <= age <= 15
-                and root.session_id in self.roots
-                and root.provenance == self.roots[root.session_id].provenance}
-            signal = frozenset((key, value[1], value[2], value[3]) for key, value in self.watch_activity.items()
-                if isinstance(value[2], str) and value[2] and type(value[3]) is int
-                and 0 < value[3] <= self.clock_ms())
-            if signal != self.prompt_signal:
-                self.wake_revision += 1
-                self.prompt_signal = signal
+            if self.state != "observed":
+                return
+            now = self.clock_ms()
+            for root, revision, captured_at, prompt_id, start, running, finish, ended in evidence:
+                key = root.session_id
+                if (key not in self.roots or root.provenance != self.roots[key].provenance
+                        or revision != self.revisions.get(key) or not 0 <= now - captured_at <= 15_000):
+                    continue
+                self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
+                                    wake=True)
 
-    def _running(self, key, fallback):
-        if self.state != "observed" or key not in self.roots:
-            return False
-        signals = [value for value in (self.prompt_activity.get(key), self.watch_activity.get(key))
-                   if value is not None and 0 <= self.clock() - value[0] <= 15]
-        return max(signals, key=lambda value: (value[0], not value[1]))[1] if signals else fallback
+    def _record_prompt(self, key, evidence, *, wake=False):
+        now = self.clock_ms()
+        if (self.roots[key].archived_at_ms is not None or not isinstance(evidence.prompt_id, str)
+                or not self.lifecycle_cutoff_ms < evidence.observed_ms <= now
+                or not evidence.prompt_id or type(evidence.start_ms) is not int
+                or not 0 < evidence.start_ms <= now
+                or evidence.finish_ms is not None and not evidence.start_ms <= evidence.finish_ms <= now):
+            return
+        previous = self.prompt_activity.get(key)
+        if evidence.finish_ms is not None:
+            evidence = replace(evidence, ended=True)
+        if previous is None:
+            if not evidence.running:
+                return  # Ordinary history belongs to the scalar index.
+        else:
+            if evidence.identity < previous.identity or evidence.observed_ms < previous.observed_ms:
+                return
+            if evidence.prompt_id == previous.prompt_id:
+                if (evidence.start_ms != previous.start_ms or evidence.running and previous.ended
+                        or not evidence.running and not evidence.ended
+                        or evidence.observed_ms == previous.observed_ms and evidence.running):
+                    return
+                if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
+                    evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
+        self.prompt_activity[key] = evidence
+        if evidence.running:
+            self.running_roots.add(key)
+        else:
+            self.running_roots.discard(key)
+        if wake and (previous is None or (previous.identity, previous.running, previous.finish_ms) !=
+                (evidence.identity, evidence.running, evidence.finish_ms)):
+            self.wake_revision += 1
+
+    def _running(self, key):
+        return (not self.interrupted and key in self.running_roots
+                and self.prompt_activity[key].observed_ms > self.lifecycle_cutoff_ms)
 
     def _current(self, key):
         value = self.valid.get(key)
@@ -374,7 +436,7 @@ class SessionCatalog:
             and not lease['navigation'].invalid
             and key in lease['navigation'].roots and key not in lease['navigation'].facts
             for lease in self.leases.values())
-        return (navigation_pending or not self._current(key) or (key in self.active or self.rows[key].running)
+        return (navigation_pending or not self._current(key) or (key in self.active or key in self.running_roots)
                       or not self.rows[key].context_qualified and self._requested(key, 'ctx')
                       or not self.rows[key].effort_qualified and self._requested(key, 'effort')
                       or not self._activity_current(key) and any(self._browsing(lease)
@@ -474,7 +536,8 @@ class SessionCatalog:
                     break
                 root, revision = self.roots[key], self.revisions.get(key)
                 epoch = self.last_observation.source_epoch
-                active = key in self.active or bool(self.rows.get(key) and self.rows[key].running)
+                active = key in self.active or key in self.running_roots
+                captured_at = self.clock_ms()
                 self.attempted[key] = self.clock()
                 self.metrics['attempts'] += 1
                 self.metrics['retries'] += int(key in self.failures)
@@ -515,7 +578,7 @@ class SessionCatalog:
                                 self.activity_valid[key] = actual
                             else:
                                 self.activity_valid.pop(key, None)
-                            self.prompt_activity[key] = self.attempted[key], row.running
+                            self._record_summary_prompt(key, row, captured_at)
                             partial = None if row.running else (
                                 'context' if not row.context_qualified and self._requested(key, 'ctx') else
                                 'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
@@ -563,6 +626,18 @@ class SessionCatalog:
             self.work_sequence += 1
             self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
+    def _record_summary_prompt(self, key, row, captured_at):
+        if row.running or row.activity_qualified:
+            self._record_prompt(key, PromptEvidence(captured_at, row.activity_prompt_id, row.prompt_started_ms,
+                row.running, None if row.running else row.last_activity_ms, revision=self.revisions.get(key)))
+
+    def _with_lifecycle(self, rows, lifecycle=None):
+        if lifecycle is None:
+            lifecycle = {row.session_id: row for row in self._rows(row.session_id for row in rows)}
+        return tuple(replace(row, **{name: getattr(lifecycle[row.session_id], name)
+            for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id')})
+            if row.running or row.session_id in self.prompt_activity else row for row in rows)
+
     def _rows(self, keys):
         rows = []
         now = self.clock_ms()
@@ -571,35 +646,27 @@ class SessionCatalog:
             value = self.rows.get(key) or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False, activity_qualified=False)
             activity = value.last_activity_ms
-            current = self._current(key)
-            unavailable = self.index_unavailable or key in self.failures
-            watch = self.watch_activity.get(key)
             prompt = self.prompt_activity.get(key)
-            watch_current = bool(watch and 0 <= self.clock() - watch[0] <= 15
-                and (prompt is None or watch[0] >= prompt[0]) and self.state == 'observed')
-            if (watch_current and watch[1] and isinstance(watch[2], str) and watch[2]
-                    and type(watch[3]) is int and 0 < watch[3] <= now):
-                value = replace(value, running=True, activity_prompt_id=watch[2],
-                                prompt_started_ms=watch[3], last_activity_ms=watch[3])
-                activity = value.last_activity_ms
-                unavailable = False  # Independent Watch proof survives scalar/pricing failure.
-            running = bool(value.running and type(value.prompt_started_ms) is int
-                and 0 < value.prompt_started_ms <= now and not unavailable
-                and self._running(key, bool(current and self.clock() - self.valid[key][1] <= 15)))
-            # A newer negative lifecycle signal is not itself a finish clock.
-            if value.running and value.prompt_started_ms is not None and not running:
-                activity = None
+            running = self._running(key)
+            started, prompt_id = value.prompt_started_ms, value.activity_prompt_id
+            if prompt is not None and (prompt.running or not self._activity_current(key) or value.running):
+                started, prompt_id = prompt.identity
+                # Preserve the scalar lane's causal finish (including linked
+                # work), never the timestamp of a different prompt.
+                activity = started if running else None if prompt.running else prompt.finish_ms
+            elif value.running:
+                activity = started = None
+                prompt_id = ""
             title = root.title or "Untitled session"
             activity = activity if type(activity) is int and 0 < activity <= now else None
-            started = value.prompt_started_ms
             started = started if type(started) is int and 0 < started <= now else None
             archived = root.archived_at_ms is not None
             # Bounded epochs share unchanged immutable facts instead of copying
             # every qualified row again for each burst's new ordering.
             if (title != value.title or activity != value.last_activity_ms or started != value.prompt_started_ms
-                    or running != value.running or archived != value.archived):
+                    or running != value.running or archived != value.archived or prompt_id != value.activity_prompt_id):
                 value = replace(value, title=title, last_activity_ms=activity, prompt_started_ms=started,
-                                running=running, archived=archived)
+                                activity_prompt_id=prompt_id, running=running, archived=archived)
             rows.append(value)
         return rows
 
@@ -683,7 +750,10 @@ class SessionCatalog:
             # A live candidate epoch already owns the order of these slices.
             # Scalar qualification can improve cells without blocking navigation.
             reuse = reuse or bool(pinned and compatible and issued.browsable_candidates
-                and (nav is None or nav.sequence != navigation))
+                 and (nav is None or nav.sequence != navigation))
+            retained_page = bool(compatible and navigation is None and nav is None
+                and self.state == 'source_unavailable')
+            reuse = reuse or retained_page
             if not pinned:
                 window, candidates = self._population(period)
             if navigation is not None:
@@ -718,6 +788,7 @@ class SessionCatalog:
                     if not pinned:
                         window, candidates = nav.window, tuple(nav.roots)
             display_rows = {row.session_id: row for row in self._rows(candidates)} if not pinned else {}
+            event_current = lambda key: self._activity_current(key) or self._finish_known(key)
             qualified = lambda key: (not pinned and display_rows[key].running or (
                 (sort == 'name' or self._key_current(key, sort))
                 and (period == 'all' and sort != 'activity' or self._activity_current(key))
@@ -732,7 +803,7 @@ class SessionCatalog:
                 applied = "activity" if pending and not live_page else sort
                 order = -1 if pending and not live_page else direction
                 cache_key = window.identity, applied, order, pending, live_page
-                members = event_members(candidates, window, display_rows, self._activity_current)
+                members = event_members(candidates, window, display_rows, event_current)
                 latest, previous = next(((key, value) for key, value in reversed(lease["epochs"].items())
                     if (value.sort, value.direction, value.window.identity) == (applied, order, window.identity)),
                     (None, None))
@@ -742,7 +813,7 @@ class SessionCatalog:
                     if in_window(self.activity.get(key), window)}
                 if live_page:
                     members = tuple(key for key in members if display_rows[key].running
-                        or self._activity_current(key) or key in metadata or window.period == 'all')
+                         or event_current(key) or key in metadata or window.period == 'all')
                 positions = {}
                 arrivals = ()
                 if live_page and pending and (sort, direction) != ("activity", -1):
@@ -760,17 +831,17 @@ class SessionCatalog:
                             if row.session_id in allowed and not display_rows[row.session_id].running
                             and not qualified(row.session_id) and row.session_id not in arrivals}
                     members = tuple(key for key in members if display_rows[key].running or qualified(key))
-                signature = (tuple((key, metadata.get(key), display_rows[key], self._activity_current(key))
+                signature = (tuple((key, metadata.get(key), display_rows[key], event_current(key))
                                     for key in (*members, *positions, *arrivals)), tuple(positions.items()), arrivals)
                 cached = self.orders.get(cache_key)
                 if nav is not None and navigation is not None and not pending:
-                    rows = ordered(nav.rows, sort, direction)
+                    rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction)
                 elif cached and cached[0] == signature:
                     rows = cached[1]
                 else:
                     rows = ordered((display_rows[key] for key in members), applied, order)
                     if pending and (applied, order) == ("activity", -1):
-                        rows = (live_activity_order(rows, metadata, self._activity_current) if live_page else
+                        rows = (live_activity_order(rows, metadata, event_current) if live_page else
                             provisional_order(rows, self.activity))
                     elif positions:
                         rows = retained_positions(rows, positions, display_rows)
@@ -825,10 +896,7 @@ class SessionCatalog:
             if frozen:
                 # Frozen metrics/membership are historical facts, not a license
                 # to keep claiming an old prompt is currently executing.
-                lifecycle = {row.session_id: row for row in self._rows(lease['visible'])}
-                selected = tuple(replace(row, **{name: getattr(lifecycle[row.session_id], name)
-                    for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id')})
-                    for row in selected)
+                selected = self._with_lifecycle(selected)
             retained_order = reuse and any(
                 old.running != fresh.running or (old.prompt_started_ms != fresh.prompt_started_ms if fresh.running
                     else sort_value(old, sort) != sort_value(fresh, sort))
@@ -844,7 +912,7 @@ class SessionCatalog:
                 key = row["session_id"]
                 current = key in self.roots and self._current(key)
                 row["indexed"] = current
-                activity_current = self._activity_current(key)
+                activity_current = event_current(key)
                 hint = self.activity.get(key)
                 row["catalog_activity_ms"] = hint if (snapshot.browsable_candidates and not activity_current
                     and not row["running"] and in_window(hint, metadata_window)) else None
@@ -853,7 +921,9 @@ class SessionCatalog:
                     self.state == 'source_unavailable' or self.index_unavailable) else (
                         'ready' if activity_current else 'partial' if key in self.rows and not self.rows[key].activity_qualified
                         else 'retained' if row["last_activity_ms"] is not None
-                        else 'unavailable' if key in self.failures else 'pending')
+                         else 'unavailable' if key in self.failures else 'pending')
+                if key in self.running_roots and not row["running"]:
+                    row["activity_state"] = 'unverified'
                 row["has_summary"] = key in self.rows or row["prompt_count"] is not None
                 unavailable = self.index_unavailable or self.state == "source_unavailable" or key in self.failures or key not in self.roots
                 row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
@@ -907,7 +977,7 @@ class SessionCatalog:
                 snapshot.remember_page(offset)
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=PAGE_SIZE,
                 page_reused=reuse, retained_order=retained_order,
-                 passive=bool(passive and not offset and navigation is None and nav is None),
+                  passive=bool(passive and not offset and navigation is None and nav is None),
                  candidate_scope='source_catalog_metadata',
                  membership_pending=snapshot.provisional, candidate_navigation=snapshot.browsable_candidates,
                  order_state='provisional' if snapshot.provisional else 'verified',
@@ -944,7 +1014,7 @@ class SessionCatalog:
                 row = self.rows.get(key)
                 current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
                     and not self.failures.get(key, (None, False))[1])
-                if key in excluded or self._running(key, bool(current and row and row.running)):
+                if key in excluded or self._running(key):
                     return None
                 at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
                 at = at if type(at) is int and 0 < at <= now else None

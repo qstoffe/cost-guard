@@ -45,4 +45,4 @@ def configure(runtime, command):
         catalog.rows[key] = row
         catalog.valid[key] = revision, catalog.clock()
         catalog.activity_valid[key] = revision
-        catalog.prompt_activity[key] = catalog.clock(), row.running
+        catalog._record_summary_prompt(key, row, catalog.clock_ms())

@@ -39,7 +39,7 @@ const ContextHelp = (() => {
     const cancelWatchdog = () => { win.clearTimeout(watchdog); watchdog = undefined; };
     const hovered = node => node.matches?.(':hover');
     const valid = target => target?.ownerDocument === doc && target.isConnected &&
-      entries.get(target).pointerTarget.ownerDocument === doc && entries.get(target).pointerTarget.isConnected &&
+      entries.get(target)?.pointerTarget.ownerDocument === doc && entries.get(target).pointerTarget.isConnected &&
       doc.visibilityState !== 'hidden' && !win.closed;
     function pointerInteraction(event) {
       if (!event?.isTrusted || event.pointerType === 'touch') return;
@@ -207,8 +207,9 @@ const ContextHelp = (() => {
       if (pending && !valid(pending)) cancelOpening();
       if (active && !valid(active)) close();
     }).observe(doc.body, {childList: true, subtree: true});
-    const value = {leave, refresh, dismiss(target) {
-      if (active && target.contains(active) || pending && target.contains(pending)) close(true);
+    const value = {leave, refresh, dismiss(target, suppress = true) {
+      if (active && target.contains(active) || pending && target.contains(pending)) close(suppress);
+      if (!suppress && blocked === target) blocked = null;
     }, click(target, passive) {
       if (!passive || active === target && origin === 'pinned') { close(); blocked = target; }
       else { blocked = null; show(target, 'pinned'); }
@@ -238,13 +239,15 @@ const ContextHelp = (() => {
   function attach(target, content, passive = false, pointerTarget = target) {
     const entry = entries.get(target);
     if (entry) { entry.content = content; refresh(target); return target; }
-    entries.set(target, {content, pointerTarget}); target.removeAttribute('title');
+    const listeners = [];
+    const listen = (node, type, fn) => { node.addEventListener(type, fn); listeners.push([node, type, fn]); };
+    entries.set(target, {content, pointerTarget, listeners}); target.removeAttribute('title');
     const owner = () => controller(target.ownerDocument);
-    pointerTarget.addEventListener('pointerenter', event => owner().enter(target, event));
-    pointerTarget.addEventListener('pointerleave', () => owner().leave(target));
-    target.addEventListener('focus', () => owner().focus(target));
-    target.addEventListener('blur', () => owner().blur(target));
-    target.addEventListener('click', () => {
+    listen(pointerTarget, 'pointerenter', event => owner().enter(target, event));
+    listen(pointerTarget, 'pointerleave', () => owner().leave(target));
+    listen(target, 'focus', () => owner().focus(target));
+    listen(target, 'blur', () => owner().blur(target));
+    listen(target, 'click', () => {
       const selection = target.ownerDocument.getSelection?.();
       if (passive && selection && !selection.isCollapsed &&
           (target.contains(selection.anchorNode) || target.contains(selection.focusNode))) return;
@@ -267,14 +270,26 @@ const ContextHelp = (() => {
   function value(target, content) {
     if (entries.has(target)) return attach(target, content, true);
     target.className = (target.className || '') + ' help-value'; target.tabIndex = 0;
-    target.addEventListener('keydown', event => {
+    attach(target, content, true);
+    const keydown = event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); controller(target.ownerDocument).click(target, true);
       }
-    });
-    return attach(target, content, true);
+    };
+    target.addEventListener('keydown', keydown);
+    entries.get(target).listeners.push([target, 'keydown', keydown]);
+    return target;
+  }
+  function clearValue(target) {
+    const entry = entries.get(target);
+    if (!entry) return;
+    documents.get(target.ownerDocument)?.dismiss(target, false);
+    for (const [node, type, fn] of entry.listeners) node.removeEventListener(type, fn);
+    entries.delete(target);
+    target.classList.toggle('help-value', false);
+    target.removeAttribute('tabindex');
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
   function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
-  return {attach, button, heading, value, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
+  return {attach, button, heading, value, clearValue, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
 })();

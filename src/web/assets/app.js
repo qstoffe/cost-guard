@@ -153,9 +153,13 @@ function connectionStatus(message, state = {}) {
       ReportView.text(warning, '');
     }
   }
-  if (hostState.terminal || hostState.sourceBlocked) for (const view of views.values()) {
-    view.detail?.invalidateValues(); view.detail?.detach(); view.catalog?.detach();
-    view.accountTimeline?.invalidate();
+  const blocked = hostState.terminal || hostState.sourceBlocked;
+  for (const view of views.values()) {
+    view.catalog?.sourceHealth(blocked || hostState.sourceOutage, blocked);
+    if (blocked) {
+      view.detail?.invalidateValues(); view.detail?.detach();
+      view.accountTimeline?.invalidate();
+    }
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
@@ -195,6 +199,9 @@ async function api(path, value, signal, attachment = false) {
       if (response.status === 401 || data.error === 'csrf_required') {
         connectionStatus('AUTHENTICATION EXPIRED — NOT LIVE. Use a fresh launcher link.',
           {kind: 'authorization_required', terminal: true, writable: false});
+      } else if (data.error === 'instance_stopping') {
+        connectionStatus('STOPPED — NOT LIVE. Use a fresh launcher link.',
+          {kind: 'stopped', terminal: true, writable: false});
       }
       const error = new Error(data.error || 'request_unavailable');
       error.retryable = data.retryable === true;
@@ -284,7 +291,7 @@ function show(state) {
   } else if (state.catalog) {
     ReportView.syncUnits(state.catalog.root);
     if (!hostState.terminal && !hostState.sourceBlocked) state.catalog.attach(output);
-    else output.replaceChildren(state.catalog.root);
+    else if (state.catalog.root.parentNode !== output) output.replaceChildren(state.catalog.root);
   } else if (state.live) {
     state.connection = liveStatus;
     state.connectionKind = hostState.kind;
@@ -587,7 +594,11 @@ function navigate() {
     current.detail.back.href = origin?.detail === location.hash ? origin.list : '#/sessions';
   }
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
-    current.catalog ||= new SessionsCatalog.View(api);
+    if (!current.catalog) {
+      current.catalog = new SessionsCatalog.View(api);
+      const blocked = hostState.terminal || hostState.sourceBlocked;
+      current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+    }
     current.catalog.configure(route.params);
      current.request = null; current.message = '';
    }

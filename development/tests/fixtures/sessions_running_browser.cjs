@@ -60,9 +60,48 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('current.catalog.next.click()');
   await until('current.catalog.data.offset===25 && !current.catalog.operation && !current.catalog.busy');
   assert.equal((await ids())[0],'root-0025');
-  assert.equal(await evaluate('current.catalog.body.rows[0].value.running'),false);
-  assert.equal(await evaluate('current.catalog.body.rows[0].activity.textContent'),'2026-11-15 01:59');
-  checks.push('supported abort removes star and reinserts terminal row after the remaining running group');
+   assert.equal(await evaluate('current.catalog.body.rows[0].value.running'),false);
+   assert.equal(await evaluate('current.catalog.body.rows[0].activity.textContent'),'2026-11-15 01:59');
+   assert.equal(await evaluate(`(()=>{const node=current.catalog.body.rows[0].activity;
+     return !node.hasAttribute('tabindex') && !node.hasAttribute('aria-describedby') &&
+       !node.classList.contains('help-value') && !node.hasAttribute('title');})()`),true);
+   checks.push('supported abort removes star and reinserts terminal row after the remaining running group');
+   // Source-shaped cell transitions over a stable real row. Keep the tooltip
+   // open across the catalog→Running→finished transitions.
+   await command('Emulation.setTouchEmulationEnabled',{enabled:false});
+   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab'});
+   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab'});
+   await evaluate(`window.activityView=new SessionsCatalog.View(api);
+     document.querySelector('main').append(activityView.root);
+     activityView.update({...structuredClone(current.catalog.data), navigation:null});
+     window.activityRow=activityView.body.rows[0];window.activityNode=activityRow.activity;
+     window.publishActivity=(fields,zone='Europe/Stockholm')=>{
+       const catalog=activityView,data=structuredClone(catalog.data);
+       data.view.timezone_id=zone;Object.assign(data.view.session_usage[0],fields);
+       catalog.update(data);
+     };
+     publishActivity({activity_state:'pending',last_activity_ms:null,prompt_started_ms:null,catalog_activity_ms:null});
+     activityNode.focus({preventScroll:true});`);
+   await until('document.getElementById("context-help")?.matches(":popover-open")');
+   assert.equal(await evaluate('activityNode.textContent'),'—*');
+   assert.match(await evaluate('document.getElementById("context-help").textContent'),/has not been verified/);
+   await evaluate(`publishActivity({catalog_activity_ms:Date.parse('2026-03-29T01:30Z')})`);
+   assert.equal(await evaluate('activityNode.textContent'),'2026-03-29 03:30*');
+   assert.match(await evaluate('document.getElementById("context-help").textContent'),/Preliminary activity/);
+   await evaluate(`publishActivity({running:true,prompt_started_ms:Date.parse('2026-10-25T01:30Z')})`);
+   assert.equal(await evaluate('activityNode.textContent'),'2026-10-25 02:30*');
+   assert.equal(await evaluate('document.getElementById("context-help").textContent'),
+     '2026-10-25 02:30\n* Running sessions appear first, regardless of sorting.');
+   await evaluate(`publishActivity({running:false,catalog_activity_ms:null,activity_state:'ready',
+     last_activity_ms:Date.parse('2026-10-25T01:31Z')})`);
+   assert.equal(await evaluate('activityNode.textContent'),'2026-10-25 02:31');
+   assert.equal(await evaluate(`activityRow===activityView.body.rows[0] && activityNode===activityRow.activity &&
+     document.getElementById('context-help').hidden && !activityNode.hasAttribute('aria-describedby') &&
+     !activityNode.hasAttribute('tabindex') && !activityNode.classList.contains('help-value')`),true);
+   await evaluate('activityNode.click()');
+   assert.equal(await evaluate('document.getElementById("context-help").hidden'),true);
+   await evaluate('activityView.root.remove()');
+   checks.push('open help follows pending → catalog → Running with one star → verified ordinary with no help target');
   const labels = await evaluate(`[
     ReportView.activityHelp(Date.parse('2026-03-29T01:30Z'),'Europe/Stockholm'),
     ReportView.activityHelp(Date.parse('2026-10-25T00:30Z'),'Europe/Stockholm'),

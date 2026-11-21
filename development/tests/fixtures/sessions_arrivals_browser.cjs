@@ -67,7 +67,7 @@ module.exports = async ({evaluate, until, fixture}) => {
   await evaluate('new Promise(resolve=>setTimeout(resolve,6200))');
   const after = await evaluate('arrivalRequests.length');
   assert.ok(after-before<=2,'unchanged Live clock publications do not produce HTTP churn');
-  assert.equal(await evaluate('arrivalLabelChanges'),0,'unchanged polite pager text is not rewritten/announced');
+  assert.equal(await evaluate('arrivalLabelChanges'),0,'unchanged pager text is not rewritten');
   const source = await fixture('arrival-observe');
   await fixture('arrival-seed');
   await evaluate("location.hash='#/sessions?period=today'");
@@ -80,6 +80,17 @@ module.exports = async ({evaluate, until, fixture}) => {
   await evaluate("document.querySelector('a[href=\"#/sessions\"]').click()");
   await until('current?.catalog?.data?.epoch!=='+JSON.stringify(warm)+
     ' && document.querySelector("tr[data-id=ses_arrival_100]")?.value.catalog_activity_ms>0');
+  await evaluate(`window.burstRoots=Array.from(current.catalog.body.rows).slice(0,3);
+    window.burstClocks=burstRoots.map(row=>row.activity.textContent);
+    window.removedRunning=[];
+    new MutationObserver(records=>{for(const record of records)for(const row of record.removedNodes)
+      if(burstRoots.includes(row)) removedRunning.push(row.dataset.id);}).observe(current.catalog.body,{childList:true});
+    burstRoots[0].name.focus({preventScroll:true});
+    const selection=getSelection(), span=burstRoots[0].titleNode.firstChild;
+    selection.setBaseAndExtent(span,0,span,span.length);
+    window.burstSelection=selection.toString();window.burstScroll=scrollY;`);
+  assert.deepEqual(await evaluate('burstRoots.map(row=>row.dataset.id)'),['ses_arrival_2','ses_arrival_1','ses_arrival_0']);
+  await fixture('arrival-omit-running-hint');
   const burstMeasurements = [];
   const beforeBurst = (await fixture('arrival-observe')).metrics.attempts;
   for (let burst=1;burst<=9;burst++) {
@@ -89,7 +100,12 @@ module.exports = async ({evaluate, until, fixture}) => {
     burstMeasurements.push({key, visible:await evaluate('Date.now()')});
     assert.equal(await evaluate('current.catalog.body.rows.length'),25);
     assert.equal(await evaluate('current.catalog.next.disabled'),false);
+    assert.equal(await evaluate(`burstRoots.every((row,i)=>current.catalog.body.rows[i]===row &&
+      row.value.running && row.activity.textContent===burstClocks[i]) &&
+      document.activeElement===burstRoots[0].name && getSelection().toString()===burstSelection && scrollY===burstScroll`),true);
   }
+  assert.deepEqual(await evaluate('removedRunning'),[]);
+  assert.deepEqual(await evaluate('quietViolations'),[]);
   const sustained = await fixture('arrival-observe');
   assert.equal(sustained.metrics.attempts,beforeBurst,'scalar acquisition remained held throughout the burst');
   for (const item of burstMeasurements) item.observation_to_dom_ms = item.visible - sustained.observed[item.key].title_ms;
@@ -101,6 +117,11 @@ module.exports = async ({evaluate, until, fixture}) => {
   await evaluate('history.back()');
   await until('current.catalog?.data?.offset===0 && !current.catalog.operation');
   assert.equal(await evaluate('JSON.stringify([...current.catalog.body.rows].map(row=>row.dataset.id))===JSON.stringify(firstBurstPage)'),true);
+  await fixture('arrival-finish');
+  await until(`(()=>{const row=document.querySelector('[data-id="ses_arrival_1"]');
+    return row && !row.value.running && row.value.last_activity_ms>row.value.prompt_started_ms;})()`);
+  assert.deepEqual(await evaluate('Array.from(current.catalog.body.rows).filter(row=>row.value.running).map(row=>row.dataset.id)'),
+    ['ses_arrival_2','ses_arrival_0']);
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
      'title and five Loading cells; Watch-qualified running top/yellow; in-place real summary hydration',
      'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery',

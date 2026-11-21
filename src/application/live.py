@@ -83,7 +83,9 @@ class LiveRuntime:
                 try:
                     frame = driver.tick()
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
-                        driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
+                        health = getattr(driver, 'source_status', None)
+                        driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
+                            source_interrupted=driver.terminal or isinstance(health, SourceStatus) and health.outage_confirmed())
                     if callable(getattr(type(driver.coordinator), "catalog_frame", None)):
                         frame = driver.coordinator.catalog_frame(self.catalog, frame)
                     if callable(getattr(type(driver.coordinator), "tick_details", None)):

@@ -68,8 +68,8 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
         if(catalogFailure)throw Error('offline');
         if(expireCatalog){expireCatalog=false;throw Error('catalog_expired');}
         if(window.delayCatalog)await new Promise(resolve=>window.finishQuietRefresh=resolve);
-         return {token:'quiet-token',epoch:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',state:'observed',total:51,size:50,offset:value.offset,period:value.period,
-          sort:value.sort,direction:value.direction,age_ms:7200000,view:{session_usage:catalogRows.slice(value.offset,value.offset+50)}};
+         return {token:'quiet-token',epoch:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',state:'observed',total:51,size:25,offset:value.offset,period:value.period,
+          sort:value.sort,direction:value.direction,age_ms:7200000,view:{timezone_id:'UTC',session_usage:catalogRows.slice(value.offset,value.offset+25)}};
       }
       if(path==='/api/detail') {
         if(value.action==='open')return {token:'quiet-detail'};if(value.action==='close')return {};
@@ -79,8 +79,8 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
       }
       return quietApi(path,value,...rest);
     };location.hash='#/sessions?sort=ccost&direction=1'`);
-  await ready(`current.catalog?.body.children.length===50`);await audit();
-  for(const offset of [0,50]) {
+  await ready(`current.catalog?.body.children.length===25`);await audit();
+  for(const offset of [0,25]) {
     await run(`location.hash='#/sessions?sort=ccost&direction=1&offset=${offset}&epoch=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'`);
     await ready(`current.catalog?.offset===${offset} && !current.catalog.busy`);
     await run(`expireCatalog=true;current.catalog.load()`);
@@ -100,16 +100,17 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
   assert.equal(await run(`current.catalog.body.firstChild===quietRow && !current.catalog.pan.hidden &&
     !current.catalog.pager.hidden && !current.catalog.operation && current.catalog.status.textContent===''`),true);
   await run(`catalogRows[0].prompt_count=2;delayCatalog=false;finishQuietRefresh();quietFlight`);
-   assert.equal(await run(`current.catalog.body.firstChild===quietRow && quietRow.cells[5].textContent==='2' &&
+   assert.equal(await run(`current.catalog.body.firstChild===quietRow && quietRow.cells[4].textContent==='2' &&
     document.activeElement===quietFocus && scrollY===quietScroll`),true);await audit();
   await run(`catalogFailure=true;current.catalog.load()`);await audit();
-  assert.equal(await run(`current.catalog.body.children.length===50 && !current.catalog.operation &&
-    !current.catalog.pan.hidden && !current.catalog.pager.hidden && current.catalog.status.textContent.includes('offline')`),true);
+  assert.equal(await run(`current.catalog.body.children.length===25 && !current.catalog.operation &&
+    !current.catalog.pan.hidden && !current.catalog.pager.hidden && current.catalog.status.hidden &&
+    current.catalog.status.textContent===''`),true);
   await run(`catalogFailure=false;current.catalog.poll()`);await audit();
   assert.equal(await run(`current.catalog.status.hidden && current.catalog.status.textContent===''`),true);
   // Backend regression tests supply qualification; these are its detached DTOs,
   // rendered through the actual Sessions route without replacing the row/help node.
-  await run(`window.quietContext=quietRow.cells[7].firstChild;
+  await run(`window.quietContext=quietRow.cells[6].firstChild;
     catalogRows[0].context_tokens=null;catalogRows[0].metric_states={ctx:'pending'};
     current.catalog.poll()`);
   assert.equal(await run(`quietContext.textContent`),'Loading…');
@@ -120,15 +121,15 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
       catalogRows[0].display.context_tokens='${label}';current.catalog.poll()`);
     assert.equal(await run(`quietContext.textContent`),label);
     assert.equal(await run(`current.catalog.body.firstChild===quietRow &&
-      quietRow.cells[7].firstChild===quietContext && !quietContext.hasAttribute('aria-busy') &&
+      quietRow.cells[6].firstChild===quietContext && !quietContext.hasAttribute('aria-busy') &&
       document.activeElement===quietFocus && scrollY===quietScroll`),true);
   }
   layouts.push({route:'sessions',context:['cold','42k','retained','retained','47k','0','authoritative-unknown'],
     stableRowAndHelp:true});
   await run(`location.hash='#/sessions/quiet-0'`);await ready(`current.detail?.data?.revision==='quiet-revision'`);await audit();
   await run(`current.detail.sourceStatus({state:'history_retained'});current.detail.sourceStatus({state:'source_unavailable'})`);await audit();
-  layouts.push({route:'sessions/detail',oldObservation:true,expiryPages:[0,50],postRecoveryPolls:3,
-    delayedRefresh:true,changedMetric:true,actionableFailure:true});
+  layouts.push({route:'sessions/detail',oldObservation:true,expiryPages:[0,25],postRecoveryPolls:3,
+    delayedRefresh:true,changedMetric:true,quietFailure:true});
   if(sessionsOnly) {
     checks.push('Sessions shipped route/DOM/AX: expired first/older pages, three later polls, retained delayed refresh, changed metrics, stable DOM/focus/scroll and truthful failure/recovery');
     return;
