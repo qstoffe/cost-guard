@@ -444,8 +444,10 @@ def stress_plot(page, chart, screenshots):
 
 @contextmanager
 def chart_fixture(browser, root, source_setup=ChartSource):
-    (root / 'config').mkdir()
-    shutil.copyfile(ROOT / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
+    config = root / 'config/default-config.jsonc'
+    config.parent.mkdir(exist_ok=True)
+    if not config.exists():
+        shutil.copyfile(ROOT / 'config/default-config.jsonc', config)
     high = subscription('github-copilot')
     high = replace(high, quotas=(*high.quotas, QuotaComponent('Model weekly', scope='model', model_id='GPT-Test'),
                                  *(QuotaComponent(f'Quota {i:02}') for i in range(1, 14))))

@@ -59,7 +59,7 @@ def stats_worker(sender, request):
     with patch.object(composition, 'application', application):
         run_report(sender, request)
     metrics = service.metrics.snapshot() if service is not None else {}
-    with (root / 'stats-counts.jsonl').open('a', encoding='utf-8') as log:
+    with Path(os.environ['COST_GUARD_RESTART_COUNTS']).open('a', encoding='utf-8') as log:
         log.write(json.dumps(dict(seconds=time.perf_counter() - started, hydrated=source.load_count,
                                   catalogs=source.catalog_count, revision_roots=source.metrics.counts.get('revision_checks', 0),
                                   hits=metrics.get('counts', {}).get('ai_stats_warm_projection_hits', 0),
@@ -72,14 +72,10 @@ def journey(root, executable, mode):
 
     # Each invocation owns a new process, browser context, Live coordinator and
     # report scheduler. Only the fixture installation/cache survives between runs.
-    (root / 'config' / 'default-config.jsonc').unlink(missing_ok=True)
-    config = root / 'config'
-    if config.exists():
-        config.rmdir()
-    counts = root / 'stats-counts.jsonl'
-    counts.unlink(missing_ok=True)
     os.environ['COST_GUARD_RESTART_ROOT'] = str(root)
-    with sync_playwright() as playwright:
+    with TemporaryDirectory(prefix='restart-counts-', dir=root) as metrics_path, sync_playwright() as playwright:
+        counts = Path(metrics_path) / 'stats-counts.jsonl'
+        os.environ['COST_GUARD_RESTART_COUNTS'] = str(counts)
         with playwright.chromium.launch(headless=True, executable_path=executable) as browser:
             with patch.object(chart, 'DispatchJobs', lambda: ReportJobs(target=stats_worker)):
                 with chart.chart_fixture(browser, root, History) as (page, host, coordinator, source, *rest):
@@ -113,7 +109,7 @@ def journey(root, executable, mode):
                     account_counts = dict(hydrated=sum(source.timeline_reads.values()), catalogs=source.catalog_count,
                                           revision_roots=source.metrics.counts.get('revision_checks', 0))
                     assert host.failure is None and not rest[2], 'Host or page error'
-    report_counts = [json.loads(line) for line in counts.read_text().splitlines()] if counts.exists() else []
+        report_counts = [json.loads(line) for line in counts.read_text().splitlines()] if counts.exists() else []
     files = sorted((root / 'cache').glob('cost-guard-cache-*.sqlite3'))
     return dict(mode=mode, pid=os.getpid(), first_seconds=round(first - start, 3), ready_seconds=round(end - start, 3),
                 account=account_counts, stats=report_counts,

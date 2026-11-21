@@ -21,6 +21,12 @@ Source-local areas:
 - `logs/`: ignored, on-demand runtime errors, crashes, recovery events and
   `diagnostics/cost-guard-diagnostics.zip`; never included in package copies.
 
+Web warm history is in the installation's ignored
+`cache/cost-guard-cache-v2.sqlite3`. An in-place Git update keeps the directory.
+Exit Cost Guard before moving the whole installation so no process is writing
+its SQLite files. A new source-only folder starts cold; it does not search
+other installations or automatically copy private evidence.
+
 Quiet maintenance starts 60 seconds after Web readiness or Legacy presentation,
 then attempts retention once per day, independently of cache/source readiness.
 Only recognized, unchanged regular files strictly older than 30 days are removed
