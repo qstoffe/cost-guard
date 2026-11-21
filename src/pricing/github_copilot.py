@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 import threading
 import time
 import urllib.request
@@ -531,10 +532,23 @@ class GitHubCopilotPricingProvider:
         catalog = _catalog_from_payload(entry.payload) if entry else None
         return _apply_expired_promotions(replace(catalog, reference_stale=self._expired(catalog)), self.now_ms()) if catalog else None
 
+    def _cache_entry(self):
+        try:
+            return self.cache.get(CACHE_NAMESPACE, CACHE_KEY, busy_timeout_ms=50)
+        except (OSError, sqlite3.Error):
+            return None
+
+    def _publish_catalog(self, catalog):
+        try:
+            self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(catalog),
+                           algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}", busy_timeout_ms=50)
+        except (OSError, sqlite3.Error):
+            pass  # The authoritative fetch remains usable in this process.
+
     def _load_or_fetch(self, force: bool, *, allow_cached_fallback: bool = True) -> PricingCatalog:
         if self._catalog is not None and not force and not self._expired(self._catalog):
             return self._catalog
-        cached_entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
+        cached_entry = self._cache_entry()
         cached = _catalog_from_payload(cached_entry.payload) if cached_entry else None
         if not force and cached is not None and not self._expired(cached):
             cached = _apply_expired_promotions(cached, self.now_ms())
@@ -548,7 +562,7 @@ class GitHubCopilotPricingProvider:
                 self._catalog = safe_cached
                 return safe_cached
             raise
-        self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(catalog), algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}")
+        self._publish_catalog(catalog)
         self._catalog = catalog
         return catalog
 
@@ -592,7 +606,7 @@ class GitHubCopilotPricingProvider:
             return None
         try:
             with self._lock:
-                entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
+                entry = self._cache_entry()
                 base = (_catalog_from_payload(entry.payload) if entry else None) or self._catalog
             if base is None:
                 self.metadata.skipped("no_catalog", self.now_ms())
@@ -600,7 +614,7 @@ class GitHubCopilotPricingProvider:
             enriched = self._enrich(base.models, base.models, reason=reason)
             with self._lock:
                 # Merge into the CURRENT catalog; a concurrent price refresh wins for prices.
-                entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
+                entry = self._cache_entry()
                 current = (_catalog_from_payload(entry.payload) if entry else None) or base
                 observed = self._catalog
                 failed_observation = bool(observed and observed.reference_stale
@@ -610,8 +624,7 @@ class GitHubCopilotPricingProvider:
                                          source_revision=current.source_revision,
                                          reference_stale=self._expired(current) or failed_observation,
                                          refresh_not_after_ms=current.refresh_not_after_ms)
-                self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(updated),
-                               algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}")
+                self._publish_catalog(updated)
                 self._catalog = _apply_expired_promotions(updated, self.now_ms())
                 return self._catalog
         finally:

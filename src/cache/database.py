@@ -31,9 +31,9 @@ class CacheDatabase:
         self.generation = generation
         self.paths = cache_paths(package_root, generation)
 
-    def initialize(self) -> Path:
+    def initialize(self, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> Path:
         self.paths.directory.mkdir(parents=True, exist_ok=True)
-        with self.connect() as connection:
+        with self.connect(busy_timeout_ms=busy_timeout_ms) as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(
                 """

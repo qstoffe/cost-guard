@@ -69,7 +69,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
         self.reads = SourceReads()
-        self.account_timeline = AccountTimeline(service_factory, self.reads)
+        self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
 
     def tick_account_timeline(self, frame, demand, *, available, terminal):
         service = self.report_service
