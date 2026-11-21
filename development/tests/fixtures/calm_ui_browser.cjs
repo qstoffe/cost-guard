@@ -102,11 +102,19 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   await evaluate(`window.quietSave=settingsView.api;settingsView.api=async()=>{throw new Error('private_failure')};
     settingsView.error(new Error('private_failure'));settingsView.api=quietSave`);
   assert.equal(await evaluate('settingsView.feedback.textContent'),'Could not save. Try again.');
-  await evaluate(`window.quietEmpty=new TokenMixView.View();quietEmpty.update({
-    source:{status:'partial'},view:{model_token_mix:[],publisher_token_mix:[],
-      token_mix:{observed_total_tokens:'0',display:{}},token_mix_period:{period:'all'}}})`);
-  assert.equal(await evaluate('quietEmpty.status.textContent'),'N/A');
-  checks.push('explicit Save failure is concise; partial empty Token Mix is unknown, never known zero');
+  const unknownMix = await evaluate(`(()=>{
+    const result={observed_at_ms:Date.now(),source:{status:'partial'},view:{kind:'token-mix',
+      model_token_mix:[],publisher_token_mix:[],token_mix:null,
+      token_mix_period:{period:'7-days',start_ms:Date.now()-604800000,end_ms:Date.now(),coverage:'unknown'}}};
+    const view=new TokenMixView.View();view.update(result);view.selection('7-days',true);view.attach(output);
+    return {valid:TokenMixView.valid(result),text:output.innerText,summaryHidden:view.summary.hidden,
+      modelsHidden:view.models.root.hidden,publishersHidden:view.publishers.root.hidden};
+  })()`);
+  assert.equal(unknownMix.valid,true);
+  assert.match(unknownMix.text,/Usage for this period could not be verified yet\./);
+  assert.doesNotMatch(unknownMix.text,/N\/A|Not Applicable|0 tokens|Loading/);
+  assert.ok(unknownMix.summaryHidden && unknownMix.modelsHidden && unknownMix.publishersHidden);
+  checks.push('explicit Save failure is concise; unknown Token Mix displays neutral coverage, never zero or N/A');
   // Health rendering is fed controlled corroborated source evidence; transport
   // counting/20s qualification is independently covered in web_connection.cjs.
   await evaluate(`liveConnection.close();hostState={kind:'connected',writable:true,terminal:false};
