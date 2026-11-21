@@ -520,6 +520,133 @@ const SessionDetail = (() => {
       ContextHelp.refresh(this.footer);
     }
   }
+  class CachedView {
+    constructor(api, id, hint) {
+      Object.assign(this, {api, id, hint, offset: 0, data: null, attached: false, dirty: true});
+      this.root = el('section', undefined, 'session-detail session-detail-cache');
+      this.root.setAttribute('aria-label', 'Session detail');
+      this.back = el('a', '↩ Back to Show All Sessions'); this.back.href = '#/sessions';
+      this.heading = el('h1', 'Session detail');
+      this.summary = el('p'); this.status = el('p');
+      this.status.setAttribute('role', 'status');
+      const table = el('table'), head = el('thead'), header = el('tr');
+      for (const [label, help] of columns) {
+        const cell = el('th', label);
+        cell.scope = 'col'; ContextHelp.attach(cell, help); header.append(cell);
+      }
+      this.body = el('tbody'); head.append(header); table.append(head, this.body);
+      this.table = el('div', undefined, 'session-scroll'); this.table.append(table);
+      this.pager = el('div', undefined, 'page-navigation');
+      this.previous = this.pageButton('Previous', -1); this.next = this.pageButton('Next', 1);
+      this.range = el('span'); this.pager.append(this.previous, this.range, this.next);
+      this.root.append(this.back, this.heading, this.summary, this.status, this.table, this.pager);
+      this.reset('No cached detail yet.');
+    }
+    pageButton(label, delta) {
+      const button = el('button', label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        if (!this.data || button.disabled) return;
+        this.offset = Math.max(0, this.offset + this.data.size * delta);
+        this.retire(); this.catchUp();
+      });
+      return button;
+    }
+    attach(parent) {
+      if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
+      if (!this.attached) { this.attached = true; this.catchUp(); }
+    }
+    detach() { this.attached = false; this.retire(); }
+    retire() {
+      this.flight?.abort(); this.flight = null;
+      clearTimeout(this.timer); this.timer = null;
+    }
+    reset(message) {
+      this.data = null; this.heading.textContent = 'Session detail';
+      ReportView.text(this.summary, ''); ReportView.text(this.status, message); this.range.textContent = '';
+      ContextHelp.dismiss(this.body); this.body.replaceChildren();
+      this.previous.disabled = this.next.disabled = true;
+    }
+    invalidateValues() { this.retire(); this.hint = null; this.reset('Session cache unavailable.'); }
+    updateInvocations() {} // Committed history cannot assert active invocation state.
+    wake() {} // Source signals never supply facts to the cache-only view.
+    cacheHint(hint, resync = false) {
+      if (hint?.view !== 'sessions') return;
+      const bindingChanged = hint.binding !== this.hint?.binding;
+      if (!bindingChanged && !resync && this.hint.generation >= hint.generation) return;
+      this.hint = hint;
+      if (!hint.binding || bindingChanged && this.data && this.data.binding !== hint.binding) this.invalidateValues();
+      if (hint.binding) { this.hint = hint; this.dirty = true; this.schedule(); }
+    }
+    schedule() {
+      if (this.attached && !document.hidden && !this.flight && !this.timer) {
+        this.timer = setTimeout(() => { this.timer = null; if (this.dirty) this.read(); }, 50);
+      }
+    }
+    catchUp() { this.dirty = true; this.read(); }
+    async read() {
+      if (!this.attached || document.hidden || this.flight) return;
+      this.dirty = false;
+      const hint = this.hint, flight = new AbortController();
+      this.flight = flight;
+      try {
+        const data = await this.api('/api/cache/session-detail', {session_id: this.id, offset: this.offset}, flight.signal);
+        if (this.flight !== flight) return;
+        if (this.hint !== hint && this.hint?.binding !== data.binding) return;
+        if (this.hint?.binding === data.binding && this.hint?.generation > data.generation) {
+          this.dirty = true;
+          return;
+        }
+        this.paint(data);
+      } catch (_) {
+        if (this.flight === flight) this.reset('Session cache unavailable.');
+      } finally {
+        if (this.flight === flight) {
+          this.flight = null;
+          if (this.dirty) this.schedule();
+        }
+      }
+    }
+    paint(data) {
+      const summary = data.summary, previous = this.data;
+      this.data = data;
+      if (previous?.binding === data.binding && previous.generation === data.generation &&
+          previous.offset === data.offset) return;
+      ReportView.text(this.heading, summary?.title || 'Session detail');
+      ReportView.text(this.summary, () => summary ?
+        `Total CCost: ${ReportView.display(summary, 'ccost')} · Ctx: ${ReportView.display(summary, 'context_tokens')}` : '');
+      if (summary?.context_detail) ContextHelp.value(this.summary, summary.context_detail);
+      else ContextHelp.clearValue(this.summary);
+      const archived = summary?.source_present === false;
+      this.status.textContent = archived ? 'Saved history; the original source session is unavailable.' :
+        !data.cached_total ? (data.history_coverage === 'as-of' ? 'No cached prompts for this session.' : 'No cached detail yet.') : '';
+      const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
+      const wanted = new Set(data.rows.map(row => row.event_id));
+      for (const [id, row] of old) if (!wanted.has(id)) { ContextHelp.dismiss(row); row.remove(); }
+      data.rows.forEach((value, index) => {
+        const row = old.get(value.event_id) || el('tr');
+        row.dataset.id = value.event_id;
+        const signature = JSON.stringify(value);
+        if (row.signature !== signature && !protection()(row)) {
+          const detail = {...value, prompt_number: value.number, watch_model: value.model, watch_effort: value.effort,
+            label: value.kind === 'compaction' ? 'Compaction' : value.kind === 'subtask' ? 'Subtask' : 'Prompt',
+            in_progress: false, execution_unverified: value.outcome === 'unverified'};
+          row.replaceChildren(...cells(detail).map(item => {
+            const cell = el('td'); cell.append(typeof item === 'object' ? item : el('span', item)); return cell;
+          }));
+          row.signature = signature;
+        }
+        if (this.body.children[index] !== row) {
+          const before = this.body.children[index] || null;
+          if (row.parentNode && this.body.moveBefore) this.body.moveBefore(row, before);
+          else if (!protection()(row)) this.body.insertBefore(row, before);
+        }
+      });
+      this.range.textContent = data.rows.length ? `${data.offset + 1}–${data.offset + data.rows.length} of ${data.cached_total} cached events` : '';
+      this.previous.disabled = data.offset === 0;
+      this.next.disabled = data.offset + data.size >= data.cached_total;
+    }
+  }
   // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.
   function firstContext(row) {
     return row.display?.first_incoming_context_tokens ?? ReportView.display(row, 'incoming_context_tokens');
@@ -529,5 +656,5 @@ const SessionDetail = (() => {
       row.display?.calls ?? String(row.calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), firstContext(row),
       ...['incoming_context_ccost', 'extra_ccost', 'token_mix_percent'].map(key => ReportView.display(row, key))][index];
   }
-  return {View};
+  return {View, CachedView};
 })();

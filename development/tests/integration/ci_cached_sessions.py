@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 
 from src.application.session_catalog import SessionCatalog
 from src.cache.display_history import RunningSession, SessionCoverage
+from src.cache.display_prompts import DisplayPrompt
+from src.cache.display_requests import RequestRoster
 from src.domain.effort import EffortEvidence
 from src.reports.models import SessionUsageRow
 from src.reports.session_models import SessionModel
@@ -107,6 +109,24 @@ def check_cached_sessions(browser, evidence, product_root):
             archived.locator("td:last-child span").first.focus()
             expect(first.get_by_text("Provisional text estimate.", exact=False)).to_be_visible()
             first.keyboard.press("Escape")
+            detail_rows = tuple(DisplayPrompt(f"prompt-{index:02d}", now - (30 - index) * 1000, now - 1000,
+                750, "prompt", index, "Recorded Model", "medium", 2, 773, Decimal("1.25"), True,
+                None, None, "30,20,0,50", "finished") for index in range(1, 31))
+            admitted = owner.admit({"s-028": "revision"})
+            detail_summary = SessionUsageRow("s-028", "Session 28", "Example", False, Decimal(28), 30,
+                last_activity_ms=now - 1000, context_tokens=773, context_detail="Provisional text estimate.")
+            owner.commit(admitted, {"s-028": detail_summary}, {"s-028": "revision"},
+                         usage=RequestRoster("fixture-prices", (), (), detail_rows))
+            owner.commit(owner.admit({"s-028": "revision"}), {}, {}, missing=("s-028",))
+            archived.get_by_role("link", name="Session 28").click()
+            detail = first.locator(".session-detail-cache")
+            expect(detail.get_by_text("Saved history; the original source session is unavailable.")).to_be_visible()
+            expect(detail.locator(".page-navigation")).to_contain_text("1–25 of 30 cached events")
+            detail.get_by_role("button", name="Next").click()
+            expect(detail.locator(".page-navigation")).to_contain_text("26–30 of 30 cached events")
+            assert "/api/cache/session-detail" in requests and "/api/detail" not in requests
+            first.go_back()
+            expect(pager).to_contain_text("26–30 of 30 cached sessions")
             first.go_back()
             expect(pager).to_contain_text("1–25 of 30 cached sessions")
             first.go_forward()
@@ -148,7 +168,7 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, scoped spinner, field qualification, two-tab requery, running, confirmed clear, source unbind")
+                checked="cold empty, held source, period/sort/page, scoped spinner, field help, archived detail, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()

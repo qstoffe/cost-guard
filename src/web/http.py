@@ -405,6 +405,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/sessions":
                 self.cached_sessions(value)
                 return
+            if self.path == "/api/cache/session-detail":
+                self.cached_sessions(value, detail=True)
+                return
             if self.path == "/api/cache/sessions/clear":
                 self.clear_cached_sessions(value)
                 return
@@ -546,8 +549,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         except RuntimeError:
             self.reply(429, {"error": "catalog_busy"})
 
-    def cached_sessions(self, value):
-        if set(value) - {"period", "sort", "direction", "offset", "known"}:
+    def cached_sessions(self, value, *, detail=False):
+        fields = {"session_id", "offset"} if detail else {"period", "sort", "direction", "offset", "known"}
+        if set(value) - fields:
             self.reply(400, {"error": "invalid_request"})
             return
         owner = self.server.lifecycle
@@ -556,7 +560,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(503, {"error": "cache_source_unbound"})
             return
         try:
-            result = views.page(**value)
+            result = views.detail(**value) if detail else views.page(**value)
         except (TypeError, ValueError):
             self.reply(400, {"error": "invalid_request"})
         except (OSError, sqlite3.Error):

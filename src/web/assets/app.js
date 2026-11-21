@@ -644,9 +644,9 @@ function navigate() {
     if (csrf && hostState.writable && !document.hidden) models.benchmark?.load(api);
   }
   document.getElementById('search').value = current.search || '';
-  if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
-    current.detail = new SessionDetail.View(api, match[1],
-      () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
+  if (match && csrf && !hostState.terminal && (sessionDetailAvailable || cachedSessionsAvailable) && !current.detail) {
+    current.detail = cachedSessionsAvailable ? new SessionDetail.CachedView(api, match[1], sessionCacheHint) :
+      new SessionDetail.View(api, match[1], () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
     current.message = '';
   }
   if (match && current.detail) {
@@ -666,7 +666,7 @@ function navigate() {
     current.catalog.configure(route.params);
      current.request = null; current.message = '';
    }
-   if ((match || route.catalog && !cachedSessionsAvailable) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
+   if ((match || route.catalog) && !cachedSessionsAvailable && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
   if (csrf && !hostState.terminal && current.stats && (current !== previous || !current.stats.databaseRefresh))
@@ -739,8 +739,9 @@ async function connect() {
          firstReport();
       }, connectionStatus, undefined, undefined, (hint, resync) => {
         if (hint?.view !== 'sessions') return;
-        sessionCacheHint = hint;
-        current?.catalog?.cacheHint?.(hint, resync);
+         sessionCacheHint = hint;
+         current?.catalog?.cacheHint?.(hint, resync);
+         current?.detail?.cacheHint?.(hint, resync);
       });
     }
     navigate();

@@ -275,6 +275,11 @@ class DisplayBindingTests(unittest.TestCase):
                                      (restarted.views.source,)).fetchall()
             self.assertEqual({"ses_root", "ses_child"}, {key for key, in physical})
             self.assertEqual([("ses_other",), ("ses_root",)], rosters)
+            detail = restarted.views.detail(session_id="ses_root")
+            self.assertEqual("as-of", detail["history_coverage"])
+            self.assertGreater(detail["cached_total"], 0)
+            self.assertTrue(all("preview" not in row and "prompt_text" not in row for row in detail["rows"]))
+            self.assertEqual("as-of", restarted.views.detail(session_id="ses_other")["history_coverage"])
             with database.connect() as db:
                 self.assertEqual(0, db.execute("SELECT count(*) FROM cache_entries").fetchone()[0])
 

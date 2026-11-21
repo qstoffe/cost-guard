@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from .display_prompts import DisplayPrompt, publish_prompts
 
 TOKEN_FIELDS = ("input", "cache_read", "cache_write", "output", "reasoning")
 ROOT_WRITE_LIMIT = 4096
@@ -41,6 +42,7 @@ class RequestRoster:
     pricing: str
     requests: tuple[DisplayRequest, ...]
     attribution: tuple[tuple[bytes, str], ...]  # physical key → causal root prompt
+    prompts: tuple[DisplayPrompt, ...] | None = None
 
 
 REQUEST_COLUMNS = (
@@ -91,7 +93,8 @@ def request_schema():
 def publish_roster(db, source, root_id, revision, roster):
     """Record new positive evidence in the same transaction as the session CAS."""
     requests = {request.key: request for request in roster.requests}
-    if (len(requests) != len(roster.requests) or len(requests) + len(roster.attribution) > ROOT_WRITE_LIMIT
+    if (len(requests) != len(roster.requests)
+            or len(requests) + len(roster.attribution) + len(roster.prompts or ()) > ROOT_WRITE_LIMIT
             or not roster.pricing or any(key not in requests or not prompt for key, prompt in roster.attribution)):
         raise ValueError("invalid_request_roster")
     db.execute("""
@@ -122,3 +125,4 @@ def publish_roster(db, source, root_id, revision, roster):
                    ((source, root_id, key) for key in requests))
     db.executemany("INSERT OR IGNORE INTO archive_prompt_attribution VALUES(?, ?, ?, ?)",
                    ((source, root_id, key, prompt) for key, prompt in roster.attribution))
+    return roster.prompts is not None and publish_prompts(db, source, root_id, revision, roster.prompts)

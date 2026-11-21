@@ -8,10 +8,11 @@ import sqlite3
 from threading import Lock
 import time
 
+from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, publish_roster, request_schema
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -238,6 +239,7 @@ class DisplayHistory:
                     ALTER TABLE sessions ADD COLUMN has_model_details INTEGER;
                     DELETE FROM session_scope_coverage;
                 """ if version < 7 else ""
+                requests = request_schema() if version < 8 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
@@ -246,7 +248,8 @@ class DisplayHistory:
                     {evidence}
                     {self._coverage_schema()}
                     {help_columns}
-                    {request_schema()}
+                    {requests}
+                    {prompt_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -291,6 +294,7 @@ class DisplayHistory:
                 {self._live_schema()}
                 {self._coverage_schema()}
                 {request_schema()}
+                {prompt_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -389,7 +393,7 @@ class DisplayHistory:
                 if change.previous_progress is not None or (visible and progress):
                     self._advance_progress(db, source, session_id, change.fact.revision, change.dependency)
                 if change.request_roster is not None:
-                    publish_roster(db, source, session_id, change.fact.revision, change.request_roster)
+                    changed |= publish_roster(db, source, session_id, change.fact.revision, change.request_roster)
             for membership, entries in ((0, missing), (1, present)):
                 for session_id, checkpoint in entries:
                     if db.execute("""
@@ -637,6 +641,24 @@ class DisplayHistory:
             self._append_change(db, source, generation, 0, 0, (1 << 63) - 1)
             db.commit()
             return generation
+
+    def session_detail_page(self, source, root, *, limit, offset):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            state = self._state(db, source)
+            header = db.execute("""
+                SELECT s.title,s.ccost,s.prompts,s.context_tokens,s.context_detail,s.source_present,
+                       p.revision IS NOT NULL,p.revision=s.revision
+                FROM sessions AS s LEFT JOIN archive_prompt_state AS p
+                    ON p.source=s.source AND p.root_id=s.session_id
+                WHERE s.source=? AND s.session_id=?
+            """, (source, root)).fetchone()
+            if header is None:
+                return state.generation, None, 0, ()
+            count = db.execute("""
+                SELECT count(*) FROM archive_prompt_history WHERE source=? AND root_id=?
+            """, (source, root)).fetchone()[0]
+            return state.generation, header, count, prompt_page(db, source, root, limit, offset)
 
     def session_changes(self, source, previous):
         """Read compact committed hints, or signal a requery across a replay gap."""

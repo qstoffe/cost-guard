@@ -1,5 +1,6 @@
 """Cache-only Sessions query model; cannot admit work or read OpenCode."""
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import re
 import time
 
 from src.cache.display_history import DisplayHistory, EMPTY_HISTORY_EVIDENCE, FIELD_EVIDENCE_BITS, SORT_COLUMNS
@@ -11,6 +12,7 @@ from .session_catalog_scope import PAGE_SIZE, PERIODS, catalog_window
 
 _SCALAR_FIELDS = dict(activity="activity_ms", model="model", ccost="ccost", prompts="prompts",
                       duration="duration_ms", ctx="context_tokens")
+_SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,200}")
 
 
 def field_states(row, values):
@@ -43,6 +45,28 @@ class CachedSessionViews:
     timezone_id: str
     binding: str = ""
     coverage_supported: bool = False
+
+    def detail(self, *, session_id, offset=0):
+        if (not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id)
+                or type(offset) is not int or not 0 <= offset <= 1_000_000 or offset % PAGE_SIZE):
+            raise ValueError("invalid_session_detail_query")
+        generation, header, count, rows = self.history.session_detail_page(
+            self.source, session_id, limit=PAGE_SIZE, offset=offset)
+        summary = None
+        status = "pending"
+        if header is not None:
+            title, ccost, prompts, context, context_detail, present, known, current = header
+            summary = with_display(record(title=title, ccost=ccost, prompts=prompts, context_tokens=context,
+                context_detail=context_detail, source_present=bool(present)), self.timezone_id).to_json()
+            status = "as-of" if known and present and current else "retained" if known else (
+                "source-history-missing" if not present else "pending")
+        displayed = [with_display(record(**asdict(row), at_ms=row.start_ms, ccost=row.observed_cost,
+            unresolved_cost=not row.cost_complete, incoming_context_tokens=row.context_tokens,
+            incoming_context_ccost=row.incoming_cost, extra_ccost=row.extra_cost,
+            token_mix_percent=tuple(map(int, row.mix.split(","))) if row.mix else None), self.timezone_id).to_json()
+            for row in rows]
+        return dict(binding=self.binding, generation=generation, session_id=session_id, offset=offset,
+                    size=PAGE_SIZE, cached_total=count, summary=summary, history_coverage=status, rows=displayed)
 
     def page(self, *, period="today", sort="activity", direction=-1, offset=0, known=None, now_ms=None):
         if (period not in PERIODS or sort not in SORT_COLUMNS or type(direction) is not int

@@ -4,8 +4,10 @@ from decimal import Decimal
 from src.analysis.billing import billing_request_fingerprint
 from src.analysis.cache import dependency_signature
 from src.analysis.valuation import physical_usage_key
+from src.cache.display_prompts import DisplayPrompt
 from src.cache.display_requests import DisplayRequest, RequestRoster, ROOT_WRITE_LIMIT, TOKEN_FIELDS
 from src.domain import CostDisposition
+from src.reports.prompts import build_prompt_block
 from src.reports.token_mix_history import history_prompt_keys
 
 
@@ -22,10 +24,35 @@ def _account(entry):
         return None
 
 
-def request_roster(snapshot, bundle, reference):
+def display_prompt(row, kind):
+    if row.in_progress or row.execution_unverified:
+        outcome = "unverified"  # No live state can survive process restart.
+    elif row.watch_error:
+        outcome = "failed"
+    elif row.aborted:
+        outcome = "aborted"
+    elif row.completed_successfully:
+        outcome = "finished"
+    else:
+        outcome = "unknown"
+    cost = row.ccost if row.comparison_cost.observed_requests or not row.unresolved_cost else None
+    mix = ",".join(map(str, row.token_mix_percent)) if row.token_mix_percent is not None else None
+    return DisplayPrompt(
+        row.event_id, row.at_ms or None, row.completed_at_ms, row.duration_ms, kind, row.prompt_number,
+        next((name for name in (row.watch_model, row.model_effort) if name and name != "N/A"), None),
+        row.watch_effort if row.watch_effort and row.watch_effort != "N/A" else None,
+        row.calls, row.incoming_context_tokens, cost, not row.unresolved_cost,
+        row.incoming_context_ccost if row.incoming_context_ccost_known else None,
+        row.extra_ccost if row.extra_ccost_known else None, mix, outcome,
+    )
+
+
+def request_roster(snapshot, bundle, reference, *, config=None):
     """Reject unstable or unidentifiable acquisitions, never infer retractions."""
+    prompt_count = len(bundle.prompts) + len(bundle.compactions) if config is not None else 0
     if (not snapshot.complete or not bundle.cacheable or snapshot.source_revision != bundle.source_revision
-            or snapshot.root.session_id != bundle.root_session_id or len(bundle.trace_entries) > ROOT_WRITE_LIMIT):
+            or snapshot.root.session_id != bundle.root_session_id
+            or len(bundle.trace_entries) + prompt_count > ROOT_WRITE_LIMIT):
         return None
     prompts = history_prompt_keys(bundle)
     chosen, keys = {}, {}
@@ -48,7 +75,7 @@ def request_roster(snapshot, bundle, reference):
             if key not in chosen:  # Copied or missing evidence is not a physical request.
                 return None
             attributed.add((key, prompt.prompt_id))
-            if len(chosen) + len(attributed) > ROOT_WRITE_LIMIT:
+            if len(chosen) + len(attributed) + prompt_count > ROOT_WRITE_LIMIT:
                 return None
 
     requests = []
@@ -71,4 +98,13 @@ def request_roster(snapshot, bundle, reference):
             entry.reported_cost if has_billing else None, entry.reported_cost_currency if has_billing else None,
             entry.cost_disposition.value, amounts, entry.selected_effort or entry.variant, entry.summary,
         ))
-    return RequestRoster(reference.analysis_signature, tuple(requests), tuple(sorted(attributed)))
+    detail = () if config is not None else None
+    if config is not None and prompt_count:
+        block = build_prompt_block(session_id=snapshot.root.session_id, title=snapshot.root.title,
+                                   bundle=bundle, snapshot=snapshot, catalog=reference, config=config)
+        kinds = {row.prompt_id: row.prompt_kind for row in bundle.prompts}
+        detail = tuple(display_prompt(row, "compaction" if row.is_compaction else kinds.get(row.event_id, "prompt"))
+                       for row in block.rows)
+        if any(not row.event_id for row in detail) or len({row.event_id for row in detail}) != len(detail):
+            return None
+    return RequestRoster(reference.analysis_signature, tuple(requests), tuple(sorted(attributed)), detail)

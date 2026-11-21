@@ -139,6 +139,8 @@ class DisplayHistoryTests(unittest.TestCase):
         self.history.publish_session_coverage("source", SessionCoverage(30, False, False, None), archive_epoch=0)
         with closing(sqlite3.connect(self.history.path)) as db:
             db.executescript("""
+                DROP TABLE archive_prompt_state;
+                DROP TABLE archive_prompt_history;
                 DROP TABLE archive_prompt_attribution;
                 DROP TABLE archive_request_membership;
                 DROP TABLE archive_request_rosters;
@@ -293,6 +295,8 @@ class DisplayHistoryTests(unittest.TestCase):
         self.history.commit_sessions("source", (SessionChange(original, None),))
         with closing(sqlite3.connect(self.history.path, isolation_level=None)) as db:
             db.executescript("""
+                DROP TABLE archive_prompt_state;
+                DROP TABLE archive_prompt_history;
                 DROP TABLE archive_prompt_attribution;
                 DROP TABLE archive_request_membership;
                 DROP TABLE archive_request_rosters;

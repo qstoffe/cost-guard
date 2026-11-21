@@ -16,7 +16,7 @@ SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
-PROJECTION_REVISION = "sessions-typed-usage-3"
+PROJECTION_REVISION = "sessions-typed-detail-4"
 
 
 def scalar_dependency(service):
@@ -202,7 +202,7 @@ class SessionArchiveSweep:
 
         def observed(snapshot, bundle, reference):
             nonlocal usage
-            usage = request_roster(snapshot, bundle, reference)
+            usage = request_roster(snapshot, bundle, reference, config=service.config)
 
         service.retain_derived_cache_read_only()
         try:
