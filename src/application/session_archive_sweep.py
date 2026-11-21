@@ -9,13 +9,14 @@ from src.pricing.base import PricingUnavailableError
 from src.reports.session_summary import ALGORITHM, EFFORT_REVISION, session_summary
 from src.sources.errors import SourceError
 
+from .request_archive_projection import request_roster
 from .session_catalog_lifecycle import is_running, terminal_prompt
 
 SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
-PROJECTION_REVISION = "sessions-model-context-help-2"
+PROJECTION_REVISION = "sessions-typed-usage-3"
 
 
 def scalar_dependency(service):
@@ -197,10 +198,17 @@ class SessionArchiveSweep:
         if admission is None:
             return False
         authorities = []
+        usage = None
+
+        def observed(snapshot, bundle, reference):
+            nonlocal usage
+            usage = request_roster(snapshot, bundle, reference)
+
         service.retain_derived_cache_read_only()
         try:
             row, actual = session_summary(service, candidate.root, revision, active=candidate.terminal is not None,
-                                          on_dependencies=authorities.extend, persist_legacy=False)
+                                          on_dependencies=authorities.extend, persist_legacy=False,
+                                          on_observation=observed)
         except (PricingUnavailableError, SourceError):
             # A temporarily unreadable root must not starve other roots.
             return False
@@ -214,6 +222,6 @@ class SessionArchiveSweep:
 
         published = actual == revision and archive.publish_summary(
             service, admission, row, actual, eligible=eligible,
-            dependency=checkpoint_dependency(base, authorities, candidate.terminal))
+            dependency=checkpoint_dependency(base, authorities, candidate.terminal), usage=usage)
         return (published and not row.running and not row.ccost_unavailable and row.complete
                 and row.activity_qualified and row.context_qualified and not row.model_pending)

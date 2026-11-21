@@ -268,6 +268,13 @@ class DisplayBindingTests(unittest.TestCase):
             self.assertEqual(0, by_id["ses_other"]["prompts"])
             self.assertEqual(1, by_id["ses_root"]["prompts"])
             self.assertEqual(full["generation"], restarted.views.page(period="all")["generation"])
+            with restarted.history._connect(read=True) as db:
+                physical = db.execute("SELECT DISTINCT session_id FROM archive_requests WHERE source=?",
+                                      (restarted.views.source,)).fetchall()
+                rosters = db.execute("SELECT root_id FROM archive_request_rosters WHERE source=? ORDER BY root_id",
+                                     (restarted.views.source,)).fetchall()
+            self.assertEqual({"ses_root", "ses_child"}, {key for key, in physical})
+            self.assertEqual([("ses_other",), ("ses_root",)], rosters)
             with database.connect() as db:
                 self.assertEqual(0, db.execute("SELECT count(*) FROM cache_entries").fetchone()[0])
 

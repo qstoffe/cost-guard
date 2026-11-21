@@ -318,7 +318,7 @@ class DisplayArchive:
         self._cache_write(admit)
         return admission
 
-    def publish_summary(self, service, admission, row, revision, *, dependency=None, eligible=None):
+    def publish_summary(self, service, admission, row, revision, *, dependency=None, eligible=None, usage=None):
         if admission is None or self._writer_binding(service) != (admission.source, admission.epoch):
             return False
         accepted = False
@@ -329,6 +329,6 @@ class DisplayArchive:
             return accepted
 
         if self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
-                {row.session_id: revision}, dependency=dependency, eligible=check)):
+                {row.session_id: revision}, dependency=dependency, eligible=check, usage=usage)):
             return accepted
         return False

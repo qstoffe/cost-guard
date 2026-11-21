@@ -63,7 +63,7 @@ class SessionArchiveOwner:
                 SessionPublication(session_id, revision, epoch, previous.get(session_id))
                 for session_id, revision in revisions.items()))
 
-    def commit(self, admission, rows, current_revisions, *, missing=(), dependency=None, eligible=None):
+    def commit(self, admission, rows, current_revisions, *, missing=(), dependency=None, eligible=None, usage=None):
         """Publish compact facts and notify only after the SQLite commit succeeded."""
         with self._lock:
             if ((admission.source, admission.epoch) != self._binding
@@ -74,7 +74,8 @@ class SessionArchiveOwner:
                 session_id = proof.session_id
                 if session_id in rows:
                     row = proof.project(rows[session_id], current_revision=current_revisions.get(session_id),
-                                         current_epoch=admission.epoch, dependency=dependency)
+                                         current_epoch=admission.epoch, dependency=dependency,
+                                         usage=usage if len(admission.facts) == 1 else None)
                     if row is not None:
                         updates.append(row)
                 elif session_id in missing and session_id not in current_revisions and proof.checkpoint:

@@ -28,7 +28,7 @@ class SessionPublication:
     observation_epoch: str
     checkpoint: SessionCheckpoint | None
 
-    def project(self, row, *, current_revision, current_epoch, dependency=None):
+    def project(self, row, *, current_revision, current_epoch, dependency=None, usage=None):
         if (row.session_id != self.session_id or not self.source_revision or not self.observation_epoch
                 or self.source_revision != current_revision or self.observation_epoch != current_epoch):
             return None
@@ -66,6 +66,7 @@ class SessionPublication:
         )
         complete = fields == ACQUIRED_SCALAR_FIELDS
         return SessionChange(fact, self.checkpoint.revision if self.checkpoint else None,
-                             frozenset(fields), dependency if complete else None,
-                             self.checkpoint.progress if self.checkpoint else 0,
-                             empty_history=row.empty_history and row.complete and row.activity_qualified)
+                              frozenset(fields), dependency if complete else None,
+                              self.checkpoint.progress if self.checkpoint else 0,
+                              empty_history=row.empty_history and row.complete and row.activity_qualified,
+                              request_roster=usage)

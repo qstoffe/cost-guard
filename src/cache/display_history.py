@@ -8,9 +8,10 @@ import sqlite3
 from threading import Lock
 import time
 
+from .display_requests import RequestRoster, publish_roster, request_schema
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -97,6 +98,7 @@ class SessionChange:
     # observed gaps that leave the display row intact.
     previous_progress: int | None = None
     empty_history: bool = False
+    request_roster: RequestRoster | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +224,7 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6):
+            if app_id == APPLICATION_ID and version in range(1, SCHEMA_VERSION):
                 progress = self._progress_schema() if version == 1 else ""
                 clocks = """
                     ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
@@ -230,6 +232,12 @@ class DisplayHistory:
                     ALTER TABLE sessions ADD COLUMN catalog_activity_ms INTEGER;
                 """ if version < 3 else ""
                 evidence = "ALTER TABLE sessions ADD COLUMN field_evidence INTEGER NOT NULL DEFAULT 0;" if version < 5 else ""
+                help_columns = """
+                    ALTER TABLE sessions ADD COLUMN context_detail TEXT;
+                    ALTER TABLE sessions ADD COLUMN model_help TEXT;
+                    ALTER TABLE sessions ADD COLUMN has_model_details INTEGER;
+                    DELETE FROM session_scope_coverage;
+                """ if version < 7 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
@@ -237,10 +245,8 @@ class DisplayHistory:
                     {self._live_schema()}
                     {evidence}
                     {self._coverage_schema()}
-                    ALTER TABLE sessions ADD COLUMN context_detail TEXT;
-                    ALTER TABLE sessions ADD COLUMN model_help TEXT;
-                    ALTER TABLE sessions ADD COLUMN has_model_details INTEGER;
-                    DELETE FROM session_scope_coverage;
+                    {help_columns}
+                    {request_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -284,6 +290,7 @@ class DisplayHistory:
                 {self._progress_schema()}
                 {self._live_schema()}
                 {self._coverage_schema()}
+                {request_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -344,7 +351,8 @@ class DisplayHistory:
         durable generation only when visible data changed, and only after COMMIT.
         """
         if (not source or type(archive_epoch) is not int or archive_epoch < 0
-                or len(updates) + len(missing) + len(present) > BATCH_LIMIT):
+                or len(updates) + len(missing) + len(present) > BATCH_LIMIT
+                or sum(change.request_roster is not None for change in updates) > 1):
             raise ValueError("invalid_display_batch")
         if not updates and not missing and not present:
             return None
@@ -360,8 +368,10 @@ class DisplayHistory:
             for change in updates:
                 session_id = change.fact.session_id
                 if change.dependency is not None and (not change.dependency or change.previous_progress is None
-                                                     or not ACQUIRED_SCALAR_FIELDS <= change.observed_fields):
+                                                      or not ACQUIRED_SCALAR_FIELDS <= change.observed_fields):
                     raise ValueError("invalid_session_progress")
+                if change.request_roster is not None and change.previous_progress is None:
+                    raise ValueError("unguarded_request_roster")
                 before = db.execute(f"""
                     SELECT s.revision, s.{PERIOD_CLOCK}, coalesce(p.progress, 0)
                     FROM sessions AS s LEFT JOIN session_progress AS p USING (source, session_id)
@@ -378,6 +388,8 @@ class DisplayHistory:
                     clocks.extend((clock, self._activity(db, source, session_id)))
                 if change.previous_progress is not None or (visible and progress):
                     self._advance_progress(db, source, session_id, change.fact.revision, change.dependency)
+                if change.request_roster is not None:
+                    publish_roster(db, source, session_id, change.fact.revision, change.request_roster)
             for membership, entries in ((0, missing), (1, present)):
                 for session_id, checkpoint in entries:
                     if db.execute("""
@@ -467,6 +479,7 @@ class DisplayHistory:
                 return None
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))
