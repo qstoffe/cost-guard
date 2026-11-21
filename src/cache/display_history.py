@@ -10,9 +10,10 @@ import time
 
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
+from .display_watch import publish_watch, watch_schema, watch_snapshot
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -241,6 +242,7 @@ class DisplayHistory:
                 """ if version < 7 else ""
                 requests = request_schema() if version < 8 else ""
                 prompts = prompt_schema() if version < 9 else ""
+                countable = countable_schema(upgrade=version >= 8) if version < 10 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
@@ -251,7 +253,8 @@ class DisplayHistory:
                     {help_columns}
                     {requests}
                     {prompts}
-                    {countable_schema(upgrade=version >= 8)}
+                    {countable}
+                    {watch_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -298,6 +301,7 @@ class DisplayHistory:
                 {request_schema()}
                 {prompt_schema()}
                 {countable_schema()}
+                {watch_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -462,6 +466,22 @@ class DisplayHistory:
             db.commit()
             return generation
 
+    def replace_watch(self, source, binding, observation, *, archive_epoch):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._state(db, source).archive_epoch != archive_epoch:
+                return None
+            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+            generation = publish_watch(db, source, binding, observation)
+            db.commit()
+            return generation
+
+    def watch(self, source, binding, now_ms, *, live_eligible):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            value = watch_snapshot(db, source, binding, now_ms, live_eligible=live_eligible)
+            return dict(**value, archive_epoch=self._state(db, source).archive_epoch)
+
     @staticmethod
     def _advance_progress(db, source, session_id, revision, dependency):
         db.execute("""
@@ -488,6 +508,7 @@ class DisplayHistory:
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))

@@ -9,6 +9,7 @@ from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
 from src.application.session_coverage import SessionCoverageSweep
+from src.application.watch_archive_projection import archive_watch_observation
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
 from src.sources.errors import SourceError
 from src.sources.opencode_v1 import OpenCodeV1Source
@@ -18,9 +19,11 @@ from .display_binding import selected_display_binding
 
 
 class DisplayArchive:
-    def __init__(self, root, publish):
+    def __init__(self, root, publish, *, watch_enabled=False):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
+        self._publish = publish
+        self.watch_enabled = watch_enabled
         self.sweep = SessionArchiveSweep()
         self.coverage = SessionCoverageSweep()
         self.views = None
@@ -36,6 +39,10 @@ class DisplayArchive:
         self._running_offered = None
         self._running_committed = None
         self._running_retry_at = 0
+        self._watch_write = None
+        self._watch_offered = None
+        self._watch_committed = None
+        self._watch_retry_at = 0
 
     def initialize(self):
         try:
@@ -120,6 +127,46 @@ class DisplayArchive:
             return False  # No failed or partial transaction becomes a cache event.
         return True
 
+    def publish_watch(self, frame, observed_ms):
+        if not self.watch_enabled:
+            return
+        if self._watch_write is not None:
+            if not self._watch_write.done():
+                return
+            if self._watch_write.result():
+                self._watch_committed = self._watch_offered
+            else:
+                self._watch_retry_at = time.monotonic() + 2
+            self._watch_write = None
+        views = self.views
+        if views is None or time.monotonic() < self._watch_retry_at:
+            return
+        observation = archive_watch_observation(frame, observed_ms)
+        if observation is None:
+            return
+        fence = self.sessions.clear_fence
+        # Ignore the cosmetic tick clock when none of the saved evidence changed.
+        key = (views.binding, fence, observation.observed_ms, observation.state, observation.truncated, observation.facts)
+        if key == self._watch_committed:
+            return
+        self._watch_offered = key
+        self._watch_write = self._running_writer.submit(
+            self._write_watch, views.source, views.binding, fence, observation)
+
+    def _write_watch(self, source, binding, fence, observation):
+        try:
+            self.sessions.commit_watch(source, binding, observation, clear_fence=fence)
+        except (OSError, sqlite3.Error):
+            return False
+        return True
+
+    def watch_snapshot(self, *, live_eligible):
+        views = self.views
+        if views is None or not self.watch_enabled:
+            return None
+        value = self.history.watch(views.source, views.binding, int(time.time() * 1000), live_eligible=live_eligible)
+        return dict(binding=views.binding, **value) if self.views is views else None
+
     def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False, native_export_supported=False):
         if binding == self._binding:
             return
@@ -127,12 +174,16 @@ class DisplayArchive:
         self._binding = binding
         if binding is None:
             self.sessions.bind("", "", announce=True)
+            if self.watch_enabled:
+                self._publish("watch-cache", dict(binding=None))
             return
         epoch = uuid4().hex
         self.views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
                                         coverage_supported=coverage_supported,
                                         native_export_supported=native_export_supported)
         self.sessions.bind(binding.scope, epoch, announce=True)
+        if self.watch_enabled:
+            self._publish("watch-cache", dict(binding=epoch))
 
     def _writer_binding(self, service):
         views = self.views
@@ -176,6 +227,8 @@ class DisplayArchive:
             eligible=lambda: self.views is views and eligible() and
             self._writer_binding(service) == (views.source, binding))
         if state is not None:
+            if self.watch_enabled and self.views is views:
+                self._publish("watch-cache", dict(binding=binding, generation=0, archive_epoch=state.archive_epoch))
             return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
         return None
 

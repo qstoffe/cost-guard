@@ -142,6 +142,8 @@ class LiveRuntime:
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
+        if verified and self.display_archive is not None:
+            self.display_archive.publish_watch(frame, driver.observed_at_ms)
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),

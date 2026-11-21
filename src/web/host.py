@@ -26,6 +26,7 @@ class WebHost:
     # Keep the draft cutover explicit while current-host running/finish
     # observations and the legacy migration are not yet ready.
     cached_sessions_enabled = False
+    cached_watch_enabled = False
 
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
@@ -47,7 +48,8 @@ class WebHost:
             from .composition import dispatch_dependencies
             self.dependencies = dispatch_dependencies(root)
         self.events = EventHub(self.nonce)
-        self.display_archive = DisplayArchive(root, self.events.publish) if jobs is None else None
+        self.display_archive = DisplayArchive(root, self.events.publish,
+            watch_enabled=self.cached_watch_enabled) if jobs is None else None
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:

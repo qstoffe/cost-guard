@@ -279,6 +279,51 @@ class WebRuntimeTests(unittest.TestCase):
             submit.assert_not_called()
         source_startup.report_status.assert_not_called()
 
+    def test_shared_watch_endpoint_reads_only_the_current_authorized_cache(self):
+        from development.tests.fixtures.display_watch import running_frame
+        from src.web.display_archive import DisplayArchive
+
+        endpoint = "/api/cache/watch"
+        self.assertEqual(401, self.request(endpoint)[0])
+        self.login()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity = root / "fixture.db"
+            identity.write_bytes(b"fixture identity")
+            source = OpenCodeV1Source(identity)
+            selection = SimpleNamespace(selected="v1", source=source)
+            service = SimpleNamespace(timezone_id="UTC", selection=selection)
+            driver = SimpleNamespace(error=None, terminal=False, observed_at_ms=None,
+                coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
+            archive = DisplayArchive(root, lambda *_: None, watch_enabled=True)
+            self.addCleanup(archive.close)
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            owner = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
+                display_archive=archive, cached_watch_enabled=True, live=SimpleNamespace(driver=driver))
+            self.server.lifecycle = owner
+            empty = self.request(endpoint)
+            at = int(time.time() * 1000)
+            driver.observed_at_ms = at
+            archive.publish_watch(running_frame(at), at)
+            archive._watch_write.result(timeout=5)
+
+            with patch.object(source, "list_sessions", side_effect=AssertionError("cache route read the source")) as scan:
+                full = self.request(endpoint)
+                mini = self.request(endpoint)
+                driver.observed_at_ms = None
+                held = self.request(endpoint)
+                archive.unbind()
+                unbound = self.request(endpoint)
+            scan.assert_not_called()
+
+        self.assertEqual((200, []), (empty[0], json.loads(empty[2])["cards"]))
+        self.assertEqual(200, full[0])
+        self.assertEqual(json.loads(full[2]), json.loads(mini[2]))
+        self.assertEqual("running", json.loads(full[2])["cards"][0]["outcome"])
+        self.assertEqual("unverified", json.loads(held[2])["cards"][0]["outcome"])
+        self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
+
     def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
         from src.application.session_catalog import SessionCatalog
         from src.cache.display_history import SessionChange, SessionFact

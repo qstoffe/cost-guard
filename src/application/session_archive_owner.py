@@ -114,6 +114,19 @@ class SessionArchiveOwner:
             generation = self.history.replace_running(source, epoch, fresh, archive_epoch=archive_epoch)
             self._announce(source, epoch, generation)
 
+    def commit_watch(self, source, epoch, observation, *, clear_fence):
+        with self._lock:
+            fence, cleared_ms, _ = self._clear_fence
+            if (source, epoch) != self._binding or clear_fence != fence or observation.observed_ms <= cleared_ms:
+                return
+            archive_epoch = self.history.source_state(source).archive_epoch
+            generation = self.history.replace_watch(source, epoch, observation, archive_epoch=archive_epoch)
+            if generation is not None:
+                with self._signal:
+                    if (source, epoch) == self._binding:
+                        self.publish("watch-cache", dict(binding=epoch, archive_epoch=archive_epoch,
+                                                        generation=generation))
+
     def clear(self, source, epoch, expected, *, eligible, current_observation):
         """Serialize with both archive producers without holding the Live lock."""
         with self._lock:

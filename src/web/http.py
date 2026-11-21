@@ -423,6 +423,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/sessions/clear":
                 self.clear_cached_sessions()
                 return
+            if self.path == "/api/cache/watch":
+                self.cached_watch()
+                return
             if self.path == '/api/database-sizes':
                 sizes = getattr(self.server.lifecycle, 'database_sizes', None)
                 self.reply(200, sizes() if sizes else {'opencode_bytes': None, 'cache_bytes': None})
@@ -461,6 +464,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None
                     value["cached_sessions"] = getattr(self.server.lifecycle, "cached_sessions_enabled", False)
+                    value["cached_watch"] = getattr(self.server.lifecycle, "cached_watch_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)
@@ -591,6 +595,26 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(409, {"error": "cache_source_unbound"})
         else:
             self.reply(202, {"prioritized": prioritized})
+
+    def cached_watch(self):
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        if archive is None or not getattr(owner, "cached_watch_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        live = getattr(owner, "live", None)
+        driver = getattr(live, "driver", None)
+        def healthy():
+            return (driver is not None and live.driver is driver and not driver.terminal and driver.error is None
+                    and driver.observed_at_ms is not None)
+        try:
+            value = archive.watch_snapshot(live_eligible=healthy())
+            if value is not None and value["freshness"] == "current" and not healthy():
+                value = archive.watch_snapshot(live_eligible=False)
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        self.reply(200 if value is not None else 503, value or {"error": "cache_source_unbound"})
 
     def clear_cached_sessions(self, value=None):
         owner = self.server.lifecycle
