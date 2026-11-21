@@ -18,7 +18,7 @@ SORT_COLUMNS = {
 }
 METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens", "latest_activity_ms")
 SAVED_FIELDS = frozenset(METRIC_FIELDS)
-PERIOD_CLOCK = "coalesce(latest_activity_ms, activity_ms)"
+PERIOD_CLOCK = "period_clock_ms"
 
 
 def decimal_key(value: Decimal | None) -> bytes | None:
@@ -145,7 +145,8 @@ class DisplayHistory:
                 PRAGMA application_id={APPLICATION_ID};
                 CREATE TABLE IF NOT EXISTS sources (
                     source TEXT NOT NULL PRIMARY KEY,
-                    generation INTEGER NOT NULL DEFAULT 0
+                    generation INTEGER NOT NULL DEFAULT 0,
+                    session_count INTEGER NOT NULL DEFAULT 0
                 ) WITHOUT ROWID;
                 CREATE TABLE IF NOT EXISTS session_changes (
                     source TEXT NOT NULL REFERENCES sources(source),
@@ -160,6 +161,7 @@ class DisplayHistory:
                     revision TEXT NOT NULL,
                     title TEXT NOT NULL, title_key TEXT NOT NULL,
                     activity_ms INTEGER, latest_activity_ms INTEGER,
+                    period_clock_ms INTEGER GENERATED ALWAYS AS (coalesce(latest_activity_ms, activity_ms)) VIRTUAL,
                     model TEXT, model_key TEXT,
                     ccost TEXT, cost_key BLOB,
                     prompts INTEGER, duration_ms INTEGER, context_tokens INTEGER,
@@ -175,7 +177,7 @@ class DisplayHistory:
     def _sort_indexes():
         return "\n".join(
             f"CREATE INDEX IF NOT EXISTS sessions_{sort}_{direction.lower()} "
-            f"ON sessions(source, ({column} IS NULL), {column} {direction}, session_id);"
+            f"ON sessions(source, ({column} IS NULL), {column} {direction}, session_id, {PERIOD_CLOCK});"
             for sort, column in SORT_COLUMNS.items() for direction in ("ASC", "DESC")
         ) + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
 
@@ -195,11 +197,13 @@ class DisplayHistory:
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             clocks = []
             changed = False
+            inserted = 0
             for change in updates:
                 session_id = change.fact.session_id
                 previous = self._activity(db, source, session_id)
                 if self._apply_session(db, source, change):
                     changed = True
+                    inserted += int(change.previous_revision is None)
                     clocks.extend((previous, self._activity(db, source, session_id)))
             for session_id, revision in missing:
                 previous = self._activity(db, source, session_id)
@@ -211,7 +215,8 @@ class DisplayHistory:
                     clocks.append(previous)
             generation = None
             if changed:
-                db.execute("UPDATE sources SET generation=generation+1 WHERE source=?", (source,))
+                db.execute("UPDATE sources SET generation=generation+1, session_count=session_count+? WHERE source=?",
+                           (inserted, source))
                 generation = self._generation(db, source)
                 known = [clock for clock in clocks if clock is not None]
                 db.execute("INSERT INTO session_changes VALUES(?, ?, ?, ?)",
@@ -294,6 +299,7 @@ class DisplayHistory:
             raise ValueError("invalid_display_query")
         column = SORT_COLUMNS[sort]
         order = "ASC" if direction == 1 else "DESC"
+        index = f"sessions_{sort}_{order.lower()}"
         conditions, params = ["source=?"], [source]
         if start_ms is not None:
             conditions.append(f"{PERIOD_CLOCK}>=?")
@@ -304,13 +310,25 @@ class DisplayHistory:
         where = " AND ".join(conditions)
         with self._connect(read=True) as db:
             db.execute("BEGIN")
-            generation = self._generation(db, source)
-            total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
+            state = db.execute("SELECT generation, session_count FROM sources WHERE source=?", (source,)).fetchone()
+            if state is None:
+                return SessionPage(0, 0, ())
+            generation, total = state
+            if len(params) > 1:
+                total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
+            # Select ordered keys first with the covering index. CROSS JOIN
+            # keeps the small selected set outermost; a reordered join can
+            # scan every historical row just to return the first page.
             rows = db.execute(f"""
-                SELECT session_id, revision, title, activity_ms, model, ccost,
+                WITH selected AS (
+                    SELECT session_id FROM sessions INDEXED BY {index} WHERE {where}
+                    ORDER BY ({column} IS NULL), {column} {order}, session_id
+                    LIMIT ? OFFSET ?
+                )
+                SELECT s.session_id, revision, title, activity_ms, model, ccost,
                     prompts, duration_ms, context_tokens, latest_activity_ms, source_present
-                FROM sessions WHERE {where}
-                ORDER BY ({column} IS NULL), {column} {order}, session_id
-                LIMIT ? OFFSET ?
-            """, (*params, limit, offset)).fetchall()
+                FROM selected CROSS JOIN sessions AS s
+                WHERE s.source=? AND s.session_id=selected.session_id
+                ORDER BY ({column} IS NULL), {column} {order}, s.session_id
+            """, (*params, limit, offset, source)).fetchall()
         return SessionPage(generation, total, tuple(SessionSnapshot(*row[:-2], bool(row[-1]), row[-2]) for row in rows))
