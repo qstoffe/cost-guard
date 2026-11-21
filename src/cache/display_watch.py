@@ -90,9 +90,11 @@ def watch_snapshot(db, source, binding, now_ms, *, live_eligible):
         SELECT binding,generation,observed_ms,projected_ms,state,truncated FROM archive_watch_state WHERE source=?
     """, (source,)).fetchone()
     if state is None:
-        return dict(generation=0, freshness="empty", observed_ms=None, state=None, truncated=False, cards=[])
+        return dict(generation=0, freshness="empty", observed_ms=None, projected_ms=None, expires_ms=None,
+                    state=None, truncated=False, cards=[])
     issued, generation, observed, projected, card_state, truncated = state
     current = (live_eligible and issued == binding and 0 <= now_ms - observed < WATCH_LIVE_MS)
+    expires_ms = observed + WATCH_LIVE_MS if current else None
     cards = []
     keys = tuple(field.name for field in fields(WatchFact))
     for values in db.execute("""
@@ -104,9 +106,20 @@ def watch_snapshot(db, source, binding, now_ms, *, live_eligible):
         for name in ("prompt_cost_complete", "session_cost_complete"):
             facts[name] = bool(facts[name])
         proof = facts.pop("qualified_ms")
-        if facts["outcome"] == "running" and (not current or proof is None or not 0 <= now_ms - proof < WATCH_LIVE_MS):
-            facts["outcome"] = "unverified"
+        if facts["outcome"] == "running":
+            if current and proof is not None and 0 <= now_ms - proof < WATCH_LIVE_MS:
+                expires_ms = min(expires_ms, proof + WATCH_LIVE_MS)
+            else:
+                facts["outcome"] = "unverified"
         cards.append(facts)
     return dict(generation=generation, freshness="current" if current else "as-of",
                 observed_ms=observed, projected_ms=projected, state=card_state if current else "retained",
-                truncated=bool(truncated), cards=cards)
+                expires_ms=expires_ms, truncated=bool(truncated), cards=cards)
+
+
+def withdraw_watch_liveness(value):
+    """Downgrade this same read when qualification is lost while serving it."""
+    value.update(freshness="as-of", state="retained", expires_ms=None)
+    for fact in value["cards"]:
+        if fact["outcome"] == "running":
+            fact["outcome"] = "unverified"

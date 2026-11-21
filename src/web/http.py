@@ -37,6 +37,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
               "/session.js": ("session.js", "text/javascript; charset=utf-8"),
               "/session-export.js": ("session-export.js", "text/javascript; charset=utf-8"),
+              "/cached-watch.js": ("cached-watch.js", "text/javascript; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
@@ -604,17 +605,22 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         live = getattr(owner, "live", None)
         driver = getattr(live, "driver", None)
+
         def healthy():
-            return (driver is not None and live.driver is driver and not driver.terminal and driver.error is None
-                    and driver.observed_at_ms is not None)
+            return (driver is not None and owner.live is live and live.driver is driver and not driver.terminal
+                    and driver.error is None and driver.observed_at_ms is not None)
+
         try:
-            value = archive.watch_snapshot(live_eligible=healthy())
-            if value is not None and value["freshness"] == "current" and not healthy():
-                value = archive.watch_snapshot(live_eligible=False)
+            value = archive.watch_snapshot(live_eligible=healthy, presentation=True)
         except (OSError, sqlite3.Error):
             self.reply(503, {"error": "cache_unavailable"})
             return
-        self.reply(200 if value is not None else 503, value or {"error": "cache_source_unbound"})
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif owner.display_archive is not archive or value is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, value)
 
     def clear_cached_sessions(self, value=None):
         owner = self.server.lifecycle

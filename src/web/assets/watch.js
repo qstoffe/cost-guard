@@ -565,16 +565,18 @@ const WatchView = (() => {
             const focal = !historical && prompt.event_id === value.focal_id;
             const role = focal ? promptRole(prompt) : '';
             row.className = role ? `watch-${role}` : '';
-            const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const outcome = prompt.execution_unverified || prompt.outcome_unknown ? 'Unverified' : prompt.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
-            row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
+            row.setAttribute('aria-label', `Prompt ${prompt.prompt_number ?? 'unknown'} · ${outcome}${reason ? ' · ' + reason : ''}`);
             const label = row.children[2]?.children[0] || el('span', undefined, 'watch-prompt-label');
             if (!label.children.length) label.append(el('span', '', 'watch-prompt-number'),
               el('span', '', 'watch-prompt-preview'));
-            invocationText(label.children[0], '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''));
+            invocationText(label.children[0], '#' + (prompt.prompt_number ?? '—') + (outcome === 'Unverified' ? ' · Unverified' : ''));
             invocationText(label.children[1], prompt.preview || '');
-            if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
+            if (outcome === 'Unverified') ContextHelp.value(label, value.cached ?
+              'Last saved observation. The current host has not verified execution or completion.' :
+              'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
             else if (prompt.subagent_active) ContextHelp.value(label, `Running: causally linked subagent activity. Parent attempt: ${prompt.parent_outcome || 'ongoing'}${prompt.abort_reason ? ' · ' + prompt.abort_reason : ''}.`);
             const started = metricValue(row, 0, display(prompt, historical ? 'finished_clock' : 'clock'),
               !historical || prompt.completed_at_ms != null ? display(prompt, historical ? 'finished_date_time' : 'date_time') : '');
@@ -582,11 +584,11 @@ const WatchView = (() => {
             if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
             else model.removeAttribute('aria-label');
             const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptDetails(item, false));
-            const calls = metricValue(row, 6, String(prompt.calls), prompt.watch_calls_help);
+            const calls = metricValue(row, 6, prompt.calls == null ? 'N/A' : String(prompt.calls), prompt.watch_calls_help);
             const effort = metricValue(row, 4, item.effort, display(prompt, 'effort_help'));
             const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
               cost, calls, this.tokenMix(item, value),
-              display(prompt, 'incoming_context_tokens'), prompt.in_progress &&
+               display(prompt, 'incoming_context_tokens'), !value.cached && prompt.in_progress &&
                 item.live_context?.watch_delta_context_tokens == null ? 'Loading…' : display(item.live_context, 'watch_delta_context_tokens')];
             cells.forEach((value, index) => {
               const cell = row.children[index] || el('td');
@@ -601,8 +603,8 @@ const WatchView = (() => {
           return row;
         }));
       }
-      this.activity.hidden = historical || !value.focal_id;
-      if (!historical) {
+      this.activity.hidden = historical || !value.focal_id || value.cached;
+      if (!historical && !value.cached) {
         const row = value.rows.find(row => row.prompt.event_id === value.focal_id);
         const detailsVerified = value.invocation_verified === true || value.invocation_verified == null && value.state === 'observed';
         this.drawActivity(row?.tool, !sourceNotice && detailsVerified &&
@@ -626,7 +628,7 @@ const WatchView = (() => {
       else if (card.state === 'observed') this.mixes.delete(scope);
       const value = !invalid && (known ? display(prompt, 'token_mix_percent') : this.mixes.get(scope));
       for (const key of this.mixes.keys()) if (key !== scope) this.mixes.delete(key);
-      return value || (prompt.in_progress ? 'Loading…' : display(prompt, 'token_mix_percent'));
+      return value || (card.cached ? 'N/A' : prompt.in_progress ? 'Loading…' : display(prompt, 'token_mix_percent'));
     }
     drawSummary(value) {
       value = retainSummary(value, this.summaryValue);
@@ -680,7 +682,7 @@ const WatchView = (() => {
     }
     update(result) {
       this.costs ||= new ReportView.CostDisplay();
-      const view = costProjection(result.view, this.costs, result.source_generation);
+      const view = result.cached ? result.view : costProjection(result.view, this.costs, result.source_generation);
       const active = (view.active_cards || []).map(card => ({...card,
         rows: card.rows.filter(row => row.prompt.in_progress && !row.prompt.execution_unverified)}))
         .filter(card => card.rows.length);
@@ -693,16 +695,28 @@ const WatchView = (() => {
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = result.state === 'running' && this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
         !active.some(card => card.rows.some(row => row.prompt.in_progress));
-      const unverified = view.active_cards?.some(card => card.rows.some(row => row.prompt.execution_unverified));
       text(this.empty, noRunning ? 'No running prompts' : '');
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       const clock = {now: view.now_ms, zone: view.timezone_id};
-      for (const [parent, values, historical] of [[this.active, active, false]]) {
+      const recent = result.cached ? [...(view.active_cards || []).filter(card =>
+        !card.rows.some(row => row.prompt.in_progress && !row.prompt.execution_unverified)),
+        ...(view.recent_finished_cards || []), ...(view.earlier_cards || [])] : [];
+      if (recent.length && !this.recent) {
+        this.recent = el('section', undefined, 'watch-recent');
+        this.recent.setAttribute('aria-label', 'Saved recent prompts');
+        this.root.append(this.recent);
+      }
+      if (this.recent) this.recent.hidden = !recent.length;
+      const sections = [[this.active, active, false]];
+      if (this.recent) sections.push([this.recent, recent, true]);
+      for (const [parent, values, historical] of sections) {
         const wanted = values.map(value => {
-          const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history']); keep.add(key);
+          const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history', historical]); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
-          const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || !connected, clock); return card.root;
+          const card = this.cards.get(key);
+          card.update(result.cached ? {...value, cached: true} : value, historical, hostOwnsRetry || !connected, clock);
+          return card.root;
         });
         reconcile(parent, wanted);
       }

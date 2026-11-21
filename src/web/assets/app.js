@@ -14,6 +14,7 @@ let csrf = null;
 let current = null;
 let liveConnection = null;
 let liveValue = null;
+let watchCache = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let cachedSessionsAvailable = false;
@@ -144,6 +145,8 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal) demand?.close?.(false);
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
+  const blocked = hostState.terminal || hostState.sourceBlocked;
+  watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind));
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
   const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
@@ -167,7 +170,6 @@ function connectionStatus(message, state = {}) {
       ReportView.text(warning, '');
     }
   }
-  const blocked = hostState.terminal || hostState.sourceBlocked;
   for (const view of views.values()) {
     view.catalog?.sourceHealth(blocked || hostState.sourceOutage, blocked);
   if (blocked) {
@@ -330,12 +332,16 @@ function show(state) {
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
         chart.active(!document.hidden && !!csrf && hostState.writable);
       }
-    } else if (liveValue?.view) {
-      state.miniControls = miniWatch?.button.parentNode;
-      ReportView.renderLive(output, liveValue, state);
     } else {
-      // Host/source health owns startup and failure feedback, not an elapsed timer.
-      output.replaceChildren();
+      const publication = watchCache ? watchCache.publication() : liveValue;
+      state.miniControls = miniWatch?.button.parentNode;
+      if (publication?.view) ReportView.renderLive(output, publication, state);
+      else {
+        if (watchCache) state.watch = null;
+        // Host/source health owns startup and failure feedback, not an elapsed timer.
+        if (watchCache && state.miniControls) output.replaceChildren(state.miniControls);
+        else output.replaceChildren();
+      }
     }
    } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
@@ -700,14 +706,22 @@ async function connect() {
        demand = new DataDemand.Controller(api, () => current && {...current,
          history: false}, writable,
          {history: state.history_demand === true});
-       if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
+        if (state.history_demand === true && state.cached_watch !== true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
          () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
          writable, {owner: win, history: true}));
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     cachedSessionsAvailable = state.cached_sessions === true;
-    accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
+     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
+     if (state.cached_watch === true && typeof CachedWatch !== 'undefined') {
+       watchCache ||= new CachedWatch.Controller(api, publication => {
+         miniWatch?.updateCached(() => watchCache.publication());
+         if (current?.section === 'watch') show(current);
+         else if (!publication) for (const view of views.values()) view.watch = null;
+       });
+       watchCache.catchUp();
+     }
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -718,7 +732,7 @@ async function connect() {
         // readiness signal once rather than polling the optional facts.
         if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
           current.stats.refreshDatabaseSizes();
-        miniWatch?.update(liveValue);
+        if (!watchCache) miniWatch?.update(liveValue);
         current?.catalog?.wake(value?.catalog_hint);
         current?.detail?.wake(value?.detail_hints);
         current?.detail?.updateInvocations();
@@ -742,7 +756,7 @@ async function connect() {
          sessionCacheHint = hint;
          current?.catalog?.cacheHint?.(hint, resync);
          current?.detail?.cacheHint?.(hint, resync);
-      });
+      }, (hint, resync) => watchCache?.cacheHint(hint, resync));
     }
     navigate();
   } catch (_) {

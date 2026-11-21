@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.display_watch import running_frame
-from src.application.watch_archive_projection import archive_watch_observation
+from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
 from src.cache.display_history import DisplayHistory
 from src.cache.display_watch import WATCH_LIVE_MS, WATCH_ROW_LIMIT, publish_watch
 from src.sources.opencode_v1 import OpenCodeV1Source
@@ -70,6 +70,24 @@ class DisplayWatchTests(unittest.TestCase):
         self.assertEqual((2, "After commit", "0.15", 774), (committed["generation"], committed["cards"][0]["title"],
                          committed["cards"][0]["prompt_cost"], committed["cards"][0]["context_tokens"]))
         self.assertIsNone(stale)
+
+    def test_missing_running_proof_does_not_claim_complete_empty_running_membership(self):
+        at = 100_000
+        observed = archive_watch_observation(running_frame(at), at)
+        stale = replace(observed.facts[0], qualified_ms=at - WATCH_LIVE_MS)
+        self.history.replace_watch("bound", "host", replace(observed, facts=(stale,)), archive_epoch=0)
+
+        snapshot = self.history.watch("bound", "host", at, live_eligible=True)
+        view = cached_watch_view(dict(binding="host", **snapshot), "UTC")
+
+        self.assertEqual("current", snapshot["freshness"])
+        self.assertEqual("partial", view["cards_state"])
+        self.assertEqual([], view["active_cards"])
+        card, = view["earlier_cards"]
+        row, = card["rows"]
+        self.assertEqual("Observed title", card["title"])
+        self.assertTrue(row["prompt"]["execution_unverified"])
+        self.assertIsNone(row["prompt"]["completed_at_ms"])
 
     def test_new_version_preserves_previous_partition_and_purge_prevents_late_writes(self):
         at = 100_000
@@ -135,7 +153,7 @@ class DisplayWatchTests(unittest.TestCase):
                 first = archive._watch_write
                 self.assertTrue(started.wait(5))
                 archive.publish_watch(running_frame(at + 1), at + 1)
-                frozen = archive.watch_snapshot(live_eligible=True)
+                frozen = archive.watch_snapshot(live_eligible=lambda: True)
                 self.assertIs(first, archive._watch_write)
                 self.assertEqual([], [hint for _, hint in notifications if "generation" in hint])
             finally:
@@ -143,10 +161,33 @@ class DisplayWatchTests(unittest.TestCase):
             first.result(timeout=5)
             archive.publish_watch(running_frame(at + 2), at + 2)
             archive._watch_write.result(timeout=5)
-            latest = archive.watch_snapshot(live_eligible=True)
+        latest = archive.watch_snapshot(live_eligible=lambda: True)
 
         self.assertEqual("empty", frozen["freshness"])
         self.assertEqual(2, writes.call_count)
         self.assertEqual(at + 2, latest["observed_ms"])
         self.assertEqual([1, 2], [hint["generation"] for kind, hint in notifications
                                  if kind == "watch-cache" and "generation" in hint])
+
+    def test_health_lost_during_watch_read_withdraws_running_without_rereading_sqlite(self):
+        path = self.root / "fixture.db"
+        path.write_bytes(b"fixture identity")
+        driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(catalog_observation=None,
+            report_service=SimpleNamespace(timezone_id="UTC",
+                selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(path)))))
+        archive = DisplayArchive(self.root, lambda *_: None, watch_enabled=True)
+        self.addCleanup(archive.close)
+        archive.observe(driver, before_tick=True)
+        at = int(time.time() * 1000)
+        archive.publish_watch(running_frame(at), at)
+        archive._watch_write.result(timeout=5)
+        eligible = iter((True, False))
+
+        with patch.object(archive.history, "watch", wraps=archive.history.watch) as read:
+            result = archive.watch_snapshot(live_eligible=lambda: next(eligible), presentation=True)
+
+        read.assert_called_once()
+        self.assertEqual("as-of", result["freshness"])
+        self.assertEqual("unverified", result["cards"][0]["outcome"])
+        self.assertEqual([], result["view"]["active_cards"])
+        self.assertEqual("Observed title", result["view"]["earlier_cards"][0]["title"])

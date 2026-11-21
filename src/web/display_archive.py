@@ -9,8 +9,9 @@ from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
 from src.application.session_coverage import SessionCoverageSweep
-from src.application.watch_archive_projection import archive_watch_observation
+from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
+from src.cache.display_watch import withdraw_watch_liveness
 from src.sources.errors import SourceError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
@@ -160,12 +161,21 @@ class DisplayArchive:
             return False
         return True
 
-    def watch_snapshot(self, *, live_eligible):
+    def watch_snapshot(self, *, live_eligible, presentation=False):
         views = self.views
         if views is None or not self.watch_enabled:
             return None
-        value = self.history.watch(views.source, views.binding, int(time.time() * 1000), live_eligible=live_eligible)
-        return dict(binding=views.binding, **value) if self.views is views else None
+        now = int(time.time() * 1000)
+        value = dict(binding=views.binding, **self.history.watch(views.source, views.binding, now,
+                                                               live_eligible=live_eligible()))
+        if presentation:
+            value["view"] = cached_watch_view(value, views.timezone_id)
+        if value["freshness"] == "current" and (not live_eligible() or
+                int(time.time() * 1000) >= value["expires_ms"]):
+            withdraw_watch_liveness(value)
+            if presentation:
+                value["view"] = cached_watch_view(value, views.timezone_id)
+        return value if self.views is views else None
 
     def _set_binding(self, binding, timezone_id="UTC", *, coverage_supported=False, native_export_supported=False):
         if binding == self._binding:
