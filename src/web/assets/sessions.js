@@ -771,9 +771,9 @@ const SessionsCatalog = (() => {
         ...row, cache_only: true, last_activity_ms: row.activity_ms, prompt_count: row.prompts,
         has_summary: row.ccost != null, complete: row.ccost != null,
         metric_states: Object.fromEntries(Object.entries(row.fields).map(([key, value]) =>
-          [key, value === 'as-of' ? 'ready' : 'pending'])),
+          [key, value === 'as-of' ? 'ready' : value === 'retained' ? 'retained' : 'pending'])),
         metric_absences: Object.fromEntries(Object.entries(row.fields)
-          .filter(([, value]) => value === 'source-history-missing'))
+          .filter(([, value]) => ['complete_empty_history', 'source-history-missing', 'source-field-unavailable'].includes(value)))
       })));
       const count = data.rows.length;
       const range = count ? `Showing ${data.offset + 1}–${data.offset + count} of ${data.total} cached sessions` :

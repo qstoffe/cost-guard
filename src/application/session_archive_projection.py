@@ -49,4 +49,5 @@ class SessionPublication:
         complete = fields == ACQUIRED_SCALAR_FIELDS
         return SessionChange(fact, self.checkpoint.revision if self.checkpoint else None,
                              frozenset(fields), dependency if complete else None,
-                             self.checkpoint.progress if self.checkpoint else 0)
+                             self.checkpoint.progress if self.checkpoint else 0,
+                             empty_history=row.empty_history and row.complete and row.activity_qualified)

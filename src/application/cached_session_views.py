@@ -2,11 +2,32 @@
 from dataclasses import dataclass
 import time
 
-from src.cache.display_history import DisplayHistory, SORT_COLUMNS
+from src.cache.display_history import DisplayHistory, EMPTY_HISTORY_EVIDENCE, FIELD_EVIDENCE_BITS, SORT_COLUMNS
 
 from .contracts import record
 from .display import with_display
 from .session_catalog_scope import PAGE_SIZE, PERIODS, catalog_window
+
+
+_SCALAR_FIELDS = dict(activity="activity_ms", model="model", ccost="ccost", prompts="prompts",
+                      duration="duration_ms", ctx="context_tokens")
+
+
+def field_states(row, values):
+    def state(name, value):
+        evidence = row.field_evidence
+        examined = evidence & FIELD_EVIDENCE_BITS[_SCALAR_FIELDS[name]]
+        if value is not None:
+            return "as-of" if examined or not row.source_present or row.running else "retained"
+        if examined and name in ("activity", "model", "ctx") and evidence & EMPTY_HISTORY_EVIDENCE:
+            return "complete_empty_history"
+        if not row.source_present:
+            return "source-history-missing"
+        if examined and name in ("model", "ctx", "duration"):
+            return "source-field-unavailable"
+        return "pending"
+
+    return {name: state(name, value) for name, value in values.items()}
 
 
 def wall_ms():
@@ -53,8 +74,7 @@ class CachedSessionViews:
             values = {"model": row.model, "ccost": row.ccost, "prompts": row.prompts,
                       "duration": row.duration_ms, "ctx": row.context_tokens,
                       "activity": row.activity_ms if row.activity_ms is not None else row.prompt_started_ms}
-            states = {name: "as-of" if value is not None else "pending" if row.source_present else "source-history-missing"
-                      for name, value in values.items()}
+            states = field_states(row, values)
             tokens = with_display(record(ccost=row.ccost, duration_ms=row.duration_ms, context_tokens=row.context_tokens),
                                   window.timezone_id, now_ms).to_json()
             rows.append(dict(session_id=row.session_id, title=row.title, activity_ms=row.activity_ms, model=row.model,

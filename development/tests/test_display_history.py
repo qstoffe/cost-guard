@@ -247,6 +247,7 @@ class DisplayHistoryTests(unittest.TestCase):
                 ALTER TABLE sessions DROP COLUMN prompt_started_ms;
                 ALTER TABLE sessions DROP COLUMN activity_origin;
                 ALTER TABLE sessions DROP COLUMN catalog_activity_ms;
+                ALTER TABLE sessions DROP COLUMN field_evidence;
                 PRAGMA user_version=1;
             """)
 
@@ -257,6 +258,33 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual((1, "Saved title", "2.43"), (page.generation, page.rows[0].title, page.rows[0].ccost))
         self.assertEqual({"root": SessionCheckpoint("r1", 0)}, reopened.session_checkpoints("source", ("root",)))
         self.assertEqual(set(), reopened.completed_sessions("source", {"root": "r1"}, "pricing"))
+
+    def test_field_evidence_distinguishes_pending_empty_unavailable_and_retained_cells_after_restart(self):
+        source = "source"
+        owner = SessionArchiveOwner(self.history, lambda *_: None)
+        owner.bind(source, "observation")
+        initial = dict.fromkeys(("partial", "empty", "unavailable", "pending"), "v1")
+        owner.publish_catalog(owner.admit(initial), dict.fromkeys(initial, "Title"), initial)
+        owner.commit(owner.admit(initial), {
+            "partial": SessionUsageRow("partial", "Known", "M", False, Decimal("1.2"), 4, context_tokens=314),
+            "empty": SessionUsageRow("empty", "No prompts", "N/A", False, Decimal(0), 0, empty_history=True),
+            "unavailable": SessionUsageRow("unavailable", "No context", "M", False, Decimal("2.3"), 2),
+        }, initial)
+        correction = {"partial": "v2"}
+        owner.commit(owner.admit(correction), {"partial": SessionUsageRow(
+            "partial", "Revised", "M2", False, Decimal("3.4"), 5, context_qualified=False)}, correction)
+
+        reopened = DisplayHistory(self.root)
+        reopened.initialize()
+        result = CachedSessionViews(reopened, source, "UTC").page(period="all", sort="ctx")
+        by_id = {row["session_id"]: row for row in result["rows"]}
+
+        self.assertEqual("partial", result["rows"][0]["session_id"])
+        self.assertEqual(("3.4", 314, "retained"), (by_id["partial"]["ccost"], by_id["partial"]["context_tokens"],
+                                                 by_id["partial"]["fields"]["ctx"]))
+        self.assertEqual("complete_empty_history", by_id["empty"]["fields"]["ctx"])
+        self.assertEqual("source-field-unavailable", by_id["unavailable"]["fields"]["ctx"])
+        self.assertEqual("pending", by_id["pending"]["fields"]["ctx"])
 
     def test_cache_distinguishes_catalog_time_from_prompt_start_and_causal_finish(self):
         owner = SessionArchiveOwner(self.history, lambda *_: None)
@@ -367,8 +395,9 @@ class DisplayHistoryTests(unittest.TestCase):
         owner.commit(owner.admit(revisions), {"id": partial}, revisions, dependency="price-a")
 
         self.assertEqual(set(), self.history.completed_sessions("source", revisions, "price-a"))
-        page = self.history.session_page("source")
-        self.assertEqual((1, "2.43"), (page.generation, page.rows[0].ccost))
+        page = CachedSessionViews(self.history, "source", "UTC").page(period="all")
+        row, = page["rows"]
+        self.assertEqual((2, "2.43", "retained"), (page["generation"], row["ccost"], row["fields"]["ccost"]))
 
     def test_absence_invalidates_in_flight_progress_even_if_the_same_revision_returns(self):
         root = SessionFact("id", "r1", "Original")

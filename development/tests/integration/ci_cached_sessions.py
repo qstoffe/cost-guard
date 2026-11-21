@@ -61,7 +61,8 @@ def check_cached_sessions(browser, evidence, product_root):
 
             def commit(offset, amount):
                 rows = {f"s-{index:03d}": SessionUsageRow(f"s-{index:03d}", f"Session {index}", "Example",
-                    False, Decimal(index), index, last_activity_ms=now - 1000, activity_qualified=True)
+                    False, Decimal(index), index, last_activity_ms=now - 1000, activity_qualified=True,
+                    context_qualified=index != 27)
                     for index in range(offset, offset + amount)}
                 revisions = dict.fromkeys(rows, "revision")
                 owner.commit(owner.admit(revisions), rows, revisions)
@@ -81,6 +82,13 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("26–30 of 30 cached sessions", timeout=5000)
             names = first.locator(".sessions-catalog tbody .session-name")
             expect(names).to_have_text([f"Session {index}" for index in range(26, 31)])
+            absent_context = first.locator('tr[data-id="s-026"] td:last-child span').first
+            expect(absent_context).to_have_text("?")
+            first.keyboard.press("Tab")
+            absent_context.focus()
+            expect(first.get_by_text("The source did not provide context for this session.", exact=True)).to_be_visible()
+            first.keyboard.press("Escape")
+            expect(first.locator('tr[data-id="s-027"]').get_by_role("img", name="Loading context")).to_be_visible()
             first.go_back()
             expect(pager).to_contain_text("1–25 of 30 cached sessions")
             first.go_forward()
@@ -118,7 +126,7 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, two-tab requery, running, confirmed clear, source unbind")
+                checked="cold empty, held source, period/sort/page, field qualification, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()

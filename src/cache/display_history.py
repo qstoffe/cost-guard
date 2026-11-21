@@ -8,7 +8,7 @@ import time
 
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -23,6 +23,17 @@ METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "con
 SAVED_FIELDS = frozenset(METRIC_FIELDS)
 ACQUIRED_SCALAR_FIELDS = SAVED_FIELDS - {"catalog_activity_ms"}
 PERIOD_CLOCK = "period_clock_ms"
+# Do not derive these bit positions from display order: they are disk format.
+FIELD_EVIDENCE_BITS = {name: 1 << offset for offset, name in enumerate((
+    "activity_ms", "model", "ccost", "prompts", "duration_ms", "context_tokens",
+    "latest_activity_ms", "prompt_started_ms", "activity_origin", "catalog_activity_ms",
+))}
+EMPTY_HISTORY_EVIDENCE = 1 << 10
+
+
+def field_evidence(observed_fields, *, empty_history=False):
+    return sum(FIELD_EVIDENCE_BITS[field] for field in observed_fields) | (
+        EMPTY_HISTORY_EVIDENCE if empty_history else 0)
 
 
 def decimal_key(value: Decimal | None) -> bytes | None:
@@ -78,6 +89,7 @@ class SessionChange:
     # Guard same-revision changes, including dependency-only updates and
     # observed gaps that leave the display row intact.
     previous_progress: int | None = None
+    empty_history: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +123,7 @@ class SessionSnapshot:
     activity_origin: str | None
     catalog_activity_ms: int | None
     running: bool = False
+    field_evidence: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,7 +192,7 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if app_id == APPLICATION_ID and version in (1, 2, 3):
+            if app_id == APPLICATION_ID and version in (1, 2, 3, 4):
                 progress = self._progress_schema() if version == 1 else ""
                 clocks = """
                     ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
@@ -191,6 +204,7 @@ class DisplayHistory:
                     {progress}
                     {clocks}
                     {self._live_schema()}
+                    ALTER TABLE sessions ADD COLUMN field_evidence INTEGER NOT NULL DEFAULT 0;
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -226,6 +240,7 @@ class DisplayHistory:
                     prompts INTEGER, duration_ms INTEGER, context_tokens INTEGER,
                     prompt_started_ms INTEGER, activity_origin TEXT, catalog_activity_ms INTEGER,
                     source_present INTEGER NOT NULL,
+                    field_evidence INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY (source, session_id)
                 ) WITHOUT ROWID;
                 {self._sort_indexes()}
@@ -316,11 +331,13 @@ class DisplayHistory:
             for membership, entries in ((0, missing), (1, present)):
                 for session_id, checkpoint in entries:
                     if db.execute("""
-                        UPDATE sessions SET source_present=?
+                        UPDATE sessions SET source_present=?,
+                            field_evidence=CASE WHEN ?=1 THEN 0 ELSE field_evidence END
                         WHERE source=? AND session_id=? AND revision=? AND source_present<>?
                             AND coalesce((SELECT progress FROM session_progress AS p
                                 WHERE p.source=sessions.source AND p.session_id=sessions.session_id), 0)=?
-                    """, (membership, source, session_id, checkpoint.revision, membership, checkpoint.progress)).rowcount:
+                    """, (membership, membership, source, session_id, checkpoint.revision, membership,
+                          checkpoint.progress)).rowcount:
                         changed = True
                         clocks.append(self._activity(db, source, session_id))
                         # Returning under the same revision must not revive a
@@ -416,6 +433,7 @@ class DisplayHistory:
         if (not change.observed_fields <= SAVED_FIELDS or not (fact.revision and fact.session_id)
                 or fact.activity_origin not in (None, "finish", "start", "no-prompt")):
             raise ValueError("invalid_session_evidence")
+        evidence = field_evidence(change.observed_fields, empty_history=change.empty_history)
         if change.observed_fields != SAVED_FIELDS:
             previous = db.execute(f"""
                 SELECT {", ".join(METRIC_FIELDS)}
@@ -431,24 +449,25 @@ class DisplayHistory:
                   fact.model, fact.model.casefold() if fact.model is not None else None,
                   str(fact.ccost) if fact.ccost is not None else None, decimal_key(fact.ccost),
                    fact.prompts, fact.duration_ms, fact.context_tokens, fact.latest_activity_ms,
-                   fact.prompt_started_ms, fact.activity_origin, fact.catalog_activity_ms)
+                    fact.prompt_started_ms, fact.activity_origin, fact.catalog_activity_ms, evidence)
         if change.previous_revision is None:
             return db.execute("""
                 INSERT INTO sessions(source, session_id, revision, title, title_key, activity_ms,
                     model, model_key, ccost, cost_key, prompts, duration_ms, context_tokens,
-                    latest_activity_ms, prompt_started_ms, activity_origin, catalog_activity_ms, source_present)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     latest_activity_ms, prompt_started_ms, activity_origin, catalog_activity_ms, field_evidence,
+                     source_present)
+                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT(source, session_id) DO NOTHING
             """, (source, fact.session_id, *values)).rowcount
         return db.execute("""
             UPDATE sessions SET revision=?, title=?, title_key=?, activity_ms=?, model=?, model_key=?,
                 ccost=?, cost_key=?, prompts=?, duration_ms=?, context_tokens=?, latest_activity_ms=?,
-                prompt_started_ms=?, activity_origin=?, catalog_activity_ms=?, source_present=1
+                 prompt_started_ms=?, activity_origin=?, catalog_activity_ms=?, field_evidence=?, source_present=1
             WHERE source=? AND session_id=? AND revision=?
                 AND (revision, title, title_key, activity_ms, model, model_key, ccost, cost_key,
                      prompts, duration_ms, context_tokens, latest_activity_ms, prompt_started_ms, activity_origin,
-                     catalog_activity_ms, source_present)
-                    IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                       catalog_activity_ms, field_evidence, source_present)
+                      IS NOT (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (*values, source, fact.session_id, change.previous_revision, *values)).rowcount
 
     @staticmethod
@@ -587,12 +606,12 @@ class DisplayHistory:
                 )
                 SELECT s.session_id, revision, title, activity_ms, model, ccost,
                     prompts, duration_ms, context_tokens, source_present, latest_activity_ms,
-                    prompt_started_ms, activity_origin, catalog_activity_ms
+                    prompt_started_ms, activity_origin, catalog_activity_ms, field_evidence
                 FROM selected CROSS JOIN sessions AS s
                 WHERE s.source=? AND s.session_id=selected.session_id
                 ORDER BY ({column} IS NULL), {column} {order}, s.session_id
             """, (*params, limit - len(running_slice), max(0, offset - len(active)), source)).fetchall()
-        rows = tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:]) for row in rows)
+        rows = tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:-1], field_evidence=row[-1]) for row in rows)
         return SessionPage(generation, total, running_slice + rows, expires)
 
     @staticmethod
