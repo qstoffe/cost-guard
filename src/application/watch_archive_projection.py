@@ -1,9 +1,14 @@
 """Allowlist shared current/recent card facts; never serialize a Live DTO."""
 from itertools import chain, islice
 
+from src.analysis.timezones import local_day_start_ms
 from src.cache.display_watch import WATCH_ROW_LIMIT, WatchFact, WatchObservation
+from src.cache.display_watch_daily import WatchDaily
 from .contracts import record
 from .display import with_display
+
+
+_ABORT_REASONS = frozenset({"quota_limit", "rate_limit", "tool_call_limit", "step_limit", "user"})
 
 
 def _label(value, limit=1024):
@@ -43,6 +48,7 @@ def _card_fact(card, group):
         card.invocation_verified is True or card.invocation_verified is None and card.state == "observed")
     outcome = _outcome(prompt, verified=verified) if prompt else None
     finish = prompt.completed_at_ms if outcome in {"finished", "failed", "aborted"} else None
+    mix = prompt.token_mix_percent if prompt and prompt.token_mix_percent else (None,) * 4
     return WatchFact(
         card.session_id, prompt.event_id if prompt else "", _label(card.title) or card.session_id, group,
         (prompt.at_ms or None) if prompt else None, finish, outcome,
@@ -53,10 +59,30 @@ def _card_fact(card, group):
         _label(prompt.watch_effort) if prompt else None,
         prompt.calls if prompt else None, card.session_duration_ms if not (prompt and prompt.in_progress) else None,
         card.observed_at_ms if verified else None,
+        prompt_number=prompt.prompt_number if prompt else None,
+        prompt_duration_ms=prompt.duration_ms if outcome in {"running", "finished", "aborted", "failed"} else None,
+        is_compaction=prompt.is_compaction if prompt else None,
+        incoming_context_tokens=prompt.incoming_context_tokens if prompt else None,
+        context_delta_tokens=prompt.watch_delta_context_tokens if outcome == "running" else None,
+        mix_input=mix[0], mix_read=mix[1], mix_write=mix[2], mix_output=mix[3],
+        abort_reason=prompt.abort_reason if outcome == "aborted" and prompt.abort_reason in _ABORT_REASONS else None,
     )
 
 
-def archive_watch_observation(frame, observed_ms):
+def _daily_fact(value, timezone_id, now_ms):
+    if value is None or not 0 < value.day_start_ms <= value.observed_at_ms <= now_ms:
+        return None
+    start = local_day_start_ms(timezone_id, now_ms=now_ms)
+    if start != value.day_start_ms:
+        return None
+    end = local_day_start_ms(timezone_id, now_ms=now_ms, days_ago=-1)
+    total = value.total
+    return WatchDaily(timezone_id, start, end, value.observed_at_ms,
+                      total.known_ccost if total.priced_requests or total.complete else None,
+                      total.complete, value.prompt_count, value.prompt_count_complete)
+
+
+def archive_watch_observation(frame, observed_ms, timezone_id="UTC"):
     if type(observed_ms) is not int or not 0 < observed_ms <= frame.now_ms:
         return None
     groups = (("active", frame.active_cards), ("recent", frame.recent_finished_cards),
@@ -74,11 +100,17 @@ def archive_watch_observation(frame, observed_ms):
             indexed.setdefault((preview.session_id, ""), WatchFact(
                 preview.session_id, "", _label(preview.title) or preview.session_id, "earlier",
                 None, preview.activity_ms if preview.activity_origin == "finish" else None, None,
-                None, False, preview.total_ccost, preview.complete, None, None, None, None, None, None))
-    if frame.cards_state != "observed" and not any(fact.event_id or fact.session_cost is not None for fact in indexed.values()):
-        return None  # A placeholder-only turn is not evidence against the warm snapshot.
+                None, False, preview.total_ccost, preview.complete, None, None, None, None, None, None,
+                catalog_activity_ms=preview.activity_ms if preview.activity_origin == "catalog" else None))
+    daily = _daily_fact(frame.daily_usage, timezone_id, frame.now_ms)
+    has_cards = frame.cards_state == "observed" or any(
+        fact.event_id or fact.session_cost is not None for fact in indexed.values())
+    if not has_cards and daily is None:
+        return None
+    # A daily-only update must not freshen the prior card membership or its clock.
     return WatchObservation(observed_ms, frame.now_ms, frame.cards_state, len(candidates) > WATCH_ROW_LIMIT or
-                            len(candidates) + len(frame.earlier_previews) > WATCH_ROW_LIMIT, tuple(indexed.values()))
+                            len(candidates) + len(frame.earlier_previews) > WATCH_ROW_LIMIT,
+                            tuple(indexed.values()) if has_cards else None, daily)
 
 
 def cached_watch_view(value, timezone_id):
@@ -91,20 +123,28 @@ def cached_watch_view(value, timezone_id):
         identity = dict(session_id=fact["session_id"], title=fact["title"])
         cost = fact["session_cost"]
         if not fact["event_id"]:
-            previews.append(record(**identity, activity_ms=fact["finish_ms"],
-                activity_origin="finish" if fact["finish_ms"] is not None else None, total_ccost=cost,
+            finished = fact["finish_ms"]
+            catalog = fact["catalog_activity_ms"]
+            origin = "finish" if finished is not None else "catalog" if catalog is not None else None
+            previews.append(record(**identity, activity_ms=finished if finished is not None else catalog,
+                activity_origin=origin, total_ccost=cost,
                 comparison_cost_complete=fact["session_cost_complete"], total_state="retained" if cost is not None else "pending"))
             continue
         outcome = fact["outcome"]
         running = outcome == "running"
         unverified = outcome == "unverified"
         uncertain_running |= fact["group"] == "active" and (unverified or outcome == "unknown")
-        duration = max(0, projected_ms - fact["start_ms"]) if running and fact["start_ms"] else None
+        mix = tuple(fact[key] for key in ("mix_input", "mix_read", "mix_write", "mix_output"))
+        is_compaction = fact["is_compaction"]
         prompt = record(event_id=fact["event_id"], at_ms=fact["start_ms"], completed_at_ms=fact["finish_ms"],
             outcome_unknown=outcome == "unknown",
             in_progress=running, execution_unverified=unverified, completed_successfully=outcome == "finished",
             has_error=outcome == "failed", aborted=outcome == "aborted", calls=fact["calls"],
-            ccost=fact["prompt_cost"], unresolved_cost=not fact["prompt_cost_complete"], label="Prompt")
+            ccost=fact["prompt_cost"], unresolved_cost=not fact["prompt_cost_complete"],
+            label="Compaction" if is_compaction else "Prompt", is_compaction=is_compaction,
+            prompt_number=fact["prompt_number"], incoming_context_tokens=fact["incoming_context_tokens"],
+            token_mix_percent=mix if all(part is not None for part in mix) else None,
+            abort_reason=fact["abort_reason"])
         context = record(watch_next_context_tokens=fact["context_tokens"], context_scope=value["binding"],
                          context_epoch=value["archive_epoch"])
         session = record(state="as-of" if cost is not None else "pending", context=context,
@@ -114,12 +154,20 @@ def cached_watch_view(value, timezone_id):
         group = "earlier" if unverified or outcome == "unknown" else fact["group"]
         cards[group].append(record(**identity, focal_id=fact["event_id"], session_summary=session,
             state=state, observed_at_ms=value["observed_ms"], activity_scope=value["binding"], invocation_verified=False,
-            rows=(record(prompt=prompt, model=fact["model"], effort=fact["effort"], watch_duration_ms=duration),)))
+            rows=(record(prompt=prompt, model=fact["model"] or "N/A", effort=fact["effort"] or "N/A",
+                         watch_duration_ms=fact["prompt_duration_ms"],
+                         live_context=record(watch_delta_context_tokens=fact["context_delta_tokens"])),)))
     complete = value["state"] == "observed" and not value["truncated"] and not uncertain_running
+    daily = value["daily"]
+    daily_usage = None if daily is None else record(day_start_ms=daily["day_start_ms"], day_end_ms=daily["day_end_ms"],
+        observed_at_ms=daily["observed_at_ms"], prompt_count=daily["prompt_count"],
+        prompt_count_complete=daily["prompt_count_complete"], cached=True,
+        total=record(known_ccost=daily["known_ccost"], complete=daily["cost_complete"]))
     view = record(source_label=value["binding"], now_ms=projected_ms, timezone_id=timezone_id,
         cards_state="observed" if complete else "partial",
         history_state="retained" if cards["history"] else "unknown",
         active_cards=tuple(cards["active"]), history_cards=tuple(cards["history"]),
         earlier_cards=tuple(cards["earlier"] + cards["history"]), recent_finished_cards=tuple(cards["recent"]),
-        earlier_previews=tuple(previews), daily_state="pending", quota_stale=True)
+        earlier_previews=tuple(previews), daily_usage=daily_usage,
+        daily_state="retained" if daily_usage else "pending", quota_stale=True)
     return with_display(view, timezone_id, projected_ms).to_json()

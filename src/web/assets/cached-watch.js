@@ -8,13 +8,15 @@ const CachedWatch = (() => {
     }
     publication() {
       if (!this.value || this.blocked) return null;
-      const {view, freshness, observed_ms: at, expires_ms: expiry} = this.value;
-      if (!this.liveUncertain && !this.needsLiveRead && freshness === 'current' && Date.now() < expiry) {
+      const {view: saved, freshness, observed_ms: at, expires_ms: expiry} = this.value;
+      const now = Date.now();
+      const view = saved.daily_usage?.day_end_ms <= now ? {...saved, daily_usage: null, daily_state: 'pending'} : saved;
+      if (!this.liveUncertain && !this.needsLiveRead && freshness === 'current' && now < expiry) {
         return {state: 'running', source_observed_at_ms: at, view, cached: true};
       }
       const earlier = freshness !== 'current' ? view.earlier_cards : [...view.earlier_cards,
         ...view.active_cards.map(card => ({...card, state: 'retained', rows: card.rows.map(row =>
-          row.prompt.in_progress ? {...row, display: undefined, prompt: {...row.prompt,
+          row.prompt.in_progress ? {...row, display: undefined, live_context: undefined, prompt: {...row.prompt,
             in_progress: false, execution_unverified: true}} : row)}))];
       return {state: freshness === 'empty' ? 'empty' : 'as-of', source_observed_at_ms: at, cached: true,
         view: {...view, active_cards: [], earlier_cards: earlier, cards_state: 'partial'}};
@@ -22,8 +24,9 @@ const CachedWatch = (() => {
     changed() {
       const publication = this.publication();
       const previous = this.presented;
-      if (previous?.value === this.value && previous.state === publication?.state) return;
-      this.presented = {value: this.value, state: publication?.state};
+      const daily = publication?.view.daily_usage;
+      if (previous?.value === this.value && previous.state === publication?.state && previous.daily === daily) return;
+      this.presented = {value: this.value, state: publication?.state, daily};
       this.update(publication);
     }
     clear() {
@@ -79,13 +82,10 @@ const CachedWatch = (() => {
         }
         const previous = this.value;
         if (!previous || ['binding', 'archive_epoch', 'generation', 'freshness', 'expires_ms']
-          .some(key => previous[key] !== value[key])) this.value = value;
+          .some(key => previous[key] !== value[key]) || !!previous.daily !== !!value.daily) this.value = value;
         if (!this.liveUncertain && healthVersion === this.healthVersion) this.needsLiveRead = false;
         this.changed();
-        clearTimeout(this.expire);
-        if (value.expires_ms > Date.now()) this.expire = setTimeout(() => {
-          this.changed(); this.catchUp();
-        }, value.expires_ms - Date.now() + 1);
+        this.scheduleExpiry();
       } catch (error) {
         if (this.flight === flight && ['cache_source_unbound', 'authentication_required', 'host_identity_changed'].includes(error.message)) {
           const newerBinding = this.hint !== hint && this.hint?.binding;
@@ -98,6 +98,16 @@ const CachedWatch = (() => {
           if (this.dirty) this.catchUp();
         }
       }
+    }
+    scheduleExpiry() {
+      clearTimeout(this.expire);
+      const now = Date.now(), expiry = this.value?.expires_ms;
+      const next = Math.min(...[expiry, this.value?.view.daily_usage?.day_end_ms].filter(at => at > now));
+      if (Number.isFinite(next)) this.expire = setTimeout(() => {
+        this.changed();
+        if (expiry && expiry <= Date.now() && next === expiry) this.catchUp();
+        this.scheduleExpiry();
+      }, next - now + 1);
     }
   }
   return {Controller};

@@ -1,5 +1,6 @@
 """Own synthetic source fixture; both Watch renderers use the same SQLite publication."""
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -10,6 +11,10 @@ from urllib.parse import urlsplit
 
 from development.tests.fixtures.display_watch import running_frame
 from development.tests.fixtures.web_reports import current_report
+from src.analysis.daily_usage import DailyUsage
+from src.analysis.timezones import local_day_start_ms
+from src.analysis.token_mix import TokenMix
+from src.analysis.valuation import ComparisonCost
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
 from src.web.host import WebHost
@@ -65,7 +70,10 @@ def check_cached_watch(browser, evidence, product_root):
             page.on("request", lambda request: requests.append(urlsplit(request.url).path))
 
             now = int(time.time() * 1000)
-            frame = running_frame(now)
+            daily = DailyUsage(local_day_start_ms("UTC", now_ms=now), now,
+                               ComparisonCost(Decimal("400"), observed_requests=4, priced_requests=3),
+                               TokenMix(), 3, False)
+            frame = replace(running_frame(now), daily_usage=daily)
             driver.observed_at_ms = now
             archive.publish_watch(frame, now)
             archive._watch_write.result(timeout=5)
@@ -80,6 +88,9 @@ def check_cached_watch(browser, evidence, product_root):
             expect(card.locator(".watch-session-context")).to_have_text("1k")
             expect(card.locator(".watch-activity")).to_be_hidden()
             expect(card.locator("tr.watch-running")).to_have_count(1)
+            expect(card.locator(".watch-prompt-number")).to_have_text("#1")
+            expect(card.get_by_text("12/34/5/49", exact=True)).to_be_visible()
+            expect(page.locator(".watch-daily")).to_contain_text("3 observed prompts")
             assert "private transcript sample" not in card.inner_text()
 
             # Exercise the actual Mini renderer on the opener's prepared PiP
@@ -130,6 +141,8 @@ def check_cached_watch(browser, evidence, product_root):
             historical = page.locator(".watch-recent article")
             expect(historical.get_by_role("link", name="New commit")).to_be_visible()
             expect(historical.get_by_text("Unverified", exact=False)).to_be_visible()
+            expect(historical.get_by_text("12/34/5/49", exact=True)).to_be_visible()
+            expect(page.locator(".watch-daily")).to_contain_text("3 observed prompts")
             expect(page.locator(".watch-active article")).to_have_count(0)
             if mini is not None:
                 retained, = mini_rows(page)

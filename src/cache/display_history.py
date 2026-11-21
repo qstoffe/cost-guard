@@ -13,7 +13,7 @@ from .display_requests import RequestRoster, countable_schema, publish_roster, r
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -254,7 +254,7 @@ class DisplayHistory:
                     {requests}
                     {prompts}
                     {countable}
-                    {watch_schema()}
+                     {watch_schema(upgrade=version == 11)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -476,10 +476,10 @@ class DisplayHistory:
             db.commit()
             return generation
 
-    def watch(self, source, binding, now_ms, *, live_eligible):
+    def watch(self, source, binding, now_ms, *, live_eligible, timezone_id="UTC"):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
-            value = watch_snapshot(db, source, binding, now_ms, live_eligible=live_eligible)
+            value = watch_snapshot(db, source, binding, now_ms, live_eligible=live_eligible, timezone_id=timezone_id)
             return dict(**value, archive_epoch=self._state(db, source).archive_epoch)
 
     @staticmethod

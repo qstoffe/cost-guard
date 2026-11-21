@@ -10,11 +10,16 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.display_watch import running_frame
+from src.analysis.daily_usage import DailyUsage
+from src.analysis.timezones import local_date_range
+from src.analysis.token_mix import TokenMix
+from src.analysis.valuation import ComparisonCost
 from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
 from src.cache.display_history import DisplayHistory
 from src.cache.display_watch import WATCH_LIVE_MS, WATCH_ROW_LIMIT, publish_watch
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
+from src.watch.models import SessionPreview
 
 
 class DisplayWatchTests(unittest.TestCase):
@@ -94,6 +99,7 @@ class DisplayWatchTests(unittest.TestCase):
         observed = archive_watch_observation(running_frame(at), at)
         with self.history._connect() as db:
             db.executescript("""
+                DROP TABLE archive_watch_daily;
                 DROP TABLE archive_watch_cards;
                 DROP TABLE archive_watch_state;
                 INSERT INTO sources(source,generation,session_count) VALUES('bound',4,0);
@@ -113,6 +119,103 @@ class DisplayWatchTests(unittest.TestCase):
         self.assertEqual(1, cleared.archive_epoch)
         self.assertIsNone(late)
         self.assertEqual((1, "empty", []), (snapshot["archive_epoch"], snapshot["freshness"], snapshot["cards"]))
+
+    def test_v11_watch_upgrade_keeps_old_snapshot_and_leaves_added_fields_unknown(self):
+        with self.history._connect() as db:
+            db.executescript("""
+                DROP TABLE archive_watch_daily;
+                DROP TABLE archive_watch_cards;
+                CREATE TABLE archive_watch_cards (
+                    source TEXT NOT NULL REFERENCES archive_watch_state(source) ON DELETE CASCADE,
+                    position INTEGER NOT NULL, session_id TEXT NOT NULL, event_id TEXT NOT NULL, title TEXT NOT NULL,
+                    card_group TEXT NOT NULL, start_ms INTEGER, finish_ms INTEGER, outcome TEXT,
+                    prompt_cost TEXT, prompt_cost_complete INTEGER NOT NULL,
+                    session_cost TEXT, session_cost_complete INTEGER NOT NULL,
+                    context_tokens INTEGER, model TEXT, effort TEXT, calls INTEGER, duration_ms INTEGER, qualified_ms INTEGER,
+                    PRIMARY KEY(source, position)
+                ) WITHOUT ROWID;
+                INSERT INTO sources(source) VALUES('bound');
+                INSERT INTO archive_watch_state VALUES('bound','first-host',7,100000,100000,'observed',0);
+                INSERT INTO archive_watch_cards VALUES(
+                    'bound',0,'root','prompt-1','Saved v11','active',98000,NULL,'running',
+                    '0.125',1,'1.25',1,773,'Model','medium',2,NULL,100000);
+                PRAGMA user_version=11;
+            """)
+        migrated = DisplayHistory(self.root)
+
+        migrated.initialize()
+        retained = migrated.watch("bound", "restarted", 101_000, live_eligible=True)
+
+        self.assertEqual(("as-of", 7), (retained["freshness"], retained["generation"]))
+        fact, = retained["cards"]
+        self.assertEqual(("Saved v11", "0.125", "1.25", 773, "unverified"), (
+            fact["title"], fact["prompt_cost"], fact["session_cost"], fact["context_tokens"], fact["outcome"]))
+        self.assertEqual((None, None, None, None), (
+            fact["prompt_number"], fact["is_compaction"], fact["mix_input"], fact["catalog_activity_ms"]))
+
+    def test_prompt_metrics_and_catalog_preview_keep_distinct_clocks_and_lifetime(self):
+        at = 100_000
+        frame = running_frame(at)
+        active, = frame.active_cards
+        running_row, = active.rows
+        compacted = replace(running_row.prompt, in_progress=False, event_id="compact", prompt_number=3,
+                            duration_ms=1337, completed_successfully=True, completed_at_ms=at - 400,
+                            is_compaction=True, watch_delta_context_tokens=None)
+        finished = replace(active, session_id="compaction-root", focal_id="compact",
+                           rows=(replace(running_row, session_id="compaction-root", prompt=compacted),))
+        frame = replace(frame, recent_finished_cards=(finished,), earlier_previews=(
+            SessionPreview("metadata-root", "Catalog only", activity_ms=at - 800, total_ccost=Decimal(0)),))
+        observed = archive_watch_observation(frame, at)
+        self.history.replace_watch("bound", "host", observed, archive_epoch=0)
+
+        current = cached_watch_view(dict(binding="host", **self.history.watch("bound", "host", at, live_eligible=True)), "UTC")
+        retained = cached_watch_view(dict(binding="next", **self.history.watch("bound", "next", at, live_eligible=True)), "UTC")
+
+        row, = current["active_cards"][0]["rows"]
+        self.assertEqual((1, 817, [12, 34, 5, 49]), (
+            row["prompt"]["prompt_number"], row["prompt"]["incoming_context_tokens"], row["prompt"]["token_mix_percent"]))
+        self.assertEqual(-44, row["live_context"]["watch_delta_context_tokens"])
+        unverified, = retained["earlier_cards"][0]["rows"]
+        self.assertTrue(unverified["prompt"]["execution_unverified"])
+        self.assertIsNone(unverified["live_context"]["watch_delta_context_tokens"])
+        self.assertIsNone(unverified["prompt"]["completed_at_ms"])
+        compaction, = retained["recent_finished_cards"][0]["rows"]
+        self.assertTrue(compaction["prompt"]["is_compaction"])
+        self.assertEqual(at - 400, compaction["prompt"]["completed_at_ms"])
+        self.assertEqual("Compaction", compaction["prompt"]["label"])
+        preview, = retained["earlier_previews"]
+        self.assertEqual(("catalog", at - 800, "0", "retained"), (
+            preview["activity_origin"], preview["activity_ms"], preview["total_ccost"], preview["total_state"]))
+
+    def test_daily_only_observation_is_independent_of_running_and_expires_at_dst_boundary(self):
+        zone = "Europe/Stockholm"
+        local = local_date_range("2026-10-25", zone)
+        at = local.start_ms + 3_600_000
+        running = archive_watch_observation(running_frame(at), at, zone)
+        self.history.replace_watch("bound", "host", running, archive_epoch=0)
+        day_at = at + WATCH_LIVE_MS
+        total = ComparisonCost(Decimal("3.0000014"), observed_requests=3, priced_requests=2)
+        value = DailyUsage(local.start_ms, day_at, total, TokenMix(), 2, False)
+        daily_frame = replace(running_frame(day_at), active_cards=(), cards_state="loading", daily_usage=value)
+        daily_only = archive_watch_observation(daily_frame, day_at, zone)
+
+        self.history.replace_watch("bound", "host", daily_only, archive_epoch=0)
+        latest = self.history.watch("bound", "host", day_at, live_eligible=True, timezone_id=zone)
+        restart = DisplayHistory(self.root).watch("bound", "next", local.end_ms - 1,
+                                                  live_eligible=False, timezone_id=zone)
+        rollover = self.history.watch("bound", "next", local.end_ms, live_eligible=False, timezone_id=zone)
+        wrong_zone = self.history.watch("bound", "host", day_at, live_eligible=True)
+        view = cached_watch_view(dict(binding="host", **restart), zone)
+
+        self.assertIsNone(daily_only.facts)
+        self.assertEqual((2, at, "unverified"), (latest["generation"], latest["observed_ms"], latest["cards"][0]["outcome"]))
+        self.assertEqual(25 * 3_600_000, local.end_ms - local.start_ms)
+        self.assertEqual(("3.0000014", False, 2, False, day_at), tuple(restart["daily"][key] for key in
+                         ("known_ccost", "cost_complete", "prompt_count", "prompt_count_complete", "observed_at_ms")))
+        self.assertEqual("retained", view["daily_state"])
+        self.assertEqual(2, view["daily_usage"]["prompt_count"])
+        self.assertIsNone(rollover["daily"])
+        self.assertIsNone(wrong_zone["daily"])
 
     def test_bounded_projection_never_promotes_placeholder_only_turn_or_truncation_to_complete(self):
         frame = running_frame(100_000)

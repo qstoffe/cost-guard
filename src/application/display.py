@@ -37,7 +37,8 @@ def amount_tokens(values):
     tokens = {}
     if "day_start_ms" in values and "prompt_count_complete" in values:
         total = dict(values["total"].fields)
-        tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]))
+        tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]),
+                                            unresolved=values.get("cached", False) and not total["complete"])
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
                 "total_incoming_context_ccost", "total_extra_ccost",

@@ -21,7 +21,7 @@ async function main() {
   const hint = (binding, archive_epoch, generation) => ({binding, archive_epoch, generation});
   const snapshot = (binding, epoch, generation, title) => ({
     ...hint(binding, epoch, generation), freshness: 'current', observed_ms: 1000, expires_ms: 2000,
-    view: {cards_state: 'observed', earlier_cards: [],
+    view: {cards_state: 'observed', earlier_cards: [], daily_usage: {day_end_ms: 3000},
       active_cards: [{title, rows: [{prompt: {in_progress: true}}]}]}
   });
   function advanceRead() {
@@ -49,7 +49,7 @@ async function main() {
   assert.equal(title(), 'latest');
 
   controller.cacheHint(hint('A', 0, 3), true);
-  assert.equal(timers.size, 1, 'unchanged resync schedules no read or redraw');
+  assert.equal(timers.size, 1, 'unchanged resync only retains the next local expiry');
   controller.cacheHint(hint('A', 0, 4));
   const preClear = advanceRead();
   controller.cacheHint(hint('A', 1, 0));
@@ -84,6 +84,9 @@ async function main() {
   assert.equal(held.view.active_cards.length, 0);
   assert.equal(held.view.earlier_cards[0].rows[0].prompt.execution_unverified, true);
   assert.equal(held.view.earlier_cards[0].rows[0].prompt.in_progress, false);
+  assert.equal(held.view.daily_usage.day_end_ms, 3000, 'card expiry does not invalidate the cached day');
+  now = 3000;
+  assert.equal(controller.publication().view.daily_usage, null);
   controller.health(true, false);
   assert.equal(rendered.at(-1), null);
   assert.equal(timers.size, 0);

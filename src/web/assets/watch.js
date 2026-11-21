@@ -408,7 +408,10 @@ const WatchView = (() => {
   function daily(parent, value, state) {
     if (!parent.children.length) parent.append(el('strong', 'CCost Today'), el('span', '', 'metric-value'), el('span'));
     text(parent.children[1], () => display(value, 'daily_ccost'));
-    text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
+    text(parent.children[2], value ? value.cached && !value.prompt_count_complete ?
+      `${value.prompt_count} observed prompts` : `${value.prompt_count} prompts` : '');
+    if (value?.cached) parent.setAttribute('aria-description', 'Last observed ' + display(value, 'observed_at_ms'));
+    else parent.removeAttribute('aria-description');
   }
   function costGroups(value, session = false) {
     return ReportView.costGroups(value, session);
@@ -568,12 +571,13 @@ const WatchView = (() => {
             const outcome = prompt.execution_unverified || prompt.outcome_unknown ? 'Unverified' : prompt.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
-            row.setAttribute('aria-label', `Prompt ${prompt.prompt_number ?? 'unknown'} · ${outcome}${reason ? ' · ' + reason : ''}`);
+            const kind = value.cached && prompt.is_compaction ? 'Compaction' : 'Prompt';
+            row.setAttribute('aria-label', `${kind} ${prompt.prompt_number ?? 'unknown'} · ${outcome}${reason ? ' · ' + reason : ''}`);
             const label = row.children[2]?.children[0] || el('span', undefined, 'watch-prompt-label');
             if (!label.children.length) label.append(el('span', '', 'watch-prompt-number'),
               el('span', '', 'watch-prompt-preview'));
             invocationText(label.children[0], '#' + (prompt.prompt_number ?? '—') + (outcome === 'Unverified' ? ' · Unverified' : ''));
-            invocationText(label.children[1], prompt.preview || '');
+            invocationText(label.children[1], value.cached && prompt.is_compaction ? kind : prompt.preview || '');
             if (outcome === 'Unverified') ContextHelp.value(label, value.cached ?
               'Last saved observation. The current host has not verified execution or completion.' :
               'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
@@ -621,7 +625,7 @@ const WatchView = (() => {
       // Complete corrected evidence withdraws an old value; only a benign
       // same-scope reacquisition may reuse an already qualified percentage.
       const invalid = card.state === 'unavailable' || context?.context_state === 'invalidated' ||
-        prompt.execution_unverified;
+        prompt.execution_unverified && !card.cached;
       const known = Array.isArray(prompt.token_mix_percent) && prompt.token_mix_percent.length === 4;
       if (invalid) this.mixes.delete(scope);
       else if (known) this.mixes.set(scope, display(prompt, 'token_mix_percent'));
@@ -723,7 +727,7 @@ const WatchView = (() => {
       for (const [key, card] of this.cards) if (!keep.has(key)) {
         card.drawActivity(null, false); this.cards.delete(key);
       }
-      const dailyValue = view.daily_usage ?? (this.dailyValue &&
+      const dailyValue = view.daily_usage ?? (!result.cached && this.dailyValue &&
         (this.dailyValue.day_end_ms == null || this.dailyValue.day_end_ms > Date.now()) ? this.dailyValue : null);
       this.dailyValue = dailyValue;
       const dailyState = view.daily_state;

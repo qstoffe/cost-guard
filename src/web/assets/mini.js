@@ -524,7 +524,10 @@ const MiniWatch = (() => {
       this.dailyValue = value;
       ReportView.text(this.dailyLead, 'CCost Today ');
       ReportView.text(this.dailyAmount, () => ReportView.display(value, 'daily_ccost'));
-      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
+      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count}${value.cached && !value.prompt_count_complete ?
+        ' observed' : ''} prompts` : '');
+      if (value?.cached) this.daily.setAttribute('aria-description', 'Last observed ' + ReportView.display(value, 'observed_at_ms'));
+      else this.daily.removeAttribute('aria-description');
       ReportView.text(this.dailyNote, '');
       this.daily.className = 'mini-daily';
     }

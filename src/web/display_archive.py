@@ -142,12 +142,13 @@ class DisplayArchive:
         views = self.views
         if views is None or time.monotonic() < self._watch_retry_at:
             return
-        observation = archive_watch_observation(frame, observed_ms)
+        observation = archive_watch_observation(frame, observed_ms, views.timezone_id)
         if observation is None:
             return
         fence = self.sessions.clear_fence
         # Ignore the cosmetic tick clock when none of the saved evidence changed.
-        key = (views.binding, fence, observation.observed_ms, observation.state, observation.truncated, observation.facts)
+        key = (views.binding, fence, observation.observed_ms if observation.facts is not None else None,
+               observation.state, observation.truncated, observation.facts, observation.daily)
         if key == self._watch_committed:
             return
         self._watch_offered = key
@@ -167,7 +168,7 @@ class DisplayArchive:
             return None
         now = int(time.time() * 1000)
         value = dict(binding=views.binding, **self.history.watch(views.source, views.binding, now,
-                                                               live_eligible=live_eligible()))
+                                        live_eligible=live_eligible(), timezone_id=views.timezone_id))
         if presentation:
             value["view"] = cached_watch_view(value, views.timezone_id)
         if value["freshness"] == "current" and (not live_eligible() or

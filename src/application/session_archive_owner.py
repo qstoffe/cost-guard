@@ -1,5 +1,5 @@
 """Single source-qualified Sessions publication owner."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from threading import Lock
 import time
 
@@ -119,6 +119,8 @@ class SessionArchiveOwner:
             fence, cleared_ms, _ = self._clear_fence
             if (source, epoch) != self._binding or clear_fence != fence or observation.observed_ms <= cleared_ms:
                 return
+            if observation.daily is not None and observation.daily.observed_at_ms <= cleared_ms:
+                observation = replace(observation, daily=None)
             archive_epoch = self.history.source_state(source).archive_epoch
             generation = self.history.replace_watch(source, epoch, observation, archive_epoch=archive_epoch)
             if generation is not None:
