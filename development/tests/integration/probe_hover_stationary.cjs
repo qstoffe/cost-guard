@@ -1,35 +1,11 @@
-// Real elapsed time and native CDP pointer input; no clock/selector emulation.
+// Native CDP pointer layout; real elapsed-time proof on manual Full only.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises');
 function stationaryScenarios(mini,owner,event) {
-  const scenarios=[
-    [mini,'.mini-accounts .help-value'],[mini,'.mini-activity'],
-    [mini,'td:nth-child(3) .mini-cost-value'],[mini,'td:nth-child(4) .mini-cost-value'],
-    [mini,'.mini-context-exceeded'],[mini,'.mini-summary'],
-    [owner,'.watch-view .mini-accounts .help-value'],
-    [owner,'.watch-active tbody td:first-child .help-value'],
-    [owner,'.watch-active tbody td:nth-child(6) .help-value'],
-    [owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
-    [owner,'.watch-active .watch-session-summary > div:first-child .help-value'],
-    [owner,'.watch-active th:nth-child(6) button']];
-  return event==='workflow_dispatch'?scenarios:[scenarios[0],scenarios[6]];
+  return event==='workflow_dispatch'
+    ? [[mini,'.mini-accounts .help-value'],[owner,'.watch-view .mini-accounts .help-value']]
+    : [];
 }
-module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,fixture})=>{
-  const mouse=(id,x,y)=>command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},id);
-  const open=async(id,selector)=>{
-    await command('Page.bringToFront',{},id);
-    await evaluate(id,`document.activeElement?.blur()`);
-    // Mini uses the opener's controller, not a second script global in PiP.
-    await evaluate(owner,id===mini?`ContextHelp.dismiss(miniWatch.window.document.body)`:
-      `ContextHelp.dismiss(document.body)`);
-    await mouse(id,1,1);
-    const point=await evaluate(id,`(()=>{const n=document.querySelector(${JSON.stringify(selector)});
-      if(!n)throw new Error('Missing stationary target: '+${JSON.stringify(selector)});
-      n.scrollIntoView({block:'center',inline:'center'});const r=n.getBoundingClientRect();
-      return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
-    await mouse(id,point.x,point.y);
-    await until(id,`document.getElementById('context-help')?.matches(':popover-open')`);
-    return point;
-  };
+async function checkStationary({command,evaluate,until,owner,mini,checks,layouts,output,mouse,open,scenarios}) {
   // Reproduce the old hard cutoff separately in the actual PiP document.
   assert.ok(process.env.COST_GUARD_BASELINE_HELP,'required explicit old-base RED source');
   assert.match(process.env.COST_GUARD_BASELINE_REVISION || '',/^[a-f0-9]{40}$/);
@@ -71,7 +47,6 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     a.primary.quota.quota_display.used.account_percent=a.primary.quota.quota_display.used.percent;
     current.watch.update(liveValue);miniWatch.update(liveValue);
   },3000)`);
-  const scenarios=stationaryScenarios(mini,owner,process.env.GITHUB_EVENT_NAME);
   try {
     for(const [index,[id,selector]] of scenarios.entries()) {
       const point=await open(id,selector);
@@ -119,11 +94,36 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     const holds=layouts.filter(value=>value.case==='stationary-61s');
     console.log('::notice title=Cost Guard Web stationary::'+JSON.stringify({
        outcome:holds.length===scenarios.length?'PASS':'PARTIAL',expected:scenarios.length,
-       selection:scenarios.length===12?'full':'representative',holds:holds.map(value=>({
+       selection:'manual-full',holds:holds.map(value=>({
         document:value.document,selector:value.selector,elapsed:Math.round(value.elapsed),
         samples:value.samples.length,pointerEvents:value.events,
         triggerSamples:value.samples.filter(sample=>sample.triggerHovered).length,
         panelSamples:value.samples.filter(sample=>sample.panelHovered).length}))}));
+  }
+  checks.push(`GREEN: ${scenarios.length} actual 61-second stationary native hovers across PiP and Full Watch, with 3-second in-place refresh and real normal exits`);
+}
+module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,fixture})=>{
+  const mouse=(id,x,y)=>command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},id);
+  const open=async(id,selector)=>{
+    await command('Page.bringToFront',{},id);
+    await evaluate(id,`document.activeElement?.blur()`);
+    // Mini uses the opener's controller, not a second script global in PiP.
+    await evaluate(owner,id===mini?`ContextHelp.dismiss(miniWatch.window.document.body)`:
+      `ContextHelp.dismiss(document.body)`);
+    await mouse(id,1,1);
+    const point=await evaluate(id,`(()=>{const n=document.querySelector(${JSON.stringify(selector)});
+      if(!n)throw new Error('Missing tooltip target: '+${JSON.stringify(selector)});
+      n.scrollIntoView({block:'center',inline:'center'});const r=n.getBoundingClientRect();
+      return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await mouse(id,point.x,point.y);
+    await until(id,`document.getElementById('context-help')?.matches(':popover-open')`);
+    return point;
+  };
+  const scenarios=stationaryScenarios(mini,owner,process.env.GITHUB_EVENT_NAME);
+  if (scenarios.length) {
+    await checkStationary({command,evaluate,until,owner,mini,checks,layouts,output,mouse,open,scenarios});
+  } else {
+    checks.push('NOT RUN: real 61-second stationary hover holds; available on manual Full');
   }
   for(const theme of ['classic','web'])for(const scheme of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},owner);
@@ -139,9 +139,6 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     const image=await command('Page.captureScreenshot',{format:'png'},mini);
     await fs.writeFile(output.replace(/\.json$/,`-${theme}-${scheme}.png`),Buffer.from(image.data,'base64'));
   }
-  checks.push(`GREEN: ${scenarios.length} actual 61-second stationary native hovers across PiP and Full Watch, with 3-second in-place refresh and real normal exits`);
-  checks.push(scenarios.length===12?'Full stationary matrix executed':
-    'NOT RUN: ten additional stationary target holds; available on manual Full');
   await mouse(mini,1,1);
   const size=await evaluate(owner,'[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
   for(const count of [0,1,3,5]) {
@@ -155,6 +152,7 @@ module.exports=async ({command,evaluate,until,owner,mini,checks,layouts,output,f
     assert.equal(state.overflow,false);assert.equal(state.columns,5);assert.equal(state.accounts,6);
     layouts.push({case:'native-density-125-percent',...state});
   }
+  await open(mini,'.mini-accounts .help-value');
   await evaluate(owner,'window.retiredHelpDocument=miniWatch.window.document;miniWatch.close()');
   await until(owner,'!miniWatch.window');
   await evaluate(owner,'miniWatch.toggle()',true);

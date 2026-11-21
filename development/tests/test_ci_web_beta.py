@@ -80,10 +80,14 @@ class CiEvidenceTests(unittest.TestCase):
     def test_deep_sessions_journeys_stay_on_manual_full(self):
         workflow = (ci_web_beta.ROOT / '.github/workflows/web-beta.yml').read_text()
         steps = re.split(r'(?m)^      - name: ', workflow)
-        sessions = [step for step in steps if 'for mode in ("sessions-return", "fast-arrivals", "warm-pages")' in step]
-        self.assertEqual(1, len(sessions))
-        step = sessions[0]
-        self.assertRegex(step, r"if: \$\{\{ !cancelled\(\) && github.event_name == 'workflow_dispatch' \}\}")
+        for first_mode in ('sessions-return', 'detail-updates'):
+            with self.subTest(first_mode=first_mode):
+                selected = [step for step in steps if f'for mode in ("{first_mode}", ' in step]
+                self.assertEqual(1, len(selected))
+                self.assertRegex(selected[0], r"if: \$\{\{ !cancelled\(\) && github.event_name == 'workflow_dispatch' \}\}")
+                if first_mode == 'detail-updates':
+                    self.assertIn('"detail-quota", "detail-values"', selected[0])
+        step = next(step for step in steps if 'for mode in ("sessions-return", ' in step)
         # Execute the actual embedded Python with synthetic subprocess/browser
         # boundaries: all three modes run and the first failure stops the step.
         script = step.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]

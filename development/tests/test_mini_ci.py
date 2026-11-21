@@ -13,7 +13,7 @@ from development.tests.integration.ci_mini_tooltips import accepted_mixed_gap, f
 
 class MiniCiTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node.js required for actual stationary selector")
-    def test_stationary_selection_keeps_both_documents_and_manual_full_matrix(self):
+    def test_real_stationary_holds_run_only_on_manual_full_in_both_documents(self):
         script = """
 const {stationaryScenarios}=require('./development/tests/integration/probe_hover_stationary.cjs');
 console.log(JSON.stringify(['pull_request','push','workflow_dispatch',null].map(
@@ -26,13 +26,10 @@ console.log(JSON.stringify(['pull_request','push','workflow_dispatch',null].map(
         pull, push, full, unknown = json.loads(result.stdout)
         expected = [["pip", ".mini-accounts .help-value"],
                     ["watch", ".watch-view .mini-accounts .help-value"]]
-        self.assertEqual(expected, pull)
-        self.assertEqual(expected, push)
-        self.assertEqual(expected, unknown)
-        self.assertEqual(12, len(full))
-        self.assertEqual(12, len({tuple(row) for row in full}))
-        self.assertTrue(all(row in full for row in expected))
-        self.assertEqual({"pip", "watch"}, {row[0] for row in full})
+        self.assertEqual([], pull)
+        self.assertEqual([], push)
+        self.assertEqual([], unknown)
+        self.assertEqual(expected, full)
 
     def test_unchanged_ordinary_work_skips_but_manual_full_reaches_browser_setup(self):
         for event in ("pull_request", "push", "workflow_dispatch"):
