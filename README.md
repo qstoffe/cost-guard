@@ -3,6 +3,7 @@
 Cost Guard is a local Web dashboard for OpenCode. Follow live prompts and
 sessions, reference model costs, Token Mix, context and account quotas.
 It runs a local Web server and opens the dashboard in your browser.
+In Sessions, running prompts appear first. A star explains the displayed activity time.
 
 ## Requirements
 

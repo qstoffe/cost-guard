@@ -135,20 +135,19 @@ class WebWatchCoordinator(WatchCoordinator):
         self.cards.catalog(observation)
         return roots
 
-    def tick_catalog(self, catalog, *, unavailable=False):
-        catalog.observe(self.catalog_observation, unavailable=unavailable, timezone_id=self.report_service.timezone_id)
-        now = self.clock_ms()
+    def tick_catalog(self, catalog, *, unavailable=False, source_interrupted=False):
+        catalog.observe(self.catalog_observation, unavailable=unavailable,
+                        source_interrupted=source_interrupted, timezone_id=self.report_service.timezone_id)
         evidence = []
         for entry in self.cards.sessions.values():
             if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
-                    or entry.capture.retained or entry.source_status.failed_at is not None
+                    or entry.capture.retained or entry.capture.catalog_prompt is None
+                    or entry.source_status.failed_at is not None
                     or entry.verified_generation != entry.generation):
                 continue
-            running = max((row for row in entry.capture.rows if row.in_progress and not row.execution_unverified),
-                          key=lambda row: (row.at_ms, row.event_id), default=None)
-            evidence.append((entry.snapshot.root, running is not None,
-                (now - entry.capture.observed_at_ms) / 1000,
-                running.event_id if running else "", running.at_ms if running else None))
+            prompt, start, running, ended = entry.capture.catalog_prompt
+            evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
+                             prompt, start, running, None, ended))
         catalog.observe_prompts(evidence)
         if self.catalog_job is not None:
             if not self.catalog_job.done():

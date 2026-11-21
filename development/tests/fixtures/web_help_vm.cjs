@@ -19,6 +19,9 @@ module.exports = function loadHelp(vm, context) {
       const old = this.events?.[kind];
       add.call(this, kind, typeof old === 'function' ? event => { old(event); callback(event); } : callback);
     };
+    proto.removeEventListener ||= function(kind, callback) {
+      if (this.events?.[kind] === callback) delete this.events[kind];
+    };
     proto.helpEventsInstalled = true;
   }
   const original = doc.createElement;

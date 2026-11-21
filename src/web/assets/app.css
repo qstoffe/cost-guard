@@ -483,6 +483,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-preview { flex: 1; }
 .sessions-table .session-running, .sessions-table .session-running :is(td, a, span, button) { color: var(--watch-running); }
 .sessions-table .session-activity-feedback td { grid-column: 1 / -1; color: var(--muted); white-space: normal; }
+.sessions-action-status { margin-block: .45rem; color: var(--muted); }
 .session-metric-pending { color: var(--muted); }
 .page-navigation { display: grid; grid-template-columns: 1fr auto 1fr; margin-block: .8rem; gap: .5rem; }
 .page-navigation > span { text-align: center; min-width: 0; }

@@ -6,6 +6,7 @@ from src.sources.errors import FailureCode, SourceError, SourceUnavailableError
 
 
 SOURCE_CONFIRM_SECONDS = 5.0  # One existing selected-source retry interval.
+SOURCE_OUTAGE_SECONDS = 20
 
 
 class SourceStatus:
@@ -59,6 +60,10 @@ class SourceStatus:
         return dict(owner=self.health_owner, check_id=self.check_id, reachable=self.reachable, failed_checks=self.failed_checks,
             unavailable_seconds=int(max(0, self.monotonic() - self.reachability_failed_at))
                 if self.reachability_failed_at is not None else 0)
+
+    def outage_confirmed(self):
+        proof = self.reachability()
+        return proof['failed_checks'] >= 2 and proof['unavailable_seconds'] >= SOURCE_OUTAGE_SECONDS
 
     def state(self, *, retained=False, confirming_initial=False):
         if self.failed_at is None:

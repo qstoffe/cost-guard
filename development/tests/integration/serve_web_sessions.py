@@ -94,12 +94,12 @@ class FixtureRuntime:
         if not self.unavailable:
             self.details.observe_source(observation)
         if self.live_root and not self.unavailable:
-            root = self.service.source.snapshots[self.live_root].root
-            capture, _ = capture_rows(self.service, root)
-            running = max((row for row in capture.rows if row.in_progress and not row.execution_unverified),
-                          key=lambda row: (row.at_ms, row.event_id), default=None)
-            self.catalog.observe_prompts(((root, running is not None, 0,
-                running.event_id if running else "", running.at_ms if running else None),))
+            snapshot = self.service.source.snapshots[self.live_root]
+            capture, _ = capture_rows(self.service, snapshot.root)
+            if capture.catalog_prompt is not None:
+                prompt, start, running, ended = capture.catalog_prompt
+                self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
+                    prompt, start, running, None, ended),))
         if self.detail_paused:
             pass
         elif self.detail_mode is None:

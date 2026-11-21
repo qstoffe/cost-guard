@@ -11,9 +11,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     const load=SessionsCatalog.View.prototype.load;
     SessionsCatalog.View.prototype.load=function(){
       this.api=async(url,request,signal)=>{
-        if(request.action || bannerMode==='normal')return bannerApi(url,request,signal);
+        if(request.action || ['normal','terminal'].includes(bannerMode))return bannerApi(url,request,signal);
         if(bannerMode==='retry')throw new Error('source_unavailable');
-         if(bannerMode==='terminal')throw new Error('permission_denied');
          const data=structuredClone(bannerBase);
          Object.assign(data,{period:request.period,requested_sort:request.sort,requested_direction:request.direction,
            offset:request.offset,epoch:request.epoch||data.epoch,navigation:request.navigation,
@@ -38,6 +37,17 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     assert.equal(await evaluate('current.catalog.root.querySelectorAll("progress,.report-loading,.sessions-candidate-scope").length'),0);
   };
   await quiet();
+  await evaluate(`window.passiveNotices=[];
+    new MutationObserver(records=>{
+      for (const record of records) {
+        const node=record.target.nodeType===1?record.target:record.target.parentElement;
+        const live=node?.closest('.warning,[role="status"],[aria-live]:not([aria-live="off"])');
+        if ((live && !live.hidden && live.textContent) ||
+            record.oldValue?.match(/Session details|Sessions refresh unavailable|waiting for indexing/i))
+          passiveNotices.push(live?.textContent||record.oldValue);
+      }
+    }).observe(current.catalog.root,{subtree:true,characterData:true,characterDataOldValue:true,
+      childList:true,attributes:true,attributeOldValue:true});`);
   for (const completed of [3,4,5]) {
     await run(`bannerWork={phase:'index',status:'pending',generation:${completed},completed:${completed},total:100};
       await current.catalog.load()`);
@@ -45,6 +55,17 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   }
   await run(`bannerMode='normal';await current.catalog.load()`);
   await until('current.catalog.data && !current.catalog.operation && !current.catalog.busy');
+  await run(`bannerBase=structuredClone(current.catalog.data);window.retained=Array.from(current.catalog.body.rows);
+    window.pagerLabel=current.catalog.label.textContent;
+    bannerMode='retry';for(let i=0;i<5;i++)await current.catalog.load();`);
+  await quiet();
+  assert.equal(await evaluate('retained.every((row,i)=>current.catalog.body.rows[i]===row) && current.catalog.label.textContent===pagerLabel'),true);
+  for (const reason of ['concurrent_source_change','http_auth_failure','timeout']) {
+    await run(`bannerMode='pending';bannerWork={phase:'index',status:'${reason === 'http_auth_failure' ? 'failed' : 'pending'}',
+      reason:'${reason}',completed:3,total:100};await current.catalog.load()`);
+    await quiet();
+  }
+  assert.deepEqual(await evaluate('passiveNotices'),[]);
   // Actual row publications alternate with background key revalidation.
   for (const running of [true,true,false]) {
     await run(`bannerBase=structuredClone(current.catalog.data);bannerMode='observed';
@@ -121,12 +142,14 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await run(`bannerMode='retry';await current.catalog.load()`);
   await quiet();
    await run(`bannerMode='pending';await current.catalog.load()`); await quiet();
-   await run(`bannerMode='terminal';await current.catalog.load()`);
-   assert.equal(await evaluate('current.catalog.operation.failed'),true);
-   assert.match(await evaluate('current.catalog.status.textContent'),/Check your access, then reopen Sessions/);
+   // Expire the actual browser authorization and drive the shared API owner.
+   await run(`bannerMode='terminal';csrf='expired-fixture-csrf';await current.catalog.load()`);
+   await until('hostState.terminal && !current.catalog.attached && !document.getElementById("host-state").hidden');
+   await quiet();
+   assert.match(await evaluate('document.getElementById("host-message").textContent'),/Reopen Cost Guard from the launcher/);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
   const ax = await command('Accessibility.getFullAXTree');
-  assert.ok(ax.nodes.some(node=>node.role?.value==='status'));
-  checks.push('new action replaces old label/counts; late answer cannot resurrect 99/100; passive route/recovery is not initiation; terminal error is actionable, stopped and not loading');
+   assert.ok(!ax.nodes.some(node=>/Session details|Check your access, then reopen Sessions/.test(node.name?.value || '')));
+   checks.push('new action replaces old label/counts; late answer cannot resurrect 99/100; passive recovery is silent; auth stops requests and uses only the shared recovery surface');
   return {checks,layouts};
 };

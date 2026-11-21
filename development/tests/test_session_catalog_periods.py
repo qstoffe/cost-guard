@@ -219,7 +219,8 @@ class SessionPeriodTests(unittest.TestCase):
         source.snapshots[root.session_id] = replace(snapshot, root=root, sessions=(root,))
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         running = source.snapshots["root-0025"].root
-        catalog.observe_prompts(((running, True, 0, "real-prompt", self.now - 100),))
+        catalog.observe_prompts(((running, catalog.revisions[running.session_id], self.now,
+                                  "real-prompt", self.now - 100, True, None, False),))
 
         latest = catalog_page(catalog, dict(token=first["token"], passive=True))
         self.assertTrue(latest["pending_sort"])
@@ -308,7 +309,8 @@ class SessionPeriodTests(unittest.TestCase):
         source, catalog = self.catalog([self.now - 60_000] * 26)
         self.qualify(catalog)
         roots = tuple(snapshot.root for snapshot in source.snapshots.values())
-        proof = tuple((root, True, 0, f"prompt-{index}", self.now - 1000 - index)
+        proof = tuple((root, catalog.revisions[root.session_id], self.now,
+                       f"prompt-{index}", self.now - 1000 - index, True, None, False)
                       for index, root in enumerate(roots))
         existing = {root.session_id for root in roots}
         for count in (0, 1, 26):
@@ -341,13 +343,59 @@ class SessionPeriodTests(unittest.TestCase):
                 self.assertTrue(all(row["last_activity_ms"] is None for row in hints))
 
         self.clock += 1
-        catalog.observe_prompts((*proof[:25], (roots[25], False, 0, None, None)))
+        self.now += 1000
+        root, revision, _, prompt, started, _, _, _ = proof[25]
+        catalog.observe_prompts((*proof[:25], (root, revision, self.now, prompt, started, False, self.now - 1, True)))
         refreshed = catalog_page(catalog, dict(token=first["token"], epoch=first["epoch"], passive=True))
         self.assertTrue(all(row["running"] for row in refreshed["view"]["session_usage"]))
         following = catalog_page(catalog, dict(token=first["token"], epoch=refreshed["epoch"], offset=25,
                                                 navigation=2))
         self.assertTrue(all(not row["running"] for row in following["view"]["session_usage"]))
         self.assertEqual(0, source.load_count)
+
+    def test_three_confirmed_roots_keep_their_page_during_eleven_minutes_and_250_arrivals(self):
+        source, catalog = self.catalog([self.now - 2 * DAY] * 3)
+        roots = tuple(snapshot.root for snapshot in source.snapshots.values())
+        starts = [self.now - 80_000, self.now - 70_000, self.now - 60_000]
+        proof = tuple((root, catalog.revisions[root.session_id], self.now, f"prompt-{index}", starts[index],
+                       True, None, False) for index, root in enumerate(roots))
+        catalog.observe_prompts(proof)
+        first = catalog.page(passive=True)
+        expected = [(root.session_id, started) for root, started in reversed(tuple(zip(roots, starts)))]
+        epoch = first["epoch"]
+        for turn in range(1, 12):
+            self.now += 60_000
+            self.clock += 60
+            for index in range(3 + 25 * (turn - 1), min(253, 3 + 25 * turn)):
+                snapshot = make_root_snapshot(index, 1, month_start_ms=self.now - index * 60_000 - 5000)
+                source.snapshots[snapshot.root.session_id] = snapshot
+            for root in roots:
+                snapshot = source.snapshots[root.session_id]
+                source.snapshots[root.session_id] = replace(snapshot, source_revision=f"stream-{turn}")
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            # Replayed revisions and absent hints are neither fresh captures nor finishes.
+            catalog.observe_prompts(reversed(proof) if turn % 2 else ())
+            catalog.index_failed('concurrent_source_change')
+            if turn % 3 == 0:
+                catalog.observe(None, unavailable=True, source_interrupted=False)
+            latest = catalog.page(token=first["token"], epoch=epoch, passive=True)
+            epoch = latest["epoch"]
+            rows = latest["view"]["session_usage"]
+            self.assertEqual(expected, [(row["session_id"], row["last_activity_ms"]) for row in rows if row["running"]])
+            self.assertTrue(all(row["running"] for row in rows[:3]))
+            self.assertEqual(len(rows), len({row["session_id"] for row in rows}))
+        self.assertEqual(253, latest["total"])
+        self.assertEqual(25, len(rows))
+        self.assertEqual(0, source.load_count, "HTTP page assembly must not hydrate")
+        root = roots[2]
+        finish = self.now - 1
+        catalog.observe_prompts(((root, catalog.revisions[root.session_id], self.now,
+                                  "prompt-2", starts[2], False, finish, True),))
+        after = catalog.page(token=first["token"], epoch=epoch, passive=True)
+        self.assertEqual(expected[1:], [(row["session_id"], row["last_activity_ms"])
+            for row in after["view"]["session_usage"][:2]])
+        self.assertEqual((False, finish), (after["view"]["session_usage"][2]["running"],
+                                           after["view"]["session_usage"][2]["last_activity_ms"]))
 
     def test_cold_provisional_epoch_supports_paging_without_scalar_qualification(self):
         _, catalog = self.catalog([self.now - 1000 - index for index in range(159)])
@@ -370,16 +418,19 @@ class SessionPeriodTests(unittest.TestCase):
             catalog.observe(observe_catalog(source, include_archived_revisions=True))
         self.assertEqual(catalog.live_hint(), hint)
         root = source.snapshots["root-0000"].root
-        catalog.observe_prompts(((root, True, 0, "", None),))
+        revision = catalog.revisions[root.session_id]
+        catalog.observe_prompts(((root, revision, self.now, "", None, True, None, False),))
         self.assertEqual(catalog.live_hint(), hint, "active without a prompt is not running proof")
-        catalog.observe_prompts(((root, True, 0, "prompt", self.now - 100),))
+        started = self.now - 100
+        catalog.observe_prompts(((root, revision, self.now, "prompt", started, True, None, False),))
         running_hint = catalog.live_hint()
         self.assertNotEqual(running_hint, hint)
         self.clock += 1
-        catalog.observe_prompts(((root, True, 0, "prompt", self.now - 100),))
+        self.now += 1000
+        catalog.observe_prompts(((root, revision, self.now, "prompt", started, True, None, False),))
         self.assertEqual(catalog.live_hint(), running_hint, "capture age is not a new prompt")
         catalog.observe_prompts(())
-        self.assertNotEqual(catalog.live_hint(), running_hint)
+        self.assertEqual(catalog.live_hint(), running_hint, "absence does not change the observed prompt")
         hint = catalog.live_hint()
         self.qualify(catalog)
         catalog.generation += 1  # Pricing/scalar work is deliberately not a wake source.

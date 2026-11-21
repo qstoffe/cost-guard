@@ -10,14 +10,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
         b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy')) &&
       [...c.numbers.querySelectorAll('.page-gap')].every(n=>n.textContent==='…' && !n.children.length);})()`),true);
   };
-  const singleBanner = async () => {
+  const singleActionStatus = async () => {
     await labelOnlyPager();
     assert.deepEqual(await evaluate(`(()=>{const c=current.catalog;return {
       statuses:c.root.querySelectorAll('[role=status]').length,progress:c.root.querySelectorAll('progress,.report-loading').length,
       cancel:[...c.root.querySelectorAll('button')].some(b=>b.textContent==='Cancel'),
-      scope:!!c.root.querySelector('.sessions-candidate-scope'),
+      scope:!!c.root.querySelector('.warning,.sessions-candidate-scope'),
       order:[...c.root.children].map(n=>n===c.periods?'periods':n===c.status?'status':n===c.pan?'table':n===c.pager?'pager':'unexpected')};})()`),
-      {statuses:1,progress:0,cancel:false,scope:false,order:['periods','status','table','pager']});
+      {statuses:1,progress:0,cancel:false,scope:false,order:await evaluate('current.catalog.operation?.kind==="page"') ?
+        ['periods','table','pager','status'] : ['periods','status','table','pager']});
     assert.doesNotMatch(await evaluate('current.catalog.root.textContent'),/Periods verify prompt activity|Cancel|%/);
   };
   // Hold a genuine HTTP answer, not a synthetic controller update.
@@ -28,7 +29,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
           return new Promise(resolve=>{window.releasePager=()=>resolve(data);});}return data;};
       window.initiator=${button};initiator.focus();window.originalWidth=initiator.getBoundingClientRect().width;initiator.click()`);
     await until('window.releasePager && current.catalog.operation?.pending');
-    await singleBanner();
+    await singleActionStatus();
     assert.equal(await evaluate(`current.catalog.operation.button===initiator && document.activeElement===initiator &&
       initiator.getAttribute('aria-disabled')==='true' && !initiator.disabled &&
       current.catalog.pan.getAttribute('aria-busy')==='true'`),true);
@@ -49,7 +50,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('catalog-large'); await fixture('catalog-index');
   await evaluate(`location.hash='#/sessions'`);
   await until('current.catalog?.data?.total===3217 && !current.catalog.busy');
-  await singleBanner();
+  await singleActionStatus();
   assert.deepEqual(await evaluate('current.catalog.headers.map(header=>header.name)'),
     ['Last activity','Session name','Model','CCost','Prompts','Duration','Ctx']);
   await evaluate('current.catalog.headers[6].th.querySelector("button").focus()');
@@ -114,7 +115,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await until('current.catalog.operation?.pending');
-  await singleBanner();
+  await singleActionStatus();
   assert.equal(await evaluate('current.catalog.data.sort'),'activity');
   assert.equal(await evaluate('current.catalog.pan.hidden || current.catalog.pager.hidden'),false);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0,'sorts never impersonate page clicks');
@@ -212,7 +213,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await until('current.catalog.operation?.kind==="page"');
   await fixture('fail'); await load();
   await until('current.catalog.operation && current.catalog.retryDelay>0');
-  await singleBanner();
+  await singleActionStatus();
   await fixture('recover'); await fixture('catalog-index');
   await until('api("/api/sessions",{token:current.catalog.token}).then(data=>data.state==="observed")');
   await evaluate('current.catalog.poll()'); await settled(25);

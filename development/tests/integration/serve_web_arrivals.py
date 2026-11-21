@@ -56,8 +56,8 @@ class ControlledCatalog(SessionCatalog):
     def observe_prompts(self, evidence):
         evidence = tuple(evidence)
         super().observe_prompts(evidence)
-        for root, running, age, prompt, start in evidence:
-            if running and prompt and start and age <= 15:
+        for root, _, observed_at, prompt, start, running, _, _ in evidence:
+            if running and prompt and start and 0 <= self.clock_ms() - observed_at <= 15_000:
                 self.observations.setdefault(root.session_id, {}).setdefault("running_ms", int(time.time() * 1000))
 
 
@@ -219,10 +219,25 @@ def main():
                             tokens=dict(input=1000, output=100, reasoning=0, cache=dict(read=0, write=0)),
                             time=dict(created=now))]
                     next(row for row in owner.sessions if row["id"] == key)["time"]["updated"] = now
-                    owner.active = {key: dict(type="running")}
+                    owner.active[key] = dict(type="running")
                     owner.events.append(dict(type="message.updated", data=dict(sessionID=key)))
                 events[key]["running_event_ms"] = now
             elif command == "arrival-hydrate":
+                catalog.hold = False
+            elif command == "arrival-omit-running-hint":
+                with owner.lock:
+                    owner.active.pop("ses_arrival_1", None)
+                    owner.events.append(dict(type="session.updated", data=dict(sessionID="ses_arrival_1")))
+                catalog.index_failed('concurrent_source_change')
+            elif command == 'arrival-finish':
+                key, now = "ses_arrival_1", int(time.time() * 1000)
+                with owner.lock:
+                    owner.active.pop(key, None)
+                    message = owner.messages[key][-1]
+                    message['finish'] = 'stop'
+                    message['time']['completed'] = now
+                    next(row for row in owner.sessions if row['id'] == key)['time']['updated'] = now
+                    owner.events.append(dict(type="message.updated", data=dict(sessionID=key)))
                 catalog.hold = False
             elif command == "arrival-hold":
                 catalog.hold = True

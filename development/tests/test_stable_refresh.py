@@ -101,22 +101,32 @@ class StableRefreshTests(unittest.TestCase):
         self.assertEqual(row['context_tokens'], 47_000)
         self.assertEqual(row['metric_states']['ctx'], 'retained')
 
-    def test_pinned_running_fact_expires_without_fabricating_a_finish_or_moving_membership(self):
+    def test_pinned_running_survives_age_and_becomes_unverified_on_confirmed_outage(self):
         known = SessionUsageRow(self.key, 'Synthetic', 'Model', False, Decimal(0), 1,
             running=True, activity_prompt_id='root-prompt', prompt_started_ms=1000, last_activity_ms=1000)
         self.publish(known)
-        first = self.catalog.page(period='all', navigation=1)
+        first = self.catalog.page(period='all')
         self.assertTrue(first['view']['session_usage'][0]['running'])
         self.assertEqual(first['view']['session_usage'][0]['last_activity_ms'], 1000)
-        self.now += 16
+        pinned = dict(token=first['token'], epoch=first['epoch'], period='all')
+        self.now += 60
+        self.catalog.observe(None, unavailable=True, source_interrupted=False)
 
-        expired = self.catalog.page(token=first['token'], period='all', navigation=1)
+        retrying = self.catalog.page(**pinned)
 
-        self.assertEqual(expired['epoch'], first['epoch'])
-        self.assertEqual(expired['view']['session_usage'][0]['session_id'], self.key)
-        self.assertFalse(expired['view']['session_usage'][0]['running'])
-        self.assertIsNone(expired['view']['session_usage'][0]['last_activity_ms'])
-        self.assertEqual(expired['progress']['completed'], 1)
+        self.assertEqual(retrying['epoch'], first['epoch'])
+        self.assertTrue(retrying['view']['session_usage'][0]['running'])
+        self.assertEqual(retrying['view']['session_usage'][0]['last_activity_ms'], 1000)
+
+        self.catalog.observe(None, unavailable=True, source_interrupted=True)
+        unverified = self.catalog.page(**pinned)
+
+        self.assertEqual(unverified['epoch'], first['epoch'])
+        row, = unverified['view']['session_usage']
+        self.assertEqual(row['session_id'], self.key)
+        self.assertFalse(row['running'])
+        self.assertIsNone(row['last_activity_ms'])
+        self.assertEqual(unverified['progress']['completed'], 1)
 
 
 class QuietTerminalRefreshTests(unittest.TestCase):

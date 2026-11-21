@@ -24,7 +24,7 @@ const context = vm.createContext({
     constructor(_,id){this.id=id;this.root={contains:()=>false};this.back={href:'#/sessions'};this.detaches=0;}
     detach(){this.detaches++;}
   }},
-  SessionsCatalog:{View:class {configure(){} detach(){}}},
+  SessionsCatalog:{View:class {configure(){} detach(){} sourceHealth(){}}},
   settingsView:{read(){}},URLSearchParams
 });
 vm.runInContext(fs.readFileSync('src/web/assets/reports.js','utf8'),context);

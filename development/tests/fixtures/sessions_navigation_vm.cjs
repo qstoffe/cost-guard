@@ -53,10 +53,9 @@ module.exports = async ({vm, context, Node, timers}) => {
    assert.equal(cold.operation,null);
    assert.equal(cold.next.disabled,false);
    assert.match(cold.label.textContent,/159 catalog candidates \(preliminary\)/);
-   assert.match(cold.body.children[0].activity.textContent,/Catalog/);
-   cold.indexProgress.at = Date.now()-45001;
-   cold.update(candidate);
-   assert.match(cold.status.textContent,/waiting for indexing/);
+    assert.match(cold.body.children[0].activity.textContent,/\*$/);
+    cold.update({...candidate,progress:{status:'pending',reason:'concurrent_source_change',completed:0,total:159}});
+    assert.equal(cold.status.textContent,'');
    assert.equal(cold.next.disabled,false);
    cold.update({...candidate,progress:{status:'pending',completed:2,total:159}});
    assert.equal(cold.status.hidden,true,'real settled work clears stale notice');
@@ -159,7 +158,7 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(view.operation.completed,4);
    view.update({...previous,offset:100,state:'source_unavailable',
      progress:{generation:2,phase:'page',status:'failed',completed:4,total:17,reason:'http_auth_failure'}});
-     assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Check your access, then reopen Sessions\.$/);
+      assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Could not load\. Reload Cost Guard to try again\.$/);
    assert.doesNotMatch(view.status.textContent,/Cancel/);
    assert.equal(view.operation.pending,false);
    labelOnlyPager();
@@ -190,10 +189,15 @@ module.exports = async ({vm, context, Node, timers}) => {
   assert.equal(lateCalls.some(request => !request.action && request.sort === 'model'),false,
     'a failed operation must not reinstate expensive sort demand');
    assert.equal(view.operation.failed,false,'timeout retains authorized automatic recovery');
-  view.api = async (_, request) => { if (request.action) return {}; throw new Error('host_identity_changed'); };
-  view.configure(new URLSearchParams('sort=model&direction=1')); await view.load();
-    assert.equal(view.operation.failed,true); assert.match(view.status.textContent,/Could not load\. Reopen Sessions to try again\./);
+   view.api = async (_, request) => { if (request.action) return {}; throw new Error('host_identity_changed'); };
+   view.configure(new URLSearchParams('sort=model&direction=1')); await view.load();
+   assert.equal(view.operation.failed,true);
+   assert.equal(view.terminal,true);
+   assert.equal(view.status.hidden,true,'host identity failure uses shared recovery, not a Sessions notice');
+   assert.equal(view.status.textContent,'');
    assert.equal(view.data.sort,'duration');
+   const blockedCalls = calls.length; await view.poll();
+   assert.equal(calls.length,blockedCalls,'passive navigation stops after host identity changes');
    view.terminal=false;
   let expired = true;
   view.api = async (_, request) => {

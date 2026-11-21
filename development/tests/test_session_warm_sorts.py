@@ -38,9 +38,10 @@ class WarmSortTests(unittest.TestCase):
     def watch(self):
         snapshot = self.source.snapshots["root-0000"]
         capture, _ = capture_rows(self.service, snapshot.root, fresh=snapshot)
-        running = next((row for row in capture.rows if row.in_progress and not row.execution_unverified), None)
-        self.catalog.observe_prompts(((snapshot.root, running is not None, 0,
-            running.event_id if running else "", running.at_ms if running else None),))
+        if capture.catalog_prompt is not None:
+            prompt, start, running, ended = capture.catalog_prompt
+            self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
+                prompt, start, running, None, ended),))
 
     def navigate(self, sort, direction):
         self.sequence += 1
@@ -133,7 +134,7 @@ class WarmSortTests(unittest.TestCase):
         self.assertFalse(self.catalog.rows["root-0000"].running)
         self.assertEqual(self.catalog.rows["root-0000"].last_activity_ms, NOW - 100)
 
-    def test_absent_metric_lifecycle_expiry_and_transient_failure_do_not_gain_false_proof(self):
+    def test_absent_metric_blocks_its_sort_but_failed_scalar_refresh_does_not_cancel_running(self):
         self.catalog.rows["root-0002"] = replace(self.catalog.rows["root-0002"], context_qualified=False)
         missing = self.navigate("ctx", 1)
         self.assertTrue(missing["pending_sort"])
@@ -141,17 +142,18 @@ class WarmSortTests(unittest.TestCase):
         self.catalog.page(token=missing["token"], cancelled=self.sequence)
         self.source.stream(1)
         self.observe()
-        self.clock += 16  # No current Watch signal; old running proof is expired.
-        pending = self.navigate("ccost", 1)
-        self.assertTrue(pending["pending_sort"])
+        self.clock += 16
+        page = self.navigate("ccost", 1)
+        self.assertFalse(page["pending_sort"])
         with patch("src.application.session_catalog.session_summary", side_effect=SourceUnavailableError("synthetic")):
             self.catalog.tick(self.service)
-        failed = self.catalog.page(token=pending["token"], sort="ccost", direction=1, navigation=self.sequence)
-        self.assertTrue(failed["pending_sort"])
+        failed = self.catalog.page(token=page["token"], sort="ccost", direction=1, navigation=self.sequence)
+        self.assertFalse(failed["pending_sort"])
+        self.assertTrue(failed["view"]["session_usage"][0]["running"])
         self.assertEqual(failed["progress"]["status"], "pending")
         self.clock += 121
         self.catalog.tick(self.service)
-        self.assertFalse(self.catalog.page(token=pending["token"], sort="ccost", direction=1,
+        self.assertFalse(self.catalog.page(token=page["token"], sort="ccost", direction=1,
             navigation=self.sequence)["pending_sort"])
 
     def test_source_epoch_and_provenance_changes_invalidate_warm_navigation(self):
