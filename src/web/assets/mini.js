@@ -384,6 +384,15 @@ const MiniWatch = (() => {
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }
     fitHeight(reserve = true) { return targetHeight(this, reserve); }
+    openingFits() {
+      const win = this.doc.defaultView, body = this.doc.body;
+      const root = this.root.getBoundingClientRect();
+      const padding = parseFloat(win.getComputedStyle(body).paddingBottom) * (body.currentCSSZoom || 1);
+      // Report actual clipped content, not unused reservation for future rows.
+      // Measure in the achieved viewport; native frame size varies by platform.
+      return root.top + contentHeight(this, root.width / (this.root.currentCSSZoom || 1), false) +
+        padding <= win.innerHeight + 2;
+    }
     atLatest() {
       const region = this.prompts;
       return Boolean(this.body.rows) && region.scrollHeight - region.clientHeight - region.scrollTop <= 1 &&
@@ -528,7 +537,8 @@ const MiniWatch = (() => {
       const nonRunning = values.filter(value => !value.running);
       // A metadata preview can fill space before prompt history settles.
       const needsHistory = nonRunning.slice(-this.nonRunningRows)
-        .filter(value => !value.preview || value.card.empty_history).length < this.nonRunningRows;
+        .filter(value => !value.preview || value.card.metric_absences?.prompt_ccost === 'complete_empty_history')
+        .length < this.nonRunningRows;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
       for (const {card, item, running, historical, preview, catalog} of values) {
         const prompt = item?.prompt, key = card.session_id;
@@ -716,7 +726,7 @@ const MiniWatch = (() => {
           if (this.window !== win || win.closed) return;
           this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
             innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
-          if (size === 'fit-on-open' && this.view.fitHeight() > win.outerHeight + 2) {
+          if (size === 'fit-on-open' && !this.view.openingFits()) {
             this.failure = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
             this.sync();
           }

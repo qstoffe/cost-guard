@@ -65,8 +65,12 @@ module.exports = (controller, view, input, helpText) => {
   assert.deepEqual(row.children.slice(2).map(cell=>cell.textContent),['?','0','?']);
   assert.equal(helpText(row.children[2].children[0]),'No prompt is recorded for this session.');
   assert.equal(helpText(row.children[4]),'No recorded context is available for this session.');
+  assert.equal(view.needsHistory,true,'one confirmed empty session does not qualify all previews');
+  show([],[],previews.map(value=>({...value,metric_absences:absent.metric_absences})));
+  assert.equal(view.needsHistory,false,'provider-confirmed empty histories satisfy the current capacity');
   show();
   assertPending(row,[0,1,2]);
+  assert.equal(view.needsHistory,true,'unqualified preview data restores demand');
   assert.equal(row.children[4].attributes['aria-describedby'],undefined);
   const real={...structuredClone(base),session_id:'preview-0',title:'Catalog session 0',focal_id:'',
     rows:[{...structuredClone(base.rows[0]),prompt:{...structuredClone(base.rows[0].prompt),

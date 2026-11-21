@@ -30,8 +30,9 @@ module.exports=async({evaluate,until,checks,layouts,baseline=false})=>{
         window.openingStyleDocument=miniWatch.measure.styleDocument.bind(miniWatch.measure);
         miniWatch.measure.styleDocument=doc=>{openingStyleDocument(doc);return false;};
       }`);
-    await evaluate('miniWatch.toggle()',true);
-    await until('!!miniWatch.view&&openingTraces.at(-1).contentFrame!=null');
+     await evaluate('miniWatch.toggle()',true);
+     await until('!!miniWatch.view&&openingTraces.at(-1).contentFrame!=null');
+     await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(resolve))');
     const value=await evaluate(`(()=>{
       const t=openingTraces.at(-1),relative=v=>v==null?null:Math.round((v-t.click)*10)/10;
       const w=miniWatch.window,v=miniWatch.view,copy=v.root.firstElementChild.cloneNode(true);
@@ -40,24 +41,27 @@ module.exports=async({evaluate,until,checks,layouts,baseline=false})=>{
       let headerMinimum=copy.getBoundingClientRect().width;
       daily.textContent='CCost Today 90 000 · 999 prompts';
       headerMinimum=Math.max(headerMinimum,copy.getBoundingClientRect().width);copy.remove();
-      const geometry={outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],
-        requested:miniWatch.openingBounds?.requested,desiredHeight:v.fitHeight(),headerMinimum,
-        contentWidth:v.root.getBoundingClientRect().width};
-      return {native:relative(t.native),content:relative(t.content),contentFrame:relative(t.contentFrame),
+       const geometry={outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],
+         requested:miniWatch.openingBounds?.requested,desiredHeight:v.fitHeight(),headerMinimum,
+         contentWidth:v.root.getBoundingClientRect().width};
+       const tableBottom=v.prompts.getBoundingClientRect().top+v.prompts.clientHeight;
+       const contentBottom=v.root.getBoundingClientRect().bottom+parseFloat(w.getComputedStyle(v.doc.body).paddingBottom);
+       const clipped=contentBottom>w.innerHeight+2 ||
+         [...v.body.rows].some(row=>row.getBoundingClientRect().bottom>tableBottom+2);
+       return {native:relative(t.native),content:relative(t.content),contentFrame:relative(t.contentFrame),
         styles:t.styles.map(relative),usable:relative(t.usable),
         blankAfterNative:Math.round((t.content-t.native)*10)/10,
         feedback:miniWatch.feedback.textContent,adopted:miniWatch.window.document.adoptedStyleSheets.length,
-        geometry,clamped:geometry.desiredHeight>w.outerHeight+2,
+         geometry,clipped,
         feedbackHidden:miniWatch.feedback.className==='sr-only',
         violations:t.violations,paints:miniWatch.window.performance.getEntriesByType('paint').map(entry=>({
           name:entry.name,ms:Math.round((entry.startTime+miniWatch.window.performance.timeOrigin-performance.timeOrigin-t.click)*10)/10}))};
     })()`);
     layouts.push({case:'opening-'+name,...value});
     if(!baseline){
-      if(value.feedback){
-        assert.equal(value.feedback,'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.');
-        assert.equal(value.clamped,true,JSON.stringify(value));
-      }
+       assert.equal(value.feedback, value.clipped ?
+         'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.' : '',
+         JSON.stringify(value));
       assert.equal(value.feedbackHidden,true,'genuine clamp feedback also reserves no inline status slot');
       assert.deepEqual(value.violations,[],'same-origin cached styles retain shipped CSP');
       assert.ok(value.blankAfterNative<100,JSON.stringify(value));

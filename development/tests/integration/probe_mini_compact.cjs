@@ -9,13 +9,17 @@ function measure() {
     const bounds = row.getBoundingClientRect();
     const running = row.getAttribute('aria-label').endsWith(' · Running');
     return {id: row.dataset.id, running, height: bounds.height,
-      visible: bounds.top >= header.bottom - 1 && bounds.bottom <= clip.top + region.clientHeight + 1};
+      visible: bounds.top >= header.bottom - 1 && bounds.bottom <= clip.top + region.clientHeight + 1,
+      bottom: bounds.bottom};
   });
   return {
     outer: [w.outerWidth, w.outerHeight], inner: [w.innerWidth, w.innerHeight],
     requested: probeRequests.at(-1), screen: [w.screen.availWidth, w.screen.availHeight],
     height: region.clientHeight, header: header.height, headerOffset: header.top - clip.top,
     available: w.innerHeight - clip.top - parseFloat(w.getComputedStyle(v.doc.body).paddingBottom),
+    tableBottom: clip.top + region.clientHeight,
+    neededBottom: v.root.getBoundingClientRect().bottom + parseFloat(w.getComputedStyle(v.doc.body).paddingBottom),
+    feedback: miniWatch.feedback.textContent,
     gutter: region.offsetHeight - region.clientHeight, scrollTop: region.scrollTop,
     scrollHeight: region.scrollHeight, horizontal: region.scrollWidth > region.clientWidth,
     documentOverflow: v.doc.documentElement.scrollWidth > w.innerWidth + 1, rows
@@ -37,6 +41,7 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   };
   const restore = field => settings(field, {'theme':'theme', 'ccostDisplayUnit':'ccost',
     'miniWatchNonRunningRows':endpoint, 'miniWatchSize':'mini-size'}[field], 'default');
+  const fitWarning = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
 
   // Keep the original measured-width relationship under the same fixture, CSS
   // and page zoom; the pre-change source run records a separate native baseline.
@@ -49,7 +54,9 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   assert.ok(Math.abs(opening.requested.width - 0.75 * legacy) <= 1, JSON.stringify({legacy, opening}));
   assert.ok(opening.inner[0] > 0 && opening.outer[0] >= opening.inner[0]);
   assert.ok(opening.outer[0] <= opening.screen[0] + 1);
-  assert.equal(await evaluate('miniWatch.feedback.textContent'), '');
+  const hasClipping = opening.rows.some(row=>row.bottom > opening.tableBottom + 2) ||
+    opening.neededBottom > opening.inner[1] + 2;
+  assert.equal(opening.feedback, hasClipping ? fitWarning : '', JSON.stringify(opening));
   record('opening-relative-width', {...opening, legacy});
   await close();
 
@@ -176,6 +183,8 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
     assert.ok(clamped.inner[0]*evidence.browserZoom>80, JSON.stringify(clamped));
     assert.equal(clamped.documentOverflow,false);
     assert.equal(clamped.rows.length,27);
+    assert.ok(clamped.scrollHeight > clamped.height, JSON.stringify(clamped));
+    assert.equal(clamped.feedback, fitWarning, JSON.stringify(clamped));
     await publish(10,15,1); await settle();
     assert.deepEqual(await bounds(),clamped.outer);
     record('browser-minimum-width',clamped);
