@@ -56,7 +56,7 @@ class ArchiveMixBuild(AbstractContextManager):
         if batch is None:
             return MixBuildState.STALE
         self._version = batch.version
-        self._cursor = batch.next_key
+        self._cursor = batch.next_cursor
         keys = self.reducer.add_slice(batch)
         with self._prompts as db:
             for period in self._counts:

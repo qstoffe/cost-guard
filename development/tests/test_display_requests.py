@@ -113,24 +113,24 @@ class DisplayRequestTests(unittest.TestCase):
         checkpoint = self.history.session_checkpoints("bound", ("root",))["root"]
         self.history.commit_sessions("bound", missing=(("root", checkpoint),))
 
-        tail = self.history.usage_inputs("bound", expected=first.version, after=first.next_key)
+        tail = self.history.usage_inputs("bound", expected=first.version, after=first.next_cursor)
         foreign = self.history.usage_inputs("other")
         checkpoint = self.history.session_checkpoints("bound", ("root",))["root"]
         correction = replace(requests[-1], clock_ms=2222)
         self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r2", "Root"), "r1",
             previous_progress=checkpoint.progress, request_roster=replace(roster, requests=(correction,))),))
-        stale = self.history.usage_inputs("bound", expected=first.version, after=first.next_key)
-        revised = self.history.usage_inputs("bound", after=first.next_key)
+        stale = self.history.usage_inputs("bound", expected=first.version, after=first.next_cursor)
+        revised = self.history.usage_inputs("bound", after=first.next_cursor)
 
         self.assertEqual((), first.entries)
         self.assertEqual((1400,) * USAGE_SLICE, first.unqualified_clocks)
-        self.assertEqual(requests[USAGE_SLICE - 1].key, first.next_key)
+        self.assertEqual((first.version.revision, requests[USAGE_SLICE - 1].key), first.next_cursor)
         self.assertEqual(first.version, tail.version)
         self.assertEqual(tuple(request.key for request in requests[-2:]), tuple(item.request_key for item in tail.entries))
         self.assertEqual((prices, prices), tuple(item.category_costs for item in tail.entries))
         self.assertEqual(("child", "cu", 1400), (tail.entries[0].session_id, tail.entries[0].logical_prompt_id,
                                                    tail.entries[0].clock_ms))
-        self.assertIsNone(tail.next_key)
+        self.assertIsNone(tail.next_cursor)
         self.assertEqual((), foreign.entries)
         self.assertIsNone(stale)
         self.assertEqual((1400, 2222), tuple(item.clock_ms for item in revised.entries))
@@ -186,6 +186,53 @@ class DisplayRequestTests(unittest.TestCase):
 
         self.assertEqual({first.key, sibling.key}, before)
         self.assertEqual({clone.key, corrected.key}, after)
+
+    def test_append_that_changes_fork_winner_withdraws_the_older_population(self):
+        snapshot = make_snapshot()
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), reference("p1", None))
+        old = replace(next(item for item in roster.requests if item.session_id == "child"), ordinal=4)
+        late_replica = replace(old, key=b"late-replica", dedup_tree="late", ordinal=9)
+        winning_replica = replace(old, key=b"winning-replica", dedup_tree="winner", ordinal=2)
+
+        def append(root, request):
+            self.history.commit_sessions("bound", (SessionChange(SessionFact(root, "r1", root), None,
+                previous_progress=0, request_roster=replace(roster, requests=(request,), attribution=())),))
+
+        append("root", old)
+        version = self.history.usage_inputs("bound").version
+        append("late", late_replica)
+        preserved = self.history.usage_inputs("bound", expected=version)
+        append("winner", winning_replica)
+        withdrawn = self.history.usage_inputs("bound", expected=version)
+        current = self.history.usage_inputs("bound")
+
+        self.assertEqual((old.key,), tuple(row.request_key for row in preserved.entries))
+        self.assertIsNone(withdrawn)
+        self.assertEqual((winning_replica.key,), tuple(row.request_key for row in current.entries))
+
+    def test_v13_migration_retains_existing_partition_and_only_pins_proven_versions(self):
+        snapshot = make_snapshot()
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), reference("p1", None))
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r1", "Root"), None,
+            previous_progress=0, request_roster=roster),))
+        version = self.history.usage_inputs("bound").version
+        with self.history._connect() as db:
+            db.executescript("""
+                DROP TRIGGER archive_usage_correction;
+                DROP INDEX archive_requests_revision;
+                ALTER TABLE archive_requests DROP COLUMN first_revision;
+                ALTER TABLE archive_usage_revisions DROP COLUMN invalidated_through;
+                PRAGMA user_version=13;
+            """)
+        migrated = DisplayHistory(self.root)
+
+        migrated.initialize()
+        current = migrated.usage_inputs("bound", expected=version)
+        unknown = migrated.usage_inputs("bound", expected=replace(version, revision=version.revision - 1))
+
+        self.assertEqual(version, current.version)
+        self.assertEqual({request.key for request in roster.requests}, {request.request_key for request in current.entries})
+        self.assertIsNone(unknown)
 
     def test_real_projection_matches_canonical_fork_selection_even_when_loser_arrives_first(self):
         parent = make_snapshot()
@@ -261,6 +308,10 @@ class DisplayRequestTests(unittest.TestCase):
         self.history.commit_sessions("trusted", missing=(("root", checkpoint),))
         with self.history._connect() as db:
             db.executescript("""
+                DROP TRIGGER archive_usage_correction;
+                DROP INDEX archive_requests_revision;
+                ALTER TABLE archive_requests DROP COLUMN first_revision;
+                DROP TABLE archive_usage_revisions;
                 DROP VIEW archive_countable_requests;
                 DROP TABLE archive_fork_trees;
                 DROP INDEX archive_fork_candidates;

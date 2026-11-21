@@ -32,52 +32,78 @@ class UsageInput:
 class UsageSlice:
     version: UsageVersion
     entries: tuple[UsageInput, ...]
-    next_key: bytes | None
+    next_cursor: tuple[int, bytes] | None
     unqualified_clocks: tuple[int | None, ...]
 
 
-def usage_schema():
-    return """
+def usage_schema(*, existing_revision=False):
+    revisions = """
         CREATE TABLE IF NOT EXISTS archive_usage_revisions (
             source TEXT PRIMARY KEY REFERENCES sources(source),
-            revision INTEGER NOT NULL
+            revision INTEGER NOT NULL,
+            invalidated_through INTEGER NOT NULL DEFAULT 0
         ) WITHOUT ROWID;
+    """
+    if existing_revision:
+        revisions = """
+            ALTER TABLE archive_usage_revisions ADD COLUMN invalidated_through INTEGER NOT NULL DEFAULT 0;
+            UPDATE archive_usage_revisions SET invalidated_through=revision;
+        """
+    return revisions + """
+        ALTER TABLE archive_requests ADD COLUMN first_revision INTEGER NOT NULL DEFAULT 0;
+        CREATE INDEX archive_requests_revision ON archive_requests(source,first_revision,request_key);
+        CREATE TRIGGER archive_usage_correction AFTER UPDATE ON archive_requests BEGIN
+            INSERT INTO archive_usage_revisions(source,revision,invalidated_through) VALUES(NEW.source,0,1)
+            ON CONFLICT(source) DO UPDATE SET invalidated_through=revision+1;
+        END;
     """
 
 
-def advance_usage_revision(db, source):
+def advance_usage_revision(db, source, *, changed_winner):
     db.execute("""
-        INSERT INTO archive_usage_revisions VALUES(?,1)
-        ON CONFLICT(source) DO UPDATE SET revision=revision+1
-    """, (source,))
+        INSERT INTO archive_usage_revisions VALUES(?,1,?)
+        ON CONFLICT(source) DO UPDATE SET revision=revision+1,
+            invalidated_through=CASE WHEN ? THEN revision+1 ELSE invalidated_through END
+    """, (source, int(changed_winner), changed_winner))
+
+
+def _usage_state(db, source):
+    row = db.execute("""
+        SELECT archive_epoch,coalesce(revision,0),coalesce(invalidated_through,0) FROM sources
+        LEFT JOIN archive_usage_revisions USING(source) WHERE source=?
+    """, (source,)).fetchone()
+    return row if row else (0, 0, 0)
 
 
 def usage_version(db, source):
-    row = db.execute("""
-        SELECT archive_epoch,coalesce(revision,0) FROM sources
-        LEFT JOIN archive_usage_revisions USING(source) WHERE source=?
-    """, (source,)).fetchone()
-    return UsageVersion(*row) if row else UsageVersion(0, 0)
+    return UsageVersion(*_usage_state(db, source)[:2])
+
+
+def retained_usage_version(db, source, expected=None):
+    epoch, revision, floor = _usage_state(db, source)
+    if expected is None:
+        return UsageVersion(epoch, revision)
+    return expected if expected.archive_epoch == epoch and floor <= expected.revision <= revision else None
 
 
 def read_usage_slice(db, source, *, expected=None, after=None):
     """Read at most one indexed key-space slice; dedup precedes period admission.
 
-    A missing next key means this exact version is exhausted. A null result
-    withdraws a stale traversal; callers must not publish its partial reduction.
+    A missing cursor means this exact version is exhausted. Appends do not change
+    the pinned population. Corrections, winner changes and purge invalidate it.
     """
-    version = usage_version(db, source)
-    if expected is not None and expected != version:
+    version = retained_usage_version(db, source, expected)
+    if version is None:
         return None
-    bounds, args = ("", (source,)) if after is None else ("AND request_key>?", (source, after))
+    bounds = "" if after is None else "AND (first_revision,request_key)>(?,?)"
     rows = db.execute(f"""
         SELECT request_key,clock_ms,session_id,logical_prompt_id,provider,model,recorded_model,account_key,
                input_tokens,cache_read_tokens,cache_write_tokens,output_tokens,reasoning_tokens,known_fields,
                input_cost,cache_read_cost,cache_write_cost,output_cost,pricing,
-               fork_key IS NOT NULL AND dedup_tree IS NULL AS unqualified
+               fork_key IS NOT NULL AND dedup_tree IS NULL AS unqualified,first_revision
         FROM archive_requests
-        WHERE source=? {bounds} ORDER BY request_key LIMIT ?
-    """, (*args, USAGE_SLICE + 1)).fetchall()
+        WHERE source=? AND first_revision<=? {bounds} ORDER BY first_revision,request_key LIMIT ?
+    """, (source, version.revision, *(after or ()), USAGE_SLICE + 1)).fetchall()
     more = len(rows) > USAGE_SLICE
     rows = rows[:USAGE_SLICE]
     keys = tuple(row[0] for row in rows)
@@ -89,9 +115,9 @@ def read_usage_slice(db, source, *, expected=None, after=None):
     """, (source, *keys))}
     entries, unqualified = [], []
     for row in rows:
-        if row[-1]:
+        if row[-2]:
             unqualified.append(row[1])
         elif row[0] in accepted:
             amounts = None if row[18] is None else tuple(Decimal(amount) for amount in row[14:18])
             entries.append(UsageInput(*row[:8], row[8:13], row[13], amounts, row[18]))
-    return UsageSlice(version, tuple(entries), keys[-1] if more else None, tuple(unqualified))
+    return UsageSlice(version, tuple(entries), (rows[-1][-1], keys[-1]) if more else None, tuple(unqualified))

@@ -226,3 +226,34 @@ class ArchiveTokenMixTests(unittest.TestCase):
 
         self.assertIsNone(rejected)
         self.assertIsNone(saved)
+
+    def test_pinned_summary_publishes_under_continuous_independent_appends(self):
+        now = 10_000
+        snapshot = make_snapshot()
+        reference = SimpleNamespace(analysis_signature="p1", reference_category_valuation=lambda *_: None)
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=now), reference)
+        request = next(request for request in roster.requests if request.session_id == "child")
+        original = tuple(replace(request, key=f"old-{i:04}".encode(), fork_key=None, dedup_tree=None)
+                         for i in range(USAGE_SLICE * 2 + 1))
+
+        def append(root, requests):
+            self.history.commit_sessions("bound", (SessionChange(SessionFact(root, "r1", root), None,
+                previous_progress=0, request_roster=replace(roster, requests=requests, attribution=())),))
+
+        append("original", original)
+        with ArchiveMixBuild("bound", "UTC", now) as build:
+            first = build.step(self.history)
+            append("next", (replace(original[0], key=b"z-after-key"),))
+            second = build.step(self.history)
+            append("another", (replace(original[0], key=b"a-before-key"),))
+            finished = build.step(self.history)
+        saved, current = self.history.mix_total("bound", "UTC", "all", None, now)
+        with ArchiveMixBuild("bound", "UTC", now + 1) as next_build:
+            followup = tuple(next_build.step(self.history) for _ in range(3))
+        new, new_current = self.history.mix_total("bound", "UTC", "all", None, now + 1)
+
+        self.assertEqual((MixBuildState.MORE, MixBuildState.MORE, MixBuildState.PUBLISHED),
+                         (first, second, finished))
+        self.assertEqual((1, len(original), False), (saved.prompts, saved.calls, current))
+        self.assertEqual((MixBuildState.MORE, MixBuildState.MORE, MixBuildState.PUBLISHED), followup)
+        self.assertEqual((1, len(original) + 2, True), (new.prompts, new.calls, new_current))

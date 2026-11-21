@@ -99,6 +99,10 @@ class DisplayWatchTests(unittest.TestCase):
         observed = archive_watch_observation(running_frame(at), at)
         with self.history._connect() as db:
             db.executescript("""
+                DROP TRIGGER archive_usage_correction;
+                DROP INDEX archive_requests_revision;
+                ALTER TABLE archive_requests DROP COLUMN first_revision;
+                DROP TABLE archive_usage_revisions;
                 DROP TABLE archive_watch_daily;
                 DROP TABLE archive_watch_cards;
                 DROP TABLE archive_watch_state;
@@ -123,6 +127,10 @@ class DisplayWatchTests(unittest.TestCase):
     def test_v11_watch_upgrade_keeps_old_snapshot_and_leaves_added_fields_unknown(self):
         with self.history._connect() as db:
             db.executescript("""
+                DROP TRIGGER archive_usage_correction;
+                DROP INDEX archive_requests_revision;
+                ALTER TABLE archive_requests DROP COLUMN first_revision;
+                DROP TABLE archive_usage_revisions;
                 DROP TABLE archive_watch_daily;
                 DROP TABLE archive_watch_cards;
                 CREATE TABLE archive_watch_cards (

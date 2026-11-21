@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from .display_usage_reader import UsageVersion, usage_version
+from .display_usage_reader import UsageVersion, retained_usage_version, usage_version
 
 
 MIX_PERIODS = frozenset({"today", "7-days", "30-days", "month", "all"})
@@ -70,11 +70,12 @@ def publish_mix_totals(db, source, expected: UsageVersion, timezone_id, rows):
     if (not source or not timezone_id or len(rows) != len(MIX_PERIODS)
             or {row.period for row in rows} != MIX_PERIODS or len({row.end_ms for row in rows}) != 1):
         raise ValueError("invalid_mix_totals")
-    if usage_version(db, source) != expected:
+    if retained_usage_version(db, source, expected) is None:
         return None
     end_ms = rows[0].end_ms
-    previous = db.execute("SELECT end_ms,timezone_id FROM archive_mix_state WHERE source=?", (source,)).fetchone()
-    if previous is not None and previous[0] > end_ms:
+    previous = db.execute("SELECT end_ms,timezone_id,usage_revision FROM archive_mix_state WHERE source=?",
+                          (source,)).fetchone()
+    if previous is not None and (previous[0] > end_ms or previous[2] > expected.revision):
         return None
     prior = {row[1]: (row[2], *row[4:]) for row in db.execute(
         "SELECT * FROM archive_mix_totals WHERE source=?", (source,))} if previous and previous[1] == timezone_id else {}

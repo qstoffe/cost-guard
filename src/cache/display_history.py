@@ -15,7 +15,7 @@ from .display_usage_reader import read_usage_slice, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -257,7 +257,7 @@ class DisplayHistory:
                     {prompts}
                     {countable}
                      {watch_schema(upgrade=version == 11) if version < 12 else ""}
-                     {usage_schema()}
+                     {usage_schema(existing_revision=version == 13)}
                      {mix_total_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
