@@ -398,6 +398,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
+            if self.path == '/api/database-sizes':
+                sizes = getattr(self.server.lifecycle, 'database_sizes', None)
+                self.reply(200, sizes() if sizes else {'opencode_bytes': None, 'cache_bytes': None})
+                return
             if self.path == '/api/models/benchmark':
                 lane = getattr(self.server.lifecycle, 'benchmark', None)
                 references = ()

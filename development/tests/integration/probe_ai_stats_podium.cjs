@@ -22,7 +22,7 @@ module.exports = async ({command,evaluate,until,fixture,tab,checks}) => {
       assert.equal(await evaluate(`document.querySelectorAll('[data-metric="${metric}"] .ai-stat-racer').length`),count,metric);
       assert.ok(await evaluate(`!!document.querySelector('[data-metric="${metric}"] .ai-stat-value').textContent`));
     }
-    assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat')].map(c=>c.textContent).join(' ')`),/Unavailable|N\/A/);
+    assert.doesNotMatch(await evaluate(`[...document.querySelectorAll('.ai-stat[data-metric]')].map(c=>c.textContent).join(' ')`),/Unavailable|N\/A/);
   }
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
     window.__podiumHeading=document.querySelector('[data-metric="token-rate"] h4 button');__podiumHeading.focus();`);

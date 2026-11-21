@@ -25,6 +25,27 @@ const AIStatsView = (() => {
   const costMetrics = new Set(['hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session']);
   const podiumMetrics = new Set(['hourly-rate', 'token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
   const face = value => typeof value === 'string' ? value.replace(/\b(?:N\/A|Not Applicable)\b/gi, '—') : value;
+  const mainFileHelp = '\n\nMeasures only the main database file, excluding auxiliary files such as the SQLite WAL.';
+  const databaseRows = [
+    ['opencode_bytes', 'OpenCode DB',
+      'OpenCode stores the source sessions used for CostGuard’s session-based statistics. In OpenCode v2, a deleted session ' +
+      'stops contributing to refreshed source-backed results. Old derived cache entries may remain on disk for a while.'],
+    ['cache_bytes', 'CostGuard Cache DB',
+      'CostGuard keeps a disposable SQLite cache to speed up repeated analysis. Eligible old session-cache entries can be ' +
+      'cleaned up when neither session activity nor meaningful use has occurred for at least 30 days. Cleanup runs while the ' +
+      'host is idle, after at least 60 minutes of uptime—not immediately or on a fixed schedule. Removing entries may not ' +
+      'shrink the database file straight away. Cleanup never deletes OpenCode source data.']
+  ];
+  const sizeUnits = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const sizeNumber = new Intl.NumberFormat('en', {maximumFractionDigits: 1});
+  function formatFileSize(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0) return 'Size unavailable';
+    let unit = 0;
+    while (unit < sizeUnits.length - 1 && Math.round(bytes * 10) >= 10000) {
+      bytes /= 1000; unit++;
+    }
+    return `${sizeNumber.format(bytes)} ${sizeUnits[unit]}`;
+  }
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
@@ -106,6 +127,9 @@ const AIStatsView = (() => {
       }
       this.content = e('div');
       this.grid = e('div', undefined, 'ai-stats-groups');
+      this.databaseValues = new Map();
+      this.databaseRefresh = 0;
+      this.hasOpenCodeSize = false;
       for (const [name, items] of [['Overview', definitions.slice(0, 7)], ['Fun Facts', definitions.slice(7)]]) {
         const section = e('section', undefined, 'ai-stats-section'), grid = e('div', undefined, 'ai-stats-grid');
         section.append(e('h3', name), grid); this.grid.append(section);
@@ -139,6 +163,20 @@ const AIStatsView = (() => {
           this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
           card.append(heading, value, podium, detail, trait);
         }
+        if (name === 'Fun Facts') {
+          this.funFacts = grid;
+          this.databaseCard = e('article', undefined, 'ai-stat ai-stat-databases');
+          const rows = e('dl');
+          for (const [key, label, help] of databaseRows) {
+            const row = e('div', undefined, 'ai-stat-size-row'), term = e('dt');
+            term.append(ContextHelp.button(label, help + mainFileHelp));
+            const value = e('dd', formatFileSize(null));
+            row.append(term, value); rows.append(row);
+            this.databaseValues.set(key, value);
+          }
+          this.databaseCard.append(e('h4', 'Database Sizes'), rows);
+          grid.append(this.databaseCard);
+        }
       }
       this.root.append(this.selector, this.content);
       this.content.append(this.grid);
@@ -150,6 +188,21 @@ const AIStatsView = (() => {
       this.extraValue = e('p', '', 'ai-stat-value'); this.extraDetail = e('p', '', 'ai-stat-detail'); this.extraTrait = e('p', '', 'ai-stat-trait');
       const link = e('a', 'Comparisons'); link.href = '#/comparisons';
       this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
+    }
+    async refreshDatabaseSizes() {
+      // Optional local facts never share the report request or its error state.
+      const request = ++this.databaseRefresh;
+      let sizes;
+      try {
+        const response = await fetch('/api/database-sizes', {credentials: 'same-origin', cache: 'no-store',
+          signal: AbortSignal.timeout(5000)});
+        if (response.ok) sizes = await response.json();
+      } catch (_) { /* A failed read only affects this card. */ }
+      if (request !== this.databaseRefresh) return;
+      const openCodeSize = formatFileSize(sizes?.opencode_bytes);
+      this.hasOpenCodeSize = openCodeSize !== 'Size unavailable';
+      ReportView.text(this.databaseValues.get('opencode_bytes'), openCodeSize);
+      ReportView.text(this.databaseValues.get('cache_bytes'), formatFileSize(sizes?.cache_bytes));
     }
     update(state) {
       // Every card has its shell from first render. Only a complete compatible
@@ -222,8 +275,7 @@ const AIStatsView = (() => {
         ReportView.text(this.extraHeading, row.matched.metric === 'original-thinker' ? 'Original Thinker' : 'Biggest AI Speed Gap');
         ReportView.text(this.extraValue, () => face(ReportView.display(row.matched, 'value')));
         ReportView.text(this.extraTrait, face(row.matched.display.trait)); ReportView.text(this.extraDetail, face(row.matched.detail));
-        const grid = this.grid.querySelectorAll('.ai-stats-grid')[1];
-        if (!grid.contains(this.extra)) grid.append(this.extra);
+        if (!this.funFacts.contains(this.extra)) this.funFacts.insertBefore(this.extra, this.databaseCard);
       } else this.extra.remove();
       ContextHelp.refresh(this.root);
     }

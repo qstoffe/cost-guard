@@ -7,6 +7,7 @@ from dataclasses import replace
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -76,6 +77,18 @@ def main():
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)
         host = WebHost(root, jobs=jobs)
+        if sys.argv[2:] == ['--ai-stats']:
+            from src.domain import IntegrationHealth
+            from src.sources.opencode_v1 import OpenCodeV1Source
+            from src.sources.selection import SourceSelection
+            from src.web.database_sizes import database_sizes
+            source_db = root / 'fixture-opencode.db'
+            cache_db = host.cache_housekeeping.lifecycle.database.paths.database
+            source_db.write_bytes(b'\0' * 128)
+            cache_db.parent.mkdir(exist_ok=True)
+            cache_db.write_bytes(b'\0' * 92_000)
+            selection = SourceSelection(OpenCodeV1Source(source_db), 'v1', (), IntegrationHealth(True, True))
+            host.database_sizes = partial(database_sizes, selection, cache_db)
         # All browser-fixture modes are offline/synthetic, including the optional lane.
         from development.tests.fixtures.benchmark import payload
         from src.benchmarks import parse_pages
@@ -177,6 +190,10 @@ def main():
             print(json.dumps({"url": host.browser_url()}), flush=True)
             for line in sys.stdin:
                 command = json.loads(line)["command"]
+                if command == 'stats-resize-cache' and sys.argv[2:] == ['--ai-stats']:
+                    cache_db.write_bytes(b'\0' * 2_500_000)
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command == "stop":
                     host.stop()
                     print('{"ok":true}', flush=True)

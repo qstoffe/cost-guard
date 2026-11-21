@@ -594,6 +594,8 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  if (csrf && !hostState.terminal && current.stats && (current !== previous || !current.stats.databaseRefresh))
+    current.stats.refreshDatabaseSizes();
   if (current !== previous && current.detail) {
     if (current.detailFocus?.isConnected) current.detailFocus.focus({preventScroll: true});
     else focusReport({preventScroll: true});
@@ -633,8 +635,13 @@ async function connect() {
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
+        const firstLiveView = !liveValue?.view && !!value?.view;
         liveValue = value?.view || !liveValue?.view ? value : {...value,
           view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
+        // A first entry can precede source selection. Use the existing Live
+        // readiness signal once rather than polling the optional facts.
+        if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
+          current.stats.refreshDatabaseSizes();
         miniWatch?.update(liveValue);
         current?.catalog?.wake(value?.catalog_hint);
         current?.detail?.wake(value?.detail_hints);

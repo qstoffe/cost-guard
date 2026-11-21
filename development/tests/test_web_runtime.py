@@ -8,6 +8,7 @@ import io
 import json
 from pathlib import Path
 import socket
+import tempfile
 from threading import Event, Thread
 from types import SimpleNamespace
 import time
@@ -18,7 +19,16 @@ from unittest.mock import call
 
 from development.tests.fixtures.report_process import ReportProcess
 from development.tests.fixtures.web_reports import finite_report
+from src.cache.database import CacheDatabase
+from src.domain import IntegrationHealth
 from src.reports import ReportKind, ReportRequest
+from src.sources.discovery import discover_v2_registration_candidate
+from src.sources.errors import SourceUnavailableError
+from src.sources.opencode_v1 import OpenCodeV1Source
+from src.sources.opencode_v2 import OpenCodeV2Source
+from src.sources.selection import SourceSelection
+from src.web.database_sizes import database_sizes
+from src.web.host import WebHost
 from src.web.http import LoopbackServer
 from src.web.jobs import MAX_RESULT_BYTES, ProgressRelay, ReportJobs, ReportWorkerStopError, parse_report, run_report
 from src.web.security import BrowserSession
@@ -35,6 +45,66 @@ class LoopbackBindingTests(unittest.TestCase):
             resolve.assert_not_called()
         finally:
             server.server_close()
+
+
+class DatabaseSizesTests(unittest.TestCase):
+    def test_selected_v1_and_canonical_cache_are_measured_independently_without_opening(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / 'selected.sqlite'
+            cache_path = CacheDatabase(root, generation=9).paths.database
+            cache_path.parent.mkdir()
+            source_path.write_bytes(b'invalid SQLite file')
+            cache_path.write_bytes(b'disposable')
+            cache_path.with_name(cache_path.name + '-wal').write_bytes(b'\0' * 4096)
+            selection = SourceSelection(OpenCodeV1Source(source_path), 'v1', (), IntegrationHealth(True, True))
+            stat = Path.stat
+
+            def denied_on_source(path, *args, **kwargs):
+                if path == source_path:
+                    raise PermissionError(str(path))
+                return stat(path, *args, **kwargs)
+
+            with patch('sqlite3.connect', side_effect=AssertionError('size must not open SQLite')):
+                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': 10}, database_sizes(selection, cache_path))
+                with patch.object(Path, 'stat', denied_on_source):
+                    self.assertEqual({'opencode_bytes': None, 'cache_bytes': 10}, database_sizes(selection, cache_path))
+                missing = root / 'missing.sqlite'
+                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': None}, database_sizes(selection, missing))
+                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': None}, database_sizes(selection, root))
+            self.assertFalse(missing.exists())
+            self.assertEqual(b'invalid SQLite file', source_path.read_bytes())
+            self.assertEqual(b'disposable', cache_path.read_bytes())
+
+    def test_v2_uses_default_data_only_for_registered_local_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = root / 'local-data' / 'opencode'
+            data.mkdir(parents=True)
+            (data / 'opencode.db').write_bytes(b'\0' * 128)
+            health = IntegrationHealth(True, True)
+            with patch.dict('os.environ', {'XDG_DATA_HOME': str(data.parent), 'XDG_STATE_HOME': str(root)}), \
+                    patch.object(OpenCodeV2Source, '_client', side_effect=AssertionError('size must not access HTTP')):
+                candidate = discover_v2_registration_candidate()
+                registration = candidate.path
+                registration.parent.mkdir()
+                registration.write_text('{"url":"http://remote.example:1234","pid":17}', encoding='utf-8')
+                remote = OpenCodeV2Source(candidate=candidate)
+                with self.assertRaises(SourceUnavailableError):
+                    remote._read_endpoint()
+                registration.write_text('{"url":"http://127.0.0.1:1234","pid":17}', encoding='utf-8')
+                unverified = OpenCodeV2Source(candidate=candidate)
+                explicit = OpenCodeV2Source(registration)
+                explicit._read_endpoint()
+                local = OpenCodeV2Source(candidate=candidate)
+                local._read_endpoint()
+
+                for source in (remote, unverified, explicit):
+                    with self.subTest(source=source):
+                        self.assertEqual({'opencode_bytes': None, 'cache_bytes': None},
+                                         database_sizes(SourceSelection(source, 'v2', (), health), None))
+                selection = SourceSelection(local, 'v2', (), health)
+                self.assertEqual({'opencode_bytes': 128, 'cache_bytes': None}, database_sizes(selection, None))
 
 
 class WebRuntimeTests(unittest.TestCase):
@@ -189,6 +259,27 @@ class WebRuntimeTests(unittest.TestCase):
         status, _, body = self.request('/api/reports', {'kind': 'ai-stats'})
         self.assertEqual(202, status)
         self.assertTrue(json.loads(body)['id'])
+
+    def test_size_route_is_authenticated_and_refreshes_without_source_startup_or_report_admission(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            host = WebHost(Path(tmp), jobs=self.jobs)
+            self.addCleanup(host.benchmark.close)
+            self.server.lifecycle = host
+            cache_file = host.cache_housekeeping.lifecycle.database.paths.database
+            self.assertEqual(401, self.request('/api/database-sizes')[0])
+            self.login()
+            status, _, body = self.request('/api/database-sizes')
+            self.assertEqual(200, status)
+            self.assertEqual({'opencode_bytes': None, 'cache_bytes': None}, json.loads(body))
+            self.assertFalse(cache_file.parent.exists())
+
+            cache_file.parent.mkdir()
+            cache_file.write_bytes(b'\0' * 1024)
+            status, headers, body = self.request('/api/database-sizes')
+            self.assertEqual(200, status)
+            self.assertEqual('no-store', headers['Cache-Control'])
+            self.assertEqual({'opencode_bytes': None, 'cache_bytes': 1024}, json.loads(body))
+            self.assertEqual([], self.jobs.updates()['jobs'])
 
     def test_price_refresh_uses_protected_empty_body_action_and_bounded_jobs(self):
         from src.web.jobs import ModelsPriceRefresh

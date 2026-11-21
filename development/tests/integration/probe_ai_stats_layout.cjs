@@ -10,7 +10,9 @@ function inspect() {
   cards.forEach((card, index) => {
     const bounds = rect(card), fields = [...card.children].filter(field => getComputedStyle(field).display !== 'none');
     const rowKey = card.parentElement.parentElement.querySelector('h3').textContent + ':' + Math.round(bounds.top);
-    const heights = rows.get(rowKey) || []; heights.push(bounds.height); rows.set(rowKey, heights);
+    if (!card.classList.contains('ai-stat-databases')) {
+      const heights = rows.get(rowKey) || []; heights.push(bounds.height); rows.set(rowKey, heights);
+    }
     fields.forEach((field, position) => {
       const box = rect(field);
       if (!contains(bounds, box)) issues.push({index, field:position, kind:'field-outside-card'});
@@ -34,7 +36,9 @@ function inspect() {
         }
       }
     });
-    const detail = card.querySelector('.ai-stat-detail'), style = getComputedStyle(detail);
+    const detail = card.querySelector('.ai-stat-detail');
+    if (!detail) return; // The compact database card has rows, not a metric detail.
+    const style = getComputedStyle(detail);
     details.push({index, height:rect(detail).height, lineHeight:style.lineHeight, overflow:style.overflow,
       rows:getComputedStyle(card).gridTemplateRows, link:!!detail.querySelector('a')});
   });
@@ -47,7 +51,7 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
   const measure = async label => {
     const layout = await evaluate(`(${inspect.toString()})()`);
     textLayouts.push({label,...layout});
-    assert.ok(layout.count === 13 || layout.count === 14, label + ': all standard cards present');
+    assert.ok(layout.count === 14 || layout.count === 15, label + ': all standard cards present');
     assert.deepEqual(layout.issues, [], label + ': text/link regions must fit: ' + JSON.stringify(layout));
     assert.equal(layout.pageOverflow, false, label + ': page overflow');
     assert.equal(layout.equalRows, true, label + ': sibling heights');
@@ -131,11 +135,12 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
     await evaluate(`current.result=__statsStress; current.period=__statsStress.view.ai_stats[0].period;
       __statsStress.view.ai_stats[0].matched.metric='${metric}'; current.stats.update(current);`);
     await measure('optional matched card ' + metric);
-    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),14);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),15);
     assert.equal(await evaluate(`current.stats.extra.lastChild.hash`),'#/comparisons');
+    assert.equal(await evaluate(`current.stats.extra.nextElementSibling.matches('.ai-stat-databases')`),true);
   }
   await evaluate(`selectStats(current,__statsPeriod)`);
-  assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),13);
+  assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),14);
   checks.push('actual text ranges, clipping ancestors and separate rows; long/short/unbroken titles, dates, large values, unknown/partial/empty, optional facts, five periods, units, fonts, 100/125/150/200% text scaling');
 };
 

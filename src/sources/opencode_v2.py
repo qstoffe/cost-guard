@@ -36,6 +36,7 @@ from .discovery import (
     ServiceRegistration,
     ServiceRegistrationCandidate,
     ServiceRegistrationError,
+    default_opencode_data_dir,
     discover_v2_registration_candidate,
     read_v2_service_registration,
 )
@@ -177,6 +178,13 @@ class OpenCodeV2Source:
     @property
     def registration_path(self) -> Path:
         return self._candidate.path
+
+    @property
+    def local_database_path(self) -> Path | None:
+        """Only the discovered, already validated local service implies the default DB."""
+        if self._candidate.origin == "default" and self._endpoint is not None:
+            return default_opencode_data_dir() / "opencode.db"
+        return None
 
     def _read_endpoint(self) -> V2Endpoint:
         try:

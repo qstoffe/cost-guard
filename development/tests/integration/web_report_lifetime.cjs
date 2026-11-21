@@ -47,8 +47,9 @@ for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.
 // Presentation is independently tested in rendered probes; retain actual lifetime logic.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);
   class View {constructor(){this.root=ReportView.element();} selection(){} update(){} attach(){}}
+  class StatsView extends View {refreshDatabaseSizes(){this.databaseRefresh=(this.databaseRefresh || 0)+1;}}
   const TokenMixView={valid:()=>true,View}, ComparisonsView={valid:()=>true,View};
-  const AIStatsView={valid:()=>true,View,prioritize(){},observe(){return true;},remember(state,result){state.result=result;}};`,context);
+  const AIStatsView={valid:()=>true,View:StatsView,prioritize(){},observe(){return true;},remember(state,result){state.result=result;}};`,context);
 vm.runInContext(fs.readFileSync('src/web/assets/app.js','utf8'),context);
 const run = code=>vm.runInContext(code,context);
 const settle = async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
