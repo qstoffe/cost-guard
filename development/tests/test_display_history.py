@@ -141,6 +141,8 @@ class DisplayHistoryTests(unittest.TestCase):
             db.executescript("""
                 DROP TABLE archive_prompt_state;
                 DROP TABLE archive_prompt_history;
+                DROP VIEW archive_countable_requests;
+                DROP TABLE archive_fork_trees;
                 DROP TABLE archive_prompt_attribution;
                 DROP TABLE archive_request_membership;
                 DROP TABLE archive_request_rosters;
@@ -297,6 +299,8 @@ class DisplayHistoryTests(unittest.TestCase):
             db.executescript("""
                 DROP TABLE archive_prompt_state;
                 DROP TABLE archive_prompt_history;
+                DROP VIEW archive_countable_requests;
+                DROP TABLE archive_fork_trees;
                 DROP TABLE archive_prompt_attribution;
                 DROP TABLE archive_request_membership;
                 DROP TABLE archive_request_rosters;

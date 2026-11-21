@@ -16,7 +16,7 @@ SCAN_WINDOW = 32
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
-PROJECTION_REVISION = "sessions-typed-detail-4"
+PROJECTION_REVISION = "sessions-countable-requests-5"
 
 
 def scalar_dependency(service):

@@ -8,9 +8,10 @@ import unittest
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from src.analysis import analyze_snapshot
+from src.analysis.valuation import unique_usage
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
-from src.cache.display_requests import RequestRoster
+from src.cache.display_requests import RequestRoster, unqualified_forks
 
 
 def reference(signature, prices):
@@ -31,7 +32,8 @@ class DisplayRequestTests(unittest.TestCase):
         bundle = analyze_snapshot(snapshot, now_ms=10_000)
         roster = request_roster(snapshot, bundle, reference("pricing-v1", prices))
         child, = (entry for entry in roster.requests if entry.session_id == "child")
-        latest = replace(roster, requests=(child,), attribution=((child.key, "other-prompt"),))
+        standalone = replace(child, dedup_tree=None, ordinal=0, logical_prompt_id=None)
+        latest = replace(roster, requests=(standalone,), attribution=((child.key, "other-prompt"),))
         self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), None,
                                      previous_progress=0, request_roster=roster),))
         self.history.commit_sessions("trusted", (SessionChange(SessionFact("other", "r1", "Other"), None,
@@ -45,7 +47,8 @@ class DisplayRequestTests(unittest.TestCase):
         restarted.initialize()
         with restarted._connect(read=True) as db:
             observations = db.execute("""
-                SELECT clock_ms,logical_prompt_id,input_tokens,output_tokens,billed,input_cost,pricing
+                SELECT clock_ms,logical_prompt_id,input_tokens,output_tokens,billed,input_cost,pricing,
+                       dedup_tree,request_ordinal
                 FROM archive_requests WHERE source='trusted' AND session_id='child'
             """).fetchall()
             links = db.execute("""
@@ -54,7 +57,7 @@ class DisplayRequestTests(unittest.TestCase):
             """, (child.key,)).fetchall()
             payloads = db.execute("SELECT count(*) FROM archive_requests WHERE source='separate'").fetchone()[0]
 
-        self.assertEqual([(1400, "cu", 20, 5, "0.20", "0.11", "pricing-v1")], observations)
+        self.assertEqual([(1400, "cu", 20, 5, "0.20", "0.11", "pricing-v1", "root", child.ordinal)], observations)
         self.assertEqual([("other", "other-prompt"), ("root", "u_sub")], links)
         self.assertEqual(1, payloads)
         self.assertEqual(2, restarted.session_page("trusted").total)
@@ -62,6 +65,7 @@ class DisplayRequestTests(unittest.TestCase):
         restarted.clear_confirmed_sessions("trusted", archive_state)
         with restarted._connect(read=True) as db:
             self.assertEqual([("separate",)], db.execute("SELECT DISTINCT source FROM archive_requests").fetchall())
+            self.assertEqual([], db.execute("SELECT source FROM archive_fork_trees").fetchall())
 
     def test_unpriced_refresh_preserves_compatible_price_but_not_after_token_correction(self):
         snapshot = make_snapshot()
@@ -97,3 +101,125 @@ class DisplayRequestTests(unittest.TestCase):
         partial = request_roster(replace(snapshot, complete=False), bundle, reference("pricing-v1", None))
 
         self.assertIsNone(partial)
+
+    def test_global_fork_selection_preserves_sibling_multiplicity_and_repairs_old_group(self):
+        snapshot = make_snapshot()
+        bundle = analyze_snapshot(snapshot, now_ms=10_000)
+        priced = request_roster(snapshot, bundle, reference("pricing-v1", (Decimal(1),) * 4))
+        first = next(entry for entry in priced.requests if entry.session_id == "child")
+        sibling = replace(first, key=b"second-physical-call", ordinal=11)
+        clone = replace(first, key=b"forked-physical-call", dedup_tree="clone", ordinal=0)
+        for root, requests in (("root", (first, sibling)), ("clone", (clone,))):
+            roster = RequestRoster("pricing-v1", requests, ())
+            self.history.commit_sessions("trusted", (SessionChange(SessionFact(root, "r1", root), None,
+                previous_progress=0, request_roster=roster),))
+        with self.history._connect(read=True) as db:
+            before = {key for key, in db.execute("SELECT request_key FROM archive_countable_requests")}
+
+        corrected = replace(sibling, fork_key=b"corrected-fingerprint")
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r2", "root"), "r1",
+            previous_progress=1, request_roster=RequestRoster("pricing-v1", (first, corrected), ())),))
+        with self.history._connect(read=True) as db:
+            after = {key for key, in db.execute("SELECT request_key FROM archive_countable_requests")}
+
+        self.assertEqual({first.key, sibling.key}, before)
+        self.assertEqual({clone.key, corrected.key}, after)
+
+    def test_real_projection_matches_canonical_fork_selection_even_when_loser_arrives_first(self):
+        parent = make_snapshot()
+        child = next(session for session in parent.sessions if session.session_id == "child")
+        original = next(item for item in parent.invocations if item.session_id == "child")
+        clone = replace(child, session_id="fork", parent_session_id=None)
+        child_view = replace(parent, root=child, sessions=(child,), events=(), messages=(),
+                             invocations=(original,))
+        fork_view = replace(child_view, root=clone, sessions=(clone,),
+                            invocations=(replace(original, session_id="fork"),))
+        price = reference("p1", (Decimal(1),) * 4)
+        bundles = tuple(analyze_snapshot(snapshot, now_ms=10_000) for snapshot in (child_view, fork_view, parent))
+        rosters = tuple(request_roster(snapshot, bundle, price)
+                        for snapshot, bundle in zip((child_view, fork_view, parent), bundles))
+        child_capture, = rosters[0].requests
+        clone_capture, = rosters[1].requests
+        all_entries = [entry for bundle in bundles for entry in bundle.trace_entries]
+        canonical = {entry.session_id for entry in unique_usage(all_entries) if entry.completed_at_ms == 1400}
+
+        for root, roster in zip(("child", "fork", "root"), rosters):
+            self.history.commit_sessions("trusted", (SessionChange(SessionFact(root, "r1", root), None,
+                                        previous_progress=0, request_roster=roster),))
+        with self.history._connect(read=True) as db:
+            selected = db.execute("""
+                SELECT request_key FROM archive_countable_requests WHERE source='trusted' AND clock_ms=1400
+            """).fetchall()
+            assigned = db.execute("SELECT dedup_tree,logical_prompt_id FROM archive_requests WHERE request_key=?",
+                                  (child_capture.key,)).fetchone()
+
+        self.assertIsNone(child_capture.dedup_tree)
+        self.assertEqual({"fork"}, canonical)  # Earlier ordinal at the same clock, despite the child ID sorting first.
+        self.assertEqual([(clone_capture.key,)], selected)
+        self.assertEqual(("root", "cu"), assigned)
+
+    def test_qualified_reparenting_moves_physical_request_without_retracting_old_evidence(self):
+        parent = make_snapshot()
+        new_parent = replace(parent.root, session_id="new-root")
+        child = next(session for session in parent.sessions if session.session_id == "child")
+        moved = replace(child, parent_session_id="new-root")
+        reparented = replace(parent, root=new_parent, sessions=(new_parent, moved), events=(), messages=(),
+                             invocations=tuple(item for item in parent.invocations if item.session_id == "child"))
+        price = reference("p1", (Decimal(1),) * 4)
+        first = request_roster(parent, analyze_snapshot(parent, now_ms=10_000), price)
+        latest = request_roster(reparented, analyze_snapshot(reparented, now_ms=10_000), price)
+        child_key = latest.requests[0].key
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), None,
+                                    previous_progress=0, request_roster=first),))
+
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("new-root", "r1", "New"), None,
+                                    previous_progress=0, request_roster=latest),))
+        with self.history._connect(read=True) as db:
+            tree = db.execute("SELECT dedup_tree,logical_prompt_id FROM archive_requests WHERE request_key=?",
+                              (child_key,)).fetchone()
+            ranks = db.execute("""
+                SELECT dedup_tree,multiplicity FROM archive_fork_trees WHERE fork_key=?
+            """, (latest.requests[0].fork_key,)).fetchall()
+            owners = db.execute("""
+                SELECT root_id FROM archive_request_membership WHERE request_key=? ORDER BY root_id
+            """, (child_key,)).fetchall()
+
+        self.assertEqual(("new-root", "cu"), tree)
+        self.assertEqual([("new-root", 1)], ranks)
+        self.assertEqual([("new-root",), ("root",)], owners)
+
+    def test_v9_keeps_source_missing_requests_and_reports_unproven_fork_membership(self):
+        snapshot = make_snapshot()
+        bundle = analyze_snapshot(snapshot, now_ms=10_000)
+        roster = request_roster(snapshot, bundle, reference("p1", (Decimal(1),) * 4))
+        child = next(request for request in roster.requests if request.session_id == "child")
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), None,
+                                    previous_progress=0, request_roster=roster),))
+        checkpoint = self.history.session_checkpoints("trusted", ("root",))["root"]
+        self.history.commit_sessions("trusted", missing=(("root", checkpoint),))
+        with self.history._connect() as db:
+            db.executescript("""
+                DROP VIEW archive_countable_requests;
+                DROP TABLE archive_fork_trees;
+                DROP INDEX archive_fork_candidates;
+                DROP INDEX archive_unqualified_forks;
+                ALTER TABLE archive_requests DROP COLUMN dedup_tree;
+                ALTER TABLE archive_requests DROP COLUMN request_ordinal;
+                PRAGMA user_version=9;
+            """)
+
+        restarted = DisplayHistory(self.root)
+        restarted.initialize()
+        with restarted._connect(read=True) as db:
+            physical = db.execute("SELECT clock_ms,input_tokens,input_cost FROM archive_requests WHERE request_key=?",
+                                  (child.key,)).fetchone()
+            countable = db.execute("SELECT count(*) FROM archive_countable_requests").fetchone()[0]
+            inside_gap = unqualified_forks(db, "trusted", start_ms=1400, end_ms=1400)
+            outside_gap = unqualified_forks(db, "trusted", end_ms=1399)
+            foreign_gap = unqualified_forks(db, "separate")
+
+        self.assertEqual((1400, 20, "1"), physical)
+        self.assertEqual(0, countable)
+        self.assertTrue(inside_gap)
+        self.assertFalse(outside_gap)
+        self.assertFalse(foreign_gap)

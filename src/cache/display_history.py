@@ -9,10 +9,10 @@ from threading import Lock
 import time
 
 from .display_prompts import prompt_page, prompt_schema
-from .display_requests import RequestRoster, publish_roster, request_schema
+from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -240,6 +240,7 @@ class DisplayHistory:
                     DELETE FROM session_scope_coverage;
                 """ if version < 7 else ""
                 requests = request_schema() if version < 8 else ""
+                prompts = prompt_schema() if version < 9 else ""
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
@@ -249,7 +250,8 @@ class DisplayHistory:
                     {self._coverage_schema()}
                     {help_columns}
                     {requests}
-                    {prompt_schema()}
+                    {prompts}
+                    {countable_schema(upgrade=version >= 8)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -295,6 +297,7 @@ class DisplayHistory:
                 {self._coverage_schema()}
                 {request_schema()}
                 {prompt_schema()}
+                {countable_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -484,6 +487,7 @@ class DisplayHistory:
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))

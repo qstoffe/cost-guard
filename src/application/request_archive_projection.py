@@ -47,6 +47,25 @@ def display_prompt(row, kind):
     )
 
 
+def _qualified_tree_members(snapshot):
+    """Only an observed path from a top-level root qualifies a fork tree."""
+    root = snapshot.root
+    if root.parent_session_id is not None:
+        return set()
+    children = {}
+    for session in snapshot.sessions:
+        if session.parent_session_id is not None:
+            children.setdefault(session.parent_session_id, []).append(session.session_id)
+    members = {root.session_id}
+    pending = [root.session_id]
+    while pending:
+        for child in children.get(pending.pop(), ()):
+            if child not in members:
+                members.add(child)
+                pending.append(child)
+    return members
+
+
 def request_roster(snapshot, bundle, reference, *, config=None):
     """Reject unstable or unidentifiable acquisitions, never infer retractions."""
     prompt_count = len(bundle.prompts) + len(bundle.compactions) if config is not None else 0
@@ -78,6 +97,7 @@ def request_roster(snapshot, bundle, reference, *, config=None):
             if len(chosen) + len(attributed) + prompt_count > ROOT_WRITE_LIMIT:
                 return None
 
+    tree_members = _qualified_tree_members(snapshot)
     requests = []
     for key, entry in chosen.items():
         known = sum(1 << index for index, name in enumerate(TOKEN_FIELDS) if name in entry.tokens.known_fields)
@@ -91,12 +111,14 @@ def request_roster(snapshot, bundle, reference, *, config=None):
                        and entry.reported_cost_currency is not None)
         requests.append(DisplayRequest(
             key, entry.completed_at_ms if entry.completed_at_ms > 0 else None,
-            _key(fingerprint) if fingerprint else None, entry.session_id,
+            _key((entry.source_instance, fingerprint)) if fingerprint else None, entry.session_id,
             executing_prompt[1] if executing_prompt is not None else None,
             entry.model.provider, entry.model.model, entry.model.recorded_model, _account(entry),
             tuple(getattr(entry.tokens, field) for field in TOKEN_FIELDS), known,
             entry.reported_cost if has_billing else None, entry.reported_cost_currency if has_billing else None,
             entry.cost_disposition.value, amounts, entry.selected_effort or entry.variant, entry.summary,
+            snapshot.root.session_id if entry.session_id in tree_members else None,
+            entry.sort_order,
         ))
     detail = () if config is not None else None
     if config is not None and prompt_count:
