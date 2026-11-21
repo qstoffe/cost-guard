@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from src.application.session_archive_projection import SessionPublication
+from src.application.session_archive_owner import SessionArchiveOwner
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.reports.models import SessionUsageRow
 
@@ -208,3 +209,29 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertIsNone(proof.project(settled, current_revision="r3", current_epoch="observation"))
         self.assertIsNone(proof.project(settled, current_revision="r2", current_epoch="other"))
         self.assertIsNone(proof.project(running, current_revision="r2", current_epoch="observation"))
+
+    def test_owner_announces_only_committed_observations_and_refuses_old_binding(self):
+        notifications = []
+        def observed(kind, event):
+            snapshot = self.history.session_page("source")
+            notifications.append((kind, event, snapshot.generation, snapshot.rows[0].title))
+        owner = SessionArchiveOwner(self.history, observed)
+        revisions = {"session": "r"}
+        self.assertIsNone(owner.admit(revisions))
+        owner.bind("source", "first")
+        admission = owner.admit(revisions)
+        owner.publish_catalog(admission, {"session": "Metadata"}, revisions)
+        self.assertEqual([("cache", {"view": "sessions", "binding": "first", "generation": 1}, 1, "Metadata")],
+                         notifications)
+        acquired = owner.admit(revisions)
+        row = SessionUsageRow("session", "Authoritative", "Model", False, Decimal("2"), 1)
+        owner.bind("other", "second")
+        self.assertIsNone(owner.commit(acquired, {"session": row}, revisions))
+        owner.bind("source", "third")
+        admission = owner.admit(revisions)
+
+        owner.commit(admission, {"session": row}, revisions)
+
+        self.assertEqual(("cache", {"view": "sessions", "binding": "third", "generation": 2}, 2, "Authoritative"),
+                         notifications[-1])
+        self.assertEqual(2, len(notifications))

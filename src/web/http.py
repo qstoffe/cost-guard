@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import socket
 from socketserver import TCPServer
+import sqlite3
 import time
 from threading import BoundedSemaphore, Timer
 
@@ -400,6 +401,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/sessions" and self.server.lifecycle and self.server.lifecycle.live:
                 self.session_catalog(value)
                 return
+            if self.path == "/api/cache/sessions":
+                self.cached_sessions(value)
+                return
             match = JOB_PATH.fullmatch(self.path)
             if match and match[2] and not value:
                 found = self.server.jobs.cancel(match[1])
@@ -533,6 +537,27 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(410, {"error": "catalog_expired"})
         except RuntimeError:
             self.reply(429, {"error": "catalog_busy"})
+
+    def cached_sessions(self, value):
+        if set(value) - {"period", "sort", "direction", "offset"}:
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        views = getattr(owner, "cached_session_views", None)
+        if views is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+            return
+        try:
+            result = views.page(**value)
+        except (TypeError, ValueError):
+            self.reply(400, {"error": "invalid_request"})
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+        else:
+            if views is not getattr(owner, "cached_session_views", None):
+                self.reply(503, {"error": "cache_source_unbound"})
+            else:
+                self.reply(200, result)
 
     def stream_events(self):
         if not self.server._streams.acquire(blocking=False):
