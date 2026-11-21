@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .display_prompts import DisplayPrompt, publish_prompts
+from .display_usage_reader import advance_usage_revision
 
 TOKEN_FIELDS = ("input", "cache_read", "cache_write", "output", "reasoning")
 ROOT_WRITE_LIMIT = 4096
@@ -210,13 +211,18 @@ def publish_roster(db, source, root_id, revision, roster):
                                                             archive_requests.logical_prompt_id) END
     """
     updates = ", ".join(f"{column}={value}" for column, value in values.items())
-    db.executemany(f"""
+    compared = ", ".join(f"archive_requests.{column}" for column in values)
+    proposed = ", ".join(values.values())
+    written = db.executemany(f"""
         INSERT INTO archive_requests(source, {fields}) VALUES(?, {marks})
         ON CONFLICT(source, request_key) DO UPDATE SET {updates}
         WHERE (excluded.known_fields & archive_requests.known_fields) = archive_requests.known_fields
           AND (excluded.dedup_tree IS NOT NULL OR archive_requests.dedup_tree IS NULL)
+          AND ({compared}) IS NOT ({proposed})
     """, ((source, *request.values(roster.pricing)) for request in roster.requests))
-    _update_fork_trees(db, source, before, _fork_candidates(db, source, keys))
+    if written.rowcount:
+        _update_fork_trees(db, source, before, _fork_candidates(db, source, keys))
+        advance_usage_revision(db, source)
     # Missing requests/children may have been deleted from OpenCode, even when
     # the root still exists. A roster observes availability, not retraction.
     db.executemany("INSERT OR IGNORE INTO archive_request_membership VALUES(?, ?, ?)",

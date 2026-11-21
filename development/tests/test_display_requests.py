@@ -12,6 +12,7 @@ from src.analysis.valuation import unique_usage
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_requests import RequestRoster, unqualified_forks
+from src.cache.display_usage_reader import USAGE_SLICE
 
 
 def reference(signature, prices):
@@ -93,6 +94,67 @@ class DisplayRequestTests(unittest.TestCase):
         self.assertEqual((20, "1", "pricing-v1"), last_priced)
         self.assertEqual(last_priced, after_stale)
         self.assertEqual((22, None, None), current)
+
+    def test_usage_cursor_keeps_exact_population_across_membership_and_stops_on_correction(self):
+        snapshot = make_snapshot()
+        bundle = analyze_snapshot(snapshot, now_ms=10_000)
+        prices = (Decimal("0.000000000000000000000151"), Decimal(0), Decimal(0), Decimal("1.11"))
+        roster = request_roster(snapshot, bundle, reference("pricing-v1", prices))
+        child = next(request for request in roster.requests if request.session_id == "child")
+        requests = tuple(replace(child, key=index.to_bytes(4, "big"), fork_key=None)
+                         for index in range(USAGE_SLICE + 2))
+        # The first page may consist of only disqualified rows; its raw key must
+        # still advance the bounded traversal instead of stopping at "no facts".
+        early = tuple(replace(item, fork_key=b"unqualified", dedup_tree=None) for item in requests[:-2])
+        roster = replace(roster, requests=(*early, *requests[-2:]), attribution=())
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r1", "Root"), None,
+            previous_progress=0, request_roster=roster),))
+        first = self.history.usage_inputs("bound")
+        checkpoint = self.history.session_checkpoints("bound", ("root",))["root"]
+        self.history.commit_sessions("bound", missing=(("root", checkpoint),))
+
+        tail = self.history.usage_inputs("bound", expected=first.version, after=first.next_key)
+        foreign = self.history.usage_inputs("other")
+        checkpoint = self.history.session_checkpoints("bound", ("root",))["root"]
+        correction = replace(requests[-1], clock_ms=2222)
+        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r2", "Root"), "r1",
+            previous_progress=checkpoint.progress, request_roster=replace(roster, requests=(correction,))),))
+        stale = self.history.usage_inputs("bound", expected=first.version, after=first.next_key)
+        revised = self.history.usage_inputs("bound", after=first.next_key)
+
+        self.assertEqual((), first.entries)
+        self.assertEqual((1400,) * USAGE_SLICE, first.unqualified_clocks)
+        self.assertEqual(requests[USAGE_SLICE - 1].key, first.next_key)
+        self.assertEqual(first.version, tail.version)
+        self.assertEqual(tuple(request.key for request in requests[-2:]), tuple(item.request_key for item in tail.entries))
+        self.assertEqual((prices, prices), tuple(item.category_costs for item in tail.entries))
+        self.assertEqual(("child", "cu", 1400), (tail.entries[0].session_id, tail.entries[0].logical_prompt_id,
+                                                   tail.entries[0].clock_ms))
+        self.assertIsNone(tail.next_key)
+        self.assertEqual((), foreign.entries)
+        self.assertIsNone(stale)
+        self.assertEqual((1400, 2222), tuple(item.clock_ms for item in revised.entries))
+
+    def test_unchanged_fact_does_not_advance_usage_revision_but_explicit_clear_invalidates_it(self):
+        snapshot = make_snapshot()
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000),
+                                reference("pricing-v1", (Decimal(1),) * 4))
+        for current, previous, progress in (("r1", None, 0), ("r2", "r1", 1)):
+            self.history.commit_sessions("bound", (SessionChange(SessionFact("root", current, "Root"), previous,
+                previous_progress=progress, request_roster=roster),))
+            if previous is None:
+                original = self.history.usage_inputs("bound").version
+
+        confirmed = self.history.usage_inputs("bound", expected=original)
+        cleared = self.history.clear_confirmed_sessions("bound", self.history.source_state("bound"))
+        old = self.history.usage_inputs("bound", expected=original)
+        new = self.history.usage_inputs("bound")
+
+        self.assertEqual(original, confirmed.version)
+        self.assertTrue(confirmed.entries)
+        self.assertIsNone(old)
+        self.assertEqual(cleared.archive_epoch, new.version.archive_epoch)
+        self.assertEqual((), new.entries)
 
     def test_partial_source_cannot_supply_archive_replacement(self):
         snapshot = make_snapshot()

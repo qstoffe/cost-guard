@@ -10,10 +10,12 @@ import time
 
 from .display_prompts import prompt_page, prompt_schema
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
+from .display_mix_totals import mix_total_schema, publish_mix_totals, read_mix_total
+from .display_usage_reader import read_usage_slice, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -254,7 +256,9 @@ class DisplayHistory:
                     {requests}
                     {prompts}
                     {countable}
-                     {watch_schema(upgrade=version == 11)}
+                     {watch_schema(upgrade=version == 11) if version < 12 else ""}
+                     {usage_schema()}
+                     {mix_total_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -302,6 +306,8 @@ class DisplayHistory:
                 {prompt_schema()}
                 {countable_schema()}
                 {watch_schema()}
+                {usage_schema()}
+                {mix_total_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -482,6 +488,23 @@ class DisplayHistory:
             value = watch_snapshot(db, source, binding, now_ms, live_eligible=live_eligible, timezone_id=timezone_id)
             return dict(**value, archive_epoch=self._state(db, source).archive_epoch)
 
+    def usage_inputs(self, source, *, expected=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_usage_slice(db, source, expected=expected, after=after)
+
+    def replace_mix_totals(self, source, expected, timezone_id, rows):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            accepted = publish_mix_totals(db, source, expected, timezone_id, rows)
+            db.commit()
+            return accepted
+
+    def mix_total(self, source, timezone_id, period, start_ms, end_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_mix_total(db, source, timezone_id, period, start_ms, end_ms)
+
     @staticmethod
     def _advance_progress(db, source, session_id, revision, dependency):
         db.execute("""
@@ -508,6 +531,7 @@ class DisplayHistory:
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
