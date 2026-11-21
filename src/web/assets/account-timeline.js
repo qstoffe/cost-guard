@@ -398,7 +398,9 @@ const AccountTimelineView = (() => {
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
       this.selectedLegend.hidden = !view || !selectedSeries.length;
-      const legend = this.series.map(item => [this.colors.get(item.id), item.account, item.total ? shown(item.total) : '—']);
+      const legend = this.series.map(item => [
+        this.colors.get(item.id), item.account, item.total ? shown(item.total).replace(/^[~≈]/, '') : '—'
+      ]);
       const legendKey = JSON.stringify(legend);
       if (legendKey !== this.legendKey) {
         this.legendKey = legendKey;

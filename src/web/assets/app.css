@@ -289,12 +289,17 @@ section > label input { min-width: 0; }
   grid-column: 2; margin: .4rem 0 0; font-size: .76rem; line-height: 1.35;
 }
 .account-timeline-range { color: var(--muted); font-variant-numeric: tabular-nums; }
-.account-timeline-selected { display: grid; gap: .3rem; padding: 0; list-style: none; min-width: 0; }
-.account-timeline-selected li {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline;
-  gap: .4rem; min-width: 0; overflow-wrap: anywhere;
+.account-timeline-selected {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) max-content; justify-self: start;
+  gap: .3rem .4rem; padding: 0; list-style: none; min-width: 0;
 }
-.account-timeline-legend-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: end; }
+.account-timeline-selected > li {
+  display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.account-timeline-legend-value {
+  color: var(--muted); font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap;
+}
 .account-timeline-target { fill: transparent; }
 .account-timeline-loading { fill: color-mix(in srgb, var(--muted) 9%, transparent); }
 .account-timeline-future { fill: color-mix(in srgb, var(--muted) 4%, transparent); }
