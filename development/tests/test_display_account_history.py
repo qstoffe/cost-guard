@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import unittest
 
 from src.accounts.archive_identity import IdentityDeadline
+from src.analysis.account_timeline import PERIODS
 from src.analysis.cache import dependency_signature
 from src.application.account_timeline import archived_timeline_view
 from src.application.archive_account_history import AccountHistoryPublication, ArchiveAccountHistory, archived_account_roster
@@ -102,6 +103,59 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         self.assertEqual([(first, first + HOUR, Decimal(2)),
                           (first + HOUR, first + 2 * HOUR, Decimal(3))],
                          [(row.start, row.end, row.subtotal) for row in rows if row.subtotal is not None])
+
+    def test_accountless_recapture_cannot_erase_compatible_same_request_attribution(self):
+        clock = NOW - HOUR
+        other = AccountRef("source-account", "openai", account_id="foreign")
+        unseen = AccountRef("source-account", "openai", account_id="unseen")
+        series = tuple(SimpleNamespace(account=AccountSnapshot(ref, NOW, "OpenAI"), label=name)
+                       for ref, name in [(REF, "A"), (other, "B"), (unseen, "C")])
+        roster = archived_account_roster(series)
+        self.save((observation(1, clock), observation(2, clock, digest=OTHER, costs=("3", "0", "0", "0"))))
+        self.assertTrue(self.finish(AccountHistoryPublication(self.reducer(roster=roster))))
+
+        # The same source-bound request can have corrected usage without a
+        # fresh account field. Other requests at the same clock remain unbound.
+        self.save((
+            observation(1, clock, digest=None, costs=("2", "0", "0", "0")),
+            observation(3, clock, digest=None, costs=("1000", "0", "0", "0")),
+        ), revision="r2")
+        checkpoint = self.history.session_checkpoints("trusted", ("selected",))["selected"]
+        self.history.commit_sessions("trusted", missing=(("selected", checkpoint),))
+        self.history = DisplayHistory(self.root)
+        self.history.initialize()
+        self.assertTrue(self.finish(AccountHistoryPublication(self.reducer(roster=roster))))
+        provider_usage = self.history.account_usage("trusted", clock, NOW)
+        self.assertEqual([(ACCOUNT, Decimal(2)), (OTHER, Decimal(3)), (None, Decimal(1000))],
+                         [(row.account_key, row.costs[0]) for row in provider_usage.rows])
+
+        archive = DisplayArchive(self.root, lambda *_: None, accounts_enabled=True)
+        self.addCleanup(archive.close)
+        archive._set_binding(DisplayBinding("trusted", "registered"))
+        archive.accounts.offer(series, verified=True)
+        for period in PERIODS:
+            with self.subTest(period=period):
+                view = archive.accounts.snapshot(period, NOW)["view"]
+                self.assertEqual("unknown", view["coverage"])
+                rows = {row["account"]: row["total"] for row in view["series"]}
+                self.assertIsNotNone(rows["A"])
+                self.assertEqual("2", rows["A"]["amount"])
+                self.assertTrue(rows["A"]["display"]["credits"].startswith("~"))
+                self.assertEqual("3", rows["B"]["amount"])
+                self.assertIsNone(rows["C"])
+
+    def test_account_attribution_uses_new_evidence_and_never_borrows_across_route_or_clock(self):
+        clock = NOW - HOUR
+        self.save(tuple(observation(key, clock) for key in (1, 2, 3)))
+        self.save((observation(1, clock, digest=None, provider="unrelated"),
+                   observation(2, clock + HOUR // 2, digest=None),
+                   observation(3, clock, digest=OTHER)), revision="r2")
+
+        page = self.history.account_usage("trusted", clock, NOW)
+
+        self.assertEqual([("unrelated", clock, None), ("openai-codex", clock, OTHER),
+                          ("openai-codex", clock + HOUR // 2, None)],
+                         [(row.provider, row.clock_ms, row.account_key) for row in page.rows])
 
     def test_precommitted_rows_are_invisible_and_corrections_invalidate_partial_build(self):
         self.save(tuple(observation(index, NOW - HOUR) for index in range(USAGE_SLICE + 2)))

@@ -259,6 +259,15 @@ def upsert_request_values(db, source, first_revision, rows, *, private=False):
         CASE WHEN excluded.summary THEN NULL ELSE coalesce(excluded.logical_prompt_id,
                                                             {table}.logical_prompt_id) END
     """
+    # Missing account identity is not proof of a correction. Preserve the
+    # original issuer only for the same source-bound request, route and clock.
+    account_scope = ("provider", "session_id", "clock_ms", "summary")
+    new_scope = ",".join(f"excluded.{column}" for column in account_scope)
+    old_scope = ",".join(f"{table}.{column}" for column in account_scope)
+    values["account_key"] = f"""
+        CASE WHEN excluded.account_key IS NULL AND ({new_scope}) IS ({old_scope})
+             THEN {table}.account_key ELSE excluded.account_key END
+    """
     updates = ", ".join(f"{column}={value}" for column, value in values.items())
     compared = ", ".join(f"{table}.{column}" for column in values)
     proposed = ", ".join(values.values())
