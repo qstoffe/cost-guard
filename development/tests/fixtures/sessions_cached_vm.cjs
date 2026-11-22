@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 module.exports = async ({vm, context, Node}) => {
   const {document} = context;
   const calls = [];
+  // Nothing paints in this VM, so post-paint demand hints stay queued and cancellable.
+  const frames = new Map(); let frameId = 0;
+  context.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
+  context.cancelAnimationFrame = id => frames.delete(id);
   context.cachedApi = (path, request, signal) => new Promise(resolve => {
     calls.push({path, request, signal, resolve});
   });
