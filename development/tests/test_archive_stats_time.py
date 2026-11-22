@@ -14,6 +14,7 @@ from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_stats_evidence import StatsInterval
 from src.cache.display_stats_time import StatsCalendar, StatsRootTime, StatsTimeRow
 from src.cache.display_usage_reader import USAGE_SLICE
+from src.presentation.cached_stats import cached_stats
 
 
 def utc(value):
@@ -104,6 +105,27 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertIn("all", third.changed_periods)
         self.assertIsNone(third.stamp.next_end)
         self.assertEqual(2000, final.row.working_ms)
+
+    def test_overnight_share_uses_the_same_measured_period_union_and_preserves_known_zero(self):
+        midnight = utc("2026-11-22T00:00:00")
+        second = 1_000
+        noon = midnight + 12 * 3_600 * second
+        self.commit((
+            StatsInterval("root", "past-night", "prompt", midnight - 4 * second, 3 * second, False),
+            StatsInterval("root", "today-day", "prompt", noon, second, False),
+            StatsInterval("root", "pending-night", "prompt", midnight, second, True),
+        ))
+        now = noon + 2 * second
+        self.reduce(now)
+        reopened = DisplayHistory(self.root)
+        reopened.initialize()
+
+        today = reopened.stats_time("bound", "UTC", "today", midnight, now)
+        lifetime = reopened.stats_time("bound", "UTC", "all", None, now)
+
+        self.assertEqual("0%", cached_stats(today.row, None)["overnightShare"])
+        self.assertEqual("75%", cached_stats(lifetime.row, None)["overnightShare"])
+        self.assertNotIn("overnightShare", cached_stats(None, None))
 
     def test_obsolete_correction_binding_and_clear_cannot_replace_a_committed_snapshot(self):
         old = StatsInterval("root", "measured", "prompt", 1000, 400, False)

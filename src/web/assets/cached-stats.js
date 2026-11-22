@@ -5,7 +5,8 @@ const CachedStats = (() => {
     ['month', 'This month'], ['all', 'All time']];
   const fields = [['tokens', 'Observed tokens'], ['referenceCost', 'Known reference CCost'],
     ['working', 'Working time'], ['longest', 'Longest session'], ['busiest', 'Busiest day'],
-    ['overnight', 'Overnight work'], ['streak', 'Longest streak (days)'], ['parallel', 'Peak parallel sessions']];
+    ['overnight', 'Overnight work'], ['overnightShare', 'Overnight share of measured work'],
+    ['streak', 'Longest streak (days)'], ['parallel', 'Peak parallel sessions']];
   const revoked = new Set(['cache_source_unbound', 'authentication_required', 'host_identity_changed', 'instance_stopping']);
   const mark = (hint, period) => JSON.stringify(hint?.marks?.[period] ?? null);
   const clock = {now: () => Date.now(), set: (run, wait) => setTimeout(run, wait), cancel: id => clearTimeout(id)};

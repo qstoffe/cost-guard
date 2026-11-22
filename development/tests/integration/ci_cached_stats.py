@@ -60,6 +60,7 @@ def check_cached_stats(browser, evidence, product_root):
             working = view.locator('[data-metric="working"]')
             tokens = view.locator('[data-metric="tokens"]')
             reference = view.locator('[data-metric="referenceCost"]')
+            overnight_share = view.locator('[data-metric="overnightShare"]')
             expect(view.get_by_text("No measured work is cached for this period yet."),
                    f"Page errors: {errors!r}; requests: {[path for path, _ in requests]!r}").to_be_visible()
             for label in ("Today", "7 days", "30 days", "This month", "All time"):
@@ -69,6 +70,7 @@ def check_cached_stats(browser, evidence, product_root):
                 expect(working).to_have_text("—")
                 expect(tokens).to_have_text("—")
                 expect(reference).to_have_text("—")
+                expect(overnight_share).to_have_text("—")
                 expect(page.locator("#result")).to_have_attribute("aria-busy", "false")
 
             now = int(time.time() * 1000)
@@ -93,7 +95,8 @@ def check_cached_stats(browser, evidence, product_root):
                         return
                 raise AssertionError("fixture failed to commit measured time")
 
-            publish("recent", now - 360_000, 60_000, now)
+            midnight = now // 86_400_000 * 86_400_000
+            publish("recent", midnight - 12 * 3_600_000, 60_000, now)  # Yesterday at noon UTC.
             expect(working).to_have_text("1m")
             expect(tokens).to_have_text("67")
             expect(reference).to_have_text("$0.50")
@@ -101,6 +104,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(reference).to_have_text("50")
             expect(view.locator('[data-metric="longest"]')).to_have_text("1m")
             expect(view.locator('[data-metric="parallel"]')).to_have_text("1")
+            expect(overnight_share).to_have_text("0%")
             expect(view.get_by_role("button", name="All time", exact=True)).to_be_focused()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
@@ -116,13 +120,15 @@ def check_cached_stats(browser, evidence, product_root):
             peer.wait_for_function("() => statsCache.hint?.marks?.['7-days'] && !statsCache.flight")
             peer_reads = sum(path == "/api/cache/ai-stats" for path, _ in peer_requests)
 
-            publish("aged", now - 60 * 86_400_000, 120_000, now + 1)
+            publish("aged", midnight - 60 * 86_400_000 + 3 * 3_600_000, 120_000, now + 1)
             expect(working).to_have_text("3m")
             expect(tokens).to_have_text("134")
             expect(reference).to_have_text("100")
+            expect(overnight_share).to_have_text("67%")
             peer.wait_for_function("(clock) => statsCache.hint?.marks?.all?.[1] === clock", arg=now + 1)
             expect(peer_working).to_have_text("1m")
             expect(peer_tokens).to_have_text("67")
+            expect(peer_view.locator('[data-metric="overnightShare"]')).to_have_text("0%")
             assert sum(path == "/api/cache/ai-stats" for path, _ in peer_requests) == peer_reads
 
             period = view.get_by_role("button", name="7 days", exact=True)
@@ -135,6 +141,7 @@ def check_cached_stats(browser, evidence, product_root):
             }, {once: true})""")
             period.click()
             expect(working).to_have_text("1m")
+            expect(overnight_share).to_have_text("0%")
             applied = page.wait_for_function("window.statsAppliedMs").json_value()
             expect(period).to_be_focused()
 
@@ -143,6 +150,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(peer_working).to_have_text("—")
             expect(tokens).to_have_text("—")
             expect(reference).to_have_text("—")
+            expect(overnight_share).to_have_text("—")
             archive.observe(driver, before_tick=True)
             expect(working).to_have_text("1m")
             expect(peer_working).to_have_text("1m")

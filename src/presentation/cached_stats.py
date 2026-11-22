@@ -1,5 +1,6 @@
 """Presentation of strictly observed, cached AI Stats subtotals."""
 from datetime import date
+from decimal import Decimal
 
 from src.analysis.timezones import DateTimeMode, format_date_time
 from src.display import compact_tokens, duration_text
@@ -30,7 +31,9 @@ def _measured_stats(row):
         calendar = row.calendar
         day = format_date_time(date.fromordinal(calendar.busiest_local_day), DateTimeMode.DATE)
         result.update(busiest=f"{day} · {duration_text(calendar.busiest_ms)}",
-                      overnight=duration_text(calendar.night_ms), streak=str(calendar.streak_days))
+                      overnight=duration_text(calendar.night_ms),
+                      overnightShare=f"{Decimal(calendar.night_ms) * 100 / row.working_ms:.0f}%",
+                      streak=str(calendar.streak_days))
     if row.roots is not None:
         result.update(longest=duration_text(row.roots.longest_ms), parallel=str(row.roots.peak_roots))
     return result
