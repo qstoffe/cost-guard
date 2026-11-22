@@ -211,3 +211,61 @@ class V1ChildLaunchTests(unittest.TestCase):
         self.assertTrue(all(row.continuing for row in rows))
         self.assertEqual(set(expected), set(index.links_by_message["launch"][0].continuing_ids))
         self.assertLess(max(work), 2500)
+
+    def test_walk_clips_foreground_allows_background_and_follows_only_proven_crossing_attempt(self):
+        with closing(sqlite3.connect(self.source_path)) as db, db:
+            _session(db, "child", ROOT)
+            for session in ("foreground", "background", "continued", "unrelated"):
+                _session(db, session, "child")
+            _message(db, ROOT, "launch", 1500, role="assistant")
+            _tool(db, ROOT, "launch", "first", "first", 2000, 2400, 2400, metadata={"sessionID": "child"})
+            _turn(db, "child", "in-window", 2050)
+            _turn(db, "child", "later-owner", 2750)
+            _message(db, "child", "short", 2100, role="assistant", parentID="in-window", time={"completed": 2350})
+            _tool(db, "child", "short", "foreground", "foreground", 2150, 2650, 2650,
+                  metadata={"sessionID": "foreground"})
+            _tool(db, "child", "short", "background", "background", 2200, 2300, 2300,
+                  metadata={"sessionID": "background", "background": True})
+            _message(db, "child", "crossing", 2300, role="assistant", parentID="bound", time={"completed": 2640})
+            _tool(db, "child", "crossing", "continued", "continued", 2500, 2800, 2800,
+                  metadata={"sessionID": "continued"})
+            _message(db, "child", "later", 2780, role="assistant", parentID="later-owner", time={"completed": 2950})
+            _tool(db, "child", "later", "unrelated", "unrelated", 2800, 2900, 2900,
+                  metadata={"sessionID": "unrelated"})
+        source = OpenCodeV1Source(self.source_path)
+        snapshot = source.load_session_snapshot(ROOT)
+        root_assistant = next(message for message in snapshot.messages if message.message_id == "launch")
+        legacy = ChildLinkIndex(snapshot).scopes([root_assistant])
+
+        with closing(sqlite3.connect(self.stage_path)) as db:
+            with source.archive_cursor(ROOT) as cursor:
+                trace = V1ArchiveTrace(source, cursor, db)
+                for _ in range(64):
+                    if trace.capture_turn():
+                        break
+                else:
+                    self.fail("source cursor did not reach EOF")
+            with self.assertRaisesRegex(SourceDataError, "not ready"):
+                trace.child_scope_walk("launch")
+            self.assertEqual((), trace.child_launch_turn())  # All five winners are qualified in one turn.
+            walk = trace.child_scope_walk("launch")
+            scopes = []
+            for _ in range(64):
+                page = walk.turn()
+                if page is None:
+                    break
+                scopes.extend(page)
+            else:
+                self.fail("scope walk did not reach EOF")
+
+        expected = {
+            ("child", 2000, 2400, 2750, False),
+            ("foreground", 2150, 2400, OPEN_END, False),
+            ("background", 2200, OPEN_END, OPEN_END, True),
+            ("continued", 2500, 2750, OPEN_END, False),
+        }
+        self.assertEqual(expected, {(s.session_id, s.start_ms, s.end_ms, s.invocation_end_ms, s.background)
+                                    for s in legacy})
+        self.assertEqual(expected, {(s.direct.session_id, s.direct.start_ms, s.end_ms,
+                                     s.direct.invocation_end_ms, s.direct.background) for s in scopes})
+        self.assertEqual(len(expected), len(scopes))

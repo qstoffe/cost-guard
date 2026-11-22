@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 
 from src.analysis.child_links import OPEN_END, tool_call_key, tool_launch
+from src.sources.errors import SourceDataError
 
 from . import v1_child_membership
 from .v1_trace_facts import COMPACTION, PROMPT, SUBTASK
@@ -22,6 +23,7 @@ SCHEMA = """
         target TEXT NOT NULL, start INTEGER NOT NULL, finish INTEGER NOT NULL, background INTEGER NOT NULL
     );
     CREATE INDEX trace_child_launch ON trace_launches(target,start);
+    CREATE INDEX trace_launch_message ON trace_launches(session,message,ordinal);
 """
 
 
@@ -50,6 +52,19 @@ class ChildLaunches:
     def membership(self, window):
         self._membership_id += 1
         return v1_child_membership.ChildWindowMembership(self._db, self._membership_id, window)
+
+    def require_qualified(self):
+        if not self._qualified:
+            raise SourceDataError("V1 child launches are not ready for a message seek", phase="archive")
+
+    def links_for_message(self, session, message, after):
+        self.require_qualified()
+        rows = self._db.execute("""
+            SELECT ordinal,session,message,target,start,finish,background
+            FROM trace_launches INDEXED BY trace_launch_message
+            WHERE session=? AND message=? AND ordinal>? ORDER BY ordinal LIMIT ?
+        """, (session, message, after, _WINDOW_ROWS)).fetchall()
+        return tuple((row[0], self._window(*row[1:])) for row in rows)
 
     def accept(self, part, message, native_message, native_part):
         key = tool_call_key(part, message)

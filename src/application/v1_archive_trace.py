@@ -11,7 +11,7 @@ from src.sources.errors import SourceDataError
 from src.sources.opencode_requests import observed_response
 from src.sources.opencode_v1 import _event_kind, _subtask_selection
 
-from . import v1_trace_facts as facts
+from . import v1_child_walk, v1_trace_facts as facts
 from .v1_child_launches import ChildLaunches
 
 
@@ -52,7 +52,7 @@ class V1ArchiveTrace:
         self._fallback_after = None
         self._trace_after = None
         self._ordinal = 0
-        stage.executescript(facts.SCHEMA)
+        stage.executescript(facts.SCHEMA + v1_child_walk.SCHEMA)
         self._launches = ChildLaunches(stage)
 
     def capture_turn(self):
@@ -132,6 +132,11 @@ class V1ArchiveTrace:
         if self._phase in ("input", "invalid"):
             raise SourceDataError("V1 child launch stage is not ready", phase="archive")
         return self._launches.membership(window)
+
+    def child_scope_walk(self, root_assistant_id):
+        if self._phase in ("input", "invalid"):
+            raise SourceDataError("V1 child launch stage is not ready", phase="archive")
+        return v1_child_walk.ChildScopeWalk(self._db, self._launches, self._root, root_assistant_id)
 
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""
