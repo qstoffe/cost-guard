@@ -19,9 +19,18 @@ from src.sources.errors import SourceConcurrentChangeError
 START = 1_000_000_000
 
 
-def finished_snapshot(index, at, *, revision="new"):
-    value = make_root_snapshot(index, 1, month_start_ms=at - index * 60_000)
+def finished_snapshot(index, at, *, revision="new", prompts=1):
+    value = make_root_snapshot(index, prompts, month_start_ms=at - index * 60_000)
     return replace(value, complete=True, source_revision=revision)
+
+
+def publish_snapshot(cards, source, tmp, snapshot, now_ms):
+    key = snapshot.root.session_id
+    source.snapshots[key] = snapshot
+    cards.catalog(observe_catalog(source))
+    service = make_service(tmp, source, now_ms=now_ms)[2]
+    capture, item = capture_rows(service, snapshot.root)
+    cards.accept(CardResult(key, cards.sessions[key].generation, "rows", (capture, (), item.snapshot)), now_ms)
 
 
 class RecentFinishedTests(unittest.TestCase):
@@ -281,6 +290,61 @@ class RecentFinishedTests(unittest.TestCase):
             recent = cards.recent.project(cards, START + 40_000)
             self.assertEqual((START - 1000, START + 2000),
                 (recent[0].rows[0].prompt.at_ms, recent[0].rows[0].prompt.completed_at_ms))
+
+    def test_finished_successor_replaces_grace_with_or_without_certified_history(self):
+        for archive_ready in (False, True):
+            with self.subTest(archive_ready=archive_ready), tempfile.TemporaryDirectory() as tmp:
+                source = SyntheticMonthSource(2, 1, month_start_ms=START + 100, running_roots=1)
+                cards = WatchCards(None, started_at_ms=START)
+                root = "root-0000"
+                if archive_ready:
+                    archived = finished_snapshot(1, START - 60_000)
+                    publish_snapshot(cards, source, tmp, archived, START + 200)
+                running = replace(source.snapshots[root], complete=True)
+                publish_snapshot(cards, source, tmp, running, START + 250)
+                first = finished_snapshot(0, START + 100)
+                publish_snapshot(cards, source, tmp, first, START + 500)
+                self.assertEqual(["root-0000-u-0000"], [card.focal_id for card in cards.project(START + 500)[0]])
+                successor = finished_snapshot(0, START + 100, revision="successor", prompts=2)
+
+                publish_snapshot(cards, source, tmp, successor, START + 1500)
+                active, earlier, _ = cards.project(START + 1500)
+                recent = cards.recent.project(cards, START + 1500)
+
+                self.assertEqual((), active)
+                self.assertEqual("observed" if archive_ready else "loading", cards.history.state)
+                self.assertEqual((), recent if archive_ready else earlier)
+                self.assertEqual([("root-0000-u-0001", START + 1100, START + 1400)],
+                    [(row.prompt.event_id, row.prompt.at_ms, row.prompt.completed_at_ms)
+                     for card in earlier + recent if card.session_id == root for row in card.rows])
+
+    def test_unproven_or_overlapping_finish_cannot_retire_another_prompts_grace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(1, 1, month_start_ms=START + 100, running_roots=1)
+            cards = WatchCards(None, started_at_ms=START)
+            root = "root-0000"
+            publish_snapshot(cards, source, tmp, replace(source.snapshots[root], complete=True), START + 250)
+            first = finished_snapshot(0, START + 100)
+            publish_snapshot(cards, source, tmp, first, START + 500)
+            successor = finished_snapshot(0, START + 100, revision="successor", prompts=2)
+            source.snapshots[root] = successor
+            cards.catalog(observe_catalog(source))
+            now = START + 1500
+            service = make_service(tmp, source, now_ms=now)[2]
+            capture, item = capture_rows(service, successor.root)
+            entry = cards.sessions[root]
+            old, new = capture.rows
+            result = CardResult(root, entry.generation, "rows", (capture, (), item.snapshot))
+            cases = (
+                replace(result, generation=entry.generation - 1),
+                replace(result, value=(capture, (), replace(item.snapshot, source_revision="old"))),
+                replace(result, value=(replace(capture, retained=True), (), item.snapshot)),
+                replace(result, value=(replace(capture, rows=(old, replace(new, completed_at_ms=None))), (), item.snapshot)),
+                replace(result, value=(replace(capture, rows=(old, replace(new, at_ms=START + 300))), (), item.snapshot)),
+            )
+            for attempt in cases:
+                cards.accept(attempt, now)
+                self.assertEqual(["root-0000-u-0000"], [card.focal_id for card in cards.project(now)[0]])
 
 
 if __name__ == "__main__":

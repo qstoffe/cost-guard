@@ -133,7 +133,7 @@ def _sessions_metrics(page, *, running):
         raise AssertionError((running, state)) from error
 
 
-def check_p0_v1(browser, product_root, *, history=0):
+def check_p0_v1(browser, product_root, *, history=0, burst=None):
     from playwright.sync_api import expect
 
     with TemporaryDirectory() as directory:
@@ -168,7 +168,7 @@ def check_p0_v1(browser, product_root, *, history=0):
 
         def hold_catalog(now):
             entered.set()
-            if not release.wait(45):
+            if not release.wait(240 if burst else 45):
                 raise AssertionError("fixture did not release held historical read")
             return history_factory(now)
 
@@ -192,6 +192,13 @@ def check_p0_v1(browser, product_root, *, history=0):
                 assert not page.locator(".watch-view").count()
                 if history:
                     assert entered.wait(8) and not coordinator.catalog_job.done()
+                if burst:
+                    result = burst(page, path, coordinator.cards, requests, committed)
+                    assert not errors, errors
+                    assert not {"/api/reports", "/api/detail", "/api/sessions"}.intersection(requests)
+                    assert not history or not coordinator.catalog_job.done()
+                    jobs.assert_not_called()
+                    return result
                 started = _write_prompt(path)
                 running = _cache_mark(page, "running")
                 assert running["fact"]["start_ms"] == started - 2_000
