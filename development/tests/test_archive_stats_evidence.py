@@ -172,6 +172,9 @@ class ArchiveStatsEvidenceTests(TestCase):
                   "archive_stats_first_inputs", "archive_response_timing")
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_root_cohort")
+            db.execute("DROP INDEX archive_stats_geometry_cohort")
+            db.execute("DROP TABLE archive_stats_time")
+            db.execute("DROP TABLE archive_stats_time_state")
             for table in tables:
                 db.execute(f"DROP TRIGGER {table}_revision")
                 db.execute(f"ALTER TABLE {table} DROP COLUMN first_revision")
@@ -185,3 +188,5 @@ class ArchiveStatsEvidenceTests(TestCase):
 
         self.assertEqual(before, retained)
         self.assertIsNone(older)
+        self.assertTrue(reopened.stats_geometry("trusted", expected=before.version).intervals)
+        self.assertIsNone(reopened.stats_time("trusted", "UTC", "all", None, 10_000))

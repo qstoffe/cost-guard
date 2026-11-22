@@ -18,11 +18,12 @@ from .display_usage_reader import read_usage_slice, retained_usage_version, usag
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
 from .display_stats_evidence import stats_evidence_schema, stats_interval_page
-from .display_stats_reader import read_stats_parents, read_stats_roots, read_stats_usage
+from .display_stats_reader import read_stats_geometry, read_stats_parents, read_stats_roots, read_stats_usage
 from .display_stats_revision import retained_stats_version, stats_revision_schema
+from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -250,8 +251,9 @@ class DisplayHistory:
                      {mix_total_schema()}
                      {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
                      {mix_identity_schema()}
-                     {stats_evidence_schema()}
-                     {stats_revision_schema(upgrade=version == 18)}
+                      {stats_evidence_schema()}
+                      {stats_revision_schema(upgrade=version == 18)}
+                      {stats_time_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -303,8 +305,9 @@ class DisplayHistory:
                 {mix_total_schema()}
                  {mix_groups_schema()}
                  {mix_identity_schema()}
-                 {stats_evidence_schema()}
-                 {stats_revision_schema()}
+                  {stats_evidence_schema()}
+                  {stats_revision_schema()}
+                  {stats_time_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -495,6 +498,11 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_stats_usage(db, source, expected=expected, after=after)
 
+    def stats_geometry(self, source, *, expected=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_stats_geometry(db, source, expected=expected, after=after)
+
     def stats_roots(self, source, *, expected=None, after=None):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
@@ -513,6 +521,27 @@ class DisplayHistory:
             if retained_stats_version(db, source, expected) is not None:
                 return read_stats_parents(db, source, root, expected.evidence, after)
             return None
+
+    def publish_stats_time(self, source, stamp, rows, *, eligible):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if eligible():
+                published = commit_time(db, source, stamp, rows)
+                if published is not None and eligible():
+                    db.commit()
+                    return published
+            db.rollback()
+            return None
+
+    def stats_time_due(self, source, zone, scopes, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return time_due(db, source, zone, scopes, now_ms)
+
+    def stats_time(self, source, zone, period, start_ms, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_time(db, source, zone, period, start_ms, now_ms)
 
     def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
                            group_run=None, group_marks=None, reference=None):
@@ -635,6 +664,7 @@ class DisplayHistory:
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM archive_stats_revisions WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_stats_time_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))
