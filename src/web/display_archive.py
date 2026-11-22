@@ -398,7 +398,8 @@ class DisplayArchive:
             nonlocal completed
             views = self.views
             if views is not None and (views.source, views.binding) == binding:
-                completed = self.history.completed_sessions(binding[0], revisions, dependency, with_history=True)
+                completed = self.history.completed_sessions(binding[0], revisions, dependency, with_history=True,
+                                                            with_stats_requests=self.stats is not None)
 
         self._cache_write(read)
         return completed

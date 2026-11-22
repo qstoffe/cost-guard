@@ -29,7 +29,7 @@ def stats_revision_schema(*, upgrade=False):
             INSERT INTO archive_stats_revisions(source,revision,invalidated_through) VALUES(NEW.source,0,1)
             ON CONFLICT(source) DO UPDATE SET invalidated_through=revision+1;
         END;
-    """ for table in _TABLES)
+    """ for table in (*_TABLES, "archive_stats_request_identity"))
     return columns + triggers + """
         CREATE INDEX IF NOT EXISTS archive_stats_root_cohort
         ON archive_stats_roots(source,first_revision,root_id);

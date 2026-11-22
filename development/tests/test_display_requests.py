@@ -322,6 +322,7 @@ class DisplayRequestTests(unittest.TestCase):
                 DROP TABLE archive_fork_trees;
                 DROP INDEX archive_fork_candidates;
                 DROP INDEX archive_unqualified_forks;
+                DROP TRIGGER archive_stats_request_identity_stale;
                 ALTER TABLE archive_requests DROP COLUMN dedup_tree;
                 ALTER TABLE archive_requests DROP COLUMN request_ordinal;
                 PRAGMA user_version=9;

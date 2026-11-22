@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from .display_prompts import DisplayPrompt, publish_prompts
 from .display_stats_evidence import ResponseTiming, StatsCapture, publish_stats_evidence
+from .display_stats_requests import StatsRequestIdentity
 from .display_usage_reader import advance_usage_revision, usage_version
 
 TOKEN_FIELDS = ("input", "cache_read", "cache_write", "output", "reasoning")
@@ -33,6 +34,7 @@ class DisplayRequest:
     dedup_tree: str | None = None
     ordinal: int = 0
     response: ResponseTiming | None = None
+    stats_identity: StatsRequestIdentity | None = None
 
     def values(self, pricing):
         amounts = tuple(str(value) for value in self.category_costs) if self.category_costs else (None,) * 4

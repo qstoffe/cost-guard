@@ -47,7 +47,11 @@ def call_key(entry):
 
 
 def _priority(call):
-    return sha256(json.dumps(call_key(call.entry), separators=(',', ':')).encode()).digest(), call_key(call.entry)
+    return sample_hash(call.entry), call_key(call.entry)
+
+
+def sample_hash(entry):
+    return sha256(json.dumps(call_key(entry), separators=(',', ':')).encode()).digest()
 
 
 def sample(calls, key=model_key):

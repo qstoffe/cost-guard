@@ -125,11 +125,52 @@ def publish_stats_evidence(db, source, root, revision, capture, requests):
            source, value.key, value.clock_ms, value.dedup_tree) for value in requests
           if value.response is not None)).rowcount
     count += _publish_match_and_parents(db, source, root, capture, birth)
+    count += _publish_request_identity(db, source, requests, birth)
+    if _has_request_identities(db, source, requests):
+        # Exact observed roster only. Historical keys absent from that roster
+        # may still lack a recipe, and must remain unknown to the reducer.
+        db.execute("""
+            INSERT INTO archive_stats_request_ready VALUES(?,?,?)
+            ON CONFLICT(source,root_id) DO UPDATE SET source_revision=excluded.source_revision
+            WHERE source_revision IS NOT excluded.source_revision
+        """, (source, root, revision))
     if count:
         db.execute("""
             INSERT INTO archive_stats_revisions(source,revision) VALUES(?,1)
             ON CONFLICT(source) DO UPDATE SET revision=revision+1
         """, (source,))
+
+
+def _publish_request_identity(db, source, requests, birth):
+    return db.executemany("""
+        INSERT INTO archive_stats_request_identity
+        SELECT source,request_key,?,?,?,?,?,? FROM archive_requests
+        WHERE source=? AND request_key=? AND clock_ms IS ? AND dedup_tree IS ?
+              AND provider=? AND model=? AND recorded_model=? AND known_fields=? AND effort IS ?
+              AND request_ordinal=?
+        ON CONFLICT(source,request_key) DO UPDATE SET (message_key,step_key,sample_hash,source_model_key,effort)=
+            (excluded.message_key,excluded.step_key,excluded.sample_hash,excluded.source_model_key,excluded.effort)
+        WHERE (message_key,step_key,sample_hash,source_model_key,effort) IS NOT
+            (excluded.message_key,excluded.step_key,excluded.sample_hash,excluded.source_model_key,excluded.effort)
+    """, ((identity.message_key, identity.step_key, identity.sample_hash, identity.source_model_key, identity.effort,
+           birth, source, request.key, request.clock_ms, request.dedup_tree, request.provider,
+            request.model, request.recorded_model, request.known, request.effort, request.ordinal) for request in requests
+           if (identity := request.stats_identity) is not None)).rowcount
+
+
+def _has_request_identities(db, source, requests):
+    if any(request.stats_identity is None for request in requests):
+        return False
+    # Physical upsert can decline an incomplete or child-only observation.
+    # A populated input recipe does not imply it qualified for persistence.
+    for offset in range(0, len(requests), USAGE_SLICE):
+        keys = tuple(request.key for request in requests[offset:offset + USAGE_SLICE])
+        marks = ",".join("?" for _ in keys)
+        count = db.execute(f"SELECT count(*) FROM archive_stats_request_identity "
+                           f"WHERE source=? AND request_key IN ({marks})", (source, *keys)).fetchone()[0]
+        if count != len(keys):
+            return False
+    return True
 
 
 def _publish_match_and_parents(db, source, root, capture, birth):

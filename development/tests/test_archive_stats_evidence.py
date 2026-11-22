@@ -173,6 +173,9 @@ class ArchiveStatsEvidenceTests(TestCase):
                   "archive_stats_first_inputs", "archive_response_timing")
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_root_cohort")
+            db.execute("DROP TRIGGER archive_stats_request_identity_stale")
+            db.execute("DROP TABLE archive_stats_request_identity")
+            db.execute("DROP TABLE archive_stats_request_ready")
             remove_measured_cohort(db)
             db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
@@ -193,3 +196,85 @@ class ArchiveStatsEvidenceTests(TestCase):
         self.assertIsNone(older)
         self.assertTrue(reopened.stats_geometry("trusted").intervals)
         self.assertIsNone(reopened.stats_time("trusted", "UTC", "all", None, 10_000))
+
+    def test_v23_retains_timing_without_claiming_new_reconciliation_evidence(self):
+        roster = capture(one_request(running=False))
+        physical, = roster.requests
+        self.commit(None, 1, roster)
+        with self.history._connect() as db:
+            db.execute("DROP TRIGGER archive_stats_request_identity_stale")
+            db.execute("DROP TABLE archive_stats_request_identity")
+            db.execute("DROP TABLE archive_stats_request_ready")
+            db.execute("PRAGMA user_version=23")
+
+        self.history = DisplayHistory(self.root)
+        self.history.initialize()
+        migrated = self.history.stats_candidates("trusted")
+        old, = migrated.entries
+        waiting = self.history.completed_sessions("trusted", {"root": "r1"}, "dependency",
+                                                  with_history=True, with_stats_requests=True)
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), "r1",
+            ACQUIRED_SCALAR_FIELDS, "dependency", 1, request_roster=roster),))
+        read = self.history.stats_candidates("trusted")
+        ready = self.history.completed_sessions("trusted", {"root": "r1"}, "dependency",
+                                                with_history=True, with_stats_requests=True)
+        refreshed, = read.entries
+        pinned, = self.history.stats_candidates("trusted", expected=migrated.version).entries
+
+        self.assertIsNone(old.identity)
+        self.assertFalse(waiting)
+        self.assertEqual({"root"}, ready)
+        self.assertEqual(ResponseTiming(2100, 200), old.response)
+        self.assertEqual(read.version.usage, migrated.version.usage)
+        self.assertEqual(physical.stats_identity, refreshed.identity)
+        self.assertIsNone(pinned.identity)
+
+    def test_pre_reconciliation_candidates_keep_fork_members_and_bound_both_revisions(self):
+        roster = capture(one_request(running=False))
+        request, = roster.requests
+        fork = b"fixture-fork"
+        shared = replace(request, fork_key=fork)
+        self.commit(None, 1, replace(roster, requests=(shared,)))
+        replica = replace(shared, key=b"fork", dedup_tree="replica", session_id="replica")
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("replica", "r1", "Replica"), None,
+            previous_progress=0, request_roster=replace(roster, requests=(replica,), attribution=(), prompts=None)),))
+
+        raw = self.history.stats_candidates("trusted")
+        countable = self.history.stats_usage("trusted")
+        corrected_identity = replace(request.stats_identity, effort="High")
+        self.commit("r1", 2, replace(roster, requests=(replace(shared, stats_identity=corrected_identity),)))
+        obsolete = self.history.stats_candidates("trusted", expected=raw.version)
+        revised = self.history.stats_candidates("trusted")
+
+        self.assertEqual({(fork, "root"), (fork, "replica")}, {(row.fork, row.tree) for row in raw.entries})
+        self.assertEqual(1, len(countable.population.entries))
+        self.assertEqual(raw.version.usage, revised.version.usage)
+        self.assertIsNone(obsolete)
+        self.assertEqual("High", next(row.identity.effort for row in revised.entries if row.tree == "root"))
+
+    def test_declined_request_cannot_stamp_missing_recipe_ready(self):
+        roster = capture(one_request(running=False))
+        request, = roster.requests
+        self.commit(None, 1, replace(roster, requests=(replace(request, stats_identity=None),)))
+        declined = replace(request, known=0)
+        self.commit("r1", 2, replace(roster, requests=(declined,)))
+
+        stored, = self.history.stats_candidates("trusted").entries
+        self.assertEqual(request.known, stored.usage.known)
+        self.assertIsNone(stored.identity)
+        self.assertFalse(self.history.completed_sessions("trusted", {"root": "r2"}, "dependency",
+                                                         with_history=True, with_stats_requests=True))
+
+    def test_model_correction_without_recipe_cannot_reuse_old_model_group(self):
+        roster = capture(one_request(running=False))
+        request, = roster.requests
+        self.commit(None, 1, roster)
+        original = self.history.stats_candidates("trusted")
+
+        corrected = replace(request, model="new-release", stats_identity=None)
+        self.commit("r1", 2, replace(roster, requests=(corrected,)))
+
+        current, = self.history.stats_candidates("trusted").entries
+        self.assertEqual("new-release", current.usage.model)
+        self.assertIsNone(current.identity)
+        self.assertIsNone(self.history.stats_candidates("trusted", expected=original.version))

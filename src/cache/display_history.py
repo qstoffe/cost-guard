@@ -20,11 +20,12 @@ from .display_sort_keys import decimal_key
 from .display_stats_evidence import stats_evidence_schema, stats_interval_page
 from .display_stats_geometry_revision import geometry_schema
 from .display_stats_reader import read_stats_geometry, read_stats_parents, read_stats_roots, read_stats_usage
+from .display_stats_requests import read_stats_candidates, stats_request_schema
 from .display_stats_revision import retained_stats_version, stats_revision_schema
 from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -253,9 +254,10 @@ class DisplayHistory:
                      {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
                      {mix_identity_schema()}
                       {stats_evidence_schema()}
+                      {stats_request_schema()}
                       {stats_revision_schema(upgrade=version == 18)}
-                      {geometry_schema(seed=version >= 18)}
-                      {stats_time_schema(upgrade=version >= 20)}
+                      {geometry_schema(seed=18 <= version < 23)}
+                      {stats_time_schema(upgrade=20 <= version < 23)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -308,6 +310,7 @@ class DisplayHistory:
                  {mix_groups_schema()}
                  {mix_identity_schema()}
                   {stats_evidence_schema()}
+                  {stats_request_schema()}
                   {stats_revision_schema()}
                   {geometry_schema()}
                   {stats_time_schema()}
@@ -500,6 +503,11 @@ class DisplayHistory:
         with self._connect(read=True) as db:
             db.execute("BEGIN")
             return read_stats_usage(db, source, expected=expected, after=after)
+
+    def stats_candidates(self, source, *, expected=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_stats_candidates(db, source, expected=expected, after=after)
 
     def stats_geometry(self, source, *, expected=None, after=None):
         with self._connect(read=True) as db:
@@ -772,7 +780,7 @@ class DisplayHistory:
             """, (source, after, BATCH_LIMIT))
             return tuple((key, SessionCheckpoint(revision, progress), present) for key, revision, progress, present in rows)
 
-    def completed_sessions(self, source, revisions, dependency, *, with_history=False):
+    def completed_sessions(self, source, revisions, dependency, *, with_history=False, with_stats_requests=False):
         """Match exact dependency evidence, never infer freshness from revision alone."""
         if not source or not dependency or len(revisions) > BATCH_LIMIT:
             raise ValueError("invalid_archive_progress_query")
@@ -787,12 +795,17 @@ class DisplayHistory:
                 WHERE stats.source=p.source AND stats.root_id=p.session_id
                     AND stats.source_revision=p.revision AND detail.revision=p.revision)
         """ if with_history else ""
+        request_check = """
+            AND EXISTS(SELECT 1 FROM archive_stats_request_ready AS stats
+                WHERE stats.source=p.source AND stats.root_id=p.session_id AND stats.source_revision=p.revision)
+        """ if with_stats_requests else ""
         with self._connect(read=True) as db:
             return frozenset(key for key, revision in db.execute(f"""
                 SELECT p.session_id, p.revision FROM session_progress AS p
                 JOIN sessions AS s USING (source, session_id, revision)
                 WHERE p.source=? AND p.dependency=? AND p.session_id IN ({marks}) AND s.source_present=1
                 {roster_check}
+                {request_check}
             """, (source, dependency, *revisions)) if revisions[key] == revision)
 
     def session_coverage_slice(self, source, revisions):

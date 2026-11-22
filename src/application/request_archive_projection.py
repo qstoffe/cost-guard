@@ -1,12 +1,17 @@
 """Project independent physical usage and causal ownership from one acquisition."""
 from decimal import Decimal
 
+from src.analysis.active_hour import request_message_identity
+from src.analysis.ai_stats_buckets import selected_effort
+from src.analysis.ai_stats_responses import sample_hash
 from src.analysis.billing import billing_request_fingerprint
 from src.analysis.cache import dependency_signature
 from src.analysis.valuation import physical_usage_key
 from src.cache.display_prompts import DisplayPrompt
 from src.cache.display_requests import DisplayRequest, RequestRoster, ROOT_WRITE_LIMIT, TOKEN_FIELDS
+from src.cache.display_stats_requests import StatsRequestIdentity
 from src.domain import CostDisposition
+from src.reports.ai_stats_responses import source_model_key
 from src.reports.prompts import build_prompt_block
 from src.reports.token_mix_history import history_prompt_keys
 
@@ -15,6 +20,12 @@ from .archive_stats_evidence import StatsResponses, stats_capture
 
 def _key(value):
     return bytes.fromhex(dependency_signature(value))
+
+
+def _stats_identity(entry):
+    step = _key(entry.step_part_id) if entry.step_part_id else None
+    return StatsRequestIdentity(_key(request_message_identity(entry)), step, sample_hash(entry),
+                                _key(source_model_key(entry)), selected_effort(entry))
 
 
 def _account(entry):
@@ -124,6 +135,7 @@ def request_roster(snapshot, bundle, reference, *, config=None):
             snapshot.root.session_id if entry.session_id in tree_members else None,
             entry.sort_order,
             responses.observation(entry) if responses is not None else None,
+            _stats_identity(entry) if with_stats else None,
         ))
     detail = () if config is not None else None
     if config is not None and prompt_count:
