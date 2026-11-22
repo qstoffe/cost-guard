@@ -144,6 +144,8 @@ class LiveRuntime:
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
         if verified and self.display_archive is not None:
             self.display_archive.publish_watch(frame, driver.observed_at_ms)
+            if self.display_archive.accounts is not None and frame.quota is not None and not frame.quota_stale:
+                self.display_archive.accounts.offer(frame.quota.accounts, verified=True)
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),

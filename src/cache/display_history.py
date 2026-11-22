@@ -9,6 +9,10 @@ from threading import Lock
 import time
 
 from .display_prompts import prompt_page, prompt_schema
+from .display_account_usage import account_usage_slice
+from .display_account_buckets import (
+    account_buckets, account_history_due, account_schema, cleanup_accounts, publish_account_run, stage_accounts,
+)
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
 from .display_mix_groups import group_revision, inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
 from .display_mix_identity import mix_identity_schema, read_mix_identities, save_mix_identities
@@ -27,7 +31,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -262,6 +266,7 @@ class DisplayHistory:
                       {stats_time_schema(upgrade=20 <= version < 23)}
                       {stats_token_schema(upgrade=version == 25)}
                       {models_schema()}
+                      {account_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -320,6 +325,7 @@ class DisplayHistory:
                    {stats_time_schema()}
                    {stats_token_schema()}
                    {models_schema()}
+                   {account_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -710,6 +716,42 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_models(db, source, request, now_ms, price_invalidated_ms), self._state(db, source).archive_epoch
 
+    def account_usage(self, source, start, end, *, version=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return account_usage_slice(db, source, start, end, version=version, after=after)
+
+    def _write_account_buckets(self, action, eligible):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not eligible() or not action(db) or not eligible():
+                return False
+            db.commit()
+            return True
+
+    def stage_account_buckets(self, source, version, run, rows, *, eligible):
+        return self._write_account_buckets(lambda db: stage_accounts(db, source, version, run, rows), eligible)
+
+    def publish_account_buckets(self, source, stamp, *, eligible):
+        return self._write_account_buckets(lambda db: publish_account_run(db, source, stamp), eligible)
+
+    def read_account_buckets(self, source, zone, roster, period, account, start, end):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return account_buckets(db, source, zone, roster, period, account, start, end)
+
+    def account_history_due(self, source, zone, roster, now_ms, earliest):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return account_history_due(db, source, zone, roster, now_ms, earliest)
+
+    def cleanup_account_buckets(self, source, protected_run=None):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            removed = cleanup_accounts(db, source, protected_run)
+            db.commit()
+            return removed
+
     def model_benchmark_references(self, source):
         with self._connect(read=True) as db:
             return benchmark_references(db, source)
@@ -740,6 +782,8 @@ class DisplayHistory:
             db.execute("DELETE FROM archive_mix_identities WHERE source=?", (source,))
             db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
             db.execute("DELETE FROM display_model_state WHERE source=?", (source,))
+            db.execute("DELETE FROM display_account_state WHERE source=?", (source,))
+            db.execute("DELETE FROM display_account_buckets WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))

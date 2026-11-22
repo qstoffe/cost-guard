@@ -19,6 +19,7 @@ from src.sources.errors import SourceError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 
+from .display_accounts import DisplayAccounts
 from .display_binding import selected_display_binding
 from .display_models import DisplayModels
 from .display_stats import DisplayStats
@@ -26,7 +27,7 @@ from .display_stats import DisplayStats
 
 class DisplayArchive:
     def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False, stats_enabled=False,
-                 models_enabled=False):
+                 models_enabled=False, accounts_enabled=False):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
         self._publish = publish
@@ -34,6 +35,7 @@ class DisplayArchive:
         self.mix_refresh = ArchiveMixRefresh(grouped=mix_groups) if mix_enabled else None
         self.stats = DisplayStats(self, publish) if stats_enabled else None
         self.models = DisplayModels(self, publish) if models_enabled else None
+        self.accounts = DisplayAccounts(self) if accounts_enabled else None
         self._last_projection = None
         self._mix_signal = Lock()
         self._mix_marks = {}
@@ -209,7 +211,7 @@ class DisplayArchive:
 
     def next_projection(self, reference):
         """Offer one fair turn; do not do any projection or I/O on Live."""
-        turns = ("mix", "stats", "models")
+        turns = ("mix", "stats", "models", "accounts")
         start = turns.index(self._last_projection) + 1 if self._last_projection else 0
         for kind in (*turns[start:], *turns[:start]):
             if kind == "mix" and self.mix_pending():
@@ -252,6 +254,8 @@ class DisplayArchive:
             self.mix_refresh.withdraw()
         if self.stats is not None:
             self.stats.close()
+        if self.accounts is not None:
+            self.accounts.close()
 
     def _mix_reset(self, views, *, archive_epoch=None):
         if self.mix_refresh is not None:
@@ -266,6 +270,8 @@ class DisplayArchive:
             return
         self.views = None
         self._binding = binding
+        if self.accounts is not None:
+            self.accounts.reset()
         if binding is None:
             self.sessions.bind("", "", announce=True)
             if self.watch_enabled:
@@ -338,6 +344,8 @@ class DisplayArchive:
                 self.stats.reset(views, archive_epoch=state.archive_epoch)
             if self.models is not None:
                 self.models.reset(views, archive_epoch=state.archive_epoch)
+            if self.accounts is not None:
+                self.accounts.reset()
             return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
         return None
 
