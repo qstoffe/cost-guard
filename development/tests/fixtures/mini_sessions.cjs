@@ -142,7 +142,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
    show([],[card('replacement',600)]);assert.equal(rows()[0].children[0].textContent,'23:47','replacement session clears its own cue');
   const olderGrace=card('grace',50);olderGrace.focal_id='grace';show([olderGrace],history);
   assert.deepEqual(ids(),['h4','h3','h2','h1','h0'],'older grace cannot add a sixth row');
-  const unknown=card('unknown',0);unknown.rows[0].prompt.completed_at_ms=null;
+  const unknown=card('unknown',null);
   show([],[unknown,...history.slice(1)]);assert.equal(ids().at(-1),'unknown');
   assert.equal(rows().at(-1).children[0].textContent,'—');assert.equal(helpText(rows().at(-1).children[0].children[0]),activityHelp('Unknown finish time'));
   for(const state of ['loading','unavailable']) {
