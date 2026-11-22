@@ -5,6 +5,7 @@ from dataclasses import dataclass
 VISIBLE_HINT_LIMIT = 8
 MAX_TAB_LEASES = 16
 LEASE_SECONDS = 30
+RECENT_SECONDS = 15
 
 
 @dataclass(slots=True)
@@ -19,17 +20,22 @@ class SessionDemand:
     def __init__(self):
         self._scope = None
         self._leases = {}
+        self._recent = {}
 
     def _current(self, now):
         for tab, lease in tuple(self._leases.items()):
             if now >= lease.expires:
                 del self._leases[tab]
+        for key, deadline in tuple(self._recent.items()):
+            if now >= deadline:
+                del self._recent[key]
         return self._leases
 
-    def replace(self, scope, tab, sequence, keys, now):
+    def replace(self, scope, tab, sequence, keys, now, *, remember=False):
         if scope != self._scope:
             self._scope = scope
             self._leases.clear()
+            self._recent.clear()
         leases = self._current(now)
         prior = leases.get(tab)
         if (prior is None and len(leases) >= MAX_TAB_LEASES
@@ -37,6 +43,14 @@ class SessionDemand:
             return 0
         # Renewing the same viewport must not re-admit already consumed work.
         pending = keys if prior is None or prior.keys != keys else prior.pending
+        if prior is not None and remember:
+            # Formerly visible is lower priority, not queue cancellation or
+            # a reason to reacquire an already consumed foreground root.
+            self._recent.update((key, now + RECENT_SECONDS) for key in prior.pending if key not in keys)
+            while len(self._recent) > VISIBLE_HINT_LIMIT:
+                del self._recent[next(iter(self._recent))]
+        for key in keys:
+            self._recent.pop(key, None)
         leases[tab] = _Lease(sequence, now + LEASE_SECONDS, keys, pending)
         return len(pending)
 
@@ -55,5 +69,19 @@ class SessionDemand:
                 for offered in leases.values():
                     if key in offered.pending:
                         offered.pending = tuple(item for item in offered.pending if item != key)
+                self._recent.pop(key, None)
                 return key
+        return None
+
+    def nearby(self, scope, now):
+        if scope != self._scope:
+            return False
+        self._current(now)
+        return bool(self._recent)
+
+    def take_nearby(self, scope, now):
+        if self.nearby(scope, now):
+            key = next(reversed(self._recent))
+            del self._recent[key]
+            return key
         return None

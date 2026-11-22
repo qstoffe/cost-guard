@@ -656,6 +656,7 @@ const SessionsCatalog = (() => {
         period: periods.find(([key]) => key === params?.get('period'))?.[0] || 'today'
       };
       if (Object.keys(query).every(key => query[key] === this[key])) return;
+      this.releaseDemand({remember: true}); // nearby after a period/sort/page movement
       this.retire();
       Object.assign(this, query); this.periodSelection();
       this.needsRead = true;
@@ -749,16 +750,16 @@ const SessionsCatalog = (() => {
         this.demandTimer = setTimeout(() => { this.demandTimer = null; this.hintMissing(); }, 15000);
       });
     }
-    releaseDemand() {
+    releaseDemand({remember = false} = {}) {
       clearTimeout(this.demandTimer);
       this.demandTimer = null;
       if (!this.lastDemand) return;
-      this.sendDemand(this.lastDemand, []);
+      this.sendDemand(this.lastDemand, [], remember);
       this.lastDemand = null;
     }
-    sendDemand({binding, demand_epoch}, session_ids) {
+    sendDemand({binding, demand_epoch}, session_ids, remember = false) {
       this.api('/api/cache/sessions/demand', {binding, demand_epoch, session_ids,
-        tab: this.demandTab, sequence: ++this.demandSequence}).catch(() => {});
+        tab: this.demandTab, sequence: ++this.demandSequence, ...(remember ? {remember} : {})}).catch(() => {});
     }
     async poll() {
       if (!this.attached || document.hidden || this.blocked || this.flight) return;

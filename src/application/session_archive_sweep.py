@@ -65,11 +65,13 @@ class SessionArchiveSweep:
         self._next_walk = 0
         self._incomplete = False
         self._urgent_turn = 0
+        self._nearby_turn = 0
         self._visible = SessionDemand()
 
     def due(self, catalog, binding):
         return (catalog.state == "observed" and binding is not None and
-                (self.priority_due(catalog, binding) or self._background_due(catalog, binding)))
+                (self.priority_due(catalog, binding) or self._background_due(catalog, binding)
+                 or self._nearby_due(catalog, binding)))
 
     def priority_due(self, catalog, binding):
         with catalog.lock:
@@ -81,14 +83,19 @@ class SessionArchiveSweep:
     def _demand_scope(catalog, binding):
         return binding, catalog.archive_incarnation
 
-    def offer_visible(self, catalog, binding, tab, sequence, keys, *, eligible):
+    def _nearby_due(self, catalog, binding):
+        with catalog.lock:
+            return self._visible.nearby(self._demand_scope(catalog, binding), catalog.clock())
+
+    def offer_visible(self, catalog, binding, tab, sequence, keys, *, eligible, remember=False):
         if not catalog.lock.acquire(blocking=False):
             return 0
         try:
             if catalog.state != "observed" or not eligible():
                 return 0
             selected = tuple(key for key in keys if self._candidate(catalog, key) is not None)
-            return self._visible.replace(self._demand_scope(catalog, binding), tab, sequence, selected, catalog.clock())
+            return self._visible.replace(self._demand_scope(catalog, binding), tab, sequence, selected,
+                                         catalog.clock(), remember=remember)
         finally:
             catalog.lock.release()
 
@@ -178,6 +185,24 @@ class SessionArchiveSweep:
                     return key, candidate, attempts
             return None
 
+    def _nearby(self, catalog, binding):
+        with catalog.lock:
+            now = catalog.clock()
+            scope = self._demand_scope(catalog, binding)
+            if (catalog.state != "observed" or self._visible.ready(scope, now)
+                    or any(due <= now for due, _ in catalog.archive_urgent.values())
+                    or not self._visible.nearby(scope, now)):
+                return None
+            self._nearby_turn += 1
+            if self._nearby_turn % 2 == 0 and self._background_due(catalog, binding):
+                return None
+            key = self._visible.take_nearby(scope, now)
+            if key is not None and key not in catalog.archive_urgent:
+                candidate = self._candidate(catalog, key)
+                if candidate is not None:
+                    return key, candidate
+            return None
+
     def tick(self, catalog, archive, service, binding, fence):
         cohort = binding[1], fence
         urgent = self._urgent(catalog, cohort)
@@ -190,6 +215,13 @@ class SessionArchiveSweep:
                 raise
             if not self._try_acquire(catalog, archive, service, binding, base, key, candidate):
                 self._retry(catalog, key, candidate, attempts)
+            return
+        nearby = self._nearby(catalog, cohort)
+        if nearby is not None:
+            key, candidate = nearby
+            # Lower priority misses fall back to the normal sweep, never to
+            # the independent lifecycle retry queue.
+            self._try_acquire(catalog, archive, service, binding, scalar_dependency(service), key, candidate)
             return
         candidates = self._candidates(catalog, cohort)
         if not candidates:

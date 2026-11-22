@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from src.application.session_archive_sweep import SessionArchiveSweep
-from src.application.session_demand import LEASE_SECONDS, MAX_TAB_LEASES, SessionDemand
+from src.application.session_demand import LEASE_SECONDS, MAX_TAB_LEASES, RECENT_SECONDS, SessionDemand
 
 
 class SessionDemandTests(unittest.TestCase):
@@ -66,3 +66,34 @@ class SessionDemandTests(unittest.TestCase):
         self.assertEqual(("new-page", "proof-new-page", 0), first)
         self.assertEqual(("lifecycle", "proof-lifecycle", 1), second)
         self.assertIsNone(third)
+
+    def test_recent_page_earns_a_bounded_low_priority_turn_after_visible_and_lifecycle_work(self):
+        sweep = SessionArchiveSweep()
+        clock = [1]
+        catalog = SimpleNamespace(lock=Lock(), state="observed", archive_incarnation=0, clock=lambda: clock[0],
+                                  membership_generation=1, archive_urgent=OrderedDict(lifecycle=(0, 0)))
+        binding = "binding", 0
+
+        def offer(sequence, keys, *, remember=False):
+            sweep.offer_visible(catalog, binding, "tab", sequence, keys, eligible=lambda: True, remember=remember)
+
+        with patch.object(sweep, "_candidate", side_effect=lambda _, key: f"proof-{key}"):
+            offer(1, ("recent-a", "recent-b", "recent-c"))
+            offer(2, (), remember=True)
+            offer(3, ("visible",))
+            lower_while_visible = sweep._nearby(catalog, binding)
+            visible = sweep._urgent(catalog, binding)
+            lower_while_active = sweep._nearby(catalog, binding)
+            lifecycle = sweep._urgent(catalog, binding)
+            recent = sweep._nearby(catalog, binding)
+            reserve = sweep._nearby(catalog, binding)
+            clock[0] += RECENT_SECONDS
+            expired = sweep._nearby(catalog, binding)
+
+        self.assertIsNone(lower_while_visible)
+        self.assertEqual(("visible", "proof-visible", 0), visible)
+        self.assertIsNone(lower_while_active)
+        self.assertEqual(("lifecycle", "proof-lifecycle", 0), lifecycle)
+        self.assertEqual(("recent-c", "proof-recent-c"), recent)
+        self.assertIsNone(reserve)
+        self.assertIsNone(expired)

@@ -38,6 +38,8 @@ def cached_priority(handler, value, *, detail):
     expected = {"binding", field}
     if not detail:
         expected.update(("demand_epoch", "tab", "sequence"))
+        if "remember" in value:
+            expected.add("remember")
     if (set(value) != expected or not isinstance(binding, str) or not re.fullmatch(r"[a-f0-9]{32}", binding)
             or type(keys) is not list or len(keys) > VISIBLE_HINT_LIMIT
             or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", key) for key in keys)
@@ -48,6 +50,8 @@ def cached_priority(handler, value, *, detail):
         fence, tab, sequence = value["demand_epoch"], value["tab"], value["sequence"]
         if (type(fence) is not int or not 0 <= fence <= 9_007_199_254_740_991
                 or not isinstance(tab, str) or not re.fullmatch(r"[a-f0-9]{32}", tab)
+                or type(value.get("remember", False)) is not bool
+                or value.get("remember", False) and keys
                 or type(sequence) is not int or not 1 <= sequence <= 9_007_199_254_740_991):
             handler.reply(400, {"error": "invalid_request"})
             return
@@ -58,7 +62,7 @@ def cached_priority(handler, value, *, detail):
         handler.reply(503, {"error": "cache_unavailable"})
         return
     prioritized = archive.prioritize_detail(catalog, binding, keys[0]) if detail else (
-        archive.offer_visible(catalog, binding, fence, tab, sequence, keys))
+        archive.offer_visible(catalog, binding, fence, tab, sequence, keys, remember=value.get("remember", False)))
     if prioritized is None:
         handler.reply(409, {"error": "cache_source_unbound"})
     else:

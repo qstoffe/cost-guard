@@ -101,6 +101,14 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("26–30 of 30 cached sessions", timeout=5000)
             names = first.locator(".sessions-catalog tbody .session-name")
             expect(names).to_have_text([f"Session {index}" for index in range(26, 31)])
+            with first.expect_request(lambda request: urlsplit(request.url).path == "/api/cache/sessions/demand"
+                                      and request.post_data_json.get("remember") is True) as recent:
+                first.get_by_role("button", name="Previous", exact=True).click()
+            assert recent.value.post_data_json["session_ids"] == []
+            assert recent.value.post_data_json["sequence"] > hint["sequence"]
+            expect(pager).to_contain_text("1–25 of 30 cached sessions")
+            first.get_by_role("button", name="Next", exact=True).click()
+            expect(names).to_have_text([f"Session {index}" for index in range(26, 31)])
             absent_context = first.locator('tr[data-id="s-026"] td:last-child span').first
             expect(absent_context).to_have_text("?")
             first.keyboard.press("Tab")

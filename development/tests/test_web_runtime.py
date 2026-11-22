@@ -506,17 +506,21 @@ class WebRuntimeTests(unittest.TestCase):
         duplicates = self.request(endpoint, dict(payload, session_ids=["one", "one"]))[0]
         too_many = self.request(endpoint, dict(payload, session_ids=[str(i) for i in range(9)]))[0]
         bad_sequence = self.request(endpoint, dict(payload, sequence=True))[0]
+        bad_recent = self.request(endpoint, dict(payload, remember=True))[0]
         accepted, _, result = self.request(endpoint, payload)
-        withdrawn, _, empty = self.request(endpoint, dict(payload, sequence=2, session_ids=[]))
+        withdrawn, _, empty = self.request(endpoint, dict(payload, sequence=2, session_ids=[], remember=True))
         retired = self.request(endpoint, dict(payload, demand_epoch=6))[0]
 
-        self.assertEqual((401, 403, 400, 400, 400, 202, 202, 409),
-                         (unauthorized, csrf_missing, duplicates, too_many, bad_sequence, accepted, withdrawn, retired))
+        self.assertEqual((401, 403, 400, 400, 400, 400, 202, 202, 409),
+                         (unauthorized, csrf_missing, duplicates, too_many, bad_sequence, bad_recent,
+                          accepted, withdrawn, retired))
         self.assertEqual({"prioritized": 2}, json.loads(result))
         self.assertEqual({"prioritized": 0}, json.loads(empty))
         self.assertEqual([(catalog, binding, 7, tab, 1, ["two", "one"]),
                           (catalog, binding, 7, tab, 2, []), (catalog, binding, 6, tab, 1, ["two", "one"])],
                          [attempt.args for attempt in archive.offer_visible.call_args_list])
+        self.assertEqual([False, True, False],
+                         [attempt.kwargs["remember"] for attempt in archive.offer_visible.call_args_list])
 
     def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
         from src.application.session_catalog import SessionCatalog

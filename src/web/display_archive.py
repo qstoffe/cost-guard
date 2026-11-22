@@ -391,7 +391,7 @@ class DisplayArchive:
             return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) is not None
         return self.sweep.prioritize_detail(catalog, session_id, eligible=eligible)
 
-    def offer_visible(self, catalog, binding, fence, tab, sequence, session_ids):
+    def offer_visible(self, catalog, binding, fence, tab, sequence, session_ids, *, remember=False):
         views = self.views
         if views is None or views.binding != binding or self.sessions.clear_fence != fence:
             return None
@@ -399,7 +399,8 @@ class DisplayArchive:
         def eligible():
             return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) == fence
 
-        return self.sweep.offer_visible(catalog, (binding, fence), tab, sequence, session_ids, eligible=eligible)
+        return self.sweep.offer_visible(catalog, (binding, fence), tab, sequence, session_ids,
+                                        eligible=eligible, remember=remember)
 
     def export_epoch(self, service, views):
         """Only the currently authorized V2 partition can authorize native export."""
