@@ -77,14 +77,14 @@ def _attempt_ends(message, source, verified_parts, activities, part_time):
         if (part.kind != "tool" or not isinstance(state, Mapping) or part.session_id != message.session_id
                 or part.message_id != message.message_id or not source_member(part, source)):
             continue
-        if (part.session_id, part.part_id) in verified_parts:
-            continue  # Its work is addressed by the direct invocation evidence.
         start, end = part_time(part)
         tools.append((part, state, start, end))
     start_counts = defaultdict(int)
     for _, _, start, _ in tools:
         start_counts[start] += 1
     for part, state, start, end in tools:
+        if (part.session_id, part.part_id) in verified_parts:
+            continue  # Its work is addressed by the direct invocation evidence.
         declared_background = _declared_background(part, state)
         background_end = _background_end(message, part, start, activities, start_counts[start] == 1)
         if background_end == 0:

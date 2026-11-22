@@ -76,7 +76,7 @@ class ChildScope:
     inferred_path: bool = False
     excluded_ids: tuple[str, ...] = ()
     bound_continuations: bool = False
-    stale: bool = False
+    stale_at: int = 0
 
 
 def _candidate(part, message, sessions):
@@ -96,9 +96,9 @@ def _candidate(part, message, sessions):
     terminal = message.termination
     failed_at = (terminal.completed_at_ms if terminal and terminal.outcome is not TerminalOutcome.SUCCESS
                  else message.completed_at_ms if message.error_name else None)
-    stale = not background and not end and failed_at is not None and failed_at > start
-    return ChildScope(child.session_id, start, failed_at if stale else OPEN_END if background or not end else end,
-                      background, stale=stale)
+    stale_at = failed_at if not background and not end and failed_at is not None and failed_at > start else 0
+    return ChildScope(child.session_id, start, OPEN_END if background or not end else end,
+                      background, stale_at=stale_at)
 
 
 class ChildLinkIndex:
@@ -160,10 +160,17 @@ class ChildLinkIndex:
             index = bisect_right(times, scope.start_ms)
             end = times[index] if index < len(times) else OPEN_END
             child_turns = turns.get(scope.session_id, ())
+            if scope.stale_at:
+                if any(turn.kind in PROMPT_KINDS and scope.start_ms <= turn.created_at_ms < min(end, scope.stale_at)
+                       for turn in child_turns):
+                    end = min(end, min((turn.created_at_ms for turn in child_turns if turn.kind in PROMPT_KINDS
+                                        and turn.created_at_ms >= scope.stale_at), default=OPEN_END))
+                else:
+                    end = min(end, scope.stale_at)
             owned_turns = sorted((item for item in child_turns
                 if scope.start_ms <= item.created_at_ms < min(end, scope.end_ms)),
                 key=lambda item: (item.created_at_ms, item.event_id))
-            if (not owned_turns and not scope.stale
+            if (not owned_turns and not scope.stale_at
                     and scope.start_ms <= sessions[scope.session_id].created_at_ms < scope.end_ms):
                 # A freshly created child may enqueue its first user turn only
                 # after the asynchronous launch acknowledgement has returned.
@@ -186,7 +193,7 @@ class ChildLinkIndex:
             first_turn = next((item for item in owned_turns if item.kind in PROMPT_KINDS), None)
             scope = replace(scope, end_ms=min(end, scope.end_ms), invocation_end_ms=end,
                 owner_id=first_turn.event_id if first_turn else "",
-                bound_continuations=(scope.background or scope.stale) and first_turn is not None)
+                bound_continuations=bool(scope.background or scope.stale_at) and first_turn is not None)
             # A tool's return/abort ends its launch window, not an assistant
             # already executing inside it. Bind that physical attempt before
             # extending, so an unrelated later child request stays unallocated.
