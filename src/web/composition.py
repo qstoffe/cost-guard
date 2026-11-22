@@ -30,19 +30,9 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
 
     root = Path(__file__).resolve().parents[2]
     config = load_configuration(root).values
-    expected_scope = getattr(request, 'models_scope', '')
-    model_only = request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}
-
-    def model_scope(selection):
-        from .display_binding import verified_model_scope
-        from src.reports.ai_stats import StatsCheckpointError
-        scope = verified_model_scope(selection)
-        if scope != expected_scope:
-            raise StatsCheckpointError('source_identity_changed')
-        return scope
 
     def factory(now, progress):
-        selection = SourceSelector(inspect_migration_gap=not model_only).select(str(config["openCode"]["source"]))
+        selection = SourceSelector().select(str(config["openCode"]["source"]))
         if read_admission is not None:
             selection.source.read_admission = read_admission
         if isinstance(request, ManagedReport) and request.source_identity:
@@ -50,8 +40,6 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
             from src.reports.ai_stats import StatsCheckpointError
             if source_identity(selection) != request.source_identity:
                 raise StatsCheckpointError('source_identity_changed')
-        if expected_scope:
-            model_scope(selection)
         cache = open_cache(root)
         refresh_prices = isinstance(request, ModelsPriceRefresh)
         price_options = dict(defer_metadata_refresh=True) if isinstance(request, ManagedReport) else {}
@@ -93,8 +81,7 @@ def application(request, *, read_admission=None, history_checkpoint=None, publis
         return service
 
     observation = getattr(request, 'observation_ms', 0)
-    return ReportApplication(factory, clock=(lambda: observation) if observation else None, models_only=True,
-                             models_binding=model_scope if expected_scope else None)
+    return ReportApplication(factory, clock=(lambda: observation) if observation else None, models_only=True)
 
 
 def dispatch_dependencies(root):

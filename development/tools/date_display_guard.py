@@ -78,6 +78,7 @@ JS_RISK = re.compile(
     r"(?:\(|['\"]\s*\])"
 )
 JS_NUMBER_LOCALE = {
+    "src/web/assets/comparisons.js": ("page.total",),
     "src/web/assets/report-loading.js": ("completed", "progress.total"),
     "src/web/assets/sessions.js": ("count.completed", "count.total", "current.context_tokens"),
     "src/web/assets/token-mix.js": ("BigInt(mix.observed_total_tokens)",),

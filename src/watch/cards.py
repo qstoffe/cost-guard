@@ -214,8 +214,7 @@ class WatchCards:
                 entry.history_status.clear()
                 entry.failure_code = ""
                 entry.inspect_recent = False
-                finishes = self.recent.observe(self, entry, source_rows, now_ms)
-                self._retire_terminal_grace(entry, current, finishes)
+                self.recent.observe(self, entry, source_rows, now_ms)
             else:
                 entry.verified_generation = 0
                 entry.refresh_requested = True
@@ -237,20 +236,6 @@ class WatchCards:
     def _backoff(entry, now_ms):
         entry.failures += 1
         entry.retry_at_ms = now_ms + min(120_000, 5_000 * 2 ** min(5, entry.failures - 1))
-
-    @staticmethod
-    def _retire_terminal_grace(entry, current, finishes):
-        if not entry.terminals or not finishes:
-            return
-        # An already-finished successor need not pass through Running to take
-        # over. Preserve same-prompt grace and overlapping or unknown endings.
-        successor = max(finishes, key=lambda row: row.at_ms)
-        for key in tuple(entry.terminals):
-            prior = current.get(key)
-            if (prior is not None and prior.completed_at_ms is not None
-                    and prior.at_ms < successor.at_ms
-                    and prior.at_ms <= prior.completed_at_ms <= successor.at_ms):
-                del entry.terminals[key]
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:

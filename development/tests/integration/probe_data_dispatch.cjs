@@ -52,10 +52,10 @@ async function main() {
     await command('Page.navigate',{url:launch.url});
     await until(`typeof current!=='undefined' && !!current?.result && !current.loading`);
     const end=Date.now()+75000; let status;
-    do { status=await fixture('status'); if(status.ready.length===3)break; await pause(100); } while(Date.now()<end);
-    assert.equal(status.ready.length,3,'unvisited top-level reports warmed on the host');
-    facts.push('all three reports warm without navigation');
-    for(const section of ['token-mix','ai-stats','models']) {
+    do { status=await fixture('status'); if(status.ready.length===4)break; await pause(100); } while(Date.now()<end);
+    assert.equal(status.ready.length,4,'unvisited top-level reports warmed on the host');
+    facts.push('all four reports warm without navigation');
+    for(const section of ['token-mix','ai-stats','comparisons','models']) {
       await evaluate(`location.hash='#/${section}'`);
       await until(`current.section==='${section}' && !!current.result && !current.loading && !current.withheld`);
       assert.equal(await evaluate(`!!document.querySelector('.report-loading')`),false);

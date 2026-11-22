@@ -5,7 +5,6 @@ import threading
 import time
 
 from .acquisition import AccountAcquisition, AccountUpdate
-from .archive_identity import AccountArchiveIdentity
 
 
 class AccountRefreshLoop:
@@ -17,13 +16,10 @@ class AccountRefreshLoop:
     thread or a second call for the same adapter/credential generation.
     """
 
-    def __init__(self, providers, source_id, *, clock=time.monotonic, wall_ms=None, evidence_sink=None,
-                 archive_target=None, archive_publish=None):
+    def __init__(self, providers, source_id, *, clock=time.monotonic, wall_ms=None, evidence_sink=None):
         self.clock = clock
         self.wall_ms = wall_ms or (lambda: time.time_ns() // 1_000_000)
         self.engine = AccountAcquisition(providers, source_id, continuous=True, clock=clock, wall_ms=self.wall_ms)
-        self._identity = (AccountArchiveIdentity(archive_target, archive_publish, self.engine.observe_identity)
-                          if archive_target is not None else None)
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -63,8 +59,6 @@ class AccountRefreshLoop:
         if now >= self._discovery_at:
             self.engine.start(wall)
             self._discovery_at = now + 5.0
-        if self._identity is not None:
-            self._identity.tick(self.engine.discovery, now, wall)
         update = self.engine.poll(wall)
         with self._lock:
             self._pending = self.engine.pending

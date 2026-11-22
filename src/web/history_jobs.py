@@ -5,7 +5,7 @@ import time
 from src.reports import ReportKind
 from .report_control import ManagedReport
 
-KINDS = {ReportKind.TOKEN_MIX}
+KINDS = {ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}
 TOKEN_MIX_RETRY = {'busy', 'concurrent_source_change', 'history_revision_churn',
                    'history_checkpoint_busy', 'report_cache_busy'}
 
@@ -28,7 +28,7 @@ def checkpoint(job, value):
 
 def retry(job, error):
     """Reuse this job's cutoff, manifest and any proven checkpoint after a transient fault."""
-    if (not managed(job)
+    if (not managed(job) or job['request'].kind is not ReportKind.TOKEN_MIX
             or error.get('retryable') is not True or error['code'] not in TOKEN_MIX_RETRY):
         return False
     proof = job.pop('checkpoint', None)

@@ -76,7 +76,6 @@ class AccountAcquisition:
         self.refresh: dict[int, ProviderRefresh] = {}
         self.observations = QuotaObservations(continuous=continuous)
         self._desired: dict[int, AccountCandidate] = {}
-        self._identity_proof = None
         self._observed_at_ms: dict[tuple[str, str, str], int] = {}
         self._stop = threading.Event()
         self._jobs: Queue = Queue(self.limit)
@@ -232,30 +231,6 @@ class AccountAcquisition:
             self._threads.append(thread)
             thread.start()
 
-    def observe_identity(self, slot, account, deadline) -> None:
-        """A separate current status can disqualify quota; it can never create quota."""
-        if slot not in self._desired:
-            return
-        previous = self._identity_proof
-        if deadline is None and (previous is None or previous[0] != slot):
-            return
-        key = account.key if deadline is not None else None
-        self._identity_proof = (slot, key, deadline) if deadline is not None else None
-        old = self._snapshots.get(slot, ())
-        matching = tuple(item for item in old if item.key == key)
-        if matching != old:
-            self._publish(slot, matching, observed=())
-        if matching != old or previous is not None and previous[:2] != (slot, key):
-            attempt = self._running.get(slot)
-            if attempt is not None:
-                attempt.expired = True  # Keep its worker slot until the call exits.
-            self.refresh[slot] = ProviderRefresh(self._desired[slot].revision)
-
-    def _matches_current_identity(self, slot, accounts, now_ms):
-        proof = self._identity_proof
-        return (proof is None or slot != proof[0] or not proof[2].active(self.clock(), now_ms)
-                or all(item.key == proof[1] for item in accounts))
-
     def _worker(self) -> None:
         while not self._stop.is_set():
             try:
@@ -308,9 +283,6 @@ class AccountAcquisition:
             if not attempt.expired and completed_at > attempt.deadline:
                 self._timeout(attempt, now_ms, completed_at)
             elif not attempt.expired:
-                if not self._matches_current_identity(slot, accounts, now_ms):
-                    self.refresh[slot].complete((), completed_at)
-                    continue
                 # Accounts absent in a completed, successful inventory are no
                 # longer configured; pending providers are never treated absent.
                 self._apply(attempt.candidate, accounts)

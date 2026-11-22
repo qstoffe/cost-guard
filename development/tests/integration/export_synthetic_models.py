@@ -30,7 +30,7 @@ def main():
         service = desktop_service(owner, snapshots=(snapshot(), snapshot(1, "claude-sonnet-5-5", "github-copilot")))
         views = {kind.value: project(service.build(ReportRequest(kind,
             **({"session_id": "root-0000"} if kind is ReportKind.SESSION else {}))), prompt_details=True).to_json()
-            for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.AI_STATS)}
+            for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.COMPARISONS, ReportKind.AI_STATS)}
         saved = DesktopSource((snapshot(),)).load_session_snapshot("root-0000")
         bundle, projector = rows(saved)
         alias = replace(projector.prompt(bundle.prompts[0]), event_id="sonnet")

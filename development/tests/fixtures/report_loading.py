@@ -5,6 +5,7 @@ import time
 from src.application.projection import project
 from src.reports import ReportKind
 from .ai_stats_views import stats_result
+from .matched_inputs import browser_result
 from .model_views import model_report
 from .token_mix_views import token_mix_report
 
@@ -25,6 +26,8 @@ class LoadingJobs:
                 return key
         if request.kind is ReportKind.AI_STATS:
             result = stats_result(request)
+        elif request.kind is ReportKind.COMPARISONS:
+            result = browser_result(request)
         else:
             report = model_report(include_model_catalog=True) if request.kind is ReportKind.NORMAL else token_mix_report()
             observed = int(time.time() * 1000)

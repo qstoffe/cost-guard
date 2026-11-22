@@ -13,7 +13,6 @@ from src.analysis.account_timeline import PERIODS
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_catalog import MINI_PREVIEW_LIMIT
-from src.application.session_catalog_lifecycle import archive_finish_snapshot
 from src.application.session_quota import source_scope
 from src.reports.history import WatchHistoryAcquisition
 from src.reports.accounts import AccountPeriodHistory
@@ -27,13 +26,6 @@ from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
 from .detail_capture import DetailWorkerStopError
-
-
-def _cached_mix_reference(service):
-    # On the catalog lane only: share the validated local cache written by
-    # the existing price owner. Do not ask for a provider fetch or wait on it.
-    cached = getattr(getattr(service, "comparison_pricing_provider", None), "cached_catalog", None)
-    return cached() if callable(cached) else getattr(service, "comparison_pricing_catalog", None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,8 +70,6 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_observation = None
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
-        self.catalog_turn = 0
-        self._catalog_archive = None
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
 
@@ -162,49 +152,16 @@ class WebWatchCoordinator(WatchCoordinator):
             evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
                              prompt, start, running, None, ended))
         catalog.observe_prompts(evidence)
-        archive = catalog.display_archive
-        running = None if archive is None else () if unavailable else catalog.archive_running(evidence)
         if self.catalog_job is not None:
             if not self.catalog_job.done():
-                return running
+                return
             job, self.catalog_job = self.catalog_job, None
             try:
                 job.result()
             except Exception:
                 catalog.index_failed('scalar_worker_failed')
-        scalar_needed = catalog.needed()
-        archive_needed = archive is not None and archive.catalog_pending(catalog)
-        sweep_needed = archive is not None and archive.summary_pending(catalog)
-        coverage_needed = archive is not None and archive.coverage_pending(catalog)
-        history_needed = scalar_needed or archive_needed or sweep_needed or coverage_needed
-        if self._closed:
-            return running
-        projection = (archive.next_projection(lambda: _cached_mix_reference(self.report_service),
-                                              history_pending=history_needed)
-                      if archive is not None else None)
-        if projection is not None:
-            self._catalog_archive = archive
-            self.catalog_job = self.catalog_pool.submit(projection, int(self.clock_ms()), active=lambda: not self._closed)
-        elif history_needed:
-            self.catalog_turn += 1
-            # Reserve bounded progress even under continuous legacy demand. Both
-            # jobs share the original lane; Watch/Mini observation never waits here.
-            turn = self.catalog_turn % 4
-            # Coverage owns a separate slice. If its dependencies fail or stall,
-            # it cannot run ahead of and suppress every actual acquisition turn.
-            coverage = coverage_needed and (turn == 1 or not (scalar_needed or sweep_needed))
-            sweep = not coverage and sweep_needed and (not scalar_needed or turn == 0
-                                                       or turn != 3 and archive.priority_summary_pending(catalog))
-            self.catalog_job = self.catalog_pool.submit(
-                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not (sweep or coverage),
-                sweep, coverage)
-        return running
-
-    def enable_session_finishes(self):
-        self.card_workers.finish_since_ms = self.started_at_ms
-
-    def cached_session_finishes(self, catalog):
-        return archive_finish_snapshot(catalog, self.cards.sessions.values())
+        if not self._closed and catalog.needed():
+            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
@@ -223,30 +180,16 @@ class WebWatchCoordinator(WatchCoordinator):
         return replace(frame, earlier_previews=tuple(published),
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
-    def _catalog_capture(self, catalog, now_ms, scalar_needed=True, sweep=False, coverage=False):
+    def _catalog_capture(self, catalog, now_ms):
         service = None
         try:
-            if catalog.display_archive is not None:
-                # Metadata was already observed by Live. Do not acquire source
-                # or prices again just to publish that bounded batch.
-                catalog.display_archive.publish_catalog(catalog, self.report_service)
-            if not scalar_needed and not sweep and not coverage:
-                return
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
-                if coverage:
-                    catalog.display_archive.check_coverage(catalog, service)
-                elif sweep:
-                    catalog.display_archive.acquire_summaries(catalog, service)
-                elif scalar_needed:
-                    catalog.tick(service)
+                catalog.tick(service)
         except SourceError as error:
             catalog.index_failed(str(error.code), terminal=error.terminal)
         except PricingUnavailableError:
-            if not coverage:
-                catalog.index_failed('pricing_unavailable')
-            # The coverage sweep owns its own retry and does not qualify a
-            # separate scalar acquisition as unavailable for 30 seconds.
+            catalog.index_failed('pricing_unavailable')
         finally:
             if service is not None:
                 service.close_accounts()
@@ -388,11 +331,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
-            try:
-                if self._catalog_archive is not None:
-                    self.catalog_pool.submit(self._catalog_archive.close_catalog_work).result()
-            finally:
-                self.catalog_pool.shutdown(wait=True, cancel_futures=True)
+            self.catalog_pool.shutdown(wait=True, cancel_futures=True)
             self.account_timeline.close()
             for future in (self.history_job, self.catalog_job):
                 if future is not None and not future.cancelled():

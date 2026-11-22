@@ -20,12 +20,11 @@ const context = vm.createContext({
   output:{addEventListener(_,handler){this.click=handler;}},demand:null,
   show(){},enterCachedReport(){},scheduleCachedReport(){},firstReport(){},focusReport(){},
   window:{scrollY:250,scrollTo(){}},api(){},
-  cachedSessionsAvailable:true,mixCache:null,statsCache:null,modelsCache:null,sessionCacheHint:null,crypto:require('node:crypto').webcrypto,
-  SessionDetail:{CachedView:class {
+  SessionDetail:{View:class {
     constructor(_,id){this.id=id;this.root={contains:()=>false};this.back={href:'#/sessions'};this.detaches=0;}
     detach(){this.detaches++;}
   }},
-  SessionsCatalog:{CachedView:class {configure(){} detach(){} sourceHealth(){} cacheHint(){}}},
+  SessionsCatalog:{View:class {configure(){} detach(){} sourceHealth(){}}},
   settingsView:{read(){}},URLSearchParams
 });
 vm.runInContext(fs.readFileSync('src/web/assets/reports.js','utf8'),context);

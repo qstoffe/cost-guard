@@ -186,7 +186,8 @@ const AIStatsView = (() => {
         'Same opening move. Who crossed the finish line first?');
       title.append(symbol, this.extraHeading);
       this.extraValue = e('p', '', 'ai-stat-value'); this.extraDetail = e('p', '', 'ai-stat-detail'); this.extraTrait = e('p', '', 'ai-stat-trait');
-      this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait);
+      const link = e('a', 'Comparisons'); link.href = '#/comparisons';
+      this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
     }
     async refreshDatabaseSizes() {
       // Optional local facts never share the report request or its error state.

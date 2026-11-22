@@ -147,9 +147,3 @@ class ConnectionTests(unittest.TestCase):
                                 cwd=ROOT, capture_output=True, text=True, timeout=15)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn('web connection passed', result.stdout)
-
-    @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
-    def test_cached_watch_rejects_raced_generations_and_expires_locally(self):
-        result = subprocess.run(['node', 'development/tests/integration/cached_watch.cjs'],
-                                cwd=ROOT, capture_output=True, text=True, timeout=15)
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)

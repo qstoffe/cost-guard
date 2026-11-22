@@ -19,20 +19,10 @@ from .security import BrowserLinkUnavailable
 from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
 from .database_sizes import database_sizes
-from .display_archive import DisplayArchive
 
 
 class WebHost:
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
-        # Normal hosts always serve every page from the shared display archive;
-        # synthetic test hosts with injected jobs start without an archive.
-        cached = jobs is None
-        self.cached_sessions_enabled = cached
-        self.cached_watch_enabled = cached
-        self.cached_mix_enabled = cached
-        self.cached_stats_enabled = cached
-        self.cached_models_enabled = cached
-        self.cached_accounts_enabled = cached
         self.root = root
         self.store = store
         self.nonce = nonce or secrets.token_hex(16)
@@ -46,19 +36,12 @@ class WebHost:
         self._source_identity = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
-        self.events = EventHub(self.nonce)
-        self.display_archive = DisplayArchive(root, self.events.publish,
-            watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled,
-            mix_groups=self.cached_mix_enabled, stats_enabled=self.cached_stats_enabled,
-            models_enabled=self.cached_models_enabled, accounts_enabled=self.cached_accounts_enabled) if jobs is None else None
-        self.dispatcher = DataDispatcher(self.jobs, cache_only_mix=self.cached_mix_enabled,
-            cache_only_stats=self.cached_stats_enabled, models=self.display_archive.models) if jobs is None else None
-        if self.dispatcher is not None:
-            self.display_archive.visible_sections = self.dispatcher.visible_sections
+        self.dispatcher = DataDispatcher(self.jobs) if jobs is None else None
         self.dependencies = None
         if jobs is None:
             from .composition import dispatch_dependencies
             self.dependencies = dispatch_dependencies(root)
+        self.events = EventHub(self.nonce)
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:
@@ -66,16 +49,13 @@ class WebHost:
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-             timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
-             display_archive=self.display_archive, capture_session_finishes=self.cached_sessions_enabled) if live_factory else None
+            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None) if live_factory else None
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)
         self.log_housekeeping = LogHousekeeping(root)
         from .benchmark import BenchmarkLane
         self.benchmark = BenchmarkLane(root)
-        if self.cached_models_enabled:
-            self.benchmark.requested = True  # Background warm, irrespective of browser reads.
 
     def runtime_failed(self, error):
         self.failure = self.failure or error
@@ -100,10 +80,6 @@ class WebHost:
         driver = getattr(self.live, 'driver', None)
         selection = driver.coordinator.report_service.selection if driver else None
         return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database)
-
-    @property
-    def cached_session_views(self):
-        return self.display_archive.views if self.display_archive is not None else None
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:
@@ -195,7 +171,7 @@ class WebHost:
                             if self.live:
                                 self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
-                        self.cache_housekeeping.tick()
+                        self.cache_housekeeping.tick(self)
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:
@@ -221,8 +197,7 @@ class WebHost:
                 self.stopped.set()  # GUI must observe this even on cleanup failure.
 
     def start(self):
-        if self.display_archive is not None:
-            self.display_archive.initialize()
+        self.cache_housekeeping.start()
         self.server = LoopbackServer(self.jobs, self)
         if self.live:
             self.live.start()

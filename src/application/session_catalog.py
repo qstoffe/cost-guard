@@ -4,15 +4,15 @@ HTTP reads never acquire history. Metric ordering is admitted only with keys for
 every period-eligible root; an unindexed root is not a canonically unknown metric.
 """
 from collections import OrderedDict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from heapq import nsmallest
 from threading import Lock
 import time
 from uuid import uuid4
 
+from src.analysis.cache import dependency_signature
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.model_identity import payload_current
-from src.cache.display_history import BATCH_LIMIT
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -21,15 +21,11 @@ from src.sources.errors import SourceError
 from src.watch.models import SessionPreview
 
 from .projection import project
-from .session_archive_sweep import SummaryCapture, checkpoint_dependency, scalar_dependency, verified_finish
-from .session_catalog_lifecycle import PromptEvidence, is_running, observe_prompts, record_prompt, running_snapshot, terminal_prompt
 from .session_navigation import Navigation
 from .session_catalog_scope import (
     CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population,
     event_members, in_window, live_activity_order, provisional_order, retained_positions,
 )
-from .session_coverage import in_recent_tail, older_roster_changed
-from .session_preview_order import preview_keys
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
@@ -41,6 +37,21 @@ ARRIVAL_SECONDS = 120
 # Maximum Mini viewport (10) plus a small scrollback window. The card
 # scheduler still owns bounded source admission; this shortlist is in-memory.
 MINI_PREVIEW_LIMIT = 15
+
+
+@dataclass(frozen=True, slots=True)
+class PromptEvidence:
+    observed_ms: int
+    prompt_id: str
+    start_ms: int
+    running: bool
+    finish_ms: int | None
+    ended: bool = False
+    revision: str | None = None
+
+    @property
+    def identity(self):
+        return self.start_ms, self.prompt_id
 
 
 def effort_sort(key):
@@ -100,11 +111,9 @@ def retain_pending_metrics(row, previous):
 
 
 class SessionCatalog:
-    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC",
-                 display_archive=None):
+    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC"):
         self.clock = clock
         self.clock_ms = clock_ms
-        self.display_archive = display_archive
         self.lock = Lock()
         self.roots = OrderedDict()
         self.rows = {}
@@ -115,7 +124,6 @@ class SessionCatalog:
         self.failure_counts = {}
         self.failure_reasons = {}
         self.generation = 0
-        self.membership_generation = 0
         self.metrics = dict(cache_hits=0, cache_misses=0, attempts=0, retries=0, settled=0)
         self.work = None
         self.work_sequence = 0
@@ -123,10 +131,6 @@ class SessionCatalog:
         self.activity_index = ()
         self.activity_valid = {}
         self.changed_roots = set()
-        self.archive_urgent = OrderedDict()
-        self.archive_incarnation = 0
-        self.observation_sequence = 0
-        self.roster_sequence = 0
         self.active = frozenset()
         self.prompt_activity = {}
         self.running_roots = set()
@@ -153,7 +157,6 @@ class SessionCatalog:
         self.recent_arrivals = {}
         self.discovery_sequence = 0
         self.preview_totals = {}
-        self.preview_roots = ()
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
 
@@ -239,11 +242,6 @@ class SessionCatalog:
         for lease in self.leases.values():
             lease['epochs'].clear()
 
-    def _archive_prompt_changed(self, key, now_ms):
-        observation = self.last_observation
-        if observation.atomic_archive_roster and not in_recent_tail((observation.activity_floor or {}).get(key, 0), now_ms):
-            self.roster_sequence += 1
-
     def observe(self, observation, *, unavailable=False, source_interrupted=True, timezone_id=None):
         with self.lock:
             if timezone_id is not None:
@@ -255,10 +253,8 @@ class SessionCatalog:
                     self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
-                self.archive_urgent.clear()
                 if self.state != "source_unavailable" or source_interrupted and not self.interrupted:
                     self.wake_revision += 1
-                    self.archive_incarnation += 1
                 if source_interrupted and not self.interrupted:
                     # Recovery must supply new prompt evidence, not replay a
                     # capture that predates the confirmed outage.
@@ -271,16 +267,12 @@ class SessionCatalog:
             source_changed = bool(self.last_observation
                 and self.last_observation.source_epoch != observation.source_epoch)
             if source_changed:
-                self.archive_urgent.clear()
-                self.archive_incarnation += 1
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'running_roots', 'model_dependencies', 'orders'):
                     getattr(self, name).clear()
                 self._clear_epochs()
                 self.index_terminal = False
-            if self.display_archive is not None and older_roster_changed(self.last_observation, observation, self.clock_ms()):
-                self.roster_sequence += 1
             self.last_observation = observation
             previous_roots = self.roots
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions
@@ -319,26 +311,11 @@ class SessionCatalog:
             previous_active, self.active = self.active, observation.live_candidates
             previous_revisions = self.revisions
             self.revisions = dict(observation.revisions)
-            if (source_changed or self.observed is None or self.roots.keys() != previous_roots.keys()
-                    or self.revisions.keys() != previous_revisions.keys()):
-                self.membership_generation += 1
-                self.preview_roots = tuple(sorted(self.roots))
             self.changed_roots.intersection_update(self.roots)
-            revised = {key for key in self.roots if key in previous_roots
-                       and (previous_revisions.get(key) != self.revisions.get(key)
-                            or previous_roots[key].provenance != self.roots[key].provenance)}
-            self.changed_roots.update(revised)
+            self.changed_roots.update(key for key in self.roots
+                if key in previous_revisions and previous_revisions[key] != self.revisions.get(key))
             if self.observed is not None:
-                new = self.roots.keys() - previous_roots.keys()
-                self.changed_roots.update(new)
-                if self.display_archive is not None and not source_changed:
-                    for key in tuple(self.archive_urgent):
-                        if key not in self.roots or key in revised:
-                            del self.archive_urgent[key]
-                    newest = nsmallest(BATCH_LIMIT, (key for key in revised | new if self.revisions.get(key)),
-                                       key=lambda key: (-self.activity.get(key, 0), key))
-                    for key in newest:
-                        self._archive_priority(key, now=now)
+                self.changed_roots.update(self.roots.keys() - previous_roots.keys())
             if (source_changed or self.state != "observed" or previous_active != self.active
                     or tuple(previous_roots) != tuple(self.roots) or any(
                     key not in previous_roots or previous_roots[key] != root
@@ -373,22 +350,61 @@ class SessionCatalog:
             self.state = "observed"
             self.interrupted = False
             self.observed = self.clock()
-            self.observation_sequence += 1
 
     def observe_prompts(self, evidence):
-        observe_prompts(self, evidence)
+        """Canonical Watch captures only: root identity, revision and original time.
 
-    def _archive_priority(self, key, *, now=None, delay=0, attempts=0, front=False):
-        self.archive_urgent[key] = ((self.clock() if now is None else now) + delay, attempts)
-        self.archive_urgent.move_to_end(key, last=not front)
-        if len(self.archive_urgent) > BATCH_LIMIT:
-            self.archive_urgent.popitem(last=front)
+        An omitted prompt is not a lifecycle event. Resolve each supplied fact
+        against the same per-root evidence used by the scalar lane and page order.
+        """
+        with self.lock:
+            if self.state != "observed":
+                return
+            now = self.clock_ms()
+            for root, revision, captured_at, prompt_id, start, running, finish, ended in evidence:
+                key = root.session_id
+                if (key not in self.roots or root.provenance != self.roots[key].provenance
+                        or revision != self.revisions.get(key) or not 0 <= now - captured_at <= 15_000):
+                    continue
+                self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
+                                    wake=True)
 
-    def archive_running(self, evidence):
-        return running_snapshot(self, evidence)
+    def _record_prompt(self, key, evidence, *, wake=False):
+        now = self.clock_ms()
+        if (self.roots[key].archived_at_ms is not None or not isinstance(evidence.prompt_id, str)
+                or not self.lifecycle_cutoff_ms < evidence.observed_ms <= now
+                or not evidence.prompt_id or type(evidence.start_ms) is not int
+                or not 0 < evidence.start_ms <= now
+                or evidence.finish_ms is not None and not evidence.start_ms <= evidence.finish_ms <= now):
+            return
+        previous = self.prompt_activity.get(key)
+        if evidence.finish_ms is not None:
+            evidence = replace(evidence, ended=True)
+        if previous is None:
+            if not evidence.running:
+                return  # Ordinary history belongs to the scalar index.
+        else:
+            if evidence.identity < previous.identity or evidence.observed_ms < previous.observed_ms:
+                return
+            if evidence.prompt_id == previous.prompt_id:
+                if (evidence.start_ms != previous.start_ms or evidence.running and previous.ended
+                        or not evidence.running and not evidence.ended
+                        or evidence.observed_ms == previous.observed_ms and evidence.running):
+                    return
+                if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
+                    evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
+        self.prompt_activity[key] = evidence
+        if evidence.running:
+            self.running_roots.add(key)
+        else:
+            self.running_roots.discard(key)
+        if wake and (previous is None or (previous.identity, previous.running, previous.finish_ms) !=
+                (evidence.identity, evidence.running, evidence.finish_ms)):
+            self.wake_revision += 1
 
     def _running(self, key):
-        return is_running(self, key)
+        return (not self.interrupted and key in self.running_roots
+                and self.prompt_activity[key].observed_ms > self.lifecycle_cutoff_ms)
 
     def _current(self, key):
         value = self.valid.get(key)
@@ -468,8 +484,8 @@ class SessionCatalog:
         return min(candidates, key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
 
     def tick(self, service):
-        archive = self.display_archive
-        dependencies = scalar_dependency(service)
+        dependencies = dependency_signature((service._dependencies(service._load_catalog()),
+                                              service._load_comparison_catalog().diagnostic_signature))
         with self.lock:
             self.checked_at = self.clock()
             if self.index_unavailable:
@@ -524,9 +540,7 @@ class SessionCatalog:
                     break
                 root, revision = self.roots[key], self.revisions.get(key)
                 epoch = self.last_observation.source_epoch
-                incarnation = self.archive_incarnation
-                observation_sequence = self.observation_sequence
-                active = key in self.active or self._running(key) or terminal_prompt(self, key) is not None
+                active = key in self.active or key in self.running_roots
                 captured_at = self.clock_ms()
                 self.attempted[key] = self.clock()
                 self.metrics['attempts'] += 1
@@ -538,16 +552,11 @@ class SessionCatalog:
                     and key in lease['navigation'].roots and key not in lease['navigation'].facts]
                 memberships = {}
                 windows = {nav.window for nav in navigations if nav.window.period != 'all'}
-            admission = (archive.admit_summary(service, key, revision, observation_sequence=observation_sequence)
-                         if archive is not None else None)
-            capture = SummaryCapture(service.config) if admission is not None else None
-            accepted = False
             try:
                 identity_values = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
-                     on_stage=lambda stage: self._stage(stage, retrying),
-                     on_dependencies=identity_values.extend,
-                     on_observation=capture.observe if capture is not None else None,
+                    on_stage=lambda stage: self._stage(stage, retrying),
+                    on_dependencies=identity_values.extend,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
                         (window, any(in_window(at, window) for at in values)) for window in windows if complete))
@@ -566,7 +575,6 @@ class SessionCatalog:
                             and epoch == self.last_observation.source_epoch
                             and revision == self.revisions.get(key)):
                         if actual == revision:
-                            accepted = self.state == "observed"
                             self.rows[key] = retain_pending_metrics(row, self.rows.get(key))
                             self.model_dependencies[key] = identity_values
                             self.valid[key] = actual, self.clock()
@@ -597,23 +605,6 @@ class SessionCatalog:
                 with self.lock:
                     self.work = None
                     self.metrics['settled'] += 1
-            if accepted and admission is not None:
-                # Native model identity can change without a root revision.
-                # A checkpoint must name the exact observed identity authority;
-                # callers cannot use it as a revision-only restart shortcut.
-                with self.lock:
-                    terminal = terminal_prompt(self, key)
-                def eligible():
-                    with self.lock:
-                        return (self.state == "observed" and self.archive_incarnation == incarnation
-                                and self.roots.get(key) == root and self.revisions.get(key) == actual
-                                and not self._running(key) and terminal == terminal_prompt(self, key))
-
-                if terminal is None or verified_finish(row, terminal):
-                     archive.publish_summary(service, admission, row, actual,
-                                              eligible=eligible,
-                                              dependency=checkpoint_dependency(dependencies, identity_values, terminal),
-                                              usage=capture.usage)
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
@@ -641,7 +632,7 @@ class SessionCatalog:
 
     def _record_summary_prompt(self, key, row, captured_at):
         if row.running or row.activity_qualified:
-            record_prompt(self, key, PromptEvidence(captured_at, row.activity_prompt_id, row.prompt_started_ms,
+            self._record_prompt(key, PromptEvidence(captured_at, row.activity_prompt_id, row.prompt_started_ms,
                 row.running, None if row.running else row.last_activity_ms, revision=self.revisions.get(key)))
 
     def _with_lifecycle(self, rows, lifecycle=None):
@@ -1032,6 +1023,8 @@ class SessionCatalog:
                 row = self.rows.get(key)
                 current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
                     and not self.failures.get(key, (None, False))[1])
+                if key in excluded or self._running(key):
+                    return None
                 at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
                 at = at if type(at) is int and 0 < at <= now else None
                 scope = total_scope(key)
@@ -1051,7 +1044,10 @@ class SessionCatalog:
                 return SessionPreview(key, self.roots[key].title or "Untitled session", at,
                     "events" if self._activity_current(key) else "catalog",
                     total, total is not None, total_state=total_state)
-            selected = tuple(map(candidate, preview_keys(self, excluded, now, limit)))
+            # Bounded top-K output/memory; no full-history sort or capture.
+            selected = tuple(nsmallest(limit, (value for key in self.roots
+                if (value := candidate(key)) is not None),
+                key=lambda value: (-(value.activity_ms or 0), value.session_id)))
             self.preview_totals = {value.session_id: (total_scope(value.session_id), value.total_ccost)
                 for value in selected if value.total_ccost is not None}
             return selected

@@ -310,9 +310,8 @@ const AccountCards = (() => {
     update(view) {
       const text = ReportView.text, display = ReportView.display;
       const accounts = view?.accounts?.accounts, wanted = [];
-      const native = view?.accounts?.cached_native;
       for (const item of accounts || []) {
-        const obs = item.observation, primary = item.live_primary || item.primary;
+        const obs = item.observation, primary = item.primary;
         const key = JSON.stringify([obs.provider_id, obs.id]);
         let line = this.lines.get(key);
         if (!line) {
@@ -321,29 +320,25 @@ const AccountCards = (() => {
           ContextHelp.value(label.children[0], () => line.helpText || '');
           line.append(label, this.el('progress')); this.lines.set(key, line);
         }
-        const warning = item.stale ? ' · last observed' : primary.restricted ? ' · provider restriction' : '';
+        const warning = primary.restricted ? ' · provider restriction' : '';
         ReportView.bind(line, () => {
           const quota = ReportView.quotaView(primary.quota, primary);
           const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
-          line.helpText = compactQuotaHelp(primary) +
-            (native ? '\nProvider observation: ' + display(obs, 'observed_at_ms') : '');
-          const cost = native && !item.live_primary ? '' : ` (${display(primary.quota, 'ccost_' + quota.mode)})`;
-          text(line.children[0].children[0], `${obs.label} · ${used}${cost}${warning}`);
+          line.helpText = compactQuotaHelp(primary);
+          text(line.children[0].children[0], `${obs.label} · ${used} (${display(primary.quota, 'ccost_' + quota.mode)})${warning}`);
           ContextHelp.refresh(line);
-          line.className = item.stale ? '' : quota.exhausted && quota.mode === 'remaining' ?
-            'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
+          line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
           const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;
           bar.max = 1; bar.value = quota.fraction ?? 0;
-          bar.className = quota.exhausted && !item.stale && !bar.hidden ? 'mini-exhausted' : '';
+          bar.className = quota.exhausted && !bar.hidden ? 'mini-exhausted' : '';
           bar.setAttribute('aria-label', obs.label + ' · ' + primary.quota.label + ' ' + quota.mode);
-          bar.setAttribute('aria-valuetext', used + warning + (quota.exhausted && !item.stale ? ' · exhausted' : ''));
+          bar.setAttribute('aria-valuetext', used + warning + (quota.exhausted ? ' · exhausted' : ''));
         });
         wanted.push(line);
       }
       if (!wanted.length) {
         this.empty ||= this.el('li');
-        text(this.empty, view?.cached_quota ? 'Subscription quota unavailable' :
-          accounts ? 'No configured subscriptions' : 'Acquiring subscriptions…'); wanted.push(this.empty);
+        text(this.empty, accounts ? 'No configured subscriptions' : 'Acquiring subscriptions…'); wanted.push(this.empty);
       }
       const keep = new Set(wanted);
       for (const node of [...this.root.children]) if (!keep.has(node)) node.remove();

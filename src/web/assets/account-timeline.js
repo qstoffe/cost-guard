@@ -120,10 +120,9 @@ const AccountTimelineView = (() => {
   }
 
   class View {
-    constructor(api, changeDemand, {archived = false} = {}) {
+    constructor(api, changeDemand) {
       this.api = api;
       this.changeDemand = changeDemand;
-      this.archived = archived;
       this.period = 'month';
       this.cache = new Map();
       this.entries = new Map();
@@ -132,7 +131,7 @@ const AccountTimelineView = (() => {
       this.generation = 0;
       this.width = 0;
       this.root = e('section', undefined, 'account-timeline');
-      const title = e('h2', archived ? 'Observed reference CCost' : 'CCost'), id = 'account-timeline-title';
+      const title = e('h2', 'CCost'), id = 'account-timeline-title';
       title.id = id;
       this.root.setAttribute('aria-labelledby', id);
       const filters = e('div', undefined, 'ai-stats-periods');
@@ -258,27 +257,7 @@ const AccountTimelineView = (() => {
       this.schedule(0);
     }
 
-    cacheHint(hint, resync = false) {
-      if (!this.archived || !hint) return;
-      const previous = this.hint;
-      this.hint = hint;
-      clearTimeout(this.proofTimer);
-      const remaining = Number.isFinite(hint.proof_expires_ms) ? hint.proof_expires_ms - Date.now() : null;
-      if (remaining != null && remaining <= 0) {
-        this.setScope(null);
-        return;
-      }
-      if (remaining != null) this.proofTimer = setTimeout(() => this.setScope(null), remaining);
-      if (this.scope !== hint.scope) {
-        this.setScope(hint.scope);
-      } else if (hint.scope && (hint.marks?.[this.period] !== previous?.marks?.[this.period] || resync && this.cacheError)) {
-        this.generation++;
-        this.schedule(0);
-      }
-    }
-
     invalidate() {
-      clearTimeout(this.proofTimer);
       this.selected.clear();
       this.colors.clear();
       this.setScope(null);
@@ -319,8 +298,7 @@ const AccountTimelineView = (() => {
 
     schedule(delay) {
       clearTimeout(this.timer);
-      if (this.visible && !this.pending && (!this.archived || this.scope) && delay != null)
-        this.timer = setTimeout(() => this.refresh(), delay);
+      if (this.visible && !this.pending) this.timer = setTimeout(() => this.refresh(), delay);
     }
 
     async refresh() {
@@ -329,10 +307,8 @@ const AccountTimelineView = (() => {
       const generation = this.generation;
       this.pending = true;
       try {
-        const value = this.archived ? await this.api('/api/cache/accounts', {period}) :
-          await this.api('/api/accounts/timeline', {period, revision});
+        const value = await this.api('/api/accounts/timeline', {period, revision});
         if (generation !== this.generation || value.scope !== this.scope) return;
-        this.cacheError = false;
         const activityChanged = this.working !== (value.acquiring === true);
         this.working = value.acquiring === true;
         if (value.view) {
@@ -346,7 +322,7 @@ const AccountTimelineView = (() => {
           view.buckets.forEach(([start], index) => {
             if (previous?.has(start) || view.series.some(series => series.points[index] != null)) shown.add(start);
           });
-          this.cache.set(period, {revision: value.revision, view, shown, expires: value.expires_ms});
+          this.cache.set(period, {revision: value.revision, view, shown});
           this.roster = value.view.series;
           this.draw();
         } else if (!value.unchanged) {
@@ -359,24 +335,15 @@ const AccountTimelineView = (() => {
             this.draw();
           }
         } else if (activityChanged) this.draw();
-      } catch (error) {
+      } catch (_) {
         // Host health owns sign-in and connection UX. Never narrate retries.
-        if (this.archived && generation === this.generation) {
-          this.cacheError = true;
-          if (['cache_source_unbound', 'authentication_required', 'csrf_required',
-              'instance_stopping', 'host_identity_changed'].includes(error.message)) {
-            this.cache.clear();
-            this.roster = [];
-            this.draw();
-          }
-        }
         if (generation === this.generation && this.working) {
           this.working = false;
           this.draw();
         }
       } finally {
         this.pending = false;
-        this.schedule(generation !== this.generation ? 0 : this.archived ? null : this.initial ? 350 : 6000);
+        this.schedule(generation !== this.generation ? 0 : this.initial ? 350 : 6000);
       }
     }
 
@@ -423,25 +390,7 @@ const AccountTimelineView = (() => {
     }
 
     draw() {
-      if (this.archived && this.scope && this.hint?.proof_expires_ms <= Date.now()) {
-        this.setScope(null);
-        return;
-      }
-      clearTimeout(this.expiryTimer);
-      let cached = this.cache.get(this.period);
-      if (this.archived && Number.isFinite(cached?.expires)) {
-        const remaining = cached.expires - Date.now();
-        if (remaining <= 0) {
-          this.cache.delete(this.period);
-          cached = undefined;
-        } else if (this.visible && remaining <= 0x7fffffff) {
-          this.expiryTimer = setTimeout(() => {
-            this.generation++;
-            this.draw();
-            this.schedule(0);
-          }, remaining);
-        }
-      }
+      const cached = this.cache.get(this.period);
       const view = cached?.view;
       const previous = this.view;
       const roster = view?.series || this.roster || [];
@@ -478,7 +427,6 @@ const AccountTimelineView = (() => {
       const unselected = roster.length && !selectedSeries.length;
       const loading = !view && !unselected && this.initial && this.visible;
       const message = unselected ? 'Select an account to show its usage.' :
-        this.archived ? 'No observed account history is cached for this period.' :
         loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
       this.initialRing.hidden = !loading || !this.working;
@@ -486,13 +434,7 @@ const AccountTimelineView = (() => {
       this.empty.hidden = !this.frame.hidden && !unselected;
       this.empty.classList.toggle('over-plot', !this.frame.hidden);
       this.plot.setAttribute('tabindex', this.frame.hidden ? '-1' : '0');
-      if (this.frame.hidden) {
-        this.shades.replaceChildren();
-        this.layers.replaceChildren();
-        this.labels.replaceChildren();
-        this.targets.replaceChildren();
-        return this.inspect(null);
-      }
+      if (this.frame.hidden) return this.inspect(null);
 
       const axis = [];
       let lastLabel;
@@ -514,8 +456,7 @@ const AccountTimelineView = (() => {
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
       this.range.title = layout.shortDates ? 'A rolling seven-day window; dates at either end may be partial.' : '';
-      ReportView.text(this.range, `Range: ${rangeLabel(view, layout, this.future)}` +
-        (this.archived ? ' · Observed reference subtotal, not native quota or billing.' : ''));
+      ReportView.text(this.range, `Range: ${rangeLabel(view, layout, this.future)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);

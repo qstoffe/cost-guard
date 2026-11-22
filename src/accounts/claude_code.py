@@ -5,7 +5,6 @@ from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import hashlib
-from pathlib import Path
 from typing import Callable, Mapping
 import time
 
@@ -27,12 +26,6 @@ def _identity(email: object, organization: object) -> str | None:
     if not isinstance(email, str) or not email.strip():
         return None
     return hashlib.sha256((email.strip().lower() + "\0" + str(organization or "")).encode()).hexdigest()
-
-
-def _cli_ref(metadata: Mapping) -> AccountRef:
-    identity = _identity(metadata.get("email"), metadata.get("orgId"))
-    locator = hashlib.sha256(str(metadata.get("configDirectory", "default")).encode()).hexdigest()
-    return AccountRef("claude-cli:" + locator, "claude-code", account_id=identity, source_account="current-login")
 
 
 def _reset(value: object) -> int | None:
@@ -127,31 +120,17 @@ class ClaudeCodeAccountProvider:
                                          "user_action": "Signed out; run 'claude auth login'"}) if self._last else None
         backend = metadata.get("apiProvider")
         subscription = backend == "firstParty" and metadata.get("authMethod") == "claude.ai"
+        identity = _identity(metadata.get("email"), metadata.get("orgId"))
         # Compare organization NAME to name, never auth status.orgId to name.
         self._quota_identity = _identity(metadata.get("email"), metadata.get("orgName"))
+        locator = hashlib.sha256(str(metadata.get("configDirectory", "default")).encode()).hexdigest()
+        ref = AccountRef("claude-cli:" + locator, "claude-code", account_id=identity, source_account="current-login")
         api = backend == "firstParty" and metadata.get("authMethod") in {"api_key", "api-key", "api"}
-        return AccountSnapshot(_cli_ref(metadata), self.now_ms(), "Claude Code",
+        return AccountSnapshot(ref, self.now_ms(), "Claude Code",
             plan=_plan(metadata.get("subscriptionType")) if subscription else ("API pay as you go" if api else None),
             availability="unavailable", reason="Claude subscription quotas unavailable",
             observations={"auth_status": "authenticated", "backend_status": "first_party" if backend == "firstParty" else "external",
                           "account_kind": "subscription" if subscription else "api_or_external"})
-
-    def archive_identity(self) -> AccountSnapshot | None:
-        """Current first-party principal from CLI status only; never use quota or _last."""
-        metadata = self.auth_reader()
-        if (not isinstance(metadata, Mapping) or metadata.get("loggedIn") is not True
-                or metadata.get("apiProvider") != "firstParty" or metadata.get("authMethod") != "claude.ai"):
-            return None
-        email, org, profile = (metadata.get(key) for key in ("email", "orgId", "configDirectory"))
-        if (not all(isinstance(value, str) and value and value.isprintable() for value in (email, org, profile))
-                or len(email) > 320 or email.count("@") != 1 or not all(email.split("@"))
-                or any(character.isspace() for character in email)
-                or len(org) > 128 or not all(character in "-_" or character.isascii() and character.isalnum() for character in org)
-                or not Path(profile).is_absolute()):
-            return None
-        return AccountSnapshot(_cli_ref(metadata), self.now_ms(), "Claude Code", plan=_plan(metadata.get("subscriptionType")),
-            availability="unavailable", observations={"auth_status": "authenticated", "backend_status": "first_party",
-                                                      "account_kind": "subscription"})
 
     def probe(self):
         self._pending = self._discover()
