@@ -478,7 +478,8 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 with closing(sqlite3.connect(stage_path)) as db, closing(sqlite3.connect(":memory:")) as revision_db:
                     with source.archive_cursor(ROOT) as cursor:
                         revision = V1RevisionStamp(cursor, revision_db)
-                        builder = V1ArchiveTrace(source, revision, db, subscription_providers=subscriptions)
+                        builder = V1ArchiveTrace(source, revision, db, subscription_providers=subscriptions,
+                                                 tracked_provider="synthetic")
                         with self.assertRaisesRegex(SourceDataError, "not ready"):
                             builder.trace_turn()
                         work = 0
@@ -514,24 +515,82 @@ class V1ArchiveCursorTests(unittest.TestCase):
                     else:
                         self.fail("trace replay did not reach EOF")
 
-                self.assertEqual(expected, tuple(result))
+                entries = tuple(row.entry for row in result)
+                self.assertEqual(expected, entries)
                 self.assertNotIn(b"PRIVATE_FIXTURE_TRANSCRIPT", stage_path.read_bytes())
                 self.assertEqual(["wide:late-step", "unknown", "child-call", "same-clock", "selected"],
-                                 [entry.invocation_id for entry in result])
+                                  [entry.invocation_id for entry in entries])
                 self.assertEqual([None, "tied-task", None, None, "tied-task"],
-                                 [entry.logical_prompt_id for entry in result])
-                self.assertEqual(["medium", "low", None, None, "high"], [entry.selected_effort for entry in result])
+                                 [entry.logical_prompt_id for entry in entries])
+                self.assertEqual(["medium", "low", None, None, "high"], [entry.selected_effort for entry in entries])
                 self.assertEqual([("input", "cache_read"), (), ("input",), ("input",), ("output",)],
-                                 [entry.tokens.known_fields for entry in result])
-                self.assertEqual(17, result[0].tokens.input)
-                self.assertEqual(ROOT, result[2].parent_session_id)
+                                 [entry.tokens.known_fields for entry in entries])
+                self.assertEqual(17, entries[0].tokens.input)
+                self.assertEqual(ROOT, entries[2].parent_session_id)
                 self.assertLess(max(stage_steps), 15000)
                 self.assertLess(max(source_steps), 5000)
-                bundle = analyze_snapshot(snapshot, tracked_provider="synthetic", now_ms=100_000)
+                bundle = analyze_snapshot(snapshot, tracked_provider="synthetic", now_ms=100_000,
+                                          subscription_providers=subscriptions)
                 fallback = history_prompt_keys(bundle)
-                ambiguous = next(entry for entry in bundle.trace_entries if entry.invocation_id == "wide:late-step")
-                self.assertIsNone(ambiguous.logical_prompt_id)
-                self.assertEqual((ROOT, "tied-prompt"), fallback[ambiguous])
+                observed = {row.entry: (row.entry.session_id, row.executing_prompt_id)
+                            for row in result if row.executing_prompt_id is not None}
+                self.assertEqual(fallback, observed)
+                self.assertEqual(["tied-prompt", "tied-task", None, None, "tied-task"],
+                                 [row.executing_prompt_id for row in result])
+
+    def test_executing_prompt_fallback_uses_only_eligible_root_windows_in_provider_scope(self):
+        _seed(self.path)
+        with closing(sqlite3.connect(self.path)) as db, db:
+            _session(db, "child", ROOT)
+            for session, prefix in [(ROOT, "root"), ("child", "child")]:
+                for name, clock, part in [
+                    ("ordinary", 100, {"type": "text", "text": "ordinary"}),
+                    ("task-b", 100, {"type": "subtask"}),
+                    ("task-c", 100, {"type": "subtask"}),
+                    ("continuation", 200, {"type": "text", "synthetic": True,
+                                           "text": "Summarize the task tool output above and continue with your task."}),
+                ]:
+                    key = f"{prefix}-{name}"
+                    db.execute("INSERT INTO message VALUES(?,?,?,?,?)", (key, session, clock, clock, '{"role":"user"}'))
+                    db.execute("INSERT INTO part VALUES(?,?,?,?,?,?)",
+                               (f"part-{key}", key, session, clock, clock, json.dumps(part)))
+
+                for name, provider, owner, summary in [
+                    ("in", "tracked", "continuation", False),
+                    ("out", "other", "continuation", False),
+                    ("direct", "other", "ordinary", False),
+                    ("summary", "tracked", "ordinary", True),
+                ]:
+                    payload = {"role": "assistant", "providerID": provider, "modelID": "sample",
+                               "parentID": f"{prefix}-{owner}", "summary": summary,
+                               "time": {"created": 300, "completed": 301}, "tokens": {"input": 2}}
+                    db.execute("INSERT INTO message VALUES(?,?,?,?,?)",
+                               (f"{prefix}-{name}", session, 300, 301, json.dumps(payload)))
+        source = OpenCodeV1Source(self.path)
+        snapshot = source.load_session_snapshot(ROOT)
+
+        for scope in ("tracked", None):
+            with self.subTest(scope=scope):
+                with closing(sqlite3.connect(":memory:")) as stage, source.archive_cursor(ROOT) as cursor:
+                    builder = V1ArchiveTrace(source, cursor, stage, tracked_provider=scope)
+                    for _ in range(16):
+                        if builder.capture_turn():
+                            break
+                    else:
+                        self.fail("fixture cursor did not reach EOF")
+                    self.assertTrue(builder.prepare_turn())
+                    rows = builder.trace_turn()
+                    self.assertIsNone(builder.trace_turn())
+                bundle = analyze_snapshot(snapshot, tracked_provider=scope, now_ms=100_000)
+                expected = history_prompt_keys(bundle)
+                observed = {row.entry: (row.entry.session_id, row.executing_prompt_id)
+                            for row in rows if row.executing_prompt_id is not None}
+                self.assertEqual(expected, observed)
+                self.assertEqual({
+                    "root-direct": "root-ordinary", "child-direct": "child-ordinary",
+                    "root-in": "root-task-b", "root-out": "root-task-b" if scope is None else None,
+                    "root-summary": None, "child-summary": None, "child-in": None, "child-out": None,
+                }, {row.entry.invocation_id: row.executing_prompt_id for row in rows})
 
     def test_dense_root_replays_exact_order_and_identity_across_many_trace_turns(self):
         _seed(self.path)
@@ -577,11 +636,11 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 page = builder.trace_turn()
                 if page is None:
                     break
-                result.extend(page)
+                result.extend(row.entry for row in page)
                 sizes.append(len(page))
                 projected = tuple(project_request(
-                    entry, physical_request_key(entry), reference, prompt=entry.logical_prompt_id, tree=ROOT,
-                ) for entry in page)
+                    row.entry, physical_request_key(row.entry), reference, prompt=row.executing_prompt_id, tree=ROOT,
+                ) for row in page)
                 with history._connect() as display:
                     display.execute("BEGIN IMMEDIATE")
                     self.assertTrue(append_request_input(display, "dense", page_number, projected))

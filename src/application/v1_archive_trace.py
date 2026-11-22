@@ -1,9 +1,11 @@
 """Off-dispatch proof of bounded V1 trace production from one pinned cursor."""
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from src.analysis.causal import trace_entry
+from src.analysis.billing import provider_matches
+from src.analysis.causal import TRACKED_PROVIDER_DEFAULT, trace_entry
+from src.analysis.models import TraceEntry
 from src.domain import EventKind, MessageRole, TokenUsage
 from src.sources.errors import SourceDataError
 from src.sources.opencode_requests import observed_response
@@ -19,13 +21,21 @@ _KINDS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class V1TraceRow:
+    entry: TraceEntry
+    executing_prompt_id: str | None
+
+
 class V1ArchiveTrace:
     """The caller owns the cursor and a separate, disposable staging database.
 
     All facts are tentative until the source pin reaches EOF. This is only
-    usage trace; it has no root attribution, coverage or display authority.
+    usage trace and executing-prompt identity; it has no descendant causal
+    attribution, coverage or display authority.
     """
-    def __init__(self, source, cursor, stage, *, subscription_providers=frozenset()):
+    def __init__(self, source, cursor, stage, *, subscription_providers=frozenset(),
+                 tracked_provider=TRACKED_PROVIDER_DEFAULT):
         files = tuple(stage.execute("PRAGMA database_list"))
         if (stage.in_transaction or stage.isolation_level is None or len(files) != 1
                 or files[0][2] and Path(files[0][2]).resolve() == source.database_path
@@ -35,6 +45,7 @@ class V1ArchiveTrace:
         self._source = source
         self._cursor = cursor
         self._subscriptions = subscription_providers
+        self._tracked_provider = tracked_provider
         self._root = None
         self._phase = "input"
         self._fallback_after = None
@@ -126,7 +137,7 @@ class V1ArchiveTrace:
         return False
 
     def trace_turn(self):
-        """Return one ordered trace page, or None for EOF."""
+        """Return an ordered page of trace and executing-prompt facts, or None for EOF."""
         if self._phase == "done":
             return None
         self._require("trace")
@@ -142,9 +153,17 @@ class V1ArchiveTrace:
                 header = facts.load_header(row, self._source, session, message)
                 call = facts.load_call(call_values, self._source, header)
                 parent, = db.execute("SELECT parent FROM trace_members WHERE id=?", (session,)).fetchone()
-                owner, selection = facts.own_event(db, session, call.initiating_event_id)
-                result.append(trace_entry(call, self._ordinal, root=self._root, parent=parent, owner=owner,
-                                          selection=selection, subscription_providers=self._subscriptions))
+                owner, first_window, selection = facts.own_event(db, session, call.initiating_event_id)
+                entry = trace_entry(call, self._ordinal, root=self._root, parent=parent, owner=owner,
+                                    selection=selection, subscription_providers=self._subscriptions)
+                prompt = None if entry.summary else owner
+                if (prompt is None and not entry.summary and session == self._root
+                        and provider_matches(entry.model.provider, self._tracked_provider)):
+                    # Root records are ordered by prompt clock then ID. This
+                    # very call makes every enclosing window a nonempty record.
+                    # Child causal attribution cannot supply this fallback.
+                    prompt = first_window
+                result.append(V1TraceRow(entry, prompt))
                 self._ordinal += 1
         except BaseException:
             self._phase = "invalid"

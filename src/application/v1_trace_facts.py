@@ -87,14 +87,15 @@ def load_call(row, source, header):
 
 
 def own_event(db, session, event):
+    """Return the unique trace owner, earliest prompt window, and selection."""
     if event is None:
-        return None, {}
+        return None, None, {}
     row = db.execute("""
         SELECT kind,created,provider,model,variant FROM trace_messages
         WHERE session=? AND id=? AND role='user'
     """, (session, event)).fetchone()
     if row is None:
-        return None, {}
+        return None, None, {}
     kind, clock, provider, model, variant = row
     selection = {key: value for key, value in zip(
         ("provider_id", "model_id", "variant"), (provider, model, variant), strict=True) if value}
@@ -102,19 +103,20 @@ def own_event(db, session, event):
         SELECT field,value FROM trace_choices WHERE session=? AND message=?
     """, (session, event)))
     if kind in (PROMPT, SUBTASK):
-        return event, selection
+        return event, event if clock >= 0 else None, selection
     if kind not in (OTHER, SYNTHETIC):
-        return None, selection
+        return None, None, selection
     bucket = db.execute(f"""
         SELECT created FROM trace_messages INDEXED BY trace_visible
         WHERE session=? AND created<=? AND kind IN ({PROMPT},{SUBTASK}) ORDER BY created DESC LIMIT 1
     """, (session, clock)).fetchone()
     if bucket is None or bucket[0] == clock:
-        return None, selection
+        return None, None, selection
     predicate = f"kind={SUBTASK}" if kind == SYNTHETIC else f"kind IN ({PROMPT},{SUBTASK})"
     index = "trace_subtasks" if kind == SYNTHETIC else "trace_visible"
     owners = db.execute(f"""
         SELECT id FROM trace_messages INDEXED BY {index}
         WHERE session=? AND created=? AND {predicate} ORDER BY id LIMIT 2
     """, (session, bucket[0])).fetchall()
-    return (owners[0][0] if len(owners) == 1 else None), selection
+    first_window = owners[0][0] if owners and bucket[0] >= 0 else None
+    return (owners[0][0] if len(owners) == 1 else None), first_window, selection
