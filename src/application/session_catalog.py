@@ -378,11 +378,11 @@ class SessionCatalog:
     def observe_prompts(self, evidence):
         observe_prompts(self, evidence)
 
-    def _archive_priority(self, key, *, now=None, delay=0, attempts=0):
+    def _archive_priority(self, key, *, now=None, delay=0, attempts=0, front=False):
         self.archive_urgent[key] = ((self.clock() if now is None else now) + delay, attempts)
-        self.archive_urgent.move_to_end(key)
+        self.archive_urgent.move_to_end(key, last=not front)
         if len(self.archive_urgent) > BATCH_LIMIT:
-            self.archive_urgent.popitem(last=False)
+            self.archive_urgent.popitem(last=front)
 
     def archive_running(self, evidence):
         return running_snapshot(self, evidence)

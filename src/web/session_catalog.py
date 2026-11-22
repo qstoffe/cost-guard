@@ -1,6 +1,7 @@
 """Allowlisted catalog request validation; acquisition stays with shared Live."""
 import re
 
+from src.application.session_archive_sweep import VISIBLE_HINT_LIMIT
 from src.application.session_catalog import SORTS
 from src.application.session_catalog_scope import PAGE_SIZE, PERIODS
 
@@ -28,3 +29,27 @@ def catalog_page(owner, value):
                 or not re.fullmatch(r"[a-f0-9]{32}", value[key])) for key in ("token", "epoch"))):
         raise ValueError("invalid_request")
     return owner.page(**value)
+
+
+def cached_priority(handler, value, *, detail):
+    field = "session_id" if detail else "session_ids"
+    binding, raw = value.get("binding"), value.get(field)
+    keys = [raw] if detail else raw
+    if (set(value) != {"binding", field} or not isinstance(binding, str) or not re.fullmatch(r"[a-f0-9]{32}", binding)
+            or type(keys) is not list or not 1 <= len(keys) <= VISIBLE_HINT_LIMIT
+            or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", key) for key in keys)
+            or len(set(keys)) != len(keys)):
+        handler.reply(400, {"error": "invalid_request"})
+        return
+    owner = handler.server.lifecycle
+    archive = getattr(owner, "display_archive", None)
+    catalog = getattr(getattr(owner, "live", None), "catalog", None)
+    if archive is None or catalog is None or not getattr(owner, "cached_sessions_enabled", False):
+        handler.reply(503, {"error": "cache_unavailable"})
+        return
+    prioritized = archive.prioritize_detail(catalog, binding, keys[0]) if detail else (
+        archive.prioritize_visible(catalog, binding, keys))
+    if prioritized is None:
+        handler.reply(409, {"error": "cache_source_unbound"})
+    else:
+        handler.reply(202, {"prioritized": prioritized})

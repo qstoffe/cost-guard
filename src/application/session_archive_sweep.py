@@ -13,6 +13,7 @@ from .request_archive_projection import request_roster
 from .session_catalog_lifecycle import is_running, terminal_prompt
 
 SCAN_WINDOW = 32
+VISIBLE_HINT_LIMIT = 8
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
@@ -75,17 +76,20 @@ class SessionArchiveSweep:
             now = catalog.clock()
             return any(ready <= now for ready, _ in catalog.archive_urgent.values())
 
-    def prioritize_detail(self, catalog, key, *, eligible):
+    def prioritize_visible(self, catalog, keys, *, eligible):
         """A view hint can reorder existing work, but never open the source."""
         if not catalog.lock.acquire(blocking=False):
-            return False
+            return 0
         try:
-            if catalog.state != "observed" or not eligible() or self._candidate(catalog, key) is None:
-                return False
-            if key not in catalog.archive_urgent:
-                catalog._archive_priority(key)
-            catalog.archive_urgent.move_to_end(key, last=False)
-            return True
+            if catalog.state != "observed" or not eligible():
+                return 0
+            selected = tuple(key for key in keys if self._candidate(catalog, key) is not None)
+            for key in reversed(selected):
+                if key not in catalog.archive_urgent:
+                    catalog._archive_priority(key, front=True)
+                else:
+                    catalog.archive_urgent.move_to_end(key, last=False)
+            return len(selected)
         finally:
             catalog.lock.release()
 

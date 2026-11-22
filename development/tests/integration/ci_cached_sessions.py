@@ -85,11 +85,14 @@ def check_cached_sessions(browser, evidence, product_root):
             prompts = first.locator("th").filter(has_text="Prompts")
             prompts.get_by_role("button").click()
             expect(prompts).to_have_attribute("aria-sort", "ascending", timeout=5000)
-            with first.expect_response(lambda response: urlsplit(response.url).path == "/api/cache/sessions"
+            with first.expect_request(lambda request: urlsplit(request.url).path == "/api/cache/sessions/demand"
+                                      and "s-027" in request.post_data_json.get("session_ids", ())) as demand, \
+                 first.expect_response(lambda response: urlsplit(response.url).path == "/api/cache/sessions"
                                        and response.request.post_data_json.get("offset") == 25) as page_two:
                 first.get_by_role("button", name="Next", exact=True).click()
             assert page_two.value.ok
             assert page_two.value.request.post_data_json == dict(period="all", sort="prompts", direction=1, offset=25)
+            assert demand.value.post_data_json == dict(binding=views.binding, session_ids=["s-027"])
             expect(pager).to_contain_text("26–30 of 30 cached sessions", timeout=5000)
             names = first.locator(".sessions-catalog tbody .session-name")
             expect(names).to_have_text([f"Session {index}" for index in range(26, 31)])

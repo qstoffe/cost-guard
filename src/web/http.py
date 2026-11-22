@@ -18,7 +18,7 @@ from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
-from .session_catalog import catalog_page
+from .session_catalog import cached_priority, catalog_page
 from .dispatch import cache_only_reports
 from .dispatch_http import handle as handle_dispatch
 from .session_export import SessionExports
@@ -430,8 +430,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 from .accounts_http import cached_accounts
                 cached_accounts(self, value)
                 return
-            if self.path == "/api/cache/session-detail/demand":
-                self.cached_detail_demand(value)
+            if self.path in {"/api/cache/session-detail/demand", "/api/cache/sessions/demand"}:
+                cached_priority(self, value, detail=self.path == "/api/cache/session-detail/demand")
                 return
             if self.path == "/api/cache/sessions/clear":
                 self.clear_cached_sessions(value)
@@ -608,24 +608,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(503, {"error": "cache_source_unbound"})
             else:
                 self.reply(200, result)
-
-    def cached_detail_demand(self, value):
-        if (set(value) != {"session_id", "binding"} or not isinstance(value["session_id"], str)
-                or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", value["session_id"])
-                or not isinstance(value["binding"], str) or not re.fullmatch(r"[a-f0-9]{32}", value["binding"])):
-            self.reply(400, {"error": "invalid_request"})
-            return
-        owner = self.server.lifecycle
-        archive = getattr(owner, "display_archive", None)
-        catalog = getattr(getattr(owner, "live", None), "catalog", None)
-        if archive is None or catalog is None or not getattr(owner, "cached_sessions_enabled", False):
-            self.reply(503, {"error": "cache_unavailable"})
-            return
-        prioritized = archive.prioritize_detail(catalog, value["binding"], value["session_id"])
-        if prioritized is None:
-            self.reply(409, {"error": "cache_source_unbound"})
-        else:
-            self.reply(202, {"prioritized": prioritized})
 
     def cached_mix_total(self, value, *, grouped):
         from src.cache.display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_SORTS, valid_group_revision

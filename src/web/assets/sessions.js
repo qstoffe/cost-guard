@@ -595,8 +595,8 @@ const SessionsCatalog = (() => {
       });
     }
   }
-  // Committed-cache controller. No request token, source waiter, resumable
-  // navigation intent or admission path; the hash names just a local query.
+  // Committed-cache controller. The hash names just a local query. Visible
+  // missing rows may give a separate hint after that query has painted.
   class CachedView extends View {
     constructor(api) {
       super(api, {cached: true});
@@ -669,9 +669,10 @@ const SessionsCatalog = (() => {
     }
     detach() {
       this.attached = false;
+      this.lastDemand = null;
       this.retire();
     }
-    interest() {} // No HTTP lease; display work never signals source demand.
+    interest() {}
     sourceHealth(_unverified, blocked) {
       if (this.blocked === blocked) return;
       this.blocked = blocked;
@@ -709,9 +710,12 @@ const SessionsCatalog = (() => {
       this.timer = null;
       clearTimeout(this.runningTimer);
       this.runningTimer = null;
+      cancelAnimationFrame(this.demandFrame);
+      this.demandFrame = null;
     }
     unavailable() {
       this.data = null;
+      this.lastDemand = null;
       this.olderHistory.hidden = true;
       this.clearControls.open = false;
       this.clearControls.hidden = true;
@@ -720,6 +724,21 @@ const SessionsCatalog = (() => {
       this.rows([]);
       ReportView.text(this.label, 'Session cache unavailable.');
       this.pagerState();
+    }
+    hintMissing() {
+      if (this.demandFrame) return;
+      this.demandFrame = requestAnimationFrame(() => {
+        this.demandFrame = null;
+        const data = this.data;
+        if (!data || !this.attached || this.blocked || document.hidden ||
+            ['period', 'sort', 'direction', 'offset'].some(key => data[key] !== this[key])) return;
+        const keys = data.rows.filter(row => row.source_present && !row.running &&
+          Object.values(row.fields).includes('pending')).slice(0, 8).map(row => row.session_id);
+        const mark = keys.length ? JSON.stringify([data.binding, keys]) : null;
+        if (mark === this.lastDemand) return;
+        this.lastDemand = mark;
+        if (mark) this.api('/api/cache/sessions/demand', {binding: data.binding, session_ids: keys}).catch(() => {});
+      });
     }
     async poll() {
       if (!this.attached || document.hidden || this.blocked || this.flight) return;
@@ -791,6 +810,7 @@ const SessionsCatalog = (() => {
       ReportView.text(this.label, data.offset < pages * data.size ?
         `${range} · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` : range);
       this.pagerState();
+      this.hintMissing();
     }
     pagerState() {
       const data = this.data || {size: 25, total: 0, offset: this.offset || 0, period: this.period,

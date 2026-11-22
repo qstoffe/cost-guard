@@ -488,6 +488,28 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(400, invalid[0])
         self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
 
+    def test_cached_sessions_demand_is_bounded_and_separate_from_reads(self):
+        archive = Mock()
+        catalog = object()
+        lifecycle = SimpleNamespace(display_archive=archive, cached_sessions_enabled=True, nonce="test-instance",
+            observations=Mock(), stopping=Event(), live=SimpleNamespace(catalog=catalog))
+        self.server.lifecycle = lifecycle
+        endpoint = "/api/cache/sessions/demand"
+        binding = "a" * 32
+        payload = dict(binding=binding, session_ids=["two", "one"])
+        archive.prioritize_visible.return_value = 2
+
+        unauthorized = self.request(endpoint, payload)[0]
+        self.login()
+        csrf_missing = self.request(endpoint, payload, headers={"X-CG-CSRF": ""})[0]
+        duplicates = self.request(endpoint, dict(payload, session_ids=["one", "one"]))[0]
+        too_many = self.request(endpoint, dict(payload, session_ids=[str(i) for i in range(9)]))[0]
+        accepted, _, result = self.request(endpoint, payload)
+
+        self.assertEqual((401, 403, 400, 400, 202), (unauthorized, csrf_missing, duplicates, too_many, accepted))
+        self.assertEqual({"prioritized": 2}, json.loads(result))
+        archive.prioritize_visible.assert_called_once_with(catalog, binding, ["two", "one"])
+
     def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
         from src.application.session_catalog import SessionCatalog
         from src.cache.display_history import SessionChange, SessionFact

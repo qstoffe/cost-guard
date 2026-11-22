@@ -368,12 +368,16 @@ class DisplayArchive:
                 and self.sweep.priority_due(catalog))
 
     def prioritize_detail(self, catalog, binding, session_id):
+        result = self.prioritize_visible(catalog, binding, (session_id,))
+        return None if result is None else bool(result)
+
+    def prioritize_visible(self, catalog, binding, session_ids):
         views = self.views
         if views is None or views.binding != binding:
             return None
         def eligible():
             return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) is not None
-        return self.sweep.prioritize_detail(catalog, session_id, eligible=eligible)
+        return self.sweep.prioritize_visible(catalog, session_ids, eligible=eligible)
 
     def export_epoch(self, service, views):
         """Only the currently authorized V2 partition can authorize native export."""
