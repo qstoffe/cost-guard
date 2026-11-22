@@ -9,7 +9,7 @@ import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
-from development.tests.fixtures.display_watch import running_frame
+from development.tests.fixtures.display_watch import native_account, running_frame
 from development.tests.fixtures.web_reports import current_report
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms
@@ -30,6 +30,14 @@ def mini_rows(page):
             metrics: [...row.cells].slice(2).map(cell => cell.textContent),
             running: row.classList.contains('mini-running')
         }));
+    }""")
+
+
+def mini_quota(page):
+    return page.evaluate("""() => {
+        if (!miniWatch?.measure?.ready) return null;
+        miniWatch.measure.read(miniWatch);
+        return miniWatch.measure.view.accounts.textContent;
     }""")
 
 
@@ -74,8 +82,10 @@ def check_cached_watch(browser, evidence, product_root):
                                ComparisonCost(Decimal("400"), observed_requests=4, priced_requests=3),
                                TokenMix(), 3, False)
             frame = replace(running_frame(now), daily_usage=daily)
+            account = native_account(now)
+            refresh = SimpleNamespace(snapshots=(account,), seen_ms={account.key: now})
             driver.observed_at_ms = now
-            archive.publish_watch(frame, now)
+            archive.publish_watch(frame, now, account_refresh=refresh)
             archive._watch_write.result(timeout=5)
             page.wait_for_function("() => watchCache?.value?.cards[0]?.title === 'Observed title'")
             start = time.perf_counter()
@@ -91,6 +101,8 @@ def check_cached_watch(browser, evidence, product_root):
             expect(card.locator(".watch-prompt-number")).to_have_text("#1")
             expect(card.get_by_text("12/34/5/49", exact=True)).to_be_visible()
             expect(page.locator(".watch-daily")).to_contain_text("3 observed prompts")
+            quota = page.locator(".watch-view .mini-accounts")
+            expect(quota).to_contain_text("Fixture Pro · 25%")
             assert "private transcript sample" not in card.inner_text()
 
             # Exercise the actual Mini renderer on the opener's prepared PiP
@@ -101,6 +113,8 @@ def check_cached_watch(browser, evidence, product_root):
             peer.goto(host.browser_url())
             peer.get_by_role("link", name="Watch", exact=True).click()
             expect(peer.locator(".watch-active article h3")).to_have_text("Observed title")
+            peer_quota = peer.locator(".watch-view .mini-accounts")
+            expect(peer_quota).to_contain_text("Fixture Pro · 25%")
             # Wait for the required startup/resync work before measuring local actions.
             page.wait_for_function("() => !watchCache?.dirty && !watchCache?.flight && !watchCache?.timer")
             reads = requests.count("/api/cache/watch")
@@ -109,6 +123,7 @@ def check_cached_watch(browser, evidence, product_root):
                 active, = mini
                 assert active["label"].startswith("Observed title") and active["running"]
                 assert active["metrics"][0] != active["metrics"][1] and active["metrics"][2] == "1k"
+                assert "Fixture Pro · 25%" in mini_quota(page)
             assert requests.count("/api/cache/watch") == reads
 
             title = card.locator("h3 a")
@@ -116,7 +131,7 @@ def check_cached_watch(browser, evidence, product_root):
             later = now + 1
             updated = replace(frame, now_ms=later, active_cards=(replace(frame.active_cards[0], title="New commit"),))
             driver.observed_at_ms = later
-            archive.publish_watch(updated, later)
+            archive.publish_watch(updated, later, account_refresh=refresh)
             archive._watch_write.result(timeout=5)
             expect(title).to_have_text("New commit")
             expect(title).to_be_focused()
@@ -124,6 +139,16 @@ def check_cached_watch(browser, evidence, product_root):
             if mini is not None:
                 updated_mini, = mini_rows(page)
                 assert updated_mini["label"].startswith("New commit") and updated_mini["running"]
+
+            # The provider can revoke access without a fresh prompt/source tick.
+            refresh.snapshots = (replace(account, availability="error", observations={"parser_reason": "auth_failure"}),)
+            archive.publish_watch(None, None, account_refresh=refresh)
+            archive._watch_write.result(timeout=5)
+            expect(quota).to_have_text("Subscription quota unavailable")
+            expect(peer_quota).to_have_text("Subscription quota unavailable")
+            if mini is not None:
+                assert mini_quota(page) == "Subscription quota unavailable"
+            expect(title).to_have_text("New commit")
 
             # Auth expires while a visible tab still holds a running snapshot.
             # Its next authenticated read must remove both renderers' data.
@@ -157,7 +182,8 @@ def check_cached_watch(browser, evidence, product_root):
             assert not errors, errors
             evidence["cached_watch"] = dict(first_watch_dom_ms=round(first_ms, 1),
                 mini_render="opener's actual Mini renderer" if mini is not None else "unavailable in this browser",
-                checked="unvisited publication, one read path, two tabs, focus, auth loss, as-of restart, source unbind")
+                checked="unvisited publication, common native quota and provider revocation, one read path, "
+                        "two tabs, focus, auth loss, as-of restart, source unbind")
         finally:
             peer_context.close()
             context.close()

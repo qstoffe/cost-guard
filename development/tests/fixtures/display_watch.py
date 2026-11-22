@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from src.analysis.valuation import ComparisonCost
+from src.domain import AccountRef, AccountSnapshot, QuotaComponent
 from src.reports.models import PromptProjection
 from src.watch.models import WatchCard, WatchProjection, WatchRow
 
@@ -17,3 +18,12 @@ def running_frame(now):
         state="observed", session_context=SimpleNamespace(tokens=773), session_cost=session_cost,
         observed_at_ms=now, invocation_verified=True)
     return WatchProjection("Watch", "fixture", (), now_ms=now, active_cards=(card,), cards_state="observed")
+
+
+def native_account(now):
+    return AccountSnapshot(
+        AccountRef("private-provider-instance", "test-provider", "private-account-id"),
+        now, "Fixture", plan="Pro",
+        quotas=(QuotaComponent("Primary window", used=Decimal("1"), limit=Decimal("4"),
+                               reset_at_ms=now + 20_000, primary=True, reference_ccost_capacity=Decimal("98765")),),
+        observations={"private-provider-payload": "not exported"})

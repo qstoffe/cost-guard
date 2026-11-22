@@ -188,7 +188,8 @@ function connectionStatus(message, state = {}) {
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
   const blocked = hostState.terminal || hostState.sourceBlocked;
-  watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind));
+  watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind),
+    ['reconnecting', 'offline'].includes(hostState.kind));
   mixCache?.health(blocked);
   statsCache?.health(blocked);
   modelsCache?.health(blocked);
@@ -834,7 +835,8 @@ async function connect() {
         // readiness signal once rather than polling the optional facts.
         if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
           current.stats.refreshDatabaseSizes();
-        if (!watchCache) miniWatch?.update(liveValue);
+         if (!watchCache) miniWatch?.update(liveValue);
+         watchCache?.quotaHint(value?.watch_quota_hint);
         current?.catalog?.wake(value?.catalog_hint);
         current?.detail?.wake(value?.detail_hints);
         current?.detail?.updateInvocations();

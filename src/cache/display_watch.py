@@ -3,6 +3,7 @@ from dataclasses import dataclass, fields
 from decimal import Decimal
 
 from .display_watch_daily import WatchDaily, daily_schema, publish_daily, read_daily
+from .display_watch_quota import WatchQuotaBatch, publish_watch_quotas, read_watch_quotas
 
 WATCH_ROW_LIMIT = 512
 WATCH_LIVE_MS = 15_000
@@ -58,6 +59,7 @@ class WatchObservation:
     truncated: bool
     facts: tuple[WatchFact, ...] | None
     daily: WatchDaily | None = None
+    quotas: WatchQuotaBatch | None = None
 
 
 def watch_schema(*, upgrade=False):
@@ -107,12 +109,13 @@ def publish_watch(db, source, binding, observation):
         db.executemany(f"INSERT INTO archive_watch_cards VALUES({marks})",
                        ((source, offset, *fact.values()) for offset, fact in enumerate(observation.facts)))
     elif old is None:
-        if observation.daily is None:
+        if observation.daily is None and observation.quotas is None:
             return None
         db.execute("INSERT INTO archive_watch_state VALUES(?,?,?,0,0,NULL,0)", (source, binding, generation))
     newer_daily = publish_daily(db, source, observation.daily)
+    newer_quotas = publish_watch_quotas(db, source, binding, observation.quotas)
     if not newer_cards:
-        if not newer_daily:
+        if not newer_daily and not newer_quotas:
             return None
         db.execute("UPDATE archive_watch_state SET generation=? WHERE source=?", (generation, source))
     return generation
@@ -124,7 +127,7 @@ def watch_snapshot(db, source, binding, now_ms, *, live_eligible, timezone_id):
     """, (source,)).fetchone()
     if state is None:
         return dict(generation=0, freshness="empty", observed_ms=None, projected_ms=None, expires_ms=None,
-                    state=None, truncated=False, cards=[], daily=None)
+                     state=None, truncated=False, cards=[], daily=None, quotas=None)
     issued, generation, observed, projected, card_state, truncated = state
     current = bool(observed and live_eligible and issued == binding and 0 <= now_ms - observed < WATCH_LIVE_MS)
     expires_ms = observed + WATCH_LIVE_MS if current else None
@@ -152,7 +155,7 @@ def watch_snapshot(db, source, binding, now_ms, *, live_eligible, timezone_id):
                 observed_ms=observed or None, projected_ms=projected or None,
                 state=card_state if current else "retained" if observed else None,
                 expires_ms=expires_ms, truncated=bool(truncated), cards=cards,
-                daily=read_daily(db, source, now_ms, timezone_id))
+                 daily=read_daily(db, source, now_ms, timezone_id), quotas=read_watch_quotas(db, source, binding))
 
 
 def withdraw_watch_liveness(value):

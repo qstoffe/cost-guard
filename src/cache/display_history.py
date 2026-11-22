@@ -21,6 +21,7 @@ from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_total
 from .display_models import benchmark_references, models_schema, read_models, write_models
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
+from .display_watch_quota import watch_quota_schema
 from .display_sort_keys import decimal_key
 from .display_stats_evidence import stats_evidence_schema, stats_interval_page
 from .display_stats_geometry_revision import geometry_schema
@@ -31,7 +32,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -267,6 +268,7 @@ class DisplayHistory:
                       {stats_token_schema(upgrade=version == 25)}
                       {models_schema()}
                       {account_schema()}
+                      {watch_quota_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -325,7 +327,8 @@ class DisplayHistory:
                    {stats_time_schema()}
                    {stats_token_schema()}
                    {models_schema()}
-                   {account_schema()}
+                    {account_schema()}
+                    {watch_quota_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)

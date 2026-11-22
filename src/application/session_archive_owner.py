@@ -131,6 +131,10 @@ class SessionArchiveOwner:
                 return
             if observation.daily is not None and observation.daily.observed_at_ms <= cleared_ms:
                 observation = replace(observation, daily=None)
+            if observation.quotas is not None and cleared_ms:
+                batch = observation.quotas
+                observation = replace(observation, quotas=replace(
+                    batch, facts=tuple(fact for fact in batch.facts if fact.observed_ms > cleared_ms)))
             archive_epoch = self.history.source_state(source).archive_epoch
             generation = self.history.replace_watch(source, epoch, observation, archive_epoch=archive_epoch)
             if generation is not None:

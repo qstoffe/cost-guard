@@ -1,5 +1,6 @@
 """One host's source authorization for the local display archive."""
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from itertools import islice
 import sqlite3
 from threading import Lock
@@ -13,8 +14,10 @@ from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
 from src.application.session_coverage import SessionCoverageSweep
 from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
+from src.application.watch_native_quota import native_quotas
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
-from src.cache.display_watch import withdraw_watch_liveness
+from src.cache.display_watch import WatchObservation, withdraw_watch_liveness
+from src.cache.display_watch_quota import WatchQuotaBatch
 from src.sources.errors import SourceError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
@@ -60,6 +63,9 @@ class DisplayArchive:
         self._watch_offered = None
         self._watch_committed = None
         self._watch_retry_at = 0
+        self._watch_bound_ms = 0
+        self._watch_quota = None
+        self._watch_quota_revision = 0
 
     def initialize(self):
         try:
@@ -144,32 +150,47 @@ class DisplayArchive:
             return False  # No failed or partial transaction becomes a cache event.
         return True
 
-    def publish_watch(self, frame, observed_ms):
+    def publish_watch(self, frame, observed_ms, *, account_refresh=None):
         if not self.watch_enabled:
-            return
+            return None
+        views = self.views
+        if views is None:
+            return None
+        fence = self.sessions.clear_fence
+        now = int(time.time() * 1000)
+        if account_refresh is not None or self._watch_quota is not None:
+            facts = native_quotas(account_refresh, bound_ms=self._watch_bound_ms, now_ms=now)
+            scope = (views.binding, fence)
+            if self._watch_quota is None or (scope, facts) != (self._watch_quota[0], self._watch_quota[1].facts):
+                self._watch_quota_revision += 1
+                self._watch_quota = scope, WatchQuotaBatch(self._watch_quota_revision, facts)
+        batch = self._watch_quota[1] if self._watch_quota is not None else None
+        hint = dict(binding=views.binding, revision=batch.revision) if batch is not None else None
         if self._watch_write is not None:
             if not self._watch_write.done():
-                return
+                return hint
             if self._watch_write.result():
                 self._watch_committed = self._watch_offered
             else:
                 self._watch_retry_at = time.monotonic() + 2
             self._watch_write = None
-        views = self.views
-        if views is None or time.monotonic() < self._watch_retry_at:
-            return
-        observation = archive_watch_observation(frame, observed_ms, views.timezone_id)
+        if time.monotonic() < self._watch_retry_at:
+            return hint
+        observation = archive_watch_observation(frame, observed_ms, views.timezone_id) if frame is not None else None
         if observation is None:
-            return
-        fence = self.sessions.clear_fence
+            if batch is None:
+                return hint
+            observation = WatchObservation(now, now, None, False, None)
+        observation = replace(observation, quotas=batch)
         # Ignore the cosmetic tick clock when none of the saved evidence changed.
         key = (views.binding, fence, observation.observed_ms if observation.facts is not None else None,
-               observation.state, observation.truncated, observation.facts, observation.daily)
+               observation.state, observation.truncated, observation.facts, observation.daily, batch)
         if key == self._watch_committed:
-            return
+            return hint
         self._watch_offered = key
         self._watch_write = self._running_writer.submit(
             self._write_watch, views.source, views.binding, fence, observation)
+        return hint
 
     def _write_watch(self, source, binding, fence, observation):
         try:
@@ -182,17 +203,26 @@ class DisplayArchive:
         views = self.views
         if views is None or not self.watch_enabled:
             return None
+        fence = self.sessions.clear_fence
         now = int(time.time() * 1000)
         value = dict(binding=views.binding, **self.history.watch(views.source, views.binding, now,
-                                        live_eligible=live_eligible(), timezone_id=views.timezone_id))
-        if presentation:
-            value["view"] = cached_watch_view(value, views.timezone_id)
+                                         live_eligible=live_eligible(), timezone_id=views.timezone_id))
         if value["freshness"] == "current" and (not live_eligible() or
                 int(time.time() * 1000) >= value["expires_ms"]):
             withdraw_watch_liveness(value)
-            if presentation:
-                value["view"] = cached_watch_view(value, views.timezone_id)
-        return value if self.views is views else None
+        offered = self._watch_quota
+        batch = value.pop("quotas")
+        # A known revocation or newer roster must hide the old native data
+        # immediately, even if SQLite cannot take the next write yet.
+        matched = (offered is not None and offered[0] == (views.binding, fence)
+                   and batch is not None and batch.revision == offered[1].revision)
+        value["quota_revision"] = batch.revision if matched else None
+        if presentation:
+            value["view"] = cached_watch_view(value, views.timezone_id, quotas=batch if matched else None, now_ms=now)
+            if offered is not self._watch_quota and matched:
+                value["quota_revision"] = None
+                value["view"]["accounts"] = None
+        return value if self.views is views and self.sessions.clear_fence == fence else None
 
     def mix_total(self, period, *, orders=None, **groups):
         views = self.views
@@ -267,6 +297,7 @@ class DisplayArchive:
         if binding == self._binding:
             return
         self.views = None
+        self._watch_quota = None
         self._binding = binding
         if self.accounts is not None:
             self.accounts.reset()
@@ -284,6 +315,7 @@ class DisplayArchive:
         views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
                                    coverage_supported=coverage_supported, native_export_supported=native_export_supported)
         self.views = views
+        self._watch_bound_ms = int(time.time() * 1000)
         self.sessions.bind(binding.scope, epoch, announce=True)
         if self.watch_enabled:
             self._publish("watch-cache", dict(binding=epoch))

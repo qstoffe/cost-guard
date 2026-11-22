@@ -4,13 +4,27 @@ const CachedWatch = (() => {
   class Controller {
     constructor(api, update) {
       Object.assign(this, {api, update, hint: null, value: null, flight: null, blocked: false,
-        liveUncertain: false, healthVersion: 0, dirty: false});
+        liveUncertain: false, quotaUncertain: false, healthVersion: 0, dirty: false});
+    }
+    quotaView(accounts, now) {
+      if (!accounts || this.quotaMark?.binding === this.value.binding &&
+          this.quotaMark.revision > this.value.quota_revision) return null;
+      return {...accounts, accounts: accounts.accounts.filter(item => now < item.discard_at_ms).map(item =>
+        this.quotaUncertain || now >= item.fresh_until_ms ? {...item, stale: true} : item)};
+    }
+    quotaHint(hint) {
+      if (this.blocked || !hint?.binding || !Number.isSafeInteger(hint.revision)) return;
+      const mark = this.quotaMark;
+      if (mark?.binding === hint.binding && mark.revision >= hint.revision) return;
+      this.quotaMark = hint;
+      this.changed(); // Withdraw superseded values before waiting for a new commit.
     }
     publication() {
       if (!this.value || this.blocked) return null;
       const {view: saved, freshness, observed_ms: at, expires_ms: expiry} = this.value;
       const now = Date.now();
-      const view = saved.daily_usage?.day_end_ms <= now ? {...saved, daily_usage: null, daily_state: 'pending'} : saved;
+      const day = saved.daily_usage?.day_end_ms <= now ? {daily_usage: null, daily_state: 'pending'} : {};
+      const view = {...saved, ...day, accounts: this.quotaView(saved.accounts, now), cached_quota: true};
       if (!this.liveUncertain && !this.needsLiveRead && freshness === 'current' && now < expiry) {
         return {state: 'running', source_observed_at_ms: at, view, cached: true};
       }
@@ -25,8 +39,10 @@ const CachedWatch = (() => {
       const publication = this.publication();
       const previous = this.presented;
       const daily = publication?.view.daily_usage;
-      if (previous?.value === this.value && previous.state === publication?.state && previous.daily === daily) return;
-      this.presented = {value: this.value, state: publication?.state, daily};
+      const quota = JSON.stringify(publication?.view.accounts?.accounts.map(item => [item.observation.id, item.stale]));
+      if (previous?.value === this.value && previous.state === publication?.state && previous.daily === daily &&
+          previous.quota === quota) return;
+      this.presented = {value: this.value, state: publication?.state, daily, quota};
       this.update(publication);
     }
     clear() {
@@ -34,10 +50,12 @@ const CachedWatch = (() => {
       clearTimeout(this.timer); clearTimeout(this.expire); this.timer = null; this.dirty = false;
       this.changed();
     }
-    health(blocked, liveUncertain) {
-      const changed = this.blocked !== blocked || this.liveUncertain !== liveUncertain;
+    health(blocked, liveUncertain, quotaUncertain = false) {
+      const changed = this.blocked !== blocked || this.liveUncertain !== liveUncertain ||
+        this.quotaUncertain !== quotaUncertain;
       this.blocked = blocked;
       this.liveUncertain = liveUncertain;
+      this.quotaUncertain = quotaUncertain;
       if (!changed) return;
       this.healthVersion++;
       if (liveUncertain) this.needsLiveRead = true;
@@ -81,7 +99,7 @@ const CachedWatch = (() => {
           return;
         }
         const previous = this.value;
-        if (!previous || ['binding', 'archive_epoch', 'generation', 'freshness', 'expires_ms']
+        if (!previous || ['binding', 'archive_epoch', 'generation', 'freshness', 'expires_ms', 'quota_revision']
           .some(key => previous[key] !== value[key]) || !!previous.daily !== !!value.daily) this.value = value;
         if (!this.liveUncertain && healthVersion === this.healthVersion) this.needsLiveRead = false;
         this.changed();
@@ -102,7 +120,9 @@ const CachedWatch = (() => {
     scheduleExpiry() {
       clearTimeout(this.expire);
       const now = Date.now(), expiry = this.value?.expires_ms;
-      const next = Math.min(...[expiry, this.value?.view.daily_usage?.day_end_ms].filter(at => at > now));
+      const quotaDeadlines = this.value?.view.accounts?.accounts.flatMap(item =>
+        [item.fresh_until_ms, item.discard_at_ms]) || [];
+      const next = Math.min(...[expiry, this.value?.view.daily_usage?.day_end_ms, ...quotaDeadlines].filter(at => at > now));
       if (Number.isFinite(next)) this.expire = setTimeout(() => {
         this.changed();
         if (expiry && expiry <= Date.now() && next === expiry) this.catchUp();

@@ -6,6 +6,7 @@ from src.cache.display_watch import WATCH_ROW_LIMIT, WatchFact, WatchObservation
 from src.cache.display_watch_daily import WatchDaily
 from .contracts import record
 from .display import with_display
+from .watch_native_quota import present_native_quotas
 
 
 _ABORT_REASONS = frozenset({"quota_limit", "rate_limit", "tool_call_limit", "step_limit", "user"})
@@ -113,7 +114,7 @@ def archive_watch_observation(frame, observed_ms, timezone_id="UTC"):
                             tuple(indexed.values()) if has_cards else None, daily)
 
 
-def cached_watch_view(value, timezone_id):
+def cached_watch_view(value, timezone_id, *, quotas=None, now_ms=None):
     """Shape the same typed facts for both existing renderers; no Live DTO input."""
     cards = {key: [] for key in ("active", "history", "recent", "earlier")}
     previews = []
@@ -169,5 +170,6 @@ def cached_watch_view(value, timezone_id):
         active_cards=tuple(cards["active"]), history_cards=tuple(cards["history"]),
         earlier_cards=tuple(cards["earlier"] + cards["history"]), recent_finished_cards=tuple(cards["recent"]),
         earlier_previews=tuple(previews), daily_usage=daily_usage,
-        daily_state="retained" if daily_usage else "pending", quota_stale=True)
+        daily_state="retained" if daily_usage else "pending",
+        accounts=present_native_quotas(quotas, now_ms))
     return with_display(view, timezone_id, projected_ms).to_json()

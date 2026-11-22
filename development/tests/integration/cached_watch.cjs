@@ -75,7 +75,12 @@ async function main() {
   controller.health(false, false);
   await reply(uncertainRead, snapshot('B', 0, 1, 'current binding'));
   assert.equal(rendered.at(-1).state, 'as-of', 'a response from before recovery cannot restore Running');
-  await reply(advanceRead(), snapshot('B', 0, 1, 'current binding'));
+  const current = snapshot('B', 0, 1, 'current binding');
+  current.quota_revision = 1;
+  current.view.accounts = {cached_native: true, accounts: [
+    {observation: {id: 'account'}, fresh_until_ms: 2500, discard_at_ms: 3500, stale: false}
+  ]};
+  await reply(advanceRead(), current);
   assert.equal(rendered.at(-1).state, 'running');
 
   now = 2000; // Opener timers have not run; Mini still sees an expired publication.
@@ -85,8 +90,20 @@ async function main() {
   assert.equal(held.view.earlier_cards[0].rows[0].prompt.execution_unverified, true);
   assert.equal(held.view.earlier_cards[0].rows[0].prompt.in_progress, false);
   assert.equal(held.view.daily_usage.day_end_ms, 3000, 'card expiry does not invalidate the cached day');
+  assert.equal(held.view.accounts.accounts[0].stale, false, 'card expiry does not age the provider');
   now = 3000;
   assert.equal(controller.publication().view.daily_usage, null);
+  assert.equal(controller.publication().view.accounts.accounts[0].stale, true, 'Mini sees provider expiry without opener timers');
+  now = 3500;
+  assert.equal(controller.publication().view.accounts.accounts.length, 0);
+  now = 1000;
+  controller.quotaHint({binding: 'B', revision: 2});
+  assert.equal(rendered.at(-1).view.accounts, null, 'pending provider revision withdraws an old committed value');
+  assert.equal(title(), 'current binding', 'provider revocation does not retire prompt cards');
+  controller.cacheHint(hint('B', 0, 2));
+  await reply(advanceRead(), {...current, generation: 2, quota_revision: 2, view: {...current.view,
+    accounts: {cached_native: true, accounts: []}}});
+  assert.equal(rendered.at(-1).view.accounts.accounts.length, 0);
   controller.health(true, false);
   assert.equal(rendered.at(-1), null);
   assert.equal(timers.size, 0);

@@ -3,6 +3,7 @@ from threading import Event, Thread
 import time
 
 from src.sources.errors import SourceError
+from src.watch.account_refresh import WatchAccountRefresh
 from src.watch.account_timeline import FOREGROUND_SLICE_MS
 from src.watch.source_status import SourceStatus
 
@@ -144,8 +145,12 @@ class LiveRuntime:
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
+        quota_hint = None
+        if self.display_archive is not None:
+            refresh = getattr(driver.coordinator, "accounts", None)
+            quota_hint = self.display_archive.publish_watch(frame if verified else None, driver.observed_at_ms,
+                account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None)
         if verified and self.display_archive is not None:
-            self.display_archive.publish_watch(frame, driver.observed_at_ms)
             if self.display_archive.accounts is not None and frame.quota is not None and not frame.quota_stale:
                 self.display_archive.accounts.offer(frame.quota.accounts, verified=True)
         timeline_scope = self._tick_timeline(driver, frame)
@@ -153,6 +158,7 @@ class LiveRuntime:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
                 frame.now_ms, stale=frame.quota_stale or not verified)
         self.publish("live", record(state=driver.source_state,
+             watch_quota_hint=record(**quota_hint) if quota_hint is not None else None,
              account_timeline_scope=timeline_scope,
              catalog_hint=self.catalog.live_hint(),
              detail_hints=tuple(record(**hint) for hint in self.details.live_hints()),
