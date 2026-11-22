@@ -1,13 +1,16 @@
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 import sqlite3
 import tempfile
+from threading import Event
 import unittest
 
-from src.cache.display_history import DisplayHistory
+from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
+from src.cache.display_request_materialize import materialize_slot_timing
 from src.cache.display_request_overlay import RequestSlot, request_birth_slice, request_clock_slice
 from src.cache.display_request_stage import (
     RequestInputScope,
@@ -470,6 +473,50 @@ class DisplayRequestStageTests(unittest.TestCase):
             self.assertEqual(("rev-A",), db.execute("SELECT source_revision FROM archive_stats_request_ready").fetchone())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_prepare_requests").fetchone())
 
+    def test_real_summary_writer_cannot_use_identical_fold_guard_and_rechecks_admission(self):
+        key = b"same"
+        initial = _request(key)
+        replacement = replace(initial, effort="high")
+        columns = ",".join(REQUEST_COLUMNS)
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", (initial,), ()))
+            expected = db.execute(f"SELECT {columns},first_revision FROM archive_requests").fetchone()
+            _install_fixture_fold_guard(db)
+        self._stage((replacement,))
+        self._prepare("candidate")
+        attempted, entered = Event(), Event()
+        change = SessionChange(SessionFact("A", "rev-A", "A"), "rev-A", frozenset(),
+                               previous_progress=0, request_roster=RequestRoster("price", (replacement,), ()))
+
+        def ordinary_write():
+            attempted.set()
+            return self.history.commit_summary(SOURCE, change, archive_epoch=0, eligible=still_current)
+
+        def still_current():
+            entered.set()
+            with self.history._connect(read=True) as reader:
+                return reader.execute("SELECT 1 FROM archive_prepare_requests WHERE source='candidate'").fetchone() is not None
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with self.history._write_lock, self.write() as db:
+                self.assertEqual(1, _install(db, "candidate"))
+                slot = RequestSlot(*db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone())
+                db.execute("INSERT INTO probe_fold_before SELECT * FROM archive_requests WHERE request_key=?", (key,))
+                ordinary = pool.submit(ordinary_write)
+                self.assertTrue(attempted.wait(5))
+                self.assertFalse(entered.is_set())
+                self.assertTrue(_fold_one(db, slot, key, expected))
+                db.execute("DELETE FROM probe_fold_before")
+            denied = ordinary.result(timeout=5)
+
+        self.assertTrue(entered.is_set())
+        self.assertEqual(0, denied.applied)
+        accepted = self.history.commit_summary(SOURCE, change, archive_epoch=0, eligible=lambda: True)
+        self.assertEqual(1, accepted.applied)
+        with self.history._connect(read=True) as db:
+            self.assertEqual(("high",), db.execute("SELECT effort FROM archive_requests").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM probe_fold_before").fetchone())
+
     def test_peer_commit_invalidates_next_prepare_page_and_spool_replays_without_early_birth(self):
         shared = b"z-shared"
         incoming = tuple(_request(n.to_bytes(2, "big")) for n in range(64)) + (_request(shared, tokens=70),)
@@ -648,6 +695,41 @@ class DisplayRequestStageTests(unittest.TestCase):
             self.assertEqual((1, 0, 0), db.execute("""
                 SELECT edits,corrections,winner_changes FROM archive_request_preparations WHERE attempt='candidate'
             """).fetchone())
+
+    def test_timing_materializes_one_fk_parent_and_rollback_keeps_other_slot_work(self):
+        key = b"instant"
+        self._stage((replace(_request(key, clock=90), response=ResponseTiming(20, 50)),
+                     _request(b"later", clock=100)))
+        self._prepare("candidate")
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 0, 0)
+        with self.history._write_lock, self.write() as db:
+            slot = install_usage_slot(db, "candidate", witness, eligible=lambda: True)
+            self.assertEqual(RequestSlot("candidate", 1), slot)
+
+        with self.history._write_lock, self.write() as db:
+            for rejected in (replace(witness, evidence=1), replace(witness, geometry=1), replace(witness, incarnation=6)):
+                self.assertFalse(materialize_slot_timing(db, slot, rejected, key, eligible=lambda: True))
+            eligibility = iter((True, False))
+            self.assertFalse(materialize_slot_timing(db, slot, witness, key, eligible=lambda: next(eligibility)))
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_requests").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_response_timing").fetchone())
+            self.assertEqual([(key,), (b"later",)], db.execute("""
+                SELECT request_key FROM archive_prepare_requests ORDER BY request_key
+            """).fetchall())
+            self.assertTrue(materialize_slot_timing(db, slot, witness, key, eligible=lambda: True))
+            self.assertFalse(materialize_slot_timing(db, slot, witness, key, eligible=lambda: True))
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            current = RequestSlot(*db.execute("SELECT attempt,birth,layout FROM archive_request_slots").fetchone())
+            self.assertEqual(RequestSlot("candidate", 1, 1), current)
+            self.assertEqual((key, 20, 50, 1), db.execute("""
+                SELECT request_key,start_ms,duration_ms,first_revision FROM archive_response_timing
+            """).fetchone())
+            self.assertEqual([(key, 90), (b"later", 100)],
+                             [row[:2] for row in request_clock_slice(db, SOURCE, 20, 110, slot=current).rows])
+            self.assertEqual([(b"later",)], db.execute("SELECT request_key FROM archive_prepare_requests").fetchall())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
 
     def test_fork_preparation_resumes_past_tied_shadowed_candidates(self):
         fork = b"fork"
