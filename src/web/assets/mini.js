@@ -516,8 +516,10 @@ const MiniWatch = (() => {
       const time = row.children[0].children[0];
       text(time.children[0], '');
       // Generic activity only; no synthetic prompt, event ID or finish outcome.
-      text(time.children[1], activity.at == null ? card.display?.activity_clock || '—' : activityLabel(activity, now, today));
-      row.activityHelp = activityHelp(activity);
+      const pending = activity.at == null && card.activity_ms === null &&
+        ['queued', 'reading', 'waiting', 'retrying'].includes(card.hydration_state);
+      ReportView.valueSlot(time.children[1], activityLabel(activity, now, today), {pending, field: 'session activity'});
+      row.activityHelp = activity.at == null ? help + reason : activityHelp(activity);
       this.drawMetrics(row, card, null, card, null);
     }
     costGroups(value, session = false) {
@@ -585,7 +587,7 @@ const MiniWatch = (() => {
         const verifiedRunning = !historical && prompt?.in_progress && !prompt.execution_unverified &&
           !prompt.aborted && !prompt.has_error && !prompt.completed_successfully;
         text(time.children[0], verifiedRunning ? '▶ ' : '');
-        text(time.children[1], activityLabel(activity, now, today));
+        ReportView.valueSlot(time.children[1], activityLabel(activity, now, today));
         if (!usesStart && !knownTime(prompt?.completed_at_ms) && knownTime(prompt?.at_ms))
           row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
         if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;

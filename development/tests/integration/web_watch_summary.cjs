@@ -1,5 +1,6 @@
 // Watch-only dashboard and shared compact subscriptions, over source-prepared DTOs.
 const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
+const pending = require('../fixtures/pending_value.cjs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
   constructor(tag) { this.tag=tag;this.children=[];this.text='';this.dataset={};this.attributes={};this.events={};this.style={setProperty(name,value){this[name]=value;}}; }
@@ -80,7 +81,7 @@ for(const fixture of input.quota_cases||[]) {
 // Pending token mix retains only within one source/epoch/prompt; corrections clear.
 const live=input.view.active_cards[0],prompt=live.rows[0].prompt;
 prompt.token_mix_percent=null;prompt.display.token_mix_percent='running';render();
-assert.equal(row.children[7].textContent,'Loading…');
+pending(row.children[7].children[0],'token mix');
 prompt.token_mix_percent=[10,20,30,40];prompt.display.token_mix_percent='10/20/30/40';render();
 const cells=[...row.children];live.state='partial';prompt.token_mix_percent=null;prompt.display.token_mix_percent='running';render();
 assert.equal(row.children[7].textContent,'10/20/30/40');
@@ -88,8 +89,8 @@ assert.ok(cells.every((cell,i)=>cell===row.children[i]));
 prompt.token_mix_percent=[20,20,20,40];prompt.display.token_mix_percent='20/20/20/40';render();
 assert.equal(row.children[7].textContent,'20/20/20/40');
 live.session_summary.context={...live.session_summary.context,context_scope:'another-source'};
-prompt.token_mix_percent=null;render();assert.equal(row.children[7].textContent,'Loading…');
-live.state='observed';render();assert.equal(row.children[7].textContent,'Loading…');
+prompt.token_mix_percent=null;render();const pendingMix=pending(row.children[7].children[0],'token mix');
+live.state='observed';render();assert.equal(pending(row.children[7].children[0],'token mix'),pendingMix);
 // Terminal rows leave Watch, without modifying the independent Mini history DTOs.
 const history=JSON.stringify(input.view.history_cards);
 prompt.in_progress=false;render();assert.equal(watch.cards.size,0);

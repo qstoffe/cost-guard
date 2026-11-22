@@ -135,8 +135,8 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     window.numericStatsState={period:'today',result:null};document.body.replaceChildren(numericStats.root)`);
   for(const unit of ['credits','usd']) {
     await evaluate(owner,`ReportView.setUnit('${unit}',document.body);numericStats.update(numericStatsState)`);
-    assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      'Loading…');
+    const pending = require('../fixtures/stats_pending.cjs')('.ai-stat[data-metric]', 'numericStats.root');
+    assert.equal(await evaluate(owner,pending),true);
     await evaluate(owner,`(() => {
       const names=['hourly-rate','total-cost','subagent-cost','total-tokens','token-rate','working-time','average-cost',
         'expensive-session','longest-session','busiest-day','night-owl','streak','parallel'];
@@ -160,12 +160,19 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
         unit==='usd'?'$'+(expected/100).toFixed(2):expected+' CCost');
     }
     await evaluate(owner,`numericStatsState.period='all';numericStatsState.result=null;numericStats.update(numericStatsState)`);
-    assert.equal(await evaluate(owner,`numericStats.cards.get('total-cost').value.textContent`),
-      'Loading…','pending period cannot inherit another period');
-    assert.equal(await evaluate(owner,`numericStats.cards.get('total-tokens').value.textContent`),'Loading…');
-    assert.equal(await evaluate(owner,`[...numericStats.cards.values()].every(card=>
-      card.card.querySelector('h4') && card.value.textContent==='Loading…')`),true,
-      'pending period retains every heading and uniformly unresolved values');
+    assert.equal(await evaluate(owner,pending),true,'pending period cannot inherit another period');
+    const stable=await evaluate(owner,`(() => {
+      const slot=numericStats.root.querySelector('[data-metric="total-cost"] .ai-stat-value');
+      const spinner=slot.firstElementChild;
+      numericStats.update(numericStatsState);
+      return spinner===slot.firstElementChild && !spinner.closest('[aria-live],[role="status"]') && spinner.tabIndex===-1;
+    })()`);
+    assert.equal(stable,true,'quiet polls retain the named indicator without adding a live region or tab stop');
+    await evaluate(owner,`numericStats.update(numericStatsState,true)`);
+    assert.equal(await evaluate(owner,`!numericStats.root.querySelector('.metric-spinner') &&
+      numericStats.cards.get('total-cost').value.textContent==='—'`),true,'cold, source-blocked values are not pending');
+    await evaluate(owner,`numericStats.update(numericStatsState)`);
+    assert.equal(await evaluate(owner,pending),true,'recovering acquisition restores pending values');
   }
-  checks.push('AI Stats actual DOM: cold and pending periods retain all headings with uniform Loading…, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');
+  checks.push('AI Stats DOM: stable field-named spinners, blocked/recovering states, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');
 };

@@ -584,10 +584,18 @@ const WatchView = (() => {
             const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptDetails(item, false));
             const calls = metricValue(row, 6, String(prompt.calls), prompt.watch_calls_help);
             const effort = metricValue(row, 4, item.effort, display(prompt, 'effort_help'));
-            const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
-              cost, calls, this.tokenMix(item, value),
-              display(prompt, 'incoming_context_tokens'), prompt.in_progress &&
-                item.live_context?.watch_delta_context_tokens == null ? 'Loading…' : display(item.live_context, 'watch_delta_context_tokens')];
+             const mix = row.children[7]?.children[0] || el('span');
+             const tokenMix = this.tokenMix(item, value);
+             ReportView.valueSlot(mix, tokenMix.value, {pending: tokenMix.pending, field: 'token mix'});
+             const delta = row.children[9]?.children[0] || el('span');
+             const context = value.session_summary?.context;
+             ReportView.valueSlot(delta, display(item.live_context, 'watch_delta_context_tokens'), {
+               pending: prompt.in_progress && !prompt.execution_unverified && value.state !== 'unavailable' &&
+                 context?.context_state !== 'invalidated' && item.live_context?.watch_delta_context_tokens == null,
+               field: 'context change'
+             });
+             const cells = [started, display(item, 'watch_duration_ms'), label, model, effort,
+               cost, calls, mix, display(prompt, 'incoming_context_tokens'), delta];
             cells.forEach((value, index) => {
               const cell = row.children[index] || el('td');
               const child = typeof value === 'object' ? value : cell.children[0] || el('span');
@@ -626,7 +634,8 @@ const WatchView = (() => {
       else if (card.state === 'observed') this.mixes.delete(scope);
       const value = !invalid && (known ? display(prompt, 'token_mix_percent') : this.mixes.get(scope));
       for (const key of this.mixes.keys()) if (key !== scope) this.mixes.delete(key);
-      return value || (prompt.in_progress ? 'Loading…' : display(prompt, 'token_mix_percent'));
+       if (invalid) return {value: prompt.in_progress ? 'N/A' : display(prompt, 'token_mix_percent'), pending: false};
+       return {value: value ?? display(prompt, 'token_mix_percent'), pending: value == null && prompt.in_progress};
     }
     drawSummary(value) {
       value = retainSummary(value, this.summaryValue);

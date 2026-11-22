@@ -13,8 +13,8 @@ module.exports = async ({evaluate,checks}) => {
        before=cards.map(c=>({width:c.getBoundingClientRect().width,height:c.getBoundingClientRect().height}));
     const partial=structuredClone(original);partial.view.ai_stats_work.scopes['30-days'].ready=false;
     state.result=partial;view.update(state);const sliced=pending();
-    const textNodes=cards.map(c=>c.firstChild);view.update(state);
-    const quietPoll=cards.every((c,i)=>c.firstChild===textNodes[i]);
+    const indicators=cards.map(c=>c.querySelector('.metric-spinner'));view.update(state);
+    const quietPoll=cards.every((c,i)=>indicators[i] && c.querySelector('.metric-spinner')===indicators[i]);
     state.result=original;view.update(state);
     const ready=cards.every(c=>c.querySelector('h4') && c.querySelector('.ai-stat-trait'));
     const order=[...parent.querySelector('.ai-stats-grid').querySelectorAll('h4')].map(n=>n.textContent);
@@ -61,7 +61,7 @@ module.exports = async ({evaluate,checks}) => {
       const hourly=parent.querySelector('[data-metric="hourly-rate"]');
       const standardHourly=hourly.querySelector('.ai-stat-value').tagName==='P' &&
         hourly.querySelectorAll('.ai-stat-value').length===1 && !hourly.querySelector('.ai-stat-rate');
-     state.result=null;state.statsIdentity='invalidated';view.update(state);
+     state.result=null;state.statsIdentity='invalidated';state.interrupted=false;view.update(state);
      const invalidated=pending();
       parent.remove();return {cold,sliced,quietPoll,ready,retained,switched,failed,stable,unitIndependent,qualifiedRetention,neutral,invalidated,standardHourly,order,cases,coldState,firstFailure};
   })()`);
