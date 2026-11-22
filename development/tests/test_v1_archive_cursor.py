@@ -6,8 +6,15 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from src.analysis import analyze_snapshot
 from src.analysis.causal import trace_entries
+from src.application.request_archive_projection import physical_request_key, project_request, request_roster
 from src.application.v1_archive_trace import V1ArchiveTrace
+from src.cache.display_history import DisplayHistory
+from src.cache.display_request_stage import RequestInputScope, append_request_input, open_request_input, request_stage_schema, seal_request_input
+from src.cache.display_requests import REQUEST_COLUMNS
+from src.pricing.catalog import PricingCatalog
+from src.reports.token_mix_history import history_prompt_keys
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError, SourceSchemaError
 from src.sources.opencode_v1 import OpenCodeV1Source
 
@@ -367,7 +374,8 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 _trace_fixture(source_path, size)
                 source = OpenCodeV1Source(source_path)
                 subscriptions = frozenset({"synthetic"})
-                expected = trace_entries(source.load_session_snapshot(ROOT), subscription_providers=subscriptions)
+                snapshot = source.load_session_snapshot(ROOT)
+                expected = trace_entries(snapshot, subscription_providers=subscriptions)
                 with closing(sqlite3.connect(stage_path)) as db:
                     with source.archive_cursor(ROOT) as cursor:
                         builder = V1ArchiveTrace(source, cursor, db, subscription_providers=subscriptions)
@@ -415,6 +423,11 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 self.assertEqual(17, result[0].tokens.input)
                 self.assertEqual(ROOT, result[2].parent_session_id)
                 self.assertLess(max(costs), 15000)
+                bundle = analyze_snapshot(snapshot, tracked_provider="synthetic", now_ms=100_000)
+                fallback = history_prompt_keys(bundle)
+                ambiguous = next(entry for entry in bundle.trace_entries if entry.invocation_id == "wide:late-step")
+                self.assertIsNone(ambiguous.logical_prompt_id)
+                self.assertEqual((ROOT, "tied-prompt"), fallback[ambiguous])
 
     def test_dense_root_replays_exact_order_and_identity_across_many_trace_turns(self):
         _seed(self.path)
@@ -422,7 +435,20 @@ class V1ArchiveCursorTests(unittest.TestCase):
             for number in reversed(range(PROMPTS)):
                 _prompt(db, ROOT, number)
         source = _MeasuredSource(self.path)
-        expected = trace_entries(source.load_session_snapshot(ROOT))
+        snapshot = source.load_session_snapshot(ROOT)
+        expected = trace_entries(snapshot)
+        reference = PricingCatalog(())
+        expected_roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=100_000), reference)
+        self.assertIsNotNone(expected_roster)
+        history = DisplayHistory(self.path.parent)
+        history.initialize()
+        with history._connect() as display:
+            display.executescript(request_stage_schema())
+            display.execute("INSERT INTO sources(source) VALUES('pinned-source')")
+            self.assertTrue(open_request_input(display, "dense", RequestInputScope(
+                "pinned-source", "binding", 0, 1, ROOT, snapshot.source_revision, 0,
+                reference.analysis_signature, "test-dependency",
+            )))
 
         with closing(sqlite3.connect(":memory:")) as db:
             with source.archive_cursor(ROOT) as cursor:
@@ -438,12 +464,19 @@ class V1ArchiveCursorTests(unittest.TestCase):
             else:
                 self.fail("dense fallback did not reach EOF")
             result, sizes = [], []
-            for _ in range(60):
+            for page_number in range(60):
                 page = builder.trace_turn()
                 if page is None:
                     break
                 result.extend(page)
                 sizes.append(len(page))
+                projected = tuple(project_request(
+                    entry, physical_request_key(entry), reference, prompt=entry.logical_prompt_id, tree=ROOT,
+                ) for entry in page)
+                with history._connect() as display:
+                    display.execute("BEGIN IMMEDIATE")
+                    self.assertTrue(append_request_input(display, "dense", page_number, projected))
+                    display.commit()
             else:
                 self.fail("dense trace did not reach EOF")
 
@@ -451,6 +484,18 @@ class V1ArchiveCursorTests(unittest.TestCase):
         self.assertEqual(tuple(range(PROMPTS)), tuple(entry.sort_order for entry in result))
         self.assertEqual([_user(n) for n in range(PROMPTS)], [entry.logical_prompt_id for entry in result])
         self.assertEqual(expected, tuple(result))
+        with history._connect() as display:
+            display.execute("BEGIN IMMEDIATE")
+            self.assertTrue(seal_request_input(display, "dense", len(sizes)))
+            display.commit()
+        with history._connect(read=True) as display:
+            staged = display.execute(f"""
+                SELECT {",".join(REQUEST_COLUMNS)} FROM archive_input_requests WHERE source='dense' ORDER BY request_key
+            """).fetchall()
+            legacy = sorted(req.values(reference.analysis_signature) for req in expected_roster.requests)
+            self.assertEqual(legacy, staged)
+            self.assertEqual(1366, len(staged))
+            self.assertIsNone(display.execute("SELECT 1 FROM archive_requests LIMIT 1").fetchone())
 
     def test_failed_cursor_cannot_turn_partial_input_into_replayable_trace(self):
         _seed(self.path)

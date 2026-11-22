@@ -1,4 +1,5 @@
 """Project independent physical usage and causal ownership from one acquisition."""
+from dataclasses import replace
 from decimal import Decimal
 
 from src.analysis.active_hour import request_message_identity
@@ -22,6 +23,11 @@ def _key(value):
     return bytes.fromhex(dependency_signature(value))
 
 
+def physical_request_key(entry):
+    identity = physical_usage_key(entry)
+    return _key(identity) if identity is not None else None
+
+
 def _stats_identity(entry):
     step = _key(entry.step_part_id) if entry.step_part_id else None
     return StatsRequestIdentity(_key(request_message_identity(entry)), step, sample_hash(entry),
@@ -35,6 +41,27 @@ def _account(entry):
         return _key(entry.account_ref.key)
     except ValueError:  # An unbound label is never attribution evidence.
         return None
+
+
+def project_request(entry, key, reference, *, prompt, tree):
+    """Value one physical request given independent causal and evidence inputs."""
+    known = sum(1 << index for index, name in enumerate(TOKEN_FIELDS) if name in entry.tokens.known_fields)
+    amounts = (Decimal(0),) * 4 if known & 0b1111 == 0b1111 and not entry.tokens.total else (
+        reference.reference_category_valuation(entry.model, entry.tokens))
+    if amounts is not None and (len(amounts) != 4 or any(not value.is_finite() or value < 0 for value in amounts)):
+        return None
+    fingerprint = billing_request_fingerprint(entry)
+    has_billing = (entry.cost_disposition in {CostDisposition.BILLED, CostDisposition.INCLUDED_SUBSCRIPTION}
+                   and entry.reported_cost_currency is not None)
+    return DisplayRequest(
+        key, entry.completed_at_ms if entry.completed_at_ms > 0 else None,
+        _key((entry.source_instance, fingerprint)) if fingerprint else None, entry.session_id, prompt,
+        entry.model.provider, entry.model.model, entry.model.recorded_model, _account(entry),
+        tuple(getattr(entry.tokens, field) for field in TOKEN_FIELDS), known,
+        entry.reported_cost if has_billing else None, entry.reported_cost_currency if has_billing else None,
+        entry.cost_disposition.value, amounts, entry.selected_effort or entry.variant, entry.summary,
+        tree, entry.sort_order,
+    )
 
 
 def display_prompt(row, kind):
@@ -89,10 +116,10 @@ def request_roster(snapshot, bundle, reference, *, config=None):
     prompts = history_prompt_keys(bundle)
     chosen, keys = {}, {}
     for entry in bundle.trace_entries:
-        identity = physical_usage_key(entry)
-        if identity is None:
+        key = physical_request_key(entry)
+        if key is None:
             return None
-        key = keys[entry] = _key(identity)
+        keys[entry] = key
         # Repeated capture within one tree does not make another request.
         previous = chosen.get(key)
         if previous is None or (len(entry.tokens.known_fields), entry.completed_at_ms) >= (
@@ -102,8 +129,7 @@ def request_roster(snapshot, bundle, reference, *, config=None):
     attributed = set()
     for prompt in bundle.prompts:
         for entry in prompt.entries:
-            identity = physical_usage_key(entry)
-            key = keys.get(entry) or (_key(identity) if identity is not None else None)
+            key = keys.get(entry) or physical_request_key(entry)
             if key not in chosen:  # Copied or missing evidence is not a physical request.
                 return None
             attributed.add((key, prompt.prompt_id))
@@ -115,28 +141,16 @@ def request_roster(snapshot, bundle, reference, *, config=None):
     responses = StatsResponses(snapshot) if with_stats else None
     requests = []
     for key, entry in chosen.items():
-        known = sum(1 << index for index, name in enumerate(TOKEN_FIELDS) if name in entry.tokens.known_fields)
-        amounts = (Decimal(0),) * 4 if known & 0b1111 == 0b1111 and not entry.tokens.total else (
-            reference.reference_category_valuation(entry.model, entry.tokens))
-        if amounts is not None and (len(amounts) != 4 or any(not value.is_finite() or value < 0 for value in amounts)):
-            return None
-        fingerprint = billing_request_fingerprint(entry)
         executing_prompt = prompts.get(entry)
-        has_billing = (entry.cost_disposition in {CostDisposition.BILLED, CostDisposition.INCLUDED_SUBSCRIPTION}
-                       and entry.reported_cost_currency is not None)
-        requests.append(DisplayRequest(
-            key, entry.completed_at_ms if entry.completed_at_ms > 0 else None,
-            _key((entry.source_instance, fingerprint)) if fingerprint else None, entry.session_id,
-            executing_prompt[1] if executing_prompt is not None else None,
-            entry.model.provider, entry.model.model, entry.model.recorded_model, _account(entry),
-            tuple(getattr(entry.tokens, field) for field in TOKEN_FIELDS), known,
-            entry.reported_cost if has_billing else None, entry.reported_cost_currency if has_billing else None,
-            entry.cost_disposition.value, amounts, entry.selected_effort or entry.variant, entry.summary,
-            snapshot.root.session_id if entry.session_id in tree_members else None,
-            entry.sort_order,
-            responses.observation(entry) if responses is not None else None,
-            _stats_identity(entry) if with_stats else None,
-        ))
+        request = project_request(
+            entry, key, reference, prompt=executing_prompt[1] if executing_prompt is not None else None,
+            tree=snapshot.root.session_id if entry.session_id in tree_members else None,
+        )
+        if request is None:
+            return None
+        if with_stats:
+            request = replace(request, response=responses.observation(entry), stats_identity=_stats_identity(entry))
+        requests.append(request)
     detail = () if config is not None else None
     if config is not None and prompt_count:
         block = build_prompt_block(session_id=snapshot.root.session_id, title=snapshot.root.title,
