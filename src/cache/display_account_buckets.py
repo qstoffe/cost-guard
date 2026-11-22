@@ -109,6 +109,25 @@ def account_buckets(db, source, zone, roster, period, account, start, end):
     return UsageVersion(epoch, revision), as_of, rows
 
 
+def account_chart(db, source, zone, roster, period, now_ms):
+    if period not in ACCOUNT_PERIODS:
+        raise ValueError("invalid_account_period")
+    state = db.execute("""
+        SELECT run,archive_epoch,usage_revision,end_ms FROM display_account_state
+        WHERE source=? AND zone=? AND roster=? AND end_ms<=?
+    """, (source, zone, roster, now_ms)).fetchone()
+    if state is None:
+        return None
+    run, epoch, revision, end = state
+    rows = tuple(AccountBucket(period, account, left, right, Decimal(value) if value is not None else None,
+                              matched, priced, pricing)
+                 for account, left, right, value, matched, priced, pricing in db.execute("""
+        SELECT account,start_ms,end_ms,subtotal,matched,priced,pricing FROM display_account_buckets
+        WHERE source=? AND run=? AND period=? ORDER BY account,start_ms LIMIT ?
+    """, (source, run, period, ACCOUNT_LIMIT * ACCOUNT_MAX_BUCKETS)))
+    return UsageVersion(epoch, revision), end, rows
+
+
 def account_history_due(db, source, zone, roster, now_ms, earliest):
     state = db.execute("""
         SELECT archive_epoch,usage_revision,zone,roster,end_ms FROM display_account_state WHERE source=?

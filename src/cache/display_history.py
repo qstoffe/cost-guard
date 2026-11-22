@@ -11,7 +11,7 @@ import time
 from .display_prompts import prompt_page, prompt_schema
 from .display_account_usage import account_usage_slice
 from .display_account_buckets import (
-    account_buckets, account_history_due, account_schema, cleanup_accounts, publish_account_run, stage_accounts,
+    account_buckets, account_chart, account_history_due, account_schema, cleanup_accounts, publish_account_run, stage_accounts,
 )
 from .display_requests import RequestRoster, countable_schema, publish_roster, request_schema
 from .display_mix_groups import group_revision, inactive_run, mix_groups_schema, read_groups, remove_inactive_groups, stage_groups
@@ -744,6 +744,11 @@ class DisplayHistory:
         with self._connect(read=True) as db:
             db.execute("BEGIN")
             return account_history_due(db, source, zone, roster, now_ms, earliest)
+
+    def read_account_chart(self, source, zone, roster, period, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return account_chart(db, source, zone, roster, period, now_ms), self._state(db, source).archive_epoch
 
     def cleanup_account_buckets(self, source, protected_run=None):
         with self._write_lock, self._connect() as db:

@@ -7,8 +7,10 @@ from types import SimpleNamespace
 import unittest
 
 from src.analysis.cache import dependency_signature
+from src.application.account_timeline import archived_timeline_view
 from src.application.archive_account_history import AccountHistoryPublication, ArchiveAccountHistory, archived_account_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+from src.cache.display_account_buckets import AccountBucket
 from src.cache.display_requests import DisplayRequest, RequestRoster
 from src.cache.display_usage_reader import USAGE_SLICE
 from src.domain import AccountRef, AccountSnapshot, CostDisposition
@@ -144,9 +146,10 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         archive = DisplayArchive(self.root, lambda *_: None, accounts_enabled=True)
         self.addCleanup(archive.close)
         archive._set_binding(DisplayBinding("trusted", "registered"))
-        archive.accounts.offer((SimpleNamespace(account=account),), verified=False)
+        series = (SimpleNamespace(account=account, label="Verified account"),)
+        archive.accounts.offer(series, verified=False)
         self.assertIsNone(archive.next_projection(lambda: None))
-        archive.accounts.offer((SimpleNamespace(account=account),), verified=True)
+        archive.accounts.offer(series, verified=True)
         for _ in range(20):
             turn = archive.next_projection(lambda: None)
             if turn is None:
@@ -159,3 +162,29 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         _, _, rows = self.history.read_account_buckets("trusted", "UTC", build.roster,
                                                       "today", ACCOUNT, NOW - HOUR, NOW)
         self.assertEqual([Decimal(1), None], [row.subtotal for row in rows])
+        snapshot = archive.accounts.snapshot("today", NOW)
+        self.assertEqual("unknown", snapshot["view"]["coverage"])
+        self.assertEqual("Verified account", snapshot["view"]["series"][0]["account"])
+        self.assertEqual("1", snapshot["view"]["series"][0]["points"][-2]["amount"])
+        self.assertIsNone(snapshot["view"]["series"][0]["points"][-1])
+        self.assertEqual(1792972800000, snapshot["expires_ms"])  # Next UTC midnight.
+
+    def test_rolling_window_never_keeps_an_old_subtotal_across_its_start(self):
+        day = 24 * HOUR
+        start = NOW - 7 * day
+        midnight = start + 12 * HOUR
+        rows = (
+            AccountBucket("7-days", ACCOUNT, start, midnight, Decimal(2), 1, 1, "same"),
+            AccountBucket("7-days", ACCOUNT, midnight, midnight + day, Decimal(3), 1, 1, "same"),
+        )
+        roster = ((ACCOUNT, "Known account"),)
+
+        exact = archived_timeline_view("7-days", NOW, NOW, "UTC", roster, rows).to_json()
+        shifted = archived_timeline_view("7-days", NOW, NOW + 1, "UTC", roster, rows).to_json()
+        boundary = archived_timeline_view("7-days", NOW, NOW + 12 * HOUR, "UTC", roster, rows).to_json()
+
+        self.assertEqual("5", exact["series"][0]["total"]["amount"])
+        self.assertIsNone(shifted["series"][0]["points"][0])
+        self.assertEqual("3", shifted["series"][0]["total"]["amount"])
+        self.assertEqual([midnight, midnight + day], list(boundary["buckets"][0]))
+        self.assertEqual("3", boundary["series"][0]["total"]["amount"])

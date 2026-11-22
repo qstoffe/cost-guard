@@ -30,6 +30,7 @@ class WebHost:
     cached_mix_enabled = False
     cached_stats_enabled = False
     cached_models_enabled = False
+    cached_accounts_enabled = False
 
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
@@ -49,7 +50,7 @@ class WebHost:
         self.display_archive = DisplayArchive(root, self.events.publish,
             watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled,
             mix_groups=self.cached_mix_enabled, stats_enabled=self.cached_stats_enabled,
-            models_enabled=self.cached_models_enabled) if jobs is None else None
+            models_enabled=self.cached_models_enabled, accounts_enabled=self.cached_accounts_enabled) if jobs is None else None
         self.dispatcher = DataDispatcher(self.jobs, cache_only_mix=self.cached_mix_enabled,
             cache_only_stats=self.cached_stats_enabled, models=self.display_archive.models) if jobs is None else None
         self.dependencies = None

@@ -35,7 +35,7 @@ class DisplayArchive:
         self.mix_refresh = ArchiveMixRefresh(grouped=mix_groups) if mix_enabled else None
         self.stats = DisplayStats(self, publish) if stats_enabled else None
         self.models = DisplayModels(self, publish) if models_enabled else None
-        self.accounts = DisplayAccounts(self) if accounts_enabled else None
+        self.accounts = DisplayAccounts(self, publish) if accounts_enabled else None
         self._last_projection = None
         self._mix_signal = Lock()
         self._mix_marks = {}

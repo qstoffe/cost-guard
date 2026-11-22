@@ -11,6 +11,7 @@ from src.analysis.quota_pace import is_workday
 from src.analysis.timezones import resolve_timezone
 from src.numbers import ccost_amount
 
+from .archive_exact_cost import ExactCost
 from .contracts import record
 from .projection import identity
 
@@ -132,6 +133,45 @@ def _overlap(intervals, buckets):
             ends[-1] = max(ends[-1], right)
     slots = (bisect_left(starts, right) - 1 for _, right in buckets)
     return tuple(left < right and slot >= 0 and ends[slot] > left for (left, right), slot in zip(buckets, slots))
+
+
+def archived_timeline_view(period, as_of, now_ms, zone, roster, rows):
+    """Project observed reference subtotals, never claim zero for unseen work."""
+    current = timeline_window(period, now_ms, zone)
+    observed = timeline_window(period, as_of, zone)
+    if period != "7-days" and observed.start != current.start:
+        return None
+    # A former first bucket can overlap the new rolling start without being
+    # wholly selected. Omit it, instead of prorating or using its old total.
+    qualified = {(row.account, row.start, row.end): row for row in rows if row.start >= current.start}
+    buckets = tuple((max(left, current.start), right) for left, right in observed.buckets
+                    if right > current.start or left == right == current.start and period != "7-days")
+    if not buckets:
+        return None
+    skipped = len(observed.buckets) - len(buckets)
+    series = []
+    for key, label in roster:
+        saved = tuple(qualified.get((key, left, right)) if left < right else None for left, right in buckets)
+        known = tuple(row for row in saved if row is not None and row.subtotal is not None)
+        peak = max((row.subtotal for row in known), default=Decimal(0))
+        total = ExactCost()
+        for row in known:
+            total.add(row.subtotal)
+        compatible = len({row.pricing for row in known}) == 1
+        series.append(record(id=key.hex(), account=label, peak=peak, ticks=_ticks(peak),
+            points=tuple(_point(row.subtotal, "~") if row is not None and row.subtotal is not None else None
+                         for row in saved),
+            total=_point(total.amount(), "~") if compatible else None))
+    non_working, occurrence = _calendar_details(period, observed, as_of, zone)
+    partial = {index - skipped for index in observed.partial if index >= skipped}
+    if buckets[0][0] != observed.buckets[skipped][0]:
+        partial.add(0)
+    return record(period=period, timezone_id=zone, start_ms=buckets[0][0], end_ms=as_of, buckets=buckets,
+        slot_dates=observed.dates[skipped:], future_buckets=tuple(index - skipped for index in observed.future),
+        partial_buckets=tuple(sorted(partial)),
+        non_working_buckets=tuple(index - skipped for index in non_working if index >= skipped),
+        end_occurrence=occurrence, pending_buckets=(), initial_pending_buckets=(),
+        price_revision="archived-reference-only", series=tuple(series), coverage="unknown")
 
 
 def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=(), initial_pending=None,

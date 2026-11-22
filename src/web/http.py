@@ -341,6 +341,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if handle_dispatch(self, value):
                 return
             if self.path == '/api/accounts/timeline':
+                if getattr(self.server.lifecycle, "cached_accounts_enabled", False):
+                    self.reply(400, {"error": "invalid_request"})
+                    return
                 period, revision = value.get('period'), value.get('revision')
                 if (set(value) != {'period', 'revision'} or period not in ACCOUNT_PERIODS
                         or revision is not None and (type(revision) is not int or revision < 0)):
@@ -423,6 +426,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 from .models_http import cached_models
                 cached_models(self, value)
                 return
+            if self.path == "/api/cache/accounts":
+                from .accounts_http import cached_accounts
+                cached_accounts(self, value)
+                return
             if self.path == "/api/cache/session-detail/demand":
                 self.cached_detail_demand(value)
                 return
@@ -488,6 +495,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     value["cached_mix"] = getattr(self.server.lifecycle, "cached_mix_enabled", False)
                     value["cached_stats"] = getattr(self.server.lifecycle, "cached_stats_enabled", False)
                     value["cached_models"] = getattr(self.server.lifecycle, "cached_models_enabled", False)
+                    value["cached_accounts"] = getattr(self.server.lifecycle, "cached_accounts_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)

@@ -23,6 +23,8 @@ let sessionDetailAvailable = false;
 let cachedSessionsAvailable = false;
 let sessionCacheHint = null;
 let accountTimelineAvailable = false;
+let cachedAccountsAvailable = false;
+let accountsCacheHint = null;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
@@ -394,9 +396,12 @@ function show(state) {
       state.accounts.update(liveValue?.view || {});
       state.accounts.attach(output);
       if (accountTimelineAvailable) {
-        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
+        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update(), {archived: cachedAccountsAvailable});
         const chart = state.accountTimeline;
-        if (!hostState.terminal && !hostState.sourceBlocked) chart.setScope(liveValue?.account_timeline_scope ?? null);
+        if (!hostState.terminal && !hostState.sourceBlocked) {
+          if (cachedAccountsAvailable) chart.cacheHint(accountsCacheHint);
+          else chart.setScope(liveValue?.account_timeline_scope ?? null);
+        }
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
         chart.active(!document.hidden && !!csrf && hostState.writable);
       }
@@ -798,7 +803,8 @@ async function connect() {
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     cachedSessionsAvailable = state.cached_sessions === true;
-     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
+     cachedAccountsAvailable = state.cached_accounts === true;
+     accountTimelineAvailable = (cachedAccountsAvailable || state.account_timeline === true) && typeof AccountTimelineView !== 'undefined';
      if (state.cached_watch === true && typeof CachedWatch !== 'undefined') {
        watchCache ||= new CachedWatch.Controller(api, publication => {
          miniWatch?.updateCached(() => watchCache.publication());
@@ -853,7 +859,11 @@ async function connect() {
          current?.catalog?.cacheHint?.(hint, resync);
          current?.detail?.cacheHint?.(hint, resync);
         }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync),
-           (hint, resync) => statsCache?.committed(hint, resync), (hint, resync) => modelsCache?.committed(hint, resync));
+           (hint, resync) => statsCache?.committed(hint, resync), (hint, resync) => modelsCache?.committed(hint, resync),
+           (hint, resync) => {
+             accountsCacheHint = hint;
+             if (!hostState.terminal && !hostState.sourceBlocked) current?.accountTimeline?.cacheHint(hint, resync);
+           });
     }
     navigate();
   } catch (_) {

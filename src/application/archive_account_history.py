@@ -1,6 +1,7 @@
 """Qualified direct reference costs; not native balances or estimated allocation."""
 from bisect import bisect_right
 from dataclasses import dataclass, field
+from hashlib import sha256
 from itertools import islice
 from uuid import uuid4
 
@@ -135,6 +136,10 @@ class AccountHistoryPublication:
         self._rows = None
         self._count = 0
         self.published = False
+        self._marks = {period: sha256() for period in PERIODS}
+
+    def marks(self):
+        return {period: digest.hexdigest() for period, digest in self._marks.items()} if self.published else {}
 
     def step(self, history, *, eligible):
         if not eligible():
@@ -148,6 +153,9 @@ class AccountHistoryPublication:
         if batch:
             if history.stage_account_buckets(build.source, build.version, self.run, batch, eligible=eligible):
                 self._count += len(batch)
+                for row in batch:
+                    value = (row.account.hex(), row.start, str(row.subtotal), row.matched, row.priced, row.pricing)
+                    self._marks[row.period].update(dependency_signature(value).encode("ascii"))
                 return True
             return False
         stamp = AccountRun(self.run, build.version, build.zone, build.roster, build.now_ms, self._count)

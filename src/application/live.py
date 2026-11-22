@@ -131,6 +131,8 @@ class LiveRuntime:
 
     def _tick_timeline(self, driver, frame):
         coordinator = driver.coordinator
+        if self.display_archive is not None and self.display_archive.accounts is not None:
+            return None  # Opted-in chart uses only the archive lane; never warm both.
         if self.timeline_demand is not None and callable(getattr(type(coordinator), 'tick_account_timeline', None)):
             verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
             return coordinator.tick_account_timeline(frame, self.timeline_demand,
