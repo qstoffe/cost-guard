@@ -4,7 +4,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from development.tests.fixtures.archive_stats_schema import remove_measured_cohort
 from development.tests.fixtures.session_snapshots import make_snapshot, one_request
 from src.analysis import analyze_snapshot
 from src.analysis.input_identity import fingerprint, first_input
@@ -165,69 +164,6 @@ class ArchiveStatsEvidenceTests(TestCase):
 
         self.history.clear_confirmed_sessions("trusted", self.history.source_state("trusted"))
         self.assertIsNone(self.history.stats_roots("trusted", expected=fresh.version))
-
-    def test_v18_migration_preserves_facts_without_inventing_old_pins(self):
-        self.commit(None, 1, capture(one_request(running=False)))
-        before = self.history.stats_roots("trusted")
-        tables = ("archive_stats_roots", "archive_stats_intervals", "archive_stats_parents",
-                  "archive_stats_first_inputs", "archive_response_timing")
-        with self.history._connect() as db:
-            db.execute("DROP INDEX archive_stats_root_cohort")
-            db.execute("DROP TRIGGER archive_stats_request_identity_stale")
-            db.execute("DROP TABLE archive_stats_request_identity")
-            db.execute("DROP TABLE archive_stats_request_ready")
-            remove_measured_cohort(db)
-            db.execute("DROP TABLE archive_stats_root_time")
-            db.execute("DROP TABLE archive_stats_calendar")
-            db.execute("DROP TABLE archive_stats_time")
-            db.execute("DROP TABLE archive_stats_time_state")
-            for table in tables:
-                db.execute(f"DROP TRIGGER {table}_revision")
-                db.execute(f"ALTER TABLE {table} DROP COLUMN first_revision")
-            db.execute("ALTER TABLE archive_stats_revisions DROP COLUMN invalidated_through")
-            db.execute("PRAGMA user_version=18")
-
-        reopened = DisplayHistory(self.root)
-        reopened.initialize()
-        retained = reopened.stats_roots("trusted", expected=before.version)
-        older = reopened.stats_roots("trusted", expected=replace(before.version, evidence=0))
-
-        self.assertEqual(before, retained)
-        self.assertIsNone(older)
-        self.assertTrue(reopened.stats_geometry("trusted").intervals)
-        self.assertIsNone(reopened.stats_time("trusted", "UTC", "all", None, 10_000))
-
-    def test_v23_retains_timing_without_claiming_new_reconciliation_evidence(self):
-        roster = capture(one_request(running=False))
-        physical, = roster.requests
-        self.commit(None, 1, roster)
-        with self.history._connect() as db:
-            db.execute("DROP TRIGGER archive_stats_request_identity_stale")
-            db.execute("DROP TABLE archive_stats_request_identity")
-            db.execute("DROP TABLE archive_stats_request_ready")
-            db.execute("PRAGMA user_version=23")
-
-        self.history = DisplayHistory(self.root)
-        self.history.initialize()
-        migrated = self.history.stats_candidates("trusted")
-        old, = migrated.entries
-        waiting = self.history.completed_sessions("trusted", {"root": "r1"}, "dependency",
-                                                  with_history=True, with_stats_requests=True)
-        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), "r1",
-            ACQUIRED_SCALAR_FIELDS, "dependency", 1, request_roster=roster),))
-        read = self.history.stats_candidates("trusted")
-        ready = self.history.completed_sessions("trusted", {"root": "r1"}, "dependency",
-                                                with_history=True, with_stats_requests=True)
-        refreshed, = read.entries
-        pinned, = self.history.stats_candidates("trusted", expected=migrated.version).entries
-
-        self.assertIsNone(old.identity)
-        self.assertFalse(waiting)
-        self.assertEqual({"root"}, ready)
-        self.assertEqual(ResponseTiming(2100, 200), old.response)
-        self.assertEqual(read.version.usage, migrated.version.usage)
-        self.assertEqual(physical.stats_identity, refreshed.identity)
-        self.assertIsNone(pinned.identity)
 
     def test_pre_reconciliation_candidates_keep_fork_members_and_bound_both_revisions(self):
         roster = capture(one_request(running=False))

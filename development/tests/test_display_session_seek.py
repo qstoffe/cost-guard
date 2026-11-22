@@ -70,21 +70,12 @@ class DisplaySessionSeekTests(unittest.TestCase):
         self.assertEqual([f"s{i:03d}" for i in range(26, 51)], self.ids(corrected))
         self.assertEqual(self.ids(corrected), self.ids(foreign))
 
-    def test_v29_title_order_is_reindexed_without_losing_tied_casefolded_names(self):
+    def test_title_order_seeks_without_losing_tied_casefolded_names(self):
         changes = tuple(SessionChange(SessionFact(f"s{i:03d}", "one", ("AE", "Ä", "ä")[i % 3]), None)
                         for i in range(76))
         self.history.commit_sessions("source", changes)
-        with self.history._connect() as db:
-            db.executescript("""
-                DROP INDEX sessions_name_asc;
-                DROP INDEX sessions_name_desc;
-                CREATE INDEX sessions_name_asc ON sessions(source,(title_key IS NULL),title_key ASC,session_id,period_clock_ms);
-                CREATE INDEX sessions_name_desc ON sessions(source,(title_key IS NULL),title_key DESC,session_id,period_clock_ms);
-                PRAGMA user_version=29;
-            """)
         expected = [f"s{i:03d}" for i in range(76) if i % 3] + [f"s{i:03d}" for i in range(0, 76, 3)]
 
-        self.history.initialize()
         first = self.views.page(period="all", sort="name", direction=-1)
         second = self.views.page(period="all", sort="name", direction=-1, offset=25, cursor=first["next_cursor"])
 

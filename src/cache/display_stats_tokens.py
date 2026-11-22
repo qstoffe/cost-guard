@@ -36,19 +36,8 @@ class StatsTokenPublication:
     changed_periods: tuple[str, ...]
 
 
-def stats_token_schema(*, upgrade=False, add_subagent_cost=False):
-    subagent_upgrade = """
-        ALTER TABLE archive_stats_tokens ADD COLUMN subagent_reference_ccost TEXT;
-        UPDATE archive_stats_token_state SET evidence_revision=-1;
-    """ if add_subagent_cost else ""
-    if upgrade:
-        return subagent_upgrade + """
-            ALTER TABLE archive_stats_tokens ADD COLUMN reference_ccost TEXT;
-            ALTER TABLE archive_stats_tokens ADD COLUMN priced INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE archive_stats_tokens ADD COLUMN mixed_prices INTEGER NOT NULL DEFAULT 0;
-            UPDATE archive_stats_token_state SET evidence_revision=-1;
-        """
-    return subagent_upgrade + """
+def stats_token_schema():
+    return """
         CREATE TABLE IF NOT EXISTS archive_stats_token_state (
             source TEXT PRIMARY KEY REFERENCES sources(source), archive_epoch INTEGER NOT NULL,
             usage_revision INTEGER NOT NULL, evidence_revision INTEGER NOT NULL,

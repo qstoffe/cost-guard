@@ -227,36 +227,6 @@ class DisplayRequestTests(unittest.TestCase):
         self.assertIsNone(withdrawn)
         self.assertEqual((winning_replica.key,), tuple(row.request_key for row in current.entries))
 
-    def test_v13_migration_retains_existing_partition_and_only_pins_proven_versions(self):
-        snapshot = make_snapshot()
-        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), reference("p1", None))
-        self.history.commit_sessions("bound", (SessionChange(SessionFact("root", "r1", "Root"), None,
-            previous_progress=0, request_roster=roster),))
-        version = self.history.usage_inputs("bound").version
-        with self.history._connect() as db:
-            db.executescript("""
-                DROP TRIGGER archive_usage_correction;
-                DROP INDEX archive_requests_revision;
-                ALTER TABLE archive_requests DROP COLUMN first_revision;
-                ALTER TABLE archive_usage_revisions DROP COLUMN invalidated_through;
-                 DROP TABLE archive_mix_group_marks;
-                 DROP TABLE archive_mix_reference;
-                 DROP TABLE archive_mix_identities;
-                 DROP TABLE archive_mix_group_order;
-                 DROP TABLE archive_mix_groups;
-                ALTER TABLE archive_mix_state DROP COLUMN group_run;
-                PRAGMA user_version=13;
-            """)
-        migrated = DisplayHistory(self.root)
-
-        migrated.initialize()
-        current = migrated.usage_inputs("bound", expected=version)
-        unknown = migrated.usage_inputs("bound", expected=replace(version, revision=version.revision - 1))
-
-        self.assertEqual(version, current.version)
-        self.assertEqual({request.key for request in roster.requests}, {request.request_key for request in current.entries})
-        self.assertIsNone(unknown)
-
     def test_real_projection_matches_canonical_fork_selection_even_when_loser_arrives_first(self):
         parent = make_snapshot()
         child = next(session for session in parent.sessions if session.session_id == "child")
@@ -320,31 +290,16 @@ class DisplayRequestTests(unittest.TestCase):
         self.assertEqual([("new-root", 1)], ranks)
         self.assertEqual([("new-root",), ("root",)], owners)
 
-    def test_v9_keeps_source_missing_requests_and_reports_unproven_fork_membership(self):
+    def test_source_missing_requests_report_unproven_fork_membership(self):
         snapshot = make_snapshot()
         bundle = analyze_snapshot(snapshot, now_ms=10_000)
         roster = request_roster(snapshot, bundle, reference("p1", (Decimal(1),) * 4))
+        roster = replace(roster, requests=tuple(replace(item, dedup_tree=None) for item in roster.requests))
         child = next(request for request in roster.requests if request.session_id == "child")
         self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Root"), None,
                                     previous_progress=0, request_roster=roster),))
         checkpoint = self.history.session_checkpoints("trusted", ("root",))["root"]
         self.history.commit_sessions("trusted", missing=(("root", checkpoint),))
-        with self.history._connect() as db:
-            db.executescript("""
-                DROP TRIGGER archive_usage_correction;
-                DROP INDEX archive_requests_revision;
-                ALTER TABLE archive_requests DROP COLUMN first_revision;
-                DROP TABLE archive_usage_revisions;
-                DROP VIEW archive_countable_requests;
-                DROP TABLE archive_fork_trees;
-                DROP INDEX archive_fork_candidates;
-                DROP INDEX archive_unqualified_forks;
-                DROP TRIGGER archive_stats_request_identity_stale;
-                ALTER TABLE archive_requests DROP COLUMN dedup_tree;
-                ALTER TABLE archive_requests DROP COLUMN request_ordinal;
-                PRAGMA user_version=9;
-            """)
-
         restarted = DisplayHistory(self.root)
         restarted.initialize()
         with restarted._connect(read=True) as db:

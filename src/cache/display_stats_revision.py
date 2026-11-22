@@ -14,23 +14,14 @@ class StatsVersion:
     evidence: int
 
 
-def stats_revision_schema(*, upgrade=False):
-    # Before this format existing evidence has no birth order. It remains
-    # visible, but no older evidence revision can be pinned from that database.
-    columns = ""
-    if upgrade:
-        columns = """
-            ALTER TABLE archive_stats_revisions ADD COLUMN invalidated_through INTEGER NOT NULL DEFAULT 0;
-            UPDATE archive_stats_revisions SET invalidated_through=revision;
-        """ + "".join(f"ALTER TABLE {table} ADD COLUMN first_revision INTEGER NOT NULL DEFAULT 0;\n"
-                       for table in _TABLES)
+def stats_revision_schema():
     triggers = "\n".join(f"""
         CREATE TRIGGER IF NOT EXISTS {table}_revision AFTER UPDATE ON {table} BEGIN
             INSERT INTO archive_stats_revisions(source,revision,invalidated_through) VALUES(NEW.source,0,1)
             ON CONFLICT(source) DO UPDATE SET invalidated_through=revision+1;
         END;
     """ for table in (*_TABLES, "archive_stats_request_identity"))
-    return columns + triggers + """
+    return triggers + """
         CREATE INDEX IF NOT EXISTS archive_stats_root_cohort
         ON archive_stats_roots(source,first_revision,root_id);
     """

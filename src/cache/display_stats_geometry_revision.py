@@ -11,21 +11,15 @@ class StatsGeometryVersion:
     revision: int
 
 
-def geometry_schema(*, seed=False):
+def geometry_schema():
     birth = "COALESCE((SELECT revision+1 FROM archive_stats_revisions WHERE source=NEW.source),1)"
     old = "OLD.provisional=0 AND OLD.start_ms>0 AND OLD.duration_ms>0"
     new = "NEW.provisional=0 AND NEW.start_ms>0 AND NEW.duration_ms>0"
-    seed_sql = """
-        INSERT OR IGNORE INTO archive_stats_geometry_revisions
-        SELECT source,revision,revision FROM archive_stats_revisions;
-    """ if seed else ""
     return f"""
         CREATE TABLE IF NOT EXISTS archive_stats_geometry_revisions (
             source TEXT PRIMARY KEY REFERENCES sources(source),
             revision INTEGER NOT NULL, invalidated_through INTEGER NOT NULL
         ) WITHOUT ROWID;
-        {seed_sql}
-        DROP INDEX IF EXISTS archive_stats_geometry_cohort;
         CREATE INDEX IF NOT EXISTS archive_stats_measured_cohort
         ON archive_stats_intervals(source,first_revision,root_id,session_id,event_id,kind)
         WHERE {MEASURED_GEOMETRY};

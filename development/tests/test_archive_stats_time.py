@@ -5,7 +5,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from development.tests.fixtures.archive_stats_schema import remove_measured_cohort, restore_v20_cohort, restore_v20_stamp
 from development.tests.fixtures.session_snapshots import one_request
 from development.tests.test_archive_stats_evidence import capture
 from src.analysis.ai_stats import windows
@@ -155,49 +154,6 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertIsNone(self.history.stats_time("bound", "UTC", "all", None, 2100))
         self.assertEqual(400, self.history.stats_time("other", "UTC", "all", None, 2100).row.working_ms)
 
-    def test_v19_upgrade_adds_projection_without_discarding_existing_geometry_or_pins(self):
-        self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
-        before = self.history.stats_geometry("bound")
-        with self.history._connect() as db:
-            remove_measured_cohort(db)
-            db.execute("DROP TABLE archive_stats_root_time")
-            db.execute("DROP TABLE archive_stats_calendar")
-            db.execute("DROP TABLE archive_stats_time")
-            db.execute("DROP TABLE archive_stats_time_state")
-            db.execute("PRAGMA user_version=19")
-
-        self.history = DisplayHistory(self.root)
-        self.history.initialize()
-        geometry = self.history.stats_geometry("bound")
-        self.reduce(2000)
-
-        self.assertEqual(before.intervals, geometry.intervals)
-        self.assertEqual(250, self.history.stats_time("bound", "UTC", "all", None, 2000).row.working_ms)
-
-    def test_v20_measured_time_remains_readable_while_calendar_is_added(self):
-        self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
-        self.reduce(2000)
-        with self.history._connect() as db:
-            remove_measured_cohort(db)
-            restore_v20_cohort(db)
-            restore_v20_stamp(db)
-            db.execute("DROP TABLE archive_stats_root_time")
-            db.execute("DROP TABLE archive_stats_calendar")
-            db.execute("PRAGMA user_version=20")
-        self.history = DisplayHistory(self.root)
-        self.history.initialize()
-
-        prior = self.history.stats_time("bound", "UTC", "all", None, 2000)
-        due = self.history.stats_time_due("bound", "UTC", windows("UTC", 2000), 2000)
-        self.reduce(2000)
-        updated = self.history.stats_time("bound", "UTC", "all", None, 2000)
-
-        self.assertEqual(250, prior.row.working_ms)
-        self.assertIsNone(prior.row.calendar)
-        self.assertTrue(due)
-        self.assertEqual(250, updated.row.working_ms)
-        self.assertEqual(250, updated.row.calendar.night_ms)
-
     def test_calendar_uses_local_days_and_excludes_overlap_and_scope_gaps(self):
         hour = 3_600_000
         midnight = utc("2026-10-24T22:00:00")
@@ -251,29 +207,6 @@ class ArchiveStatsTimeTests(TestCase):
 
         self.assertEqual((2400, StatsRootTime("a", 1300, 2)), (all_time.working_ms, all_time.roots))
         self.assertEqual((1600, StatsRootTime("c", 700, 2)), (today.working_ms, today.roots))
-
-    def test_v21_calendar_remains_readable_before_root_projection_backfill(self):
-        self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
-        self.reduce(2000)
-        with self.history._connect() as db:
-            remove_measured_cohort(db)
-            restore_v20_cohort(db)
-            restore_v20_stamp(db)
-            db.execute("DROP TABLE archive_stats_root_time")
-            db.execute("PRAGMA user_version=21")
-        self.history = DisplayHistory(self.root)
-        self.history.initialize()
-
-        prior = self.history.stats_time("bound", "UTC", "all", None, 2000)
-        due = self.history.stats_time_due("bound", "UTC", windows("UTC", 2000), 2000)
-        self.reduce(2000)
-        updated = self.history.stats_time("bound", "UTC", "all", None, 2000)
-
-        self.assertEqual(250, prior.row.working_ms)
-        self.assertEqual(250, prior.row.calendar.night_ms)
-        self.assertIsNone(prior.row.roots)
-        self.assertTrue(due)
-        self.assertEqual(StatsRootTime("root", 250, 1), updated.row.roots)
 
     def test_unrelated_activity_does_not_invalidate_an_inflight_measured_projection(self):
         span = StatsInterval("root", "measured", "prompt", 1000, 250, False)

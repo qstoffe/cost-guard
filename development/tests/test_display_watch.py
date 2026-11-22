@@ -96,72 +96,25 @@ class DisplayWatchTests(unittest.TestCase):
         self.assertTrue(row["prompt"]["execution_unverified"])
         self.assertIsNone(row["prompt"]["completed_at_ms"])
 
-    def test_new_version_preserves_previous_partition_and_purge_prevents_late_writes(self):
+    def test_restart_preserves_partition_and_purge_prevents_late_writes(self):
         at = 100_000
         observed = archive_watch_observation(running_frame(at), at)
         with self.history._connect() as db:
-            db.executescript("""
-                DROP TRIGGER archive_usage_correction;
-                DROP INDEX archive_requests_revision;
-                ALTER TABLE archive_requests DROP COLUMN first_revision;
-                DROP TABLE archive_usage_revisions;
-                DROP TABLE archive_watch_daily;
-                DROP TABLE archive_watch_cards;
-                DROP TABLE archive_watch_state;
-                INSERT INTO sources(source,generation,session_count) VALUES('bound',4,0);
-                PRAGMA user_version=10;
-            """)
-        upgraded = DisplayHistory(self.root)
-        upgraded.initialize()
+            db.execute("INSERT INTO sources(source,generation,session_count) VALUES('bound',4,0)")
+        restarted = DisplayHistory(self.root)
+        restarted.initialize()
 
-        generation = upgraded.replace_watch("bound", "host", observed, archive_epoch=0)
-        previous = upgraded.source_state("bound")
-        cleared = upgraded.clear_confirmed_sessions("bound", previous)
-        late = upgraded.replace_watch("bound", "host", observed, archive_epoch=0)
-        snapshot = upgraded.watch("bound", "host", at, live_eligible=True)
+        generation = restarted.replace_watch("bound", "host", observed, archive_epoch=0)
+        previous = restarted.source_state("bound")
+        cleared = restarted.clear_confirmed_sessions("bound", previous)
+        late = restarted.replace_watch("bound", "host", observed, archive_epoch=0)
+        snapshot = restarted.watch("bound", "host", at, live_eligible=True)
 
         self.assertEqual(4, previous.generation)
         self.assertEqual(1, generation)
         self.assertEqual(1, cleared.archive_epoch)
         self.assertIsNone(late)
         self.assertEqual((1, "empty", []), (snapshot["archive_epoch"], snapshot["freshness"], snapshot["cards"]))
-
-    def test_v11_watch_upgrade_keeps_old_snapshot_and_leaves_added_fields_unknown(self):
-        with self.history._connect() as db:
-            db.executescript("""
-                DROP TRIGGER archive_usage_correction;
-                DROP INDEX archive_requests_revision;
-                ALTER TABLE archive_requests DROP COLUMN first_revision;
-                DROP TABLE archive_usage_revisions;
-                DROP TABLE archive_watch_daily;
-                DROP TABLE archive_watch_cards;
-                CREATE TABLE archive_watch_cards (
-                    source TEXT NOT NULL REFERENCES archive_watch_state(source) ON DELETE CASCADE,
-                    position INTEGER NOT NULL, session_id TEXT NOT NULL, event_id TEXT NOT NULL, title TEXT NOT NULL,
-                    card_group TEXT NOT NULL, start_ms INTEGER, finish_ms INTEGER, outcome TEXT,
-                    prompt_cost TEXT, prompt_cost_complete INTEGER NOT NULL,
-                    session_cost TEXT, session_cost_complete INTEGER NOT NULL,
-                    context_tokens INTEGER, model TEXT, effort TEXT, calls INTEGER, duration_ms INTEGER, qualified_ms INTEGER,
-                    PRIMARY KEY(source, position)
-                ) WITHOUT ROWID;
-                INSERT INTO sources(source) VALUES('bound');
-                INSERT INTO archive_watch_state VALUES('bound','first-host',7,100000,100000,'observed',0);
-                INSERT INTO archive_watch_cards VALUES(
-                    'bound',0,'root','prompt-1','Saved v11','active',98000,NULL,'running',
-                    '0.125',1,'1.25',1,773,'Model','medium',2,NULL,100000);
-                PRAGMA user_version=11;
-            """)
-        migrated = DisplayHistory(self.root)
-
-        migrated.initialize()
-        retained = migrated.watch("bound", "restarted", 101_000, live_eligible=True)
-
-        self.assertEqual(("as-of", 7), (retained["freshness"], retained["generation"]))
-        fact, = retained["cards"]
-        self.assertEqual(("Saved v11", "0.125", "1.25", 773, "unverified"), (
-            fact["title"], fact["prompt_cost"], fact["session_cost"], fact["context_tokens"], fact["outcome"]))
-        self.assertEqual((None, None, None, None), (
-            fact["prompt_number"], fact["is_compaction"], fact["mix_input"], fact["catalog_activity_ms"]))
 
     def test_prompt_metrics_and_catalog_preview_keep_distinct_clocks_and_lifetime(self):
         at = 100_000

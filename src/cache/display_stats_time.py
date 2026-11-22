@@ -53,13 +53,8 @@ class StatsTimeSnapshot:
     sessions_generation: int
 
 
-def stats_time_schema(*, upgrade=False):
-    migration = """
-        ALTER TABLE archive_stats_time_state DROP COLUMN usage_revision;
-        ALTER TABLE archive_stats_time_state RENAME COLUMN evidence_revision TO geometry_revision;
-        UPDATE archive_stats_time_state SET geometry_revision=-1;
-    """ if upgrade else ""
-    return migration + """
+def stats_time_schema():
+    return """
         CREATE TABLE IF NOT EXISTS archive_stats_time_state (
             source TEXT PRIMARY KEY REFERENCES sources(source),
             archive_epoch INTEGER NOT NULL, geometry_revision INTEGER NOT NULL,

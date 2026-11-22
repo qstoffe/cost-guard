@@ -32,11 +32,9 @@ class MixGroupRow:
         return (*scalars, *(None if value is None else str(value) for value in values))
 
 
-def mix_groups_schema(*, add_run=False):
+def mix_groups_schema():
     metrics = ", ".join(f"{column} TEXT" for column in _METRICS)
-    column = "ALTER TABLE archive_mix_state ADD COLUMN group_run TEXT;" if add_run else ""
     return f"""
-        {column}
         CREATE TABLE IF NOT EXISTS archive_mix_groups (
             source TEXT NOT NULL REFERENCES sources(source), run TEXT NOT NULL,
             period TEXT NOT NULL, kind TEXT NOT NULL, identity TEXT NOT NULL,

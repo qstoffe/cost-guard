@@ -63,11 +63,8 @@ class WatchObservation:
     withdraw_live: bool = False
 
 
-def watch_schema(*, upgrade=False):
+def watch_schema():
     metrics = ", ".join(f"{column} {kind}" for column, kind in _CARD_METRICS)
-    if upgrade:
-        return "\n".join(f"ALTER TABLE archive_watch_cards ADD COLUMN {column} {kind};"
-                         for column, kind in _CARD_METRICS) + daily_schema()
     return f"""
         CREATE TABLE IF NOT EXISTS archive_watch_state (
             source TEXT PRIMARY KEY REFERENCES sources(source),

@@ -78,6 +78,7 @@ def request_schema():
             billed TEXT, currency TEXT, disposition TEXT NOT NULL,
             input_cost TEXT, cache_read_cost TEXT, cache_write_cost TEXT, output_cost TEXT, pricing TEXT,
             effort TEXT, summary INTEGER NOT NULL, dedup_tree TEXT, request_ordinal INTEGER NOT NULL DEFAULT 0,
+            first_revision INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(source, request_key)
         ) WITHOUT ROWID;
         CREATE INDEX archive_request_clock ON archive_requests(source, clock_ms, request_key);
@@ -102,12 +103,8 @@ def request_schema():
     """
 
 
-def countable_schema(*, upgrade=False):
-    columns = """
-        ALTER TABLE archive_requests ADD COLUMN dedup_tree TEXT;
-        ALTER TABLE archive_requests ADD COLUMN request_ordinal INTEGER NOT NULL DEFAULT 0;
-    """ if upgrade else ""
-    return columns + """
+def countable_schema():
+    return """
         CREATE INDEX archive_fork_candidates ON archive_requests(source, fork_key, dedup_tree, request_ordinal, session_id)
             WHERE fork_key IS NOT NULL AND dedup_tree IS NOT NULL;
         CREATE INDEX archive_unqualified_forks ON archive_requests(source, clock_ms)

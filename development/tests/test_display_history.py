@@ -11,7 +11,7 @@ from src.application.session_archive_projection import SessionPublication
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.cached_session_views import CachedSessionViews
 from src.cache.display_history import (
-    FINISH_FIELDS, DisplayHistory, FinishedSession, RunningSession, SessionChange, SessionCheckpoint, SessionCoverage,
+    FINISH_FIELDS, DisplayHistory, FinishedSession, RunningSession, SessionChange, SessionCheckpoint,
     SessionFact,
 )
 from src.domain.effort import EffortEvidence
@@ -175,34 +175,6 @@ class DisplayHistoryTests(unittest.TestCase):
                           "historical settings may differ", "not a confirmed executed contributor"):
             self.assertIn(help_line, cached["model_help"])
 
-    def test_help_columns_migrate_without_removing_existing_archive_rows(self):
-        self.history.commit_sessions("source", (SessionChange(
-            SessionFact("old", "r1", "Stored", activity_ms=20, model="Known Model", ccost=Decimal(5)), None),))
-        self.history.publish_session_coverage("source", SessionCoverage(30, False, False, None), archive_epoch=0)
-        with closing(sqlite3.connect(self.history.path)) as db:
-            db.executescript("""
-                DROP TABLE archive_prompt_state;
-                DROP TABLE archive_prompt_history;
-                DROP VIEW archive_countable_requests;
-                DROP TABLE archive_fork_trees;
-                DROP TABLE archive_prompt_attribution;
-                DROP TABLE archive_request_membership;
-                DROP TABLE archive_request_rosters;
-                DROP TABLE archive_requests;
-                ALTER TABLE sessions DROP COLUMN context_detail;
-                ALTER TABLE sessions DROP COLUMN model_help;
-                ALTER TABLE sessions DROP COLUMN has_model_details;
-                PRAGMA user_version=6;
-            """)
-
-        restarted = DisplayHistory(self.root)
-        restarted.initialize()
-        page = CachedSessionViews(restarted, "source", "UTC", "epoch", coverage_supported=True).page(period="all")
-
-        stored, = page["rows"]
-        self.assertEqual(("Known Model", "5", None), (stored["model"], stored["ccost"], stored["model_help"]))
-        self.assertEqual("pending", page["history_coverage"])
-
     def test_failed_batch_does_not_publish_partial_rows_or_generation(self):
         self.history.commit_sessions("source", (SessionChange(SessionFact("a", "r1", "A"), None),))
         good = SessionChange(SessionFact("b", "r1", "B"), None, dependency="pricing", previous_progress=0)
@@ -333,40 +305,6 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertIsNone(proof.project(settled, current_revision="r3", current_epoch="observation"))
         self.assertIsNone(proof.project(settled, current_revision="r2", current_epoch="other"))
         self.assertIsNone(proof.project(running, current_revision="r2", current_epoch="observation"))
-
-    def test_version_one_upgrade_keeps_rows_without_inventing_work_progress(self):
-        original = SessionFact("root", "r1", "Saved title", ccost=Decimal("2.43"))
-        self.history.commit_sessions("source", (SessionChange(original, None),))
-        with closing(sqlite3.connect(self.history.path, isolation_level=None)) as db:
-            db.executescript("""
-                DROP TABLE archive_prompt_state;
-                DROP TABLE archive_prompt_history;
-                DROP VIEW archive_countable_requests;
-                DROP TABLE archive_fork_trees;
-                DROP TABLE archive_prompt_attribution;
-                DROP TABLE archive_request_membership;
-                DROP TABLE archive_request_rosters;
-                DROP TABLE archive_requests;
-                DROP TABLE session_progress;
-                DROP TABLE session_running;
-                DROP TABLE session_scope_coverage;
-                ALTER TABLE sessions DROP COLUMN prompt_started_ms;
-                ALTER TABLE sessions DROP COLUMN activity_origin;
-                ALTER TABLE sessions DROP COLUMN catalog_activity_ms;
-                ALTER TABLE sessions DROP COLUMN field_evidence;
-                ALTER TABLE sessions DROP COLUMN context_detail;
-                ALTER TABLE sessions DROP COLUMN model_help;
-                ALTER TABLE sessions DROP COLUMN has_model_details;
-                PRAGMA user_version=1;
-            """)
-
-        reopened = DisplayHistory(self.root)
-        reopened.initialize()
-
-        page = reopened.session_page("source", sort="ccost")
-        self.assertEqual((1, "Saved title", "2.43"), (page.generation, page.rows[0].title, page.rows[0].ccost))
-        self.assertEqual({"root": SessionCheckpoint("r1", 0)}, reopened.session_checkpoints("source", ("root",)))
-        self.assertEqual(set(), reopened.completed_sessions("source", {"root": "r1"}, "pricing"))
 
     def test_field_evidence_distinguishes_pending_empty_unavailable_and_retained_cells_after_restart(self):
         source = "source"

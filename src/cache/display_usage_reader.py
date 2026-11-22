@@ -36,21 +36,13 @@ class UsageSlice:
     unqualified_clocks: tuple[int | None, ...]
 
 
-def usage_schema(*, existing_revision=False):
-    revisions = """
+def usage_schema():
+    return """
         CREATE TABLE IF NOT EXISTS archive_usage_revisions (
             source TEXT PRIMARY KEY REFERENCES sources(source),
             revision INTEGER NOT NULL,
             invalidated_through INTEGER NOT NULL DEFAULT 0
         ) WITHOUT ROWID;
-    """
-    if existing_revision:
-        revisions = """
-            ALTER TABLE archive_usage_revisions ADD COLUMN invalidated_through INTEGER NOT NULL DEFAULT 0;
-            UPDATE archive_usage_revisions SET invalidated_through=revision;
-        """
-    return revisions + """
-        ALTER TABLE archive_requests ADD COLUMN first_revision INTEGER NOT NULL DEFAULT 0;
         CREATE INDEX archive_requests_revision ON archive_requests(source,first_revision,request_key);
         CREATE TRIGGER archive_usage_correction AFTER UPDATE ON archive_requests BEGIN
             INSERT INTO archive_usage_revisions(source,revision,invalidated_through) VALUES(NEW.source,0,1)

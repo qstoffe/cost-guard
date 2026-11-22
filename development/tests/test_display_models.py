@@ -1,7 +1,5 @@
 """Models retains qualified catalog facts; reads never use a finite job result."""
-from contextlib import closing
 from pathlib import Path
-import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -9,7 +7,6 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import Availability, NOW, report_service
 from development.tests.test_web_dispatch import RecordingJobs
 from src.application import ReportApplication
-from src.cache.display_history import SessionChange, SessionFact
 from src.cache.display_models import ModelPage
 from src.reports import ReportRequest
 from src.web.dispatch import DataDispatcher
@@ -140,20 +137,6 @@ class DisplayModelsTests(unittest.TestCase):
         self.assertEqual(["current"], self.names())
         self.models.invalidate_prices(1030)
         self.assertFalse(self.models.snapshot(ModelPage(), 2000)["prices_valid"])
-
-    def test_legacy_v26_upgrade_keeps_prior_session_rows(self):
-        history = self.archive.history
-        history.commit_sessions("source", (SessionChange(SessionFact("prior", "r1", "Prior"), None),))
-        with closing(sqlite3.connect(history.path, isolation_level=None)) as db:
-            db.execute("DROP TABLE display_models")
-            db.execute("DROP TABLE display_model_state")
-            db.execute("PRAGMA user_version=26")
-
-        self.assertTrue(self.archive.initialize())
-        self.publish([model("new", ["1"])])
-
-        self.assertEqual(1, history.session_page("source").total)
-        self.assertEqual(["new"], self.names())
 
     def test_actual_models_worker_projection_is_a_complete_cache_input_without_history(self):
         availability = Availability()

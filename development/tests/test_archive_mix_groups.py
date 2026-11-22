@@ -106,17 +106,6 @@ class ArchiveMixGroupsTests(TestCase):
                 rejected = stale_build.step(history)
             inactive = history.reclaim_mix_groups("bound")
             retained = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model", order=order)
-            with history._connect() as db:
-                db.executescript("""
-                    DROP TABLE archive_mix_reference;
-                    DROP TABLE archive_mix_identities;
-                    DROP TABLE archive_mix_group_order;
-                    UPDATE archive_mix_group_marks SET digest=substr(digest,5);
-                    PRAGMA user_version=15;
-                """)
-            history.initialize()
-            migrated = history.mix_group_page("bound", "UTC", "all", None, now + 1, "model", order=order)
-            old_stamp = history.mix_refresh("bound", "UTC", now + 1)
             history.clear_confirmed_sessions("bound", history.source_state("bound"))
             deleted = history.mix_group_page("bound", "UTC", "all", None, now, "model")
 
@@ -127,8 +116,6 @@ class ArchiveMixGroupsTests(TestCase):
         self.assertEqual(MixBuildState.STALE, rejected)
         self.assertEqual(32, inactive)
         self.assertEqual((token, as_of, order, rows, after), retained)
-        self.assertEqual((token.removeprefix("v16:"), as_of, None, rows, after), migrated)
-        self.assertFalse(old_stamp.grouped)
         self.assertEqual((25, 4, None), (len(rows), len(tail), end))
         self.assertEqual(rows, reset)
         self.assertEqual((now, True, 29), (as_of, current, summary.calls))

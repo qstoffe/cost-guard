@@ -32,8 +32,8 @@ from .display_stats_revision import retained_stats_version, stats_revision_schem
 from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
-FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 32
+FILENAME = "cost-guard-display-v1.sqlite3"
+SCHEMA_VERSION = 1
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -254,60 +254,6 @@ class DisplayHistory:
             app_id, version = self._identity(db)
             if (app_id, version) == (APPLICATION_ID, SCHEMA_VERSION):
                 return
-            if app_id == APPLICATION_ID and version in range(1, SCHEMA_VERSION):
-                progress = self._progress_schema() if version == 1 else ""
-                clocks = """
-                    ALTER TABLE sessions ADD COLUMN prompt_started_ms INTEGER;
-                    ALTER TABLE sessions ADD COLUMN activity_origin TEXT;
-                    ALTER TABLE sessions ADD COLUMN catalog_activity_ms INTEGER;
-                """ if version < 3 else ""
-                evidence = "ALTER TABLE sessions ADD COLUMN field_evidence INTEGER NOT NULL DEFAULT 0;" if version < 5 else ""
-                help_columns = """
-                    ALTER TABLE sessions ADD COLUMN context_detail TEXT;
-                    ALTER TABLE sessions ADD COLUMN model_help TEXT;
-                    ALTER TABLE sessions ADD COLUMN has_model_details INTEGER;
-                    DELETE FROM session_scope_coverage;
-                """ if version < 7 else ""
-                requests = request_schema() if version < 8 else ""
-                prompts = prompt_schema() if version < 9 else ""
-                countable = countable_schema(upgrade=version >= 8) if version < 10 else ""
-                mix_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_mix_state)")}
-                token_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_stats_tokens)")}
-                running_columns = {row[1] for row in db.execute("PRAGMA table_info(session_running)")}
-                running_metrics = "\n".join(f"ALTER TABLE session_running ADD COLUMN {name} {kind};"
-                    for name, kind in _RUNNING_METRICS if running_columns and name not in running_columns)
-                db.executescript(f"""
-                    BEGIN IMMEDIATE;
-                    {progress}
-                    {clocks}
-                    {self._live_schema()}
-                    {running_metrics}
-                    {evidence}
-                    {self._coverage_schema()}
-                    {help_columns}
-                    {requests}
-                    {prompts}
-                    {countable}
-                     {watch_schema(upgrade=version == 11) if version < 12 else ""}
-                     {usage_schema(existing_revision=version == 13) if version < 14 else ""}
-                     {mix_total_schema()}
-                     {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
-                     {mix_identity_schema()}
-                      {stats_evidence_schema()}
-                      {stats_request_schema()}
-                      {stats_revision_schema(upgrade=version == 18)}
-                      {geometry_schema(seed=18 <= version < 23)}
-                      {stats_time_schema(upgrade=20 <= version < 23)}
-                       {stats_token_schema(upgrade=version == 25, add_subagent_cost=(
-                           bool(token_columns) and "subagent_reference_ccost" not in token_columns))}
-                      {models_schema()}
-                      {account_schema()}
-                      {watch_quota_schema()}
-                      {self._name_indexes(upgrade=True)}
-                    PRAGMA user_version={SCHEMA_VERSION};
-                    COMMIT;
-                """)
-                return
             if (app_id, version) != (0, 0) or db.execute("SELECT 1 FROM sqlite_schema LIMIT 1").fetchone():
                 raise sqlite3.DatabaseError("unsupported_display_history_schema")
             db.execute("PRAGMA journal_mode=WAL")
@@ -353,17 +299,17 @@ class DisplayHistory:
                 {watch_schema()}
                 {usage_schema()}
                 {mix_total_schema()}
-                 {mix_groups_schema()}
-                 {mix_identity_schema()}
-                  {stats_evidence_schema()}
-                  {stats_request_schema()}
-                  {stats_revision_schema()}
-                  {geometry_schema()}
-                   {stats_time_schema()}
-                   {stats_token_schema()}
-                   {models_schema()}
-                    {account_schema()}
-                    {watch_quota_schema()}
+                {mix_groups_schema()}
+                {mix_identity_schema()}
+                {stats_evidence_schema()}
+                {stats_request_schema()}
+                {stats_revision_schema()}
+                {geometry_schema()}
+                {stats_time_schema()}
+                {stats_token_schema()}
+                {models_schema()}
+                {account_schema()}
+                {watch_quota_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -419,11 +365,10 @@ class DisplayHistory:
         ) + DisplayHistory._name_indexes() + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
 
     @staticmethod
-    def _name_indexes(*, upgrade=False):
+    def _name_indexes():
         # title_key is NOT NULL; SQLite simplifies its null expression away,
         # so indexing that expression obstructs seeks and index-order scans.
         return "\n".join(
-            (f"DROP INDEX IF EXISTS sessions_name_{direction.lower()};" if upgrade else "") +
             f"CREATE INDEX IF NOT EXISTS sessions_name_{direction.lower()} "
             f"ON sessions(source, title_key {direction}, session_id, {PERIOD_CLOCK});"
             for direction in ("ASC", "DESC"))
