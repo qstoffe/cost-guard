@@ -1,4 +1,5 @@
 """Render the draft Sessions cache controller against protected HTTP and SQLite."""
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 import shutil
@@ -130,6 +131,27 @@ def check_cached_sessions(browser, evidence, product_root):
             detail.get_by_role("button", name="Next").click()
             expect(detail.locator(".page-navigation")).to_contain_text("26–30 of 30 cached events")
             assert "/api/cache/session-detail" in requests and "/api/detail" not in requests
+            reads = requests.count("/api/cache/session-detail")
+            unrelated = owner.commit(owner.admit({"s-030": "revision"}), {}, {}, missing=("s-030",))
+            first.wait_for_function("generation => current.detail.observedHint?.generation === generation", arg=unrelated)
+            assert first.evaluate("!current.detail.timer && !current.detail.dirty && !current.detail.flight")
+            assert requests.count("/api/cache/session-detail") == reads
+
+            revisions = {"s-028": "revision"}
+            owner.publish_catalog(owner.admit(revisions), {"s-028": "Session 28"}, revisions)
+            expect(detail.get_by_text("Saved history; the original source session is unavailable.")).to_be_hidden()
+            late = replace(detail_rows[0], event_id="prompt-late", start_ms=now - 31_000)
+            owner.commit(owner.admit(revisions), {"s-028": detail_summary}, revisions,
+                         usage=RequestRoster("fixture-prices", (), (), (late,)))
+            expect(detail.locator(".page-navigation")).to_contain_text("26–31 of 31 cached events")
+            # Drop a relevant hint at the publisher. A later unrelated hint
+            # cannot rule out changes in the skipped cache generation.
+            history = host.display_archive.history
+            checkpoint = history.session_checkpoints(views.source, ("s-028",))["s-028"]
+            history.commit_sessions(views.source, missing=(("s-028", checkpoint),))
+            owner.commit(owner.admit({"s-029": "revision"}), {}, {}, missing=("s-029",))
+            expect(detail.get_by_text("Saved history; the original source session is unavailable.")).to_be_visible()
+            expect(detail.locator(".page-navigation")).to_contain_text("26–31 of 31 cached events")
             first.go_back()
             expect(pager).to_contain_text("26–30 of 30 cached sessions")
             first.go_back()
@@ -173,7 +195,7 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, scoped spinner, field help, archived detail, two-tab requery, running, confirmed clear, source unbind")
+                checked="cold empty, held source, period/sort/page, scoped spinner, field help, root-scoped detail, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()

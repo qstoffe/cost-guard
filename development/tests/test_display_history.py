@@ -491,8 +491,8 @@ class DisplayHistoryTests(unittest.TestCase):
         owner.bind("source", "first")
         admission = owner.admit(revisions)
         owner.publish_catalog(admission, {"session": "Metadata"}, revisions)
-        self.assertEqual([("cache", {"view": "sessions", "binding": "first", "generation": 1}, 1, "Metadata")],
-                         notifications)
+        self.assertEqual([("cache", {"view": "sessions", "binding": "first", "generation": 1,
+                                     "detail_roots": ["session"]}, 1, "Metadata")], notifications)
         acquired = owner.admit(revisions)
         row = SessionUsageRow("session", "Authoritative", "Model", False, Decimal("2"), 1)
         owner.bind("other", "second")
@@ -502,6 +502,19 @@ class DisplayHistoryTests(unittest.TestCase):
 
         owner.commit(admission, {"session": row}, revisions)
 
-        self.assertEqual(("cache", {"view": "sessions", "binding": "third", "generation": 2}, 2, "Authoritative"),
-                         notifications[-1])
+        self.assertEqual(("cache", {"view": "sessions", "binding": "third", "generation": 2,
+                                    "detail_roots": ["session"]}, 2, "Authoritative"), notifications[-1])
         self.assertEqual(2, len(notifications))
+
+    def test_large_catalog_commit_announces_an_unscoped_detail_change(self):
+        notifications = []
+        owner = SessionArchiveOwner(self.history, lambda _, hint: notifications.append(hint))
+        owner.bind("source", "first")
+        revisions = {f"s-{key}": "r" for key in range(17)}
+        titles = dict.fromkeys(revisions, "Cached")
+        admission = owner.admit(revisions)
+
+        owner.publish_catalog(admission, titles, revisions)
+
+        self.assertEqual([{"view": "sessions", "binding": "first", "generation": 1}], notifications)
+        self.assertEqual(17, self.history.session_page("source").total)

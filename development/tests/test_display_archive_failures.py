@@ -53,7 +53,8 @@ class DisplayArchiveFailureTests(unittest.TestCase):
         committed = owner._commit(admission, (change, overflow))
 
         self.assertEqual(2, committed)
-        self.assertEqual([("cache", {"view": "sessions", "binding": "binding", "generation": 2})], evidence)
+        self.assertEqual([("cache", {"view": "sessions", "binding": "binding", "generation": 2,
+                                     "detail_roots": ["known", "overflow"]})], evidence)
         self.assertEqual(2, self.history.session_checkpoints("source", ("known",))["known"].progress)
         self.assertEqual(2, self.history.session_page("source").total)
 

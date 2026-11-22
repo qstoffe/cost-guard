@@ -522,7 +522,7 @@ const SessionDetail = (() => {
   }
   class CachedView {
     constructor(api, id, hint) {
-      Object.assign(this, {api, id, hint, offset: 0, data: null, attached: false, dirty: true});
+      Object.assign(this, {api, id, hint, observedHint: hint, offset: 0, data: null, attached: false, dirty: true});
       this.root = el('section', undefined, 'session-detail session-detail-cache');
       this.root.setAttribute('aria-label', 'Session detail');
       this.back = el('a', '↩ Back to Show All Sessions'); this.back.href = '#/sessions';
@@ -579,16 +579,31 @@ const SessionDetail = (() => {
       ContextHelp.dismiss(this.body); this.body.replaceChildren();
       this.previous.disabled = this.next.disabled = true;
     }
-    invalidateValues() { this.retire(); this.hint = null; this.demanded = null; this.reset('Session cache unavailable.'); }
+    invalidateValues() {
+      this.retire(); this.hint = this.observedHint = null;
+      this.demanded = null; this.reset('Session cache unavailable.');
+    }
     updateInvocations() {} // Committed history cannot assert active invocation state.
     wake() {} // Source signals never supply facts to the cache-only view.
     cacheHint(hint, resync = false) {
       if (hint?.view !== 'sessions') return;
-      const bindingChanged = hint.binding !== this.hint?.binding;
-      if (!bindingChanged && !resync && this.hint.generation >= hint.generation) return;
-      this.hint = hint;
-      if (!hint.binding || bindingChanged && this.data && this.data.binding !== hint.binding) this.invalidateValues();
-      if (hint.binding) { this.hint = hint; this.dirty = true; this.schedule(); }
+      const previous = this.observedHint;
+      const bindingChanged = hint.binding !== previous?.binding;
+      if (!bindingChanged && previous.generation > hint.generation) return;
+      if (!hint.binding || bindingChanged && (this.flight || this.data && this.data.binding !== hint.binding)) {
+        this.invalidateValues();
+      }
+      this.observedHint = hint;
+      if (!hint.binding) return;
+      const painted = this.data?.binding === hint.binding ? this.data.generation : -1;
+      if (!bindingChanged && (painted >= hint.generation ||
+          painted >= 0 && previous.generation === hint.generation)) return;
+      // A root list describes exactly one commit. A snapshot/replay gap is
+      // never proof of irrelevance; a contiguous unrelated commit is.
+      const seen = Math.max(painted, previous?.generation ?? -1);
+      if (!bindingChanged && !resync && hint.generation === seen + 1 &&
+          Array.isArray(hint.detail_roots) && !hint.detail_roots.includes(this.id)) return;
+      this.hint = hint; this.dirty = true; this.schedule();
     }
     schedule() {
       if (this.attached && !document.hidden && !this.flight && !this.timer) {

@@ -179,6 +179,7 @@ class HistoryState:
 class SessionCommit:
     generation: int | None = None
     applied: int = 0
+    detail_roots: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,15 +407,14 @@ class DisplayHistory:
         source membership observation, not a failed source request. Return the
         durable generation only when visible data changed, and only after COMMIT.
         """
-        return self._commit_sessions(source, updates, missing=missing, present=present,
-                                     archive_epoch=archive_epoch).generation
+        return self.commit_session_batch(source, updates, missing=missing, present=present,
+                                         archive_epoch=archive_epoch).generation
 
     def commit_summary(self, source, change, *, archive_epoch, eligible):
         """Distinguish a confirmed current summary from a lost compare-and-swap."""
-        return self._commit_sessions(source, (change,), missing=(), present=(),
-                                     archive_epoch=archive_epoch, eligible=eligible)
+        return self.commit_session_batch(source, (change,), archive_epoch=archive_epoch, eligible=eligible)
 
-    def _commit_sessions(self, source, updates, *, missing, present, archive_epoch, eligible=None):
+    def commit_session_batch(self, source, updates, *, missing=(), present=(), archive_epoch, eligible=None):
         if (not source or type(archive_epoch) is not int or archive_epoch < 0
                 or len(updates) + len(missing) + len(present) > BATCH_LIMIT
                 or sum(change.request_roster is not None for change in updates) > 1):
@@ -428,7 +428,7 @@ class DisplayHistory:
                 return SessionCommit()
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             clocks = []
-            changed = False
+            detail_roots = set()
             inserted = 0
             applied = 0
             for change in updates:
@@ -450,13 +450,14 @@ class DisplayHistory:
                 applied += 1
                 visible = self._apply_session(db, source, change)
                 if visible:
-                    changed = True
+                    detail_roots.add(session_id)
                     inserted += int(before is None)
                     clocks.extend((clock, self._activity(db, source, session_id)))
                 if change.previous_progress is not None or (visible and progress):
                     self._advance_progress(db, source, session_id, change.fact.revision, change.dependency)
-                if change.request_roster is not None:
-                    changed |= publish_roster(db, source, session_id, change.fact.revision, change.request_roster)
+                if change.request_roster is not None and publish_roster(
+                        db, source, session_id, change.fact.revision, change.request_roster):
+                    detail_roots.add(session_id)
             for membership, entries in ((0, missing), (1, present)):
                 for session_id, checkpoint in entries:
                     if db.execute("""
@@ -467,13 +468,13 @@ class DisplayHistory:
                                 WHERE p.source=sessions.source AND p.session_id=sessions.session_id), 0)=?
                     """, (membership, membership, source, session_id, checkpoint.revision, membership,
                           checkpoint.progress)).rowcount:
-                        changed = True
+                        detail_roots.add(session_id)
                         clocks.append(self._activity(db, source, session_id))
                         # Returning under the same revision must not revive a
                         # prior completion or accept an in-flight pre-gap read.
                         self._advance_progress(db, source, session_id, checkpoint.revision, None)
             generation = None
-            if changed:
+            if detail_roots:
                 generation = state.generation + 1
                 known = [clock for clock in clocks if clock is not None]
                 self._append_change(db, source, generation, inserted, min(known, default=None), max(known, default=None))
@@ -481,7 +482,7 @@ class DisplayHistory:
                 db.rollback()
                 return SessionCommit()
             db.commit()
-            return SessionCommit(generation, applied)
+        return SessionCommit(generation, applied, frozenset(detail_roots))
 
     @staticmethod
     def _append_change(db, source, generation, inserted, earliest, latest):

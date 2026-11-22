@@ -1,11 +1,14 @@
 """Single source-qualified Sessions publication owner."""
 from dataclasses import dataclass, replace
+import re
 from threading import Lock
 import time
 
 from src.cache.display_history import BATCH_LIMIT, SessionChange, SessionFact
 
 from .session_archive_projection import SessionPublication
+
+DETAIL_HINT_LIMIT = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,14 +116,14 @@ class SessionArchiveOwner:
                 return False
             result = self.history.commit_summary(admission.source, change, archive_epoch=admission.archive_epoch,
                                                  eligible=current)
-            self._announce(*binding, result.generation)
+            self._announce(*binding, result.generation, detail_roots=result.detail_roots)
             return result.applied == 1
 
     def _commit(self, admission, updates, missing=(), present=()):
-        generation = self.history.commit_sessions(admission.source, updates, missing=missing, present=present,
-                                                    archive_epoch=admission.archive_epoch)
-        self._announce(admission.source, admission.epoch, generation)
-        return generation
+        result = self.history.commit_session_batch(admission.source, updates, missing=missing, present=present,
+                                                   archive_epoch=admission.archive_epoch)
+        self._announce(admission.source, admission.epoch, result.generation, detail_roots=result.detail_roots)
+        return result.generation
 
     def commit_running(self, source, epoch, running, *, clear_fence):
         with self._lock:
@@ -130,7 +133,7 @@ class SessionArchiveOwner:
             archive_epoch = self.history.source_state(source).archive_epoch
             fresh = tuple(item for item in running if item.observed_ms > cleared_ms)
             generation = self.history.replace_running(source, epoch, fresh, archive_epoch=archive_epoch)
-            self._announce(source, epoch, generation)
+            self._announce(source, epoch, generation, detail_roots=())
 
     def commit_models(self, source, epoch, catalog, *, clear_fence, eligible):
         with self._lock:
@@ -179,10 +182,15 @@ class SessionArchiveOwner:
             state = self.history.source_state(source)
             generation = self.history.publish_session_coverage(source, proof, archive_epoch=state.archive_epoch,
                                                                widen_only=widen_only)
-            self._announce(source, epoch, generation)
+            self._announce(source, epoch, generation, detail_roots=())
 
-    def _announce(self, source, epoch, generation):
+    def _announce(self, source, epoch, generation, *, detail_roots=None):
         if generation is not None:
             with self._signal:
                 if (source, epoch) == self._binding:
-                    self.publish("cache", {"view": "sessions", "binding": epoch, "generation": generation})
+                    hint = {"view": "sessions", "binding": epoch, "generation": generation}
+                    if detail_roots is not None and len(detail_roots) <= DETAIL_HINT_LIMIT:
+                        # Only routable IDs; no titles, fields or unbounded payload.
+                        hint["detail_roots"] = sorted(root for root in detail_roots
+                                                      if re.fullmatch(r"[A-Za-z0-9_-]{1,200}", root))
+                    self.publish("cache", hint)
