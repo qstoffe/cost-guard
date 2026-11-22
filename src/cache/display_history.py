@@ -14,6 +14,7 @@ from .display_mix_groups import group_revision, inactive_run, mix_groups_schema,
 from .display_mix_identity import mix_identity_schema, read_mix_identities, save_mix_identities
 from .display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_ORDER_VERSION
 from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_totals, read_mix_total
+from .display_models import benchmark_references, models_schema, read_models, write_models
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
@@ -26,7 +27,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -260,6 +261,7 @@ class DisplayHistory:
                       {geometry_schema(seed=18 <= version < 23)}
                       {stats_time_schema(upgrade=20 <= version < 23)}
                       {stats_token_schema(upgrade=version == 25)}
+                      {models_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -317,6 +319,7 @@ class DisplayHistory:
                   {geometry_schema()}
                    {stats_time_schema()}
                    {stats_token_schema()}
+                   {models_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -692,6 +695,25 @@ class DisplayHistory:
             SET revision=excluded.revision, dependency=excluded.dependency, progress=progress+1
         """, (source, session_id, revision, dependency))
 
+    def publish_model_catalog(self, source, catalog, *, archive_epoch, eligible):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._state(db, source).archive_epoch != archive_epoch or not eligible():
+                return False
+            if not write_models(db, source, catalog) or not eligible():
+                return False
+            db.commit()
+            return True
+
+    def models_page(self, source, request, now_ms, *, price_invalidated_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_models(db, source, request, now_ms, price_invalidated_ms), self._state(db, source).archive_epoch
+
+    def model_benchmark_references(self, source):
+        with self._connect(read=True) as db:
+            return benchmark_references(db, source)
+
     def clear_confirmed_sessions(self, source, expected_state):
         """Storage step after external confirmation and acquisition quiescence.
 
@@ -717,6 +739,7 @@ class DisplayHistory:
             db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_identities WHERE source=?", (source,))
             db.execute("DELETE FROM archive_watch_state WHERE source=?", (source,))
+            db.execute("DELETE FROM display_model_state WHERE source=?", (source,))
             db.execute("DELETE FROM session_running WHERE source=?", (source,))
             db.execute("DELETE FROM session_scope_coverage WHERE source=?", (source,))
             db.execute("DELETE FROM session_changes WHERE source=?", (source,))

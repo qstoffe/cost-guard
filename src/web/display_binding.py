@@ -46,3 +46,12 @@ def selected_display_binding(selection):
     except (OSError, ValueError):
         return None  # Unavailable identity must not authorize an old snapshot.
     return None
+
+
+def verified_model_scope(selection):
+    """Recheck source registration in the isolated producer, never in HTTP."""
+    source = selection.source
+    if isinstance(source, OpenCodeV2Source):
+        source.refresh_observation_epoch()
+    binding = selected_display_binding(selection)
+    return binding.scope if binding else None

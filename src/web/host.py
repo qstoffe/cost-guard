@@ -29,6 +29,7 @@ class WebHost:
     cached_watch_enabled = False
     cached_mix_enabled = False
     cached_stats_enabled = False
+    cached_models_enabled = False
 
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
@@ -44,16 +45,17 @@ class WebHost:
         self._source_identity = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
+        self.events = EventHub(self.nonce)
+        self.display_archive = DisplayArchive(root, self.events.publish,
+            watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled,
+            mix_groups=self.cached_mix_enabled, stats_enabled=self.cached_stats_enabled,
+            models_enabled=self.cached_models_enabled) if jobs is None else None
         self.dispatcher = DataDispatcher(self.jobs, cache_only_mix=self.cached_mix_enabled,
-                                         cache_only_stats=self.cached_stats_enabled) if jobs is None else None
+            cache_only_stats=self.cached_stats_enabled, models=self.display_archive.models) if jobs is None else None
         self.dependencies = None
         if jobs is None:
             from .composition import dispatch_dependencies
             self.dependencies = dispatch_dependencies(root)
-        self.events = EventHub(self.nonce)
-        self.display_archive = DisplayArchive(root, self.events.publish,
-             watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled,
-              mix_groups=self.cached_mix_enabled, stats_enabled=self.cached_stats_enabled) if jobs is None else None
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:
@@ -69,6 +71,8 @@ class WebHost:
         self.log_housekeeping = LogHousekeeping(root)
         from .benchmark import BenchmarkLane
         self.benchmark = BenchmarkLane(root)
+        if self.cached_models_enabled:
+            self.benchmark.requested = True  # Background warm, irrespective of browser reads.
 
     def runtime_failed(self, error):
         self.failure = self.failure or error

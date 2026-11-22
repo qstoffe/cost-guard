@@ -17,6 +17,7 @@ let liveValue = null;
 let watchCache = null;
 let mixCache = null;
 let statsCache = null;
+let modelsCache = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let cachedSessionsAvailable = false;
@@ -35,7 +36,7 @@ function sourceNoticeGeometry() {
   document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
 }
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
-function historical(state) { return !state?.cachedMix && !state?.cachedStats && !!CachedReports.cadences[state?.section]; }
+function historical(state) { return !state?.cachedMix && !state?.cachedStats && !state?.cachedModels && !!CachedReports.cadences[state?.section]; }
 function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
 function firstReport(state = current) {
   if (csrf && hostState.writable && state?.request && !state.cachedMix && !state.cachedStats && !state.detail && !state.result && !state.attempted && !document.hidden) {
@@ -141,6 +142,32 @@ function applySettings(value) {
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }
+function modelsSelectionActive(state) {
+  const body = state.modelView?.root.querySelector('.overview-model-table tbody');
+  if (!body) return false;
+  const selection = document.getSelection?.();
+  return body.contains(document.activeElement) || !!(selection && !selection.isCollapsed &&
+    (body.contains(selection.anchorNode) || body.contains(selection.focusNode)));
+}
+function updateCachedModels(urgent = false) {
+  if (!current?.cachedModels) return;
+  const state = current, value = modelsCache.snapshot().value;
+  state.deferModels = !urgent && modelsSelectionActive(state);
+  if (value?.observed_ms != null && value.observed_ms !== state.modelsObservation) {
+    state.modelsObservation = value.observed_ms;
+    if (!document.hidden && hostState.writable) state.benchmark?.load(api, true);
+  }
+  show(state);
+}
+function releaseModelsSelection() {
+  const state = current;
+  if (state?.deferModels && !modelsSelectionActive(state)) {
+    state.deferModels = false;
+    show(state);
+  }
+}
+document.addEventListener('selectionchange', releaseModelsSelection);
+output.addEventListener('focusout', () => queueMicrotask(releaseModelsSelection));
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
@@ -162,6 +189,7 @@ function connectionStatus(message, state = {}) {
   watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind));
   mixCache?.health(blocked);
   statsCache?.health(blocked);
+  modelsCache?.health(blocked);
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
   const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
@@ -277,6 +305,17 @@ function show(state) {
    if (state.section === 'models') { refresh.textContent = 'Try again'; refresh.hidden = !state.failed || !!state.result; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
+  if (state.cachedModels) {
+    output.setAttribute('aria-busy', 'false');
+    const publication = modelsCache.snapshot();
+    if (!state.deferModels || !state.modelView || !publication.value || !publication.value.prices_valid)
+      ReportView.renderCachedModels(output, publication, state);
+    state.priceControls?.(!!csrf && hostState.writable);
+    state.benchmark?.controls(!!csrf && hostState.writable, api);
+    if (state.benchmark && (!state.benchmark.checked || state.benchmark.manual) &&
+        csrf && hostState.writable && !document.hidden) state.benchmark.load(api);
+    return;
+  }
   if (state.section === 'ai-stats') {
     if (state.cachedStats) {
       output.setAttribute('aria-busy', 'false');
@@ -407,7 +446,7 @@ function failure(code, state) {
   return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
-  if (state.loading || state.cachedMix || state.cachedStats || !hostState.writable) return;
+  if (state.loading || state.cachedMix || state.cachedStats || state.cachedModels && !prices || !hostState.writable) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
   let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
@@ -541,8 +580,12 @@ async function acquire(state, background = false, prices = false) {
           const revision = [job.publication_id || state.active, job.result.instance_id,
             job.result.sequence, CachedReports.observation(job.result)].join(':');
           if (demand && !prices && state.result && state.dataRevision === revision) break;
-         if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
+          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
+          if (state.cachedModels) {
+            state.priceMessage = 'Price list refreshed. Updating the local Models cache.';
+            break; // Only SQLite publications supply browser table rows.
+          }
           if (state.section === 'ai-stats') {
             AIStatsView.remember(state, job.result);
             if (!state.result) throw new Error('report_unavailable');
@@ -662,6 +705,7 @@ function navigate() {
   if (current !== previous) {
     previous?.catalog?.detach();
     previous?.accountTimeline?.active(false);
+    if (previous?.cachedModels) previous.deferModels = false;
   }
   // A requested report (including bounded admission backoff) belongs to its view,
   // not the active route. Navigation never abandons it or starts another attempt.
@@ -679,9 +723,17 @@ function navigate() {
   statsCache?.activate(current.cachedStats && !document.hidden ? current.period : null);
   if (route.section === 'models') {
     const models = current;
+    models.cachedModels = !!modelsCache;
+    if (models.cachedModels) {
+      models.request = null;
+      models.result = null;
+      models.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
+      models.selectModels = offset => modelsCache.select(offset);
+    }
     models.refreshPrices = () => acquire(models, false, true);
     if (csrf && hostState.writable && !document.hidden) models.benchmark?.load(api);
   }
+  modelsCache?.activate(current.cachedModels && !document.hidden ? current : null);
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && (sessionDetailAvailable || cachedSessionsAvailable) && !current.detail) {
     current.detail = cachedSessionsAvailable ? new SessionDetail.CachedView(api, match[1], sessionCacheHint) :
@@ -763,6 +815,9 @@ async function connect() {
         statsCache ||= new CachedStats.Controller(api, () => { if (current?.cachedStats) show(current); });
         if (current?.section === 'ai-stats') { current.cachedStats = true; current.request = null; }
       }
+      if (state.cached_models === true && typeof CachedModels !== 'undefined') {
+        modelsCache ||= new CachedModels.Controller(api, urgent => updateCachedModels(urgent));
+      }
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -798,7 +853,7 @@ async function connect() {
          current?.catalog?.cacheHint?.(hint, resync);
          current?.detail?.cacheHint?.(hint, resync);
         }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync),
-           (hint, resync) => statsCache?.committed(hint, resync));
+           (hint, resync) => statsCache?.committed(hint, resync), (hint, resync) => modelsCache?.committed(hint, resync));
     }
     navigate();
   } catch (_) {
@@ -851,6 +906,7 @@ document.addEventListener('visibilitychange', () => {
   current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
   mixCache?.activate(!document.hidden && current?.cachedMix ? current.period : null);
   statsCache?.activate(!document.hidden && current?.cachedStats ? current.period : null);
+  modelsCache?.activate(!document.hidden && current?.cachedModels ? current : null);
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {

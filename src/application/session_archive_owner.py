@@ -114,6 +114,16 @@ class SessionArchiveOwner:
             generation = self.history.replace_running(source, epoch, fresh, archive_epoch=archive_epoch)
             self._announce(source, epoch, generation)
 
+    def commit_models(self, source, epoch, catalog, *, clear_fence, eligible):
+        with self._lock:
+            fence, cleared_ms, _ = self._clear_fence
+            if ((source, epoch) != self._binding or clear_fence != fence
+                    or catalog.observed_ms <= cleared_ms or not eligible()):
+                return False
+            archive_epoch = self.history.source_state(source).archive_epoch
+            return self.history.publish_model_catalog(source, catalog, archive_epoch=archive_epoch,
+                eligible=lambda: self._binding == (source, epoch) and eligible())
+
     def commit_watch(self, source, epoch, observation, *, clear_fence):
         with self._lock:
             fence, cleared_ms, _ = self._clear_fence

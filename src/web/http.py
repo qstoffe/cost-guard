@@ -41,6 +41,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
               "/cached-watch.js": ("cached-watch.js", "text/javascript; charset=utf-8"),
               "/cached-mix.js": ("cached-mix.js", "text/javascript; charset=utf-8"),
               "/cached-stats.js": ("cached-stats.js", "text/javascript; charset=utf-8"),
+              "/cached-models.js": ("cached-models.js", "text/javascript; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
@@ -418,6 +419,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/cache/ai-stats":
                 self.cached_ai_stats(value)
                 return
+            if self.path == "/api/cache/models":
+                from .models_http import cached_models
+                cached_models(self, value)
+                return
             if self.path == "/api/cache/session-detail/demand":
                 self.cached_detail_demand(value)
                 return
@@ -445,7 +450,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 references = ()
                 timezone_id = 'UTC'
                 dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
-                if dispatcher:
+                if dispatcher and dispatcher.models is not None:
+                    try:
+                        references, timezone_id = dispatcher.models.benchmark_references()
+                    except (OSError, sqlite3.Error):
+                        pass
+                elif dispatcher:
                     with dispatcher.lock:
                         for request, entry in dispatcher.entries.items():
                             if request.kind.value == 'normal' and entry['result']:
@@ -477,6 +487,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     value["cached_watch"] = getattr(self.server.lifecycle, "cached_watch_enabled", False)
                     value["cached_mix"] = getattr(self.server.lifecycle, "cached_mix_enabled", False)
                     value["cached_stats"] = getattr(self.server.lifecycle, "cached_stats_enabled", False)
+                    value["cached_models"] = getattr(self.server.lifecycle, "cached_models_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)

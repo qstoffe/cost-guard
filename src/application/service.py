@@ -22,6 +22,7 @@ from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, re
 from .projection import identity, project
 from src.reports.ai_stats import StatsCheckpointError
 from src.reports.history_work import HistoryContinuation, HistoryCheckpointError
+from src.reports.model_comparison import model_price_boundary
 
 
 ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
@@ -45,9 +46,10 @@ class ReportApplication:
     """
 
     def __init__(self, factory: ServiceFactory, *, clock: Callable[[], int] | None = None,
-                 models_only: bool = False):
+                 models_only: bool = False, models_binding=None):
         self._factory = factory
         self._models_only = models_only
+        self._models_binding = models_binding
         self._clock = clock or (lambda: time_ns() // 1_000_000)
         self._instance_id = str(uuid4())
         self._lock = Lock()
@@ -111,7 +113,8 @@ class ReportApplication:
                     return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
-            if self._models_only and request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}:
+            models_report = self._models_only and request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}
+            if models_report:
                 report = service.build_model_price_list(request)
             elif request.kind is ReportKind.TOKEN_MIX:
                 report = service.build_token_mix_history(lambda label, _percent: observe(label), scope=request.token_mix_scope)
@@ -129,6 +132,12 @@ class ReportApplication:
                 observed_at_ms=now, revisions=revisions, atomicity="per_root_snapshot",
                 accounts_atomic_with_sessions=False,
             )
+            if models_report and self._models_binding is not None:
+                source = ObjectValue(source.fields + (
+                    ("model_scope", self._models_binding(service.selection)),
+                    ("model_price_boundary_ms", model_price_boundary(service._load_catalog(), now)),
+                    ("model_price_stale", service._load_catalog().reference_stale),
+                ))
             requests = tuple(record(id=identity(parts), session_id=parts[0], event_id=parts[1],
                                     message_id=parts[2], step_part_id=parts[3])
                              # Normal is an aggregate comparison/account report. Its

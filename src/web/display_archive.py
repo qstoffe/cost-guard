@@ -20,17 +20,20 @@ from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 
 from .display_binding import selected_display_binding
+from .display_models import DisplayModels
 from .display_stats import DisplayStats
 
 
 class DisplayArchive:
-    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False, stats_enabled=False):
+    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False, stats_enabled=False,
+                 models_enabled=False):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
         self._publish = publish
         self.watch_enabled = watch_enabled
         self.mix_refresh = ArchiveMixRefresh(grouped=mix_groups) if mix_enabled else None
         self.stats = DisplayStats(self, publish) if stats_enabled else None
+        self.models = DisplayModels(self, publish) if models_enabled else None
         self._last_projection = None
         self._mix_signal = Lock()
         self._mix_marks = {}
@@ -206,14 +209,17 @@ class DisplayArchive:
 
     def next_projection(self, reference):
         """Offer one fair turn; do not do any projection or I/O on Live."""
-        mix = self.mix_pending()
-        stats = self.stats is not None and self.stats.pending()
-        if stats and (not mix or self._last_projection == "mix"):
-            self._last_projection = "stats"
-            return self.stats.advance
-        if mix:
-            self._last_projection = "mix"
-            return lambda now_ms, *, active: self.advance_mix(now_ms, active=active, reference=reference)
+        turns = ("mix", "stats", "models")
+        start = turns.index(self._last_projection) + 1 if self._last_projection else 0
+        for kind in (*turns[start:], *turns[:start]):
+            if kind == "mix" and self.mix_pending():
+                self._last_projection = kind
+                return lambda now_ms, *, active: self.advance_mix(now_ms, active=active, reference=reference)
+            if kind != "mix":
+                projection = getattr(self, kind)
+                if projection is not None and projection.pending():
+                    self._last_projection = kind
+                    return projection.advance
         return None
 
     def advance_mix(self, now_ms, *, active, reference=lambda: None):
@@ -267,6 +273,8 @@ class DisplayArchive:
             self._mix_reset(None)
             if self.stats is not None:
                 self.stats.reset(None)
+            if self.models is not None:
+                self.models.reset(None)
             return
         epoch = uuid4().hex
         views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
@@ -278,6 +286,8 @@ class DisplayArchive:
         self._mix_reset(views)
         if self.stats is not None:
             self.stats.reset(views)
+        if self.models is not None:
+            self.models.reset(views)
 
     def _writer_binding(self, service):
         views = self.views
@@ -326,6 +336,8 @@ class DisplayArchive:
             self._mix_reset(views, archive_epoch=state.archive_epoch)
             if self.stats is not None:
                 self.stats.reset(views, archive_epoch=state.archive_epoch)
+            if self.models is not None:
+                self.models.reset(views, archive_epoch=state.archive_epoch)
             return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
         return None
 

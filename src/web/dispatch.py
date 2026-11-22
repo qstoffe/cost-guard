@@ -68,7 +68,8 @@ def token_mix_coverage(result):
 
 def cache_only_reports(owner):
     return frozenset(kind for kind, feature in
-                     ((ReportKind.TOKEN_MIX, 'cached_mix_enabled'), (ReportKind.AI_STATS, 'cached_stats_enabled'))
+                     ((ReportKind.TOKEN_MIX, 'cached_mix_enabled'), (ReportKind.AI_STATS, 'cached_stats_enabled'),
+                      (ReportKind.NORMAL, 'cached_models_enabled'), (ReportKind.ALL_MODELS, 'cached_models_enabled'))
                      if getattr(owner, feature, False))
 
 
@@ -83,7 +84,7 @@ def cadence(request, result, foreground):
 
 class DataDispatcher:
     def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, cache_only_mix=False,
-                 cache_only_stats=False):
+                 cache_only_stats=False, models=None):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -97,6 +98,8 @@ class DataDispatcher:
         self.price_actions = set()
         self.ready = False
         self.warm_allowed = False
+        self.models = models
+        self.model_binding = None
         self.default_requests = tuple(request for request in DEFAULT_REQUESTS
                                       if (not cache_only_mix or request.kind is not ReportKind.TOKEN_MIX)
                                       and (not cache_only_stats or request.kind is not ReportKind.AI_STATS))
@@ -109,6 +112,8 @@ class DataDispatcher:
         """Known projection dependency changed; no stale completed-job reuse."""
         with self.lock:
             self.projection_epoch += 1
+            if self.models is not None:
+                self.models.invalidate_prices(int(self.wall_clock() * 1000))
             for entry in self.entries.values():
                 if entry['job']:
                     self.jobs.cancel(entry['job'])
@@ -195,11 +200,40 @@ class DataDispatcher:
 
     def _submit(self, request, entry):
         managed = ManagedReport(**{name: getattr(request, name) for name in ReportRequest.__dataclass_fields__},
-                                source_identity=self.identity)
+                                source_identity=self.identity,
+                                models_scope=self.model_binding[0].source if self._cached_models(request) else '')
         entry['job'] = self.jobs.submit(managed)
         if (request in self._foreground() and request.kind is ReportKind.AI_STATS
                 and hasattr(self.jobs, 'select_scope')):
             self.jobs.select_scope(entry['job'], request.stats_scope)
+
+    def _cached_models(self, request):
+        return self.models is not None and request.kind is ReportKind.NORMAL
+
+    def _sync_models(self):
+        if self.models is None:
+            return
+        bound = self.models.binding()
+        if self.model_binding == bound:
+            return
+        self.model_binding = bound
+        entry = self.entries.pop(ReportRequest(ReportKind.NORMAL), None)
+        if entry and entry['job']:
+            self.jobs.cancel(entry['job'])
+        if bound is not None:
+            self._entry(ReportRequest(ReportKind.NORMAL))
+
+    def _offer_models(self, request, snapshot, result, ready):
+        if not self._cached_models(request):
+            return ready, False
+        if snapshot['status'] != 'complete' or not ready:
+            return False, False
+        now = int(self.wall_clock() * 1000)
+        if self.model_binding is None or not current_result(request, result, now):
+            return False, False
+        epoch = self.projection_epoch
+        accepted = self.models.offer(self.model_binding, result, eligible=lambda: self.projection_epoch == epoch)
+        return accepted, False  # Data/benchmark HTTP cannot borrow the worker payload.
 
     def _collect(self):
         for request, entry in self.entries.items():
@@ -222,6 +256,8 @@ class DataDispatcher:
                 ready = ready and scoped.get(request.stats_scope, {}).get('ready') is True
             ready = ready and not old_schema
             replace_result, degraded = ready, False
+            if self._cached_models(request):
+                ready, replace_result = self._offer_models(request, snapshot, result, ready)
             token_mix = request.kind is ReportKind.TOKEN_MIX
             if token_mix and ready:
                 now = int(self.wall_clock() * 1000)
@@ -241,6 +277,11 @@ class DataDispatcher:
                 spread = int(dependency_signature(str(request))[:4], 16) % 90
                 if degraded:
                     delay, spread = 30, spread % 15  # Reconcile coverage sooner on the low-priority lane.
+                if self._cached_models(request):
+                    boundary = result['source'].get('model_price_boundary_ms')
+                    if type(boundary) is int:
+                        remaining = (boundary - int(self.wall_clock() * 1000)) / 1000
+                        delay, spread = min(delay, max(30, remaining)), 0
                 entry.update(due=self.clock() + delay + spread, terminal=False, finished=self.clock(), requested=False)
             elif token_mix and snapshot['status'] == 'complete' and result and not result.get('error'):
                 period = (result.get('view') or {}).get('token_mix_period') or {}
@@ -283,6 +324,7 @@ class DataDispatcher:
                 self.projection_epoch += 1
                 self.initialized = False
             self.identity = identity
+            self._sync_models()
             self._prices()
             self._collect()
             if not ready:
@@ -342,6 +384,7 @@ class DataDispatcher:
             optional = recent and ((request.kind is ReportKind.AI_STATS and request.stats_scope != 'all')
                                    or (request.kind is ReportKind.TOKEN_MIX and request.token_mix_scope != 'all'))
             if (request not in foreground and not entry['job'] and not entry['terminal']
+                    and (not self._cached_models(request) or self.model_binding is not None)
                     and now >= entry['due'] and (default or optional)):
                 due.append((not default, entry['due'], request, entry))
         if not due:
