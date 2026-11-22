@@ -422,10 +422,10 @@ def _resolved_launches(calls, sessions):
             hint = start or observed_message.created_at_ms
             siblings = children[observed_message.session_id]
             if child in siblings and (scope is None or scope.session_id != child):
-                # A reversed clock must not let timing inference bridge a rejected launch.
-                if 0 < end < start:
-                    hint = max(end, observed_message.created_at_ms)
                 fences[child].add(hint)
+                # Neither endpoint of a reversed clock can safely be ignored.
+                if 0 < end < start:
+                    fences[child].add(max(end, observed_message.created_at_ms))
             elif scope is None and _malformed_native_link(observed):
                 for sibling in siblings:
                     fences[sibling].add(hint)
