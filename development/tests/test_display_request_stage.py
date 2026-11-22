@@ -11,7 +11,7 @@ import unittest
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
 from src.cache.display_request_materialize import materialize_slot_timing
-from src.cache.display_request_overlay import RequestSlot, request_birth_slice, request_clock_slice
+from src.cache.display_request_overlay import RequestSlot, countable_request_rows, request_birth_slice, request_clock_slice
 from src.cache.display_request_stage import (
     RequestInputScope,
     append_request_attribution,
@@ -676,6 +676,34 @@ class DisplayRequestStageTests(unittest.TestCase):
                              [(row[0], row[9], row[-1]) for row in page.rows])
             self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_prompt_attribution").fetchone())
+
+    def test_slot_winner_is_global_even_when_its_requests_are_outside_the_window(self):
+        fork = b"same-fork"
+        with self.write() as db:
+            publish_roster(db, SOURCE, "B", "rev-B",
+                           RequestRoster("price", (_request(b"local", root="B", clock=20, fork=fork),), ()))
+        self._stage((_request(b"outside-a", clock=80, fork=fork), _request(b"outside-b", clock=90, fork=fork),
+                     _request(b"independent", clock=30)))
+        self._prepare("candidate")
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 0, 0)
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            before = request_clock_slice(db, SOURCE, 0, 40)
+            self.assertEqual([b"local"], [row[0] for row in countable_request_rows(db, SOURCE, before.rows)])
+            with self.write() as writer:
+                slot = install_usage_slot(writer, "candidate", witness, eligible=lambda: True)
+                self.assertEqual(RequestSlot("candidate", 2), slot)
+            self.assertEqual([b"local"], [row[0] for row in countable_request_rows(db, SOURCE, before.rows)])
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            scoped = request_clock_slice(db, SOURCE, 0, 40, slot=slot)
+            self.assertEqual([b"local", b"independent"], [row[0] for row in scoped.rows])
+            scoped_countable = countable_request_rows(db, SOURCE, scoped.rows, slot=slot)
+            self.assertEqual([b"independent"], [row[0] for row in scoped_countable])
+            all_windows = request_clock_slice(db, SOURCE, 0, 100, slot=slot)
+            all_countable = countable_request_rows(db, SOURCE, all_windows.rows, slot=slot)
+            self.assertEqual([b"independent", b"outside-a", b"outside-b"], [row[0] for row in all_countable])
 
     def test_append_only_usage_slot_retains_old_revision_without_relabeling_new_keys(self):
         with self.write() as db:

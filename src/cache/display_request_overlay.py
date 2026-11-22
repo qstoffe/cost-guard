@@ -47,6 +47,41 @@ class BirthSlice:
     next_cursor: BirthCursor | None
 
 
+def countable_request_rows(db, source, rows, *, slot=None):
+    """Filter one effective page using global fork winners, never page counts."""
+    _require_pinned(db, max(1, len(rows)))
+    winners = {}
+    accepted = []
+    for row in rows:
+        fork = row[2]
+        if fork is None:
+            accepted.append(row)
+            continue
+        tree = row[-3]
+        if tree is None:
+            continue
+        if fork not in winners:
+            winners[fork] = _winner(db, source, slot, fork)
+        if tree == winners[fork]:
+            accepted.append(row)
+    return tuple(accepted)
+
+
+def _winner(db, source, slot, fork):
+    if slot is not None:
+        row = db.execute("""
+            SELECT winner FROM archive_prepare_winners WHERE attempt=? AND fork_key=? AND done
+        """, (slot.attempt, fork)).fetchone()
+        if row is not None:
+            return row[0]
+    row = db.execute("""
+        SELECT dedup_tree FROM archive_fork_trees INDEXED BY archive_fork_rank
+        WHERE source=? AND fork_key=?
+        ORDER BY multiplicity DESC,first_ordinal,first_session,dedup_tree LIMIT 1
+    """, (source, fork)).fetchone()
+    return row[0] if row else None
+
+
 def request_clock_slice(db, source, start, end, *, slot=None, cursor=None, limit=USAGE_SLICE):
     """Return one bounded half-open window slice, or None for a stale cursor.
 
