@@ -42,6 +42,15 @@ class SummaryCandidate:
     terminal: tuple[int, str] | None
 
 
+class SummaryCapture:
+    def __init__(self, config):
+        self.config = config
+        self.usage = None
+
+    def observe(self, snapshot, bundle, reference):
+        self.usage = request_roster(snapshot, bundle, reference, config=self.config)
+
+
 class SessionArchiveSweep:
     """Use the current observation, not a second independently enumerated catalog.
 
@@ -212,17 +221,13 @@ class SessionArchiveSweep:
         if admission is None:
             return False
         authorities = []
-        usage = None
-
-        def observed(snapshot, bundle, reference):
-            nonlocal usage
-            usage = request_roster(snapshot, bundle, reference, config=service.config)
+        capture = SummaryCapture(service.config)
 
         service.retain_derived_cache_read_only()
         try:
             row, actual = session_summary(service, candidate.root, revision, active=candidate.terminal is not None,
                                           on_dependencies=authorities.extend, persist_legacy=False,
-                                          on_observation=observed)
+                                          on_observation=capture.observe)
         except (PricingUnavailableError, SourceError):
             # A temporarily unreadable root must not starve other roots.
             return False
@@ -234,6 +239,7 @@ class SessionArchiveSweep:
             with catalog.lock:
                 return catalog.state == "observed" and self._candidate(catalog, key) == candidate
 
+        usage = capture.usage
         published = actual == revision and archive.publish_summary(
             service, admission, row, actual, eligible=eligible,
             dependency=checkpoint_dependency(base, authorities, candidate.terminal) if usage is not None else None,

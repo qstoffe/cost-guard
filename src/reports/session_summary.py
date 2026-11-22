@@ -65,7 +65,10 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     epoch = getattr(service.source, "observation_epoch", None)
     key = summary_key(service, root) if persist_legacy or on_observation is None else None
     cached = None
-    if on_observation is None and not active:
+    # The legacy scalar caller can reuse a qualified scalar hit and optionally
+    # hand off a fresh capture on misses. A dedicated archive turn needs facts,
+    # not just the old scalar, and therefore bypasses the scalar cache.
+    if not active and (on_observation is None or persist_legacy):
         try:
             cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):

@@ -323,6 +323,41 @@ class DisplayBindingTests(unittest.TestCase):
             self.assertEqual(["b", "c"], [row["session_id"] for row in archive.views.page(period="all")["rows"]])
             self.assertEqual("pending", archive.views.detail(session_id="b")["history_coverage"])
 
+    def test_fresh_scalar_acquisition_feeds_detail_and_history_without_a_second_source_read(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fixture.db"
+            create_v1_database(path)
+            with closing(sqlite3.connect(path)) as db:
+                db.execute("DELETE FROM part WHERE message_id='msg_synthetic'")
+                db.execute("DELETE FROM message WHERE id='msg_synthetic'")
+                db.commit()
+            source = OpenCodeV1Source(path)
+            repository = CacheRepository(CacheDatabase(root))
+            repository.database.initialize()
+            service = ReportService(selection=SourceSelection(source, "v1", (), source.probe()),
+                pricing_provider=FakePricingProvider(), account_provider=None, cache_repository=repository,
+                config={"timezone": "UTC"}, now_ms=50_000, progress=lambda _: None)
+            archive = DisplayArchive(root, lambda *_: None, stats_enabled=True)
+            self.addCleanup(archive.close)
+            archive.initialize()
+            driver = SimpleNamespace(coordinator=SimpleNamespace(report_service=service, catalog_observation=None),
+                                     error=None, terminal=False)
+            archive.observe(driver, before_tick=True)
+            catalog = SessionCatalog(clock_ms=lambda: 50_000, display_archive=archive)
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            catalog.enable_warm()
+
+            with patch.object(service, "_analyze", wraps=service._analyze) as read:
+                catalog.tick(service)
+                visited = [call.args[0].session_id for call in read.call_args_list]
+                archive.acquire_summaries(catalog, service)
+                after_sweep = [call.args[0].session_id for call in read.call_args_list]
+
+            self.assertCountEqual(["ses_root", "ses_other"], visited)
+            self.assertEqual(visited, after_sweep)
+            self.assertGreater(archive.views.detail(session_id="ses_root")["cached_total"], 0)
+
     def test_detail_priority_is_source_bound_coalesced_and_keeps_existing_cooldown(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -593,6 +628,7 @@ def archive_sweep_fixture(root):
 def v1_driver(root):
     path = root / "source"
     path.write_bytes(b"test source identity only")
-    service = SimpleNamespace(selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(path)), timezone_id="UTC")
+    service = SimpleNamespace(selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(path)),
+                              timezone_id="UTC", config={})
     return SimpleNamespace(coordinator=SimpleNamespace(report_service=service, catalog_observation=None),
                            error=None, terminal=False)

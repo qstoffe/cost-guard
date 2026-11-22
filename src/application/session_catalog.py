@@ -21,7 +21,7 @@ from src.sources.errors import SourceError
 from src.watch.models import SessionPreview
 
 from .projection import project
-from .session_archive_sweep import checkpoint_dependency, scalar_dependency, verified_finish
+from .session_archive_sweep import SummaryCapture, checkpoint_dependency, scalar_dependency, verified_finish
 from .session_catalog_lifecycle import PromptEvidence, is_running, observe_prompts, record_prompt, running_snapshot, terminal_prompt
 from .session_navigation import Navigation
 from .session_catalog_scope import (
@@ -537,12 +537,14 @@ class SessionCatalog:
                 windows = {nav.window for nav in navigations if nav.window.period != 'all'}
             admission = (archive.admit_summary(service, key, revision, observation_sequence=observation_sequence)
                          if archive is not None else None)
+            capture = SummaryCapture(service.config) if admission is not None else None
             accepted = False
             try:
                 identity_values = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
-                    on_stage=lambda stage: self._stage(stage, retrying),
-                    on_dependencies=identity_values.extend,
+                     on_stage=lambda stage: self._stage(stage, retrying),
+                     on_dependencies=identity_values.extend,
+                     on_observation=capture.observe if capture is not None else None,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
                         (window, any(in_window(at, window) for at in values)) for window in windows if complete))
@@ -605,9 +607,10 @@ class SessionCatalog:
                                 and not self._running(key) and terminal == terminal_prompt(self, key))
 
                 if terminal is None or verified_finish(row, terminal):
-                    archive.publish_summary(service, admission, row, actual,
-                                             eligible=eligible,
-                                             dependency=checkpoint_dependency(dependencies, identity_values, terminal))
+                     archive.publish_summary(service, admission, row, actual,
+                                              eligible=eligible,
+                                              dependency=checkpoint_dependency(dependencies, identity_values, terminal),
+                                              usage=capture.usage)
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
