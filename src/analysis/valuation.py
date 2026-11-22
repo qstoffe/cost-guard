@@ -34,13 +34,9 @@ class ComparisonCost:
         return self.known_ccost if self.complete else None
 
 
-def physical_request_identity(source_instance, call):
-    return ((source_instance, call.session_id, call.invocation_id, call.message_id, call.step_part_id)
-            if call.invocation_id else None)
-
-
 def physical_usage_key(entry: TraceEntry) -> tuple | None:
-    return physical_request_identity(entry.source_instance, entry)
+    return ((entry.source_instance, entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
+            if entry.invocation_id else None)
 
 
 def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:

@@ -228,21 +228,23 @@ def _event_metadata(message: NormalizedMessage) -> dict[str, str]:
         metadata["agent"] = message.agent
     for part in message.parts:
         if part.kind == "subtask":
-            metadata.update(_subtask_selection(part))
+            model = part.data.get("model")
+            if isinstance(model, Mapping):
+                provider = str(model.get("providerID", "")).strip()
+                model_id = str(model.get("modelID", "")).strip()
+                variant = str(model.get("variant", "")).strip()
+                if provider:
+                    metadata["provider_id"] = provider
+                if model_id:
+                    metadata["model_id"] = model_id
+                if variant:
+                    metadata["variant"] = variant
         elif part.kind == "compaction":
             metadata["auto"] = "true" if bool(part.data.get("auto", False)) else "false"
             tail = part.data.get("tail_start_id", part.data.get("tailStartId"))
             if tail:
                 metadata["tail_start_id"] = str(tail)
     return metadata
-
-
-def _subtask_selection(part):
-    model = part.data.get("model")
-    if not isinstance(model, Mapping):
-        return {}
-    fields = (("provider_id", "providerID"), ("model_id", "modelID"), ("variant", "variant"))
-    return {key: value for key, native in fields if (value := str(model.get(native, "")).strip())}
 
 
 class OpenCodeV1Source:
@@ -450,21 +452,6 @@ class OpenCodeV1Source:
         with self.metrics.measure("revision"), self._connection() as connection:
             self._require_schema(connection)
             return batch_revisions(connection, session_ids)
-
-    @contextmanager
-    def archive_cursor(self, session_id: str):
-        """Read tentative normalized pages; only this context owns their pin."""
-        from .v1_archive_cursor import V1ArchiveCursor
-
-        with self._connection() as connection:
-            connection.execute("PRAGMA busy_timeout = 0")
-            connection.execute("BEGIN")
-            self._require_schema(connection)
-            cursor = V1ArchiveCursor(self, connection, session_id)
-            try:
-                yield cursor
-            finally:
-                cursor.close()
 
     @staticmethod
     def _json_object(raw: Any, *, context: str) -> dict[str, Any]:

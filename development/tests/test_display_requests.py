@@ -95,6 +95,23 @@ class DisplayRequestTests(unittest.TestCase):
         self.assertEqual(last_priced, after_stale)
         self.assertEqual((22, None, None), current)
 
+    def test_long_session_publishes_its_whole_roster(self):
+        snapshot = make_snapshot()
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000),
+                                reference("pricing-v1", (Decimal(1),) * 4))
+        requests = tuple(replace(roster.requests[0], key=index.to_bytes(4, "big"), fork_key=None, ordinal=index)
+                         for index in range(5000))
+        long_roster = replace(roster, requests=requests,
+                              attribution=tuple((request.key, "prompt") for request in requests))
+
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("root", "r1", "Long"), None,
+                                     previous_progress=0, request_roster=long_roster),))
+
+        with self.history._connect(read=True) as db:
+            stored = db.execute("SELECT count(*) FROM archive_requests").fetchone()[0]
+            attributed = db.execute("SELECT count(*) FROM archive_prompt_attribution").fetchone()[0]
+        self.assertEqual((5000, 5000), (stored, attributed))
+
     def test_usage_cursor_keeps_exact_population_across_membership_and_stops_on_correction(self):
         snapshot = make_snapshot()
         bundle = analyze_snapshot(snapshot, now_ms=10_000)

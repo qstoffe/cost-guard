@@ -37,48 +37,41 @@ def trace_entries(
     parents = {session.session_id: session.parent_session_id for session in snapshot.sessions}
     for order, invocation in enumerate(snapshot.invocations):
         observe_work('analyzing', 1)
-        key = invocation.session_id, invocation.initiating_event_id
-        result.append(trace_entry(invocation, order, root=snapshot.root.session_id,
-                                  parent=parents.get(invocation.session_id), owner=owners.get(key),
-                                  selection=selections.get(key, {}), subscription_providers=subscription_providers))
+        reported = invocation.cost.amount if invocation.cost is not None else 0
+        disposition = invocation.cost_disposition
+        if reported > 0:
+            disposition = CostDisposition.BILLED
+        elif disposition is CostDisposition.UNKNOWN and invocation.model.provider in subscription_providers:
+            disposition = CostDisposition.INCLUDED_SUBSCRIPTION
+        result.append(TraceEntry(
+            session_id=invocation.session_id,
+            parent_event_id=invocation.initiating_event_id,
+            message_id=invocation.message_id,
+            step_part_id=invocation.step_part_id,
+            completed_at_ms=invocation.completed_at_ms or invocation.created_at_ms,
+            sort_order=order,
+            model=invocation.model,
+            variant=invocation.variant,
+            tokens=invocation.tokens,
+            reported_cost=reported,
+            reported_cost_currency=invocation.cost.currency if invocation.cost is not None else None,
+            summary=invocation.summary,
+            finish_reason=invocation.finish_reason,
+            error_name=invocation.error_name,
+            cost_disposition=disposition,
+            source_instance=invocation.provenance.source_instance,
+            account_ref=invocation.account_ref,
+            logical_prompt_id=owners.get((invocation.session_id, invocation.initiating_event_id)),
+            selected_effort=_selected_effort(invocation, selections),
+            root_session_id=snapshot.root.session_id,
+            invocation_id=invocation.invocation_id,
+            parent_session_id=parents.get(invocation.session_id),
+        ))
     return tuple(sorted(result, key=lambda item: (item.completed_at_ms, item.sort_order)))
 
 
-def trace_entry(invocation, ordinal, *, root, parent, owner, selection, subscription_providers):
-    """Project one invocation once its causal indexes are authoritative."""
-    reported = invocation.cost.amount if invocation.cost is not None else 0
-    disposition = invocation.cost_disposition
-    if reported > 0:
-        disposition = CostDisposition.BILLED
-    elif disposition is CostDisposition.UNKNOWN and invocation.model.provider in subscription_providers:
-        disposition = CostDisposition.INCLUDED_SUBSCRIPTION
-    return TraceEntry(
-        session_id=invocation.session_id,
-        parent_event_id=invocation.initiating_event_id,
-        message_id=invocation.message_id,
-        step_part_id=invocation.step_part_id,
-        completed_at_ms=invocation.completed_at_ms or invocation.created_at_ms,
-        sort_order=ordinal,
-        model=invocation.model,
-        variant=invocation.variant,
-        tokens=invocation.tokens,
-        reported_cost=reported,
-        reported_cost_currency=invocation.cost.currency if invocation.cost is not None else None,
-        summary=invocation.summary,
-        finish_reason=invocation.finish_reason,
-        error_name=invocation.error_name,
-        cost_disposition=disposition,
-        source_instance=invocation.provenance.source_instance,
-        account_ref=invocation.account_ref,
-        logical_prompt_id=owner,
-        selected_effort=_selected_effort(invocation, selection),
-        root_session_id=root,
-        invocation_id=invocation.invocation_id,
-        parent_session_id=parent,
-    )
-
-
-def _selected_effort(invocation, selection):
+def _selected_effort(invocation, selections):
+    selection = selections.get((invocation.session_id, invocation.initiating_event_id), {})
     if (not invocation.summary and selection.get("model_id") == invocation.model.recorded_model
             and selection.get("provider_id") == invocation.model.provider):
         return selection.get("variant", "")

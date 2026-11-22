@@ -66,43 +66,21 @@ class ChildScope:
     owner_id: str = ""
 
 
-def tool_call_key(part, message):
-    """Select competing tool observations before interpreting any child data."""
-    if part.kind != "tool" or part.session_id != message.session_id or part.message_id != message.message_id:
-        return None
-    start, _ = part_time(part)
-    if start > 0 and start < message.created_at_ms:
-        return None
-    call = part.data.get("callID")
-    return ("call", call) if isinstance(call, str) and call else ("part", part.part_id)
-
-
-def tool_launch(part, message):
-    """Extract a possible launch; callers still have to prove the child."""
-    target = child_session_id(part)
-    if not target:
+def _candidate(part, message, sessions):
+    child = sessions.get(child_session_id(part))
+    if (child is None or child.parent_session_id != message.session_id or child.session_id == message.session_id
+            or part.session_id != message.session_id or part.message_id != message.message_id):
         return None
     start, end = part_time(part)
     if (start <= 0 or start < message.created_at_ms or (end and end <= start)
-            or target == message.session_id):
+            or (end and child.created_at_ms > end)):
         return None
     state = part.data.get("state")
     state = state if isinstance(state, Mapping) else {}
     inputs = state.get("input")
     background = any(isinstance(value, Mapping) and value.get("background") is True
                      for value in (state.get("metadata"), part.data.get("metadata"), inputs))
-    return target, start, end, background
-
-
-def _candidate(part, message, sessions):
-    launch = tool_launch(part, message)
-    if launch is None:
-        return None
-    target, start, end, background = launch
-    child = sessions.get(target)
-    if child is None or child.parent_session_id != message.session_id or (end and child.created_at_ms > end):
-        return None
-    return ChildScope(target, start, OPEN_END if background or not end else end, background)
+    return ChildScope(child.session_id, start, OPEN_END if background or not end else end, background)
 
 
 class ChildLinkIndex:
@@ -124,10 +102,13 @@ class ChildLinkIndex:
                 continue
             self.messages_by_session[message.session_id].append(message)
             for part in message.parts:
-                key = tool_call_key(part, message)
-                if key is None:
+                start, _ = part_time(part)
+                if (part.kind != "tool" or part.session_id != message.session_id or part.message_id != message.message_id
+                        or (start > 0 and start < message.created_at_ms)):
                     continue
-                key = (part.session_id, *key)
+                call = part.data.get("callID")
+                has_call = isinstance(call, str) and bool(call)
+                key = (part.session_id, "call" if has_call else "part", call if has_call else part.part_id)
                 rank = (part.updated_at_ms, -message.created_at_ms)
                 if key not in calls or rank > calls[key][0]:
                     calls[key] = (rank, message, part)

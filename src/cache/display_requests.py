@@ -9,7 +9,9 @@ from .display_stats_requests import StatsRequestIdentity
 from .display_usage_reader import advance_usage_revision, usage_version
 
 TOKEN_FIELDS = ("input", "cache_read", "cache_write", "output", "reasoning")
-ROOT_WRITE_LIMIT = 4096
+# One root is already acquired as one bounded snapshot and commits atomically.
+# This is a guard against absurd input, not a cutoff for long ordinary sessions.
+ROOT_WRITE_LIMIT = 250_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +66,20 @@ REQUEST_COLUMNS = (
 
 
 def request_schema():
-    return request_table_schema("archive_requests", "REFERENCES sources(source)") + """
+    return """
+        CREATE TABLE archive_requests (
+            source TEXT NOT NULL REFERENCES sources(source),
+            request_key BLOB NOT NULL,
+            clock_ms INTEGER, fork_key BLOB,
+            session_id TEXT NOT NULL, logical_prompt_id TEXT,
+            provider TEXT NOT NULL, model TEXT NOT NULL, recorded_model TEXT NOT NULL, account_key BLOB,
+            input_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
+            output_tokens INTEGER NOT NULL, reasoning_tokens INTEGER NOT NULL, known_fields INTEGER NOT NULL,
+            billed TEXT, currency TEXT, disposition TEXT NOT NULL,
+            input_cost TEXT, cache_read_cost TEXT, cache_write_cost TEXT, output_cost TEXT, pricing TEXT,
+            effort TEXT, summary INTEGER NOT NULL, dedup_tree TEXT, request_ordinal INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(source, request_key)
+        ) WITHOUT ROWID;
         CREATE INDEX archive_request_clock ON archive_requests(source, clock_ms, request_key);
         CREATE TABLE archive_request_rosters (
             source TEXT NOT NULL, root_id TEXT NOT NULL, revision TEXT NOT NULL, pricing TEXT NOT NULL,
@@ -83,26 +98,6 @@ def request_schema():
             PRIMARY KEY(source, root_id, request_key, prompt_id),
             FOREIGN KEY(source, root_id, request_key)
                 REFERENCES archive_request_membership(source, root_id, request_key) ON DELETE CASCADE
-        ) WITHOUT ROWID;
-    """
-
-
-def request_table_schema(table, owner, *, extra_columns=""):
-    """Shared row shape for positive usage evidence, not a raw source payload."""
-    return f"""
-        CREATE TABLE {table} (
-            source TEXT NOT NULL {owner},
-            request_key BLOB NOT NULL,
-            clock_ms INTEGER, fork_key BLOB,
-            session_id TEXT NOT NULL, logical_prompt_id TEXT,
-            provider TEXT NOT NULL, model TEXT NOT NULL, recorded_model TEXT NOT NULL, account_key BLOB,
-            input_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
-            output_tokens INTEGER NOT NULL, reasoning_tokens INTEGER NOT NULL, known_fields INTEGER NOT NULL,
-            billed TEXT, currency TEXT, disposition TEXT NOT NULL,
-            input_cost TEXT, cache_read_cost TEXT, cache_write_cost TEXT, output_cost TEXT, pricing TEXT,
-            effort TEXT, summary INTEGER NOT NULL, dedup_tree TEXT, request_ordinal INTEGER NOT NULL DEFAULT 0,
-            {extra_columns}
-            PRIMARY KEY(source, request_key)
         ) WITHOUT ROWID;
     """
 
@@ -217,31 +212,6 @@ def publish_roster(db, source, root_id, revision, roster):
         INSERT INTO archive_request_rosters VALUES(?, ?, ?, ?)
         ON CONFLICT(source, root_id) DO UPDATE SET revision=excluded.revision, pricing=excluded.pricing
     """, (source, root_id, revision, roster.pricing))
-    keys = tuple(requests)
-    before = _fork_candidates(db, source, keys)
-    first_revision = usage_version(db, source).revision + 1
-    values = (request.values(roster.pricing) for request in roster.requests)
-    if upsert_request_values(db, source, first_revision, values):
-        changed_winner = _update_fork_trees(db, source, before, _fork_candidates(db, source, keys))
-        advance_usage_revision(db, source, changed_winner=changed_winner)
-    # Missing requests/children may have been deleted from OpenCode, even when
-    # the root still exists. A roster observes availability, not retraction.
-    db.executemany("INSERT OR IGNORE INTO archive_request_membership VALUES(?, ?, ?)",
-                   ((source, root_id, key) for key in requests))
-    db.executemany("INSERT OR IGNORE INTO archive_prompt_attribution VALUES(?, ?, ?, ?)",
-                   ((source, root_id, key, prompt) for key, prompt in roster.attribution))
-    if roster.stats is not None:
-        publish_stats_evidence(db, source, root_id, revision, roster.stats, roster.requests)
-    return roster.prompts is not None and publish_prompts(db, source, root_id, revision, roster.prompts)
-
-
-def upsert_request_values(db, source, first_revision, rows, *, private=False):
-    """Apply the same positive-evidence merge to published or private rows.
-
-    Private after-images use the same shape + key but are seeded from the
-    current committed rows. They deliberately have no visible-table triggers.
-    """
-    table = "archive_prepare_requests" if private else "archive_requests"
     fields = ", ".join(REQUEST_COLUMNS)
     marks = ", ".join("?" for _ in REQUEST_COLUMNS)
     # A new price failure on unchanged inputs is not evidence against the
@@ -249,32 +219,47 @@ def upsert_request_values(db, source, first_revision, rows, *, private=False):
     valuation_columns = ("provider", "model", "recorded_model", *(
         f"{field}_tokens" for field in TOKEN_FIELDS), "known_fields")
     left = ",".join(f"excluded.{column}" for column in valuation_columns)
-    right = ",".join(f"{table}.{column}" for column in valuation_columns)
+    right = ",".join(f"archive_requests.{column}" for column in valuation_columns)
     keep_previous = f"excluded.pricing IS NULL AND ({left}) IS ({right})"
     prices = {"input_cost", "cache_read_cost", "cache_write_cost", "output_cost", "pricing"}
+    keys = tuple(requests)
+    before = _fork_candidates(db, source, keys)
     values = {column: f"excluded.{column}" for column in REQUEST_COLUMNS[1:]}
     for column in prices:
-        values[column] = f"CASE WHEN {keep_previous} THEN {table}.{column} ELSE excluded.{column} END"
-    values["logical_prompt_id"] = f"""
+        values[column] = f"CASE WHEN {keep_previous} THEN archive_requests.{column} ELSE excluded.{column} END"
+    values["logical_prompt_id"] = """
         CASE WHEN excluded.summary THEN NULL ELSE coalesce(excluded.logical_prompt_id,
-                                                            {table}.logical_prompt_id) END
+                                                            archive_requests.logical_prompt_id) END
     """
     # Missing account identity is not proof of a correction. Preserve the
     # original issuer only for the same source-bound request, route and clock.
     account_scope = ("provider", "session_id", "clock_ms", "summary")
     new_scope = ",".join(f"excluded.{column}" for column in account_scope)
-    old_scope = ",".join(f"{table}.{column}" for column in account_scope)
+    old_scope = ",".join(f"archive_requests.{column}" for column in account_scope)
     values["account_key"] = f"""
         CASE WHEN excluded.account_key IS NULL AND ({new_scope}) IS ({old_scope})
-             THEN {table}.account_key ELSE excluded.account_key END
+             THEN archive_requests.account_key ELSE excluded.account_key END
     """
     updates = ", ".join(f"{column}={value}" for column, value in values.items())
-    compared = ", ".join(f"{table}.{column}" for column in values)
+    compared = ", ".join(f"archive_requests.{column}" for column in values)
     proposed = ", ".join(values.values())
-    return db.executemany(f"""
-        INSERT INTO {table}(source,first_revision, {fields}) VALUES(?, ?, {marks})
+    first_revision = usage_version(db, source).revision + 1
+    written = db.executemany(f"""
+        INSERT INTO archive_requests(source,first_revision, {fields}) VALUES(?, ?, {marks})
         ON CONFLICT(source, request_key) DO UPDATE SET {updates}
-        WHERE (excluded.known_fields & {table}.known_fields) = {table}.known_fields
-          AND (excluded.dedup_tree IS NOT NULL OR {table}.dedup_tree IS NULL)
+        WHERE (excluded.known_fields & archive_requests.known_fields) = archive_requests.known_fields
+          AND (excluded.dedup_tree IS NOT NULL OR archive_requests.dedup_tree IS NULL)
           AND ({compared}) IS NOT ({proposed})
-    """, ((source, first_revision, *value) for value in rows)).rowcount
+    """, ((source, first_revision, *request.values(roster.pricing)) for request in roster.requests))
+    if written.rowcount:
+        changed_winner = _update_fork_trees(db, source, before, _fork_candidates(db, source, keys))
+        advance_usage_revision(db, source, changed_winner=changed_winner)
+    # Missing requests/children may have been deleted from OpenCode, even when
+    # the root still exists. A roster observes availability, not retraction.
+    db.executemany("INSERT OR IGNORE INTO archive_request_membership VALUES(?, ?, ?)",
+                   ((source, root_id, key) for key in requests))
+    db.executemany("INSERT OR IGNORE INTO archive_prompt_attribution VALUES(?, ?, ?, ?)",
+                    ((source, root_id, key, prompt) for key, prompt in roster.attribution))
+    if roster.stats is not None:
+        publish_stats_evidence(db, source, root_id, revision, roster.stats, roster.requests)
+    return roster.prompts is not None and publish_prompts(db, source, root_id, revision, roster.prompts)
