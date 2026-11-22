@@ -87,7 +87,8 @@ def seed(archive, now, account):
                 changes.append(change)
         archive.history.commit_sessions(source, tuple(changes))
     scope = archive.models.binding()
-    assert archive.models.offer(scope, models_capture((model("Saved reference model", ["3"]),),
+    assert archive.models.offer(scope, models_capture((model("Saved reference model", ["3"]),
+        model("Second reference model", ["4"])),
         scope=source, observed=now), eligible=lambda: True)
     roster = (SimpleNamespace(account=account, label="Claude Code Pro"),)
     archive.accounts.offer(roster, verified=True)
@@ -103,7 +104,7 @@ def seed(archive, now, account):
     assert archive._live_write.result(timeout=5)
 
 
-def check_cached_warm_views(browser, evidence, product_root):
+def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=False):
     from playwright.sync_api import expect
 
     with TemporaryDirectory() as directory:
@@ -243,6 +244,9 @@ def check_cached_warm_views(browser, evidence, product_root):
                 assert Decimal(value["view"]["series"][0]["total"]["amount"]) == 25
                 expect(accounts.locator(".account-timeline-bar")).to_have_count(1)
                 first_ms["accounts_7_days"] = round((time.perf_counter() - begin) * 1000, 1)
+                if measure_actions:
+                    from development.tests.integration.warm_action_latency import measure_warm_actions
+                    evidence["warm_action_latency"] = measure_warm_actions(page)
                 assert not history_release.is_set() and quota_calls == [False]
 
                 quota_release[0].set()
@@ -298,7 +302,8 @@ if __name__ == "__main__":
         browser = playwright.chromium.launch(executable_path=os.environ.get("BROWSER_PROBE_EXECUTABLE"), headless=True)
         try:
             evidence = {}
-            check_cached_warm_views(browser, evidence, Path.cwd())
+            check_cached_warm_views(browser, evidence, Path.cwd(),
+                                    measure_actions=os.environ.get("MEASURE_WARM_ACTIONS") == "1")
             print(evidence)
         finally:
             browser.close()
