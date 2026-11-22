@@ -31,6 +31,17 @@ def message(mid: str, sid: str, role: MessageRole, created: int, *, parent: str 
                              model, None, None, summary, finish, error)
 
 
+def _in_generation(msg: NormalizedMessage, generation: str) -> NormalizedMessage:
+    return replace(
+        msg,
+        provenance=prov(msg.session_id, msg.message_id, generation),
+        parts=tuple(
+            replace(p, provenance=prov(p.session_id, p.part_id, generation))
+            for p in msg.parts
+        ),
+    )
+
+
 def history(spans, *, archived=False, generation="v1"):
     """Root-only canonical history: spans are explicit start/end evidence."""
     base = make_snapshot(generation=generation)
@@ -38,13 +49,13 @@ def history(spans, *, archived=False, generation="v1"):
     events, messages, invocations = [], [], []
     for index, (start, end) in enumerate(spans):
         uid, aid = f"u{index}", f"a{index}"
-        events.append(NormalizedEvent(uid, "root", EventKind.USER_PROMPT, start, prov("root", uid), "work"))
+        events.append(NormalizedEvent(uid, "root", EventKind.USER_PROMPT, start, prov("root", uid, generation), "work"))
         messages.extend((message(uid, "root", MessageRole.USER, start),
                          message(aid, "root", MessageRole.ASSISTANT, start + 1, parent=uid,
                                  completed=end, model=MODEL, finish="stop" if end is not None else None)))
         invocations.append(ModelInvocation(aid, "root", start + 1, MODEL, TokenUsage(input=30, output=4),
-                                           prov("root", aid), completed_at_ms=end, initiating_event_id=uid, message_id=aid))
-    return replace(base, root=root, sessions=(root,), messages=tuple(messages), parts=(), events=tuple(events),
+                                            prov("root", aid, generation), completed_at_ms=end, initiating_event_id=uid, message_id=aid))
+    return replace(base, root=root, sessions=(root,), messages=tuple(_in_generation(msg, generation) for msg in messages), parts=(), events=tuple(events),
                    invocations=tuple(invocations), source_revision=f"duration-{generation}-{spans}")
 
 
@@ -90,6 +101,7 @@ def make_snapshot(*, generation: str = "v1", running: bool = False) -> SessionSn
         ModelInvocation("i_next", "root", 2100, MODEL, TokenUsage(input=30, output=4), prov("root", "i_next", generation), completed_at_ms=None if running else 2300, cost=CostObservation(Decimal("0.30"), "USD", CostKind.PROVIDER_REPORTED), initiating_event_id="u_next", message_id="a_next"),
         ModelInvocation("i_comp", "root", 3100, MODEL, TokenUsage(input=40, cache_read=3, cache_write=2, output=4, reasoning=1), prov("root", "i_comp", generation), completed_at_ms=3300, cost=CostObservation(Decimal("0.40"), "USD", CostKind.PROVIDER_REPORTED), initiating_event_id="u_comp", message_id="a_comp", summary=True, finish_reason="stop"),
     )
+    msgs = tuple(_in_generation(msg, generation) for msg in msgs)
     return SessionSnapshot(root, (root, child), msgs, tuple(p for m in msgs for p in m.parts), events, inv, f"{generation}-rev-1",
         complete=True)
 
@@ -127,6 +139,8 @@ def make_native_v2_compaction_snapshot() -> SessionSnapshot:
     snapshot = make_snapshot(generation="v2")
     compact_part = part("p_comp", "u_comp", "root", "compaction", {"auto": True, "summary": "x", "recent": None}, 1800)
     native_compaction = message("u_comp", "root", MessageRole.USER, 1800, parts=(compact_part,), completed=1800)
+    native_compaction = _in_generation(native_compaction, "v2")
+    compact_part, = native_compaction.parts
     messages = tuple(native_compaction if item.message_id == "u_comp" else item
                      for item in snapshot.messages if item.message_id != "a_comp")
     events = tuple(replace(item, created_at_ms=1800, metadata={**dict(item.metadata), "auto": "true"})

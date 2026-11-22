@@ -24,17 +24,42 @@ class ChildLinkTests(unittest.TestCase):
             if session.session_id == "ses_current_child" else session for session in self.snapshot.sessions)
         return replace(self.snapshot, messages=messages, sessions=sessions)
 
-    def assert_link(self, snapshot, expected):
+    def assert_link(self, snapshot, expected, *, inferred=False):
         record = analyze_snapshot(snapshot, now_ms=20_000).prompts[0]
-        self.assertEqual(3 if expected else 2, record.model_calls)
-        self.assertEqual(("ses_current_child",) if expected else (), record.linked_session_ids)
-        # Child activity follows the same interpretation, not an independent parser.
-        child_message = next(m for m in snapshot.messages if m.message_id == "ca")
-        activity = replace(self.tool, part_id="child-read", message_id="ca", session_id="ses_current_child",
-            created_at_ms=3500, updated_at_ms=3600, data={"tool": "child-proof", "state": {"status": "completed"}})
-        snapshot = replace(snapshot, messages=tuple(replace(m, parts=(activity,)) if m == child_message else m
-            for m in snapshot.messages))
-        self.assertEqual(expected, "child-proof" in dict(observe_tools(snapshot, "u1").tool_counts))
+        child_id = "ses_current_child"
+        charged = expected or inferred
+
+        calls = [(entry.session_id, entry.message_id) for entry in record.entries]
+        expected_calls = [("ses_current", "a1"), ("ses_current", "a2")]
+        if charged:
+            expected_calls.append((child_id, "ca"))
+        self.assertCountEqual(expected_calls, calls)
+        self.assertEqual(len(expected_calls), record.model_calls)
+
+        if inferred:
+            self.assertIn(
+                (child_id, "inferred"),
+                [(item.session_id, item.attribution) for item in record.agent_coverage],
+            )
+        else:
+            self.assertEqual((child_id,) if expected else (), record.linked_session_ids)
+
+        activity = replace(
+            self.tool,
+            part_id="child-read",
+            message_id="ca",
+            session_id=child_id,
+            provenance=replace(self.tool.provenance, source_session_id=child_id),
+            created_at_ms=3500,
+            updated_at_ms=3600,
+            data={"tool": "child-proof", "state": {"status": "completed"}},
+        )
+        messages = tuple(
+            replace(m, parts=(activity,)) if (m.session_id, m.message_id) == (child_id, "ca") else m
+            for m in snapshot.messages
+        )
+        probe = replace(snapshot, messages=messages)
+        self.assertEqual(expected, "child-proof" in dict(observe_tools(probe, "u1").tool_counts))
 
     def test_both_tool_names_and_metadata_spellings_at_each_supported_level(self):
         for name in ("task", "subagent"):
@@ -58,7 +83,7 @@ class ChildLinkTests(unittest.TestCase):
                     data["tool"] = name
                     data["state"]["metadata"] = {}
                     data["state"]["output"] = prefix + wrapper
-                    self.assert_link(self.changed(replace(self.tool, data=data)), expected)
+                    self.assert_link(self.changed(replace(self.tool, data=data)), expected, inferred=not expected)
 
     def test_malformed_structured_identity_is_not_replaced_by_valid_copied_output(self):
         for value in (None, 4, {}, [], "", "ses bad", "../child", "ses_<bad>", "x" * 257):
@@ -71,9 +96,9 @@ class ChildLinkTests(unittest.TestCase):
     def test_unrelated_tools_user_text_wrong_parent_and_impossible_intervals(self):
         data = deepcopy(self.tool.data)
         data["tool"] = "read"
-        self.assert_link(self.changed(replace(self.tool, data=data)), False)
-        self.assert_link(self.changed(replace(self.tool, kind="text")), False)
-        self.assert_link(self.changed(self.tool, role=MessageRole.USER), False)
+        self.assert_link(self.changed(replace(self.tool, data=data)), False, inferred=True)
+        self.assert_link(self.changed(replace(self.tool, kind="text")), False, inferred=True)
+        self.assert_link(self.changed(self.tool, role=MessageRole.USER), False, inferred=True)
         self.assert_link(self.changed(self.tool, child_parent="different-parent"), False)
         for start, end in ((3900, 3200), (3200, 3200), (3000, 3900)):
             with self.subTest(start=start, end=end):
