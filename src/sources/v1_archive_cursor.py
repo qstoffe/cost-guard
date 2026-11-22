@@ -30,6 +30,10 @@ class V1ArchivePage:
     parts: tuple[NormalizedPart, ...] = ()
     eof: bool = False
     revision_member: tuple[bytes, bytes] | None = None
+    # Canonical tie-break for equal-ranked tool observations, independent of
+    # this cursor's seek order and the staging database's encoding.
+    message_order: tuple[tuple[int, bytes], ...] = ()
+    part_order: tuple[bytes, ...] = ()
 
 
 def _identifier(value):
@@ -195,7 +199,7 @@ class V1ArchiveCursor:
             return self._child_page(db, member, seek)
         table = _TABLES[member.phase][0]
         normalize = self._source._normalize_message if member.phase == 1 else self._source._normalize_part
-        values = []
+        values, native_order = [], []
         remaining = PAGE_BYTES
         for row in seek.rows(db, member.session_id, member.after, PAGE_ROWS):
             _require_ids(row, "id", "session_id")
@@ -216,6 +220,10 @@ class V1ArchiveCursor:
                 except UnicodeError as error:
                     raise SourceDataError("OpenCode V1 archive payload has invalid text", phase="archive") from error
                 values.append(normalize(record, ()) if member.phase == 1 else normalize(record))
+                if table == "message":
+                    native_order.append((row["time_created"], row["revision_id"]))
+                else:
+                    native_order.append(row["revision_id"])
             totals = member.revision.messages if member.phase == 1 else member.revision.parts
             totals.add(row)
             member.after = seek.key(row, trailing_columns=len(_DATA_COLUMNS))
@@ -223,7 +231,9 @@ class V1ArchiveCursor:
             if len(values) < PAGE_ROWS:
                 member.phase = 2 if member.phase == 1 else 0
                 member.after = None
-        return V1ArchivePage(messages=tuple(values)) if table == "message" else V1ArchivePage(parts=tuple(values))
+        if table == "message":
+            return V1ArchivePage(messages=tuple(values), message_order=tuple(native_order))
+        return V1ArchivePage(parts=tuple(values), part_order=tuple(native_order))
 
     def _child_page(self, db, member, seek):
         rows = seek.rows(db, member.session_id, member.after, 1)

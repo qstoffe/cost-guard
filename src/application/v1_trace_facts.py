@@ -9,16 +9,18 @@ TOKENS = "input_tokens,cache_read,cache_write,output_tokens,reasoning,known"
 HEAD = f"role,created,completed,parent,provider,model,variant,summary,finish,error,cost,{TOKENS}"
 
 SCHEMA = f"""
-    CREATE TABLE trace_members(id TEXT PRIMARY KEY,parent TEXT) WITHOUT ROWID;
+    CREATE TABLE trace_members(id TEXT PRIMARY KEY,parent TEXT,created INTEGER NOT NULL) WITHOUT ROWID;
     CREATE TABLE trace_messages(
         session TEXT NOT NULL,id TEXT NOT NULL,role TEXT NOT NULL,created INTEGER NOT NULL,completed INTEGER,
         parent TEXT,provider TEXT,model TEXT,variant TEXT,summary INTEGER NOT NULL,finish TEXT,error TEXT,cost TEXT,
         input_tokens INTEGER,cache_read INTEGER,cache_write INTEGER,output_tokens INTEGER,reasoning INTEGER,known TEXT,
         kind INTEGER NOT NULL DEFAULT {OTHER},response INTEGER NOT NULL DEFAULT 0,step INTEGER NOT NULL DEFAULT 0,
+        native_clock INTEGER NOT NULL,native_id BLOB NOT NULL,
         PRIMARY KEY(session,id)
     ) WITHOUT ROWID;
     CREATE INDEX trace_visible ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK});
     CREATE INDEX trace_subtasks ON trace_messages(session,created,id) WHERE kind={SUBTASK};
+    CREATE INDEX trace_turns ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK},{COMPACTION});
     CREATE TABLE trace_choices(
         session TEXT NOT NULL,message TEXT NOT NULL,field TEXT NOT NULL,clock INTEGER NOT NULL,part TEXT NOT NULL,
         value TEXT NOT NULL,PRIMARY KEY(session,message,field)
@@ -45,14 +47,15 @@ def _cost(value):
     return CostObservation(Decimal(value), "USD", CostKind.PROVIDER_REPORTED) if value is not None else None
 
 
-def save_header(db, message):
+def save_header(db, message, native_order):
     model = message.model
     db.execute(f"""
-        INSERT INTO trace_messages(session,id,{HEAD}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO trace_messages(session,id,{HEAD},native_clock,native_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (message.session_id, message.message_id, message.role.value, message.created_at_ms, message.completed_at_ms,
           message.parent_message_id, model.provider if model else None, model.model if model else None, message.variant,
           message.summary, message.finish_reason, message.error_name,
-          str(message.cost.amount) if message.cost else None, *_token_values(message.tokens)))
+          str(message.cost.amount) if message.cost else None, *_token_values(message.tokens), *native_order))
 
 
 def load_header(row, source, session, message):

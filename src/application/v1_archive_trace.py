@@ -12,6 +12,7 @@ from src.sources.opencode_requests import observed_response
 from src.sources.opencode_v1 import _event_kind, _subtask_selection
 
 from . import v1_trace_facts as facts
+from .v1_child_launches import ChildLaunches
 
 
 TRACE_ROWS = 32
@@ -52,6 +53,7 @@ class V1ArchiveTrace:
         self._trace_after = None
         self._ordinal = 0
         stage.executescript(facts.SCHEMA)
+        self._launches = ChildLaunches(stage)
 
     def capture_turn(self):
         self._require("input")
@@ -63,13 +65,14 @@ class V1ArchiveTrace:
                 for session in page.sessions:
                     if session.provenance.source_instance != self._source.source_instance:
                         raise SourceDataError("V1 trace cursor has a different source binding", phase="archive")
-                    self._db.execute("INSERT INTO trace_members VALUES(?,?)", (session.session_id, session.parent_session_id))
+                    self._db.execute("INSERT INTO trace_members VALUES(?,?,?)",
+                                     (session.session_id, session.parent_session_id, session.created_at_ms))
                     if self._root is None:
                         self._root = session.session_id
-                for message in page.messages:
-                    facts.save_header(self._db, message)
-                for part in page.parts:
-                    self._accept_part(part)
+                for message, order in zip(page.messages, page.message_order, strict=True):
+                    facts.save_header(self._db, message, order)
+                for part, order in zip(page.parts, page.part_order, strict=True):
+                    self._accept_part(part, order)
         except BaseException:
             self._phase = "invalid"
             raise
@@ -81,10 +84,11 @@ class V1ArchiveTrace:
         if self._phase != phase:
             raise SourceDataError("V1 trace stage is not ready for this phase", phase="archive")
 
-    def _accept_part(self, part):
+    def _accept_part(self, part, native_order):
         db = self._db
         key = part.session_id, part.message_id
-        row = db.execute(f"SELECT {facts.HEAD} FROM trace_messages WHERE session=? AND id=?", key).fetchone()
+        columns = facts.HEAD + ",native_clock,native_id" if part.kind == "tool" else facts.HEAD
+        row = db.execute(f"SELECT {columns} FROM trace_messages WHERE session=? AND id=?", key).fetchone()
         if row is None:
             raise SourceDataError("V1 trace part has no observed message in its session", phase="archive")
         role = MessageRole(row[0])
@@ -102,6 +106,9 @@ class V1ArchiveTrace:
             return
         if role is not MessageRole.ASSISTANT:
             return
+        if part.kind == "tool":
+            header = facts.load_header(row[:-2], self._source, *key)
+            self._launches.accept(part, header, row[-2:], native_order)
         if observed_response(part):
             db.execute("UPDATE trace_messages SET response=1 WHERE session=? AND id=? AND NOT response", key)
         if part.kind == "step-finish" and isinstance(part.data.get("tokens"), Mapping):
@@ -109,6 +116,16 @@ class V1ArchiveTrace:
             for call in self._source._normalize_invocations(replace(message, parts=(part,))):
                 facts.save_call(db, call)
                 db.execute("UPDATE trace_messages SET step=1 WHERE session=? AND id=? AND NOT step", key)
+
+    def child_launch_turn(self):
+        """Visit direct launches after source EOF, independently of trace replay."""
+        if self._phase in ("input", "invalid"):
+            raise SourceDataError("V1 child launch stage is not ready", phase="archive")
+        try:
+            return self._launches.turn()
+        except BaseException:
+            self._phase = "invalid"
+            raise
 
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""
