@@ -25,6 +25,37 @@ class RequestInstallWitness:
     geometry: int
 
 
+@dataclass(frozen=True, slots=True)
+class InstalledRequestScope:
+    run: str
+    root: str
+    revision: str
+
+
+def current_slot_scope(db, slot, witness):
+    """Exact persisted root and independent evidence fences for one writer turn."""
+    row = db.execute("""
+        SELECT x.run,x.root_id,x.revision
+        FROM archive_request_slots AS s
+        JOIN archive_request_preparations AS a USING(attempt)
+        JOIN archive_request_inputs AS x USING(run)
+        JOIN sources AS b ON b.source=s.source
+        JOIN sessions AS root ON root.source=s.source AND root.session_id=x.root_id
+        LEFT JOIN session_progress AS r ON root.source=r.source AND root.session_id=r.session_id
+        LEFT JOIN archive_usage_revisions AS u ON u.source=s.source
+        LEFT JOIN archive_stats_revisions AS e ON e.source=s.source
+        LEFT JOIN archive_stats_geometry_revisions AS g ON g.source=s.source
+        WHERE s.source=? AND (s.attempt,s.birth,s.layout)=(?,?,?)
+          AND x.source=s.source AND x.archive_epoch=b.archive_epoch
+          AND (x.binding,x.incarnation,x.pricing,x.dependency)=(?,?,?,?)
+          AND root.source_present AND root.revision=x.revision AND coalesce(r.progress,0)=x.progress
+          AND coalesce(u.revision,0)=s.birth
+          AND coalesce(e.revision,0)=? AND coalesce(g.revision,0)=?
+    """, (witness.source, slot.attempt, slot.birth, slot.layout, witness.binding, witness.incarnation,
+          witness.pricing, witness.dependency, witness.evidence, witness.geometry)).fetchone()
+    return InstalledRequestScope(*row) if row else None
+
+
 def install_usage_slot(db, attempt, witness, *, eligible):
     """Install request and fork evidence only in the caller's writer transaction.
 

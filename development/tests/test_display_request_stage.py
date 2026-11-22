@@ -9,8 +9,11 @@ from threading import Event
 import unittest
 
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
+from src.cache.display_request_drain import DRAIN_SCHEMA, drain_slot_page
 from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
-from src.cache.display_request_materialize import fixture_usage_fold_schema, fold_slot_correction, materialize_slot_timing
+from src.cache.display_request_materialize import (
+    fixture_usage_fold_schema, fold_slot_correction, fold_slot_insert, materialize_slot_timing,
+)
 from src.cache.display_request_overlay import RequestSlot, countable_request_rows, request_birth_slice, request_clock_slice
 from src.cache.display_request_slot_stats import slot_stats_candidates
 from src.cache.display_request_stage import (
@@ -152,7 +155,7 @@ class DisplayRequestStageTests(unittest.TestCase):
         self.history = DisplayHistory(Path(temp.name))
         self.history.initialize()
         with self.history._connect() as db:
-            db.executescript(request_stage_schema() + INSTALL_SCHEMA + _SLOT)
+            db.executescript(request_stage_schema() + INSTALL_SCHEMA + DRAIN_SCHEMA + _SLOT)
         with self.write() as db:
             db.execute("INSERT INTO sources(source) VALUES(?)", (SOURCE,))
             db.executemany("""
@@ -759,6 +762,55 @@ class DisplayRequestStageTests(unittest.TestCase):
             self.assertEqual([(key, 90), (b"later", 100)],
                              [row[:2] for row in request_clock_slice(db, SOURCE, 20, 110, slot=current).rows])
             self.assertEqual([(b"later",)], db.execute("SELECT request_key FROM archive_prepare_requests").fetchall())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
+
+    def test_drain_resumes_tied_causal_edges_and_retires_without_erasing_prior_evidence(self):
+        fork = b"family"
+        new_key = b"new"
+        old = _request(b"old", clock=15, fork=fork)
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 0, 0)
+        edges = tuple((new_key, f"prompt-{number:02d}") for number in range(70))
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "old", RequestRoster("price", (old,), ((old.key, "retained"),)))
+            self.assertTrue(open_request_input(db, "spool", SCOPE))
+            self.assertTrue(append_request_input(db, "spool", 0, (_request(new_key, clock=20, fork=fork),)))
+        for page, start in enumerate(range(0, len(edges), 32), start=1):
+            with self.write() as db:
+                self.assertTrue(append_request_attribution(db, "spool", page, edges[start:start + 32]))
+        with self.write() as db:
+            self.assertTrue(seal_request_input(db, "spool", 4))
+        self._prepare("candidate")
+        with self.history._write_lock, self.write() as db:
+            slot = install_usage_slot(db, "candidate", witness, eligible=lambda: True)
+            self.assertIs(drain_slot_page(db, slot, witness, eligible=lambda: True), False)
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_slot_drain").fetchone())
+            self.assertTrue(fold_slot_insert(db, slot, witness, new_key, eligible=lambda: True))
+            self.assertEqual(2, usage_version(db, SOURCE).revision)
+        current = replace(slot, layout=1)
+
+        with self.history._write_lock, self.write() as db:
+            self.assertIsNone(drain_slot_page(db, slot, witness, eligible=lambda: True))
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), False)
+        with self.history._write_lock, self.write() as db:
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), False)
+        with self.history._write_lock, self.write() as db:
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), False)
+            self.assertEqual(33, db.execute("SELECT count(*) FROM archive_prompt_attribution").fetchone()[0])
+        with self.history._write_lock, self.write() as db:
+            eligibility = iter((True, False))
+            self.assertIsNone(drain_slot_page(db, current, witness, eligible=lambda: next(eligibility)))
+            self.assertEqual(33, db.execute("SELECT count(*) FROM archive_prompt_attribution").fetchone()[0])
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), False)
+        with self.history._write_lock, self.write() as db:
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), False)
+            self.assertIs(drain_slot_page(db, current, witness, eligible=lambda: True), True)
+        with self.history._connect(read=True) as db:
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_request_slots").fetchone())
+            self.assertEqual((2,), db.execute("SELECT multiplicity FROM archive_fork_trees").fetchone())
+            self.assertEqual([*edges, (old.key, "retained")], db.execute("""
+                SELECT request_key,prompt_id FROM archive_prompt_attribution ORDER BY request_key,prompt_id
+            """).fetchall())
+            self.assertEqual(("rev-A",), db.execute("SELECT revision FROM archive_request_rosters").fetchone())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
 
     def test_slot_stats_reuses_only_evidence_compatible_with_the_effective_request(self):

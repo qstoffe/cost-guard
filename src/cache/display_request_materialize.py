@@ -1,6 +1,7 @@
 """Private per-key slot materialization and dependent timing writes."""
 from contextlib import contextmanager
 
+from .display_request_install import current_slot_scope
 from .display_requests import REQUEST_COLUMNS
 from .display_request_slot_stats import IDENTITY_SHAPE, slot_stats_recipe
 
@@ -40,28 +41,12 @@ def fold_slot_correction(db, slot, witness, key, *, eligible):
     """
     if not db.in_transaction:
         raise ValueError("request materialization requires a writer transaction")
-    if not eligible():
+    if not eligible() or current_slot_scope(db, slot, witness) is None:
         return False
     image = db.execute(f"""
         SELECT {_STAGED_COLUMNS},p.first_revision
-        FROM archive_request_slots AS s
-        JOIN archive_request_preparations AS a USING(attempt)
-        JOIN archive_request_inputs AS x USING(run)
-        JOIN sources AS b ON b.source=s.source
-        JOIN sessions AS root ON root.source=s.source AND root.session_id=x.root_id
-        LEFT JOIN session_progress AS r ON root.source=r.source AND root.session_id=r.session_id
-        LEFT JOIN archive_usage_revisions AS u ON u.source=s.source
-        LEFT JOIN archive_stats_revisions AS e ON e.source=s.source
-        LEFT JOIN archive_stats_geometry_revisions AS g ON g.source=s.source
-        JOIN archive_prepare_requests AS p ON p.source=s.attempt AND p.request_key=?
-        WHERE s.source=? AND (s.attempt,s.birth,s.layout)=(?,?,?)
-          AND x.source=s.source AND x.archive_epoch=b.archive_epoch
-          AND (x.binding,x.incarnation,x.pricing,x.dependency)=(?,?,?,?)
-          AND root.source_present AND root.revision=x.revision AND coalesce(r.progress,0)=x.progress
-          AND coalesce(u.revision,0)=s.birth
-          AND coalesce(e.revision,0)=? AND coalesce(g.revision,0)=?
-          AND p.first_revision IS NOT NULL
-    """, _scope_args(slot, witness, key)).fetchone()
+        FROM archive_prepare_requests AS p WHERE p.source=? AND p.request_key=? AND p.first_revision IS NOT NULL
+    """, (slot.attempt, key)).fetchone()
     if image is None:
         return False
     invalidation = _identity_invalidation(db, slot, witness.source, key)
@@ -129,32 +114,27 @@ def materialize_slot_timing(db, slot, witness, key, *, eligible):
     This handles insertions only, not replacements or unrelated row writers.
     The caller must own the shared writer transaction and current binding.
     """
+    return _fold_insert(db, slot, witness, key, eligible, require_timing=True)
+
+
+def fold_slot_insert(db, slot, witness, key, *, eligible):
+    """Materialize a newly observed key, plus qualified timing if captured."""
+    return _fold_insert(db, slot, witness, key, eligible, require_timing=False)
+
+
+def _fold_insert(db, slot, witness, key, eligible, *, require_timing):
     if not db.in_transaction:
         raise ValueError("request materialization requires a writer transaction")
-    if not eligible():
+    scope = current_slot_scope(db, slot, witness) if eligible() else None
+    if scope is None:
         return False
     row = db.execute(f"""
         SELECT {_STAGED_COLUMNS},i.timing_start,i.timing_duration,i.timing_excluded
-        FROM archive_request_slots AS s
-        JOIN archive_request_preparations AS a USING(attempt)
-        JOIN archive_request_inputs AS x USING(run)
-        JOIN sources AS b ON b.source=s.source
-        JOIN sessions AS root ON root.source=s.source AND root.session_id=x.root_id
-        LEFT JOIN session_progress AS r ON root.source=r.source AND root.session_id=r.session_id
-        LEFT JOIN archive_usage_revisions AS u ON u.source=s.source
-        LEFT JOIN archive_stats_revisions AS e ON e.source=s.source
-        LEFT JOIN archive_stats_geometry_revisions AS g ON g.source=s.source
-        JOIN archive_prepare_requests AS p ON p.source=s.attempt AND p.request_key=?
-        JOIN archive_input_requests AS i ON i.source=x.run AND i.request_key=p.request_key
-        WHERE s.source=? AND (s.attempt,s.birth,s.layout)=(?,?,?)
-          AND x.source=s.source AND x.archive_epoch=b.archive_epoch
-          AND (x.binding,x.incarnation,x.pricing,x.dependency)=(?,?,?,?)
-          AND root.source_present AND root.revision=x.revision AND coalesce(r.progress,0)=x.progress
-          AND coalesce(u.revision,0)=s.birth
-          AND coalesce(e.revision,0)=? AND coalesce(g.revision,0)=?
-          AND p.first_revision IS NULL AND i.timing_excluded IS NOT NULL AND p.clock_ms IS i.clock_ms
-    """, _scope_args(slot, witness, key)).fetchone()
-    if row is None:
+        FROM archive_prepare_requests AS p
+        JOIN archive_input_requests AS i ON i.source=? AND i.request_key=p.request_key
+        WHERE p.source=? AND p.request_key=? AND p.first_revision IS NULL AND p.clock_ms IS i.clock_ms
+    """, (scope.run, slot.attempt, key)).fetchone()
+    if row is None or require_timing and row[-1] is None:
         return False
 
     with _savepoint(db, "archive_materialize_timing") as rollback:
@@ -162,11 +142,6 @@ def materialize_slot_timing(db, slot, witness, key, *, eligible):
             rollback()
             return False
         return True
-
-
-def _scope_args(slot, witness, key):
-    return (key, witness.source, slot.attempt, slot.birth, slot.layout, witness.binding, witness.incarnation,
-            witness.pricing, witness.dependency, witness.evidence, witness.geometry)
 
 
 @contextmanager
@@ -198,6 +173,8 @@ def _materialize(db, slot, witness, key, row):
     """, (witness.source, *request, slot.birth)).rowcount:
         return False
     _retire(db, slot, witness.source, key)
+    if timing[-1] is None:
+        return True
     new_evidence = witness.evidence + 1
     db.execute("""
         INSERT INTO archive_response_timing VALUES(?,?,?,?,?,?,?)
