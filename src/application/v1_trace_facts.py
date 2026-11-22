@@ -33,6 +33,8 @@ SCHEMA = f"""
         output_tokens INTEGER NOT NULL,reasoning INTEGER NOT NULL,known TEXT NOT NULL,
         PRIMARY KEY(clock,id)
     ) WITHOUT ROWID;
+    CREATE INDEX trace_calls_session ON trace_calls(session,clock,id);
+    CREATE INDEX trace_calls_message ON trace_calls(session,message,clock,id);
 """
 
 

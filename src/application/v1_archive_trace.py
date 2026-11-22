@@ -13,6 +13,7 @@ from src.sources.opencode_v1 import _event_kind, _subtask_selection
 
 from . import v1_child_walk, v1_trace_facts as facts
 from .v1_child_launches import ChildLaunches
+from .v1_scoped_calls import ScopedCalls
 
 
 TRACE_ROWS = 32
@@ -137,6 +138,11 @@ class V1ArchiveTrace:
         if self._phase in ("input", "invalid"):
             raise SourceDataError("V1 child launch stage is not ready", phase="archive")
         return v1_child_walk.ChildScopeWalk(self._db, self._launches, self._root, root_assistant_id)
+
+    def scoped_calls(self, scope):
+        if self._phase not in ("trace", "done"):
+            raise SourceDataError("V1 descendant calls require prepared trace", phase="archive")
+        return ScopedCalls(self._db, scope, self._launches.membership(scope.direct), self._tracked_provider)
 
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""

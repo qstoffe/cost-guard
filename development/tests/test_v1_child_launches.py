@@ -6,7 +6,8 @@ import tempfile
 import unittest
 
 from development.tests.test_v1_archive_cursor import ROOT, _seed, _session
-from src.analysis.child_links import ChildLinkIndex, OPEN_END
+from src.analysis.causal import trace_entries
+from src.analysis.child_links import ChildLinkIndex, OPEN_END, scoped_entries
 from src.application.v1_archive_trace import V1ArchiveTrace
 from src.application.v1_child_launches import DirectChildWindow
 from src.application.v1_child_membership import ChildAssistant
@@ -221,17 +222,32 @@ class V1ChildLaunchTests(unittest.TestCase):
             _tool(db, ROOT, "launch", "first", "first", 2000, 2400, 2400, metadata={"sessionID": "child"})
             _turn(db, "child", "in-window", 2050)
             _turn(db, "child", "later-owner", 2750)
-            _message(db, "child", "short", 2100, role="assistant", parentID="in-window", time={"completed": 2350})
+            _message(db, "child", "short", 2100, role="assistant", parentID="in-window", time={"completed": 2350},
+                     providerID="tracked", modelID="sample", tokens={"input": 5})
             _tool(db, "child", "short", "foreground", "foreground", 2150, 2650, 2650,
                   metadata={"sessionID": "foreground"})
             _tool(db, "child", "short", "background", "background", 2200, 2300, 2300,
                   metadata={"sessionID": "background", "background": True})
-            _message(db, "child", "crossing", 2300, role="assistant", parentID="bound", time={"completed": 2640})
+            _message(db, "child", "crossing", 2300, role="assistant", parentID="bound", time={"completed": 2640},
+                     providerID="tracked", modelID="sample")
+            for number in range(130):
+                _part(db, "child", "crossing", f"step-{number:03d}", 2330, 2330,
+                      type="step-finish", tokens={"input": 2})
             _tool(db, "child", "crossing", "continued", "continued", 2500, 2800, 2800,
                   metadata={"sessionID": "continued"})
-            _message(db, "child", "later", 2780, role="assistant", parentID="later-owner", time={"completed": 2950})
+            _message(db, "child", "later", 2780, role="assistant", parentID="later-owner", time={"completed": 2950},
+                     providerID="tracked", modelID="sample", tokens={"input": 7})
             _tool(db, "child", "later", "unrelated", "unrelated", 2800, 2900, 2900,
                   metadata={"sessionID": "unrelated"})
+            for session, name, start, end, provider in [
+                ("foreground", "at-bound", 2160, 2400, "tracked"),
+                ("foreground", "after-bound", 2160, 2401, "tracked"),
+                ("foreground", "foreign", 2160, 2399, "other"),
+                ("background", "background-call", 4200, 5000, "tracked"),
+                ("continued", "continued-call", 2600, 2700, "tracked"),
+            ]:
+                _message(db, session, name, start, role="assistant", time={"completed": end},
+                         providerID=provider, modelID="sample", tokens={"input": 10})
         source = OpenCodeV1Source(self.source_path)
         snapshot = source.load_session_snapshot(ROOT)
         root_assistant = next(message for message in snapshot.messages if message.message_id == "launch")
@@ -239,7 +255,7 @@ class V1ChildLaunchTests(unittest.TestCase):
 
         with closing(sqlite3.connect(self.stage_path)) as db:
             with source.archive_cursor(ROOT) as cursor:
-                trace = V1ArchiveTrace(source, cursor, db)
+                trace = V1ArchiveTrace(source, cursor, db, tracked_provider="tracked")
                 for _ in range(64):
                     if trace.capture_turn():
                         break
@@ -257,6 +273,24 @@ class V1ChildLaunchTests(unittest.TestCase):
                 scopes.extend(page)
             else:
                 self.fail("scope walk did not reach EOF")
+            with self.assertRaisesRegex(SourceDataError, "prepared trace"):
+                trace.scoped_calls(scopes[0])
+            for _ in range(16):
+                if trace.prepare_turn():
+                    break
+            else:
+                self.fail("trace calls were not prepared")
+            calls, sizes = [], []
+            for scope in scopes:
+                scoped_calls = trace.scoped_calls(scope)
+                for _ in range(64):
+                    page = scoped_calls.turn()
+                    if page is None:
+                        break
+                    calls.extend((item.session_id, item.invocation_id, item.message_id, item.step_part_id) for item in page)
+                    sizes.append(len(page))
+                else:
+                    self.fail("scoped call population did not reach EOF")
 
         expected = {
             ("child", 2000, 2400, 2750, False),
@@ -269,3 +303,11 @@ class V1ChildLaunchTests(unittest.TestCase):
         self.assertEqual(expected, {(s.direct.session_id, s.direct.start_ms, s.end_ms,
                                      s.direct.invocation_end_ms, s.direct.background) for s in scopes})
         self.assertEqual(len(expected), len(scopes))
+        canonical = scoped_entries(snapshot, trace_entries(snapshot), legacy, "tracked")
+        self.assertEqual({(row.session_id, row.invocation_id, row.message_id, row.step_part_id)
+                          for row in canonical}, set(calls))
+        self.assertEqual({"at-bound", "background-call", "continued-call", "short",
+                          *(f"crossing:step-{num:03d}" for num in range(130))},
+                         {item[1] for item in calls})
+        self.assertEqual(134, len(calls))
+        self.assertEqual(4, sizes.count(32))
