@@ -62,6 +62,7 @@ def check_cached_stats(browser, evidence, product_root):
             reference = view.locator('[data-metric="referenceCost"]')
             subagent = view.locator('[data-metric="subagentReferenceCost"]')
             overnight_share = view.locator('[data-metric="overnightShare"]')
+            longest = view.locator('[data-metric="longest"]')
             expect(view.get_by_text("No measured work is cached for this period yet."),
                    f"Page errors: {errors!r}; requests: {[path for path, _ in requests]!r}").to_be_visible()
             for label in ("Today", "7 days", "30 days", "This month", "All time"):
@@ -90,7 +91,8 @@ def check_cached_stats(browser, evidence, product_root):
                 roster = replace(base, requests=(observed,), attribution=(), prompts=None,
                     stats=replace(base.stats, intervals=(interval,), parents=parents, first_input=None))
                 archive.history.commit_sessions(archive.views.source, (SessionChange(
-                    SessionFact(root_id, "r1", root_id), None, previous_progress=0, request_roster=roster),))
+                     SessionFact(root_id, "r1", f"{root_id.title()} fixture"), None,
+                     previous_progress=0, request_roster=roster),))
                 archive.close_catalog_work()
                 for _ in range(50):
                     archive.stats.advance(clock, active=lambda: True)
@@ -107,7 +109,8 @@ def check_cached_stats(browser, evidence, product_root):
             view.evaluate("root => ReportView.setUnit('credits', root)")
             expect(reference).to_have_text("50")
             expect(subagent).to_have_text("50")
-            expect(view.locator('[data-metric="longest"]')).to_have_text("1m")
+            expect(longest.locator("span").first).to_have_text("1m")
+            expect(longest.get_by_role("link", name="Recent fixture")).to_have_attribute("href", "#/sessions/recent")
             expect(view.locator('[data-metric="parallel"]')).to_have_text("1")
             expect(overnight_share).to_have_text("0%")
             expect(view.get_by_role("button", name="All time", exact=True)).to_be_focused()
@@ -131,6 +134,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(reference).to_have_text("100")
             expect(subagent).to_have_text("50")
             expect(overnight_share).to_have_text("67%")
+            expect(longest.get_by_role("link", name="Aged fixture")).to_have_attribute("href", "#/sessions/aged")
             peer.wait_for_function("(clock) => statsCache.hint?.marks?.all?.[1] === clock", arg=now + 1)
             expect(peer_working).to_have_text("1m")
             expect(peer_tokens).to_have_text("67")
@@ -148,6 +152,7 @@ def check_cached_stats(browser, evidence, product_root):
             period.click()
             expect(working).to_have_text("1m")
             expect(overnight_share).to_have_text("0%")
+            expect(longest.get_by_role("link", name="Recent fixture")).to_have_attribute("href", "#/sessions/recent")
             applied = page.wait_for_function("window.statsAppliedMs").json_value()
             expect(period).to_be_focused()
 
@@ -158,10 +163,12 @@ def check_cached_stats(browser, evidence, product_root):
             expect(reference).to_have_text("—")
             expect(subagent).to_have_text("—")
             expect(overnight_share).to_have_text("—")
+            expect(longest.get_by_role("link")).to_have_count(0)
             archive.observe(driver, before_tick=True)
             expect(working).to_have_text("1m")
             expect(peer_working).to_have_text("1m")
             expect(tokens).to_have_text("67")
+            expect(longest.get_by_role("link", name="Recent fixture")).to_have_attribute("href", "#/sessions/recent")
             expect(period).to_be_focused()
 
             state = archive.history.source_state(archive.views.source)

@@ -49,6 +49,8 @@ class StatsTimeSnapshot:
     row: StatsTimeRow
     stamp: StatsTimeStamp
     current: bool  # Current against the archive, not proof of historical coverage.
+    longest_title: str | None
+    sessions_generation: int
 
 
 def stats_time_schema(*, upgrade=False):
@@ -83,13 +85,13 @@ def stats_time_schema(*, upgrade=False):
     """
 
 
-_ROWS = """
-    SELECT period,start_ms,working_ms,busiest_local_day,busiest_ms,night_ms,streak_days,
-           longest_root,longest_ms,peak_roots
+_COLUMNS = """period,start_ms,working_ms,busiest_local_day,busiest_ms,night_ms,streak_days,
+              longest_root,longest_ms,peak_roots"""
+_FROM = """
     FROM archive_stats_time LEFT JOIN archive_stats_calendar USING(source,period)
          LEFT JOIN archive_stats_root_time USING(source,period)
-    WHERE source=?
 """
+_ROWS = f"SELECT {_COLUMNS} {_FROM} WHERE source=?"
 
 
 def time_stamp(db, source):
@@ -179,11 +181,18 @@ def read_time(db, source, zone, period, start_ms, now_ms):
     version = retained_geometry_version(db, source)
     if stamp.version.archive_epoch != version.archive_epoch:
         return None
-    row = db.execute(_ROWS + " AND period=? AND start_ms IS ?", (source, period, start_ms)).fetchone()
+    # Look up at most one retained title using the measured leader and the
+    # existing source/session primary key; no geometry replay on a rename.
+    row = db.execute(f"""
+        SELECT {_COLUMNS},sessions.title,sources.generation {_FROM}
+        JOIN sources USING(source)
+        LEFT JOIN sessions ON (sessions.source,sessions.session_id)=(sources.source,longest_root)
+        WHERE sources.source=? AND period=? AND start_ms IS ?
+    """, (source, period, start_ms)).fetchone()
     if row is None:
         return None
-    return StatsTimeSnapshot(_decode(row), stamp,
-                             version == stamp.version and _unexpired(stamp, now_ms))
+    return StatsTimeSnapshot(_decode(row[:10]), stamp,
+                             version == stamp.version and _unexpired(stamp, now_ms), *row[10:])
 
 
 def _decode(row):

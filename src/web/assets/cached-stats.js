@@ -10,6 +10,8 @@ const CachedStats = (() => {
     ['streak', 'Longest streak (days)'], ['parallel', 'Peak parallel sessions']];
   const revoked = new Set(['cache_source_unbound', 'authentication_required', 'host_identity_changed', 'instance_stopping']);
   const costFields = new Set(['referenceCost', 'subagentReferenceCost']);
+  const sessionLink = item => typeof item?.session_id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(item.session_id) &&
+    typeof item.title === 'string' && item.title.trim() ? item : null;
   const mark = (hint, period) => JSON.stringify(hint?.marks?.[period] ?? null);
   const clock = {now: () => Date.now(), set: (run, wait) => setTimeout(run, wait), cancel: id => clearTimeout(id)};
 
@@ -71,6 +73,23 @@ const CachedStats = (() => {
       }
     }
 
+    sessionCommit(hint, resync = false) {
+      if (!hint?.binding || !Number.isSafeInteger(hint.generation) || this.blocked) return;
+      const prior = this.sessionHint;
+      if (prior?.binding === hint.binding && prior.generation >= hint.generation) return;
+      this.sessionHint = {...hint, resync};
+      if (this.flight) return;
+      if (this.titleChanged(this.value, this.sessionsSeen)) this.read();
+      else if (this.value?.binding === hint.binding) this.sessionsSeen = Math.max(this.sessionsSeen ?? -1, hint.generation);
+    }
+
+    titleChanged(value, seen = value?.sessions_generation) {
+      const hint = this.sessionHint, leader = value?.measured_root_time?.longest_root;
+      if (!hint || !leader || hint.binding !== value.binding || !(hint.generation > seen)) return false;
+      return hint.resync || hint.generation !== seen + 1 ||
+        !Array.isArray(hint.detail_roots) || hint.detail_roots.includes(leader);
+    }
+
     expired() {
       const end = this.value?.valid_until_ms;
       return end != null && end <= this.timing.now();
@@ -79,6 +98,7 @@ const CachedStats = (() => {
     async read(allowRolloverRetry = true) {
       if (!this.period || this.blocked || this.flight || this.hint && !this.hint.binding) return;
       const period = this.period, flight = this.flight = new AbortController();
+      const sessionHint = this.sessionHint;
       this.dirty = false;
       let renew = false;
       try {
@@ -101,7 +121,12 @@ const CachedStats = (() => {
           renew = allowRolloverRetry;
           return;
         }
+        if (sessionHint !== this.sessionHint && this.titleChanged(value)) {
+          this.dirty = true;
+          return;
+        }
         this.value = value;
+        this.sessionsSeen = value.sessions_generation;
         this.error = null;
         this.timing.cancel(this.expiry);
         if (end != null && Number.isSafeInteger(end) && end > this.timing.now()) {
@@ -151,6 +176,15 @@ const CachedStats = (() => {
         const value = element('dd', '—');
         value.dataset.metric = field;
         values.append(element('dt', label), value);
+        if (field === 'longest') {
+          const duration = element('span', '—');
+          this.longestDetail = element('span');
+          this.longest = element('a');
+          this.longestDetail.append(' · ', this.longest);
+          this.longestDetail.hidden = true;
+          value.replaceChildren(duration, this.longestDetail);
+          return [field, duration];
+        }
         return [field, value];
       }));
       this.root.append(filters, this.caption, values);
@@ -158,7 +192,8 @@ const CachedStats = (() => {
 
     attach(host, period, {value, error, blocked}) {
       for (const [name, button] of this.buttons) button.setAttribute('aria-pressed', String(name === period));
-      const display = value?.period === period ? value.display : {};
+      const current = value?.period === period ? value : null;
+      const display = current?.display ?? {};
       ReportView.text(this.caption, blocked || error ? 'Cached AI Stats are unavailable for this source.' :
         display.working || display.tokens || display.referenceCost || display.subagentReferenceCost ?
           'Observed cache only. Unobserved and estimated activity is not included.' :
@@ -166,8 +201,19 @@ const CachedStats = (() => {
       for (const [field, node] of this.values) {
         const item = typeof display[field] === 'string' ? display[field] : '—';
         ReportView.text(node, costFields.has(field) && item !== '—' ?
-          () => ReportView.metricToken(value, field) ?? '—' : item);
+           () => ReportView.metricToken(value, field) ?? '—' : item);
       }
+      const longest = !blocked && !revoked.has(error) ? sessionLink(current?.longest_session) : null;
+      // Keep the duration's text node independent so a quiet refresh doesn't
+      // remove a focused session link.
+      if (longest) {
+        this.longest.href = '#/sessions/' + longest.session_id;
+        ReportView.text(this.longest, longest.title);
+      } else {
+        this.longest.removeAttribute('href');
+        ReportView.text(this.longest, '');
+      }
+      this.longestDetail.hidden = !longest;
       if (this.root.parentNode !== host) host.replaceChildren(this.root);
     }
   }

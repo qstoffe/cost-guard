@@ -68,4 +68,23 @@ vm.runInNewContext(`${fs.readFileSync('src/web/assets/cached-stats.js', 'utf8')}
   const discarded = ['obsolete', 'purged', 'wrong period', 'expired session', 'crossed midnight in flight',
     'server still on old day'];
   assert.ok(!renders.some(value => discarded.includes(value)));
+
+  const measured = (title, sessions_generation) => ({
+    ...result('today', b, 0, 'new day', 30), sessions_generation,
+    measured_root_time: {longest_root: 'leader'}, longest_session: {session_id: 'leader', title}
+  });
+  controller.committed({binding: b, archive_epoch: 0, marks: {today: [3, 20]}});
+  await finish(11, measured('First title', 3));
+  controller.sessionCommit({binding: b, generation: 4, detail_roots: ['peer']});
+  controller.sessionCommit({binding: b, generation: 5, detail_roots: ['other']});
+  assert.equal(requests.length, 12, 'contiguous unrelated commits must not fetch Stats');
+  controller.sessionCommit({binding: b, generation: 6, detail_roots: ['leader']});
+  assert.equal(requests.length, 13);
+  controller.sessionCommit({binding: b, generation: 7, detail_roots: ['leader']});
+  await finish(12, measured('Obsolete title', 6));
+  assert.equal(controller.snapshot().value.longest_session.title, 'First title');
+  await finish(13, measured('Current title', 7));
+  assert.equal(controller.snapshot().value.longest_session.title, 'Current title');
+  controller.sessionCommit({binding: b, generation: 5, detail_roots: ['leader']});
+  assert.equal(requests.length, 14, 'an older notification must not fetch Stats');
 })().catch(error => { console.error(error); process.exitCode = 1; });

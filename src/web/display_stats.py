@@ -74,13 +74,15 @@ class DisplayStats:
         # subtotal has no authority over unseen, provisional or unmeasured work.
         calendar = value.row.calendar if value else None
         roots = value.row.roots if value else None
+        longest = dict(session_id=roots.longest_root, title=value.longest_title) if roots and value.longest_title else None
         token_row, token_as_of = token or (None, None)
         return dict(binding=views.binding, archive_epoch=epoch, period=period, start_ms=start,
                     valid_until_ms=scope_rollover(period, views.timezone_id, now_ms),
                     as_of_ms=value.stamp.as_of if value else None,
                     measured_working_ms=value.row.working_ms if value else None,
-                    measured_calendar=asdict(calendar) if calendar else None,
-                    measured_root_time=asdict(roots) if roots else None,
+                     measured_calendar=asdict(calendar) if calendar else None,
+                     measured_root_time=asdict(roots) if roots else None,
+                     longest_session=longest, sessions_generation=value.sessions_generation if value else None,
                     observed_tokens=str(token_row.observed) if token_row and token_row.observed is not None else None,
                     reference_ccost=str(token_row.reference_ccost)
                         if token_row and token_row.reference_ccost is not None else None,

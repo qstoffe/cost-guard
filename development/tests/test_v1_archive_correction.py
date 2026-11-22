@@ -29,9 +29,9 @@ def step_usage(input_tokens):
         "input": input_tokens, "output": 10, "reasoning": 0, "cache": {"read": 0, "write": 0}}})
 
 
-def add_session(db, session_id, title, start, input_tokens):
+def add_session(db, session_id, title, start, input_tokens, *, duration=3000):
     user, assistant = f"{session_id}-user", f"{session_id}-assistant"
-    finish = start + 3000
+    finish = start + duration
     model = {"providerID": "github-copilot", "modelID": "gpt-test"}
     db.execute("INSERT INTO session(id,project_id,directory,title,time_created,time_updated) VALUES(?,?,?,?,?,?)",
                (session_id, "fixture", "/fixture", title, start, finish))
@@ -102,7 +102,7 @@ class V1ArchiveCorrectionTests(unittest.TestCase):
             old_start, recent_start = NOW - 60 * DAY, NOW - 60_000
             with closing(sqlite3.connect(path)) as db, db:
                 db.executescript(SCHEMA.read_text(encoding="utf-8"))
-                add_session(db, RETAINED, "Retained original", old_start, 100)
+                add_session(db, RETAINED, "Retained original", old_start, 100, duration=5000)
                 add_session(db, CORRECTED, "Present original", recent_start, 200)
 
             with bound_archive(root, path) as (archive, service, catalog):
@@ -112,6 +112,8 @@ class V1ArchiveCorrectionTests(unittest.TestCase):
                 old_prompt, = archive.views.detail(session_id=RETAINED)["rows"]
                 present_prompt, = archive.views.detail(session_id=CORRECTED)["rows"]
                 self.assertIsNotNone(old_prompt["ccost"])
+                self.assertEqual({"session_id": RETAINED, "title": "Retained original"},
+                                 archive.stats.snapshot("all", NOW)["longest_session"])
 
             with closing(sqlite3.connect(path)) as db, db:
                 db.execute("DELETE FROM part WHERE session_id=?", (RETAINED,))
@@ -128,7 +130,7 @@ class V1ArchiveCorrectionTests(unittest.TestCase):
 
                 rows = archive.views.page(period="all", now_ms=NOW)["rows"]
                 self.assertEqual([(CORRECTED, "Present corrected", True, recent_start + 3000),
-                                  (RETAINED, "Retained original", False, old_start + 3000)],
+                                  (RETAINED, "Retained original", False, old_start + 5000)],
                     [(row["session_id"], row["title"], row["source_present"], row["activity_ms"]) for row in rows])
                 retained = archive.views.detail(session_id=RETAINED)
                 self.assertEqual("retained", retained["history_coverage"])
@@ -138,6 +140,10 @@ class V1ArchiveCorrectionTests(unittest.TestCase):
                 self.assertGreater(Decimal(corrected["ccost"]), Decimal(present_prompt["ccost"]))
                 self.assertEqual((["400", "0", "0", "20"], "420"), totals(archive, "all"))
                 self.assertEqual((["300", "0", "0", "10"], "310"), totals(archive, "7-days"))
+                self.assertEqual({"session_id": RETAINED, "title": "Retained original"},
+                                 archive.stats.snapshot("all", NOW)["longest_session"])
+                self.assertEqual({"session_id": CORRECTED, "title": "Present corrected"},
+                                 archive.stats.snapshot("7-days", NOW)["longest_session"])
 
                 saved = archive.clear_snapshot()
                 state = HistoryState(saved["generation"], saved["archive_epoch"])

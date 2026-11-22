@@ -861,9 +861,10 @@ async function connect() {
          firstReport();
       }, connectionStatus, undefined, undefined, (hint, resync) => {
         if (hint?.view !== 'sessions') return;
-         sessionCacheHint = hint;
-         current?.catalog?.cacheHint?.(hint, resync);
-         current?.detail?.cacheHint?.(hint, resync);
+        sessionCacheHint = hint;
+        current?.catalog?.cacheHint?.(hint, resync);
+        current?.detail?.cacheHint?.(hint, resync);
+        statsCache?.sessionCommit(hint, resync);
         }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync),
            (hint, resync) => statsCache?.committed(hint, resync), (hint, resync) => modelsCache?.committed(hint, resync),
            (hint, resync) => {
