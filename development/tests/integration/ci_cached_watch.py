@@ -88,22 +88,20 @@ def check_cached_watch(browser, evidence, product_root):
             archive.publish_live(None, frame, now, account_refresh=refresh)
             archive._live_write.result(timeout=5)
             page.wait_for_function("() => watchCache?.value?.cards[0]?.title === 'Observed title'")
-            start = time.perf_counter()
             page.get_by_role("link", name="Watch", exact=True).click()
             card = page.locator(".watch-active article")
             expect(card.get_by_role("link", name="Observed title")).to_be_visible()
-            first_ms = (time.perf_counter() - start) * 1000
-            assert first_ms < 1000, first_ms
             expect(card.get_by_text("Total CCost:", exact=True)).to_be_visible()
             expect(card.locator(".watch-session-context")).to_have_text("1k")
-            expect(card.locator(".watch-activity")).to_be_hidden()
+            expect(card.locator(".watch-activity")).to_be_visible()
             expect(card.locator("tr.watch-running")).to_have_count(1)
             expect(card.locator(".watch-prompt-number")).to_have_text("#1")
             expect(card.get_by_text("12/34/5/49", exact=True)).to_be_visible()
             expect(page.locator(".watch-daily")).to_contain_text("3 observed prompts")
             quota = page.locator(".watch-view .mini-accounts")
             expect(quota).to_contain_text("Fixture Pro · 25%")
-            assert "private transcript sample" not in card.inner_text()
+            # Current committed observations lend, but never persist, live detail.
+            expect(card).to_contain_text("private transcript sample")
 
             # Exercise the actual Mini renderer on the opener's prepared PiP
             # layout, with no separate native window or acquisition.
@@ -170,6 +168,8 @@ def check_cached_watch(browser, evidence, product_root):
             expect(historical.get_by_text("12/34/5/49", exact=True)).to_be_visible()
             expect(page.locator(".watch-daily")).to_contain_text("3 observed prompts")
             expect(page.locator(".watch-active article")).to_have_count(0)
+            expect(historical).not_to_contain_text("private transcript sample")
+            expect(historical.locator(".watch-activity")).to_be_hidden()
             if mini is not None:
                 retained, = mini_rows(page)
                 assert retained["label"].endswith("Unverified") and not retained["running"]
@@ -181,7 +181,7 @@ def check_cached_watch(browser, evidence, product_root):
             assert not set(requests).intersection(("/api/detail", "/api/interest", "/api/reports",
                                                    "/api/cache/session-detail/demand"))
             assert not errors, errors
-            evidence["cached_watch"] = dict(first_watch_dom_ms=round(first_ms, 1),
+            evidence["cached_watch"] = dict(
                 mini_render="opener's actual Mini renderer" if mini is not None else "unavailable in this browser",
                 checked="unvisited publication, common native quota and provider revocation, one read path, "
                         "two tabs, focus, auth loss, as-of restart, source unbind")

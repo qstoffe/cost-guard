@@ -16,7 +16,8 @@ def running_frame(now):
     session_cost = SessionCost(
         ComparisonCost(Decimal("1.25000001"), observed_requests=4, priced_requests=4), True, True)
     card = WatchCard("root", "Observed title", prompt.event_id, (WatchRow("root", "Observed title", prompt),),
-        state="observed", session_context=WatchContextGuidance("root", 773), session_cost=session_cost,
+        state="observed", session_context=WatchContextGuidance("root", 773, context_scope="fixture"),
+        session_cost=session_cost, session_cost_state="observed",
         observed_at_ms=now, invocation_verified=True)
     return WatchProjection("Watch", "fixture", (), now_ms=now, active_cards=(card,), cards_state="observed")
 
