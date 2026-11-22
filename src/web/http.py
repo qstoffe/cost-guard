@@ -453,16 +453,19 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200, sizes() if sizes else {'opencode_bytes': None, 'cache_bytes': None})
                 return
             if self.path == '/api/models/benchmark':
-                lane = getattr(self.server.lifecycle, 'benchmark', None)
+                owner = self.server.lifecycle
+                lane = getattr(owner, 'benchmark', None)
+                cache_only = getattr(owner, 'cached_models_enabled', False)
                 references = ()
                 timezone_id = 'UTC'
-                dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
-                if dispatcher and dispatcher.models is not None:
+                dispatcher = getattr(owner, 'dispatcher', None)
+                models = getattr(getattr(owner, 'display_archive', None), 'models', None) if cache_only else None
+                if models is not None:
                     try:
-                        references, timezone_id = dispatcher.models.benchmark_references()
+                        references, timezone_id = models.benchmark_references()
                     except (OSError, sqlite3.Error):
                         pass
-                elif dispatcher:
+                elif dispatcher and not cache_only:
                     with dispatcher.lock:
                         for request, entry in dispatcher.entries.items():
                             if request.kind.value == 'normal' and entry['result']:
@@ -470,7 +473,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 references = (view.get('model_catalog') or {}).get('rows', ())
                                 timezone_id = view.get('timezone_id', 'UTC')
                                 break
-                self.reply(200, lane.view(references, timezone_id=timezone_id) if lane else dict(rows=[], fetched_at_ms=None))
+                options = {"request_refresh": False} if cache_only else {}
+                self.reply(200, lane.view(references, timezone_id=timezone_id, **options)
+                           if lane else dict(rows=[], fetched_at_ms=None))
                 return
             if self.path == "/api/settings":
                 self.web_settings()

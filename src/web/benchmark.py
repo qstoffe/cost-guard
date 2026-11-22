@@ -46,9 +46,10 @@ class BenchmarkLane:
             raise ValueError('benchmark_cache_identity')
         return parse_pages(value['pages'], value['fetched_at_ms'])
 
-    def view(self, references=(), *, timezone_id='UTC'):
+    def view(self, references=(), *, timezone_id='UTC', request_refresh=True):
         with self.lock:
-            self.requested = True
+            if request_refresh:
+                self.requested = True
             value = benchmark_view(self.snapshot, references, now_ms=int(self.wall_clock() * 1000), timezone_id=timezone_id)
             return dict(**value, source_url=SOURCE_URL, unavailable=self.error is not None,
                 refreshing=self.forced or self.job is not None)

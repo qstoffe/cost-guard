@@ -381,6 +381,8 @@ def main():
                 check_cached_models(browser, evidence, ROOT)
                 from development.tests.integration.ci_cached_accounts import check_cached_accounts
                 check_cached_accounts(browser, evidence, ROOT)
+                from development.tests.integration.ci_cached_cold_views import check_cached_cold_views
+                check_cached_cold_views(browser, evidence, ROOT)
                 check_extended_browser(browser, evidence)
             finally:
                 browser.close()

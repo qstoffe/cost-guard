@@ -324,6 +324,8 @@ class DisplayArchive:
             self.stats.reset(views)
         if self.models is not None:
             self.models.reset(views)
+        if self.accounts is not None:
+            self.accounts.announce_binding(views)
 
     def _writer_binding(self, service):
         views = self.views

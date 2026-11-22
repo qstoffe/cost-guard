@@ -66,23 +66,40 @@ class DisplayAccounts:
         with self._signal:
             self._reset()
 
+    def announce_binding(self, views):
+        with self._signal:
+            if self.archive.views is views and self._state is None:
+                self._announce(views.binding)
+
     def _reset(self):
         self._state = None
         self._marks = {}
-        self._announce(None)
+        self._announce(self.scope())
 
     def _announce(self, scope):
         self._publish("accounts-cache", dict(scope=scope, marks=self._marks.copy()))
 
     def snapshot(self, period, now_ms):
+        views = self.archive.views
+        fence = self.archive.sessions.clear_fence
         state = self._state
-        if state is None:
+        if views is None:
             return None
-        views, fence, accounts, labels, scope = state
 
         def eligible():
             return self._state is state and self.archive.views is views and self.archive.sessions.clear_fence == fence
 
+        if state is None:
+            # A verified source, without a current provider roster, may read
+            # an empty chart but must not borrow an archived account identity.
+            self.archive.history.source_state(views.source)
+            if not eligible():
+                return None
+            return dict(scope=views.binding, revision=0, expires_ms=None, view=None,
+                        series=(), ready=False, acquiring=False, unchanged=False)
+        if state[:2] != (views, fence):
+            return None
+        _, _, accounts, labels, scope = state
         value, epoch = self.archive.history.read_account_chart(
             views.source, views.timezone_id, roster_signature(accounts), period, now_ms)
         view = expires = None
@@ -101,8 +118,13 @@ class DisplayAccounts:
                     ready=True, acquiring=False, unchanged=False)
 
     def scope(self):
+        views = self.archive.views
+        if views is None:
+            return None
         state = self._state
-        return state[4] if state is not None else None
+        if state is None:
+            return views.binding
+        return state[4] if state[:2] == (views, self.archive.sessions.clear_fence) else None
 
     def advance(self, now_ms, *, active):
         state = self._state

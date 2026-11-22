@@ -143,11 +143,17 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         roster = archived_account_roster((SimpleNamespace(account=account),))
         self.assertEqual({ACCOUNT: frozenset({"openai"})}, roster)
         self.save((observation(1, NOW - HOUR),))
-        archive = DisplayArchive(self.root, lambda *_: None, accounts_enabled=True)
+        hints = []
+        archive = DisplayArchive(self.root, lambda kind, hint: hints.append(hint) if kind == "accounts-cache" else None,
+                                 accounts_enabled=True)
         self.addCleanup(archive.close)
         archive._set_binding(DisplayBinding("trusted", "registered"))
         series = (SimpleNamespace(account=account, label="Verified account"),)
         archive.accounts.offer(series, verified=False)
+        cold = archive.accounts.snapshot("today", NOW)
+        cold_scope = archive.views.binding
+        self.assertEqual((cold_scope, None, (), False), (cold["scope"], cold["view"], cold["series"], cold["ready"]))
+        self.assertEqual({"scope": cold_scope, "marks": {}}, hints[-1])
         self.assertIsNone(archive.next_projection(lambda: None))
         archive.accounts.offer(series, verified=True)
         for _ in range(20):
@@ -168,6 +174,16 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         self.assertEqual("1", snapshot["view"]["series"][0]["points"][-2]["amount"])
         self.assertIsNone(snapshot["view"]["series"][0]["points"][-1])
         self.assertEqual(1792972800000, snapshot["expires_ms"])  # Next UTC midnight.
+
+        archive.accounts.reset()
+
+        withheld = archive.accounts.snapshot("today", NOW)
+        self.assertEqual((cold_scope, None, (), False),
+                         (withheld["scope"], withheld["view"], withheld["series"], withheld["ready"]))
+        self.assertEqual({"scope": cold_scope, "marks": {}}, hints[-1])
+        archive.unbind()
+        self.assertIsNone(archive.accounts.snapshot("today", NOW))
+        self.assertIsNone(hints[-1]["scope"])
 
     def test_rolling_window_never_keeps_an_old_subtotal_across_its_start(self):
         day = 24 * HOUR
