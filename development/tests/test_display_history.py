@@ -10,7 +10,10 @@ import unittest
 from src.application.session_archive_projection import SessionPublication
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.cached_session_views import CachedSessionViews
-from src.cache.display_history import DisplayHistory, RunningSession, SessionChange, SessionCheckpoint, SessionCoverage, SessionFact
+from src.cache.display_history import (
+    FINISH_FIELDS, DisplayHistory, FinishedSession, RunningSession, SessionChange, SessionCheckpoint, SessionCoverage,
+    SessionFact,
+)
 from src.domain.effort import EffortEvidence
 from src.domain.reference_cost import ReferenceCostIssue
 from src.reports.models import SessionUsageRow
@@ -108,6 +111,45 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(2, page.generation)
         self.assertEqual(1, page.total)
         self.assertEqual((11, "2"), (page.rows[0].activity_ms, page.rows[0].ccost))
+
+    def test_live_finish_retains_independent_fields_and_original_period_after_source_absence(self):
+        previous = SessionFact("root", "r1", "Old title", activity_ms=100, model="Model", ccost=Decimal("1.2"))
+        self.history.commit_sessions("source", (SessionChange(previous, None),))
+        self.history.replace_running("source", "binding", (RunningSession("root", "Running title", 200, 205),),
+                                     archive_epoch=0)
+        current = SessionFact("root", "r2", "New title", activity_ms=210, latest_activity_ms=215,
+                              prompt_started_ms=200, activity_origin="finish", context_tokens=917)
+        evidence = FinishedSession(current, 225, FINISH_FIELDS | {"context_tokens"})
+
+        committed = self.history.replace_live("source", "binding", running=(), finishes=(evidence,),
+                                              archive_epoch=0, finishes_current=lambda: True)
+        checkpoint = self.history.session_checkpoints("source", ("root",))["root"]
+        self.history.commit_sessions("source", missing=(("root", checkpoint),))
+        restarted = DisplayHistory(self.root)
+        row, = restarted.session_page("source", start_ms=215, end_ms=216).rows
+
+        self.assertEqual(3, committed.sessions_generation)
+        self.assertEqual(("r2", "New title", "finish", 200, 210, 215),
+            (row.revision, row.title, row.activity_origin, row.prompt_started_ms, row.activity_ms, row.latest_activity_ms))
+        self.assertEqual(("Model", "1.2", 917, False, False),
+            (row.model, row.ccost, row.context_tokens, row.running, row.source_present))
+        self.assertEqual(0, restarted.session_page("source", start_ms=100, end_ms=215).total)
+
+    def test_lost_finish_revision_rolls_back_the_running_withdrawal(self):
+        running = RunningSession("root", "Running", 200, 205)
+        self.history.replace_running("source", "binding", (running,), archive_epoch=0)
+        fact = SessionFact("root", "r2", "Finished", activity_ms=210, latest_activity_ms=210,
+                           prompt_started_ms=200, activity_origin="finish")
+        evidence = FinishedSession(fact, 225, FINISH_FIELDS)
+        outcomes = iter((True, False))  # A new source revision invalidates the in-flight write.
+
+        rejected = self.history.replace_live("source", "binding", running=(), finishes=(evidence,),
+                                             archive_epoch=0, finishes_current=lambda: next(outcomes))
+        live = self.history.session_page("source", live_binding="binding", now_ms=225)
+
+        self.assertIsNone(rejected)
+        self.assertEqual((), self.history.session_page("source").rows)
+        self.assertEqual((1, "Running", True), (live.generation, live.rows[0].title, live.rows[0].running))
 
     def test_projection_help_survives_partial_correction_deletion_and_restart(self):
         owner = SessionArchiveOwner(self.history, lambda *_: None)

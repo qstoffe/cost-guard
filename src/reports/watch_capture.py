@@ -6,6 +6,7 @@ incremental session-cost work; no aggregate blocks this row publication.
 """
 from dataclasses import dataclass, replace
 
+from src.analysis.session_activity import activity_fields
 from src.domain import EventKind
 from src.reports.sampling import AnalyzedRoot
 from .session_history import analyze_observed
@@ -30,6 +31,7 @@ class WatchCapture:
     duration_intervals: tuple = ()
     context_comparable_ids: frozenset = frozenset()
     catalog_prompt: tuple | None = None
+    catalog_finish: tuple[int, int] | None = None
 
     @property
     def history_row(self):
@@ -84,7 +86,8 @@ def running_context_rows(rows, context, comparable_ids):
         if row.in_progress else row for row in rows)
 
 
-def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False):
+def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False,
+                 finish_since_ms=None):
     if fresh is None:
         fresh = service.source.load_session_snapshot(root.session_id)
     snapshot, bundle, retained = analyze_observed(service, previous, fresh)
@@ -148,9 +151,20 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
     ended = focal is not None and not running and not focal.execution_unverified and bool(
         focal.parent_outcome and focal.parent_terminal_time_ms >= focal.prompt_time_ms)
     catalog_prompt = (focal.prompt_id, focal.prompt_time_ms, bool(running), ended) if focal is not None else None
+    catalog_finish = None
+    if (finish_since_ms is not None and ended and fresh.complete and not retained
+            and (focal.prompt_id in focal_ids or focal.terminal_time_ms >= finish_since_ms)):
+        activity = activity_fields(item)
+        finish, latest = activity["last_activity_ms"], activity["activity_latest_ms"]
+        if (activity["activity_qualified"] and not activity["running"]
+                and activity["activity_prompt_id"] == focal.prompt_id
+                and activity["prompt_started_ms"] == focal.prompt_time_ms
+                and finish is not None and latest is not None
+                and 0 < focal.prompt_time_ms <= finish <= latest and finish >= finish_since_ms):
+            catalog_finish = finish, latest
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids), catalog_prompt), item
+        intervals, frozenset(comparable_ids), catalog_prompt, catalog_finish), item

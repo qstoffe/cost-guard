@@ -2,7 +2,9 @@
 from dataclasses import dataclass, replace
 from heapq import nsmallest
 
-from src.cache.display_history import BATCH_LIMIT, RUNNING_FRESH_MS, RunningSession
+from src.cache.display_history import (
+    BATCH_LIMIT, FINISH_FIELDS, RUNNING_FRESH_MS, FinishedSession, RunningSession, SessionFact,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +71,61 @@ def running_snapshot(catalog, evidence):
                 continue
             recent[key] = RunningSession(key, root.title or "Untitled session", start, captured_at, prompt_id)
         return tuple(nsmallest(BATCH_LIMIT, recent.values(), key=lambda item: (-item.started_ms, item.session_id)))
+
+
+def archive_finish_snapshot(catalog, entries):
+    """Freeze a bounded set of causal finishes and a catalog-revision commit guard."""
+    with catalog.lock:
+        if catalog.state != "observed" or catalog.interrupted:
+            return (), lambda: False
+        now, incarnation = catalog.clock_ms(), catalog.archive_incarnation
+        candidates = {}
+        for entry in entries:
+            capture, snapshot = entry.capture, entry.snapshot
+            if (capture is None or capture.catalog_finish is None or capture.retained
+                    or not capture.authoritative or entry.verified_generation != entry.generation
+                    or snapshot is None or not snapshot.complete or snapshot.source_revision != entry.revision
+                    or entry.source_status.failed_at is not None):
+                continue
+            root, revision, observed = entry.root, entry.revision, capture.observed_at_ms
+            key = root.session_id
+            _, start, _, _ = capture.catalog_prompt
+            finish, latest = capture.catalog_finish
+            if (root.archived_at_ms is not None or not revision or revision != catalog.revisions.get(key)
+                    or root != catalog.roots.get(key) or is_running(catalog, key)
+                    or not (catalog.lifecycle_cutoff_ms < observed <= now
+                            and now - observed < RUNNING_FRESH_MS and latest <= now)):
+                continue
+            fields = FINISH_FIELDS
+            cost, context = entry.cost.value, capture.context
+            ccost = None
+            if (entry.cost.status == "observed" and cost is not None
+                    and cost.source_complete and cost.total.complete):
+                ccost = cost.total.known_ccost
+                fields = fields | {"ccost"}
+            tokens = None
+            if context is not None and context.context_state in {"ready-current", "invalidated"}:
+                tokens = context.tokens if context.context_state == "ready-current" else None
+                fields = fields | {"context_tokens", "context_detail"}
+            detail = "Estimated next incoming session context." if tokens is not None else None
+            fact = SessionFact(key, revision, root.title or "Untitled session", activity_ms=finish,
+                ccost=ccost, context_tokens=tokens, latest_activity_ms=latest, prompt_started_ms=start,
+                activity_origin="finish", context_detail=detail)
+            candidates[key] = FinishedSession(fact, observed, fields)
+        finishes = tuple(nsmallest(BATCH_LIMIT, candidates.values(),
+            key=lambda item: (-item.fact.activity_ms, item.fact.session_id)))
+        roots = {item.fact.session_id: catalog.roots[item.fact.session_id] for item in finishes}
+
+    def current():
+        with catalog.lock:
+            return (catalog.state == "observed" and not catalog.interrupted and
+                    catalog.archive_incarnation == incarnation and all(
+                        item.observed_ms > catalog.lifecycle_cutoff_ms
+                        and item.fact.revision == catalog.revisions.get(item.fact.session_id)
+                        and catalog.roots.get(item.fact.session_id) == roots[item.fact.session_id]
+                        and not is_running(catalog, item.fact.session_id) for item in finishes))
+
+    return finishes, current
 
 
 def record_prompt(catalog, key, evidence, *, wake=False):

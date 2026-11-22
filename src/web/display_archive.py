@@ -121,11 +121,14 @@ class DisplayArchive:
         self.unbind()
         self._live_writer.shutdown(wait=True, cancel_futures=True)
 
-    def publish_live(self, running, frame=None, observed_ms=None, *, account_refresh=None, source_unavailable=False):
+    def publish_live(self, running, frame=None, observed_ms=None, *, account_refresh=None, source_unavailable=False,
+                     finishes=(), finishes_current=None):
         """One in-flight turn, with independent proof for each display slice."""
         views = self.views
         if views is None:
             return None
+        if source_unavailable:
+            finishes = ()
         fence = self.sessions.clear_fence
         scope = (views.binding, fence)
         status = views.binding, source_unavailable
@@ -153,15 +156,16 @@ class DisplayArchive:
                 watch = replace(watch, quotas=batch)
             elif batch is not None or source_unavailable:
                 watch = WatchObservation(now, now, None, False, None, quotas=batch, withdraw_live=source_unavailable)
-        if watch is None and running is None:
+        if watch is None and running is None and not finishes:
             return hint
         # Ignore projection time alone (and synthetic clocks for quota/outage-only turns).
         watch_key = (watch.observed_ms if watch.facts is not None else None, watch.state, watch.truncated,
                      watch.facts, watch.daily, watch.quotas, watch.withdraw_live) if watch is not None else None
-        key = (scope, health), running, watch_key
+        key = (scope, health), running, watch_key, finishes
         if key != self._live_committed:
             self._live_offered = key
-            self._live_write = self._live_writer.submit(self._write_live, views, fence, health, running, watch)
+            self._live_write = self._live_writer.submit(self._write_live, views, fence, health, running, watch,
+                                                       finishes, finishes_current)
         return hint
 
     def _offer_watch_quota(self, scope, refresh, now):
@@ -173,9 +177,10 @@ class DisplayArchive:
             return self._watch_quota[1]
         return None
 
-    def _write_live(self, views, fence, health, running, watch):
+    def _write_live(self, views, fence, health, running, watch, finishes, finishes_current):
         try:
             return self.sessions.commit_live(views.source, views.binding, running=running, watch=watch,
+                finishes=finishes, finishes_current=finishes_current,
                 clear_fence=fence, eligible=lambda: self.views is views and self._live_health is health)
         except (OSError, sqlite3.Error):
             return False  # No failed or partial transaction becomes a cache event.

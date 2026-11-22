@@ -66,8 +66,8 @@ class WebHost:
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
-            display_archive=self.display_archive) if live_factory else None
+             timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
+             display_archive=self.display_archive, capture_session_finishes=self.cached_sessions_enabled) if live_factory else None
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)

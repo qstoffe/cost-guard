@@ -16,12 +16,14 @@ from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, display_archive=None):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, display_archive=None,
+                 capture_session_finishes=False):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
         self.timeline_demand = timeline_demand
         self.display_archive = display_archive
+        self.capture_session_finishes = capture_session_finishes
         self.stopping = Event()
         self.thread = None
         self.failure = None
@@ -58,6 +60,9 @@ class LiveRuntime:
             publication_due = time.monotonic()
             timeline_due = publication_due
             coordinator = driver.coordinator
+            enable_finishes = getattr(type(coordinator), "enable_session_finishes", None)
+            if self.capture_session_finishes and self.display_archive is not None and enable_finishes is not None:
+                enable_finishes(coordinator)
             timeline = getattr(coordinator, 'account_timeline', None) if self.timeline_demand is not None else None
             accounts = self.display_archive.accounts if self.display_archive is not None else None
             if accounts is not None:
@@ -156,9 +161,13 @@ class LiveRuntime:
         if self.display_archive is not None:
             refresh = getattr(driver.coordinator, "accounts", None)
             current = frame if verified else None
+            finish_reader = getattr(type(driver.coordinator), "cached_session_finishes", None)
+            finishes, finishes_current = (finish_reader(driver.coordinator, self.catalog)
+                                           if verified and self.capture_session_finishes and finish_reader is not None
+                                           else ((), None))
             quota_hint = self.display_archive.publish_live(with_live_metrics(running, current), current, driver.observed_at_ms,
                 account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None,
-                source_unavailable=driver.error is not None)
+                source_unavailable=driver.error is not None, finishes=finishes, finishes_current=finishes_current)
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),

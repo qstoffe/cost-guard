@@ -133,6 +133,22 @@ def _sessions_metrics(page, *, running):
         raise AssertionError((running, state)) from error
 
 
+def _sessions_finish(page, started, finished):
+    from playwright.sync_api import TimeoutError
+
+    try:
+        return page.wait_for_function("""({key, started, finished}) => {
+          const fact = document.querySelector(`.sessions-catalog tbody tr[data-id="${key}"]`)?.value;
+          if (fact && !fact.running && fact.activity_origin === 'finish' &&
+              fact.prompt_started_ms === started && fact.activity_ms === finished)
+            return Date.now();
+          return false;
+        }""", arg=dict(key=ROOT_ID, started=started, finished=finished), timeout=8_000).json_value()
+    except TimeoutError as error:
+        actual = page.evaluate("key => document.querySelector(`.sessions-catalog tr[data-id=\"${key}\"]`)?.value", ROOT_ID)
+        raise AssertionError((started, finished, actual)) from error
+
+
 def check_p0_v1(browser, product_root, *, history=0, burst=None):
     from playwright.sync_api import expect
 
@@ -162,7 +178,8 @@ def check_p0_v1(browser, product_root, *, history=0, burst=None):
             host.events.publish(kind, hint)
 
         archive = host.display_archive = DisplayArchive(root, publish, watch_enabled=True, models_enabled=True)
-        host.live = LiveRuntime(lambda: driver, host.events.publish, host.runtime_failed, display_archive=archive)
+        host.live = LiveRuntime(lambda: driver, host.events.publish, host.runtime_failed, display_archive=archive,
+                                capture_session_finishes=True)
         entered, release = Event(), Event()
         history_factory = coordinator.history_factory
 
@@ -244,10 +261,9 @@ def check_p0_v1(browser, product_root, *, history=0, burst=None):
                 sessions = page.locator(".sessions-catalog")
                 expect(sessions).to_be_visible()
                 expect(sessions.get_by_role("link", name=f"[RUNNING] {TITLE}", exact=True)).to_have_count(0)
-                if not history:
-                    expect(sessions.locator("tbody").get_by_role("link", name=TITLE, exact=True)).to_be_visible()
-                    assert _sessions_metrics(page, running=False) == dict(
-                        context=CONTEXT_TOKENS, cost=float(TOTAL_COST), ctxText=context_text)
+                sessions_applied = _sessions_finish(page, started - 2_000, finished)
+                assert _sessions_metrics(page, running=False) == dict(
+                    context=CONTEXT_TOKENS, cost=float(TOTAL_COST), ctxText=context_text)
                 if history:
                     assert not coordinator.catalog_job.done()
                 jobs.assert_not_called()
@@ -260,8 +276,9 @@ def check_p0_v1(browser, product_root, *, history=0, burst=None):
 
             return dict(history_source_roots=history, real_v1_mutation=True, running_watch_wall_ms=round(full_ms, 1),
                         running_native_mini_wall_ms=round(mini_ms, 1), running=latency(running, started),
-                        qualified_running_cost_and_context=latency(qualified, started),
-                        finish=latency(terminal, finished), qualified_finish_cost=latency(verified, finished),
+                         qualified_running_cost_and_context=latency(qualified, started),
+                         finish=latency(terminal, finished), qualified_finish_cost=latency(verified, finished),
+                         finished_sessions_dom_ms=sessions_applied - committed[terminal["generation"]],
                         mini_running_metrics=metrics, mini_finished_metrics=terminal_metrics,
                         context_tokens=CONTEXT_TOKENS, finish_costs=[PROMPT_COST, TOTAL_COST])
         finally:

@@ -50,6 +50,7 @@ METRIC_FIELDS = ("activity_ms", "model", "ccost", "prompts", "duration_ms", "con
                  "model_help", "has_model_details")
 SAVED_FIELDS = frozenset(METRIC_FIELDS)
 ACQUIRED_SCALAR_FIELDS = SAVED_FIELDS - {"catalog_activity_ms"}
+FINISH_FIELDS = frozenset({"activity_ms", "latest_activity_ms", "prompt_started_ms", "activity_origin"})
 PERIOD_CLOCK = "period_clock_ms"
 # Do not derive these bit positions from display order: they are disk format.
 FIELD_EVIDENCE_BITS = {name: 1 << offset for offset, name in enumerate((
@@ -122,6 +123,13 @@ class RunningSession:
     ccost: Decimal | None = None
     context_tokens: int | None = None
     context_invalidated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class FinishedSession:
+    fact: SessionFact
+    observed_ms: int
+    fields: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,9 +525,10 @@ class DisplayHistory:
         outcome = self.replace_live(source, binding, watch=observation, archive_epoch=archive_epoch)
         return outcome.watch_generation if outcome is not None else None
 
-    def replace_live(self, source, binding, *, running=None, watch=None, archive_epoch, eligible=lambda: True):
-        """Commit the two qualified slices together; None means no update to that slice."""
-        if (not source or not binding or running is not None and
+    def replace_live(self, source, binding, *, running=None, watch=None, finishes=(),
+                     archive_epoch, eligible=lambda: True, finishes_current=None):
+        """Commit qualified Live facts without waiting for historical backfill."""
+        if (not source or not binding or len(finishes) > BATCH_LIMIT or running is not None and
                 (len(running) > BATCH_LIMIT or any(
                     not item.session_id or type(item.started_ms) is not int or type(item.observed_ms) is not int
                     or not 0 < item.started_ms <= item.observed_ms for item in running))):
@@ -530,18 +539,27 @@ class DisplayHistory:
             if state.archive_epoch != archive_epoch or not eligible():
                 return None
             sessions_generation = watch_generation = None
+            inserted, finish_clocks = 0, []
+            if finishes and finishes_current is not None and finishes_current():
+                db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+                inserted, finish_clocks = self._publish_finishes(db, source, finishes)
+            clocks = list(finish_clocks)
             if running is not None:
-                sessions_generation = self._replace_running(db, source, binding, running, state.generation)
+                if self._replace_running(db, source, binding, running):
+                    clocks.extend((0, (1 << 63) - 1))  # Running can cross period boundaries.
+            if clocks:
+                sessions_generation = state.generation + 1
+                self._append_change(db, source, sessions_generation, inserted, min(clocks), max(clocks))
             if watch is not None:
                 db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
                 watch_generation = publish_watch(db, source, binding, watch)
-            if not eligible():
+            if not eligible() or finish_clocks and not finishes_current():
                 db.rollback()
                 return None
             db.commit()
             return LiveCommit(sessions_generation, watch_generation)
 
-    def _replace_running(self, db, source, binding, running, generation):
+    def _replace_running(self, db, source, binding, running):
         previous = tuple(db.execute("""
             SELECT binding, session_id, title, started_ms, ccost, context_tokens, context_invalidated, observed_ms
             FROM session_running
@@ -552,7 +570,7 @@ class DisplayHistory:
                              item.context_tokens, int(item.context_invalidated), item.observed_ms)
                             for item in sorted(running, key=lambda row: row.session_id))
         if previous == replacement:
-            return None
+            return False
         db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
         db.execute("DELETE FROM session_running WHERE source=?", (source,))
         db.executemany("""
@@ -561,13 +579,36 @@ class DisplayHistory:
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ((source, *row) for row in replacement))
         now = int(time.time() * 1000)
-        if (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
+        return (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
                 or any(old[-1] + RUNNING_FRESH_MS <= now < new[-1] + RUNNING_FRESH_MS
-                       for old, new in zip(previous, replacement))):
-            # Running sessions can cross midnight and affect every period.
-            self._append_change(db, source, generation + 1, 0, 0, (1 << 63) - 1)
-            return generation + 1
-        return None
+                       for old, new in zip(previous, replacement)))
+
+    def _publish_finishes(self, db, source, finishes):
+        inserted, clocks = 0, []
+        for item in finishes:
+            fact, fields = item.fact, item.fields
+            if (fact.activity_origin != "finish" or not FINISH_FIELDS <= fields
+                    or any(type(clock) is not int for clock in
+                           (fact.prompt_started_ms, fact.activity_ms, fact.latest_activity_ms, item.observed_ms))
+                    or not 0 < fact.prompt_started_ms <= fact.activity_ms <= fact.latest_activity_ms):
+                raise ValueError("invalid_session_finish")
+            before = db.execute(f"""
+                SELECT s.revision, s.{PERIOD_CLOCK}, s.field_evidence, p.dependency
+                FROM sessions AS s LEFT JOIN session_progress AS p USING (source, session_id)
+                WHERE s.source=? AND s.session_id=?
+            """, (source, fact.session_id)).fetchone()
+            previous, old_clock, evidence, dependency = before or (None, None, 0, None)
+            same = previous == fact.revision
+            if same and dependency is not None:
+                continue  # Do not replace a completed canonical scalar/usage capture.
+            change = SessionChange(fact, previous, fields)
+            retained = evidence & ~EMPTY_HISTORY_EVIDENCE if same else 0
+            if self._apply_session(db, source, change, retained_evidence=retained):
+                self._advance_progress(db, source, fact.session_id, fact.revision, None)
+                inserted += int(before is None)
+                clocks.extend(value for value in (old_clock, self._activity(db, source, fact.session_id))
+                              if value is not None)
+        return inserted, clocks
 
     def watch(self, source, binding, now_ms, *, live_eligible, timezone_id="UTC"):
         with self._connect(read=True) as db:
@@ -870,12 +911,12 @@ class DisplayHistory:
             return state
 
     @staticmethod
-    def _apply_session(db, source, change):
+    def _apply_session(db, source, change, *, retained_evidence=0):
         fact = change.fact
         if (not change.observed_fields <= SAVED_FIELDS or not (fact.revision and fact.session_id)
                 or fact.activity_origin not in (None, "finish", "start", "no-prompt")):
             raise ValueError("invalid_session_evidence")
-        evidence = field_evidence(change.observed_fields, empty_history=change.empty_history)
+        evidence = field_evidence(change.observed_fields, empty_history=change.empty_history) | retained_evidence
         if change.observed_fields != SAVED_FIELDS:
             previous = db.execute(f"""
                 SELECT {", ".join(METRIC_FIELDS)}

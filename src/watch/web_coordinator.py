@@ -13,6 +13,7 @@ from src.analysis.account_timeline import PERIODS
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_catalog import MINI_PREVIEW_LIMIT
+from src.application.session_catalog_lifecycle import archive_finish_snapshot
 from src.application.session_quota import source_scope
 from src.reports.history import WatchHistoryAcquisition
 from src.reports.accounts import AccountPeriodHistory
@@ -194,6 +195,12 @@ class WebWatchCoordinator(WatchCoordinator):
             self.catalog_job = self.catalog_pool.submit(
                 self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep, coverage_needed)
         return running
+
+    def enable_session_finishes(self):
+        self.card_workers.finish_since_ms = self.started_at_ms
+
+    def cached_session_finishes(self, catalog):
+        return archive_finish_snapshot(catalog, self.cards.sessions.values())
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or

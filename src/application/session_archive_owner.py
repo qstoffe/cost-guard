@@ -125,7 +125,8 @@ class SessionArchiveOwner:
         self._announce(admission.source, admission.epoch, result.generation, detail_roots=result.detail_roots)
         return result.generation
 
-    def commit_live(self, source, epoch, *, running=None, watch=None, clear_fence, eligible=lambda: True):
+    def commit_live(self, source, epoch, *, running=None, watch=None, finishes=(), finishes_current=None,
+                    clear_fence, eligible=lambda: True):
         def current():
             return (source, epoch) == self._binding and clear_fence == self.clear_fence and eligible()
 
@@ -135,12 +136,13 @@ class SessionArchiveOwner:
             _, cleared_ms, _ = self._clear_fence
             archive_epoch = self.history.source_state(source).archive_epoch
             if cleared_ms:
+                finishes = tuple(item for item in finishes if item.observed_ms > cleared_ms)
                 if running is not None:
                     running = tuple(item for item in running if item.observed_ms > cleared_ms)
                 if watch is not None:
                     watch = _watch_after_clear(watch, cleared_ms)
-            outcome = self.history.replace_live(source, epoch, running=running, watch=watch,
-                                                archive_epoch=archive_epoch, eligible=current)
+            outcome = self.history.replace_live(source, epoch, running=running, watch=watch, finishes=finishes,
+                archive_epoch=archive_epoch, eligible=current, finishes_current=finishes_current)
             if outcome is None:
                 return False
             with self._signal:
