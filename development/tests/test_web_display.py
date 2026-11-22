@@ -53,7 +53,7 @@ class WebDisplayTests(unittest.TestCase):
     def test_tiny_positive_categories_help_and_totals_share_both_unit_tokens(self):
         source = record(totals=(1, 0, 0, 1), shares=(50, 0, 0, 50),
                         costs=(Decimal("0.001"), Decimal(0), Decimal(0), Decimal("0.099")),
-                        category_cost_help=True, total_tokens=2)
+                        total_cost=Decimal("0.1"), category_cost_help=True, total_tokens=2)
         for unit, tiny, total, suffix in (("credits", "<0.1", "0.1", " Credits"),
                                           ("usd", "<$0.01", "<$0.01", "")):
             dto = with_display(source, ccost_display_unit=unit).to_json()
