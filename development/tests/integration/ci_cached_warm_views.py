@@ -258,6 +258,8 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
         driver = LiveAcquisition(coordinator)
         driver.tick = held_history
         host.live = LiveRuntime(lambda: driver, host.events.publish, host.runtime_failed, display_archive=archive)
+        # The host's own startup warm is not under test; any submit below must come from browsing.
+        host.benchmark.requested = False
         context = browser.new_context(viewport={"width": 1100, "height": 800})
         requests, errors, first_ms = [], [], {}
         try:

@@ -23,14 +23,13 @@ from .display_archive import DisplayArchive
 
 
 class WebHost:
-    # Keep the draft cutover explicit while current-host running/finish
-    # observations and the legacy migration are not yet ready.
-    cached_sessions_enabled = False
-    cached_watch_enabled = False
-    cached_mix_enabled = False
-    cached_stats_enabled = False
-    cached_models_enabled = False
-    cached_accounts_enabled = False
+    # Every page reads the shared display archive; acquisition only publishes into it.
+    cached_sessions_enabled = True
+    cached_watch_enabled = True
+    cached_mix_enabled = True
+    cached_stats_enabled = True
+    cached_models_enabled = True
+    cached_accounts_enabled = True
 
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
