@@ -25,13 +25,17 @@ SESSION_SORTS = {"activity": "Last activity", "name": "Session name", "model": "
 FORBIDDEN = {"/api/data", "/api/reports", "/api/sessions", "/api/detail", "/api/accounts/timeline"}
 
 
-def _populate(path, now_ms):
+def _populate(path, now_ms, activity=None):
+    def roots():
+        for index in range(10_000):
+            clock = activity(now_ms, index) if activity is not None else now_ms - index * 60_000
+            yield f"ses_cold_{index:05d}", "fixture", "/fixture", f"Synthetic root {index}", clock - 60_000, clock
+
     with closing(sqlite3.connect(path)) as db, db:
         db.executescript(SCHEMA.read_text(encoding="utf-8"))
         db.executemany("""
             INSERT INTO session(id,project_id,directory,title,time_created,time_updated) VALUES(?,?,?,?,?,?)
-        """, ((f"ses_cold_{i:05d}", "fixture", "/fixture", f"Synthetic root {i}",
-               now_ms - (i + 1) * 60_000, now_ms - i * 60_000) for i in range(10_000)))
+        """, roots())
         assert db.execute("SELECT count(*) FROM session").fetchone() == (10_000,)
 
 
@@ -104,8 +108,9 @@ def _journey(page, link, selector, empty=None):
     return panel, round((time.perf_counter() - start) * 1000, 1)
 
 
-def check_cached_cold_views(browser, evidence, product_root):
+def check_cached_cold_views(browser, evidence, product_root, *, measure_progress=False):
     from playwright.sync_api import expect
+    from development.tests.integration.cached_progressive_sessions import check_progressive_sessions, fixture_activity
 
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -113,7 +118,7 @@ def check_cached_cold_views(browser, evidence, product_root):
         shutil.copyfile(product_root / "config/default-config.jsonc", root / "config/default-config.jsonc")
         path = root / "source.db"
         now = int(time.time() * 1000)
-        _populate(path, now)
+        _populate(path, now, fixture_activity if measure_progress else None)
         source = OpenCodeV1Source(path)
         service = SimpleNamespace(timezone_id="UTC", selection=SimpleNamespace(selected="v1", source=source))
         driver = SimpleNamespace(error=None, terminal=False, observed_at_ms=None,
@@ -169,6 +174,9 @@ def check_cached_cold_views(browser, evidence, product_root):
                 page.evaluate("location.hash = '#/sessions/ses_cold_00000'")
                 detail, first_ms["detail"] = _journey(page, None, ".session-detail-cache", "No cached detail yet.")
                 expect(detail.get_by_role("button", name="Next", exact=True)).to_be_disabled()
+                assert archive.history.session_page(archive.views.source).total == 0
+                if measure_progress:
+                    evidence["cached_progressive_sessions"] = check_progressive_sessions(page, archive, host.events, now)
                 reads.assert_not_called()
                 jobs.assert_not_called()
                 benchmark.assert_not_called()
@@ -178,9 +186,25 @@ def check_cached_cold_views(browser, evidence, product_root):
             assert "/api/models/benchmark" in requests
             assert not FORBIDDEN.intersection(requests), sorted(FORBIDDEN.intersection(requests))
             assert not errors, errors
-            assert archive.history.session_page(archive.views.source).total == 0
+            assert max(first_ms.values()) < 1000, first_ms
             evidence["cached_cold_views"] = dict(source_roots=10_000, committed_roots=0,
                 source_reads=0, finite_submits=0, benchmark_submits=0, first_correct_view_wall_ms=first_ms)
         finally:
             context.close()
             host.close()
+
+
+if __name__ == "__main__":
+    import json
+    import os
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(executable_path=os.environ.get("BROWSER_PROBE_EXECUTABLE"), headless=True)
+        try:
+            evidence = {}
+            check_cached_cold_views(browser, evidence, Path.cwd(),
+                                    measure_progress=os.environ.get("MEASURE_COLD_PROGRESS") == "1")
+            print(json.dumps(evidence))
+        finally:
+            browser.close()
