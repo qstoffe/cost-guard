@@ -51,20 +51,25 @@ async function main() {
   const checks=[],layouts=[]; let evidence={outcome:'FAIL'},phase='launch-fixture';
    const deadline=setTimeout(()=>{child.kill();server.kill();},scope==='--mini-tooltips'?900000:170000);
   try {
-    const launch=JSON.parse((await lines.next()).value); // Never log bootstrap credentials.
-    const version=await command('Browser.getVersion');
-    const {targetId}=await command('Target.createTarget',{url:'about:blank'});
-    const {sessionId:owner}=await command('Target.attachToTarget',{targetId,flatten:true});
-    await command('Page.enable',{},owner);await command('Runtime.enable',{},owner);
-     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
+     const launch=JSON.parse((await lines.next()).value); // Never log bootstrap credentials.
+     const version=await command('Browser.getVersion');
      if(scope==='--mini-tooltips') {
        phase='native-browser-zoom';
-       await command('Page.navigate',{url:'chrome://settings/appearance'},owner);
-       await until(owner,`typeof chrome.settingsPrivate?.setDefaultZoom==='function'`);
-       await evaluate(owner,`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(1.25,resolve))`);
-       assert.equal(await evaluate(owner,`new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))`),1.25);
+       // Open WebUI as its own target instead of navigating an attached,
+       // emulated product page across Chrome's internal renderer boundary.
+       const {targetId:settings}=await command('Target.createTarget',{url:'chrome://settings/appearance'});
+       const {sessionId:settingsSession}=await command('Target.attachToTarget',{targetId:settings,flatten:true});
+       await until(settingsSession,`typeof chrome.settingsPrivate?.setDefaultZoom==='function'`);
+       await evaluate(settingsSession,`new Promise(resolve=>chrome.settingsPrivate.setDefaultZoom(1.25,resolve))`);
+       assert.equal(await evaluate(settingsSession,`new Promise(resolve=>chrome.settingsPrivate.getDefaultZoom(resolve))`),1.25);
+       await command('Target.closeTarget',{targetId:settings});
      }
-    await command('Page.navigate',{url:launch.url},owner);
+     phase='product-navigation';
+     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
+     const {sessionId:owner}=await command('Target.attachToTarget',{targetId,flatten:true});
+     await command('Page.enable',{},owner);await command('Runtime.enable',{},owner);
+      await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
+     await command('Page.navigate',{url:launch.url},owner);
     await until(owner,`typeof miniWatch!=='undefined' && hostState.kind==='connected' && liveValue?.view?.active_cards?.length===${scope==='--effort-defaults'?5:2}`);
     await evaluate(owner,`location.hash='#/watch'`);
       await until(owner,`current?.watch?.cards.size>0`);
