@@ -381,7 +381,7 @@ class V1ArchiveCursorTests(unittest.TestCase):
                     cursor.read_page()
                 self.assertFalse(source.db.in_transaction)
 
-    def test_equal_incremental_catalog_revision_is_not_exact_reopen_equivalence(self):
+    def test_capture_fingerprint_distinguishes_same_clock_content_change_legacy_stamp_misses(self):
         _seed(self.path)
         with closing(sqlite3.connect(self.path)) as writer, writer:
             _prompt(writer, ROOT, 1)
@@ -389,20 +389,61 @@ class V1ArchiveCursorTests(unittest.TestCase):
         source = OpenCodeV1Source(self.path)
         previous = source.load_session_snapshot(ROOT)
         with closing(sqlite3.connect(":memory:")) as db, source.archive_cursor(ROOT) as cursor:
-            old_stamp = _stamp(V1RevisionStamp(cursor, db))
+            old = V1RevisionStamp(cursor, db)
+            self.assertIsNone(old.capture_fingerprint)
+            self.assertFalse(old.read_page().eof)
+            self.assertIsNone(old.capture_fingerprint)
+            old_stamp = _stamp(old)
 
         with closing(sqlite3.connect(self.path)) as writer, writer:
             writer.execute("UPDATE part SET data=? WHERE id='step-0001'",
                            ('{"type":"step-finish","tokens":{"input":700,"output":2}}',))
         current = source.load_session_snapshot(ROOT)
         with closing(sqlite3.connect(":memory:")) as db, source.archive_cursor(ROOT) as cursor:
-            new_stamp = _stamp(V1RevisionStamp(cursor, db))
+            new = V1RevisionStamp(cursor, db)
+            new_stamp = _stamp(new)
 
         self.assertEqual(previous.source_revision, current.source_revision)
         self.assertEqual(previous.source_revision, old_stamp)
         self.assertEqual(old_stamp, new_stamp)
+        self.assertRegex(old.capture_fingerprint, r"^v1-capture:[0-9a-f]{64}$")
+        self.assertRegex(new.capture_fingerprint, r"^v1-capture:[0-9a-f]{64}$")
+        self.assertNotEqual(old.capture_fingerprint, new.capture_fingerprint)
         self.assertEqual([9, 9], [entry.tokens.input for entry in trace_entries(previous)])
         self.assertEqual([700, 9], [entry.tokens.input for entry in trace_entries(current)])
+
+    def test_capture_fingerprint_compares_only_the_root_observed_at_eof(self):
+        _seed(self.path)
+        source = _MeasuredSource(self.path)
+        with closing(sqlite3.connect(self.path)) as writer:
+            writer.execute("PRAGMA journal_mode=WAL")
+            with writer:
+                _session(writer, "peer")
+                _prompt(writer, "peer", 1)
+                _prompt(writer, ROOT, 2)
+
+            def capture(on_pin):
+                with closing(sqlite3.connect(":memory:")) as db, source.archive_cursor(ROOT) as cursor:
+                    revision = V1RevisionStamp(cursor, db)
+                    self.assertFalse(revision.read_page().eof)
+                    on_pin()
+                    stamp = _stamp(revision)
+                    self.assertFalse(source.db.in_transaction)
+                    self.assertFalse(any("WITH RECURSIVE" in sql or "COUNT(" in sql.upper() for sql in source.sql))
+                    return stamp, revision.capture_fingerprint
+
+            def edit(key, text):
+                with writer:
+                    writer.execute("UPDATE part SET data=? WHERE id=?",
+                                   (json.dumps({"type": "text", "text": text}), key))
+
+            original = capture(lambda: edit("text-0001", "unrelated change during capture"))
+            self.assertEqual(original, capture(lambda: None))
+            old_view = capture(lambda: edit("text-0002", "same clock root change during capture"))
+            new_view = capture(lambda: None)
+            self.assertEqual(original, old_view)
+            self.assertEqual(old_view[0], new_view[0])
+            self.assertNotEqual(old_view[1], new_view[1])
 
     def test_revision_stamp_retains_pinned_member_fields_and_ignores_peer_root_updates(self):
         _seed(self.path)

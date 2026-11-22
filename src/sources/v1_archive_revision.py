@@ -65,11 +65,16 @@ class V1RevisionStamp:
         self._input_done = False
         self._invalid = False
         self._stamp = None
+        self._capture_fingerprint = None
         stage.execute("""
             CREATE TEMP TABLE v1_revision_members(
                 sort_key BLOB PRIMARY KEY, encoded BLOB NOT NULL
             ) WITHOUT ROWID
         """)
+
+    @property
+    def capture_fingerprint(self):
+        return self._capture_fingerprint
 
     def read_page(self):
         """Return the source page unchanged; callers can consume the same facts."""
@@ -84,6 +89,8 @@ class V1RevisionStamp:
             self._invalid = True
             raise
         self._input_done = page.eof
+        if page.eof:
+            self._capture_fingerprint = page.capture_fingerprint
         return page
 
     def digest_turn(self):

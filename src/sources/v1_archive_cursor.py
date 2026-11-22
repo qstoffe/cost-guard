@@ -6,6 +6,7 @@ from time import monotonic
 from src.domain import NormalizedMessage, NormalizedPart, NormalizedSession
 
 from .errors import SourceConcurrentChangeError, SourceDataError, SourceSchemaError
+from .v1_archive_content import CaptureFingerprint, MESSAGE_FIELDS, PART_FIELDS, SESSION_FIELDS
 from .v1_archive_revision import MemberRevision
 
 
@@ -15,9 +16,9 @@ PIN_SECONDS = 30
 MAX_DEPTH = 128
 _REVISION_ID = "CAST(id AS BLOB) AS revision_id"  # Match BINARY order in the source database encoding.
 _TABLES = (
-    ("session", "parent_id", f"id,parent_id,project_id,title,time_created,time_updated,time_archived,{_REVISION_ID}"),
-    ("message", "session_id", f"id,session_id,time_created,time_updated,{_REVISION_ID}"),
-    ("part", "session_id", f"id,message_id,session_id,time_created,time_updated,{_REVISION_ID}"),
+    ("session", "parent_id", ",".join((*SESSION_FIELDS, _REVISION_ID))),
+    ("message", "session_id", ",".join((*MESSAGE_FIELDS, _REVISION_ID))),
+    ("part", "session_id", ",".join((*PART_FIELDS, _REVISION_ID))),
 )
 _KEYS = (("id",), ("time_created", "id"), ("rowid",))
 _DATA_COLUMNS = ("rowid", "typeof(data)")
@@ -34,6 +35,9 @@ class V1ArchivePage:
     # this cursor's seek order and the staging database's encoding.
     message_order: tuple[tuple[int, bytes], ...] = ()
     part_order: tuple[bytes, ...] = ()
+    # Present only at explicit EOF. This compares captured inputs, not
+    # database incarnation, live state, or time of a later cache commit.
+    capture_fingerprint: str | None = None
 
 
 def _identifier(value):
@@ -151,6 +155,8 @@ class V1ArchiveCursor:
         if root is None or root["parent_id"] not in (None, ""):
             raise SourceDataError("OpenCode V1 archive root is not a top-level session", phase="archive")
         _require_ids(root, "id")
+        self._fingerprint = CaptureFingerprint(source.source_instance, self._encoding)
+        self._fingerprint.record(0, root)
         self._root = self._source._normalize_session(root)
         self._stack = [_Member(self._root.session_id, MemberRevision.from_row(root))]
 
@@ -192,7 +198,7 @@ class V1ArchiveCursor:
             self._root = None
             return result
         if not self._stack:
-            return V1ArchivePage(eof=True)
+            return V1ArchivePage(eof=True, capture_fingerprint=self._fingerprint.finish())
         member = self._stack[-1]
         seek = self._seeks[member.phase]
         if member.phase == 0:
@@ -215,11 +221,13 @@ class V1ArchiveCursor:
                     break
                 remaining -= len(payload)
                 record = dict(row)
+                captured = payload.read()
                 try:
-                    record["data"] = payload.read().decode(self._encoding)
+                    record["data"] = captured.decode(self._encoding)
                 except UnicodeError as error:
                     raise SourceDataError("OpenCode V1 archive payload has invalid text", phase="archive") from error
                 values.append(normalize(record, ()) if member.phase == 1 else normalize(record))
+                self._fingerprint.record(member.phase, row, captured)
                 if table == "message":
                     native_order.append((row["time_created"], row["revision_id"]))
                 else:
@@ -243,6 +251,7 @@ class V1ArchiveCursor:
         if len(self._stack) >= MAX_DEPTH:
             raise SourceDataError("OpenCode V1 archive tree exceeds the traversal depth budget", phase="archive")
         _require_ids(rows[0], "id", "parent_id")
+        self._fingerprint.record(0, rows[0])
         child = self._source._normalize_session(rows[0])
         member.after = seek.key(rows[0])
         self._stack.append(_Member(child.session_id, MemberRevision.from_row(rows[0])))
