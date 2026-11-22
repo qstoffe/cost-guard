@@ -1,8 +1,7 @@
 'use strict';
 // App-owned PiP presentation. No auth, source calls, totals or lifecycle inference.
 const MiniWatch = (() => {
-  const defaultNonRunningRows = 5;
-  const nonRunningScrollback = 15; // Same bounded window as the shared catalog publication.
+  const defaultSessionRows = 5;
   const openingWidthRatio = 0.75;
   const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, {granularity: 'grapheme'}) : null;
   function promptPreview(prompt) {
@@ -124,52 +123,71 @@ const MiniWatch = (() => {
   }
   // Select presentation representatives from canonical, already-acquired facts.
   // Never infer completion, revalue costs or resolve identity from display names.
-  function sessions(view, nonRunningRows) {
-    const active = new Map(), finished = new Map();
-    const catalog = new Map((view?.earlier_previews || []).map(value => [value.session_id, value]));
-    const start = value => [value.item?.prompt?.at_ms ?? 0, value.item?.prompt?.event_id || ''];
-    const activity = value => value.preview ? value.card.activity_ms :
-      value.running ? value.item.prompt.at_ms :
-        value.item?.prompt?.completed_at_ms ?? catalog.get(value.card.session_id)?.activity_ms;
-    const compare = (a, b) => (activity(a) ?? -Infinity) - (activity(b) ?? -Infinity) ||
-      a.card.session_id.localeCompare(b.card.session_id) || start(a)[1].localeCompare(start(b)[1]);
-    const add = (pool, value, newer) => {
-      const old = pool.get(value.card.session_id);
-      if (!old || newer(value, old)) pool.set(value.card.session_id, value);
+  const knownTime = at => Number.isSafeInteger(at) && at >= 0;
+  function sessionActivity(prompt, catalog, {usesStart = false, running = false} = {}) {
+    const display = prompt?.display;
+    const at = usesStart ? prompt?.at_ms : prompt?.completed_at_ms;
+    const activity = catalog?.activity_ms;
+    if (!running && knownTime(activity) &&
+        (!knownTime(at) || (catalog.activity_origin === 'events' && activity > at))) {
+      return {at: activity, clock: catalog.display?.activity_clock, full: catalog.display?.activity_date_time,
+        generic: true, estimated: catalog.activity_origin === 'catalog'};
+    }
+    if (!knownTime(at)) return {at: null};
+    return {at,
+      clock: usesStart ? display?.clock : display?.finished_clock,
+      full: usesStart ? display?.mini_start_date_time ?? display?.start_date_time :
+        display?.mini_finished_date_time ?? display?.finished_date_time};
+  }
+  function sessions(view, rowTarget) {
+    const active = new Map(), unverified = new Map(), finished = new Map();
+    const catalog = new Map();
+    const previewRank = card => !knownTime(card?.activity_ms) ? 0 : card.activity_origin === 'events' ? 2 : 1;
+    for (const card of view?.earlier_previews || []) {
+      const old = catalog.get(card.session_id);
+      if (!old || (previewRank(card) - previewRank(old) || card.activity_ms - old.activity_ms) > 0)
+        catalog.set(card.session_id, card);
+    }
+    const compare = (a, b) => (b.activity.at ?? -Infinity) - (a.activity.at ?? -Infinity) ||
+      a.card.session_id.localeCompare(b.card.session_id) ||
+      (b.item?.prompt?.event_id || '').localeCompare(a.item?.prompt?.event_id || '');
+    const add = (pool, card, item, {running = false, usesStart = false, historical = false} = {}) => {
+      const metadata = catalog.get(card.session_id);
+      const value = {card, item, running, usesStart, historical, catalog: metadata,
+        activity: sessionActivity(item?.prompt, metadata, {usesStart, running})};
+      const old = pool.get(card.session_id);
+      // Choose the newest actual prompt first. A shared session timestamp must
+      // not mask which prompt is newer when comparing two rich representatives.
+      const clock = usesStart ? 'at_ms' : 'completed_at_ms';
+      const oldAt = old?.item?.prompt?.[clock], at = item?.prompt?.[clock];
+      const byPrompt = (knownTime(oldAt) ? oldAt : -Infinity) - (knownTime(at) ? at : -Infinity);
+      if (!old || (byPrompt || compare(value, old)) <= 0) pool.set(card.session_id, value);
     };
     for (const card of view?.active_cards || []) for (const item of card.rows || []) {
       const prompt = item.prompt;
       if (!card.focal_id || prompt.event_id !== card.focal_id || prompt.is_compaction) continue;
-      const running = Boolean(prompt.in_progress || prompt.execution_unverified);
-      const value = {card, item, running, historical: false};
-      if (running) add(active, value, (a, b) => {
-        const verified = p => Boolean(p.in_progress && !p.execution_unverified);
-        const pa = a.item.prompt, pb = b.item.prompt;
-        return verified(pa) !== verified(pb) ? verified(pa) :
-          pa.at_ms !== pb.at_ms ? pa.at_ms > pb.at_ms : pa.event_id.localeCompare(pb.event_id) > 0;
-      });
-      else add(finished, value, (a, b) => compare(a, b) > 0);
+      if (prompt.execution_unverified) add(unverified, card, item, {usesStart: true});
+      else if (prompt.in_progress) add(active, card, item, {running: true, usesStart: true});
+      else add(finished, card, item);
     }
-    for (const card of [...(view?.earlier_cards || []), ...WatchView.finishedCards(view)]) {
-      const value = {card, item: card.rows?.[0], running: false, historical: true};
-      add(finished, value, (a, b) => compare(a, b) >= 0);
+    for (const card of [...(view?.earlier_cards || []), ...WatchView.finishedCards(view)])
+      add(finished, card, card.rows?.[0], {historical: true});
+    for (const card of catalog.values()) if (!finished.has(card.session_id))
+      finished.set(card.session_id, {card, preview: true, running: false, historical: true,
+        activity: sessionActivity(null, card)});
+    for (const [id, value] of unverified) {
+      const recent = finished.get(id)?.activity;
+      if (recent?.at != null && !recent.estimated && recent.at > (value.activity.at ?? -Infinity))
+        value.activity = {...recent, generic: true};
+      finished.set(id, value);
     }
-    for (const card of view?.earlier_previews || []) if (!finished.has(card.session_id))
-      finished.set(card.session_id, {card, preview: true, running: false, historical: true});
     for (const id of active.keys()) finished.delete(id);
-    const fillers = [...finished.values()].sort(compare).slice(-nonRunningScrollback);
-    const split = Math.max(0, fillers.length - nonRunningRows);
-    // Older finished rows form scrollback. Preserve activity order within
-    // each band: even a long-running session belongs in the opening band.
-    const latest = [...active.values(), ...fillers.slice(split)].sort(compare);
-    return [...fillers.slice(0, split), ...latest]
-      .map(value => ({...value, catalog: catalog.get(value.card.session_id)}));
+    const slots = Math.max(0, rowTarget - active.size);
+    const fillers = [...finished.values()].sort(compare).slice(0, slots);
+    return {rows: [...active.values()].sort(compare).concat(fillers), fillers, slots};
   }
-  function activityLabel(prompt, running, now, today) {
-    const at = running ? prompt?.at_ms : prompt?.completed_at_ms;
-    if (!Number.isSafeInteger(at) || at < 0) return '—';
-    const clock = (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—';
-    const full = running ? prompt.display?.start_date_time : prompt.display?.finished_date_time;
+  function activityLabel({at, clock = '—', full}, now, today) {
+    if (at == null) return '—';
     const hour = 3600000, day = 24 * hour, age = now - at;
     // Future times keep their supported clock, never a negative "ago". Without
     // configured-local day evidence, conservatively retain the prepared clock.
@@ -178,6 +196,10 @@ const MiniWatch = (() => {
     if (age < 30 * day) return Math.floor(age / day) + 'd ago';
     if (age < 365 * day) return Math.floor(age / (30 * day)) + 'm ago';
     return Math.floor(age / (365 * day)) + 'y ago';
+  }
+  function activityHelp({full, estimated}) {
+    return 'Session activity' + (full ? ' · ' + full : '') +
+      (estimated ? '\nSource catalog activity, not a prompt finish.' : '');
   }
   const hydrationHelp = {
     reading: 'Reading this session’s prompt history.',
@@ -196,26 +218,20 @@ const MiniWatch = (() => {
     row.children[4].textContent = '120k';
     return row;
   }
-  // Budget the opening band's real heights independently:
-  // every running row, plus the newest configured number of non-running rows.
+  // The selected rows determine content height. Only the viewport clips it.
   function boundTable(view, root, {reserve = false, viewport = false} = {}) {
     const region = root.querySelector('.mini-prompts'), table = region.firstElementChild;
     const body = table.tBodies[0], rows = [...body.rows];
-    // DOM attributes, rather than class names, also cover unverified running
-    // representatives and survive cloning for opening/explicit-fit measurement.
-    const nonRunning = rows.filter(row => row.dataset.running === 'false');
-    const capacity = view.nonRunningRows;
-    const visible = [...rows.filter(row => row.dataset.running !== 'false'), ...nonRunning.slice(-capacity)];
     const zoom = region.currentCSSZoom || 1;
     const header = table.tHead.getBoundingClientRect().height;
     const height = row => row.getBoundingClientRect().height;
-    let content = header + visible.reduce((total, row) => total + height(row), 0);
-    if (reserve && nonRunning.length < capacity) {
+    let content = header + rows.reduce((total, row) => total + height(row), 0);
+    const notice = rows.find(row => row.dataset.id === undefined);
+    const missing = view.rowTarget - rows.length + Number(Boolean(notice));
+    if (reserve && missing > 0) {
       const sample = measurementRow(view);
       body.append(sample);
       try {
-        const missing = capacity - nonRunning.length;
-        const notice = rows.find(row => row.dataset.running === undefined);
         content += Math.max(0, missing * height(sample) - (notice ? height(notice) : 0));
       } finally { sample.remove(); }
     }
@@ -226,7 +242,7 @@ const MiniWatch = (() => {
       const padding = parseFloat(win.getComputedStyle(view.doc.body).paddingBottom) * zoom;
       // Keep at least a header and one row reachable even in a very short
       // viewport; the document can still scroll past the header or to accounts.
-      minimum = (header + (rows.length ? height(rows.at(-1)) : 0)) / zoom;
+      minimum = (header + (rows.length ? height(rows[0]) : 0)) / zoom;
       available = (win.innerHeight - inset - padding) / zoom;
     }
     const gutter = () => region.offsetHeight - region.clientHeight;
@@ -359,7 +375,7 @@ const MiniWatch = (() => {
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Session activity');
       this.body = this.table(this.prompts);
-      this.nonRunningRows = defaultNonRunningRows;
+      this.rowTarget = defaultSessionRows;
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5);
       this.compactAccounts = new AccountCards.CompactView(doc);
       this.accounts = this.compactAccounts.root;
@@ -372,7 +388,7 @@ const MiniWatch = (() => {
       table.setAttribute('aria-label', 'Session activity: representative prompt CCost, whole-session Total CCost and estimated next incoming context (Ctx)');
       for (const name of ['Activity', 'Session', 'CCost', 'Total', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Activity: '• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.\n• While prompt details load, shows session activity.', Session: 'The name of the session.',
+        const explanation = {Activity: 'Running sessions come first. Each group is sorted by newest activity.\n• Running prompts show their start time.\n• Other rows show the prompt’s finish or last known start, or a newer session activity time when available.', Session: 'The name of the session.',
           CCost: "Reference cost of this session's latest represented prompt, including attributed linked subagent calls.",
           Total: ReportView.headerHelp.sessionCost,
           Ctx: ReportView.headerHelp.context}[name];
@@ -393,15 +409,27 @@ const MiniWatch = (() => {
       return root.top + contentHeight(this, root.width / (this.root.currentCSSZoom || 1), false) +
         padding <= win.innerHeight + 2;
     }
-    atLatest() {
+    scrollAnchor() {
       const region = this.prompts;
-      return Boolean(this.body.rows) && region.scrollHeight - region.clientHeight - region.scrollTop <= 1 &&
-        !region.contains(this.doc.activeElement);
+      if (!this.body.rows || region.scrollTop <= 1) return [];
+      const top = region.getBoundingClientRect().top;
+      const headerBottom = top + this.body.parentNode.tHead.getBoundingClientRect().height;
+      const positions = [...this.body.rows].filter(row => row.dataset.id !== undefined).map(row => {
+        const bounds = row.getBoundingClientRect();
+        return {row, offset: bounds.top - top, visible: bounds.bottom > headerBottom};
+      });
+      const first = positions.findIndex(position => position.visible);
+      return first < 0 ? [] : positions.slice(first).concat(positions.slice(0, first).reverse());
     }
-    boundSessions(followLatest = this.atLatest()) {
+    boundSessions(positions = []) {
       if (!this.body.rows) return; // VM fixtures have no layout engine.
       boundTable(this, this.root, {viewport: true});
-      if (followLatest) this.prompts.scrollTop = this.prompts.scrollHeight;
+      const anchor = positions.find(({row}) => row.parentNode === this.body);
+      if (anchor) {
+        const region = this.prompts;
+        const offset = anchor.row.getBoundingClientRect().top - region.getBoundingClientRect().top;
+        region.scrollTop += (offset - anchor.offset) / (region.currentCSSZoom || 1);
+      }
     }
     emptyRow(columns) {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
@@ -477,7 +505,7 @@ const MiniWatch = (() => {
       });
       if (!row.children[4].className.includes('help-value')) row.children[4].tabIndex = -1;
     }
-    drawPreview(row, card, now, today) {
+    drawPreview(row, card, activity, now, today) {
       const text = ReportView.text, session = this.drawSession(row.children[1], card);
       const help = hydrationDetail(card);
       const reason = card.hydration_reason === 'http_auth_failure' ? ' Source authorization is required.' : '';
@@ -485,17 +513,11 @@ const MiniWatch = (() => {
       row.sessionHelp = `${session}\n${help}${reason}`;
       row.contextHelp = ''; row.children[4].classList.toggle('mini-context-exceeded', false);
       row.children[4].dataset.guidance = 'pending';
-      const time = row.children[0].children[0], at = card.activity_ms;
+      const time = row.children[0].children[0];
       text(time.children[0], '');
       // Generic activity only; no synthetic prompt, event ID or finish outcome.
-      const full = card.display?.activity_date_time;
-      const label = card.display?.activity_clock || '—';
-      const age = now - at, day = 86400000;
-      text(time.children[1], at == null || age < 43200000 || !today || full?.startsWith(today + ' ') ? label :
-        age < day ? Math.floor(age / 3600000) + 'h ago' : age < 30 * day ? Math.floor(age / day) + 'd ago' :
-        age < 365 * day ? Math.floor(age / (30 * day)) + 'm ago' : Math.floor(age / (365 * day)) + 'y ago');
-      row.activityHelp = 'Session activity' + (full ? ' · ' + full : '') +
-        (card.activity_origin === 'catalog' ? '\nSource catalog activity, not a prompt finish.' : '');
+      text(time.children[1], activity.at == null ? card.display?.activity_clock || '—' : activityLabel(activity, now, today));
+      row.activityHelp = activityHelp(activity);
       this.drawMetrics(row, card, null, card, null);
     }
     costGroups(value, session = false) {
@@ -533,16 +555,14 @@ const MiniWatch = (() => {
       const localNow = ReportView.formatDateTime(now, ReportView.DateTimeMode.DATE,
         view?.timezone_id ?? ReportView.configuredTimezone());
       const today = localNow === 'N/A' ? null : localNow;
-      const values = sessions(view, this.nonRunningRows);
-      const nonRunning = values.filter(value => !value.running);
+      const {rows, fillers, slots} = sessions(view, this.rowTarget);
       // A metadata preview can fill space before prompt history settles.
-      const needsHistory = nonRunning.slice(-this.nonRunningRows)
+      const needsHistory = fillers
         .filter(value => !value.preview || value.card.metric_absences?.prompt_ccost === 'complete_empty_history')
-        .length < this.nonRunningRows;
+        .length < slots;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
-      for (const {card, item, running, historical, preview, catalog} of values) {
+      for (const {card, item, running, usesStart, historical, preview, catalog, activity} of rows) {
         const prompt = item?.prompt, key = card.session_id;
-        if (seen.has(key)) continue;
         seen.add(key);
         let row = this.promptRows.get(key);
         if (!row) {
@@ -550,25 +570,23 @@ const MiniWatch = (() => {
           this.promptRows.set(key, row);
         }
         row.dataset.running = String(running);
-        if (preview) { this.drawPreview(row, card, now, today); wanted.push(row); continue; }
+        if (preview) { this.drawPreview(row, card, activity, now, today); wanted.push(row); continue; }
         const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
-        const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
+        const reason = !usesStart && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
         const summaryContext = card.session_summary?.context;
         const source = historical || summaryContext?.context_scope ? summaryContext : item?.live_context;
         this.rowHelp(row, session, item, card, historical);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
         row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
-        const at = running ? prompt?.at_ms : prompt?.completed_at_ms;
-        const known = Number.isSafeInteger(at) && at >= 0;
-        row.activityHelp = known ? (running ? prompt.display?.mini_start_date_time : prompt.display?.mini_finished_date_time) : null;
+        row.activityHelp = activity.generic ? activityHelp(activity) :
+          activity.full || (usesStart ? 'Unknown start time' : 'Unknown finish time');
         const time = row.children[0].children[0];
         const verifiedRunning = !historical && prompt?.in_progress && !prompt.execution_unverified &&
           !prompt.aborted && !prompt.has_error && !prompt.completed_successfully;
         text(time.children[0], verifiedRunning ? '▶ ' : '');
-        text(time.children[1], activityLabel(prompt, running, now, today));
-        row.activityHelp ||= running ? 'Unknown start time' : 'Unknown finish time';
-        if (!known && !running && Number.isSafeInteger(prompt?.at_ms) && prompt.at_ms > 0)
+        text(time.children[1], activityLabel(activity, now, today));
+        if (!usesStart && !knownTime(prompt?.completed_at_ms) && knownTime(prompt?.at_ms))
           row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
         if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;
         if (catalog && ['refreshing', 'retrying', 'unavailable', 'partial'].includes(card.state)) {
@@ -579,12 +597,15 @@ const MiniWatch = (() => {
         wanted.push(row);
       }
       const certified = view?.history_state === 'observed' || view?.history_epoch > 0;
-      const notice = !values.some(value => value.preview) && nonRunning.length < this.nonRunningRows &&
+      const notice = !fillers.some(value => value.preview) && fillers.length < slots &&
         (view?.recent_finished_cards?.length || !(certified && wanted.length)) ?
-        WatchView.historyNotice(view, values.some(value => value.historical)) : '';
+        WatchView.historyNotice(view, fillers.some(value => value.historical)) : '';
       text(this.emptyPrompts.children[0].children[0], notice || (view?.cards_state === 'observed' ? 'No sessions' : 'Loading…'));
       this.emptyPrompts.setAttribute('role', 'status');
+      const focus = this.doc.activeElement;
+      const lostFocus = focus && [...this.promptRows.values()].some(row => !seen.has(row.dataset.id) && row.contains(focus));
       reconcile(this.body, [...wanted, ...(!wanted.length || notice ? [this.emptyPrompts] : [])]);
+      if (lostFocus) this.prompts.focus({preventScroll: true});
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
     }
     drawAccounts(view) {
@@ -745,6 +766,7 @@ const MiniWatch = (() => {
       const scope = JSON.stringify([this.instance, value?.view?.source_label]);
       if (scope !== this.sourceScope) {
         this.sourceScope = scope; this.observations = new Observations();
+        if (this.view) this.view.prompts.scrollTop = 0;
       }
       const epoch = JSON.stringify([value?.view?.now_ms, value?.source_observed_at_ms]);
       if (epoch !== this.epoch) { this.epoch = epoch; this.receivedAt = Date.now(); }
@@ -768,11 +790,12 @@ const MiniWatch = (() => {
         this.instance = instance; this.opened = false;
         this.publication = null; this.observations = new Observations();
         this.view?.drawSessions(null); this.measure?.view?.drawSessions(null);
+        if (this.view) this.view.prompts.scrollTop = 0;
       }
       if (values) {
         this.placement = values.miniWatchPlacement;
         this.size = values.miniWatchSize || 'fit-on-open';
-        this.nonRunningRows = values.miniWatchNonRunningRows ?? defaultNonRunningRows;
+        this.rowTarget = values.miniWatchRows ?? defaultSessionRows;
         this.failure = '';
       }
       this.syncTheme(); this.sync(); this.render();
@@ -794,10 +817,10 @@ const MiniWatch = (() => {
     render() {
       if (!this.view) return;
       const now = Date.now();
-      const followLatest = this.view.atLatest();
-      this.view.nonRunningRows = this.nonRunningRows ?? defaultNonRunningRows;
+      const positions = this.view.scrollAnchor();
+      this.view.rowTarget = this.rowTarget ?? defaultSessionRows;
       this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
-      this.view.boundSessions(followLatest);
+      this.view.boundSessions(positions);
     }
     defaultContentWidth() {
       return this.measure?.ready ? this.measure.defaultContentWidth?.() : null;
@@ -845,7 +868,7 @@ const MiniWatch = (() => {
     }
     read(controller) {
       const owner = this.owner, view = this.view, now = Date.now();
-      view.nonRunningRows = controller.nonRunningRows ?? defaultNonRunningRows;
+      view.rowTarget = controller.rowTarget ?? defaultSessionRows;
       view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
       // First-open native frame estimate is intentionally conservative; the API has
       // no pre-open frame/zoom query. Screen clamps remain browser-owned and scrollable.

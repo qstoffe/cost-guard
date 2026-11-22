@@ -52,7 +52,7 @@ WEB_SETTINGS_PATHS = {
     "/api/settings/ccost": "ccostDisplayUnit",
     "/api/settings/mini-placement": "miniWatchPlacement",
     "/api/settings/mini-size": "miniWatchSize",
-    "/api/settings/mini-non-running-rows": "miniWatchNonRunningRows",
+    "/api/settings/mini-rows": "miniWatchRows",
     "/api/settings/quota-display": "quotaDisplayMode",
 }
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "

@@ -27,7 +27,7 @@ WEB_PREFERENCES = {
     "ccostDisplayUnit": ("credits", "usd"),
     "miniWatchPlacement": ("remember-last", "standard"),
     "miniWatchSize": ("fit-on-open", "remember-last"),
-    "miniWatchNonRunningRows": tuple(range(2, 11)),
+    "miniWatchRows": tuple(range(8)),
     "quotaDisplayMode": ("used", "remaining"),
 }
 
@@ -216,6 +216,9 @@ def normalize_legacy_settings(overrides: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(overrides)
     # Promote the legacy user theme before merging shipped nested defaults.
     web = result.get("webSettings", {})
+    if isinstance(web, dict):
+        # The old viewport budget excluded Running; it is not a combined target.
+        web.pop("miniWatchNonRunningRows", None)
     if isinstance(web, dict) and "theme" not in web and "webTheme" in result:
         result["webSettings"] = dict(web, theme=result["webTheme"])
     # A new optional Watch color must not invalidate complete pre-feature custom palettes.
