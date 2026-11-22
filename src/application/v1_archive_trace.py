@@ -1,0 +1,167 @@
+"""Off-dispatch proof of bounded V1 trace production from one pinned cursor."""
+from collections.abc import Mapping
+from dataclasses import replace
+from pathlib import Path
+
+from src.analysis.causal import trace_entry
+from src.domain import EventKind, MessageRole, TokenUsage
+from src.sources.errors import SourceDataError
+from src.sources.opencode_requests import observed_response
+from src.sources.opencode_v1 import _event_kind, _subtask_selection
+
+from . import v1_trace_facts as facts
+
+
+TRACE_ROWS = 32
+_KINDS = {
+    EventKind.OTHER: facts.OTHER, EventKind.SYNTHETIC_CONTINUATION: facts.SYNTHETIC,
+    EventKind.USER_PROMPT: facts.PROMPT, EventKind.SUBTASK: facts.SUBTASK, EventKind.COMPACTION: facts.COMPACTION,
+}
+
+
+class V1ArchiveTrace:
+    """The caller owns the cursor and a separate, disposable staging database.
+
+    All facts are tentative until the source pin reaches EOF. This is only
+    usage trace; it has no root attribution, coverage or display authority.
+    """
+    def __init__(self, source, cursor, stage, *, subscription_providers=frozenset()):
+        files = tuple(stage.execute("PRAGMA database_list"))
+        if (stage.in_transaction or stage.isolation_level is None or len(files) != 1
+                or files[0][2] and Path(files[0][2]).resolve() == source.database_path
+                or stage.execute("SELECT 1 FROM sqlite_schema LIMIT 1").fetchone()):
+            raise ValueError("V1 trace requires an empty private staging database")
+        self._db = stage
+        self._source = source
+        self._cursor = cursor
+        self._subscriptions = subscription_providers
+        self._root = None
+        self._phase = "input"
+        self._fallback_after = None
+        self._trace_after = None
+        self._ordinal = 0
+        stage.executescript(facts.SCHEMA)
+
+    def capture_turn(self):
+        self._require("input")
+        try:
+            page = self._cursor.read_page()
+            if page.eof and self._root is None:
+                raise SourceDataError("V1 trace captured no root", phase="archive")
+            with self._db:
+                for session in page.sessions:
+                    if session.provenance.source_instance != self._source.source_instance:
+                        raise SourceDataError("V1 trace cursor has a different source binding", phase="archive")
+                    self._db.execute("INSERT INTO trace_members VALUES(?,?)", (session.session_id, session.parent_session_id))
+                    if self._root is None:
+                        self._root = session.session_id
+                for message in page.messages:
+                    facts.save_header(self._db, message)
+                for part in page.parts:
+                    self._accept_part(part)
+        except BaseException:
+            self._phase = "invalid"
+            raise
+        if page.eof:
+            self._phase = "fallback"
+        return page.eof
+
+    def _require(self, phase):
+        if self._phase != phase:
+            raise SourceDataError("V1 trace stage is not ready for this phase", phase="archive")
+
+    def _accept_part(self, part):
+        db = self._db
+        key = part.session_id, part.message_id
+        row = db.execute(f"SELECT {facts.HEAD} FROM trace_messages WHERE session=? AND id=?", key).fetchone()
+        if row is None:
+            raise SourceDataError("V1 trace part has no observed message in its session", phase="archive")
+        role = MessageRole(row[0])
+        if role is MessageRole.USER:
+            kind = _KINDS[_event_kind((part,))]
+            db.execute("UPDATE trace_messages SET kind=max(kind,?) WHERE session=? AND id=?", (kind, *key))
+            if part.kind == "subtask":
+                db.executemany("""
+                    INSERT INTO trace_choices VALUES(?,?,?,?,?,?)
+                    ON CONFLICT(session,message,field) DO UPDATE SET (clock,part,value)=
+                        (excluded.clock,excluded.part,excluded.value)
+                    WHERE (clock,part)<(excluded.clock,excluded.part)
+                """, ((*key, field, part.created_at_ms, part.part_id, value)
+                      for field, value in _subtask_selection(part).items()))
+            return
+        if role is not MessageRole.ASSISTANT:
+            return
+        if observed_response(part):
+            db.execute("UPDATE trace_messages SET response=1 WHERE session=? AND id=? AND NOT response", key)
+        if part.kind == "step-finish" and isinstance(part.data.get("tokens"), Mapping):
+            message = facts.load_header(row, self._source, *key)
+            for call in self._source._normalize_invocations(replace(message, parts=(part,))):
+                facts.save_call(db, call)
+                db.execute("UPDATE trace_messages SET step=1 WHERE session=? AND id=? AND NOT step", key)
+
+    def prepare_turn(self):
+        """Decide fallback only after all steps are known; visit even noncalls."""
+        self._require("fallback")
+        db = self._db
+        try:
+            with db:
+                rows = _keyset(db, "trace_messages", "session,id", f"session,id,{facts.HEAD},step,response",
+                               self._fallback_after)
+                for session, message, *fields in rows:
+                    step, observed = fields[-2:]
+                    if step or fields[0] != MessageRole.ASSISTANT.value:
+                        continue
+                    header = facts.load_header(fields[:-2], self._source, session, message)
+                    if header.tokens is None and observed:
+                        header = replace(header, tokens=TokenUsage(known_fields=()))
+                    for call in self._source._normalize_invocations(header):
+                        facts.save_call(db, call)
+        except BaseException:
+            self._phase = "invalid"
+            raise
+        if len(rows) < TRACE_ROWS:
+            self._phase = "trace"
+            return True
+        self._fallback_after = rows[-1][:2]
+        return False
+
+    def trace_turn(self):
+        """Return one ordered trace page, or None for EOF."""
+        if self._phase == "done":
+            return None
+        self._require("trace")
+        db = self._db
+        result = []
+        try:
+            rows = _keyset(db, "trace_calls", "clock,id", "*", self._trace_after)
+            for call_values in rows:
+                session, message = call_values[2:4]
+                row = db.execute(f"""
+                    SELECT {facts.HEAD} FROM trace_messages WHERE session=? AND id=?
+                """, (session, message)).fetchone()
+                header = facts.load_header(row, self._source, session, message)
+                call = facts.load_call(call_values, self._source, header)
+                parent, = db.execute("SELECT parent FROM trace_members WHERE id=?", (session,)).fetchone()
+                owner, selection = facts.own_event(db, session, call.initiating_event_id)
+                result.append(trace_entry(call, self._ordinal, root=self._root, parent=parent, owner=owner,
+                                          selection=selection, subscription_providers=self._subscriptions))
+                self._ordinal += 1
+        except BaseException:
+            self._phase = "invalid"
+            raise
+        if len(rows) < TRACE_ROWS:
+            self._phase = "done"
+        elif rows:
+            self._trace_after = rows[-1][:2]
+        return tuple(result) if rows else None
+
+
+def _keyset(db, table, ordering, selected, after):
+    lead, tie = ordering.split(",")
+    base = f"SELECT {selected} FROM {table} {{bounds}} ORDER BY {ordering} LIMIT ?"
+    if after is None:
+        return db.execute(base.format(bounds=""), (TRACE_ROWS,)).fetchall()
+    rows = db.execute(base.format(bounds=f"WHERE {lead}=? AND {tie}>?"), (*after, TRACE_ROWS)).fetchall()
+    if len(rows) < TRACE_ROWS:
+        rows.extend(db.execute(base.format(bounds=f"WHERE {lead}>?"), (after[0], TRACE_ROWS - len(rows))).fetchall())
+    return rows

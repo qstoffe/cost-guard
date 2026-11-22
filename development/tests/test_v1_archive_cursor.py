@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from src.analysis.causal import trace_entries
+from src.application.v1_archive_trace import V1ArchiveTrace
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError, SourceSchemaError
 from src.sources.opencode_v1 import OpenCodeV1Source
 
@@ -44,6 +46,46 @@ def _prompt(db, session_id, number):
          '{"type":"step-finish","tokens":{"input":9,"output":2}}'),
         (f"text-{number:04d}", user, session_id, 1100, 1100, '{"type":"text","text":"original"}'),
     ])
+
+
+def _trace_fixture(path, size):
+    _seed(path)
+    with closing(sqlite3.connect(path)) as db, db:
+        _session(db, "child", ROOT)
+
+        def message(key, clock, *, session=ROOT, **data):
+            db.execute("INSERT INTO message VALUES(?,?,?,?,?)", (key, session, clock, clock, json.dumps(data)))
+
+        def part(key, owner, clock, *, session=ROOT, **data):
+            db.execute("INSERT INTO part VALUES(?,?,?,?,?,?)", (key, owner, session, clock, clock, json.dumps(data)))
+
+        selection = {"providerID": "synthetic", "modelID": "sample", "variant": "medium"}
+        message("tied-prompt", 100, role="user")
+        part("tied-text", "tied-prompt", 100, type="text", text="PRIVATE_FIXTURE_TRANSCRIPT")
+        message("wide", 400, role="assistant", parentID="continuation", **selection,
+                time={"created": 400, "completed": 500}, tokens={"input": 9999})
+        for number in range(size):
+            part(f"response-{number:05d}", "wide", 401 + number, type="text", text="PRIVATE_FIXTURE_TRANSCRIPT")
+        part("late-step", "wide", 500, type="step-finish", cost=0.5, tokens={"input": 17, "cache": {"read": 0}})
+        # Fill output pages with noncalls. Put the other tied boundary later
+        # in acquisition order and visit its part after the first boundary.
+        for number in range(130):
+            message(f"noncall-{number:05d}", 42, role="other")
+        message("tied-task", 100, role="user", model=selection)
+        part("task-later", "tied-task", 102, type="subtask", model={"variant": "high"})
+        part("task-earlier", "tied-task", 101, type="subtask", model={"variant": "low"})
+        message("continuation", 200, role="user", model=selection)
+        message("synthetic", 210, role="user", model={**selection, "variant": "low"})
+        part("synthetic-continue", "synthetic", 210, type="text", synthetic=True,
+             text="Summarize the task tool output above and continue with your task.")
+        message("at-tie", 100, role="user")
+        message("unknown", 600, role="assistant", parentID="synthetic", **selection)
+        part("unknown-reason", "unknown", 600, type="reasoning", text="PRIVATE_FIXTURE_TRANSCRIPT")
+        message("same-clock", 601, role="assistant", parentID="at-tie", **selection, tokens={"input": 0})
+        message("selected", 602, role="assistant", parentID="tied-task", **selection, tokens={"output": 5})
+        message("child-call", 601, session="child", role="assistant", parentID="tied-task", **selection,
+                tokens={"input": 8})
+        message("no-response", 700, role="assistant", parentID="continuation", **selection)
 
 
 def _seed(path, *, encoding="UTF-8", composite=False, parent_index=True, unique_root=True):
@@ -316,6 +358,120 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 with self.assertRaises(SourceConcurrentChangeError):
                     cursor.read_page()
                 self.assertFalse(source.db.in_transaction)
+
+    def test_bounded_trace_matches_whole_snapshot_with_a_late_step_and_tied_continuations(self):
+        for size in (140, 2200):
+            with self.subTest(parts=size):
+                source_path = self.path.with_name(f"source-{size}.db")
+                stage_path = self.path.with_name(f"stage-{size}.db")
+                _trace_fixture(source_path, size)
+                source = OpenCodeV1Source(source_path)
+                subscriptions = frozenset({"synthetic"})
+                expected = trace_entries(source.load_session_snapshot(ROOT), subscription_providers=subscriptions)
+                with closing(sqlite3.connect(stage_path)) as db:
+                    with source.archive_cursor(ROOT) as cursor:
+                        builder = V1ArchiveTrace(source, cursor, db, subscription_providers=subscriptions)
+                        with self.assertRaisesRegex(SourceDataError, "not ready"):
+                            builder.trace_turn()
+                        work = 0
+
+                        def progress():
+                            nonlocal work
+                            work += 1
+                            return 0
+
+                        db.set_progress_handler(progress, 1)
+                        costs = []
+                        for _ in range(80):
+                            start = work
+                            if builder.capture_turn():
+                                break
+                            costs.append(work - start)
+                        else:
+                            self.fail("source trace capture did not reach EOF")
+                    for _ in range(25):
+                        if builder.prepare_turn():
+                            break
+                    else:
+                        self.fail("fallback preparation did not reach EOF")
+                    result = []
+                    for _ in range(10):
+                        page = builder.trace_turn()
+                        if page is None:
+                            break
+                        result.extend(page)
+                    else:
+                        self.fail("trace replay did not reach EOF")
+
+                self.assertEqual(expected, tuple(result))
+                self.assertNotIn(b"PRIVATE_FIXTURE_TRANSCRIPT", stage_path.read_bytes())
+                self.assertEqual(["wide:late-step", "unknown", "child-call", "same-clock", "selected"],
+                                 [entry.invocation_id for entry in result])
+                self.assertEqual([None, "tied-task", None, None, "tied-task"],
+                                 [entry.logical_prompt_id for entry in result])
+                self.assertEqual(["medium", "low", None, None, "high"], [entry.selected_effort for entry in result])
+                self.assertEqual([("input", "cache_read"), (), ("input",), ("input",), ("output",)],
+                                 [entry.tokens.known_fields for entry in result])
+                self.assertEqual(17, result[0].tokens.input)
+                self.assertEqual(ROOT, result[2].parent_session_id)
+                self.assertLess(max(costs), 15000)
+
+    def test_dense_root_replays_exact_order_and_identity_across_many_trace_turns(self):
+        _seed(self.path)
+        with closing(sqlite3.connect(self.path)) as db, db:
+            for number in reversed(range(PROMPTS)):
+                _prompt(db, ROOT, number)
+        source = _MeasuredSource(self.path)
+        expected = trace_entries(source.load_session_snapshot(ROOT))
+
+        with closing(sqlite3.connect(":memory:")) as db:
+            with source.archive_cursor(ROOT) as cursor:
+                builder = V1ArchiveTrace(source, cursor, db)
+                for _ in range(100):
+                    if builder.capture_turn():
+                        break
+                else:
+                    self.fail("dense input did not reach EOF")
+            for _ in range(100):
+                if builder.prepare_turn():
+                    break
+            else:
+                self.fail("dense fallback did not reach EOF")
+            result, sizes = [], []
+            for _ in range(60):
+                page = builder.trace_turn()
+                if page is None:
+                    break
+                result.extend(page)
+                sizes.append(len(page))
+            else:
+                self.fail("dense trace did not reach EOF")
+
+        self.assertEqual([32] * 42 + [22], sizes)
+        self.assertEqual(tuple(range(PROMPTS)), tuple(entry.sort_order for entry in result))
+        self.assertEqual([_user(n) for n in range(PROMPTS)], [entry.logical_prompt_id for entry in result])
+        self.assertEqual(expected, tuple(result))
+
+    def test_failed_cursor_cannot_turn_partial_input_into_replayable_trace(self):
+        _seed(self.path)
+        source = OpenCodeV1Source(self.path)
+        before = self.path.read_bytes()
+
+        with closing(sqlite3.connect(":memory:")) as stage, source.archive_cursor(ROOT) as cursor:
+            with closing(sqlite3.connect(self.path)) as wrong:
+                with self.assertRaisesRegex(ValueError, "private staging database"):
+                    V1ArchiveTrace(source, cursor, wrong)
+            builder = V1ArchiveTrace(source, cursor, stage)
+            self.assertFalse(builder.capture_turn())
+            cursor.close()
+            with self.assertRaises(SourceConcurrentChangeError):
+                builder.capture_turn()
+            with self.assertRaisesRegex(SourceDataError, "not ready"):
+                builder.prepare_turn()
+            with self.assertRaisesRegex(SourceDataError, "not ready"):
+                builder.trace_turn()
+
+        self.assertEqual(before, self.path.read_bytes())
 
 
 if __name__ == "__main__":

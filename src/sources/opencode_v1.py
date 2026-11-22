@@ -228,23 +228,21 @@ def _event_metadata(message: NormalizedMessage) -> dict[str, str]:
         metadata["agent"] = message.agent
     for part in message.parts:
         if part.kind == "subtask":
-            model = part.data.get("model")
-            if isinstance(model, Mapping):
-                provider = str(model.get("providerID", "")).strip()
-                model_id = str(model.get("modelID", "")).strip()
-                variant = str(model.get("variant", "")).strip()
-                if provider:
-                    metadata["provider_id"] = provider
-                if model_id:
-                    metadata["model_id"] = model_id
-                if variant:
-                    metadata["variant"] = variant
+            metadata.update(_subtask_selection(part))
         elif part.kind == "compaction":
             metadata["auto"] = "true" if bool(part.data.get("auto", False)) else "false"
             tail = part.data.get("tail_start_id", part.data.get("tailStartId"))
             if tail:
                 metadata["tail_start_id"] = str(tail)
     return metadata
+
+
+def _subtask_selection(part):
+    model = part.data.get("model")
+    if not isinstance(model, Mapping):
+        return {}
+    fields = (("provider_id", "providerID"), ("model_id", "modelID"), ("variant", "variant"))
+    return {key: value for key, native in fields if (value := str(model.get(native, "")).strip())}
 
 
 class OpenCodeV1Source:
