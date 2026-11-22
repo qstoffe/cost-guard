@@ -20,9 +20,10 @@ from src.cache.display_request_stage import (
     seal_request_input,
 )
 from src.cache.display_requests import REQUEST_COLUMNS, DisplayRequest, RequestRoster, publish_roster
-from src.cache.display_stats_evidence import ResponseTiming
+from src.cache.display_stats_evidence import ResponseTiming, StatsCapture
 from src.cache.display_stats_requests import StatsRequestIdentity
-from src.cache.display_usage_reader import usage_version
+from src.cache.display_stats_revision import StatsVersion, retained_stats_version
+from src.cache.display_usage_reader import advance_usage_revision, retained_usage_version, usage_version
 
 
 SOURCE = "synthetic"
@@ -92,6 +93,32 @@ def _forks(db, fork):
         FROM archive_prepare_forks p WHERE p.attempt=? AND p.fork_key=? AND p.multiplicity>0
         ORDER BY 2 DESC,3,4,1
     """, (SOURCE, fork, attempt, attempt, fork)).fetchall()
+
+
+def _fold_one(db, slot, key, expected):
+    """Fixture-only CAS: materialize one row with installed triggers intact."""
+    if db.execute("SELECT attempt FROM probe_installed WHERE source=?", (SOURCE,)).fetchone() != (slot.attempt,):
+        return False
+    columns = ",".join(REQUEST_COLUMNS)
+    staged = db.execute(f"""
+        SELECT {columns},coalesce(first_revision,?) FROM archive_prepare_requests WHERE source=? AND request_key=?
+    """, (slot.birth, slot.attempt, key)).fetchone()
+    if staged is None:
+        return False
+    parameters = ",".join("?" for _ in staged)
+    if expected is None:
+        changed = db.execute(f"""
+            INSERT INTO archive_requests(source,{columns},first_revision) VALUES(?,{parameters})
+            ON CONFLICT(source,request_key) DO NOTHING
+        """, (SOURCE, *staged)).rowcount
+    else:
+        changed = db.execute(f"""
+            UPDATE archive_requests SET ({columns},first_revision)=({parameters})
+            WHERE source=? AND request_key=? AND ({columns},first_revision) IS ({parameters})
+        """, (*staged, SOURCE, key, *expected)).rowcount
+    if changed:
+        db.execute("DELETE FROM archive_prepare_requests WHERE source=? AND request_key=?", (slot.attempt, key))
+    return bool(changed)
 
 
 class DisplayRequestStageTests(unittest.TestCase):
@@ -308,6 +335,79 @@ class DisplayRequestStageTests(unittest.TestCase):
         expected = [(key, 70, 1) for key in keys] + [(b"\0", 20, 2)]
         self.assertEqual(expected, found)
         self.assertLess(max(work), 6000)
+
+    def test_existing_fold_triggers_invalidate_fresh_stats_after_publication(self):
+        key = b"corrected"
+        recipe = StatsRequestIdentity(b"m" * 32, None, b"s" * 32, b"p" * 32, "medium")
+        initial = replace(_request(key), stats_identity=recipe)
+        capture = StatsCapture((), False, None, ())
+        columns = ",".join(REQUEST_COLUMNS)
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", (initial,), (), stats=capture))
+            expected = db.execute(f"SELECT {columns},first_revision FROM archive_requests").fetchone()
+            old = usage_version(db, SOURCE)
+        self._stage((replace(initial, clock_ms=40, effort="high"),))
+        self._prepare("candidate")
+
+        with self.write() as db:
+            self.assertEqual(1, _install(db, "candidate"))
+            attempt, birth = db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone()
+            slot = RequestSlot(attempt, birth)
+            # Simulate a semantic publication that creates fresh Stats evidence.
+            advance_usage_revision(db, SOURCE, changed_winner=True)
+            new = usage_version(db, SOURCE)
+            next_evidence = db.execute(
+                "SELECT revision+1 FROM archive_stats_revisions WHERE source=?", (SOURCE,)).fetchone()[0]
+            db.execute("""
+                UPDATE archive_stats_request_identity SET effort='high',first_revision=? WHERE source=? AND request_key=?
+            """, (next_evidence, SOURCE, key))
+            db.execute("UPDATE archive_stats_revisions SET revision=? WHERE source=?", (next_evidence, SOURCE))
+            published_stats = StatsVersion(new, next_evidence)
+            self.assertEqual(published_stats, retained_stats_version(db, SOURCE, published_stats))
+            self.assertEqual(new, retained_usage_version(db, SOURCE, new))
+            self.assertIsNone(retained_usage_version(db, SOURCE, old))
+            self.assertEqual("high", db.execute("SELECT effort FROM archive_stats_request_identity").fetchone()[0])
+
+            db.execute("SAVEPOINT fold")
+            self.assertTrue(_fold_one(db, slot, key, expected))
+            self.assertEqual([(key, 40)], [row[:2] for row in request_clock_slice(db, SOURCE, 1, 50, slot=slot).rows])
+            self.assertEqual(new, usage_version(db, SOURCE))
+            self.assertIsNone(retained_usage_version(db, SOURCE, new))
+            self.assertIsNone(retained_usage_version(db, SOURCE, old))
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_identity").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
+            db.execute("ROLLBACK TO fold")
+            db.execute("RELEASE fold")
+            self.assertEqual(new, retained_usage_version(db, SOURCE, new))
+            self.assertEqual(published_stats, retained_stats_version(db, SOURCE, published_stats))
+            self.assertEqual("high", db.execute("SELECT effort FROM archive_stats_request_identity").fetchone()[0])
+
+            db.execute("UPDATE archive_requests SET input_tokens=99 WHERE source=? AND request_key=?", (SOURCE, key))
+            self.assertFalse(_fold_one(db, slot, key, expected), "same slot does not fence a changed base row")
+            self.assertEqual((99,), db.execute("SELECT input_tokens FROM archive_requests").fetchone())
+            self.assertEqual((40,), db.execute("SELECT clock_ms FROM archive_prepare_requests").fetchone())
+
+    def test_new_request_needs_real_parent_before_dependent_evidence_can_commit(self):
+        key = b"new"
+        self._stage((_request(key, clock=40),))
+        self._prepare("candidate")
+        with self.write() as db:
+            self.assertEqual(1, db.execute("PRAGMA foreign_keys").fetchone()[0])
+            self.assertEqual(1, _install(db, "candidate"))
+            attempt, birth = db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone()
+            slot = RequestSlot(attempt, birth)
+            self.assertEqual([(key, 40)], [row[:2] for row in request_clock_slice(db, SOURCE, 1, 50, slot=slot).rows])
+            sql = "INSERT INTO archive_response_timing VALUES(?,?,40,10,25,0,1)"
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "FOREIGN KEY"):
+                db.execute(sql, (SOURCE, key))
+
+            self.assertTrue(_fold_one(db, slot, key, None))
+            db.execute(sql, (SOURCE, key))
+        with self.history._connect(read=True) as db:
+            self.assertEqual((key, 1, 25), db.execute("""
+                SELECT request_key,request.first_revision,duration_ms
+                FROM archive_response_timing JOIN archive_requests AS request USING(source,request_key)
+            """).fetchone())
 
     def test_peer_commit_invalidates_next_prepare_page_and_spool_replays_without_early_birth(self):
         shared = b"z-shared"
