@@ -34,17 +34,10 @@ class ModelsPriceRefresh(ReportRequest):
 
 def parse_report(value):
     page_fields = {"session_page_size", "session_offset", "session_catalog_revision"}
-    comparison_fields = {'comparison_offset', 'comparison_revision'}
-    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope", "token_mix_scope"} | page_fields | comparison_fields):
+    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope", "token_mix_scope"} | page_fields):
         raise ValueError("invalid_request")
     kind = ReportKind(value.get("kind"))
-    comparison_offset = value.get('comparison_offset', 0)
-    comparison_revision = value.get('comparison_revision')
-    if (comparison_fields & set(value) and kind is not ReportKind.COMPARISONS
-            or type(comparison_offset) is not int or not 0 <= comparison_offset <= 1_000_000 or comparison_offset % 10
-            or comparison_revision is not None and (not isinstance(comparison_revision, str)
-                or not re.fullmatch(r'[0-9a-f]{64}', comparison_revision))
-            or comparison_offset and comparison_revision is None):
+    if kind is ReportKind.COMPARISONS:
         raise ValueError('invalid_request')
     stats_scope = value.get('stats_scope', '30-days')
     token_mix_scope = value.get('token_mix_scope', 'all')
@@ -87,7 +80,6 @@ def parse_report(value):
             raise ValueError("invalid_request") from exc
     return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit,
                          session_page_size=size, session_offset=offset, session_catalog_revision=revision, stats_scope=stats_scope,
-                          comparison_offset=comparison_offset, comparison_revision=comparison_revision,
                           token_mix_scope=token_mix_scope)
 
 

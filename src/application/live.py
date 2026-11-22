@@ -14,7 +14,7 @@ from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, archive=None):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
@@ -22,8 +22,8 @@ class LiveRuntime:
         self.stopping = Event()
         self.thread = None
         self.failure = None
-        self.details = SessionDetails()
-        self.catalog = SessionCatalog()
+        self.details = SessionDetails(archive=archive)
+        self.catalog = SessionCatalog(archive=archive)
         self.driver = None
         self.source_failure = None
         self.observed = Event()
@@ -83,6 +83,11 @@ class LiveRuntime:
                 try:
                     frame = driver.tick()
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
+                        selection = coordinator.report_service.selection
+                        if driver.error is None:
+                            self.catalog.bind_archive(selection.selected, selection.source.source_instance)
+                            if self.catalog.archive is not None:
+                                self.details.bind_archive(self.catalog.archive.partition)
                         health = getattr(driver, 'source_status', None)
                         driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
                             source_interrupted=driver.terminal or isinstance(health, SourceStatus) and health.outage_confirmed())

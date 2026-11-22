@@ -121,7 +121,6 @@ function applySettings(value) {
     state.accountTimeline?.draw();
     if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
     if (state.stats) ReportView.syncUnits(state.stats.root);
-    if (state.comparisons) ReportView.syncUnits(state.comparisons.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
@@ -283,20 +282,6 @@ function show(state) {
     } else state.mixLoading?.remove();
     return;
   }
-  if (state.section === 'comparisons') {
-    refresh.textContent = 'Retry Comparisons'; refresh.hidden = !state.failed;
-    notice.textContent = '';
-    ReportView.defaultUnit();
-    state.comparisons ||= new ComparisonsView.View((offset, revision) => {
-      if (state.loading) return;
-      state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
-      state.pageNavigation = true; state.orderRetried = false; state.orderReset = false;
-      state.actionRequested = true;
-      demand?.update(); acquire(state);
-    });
-    state.comparisons.update(state); state.comparisons.attach(output);
-    return;
-  }
   if (state.section === 'settings') {
     heading.hidden = true;
     if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
@@ -448,7 +433,7 @@ async function acquire(state, background = false, prices = false) {
         state.progressSequence = 0;
         return;
       } catch (error) {
-         if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !canRetry(error)) throw error;
+         if (!canRetry(error)) throw error;
          if (mix && state.result && TokenMixView.compatible(state.result, state.period)) { keepRetained = true; return; }
          await pause(error);
       }
@@ -493,7 +478,7 @@ async function acquire(state, background = false, prices = false) {
            if (demand && automaticHistory(state)) { state.active = null; await admit(); continue; }
           const error = new Error(job.result?.error?.code || job.error || job.status);
           error.retryable = job.result?.error?.retryable === true;
-            if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
+            if (!ReportLoading.retryable(error)) throw error;
            state.active = null; ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
           await attempt.backoff(error); await admit(); continue;
         }
@@ -501,8 +486,6 @@ async function acquire(state, background = false, prices = false) {
            if (state.section === 'token-mix' && (!TokenMixView.valid(job.result) ||
                job.result.view.token_mix_period?.period !== state.period)) throw new Error('report_invalid_result');
           if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_invalid_result');
-         if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
-          if (state.section === 'comparisons') state.pageNavigation = false;
           if (state.section === 'ai-stats' && !job.result.view.ai_stats_work?.scopes?.[state.period]?.ready) {
             // A finished slice is not a ready period. Keep demand and a bounded
             // lookup interval even for an old host's incomplete publication.
@@ -544,11 +527,6 @@ async function acquire(state, background = false, prices = false) {
   } catch (error) {
     if (state.attempt !== attempt) return;
     if (attempt.reason) error = new Error(attempt.reason);
-    if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
-      state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
-      state.orderRetried = true;
-      demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
-    }
     if (mix) state.mixFailure = error.message;
     state.message = prices || state.userInitiated ? 'Could not load. Try again.' : '';
     if (prices) state.priceMessage = state.message;
@@ -566,9 +544,6 @@ async function acquire(state, background = false, prices = false) {
     for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);
     if (owned && priceFocus && state === current && document.activeElement === document.body)
       output.querySelector('[data-model-control="refresh"]')?.focus({preventScroll: true});
-    if (owned && state.retryOrder && state === current && !document.hidden && hostState.writable) {
-      state.retryOrder = false; acquire(state);
-    }
     if (owned && state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
          JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }

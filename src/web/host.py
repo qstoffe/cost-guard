@@ -7,6 +7,7 @@ import webbrowser
 
 from src.version import VERSION
 from src.application.live import LiveRuntime
+from src.cache.web_archive import WebArchive
 from src.log_housekeeping import LogHousekeeping
 from .change_guard import SourceGuard
 from .http import LoopbackServer
@@ -48,8 +49,10 @@ class WebHost:
             from .source_startup import SourceStartup
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
+        archive = WebArchive(root) if self.source_startup else None
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None) if live_factory else None
+            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
+            archive=archive) if live_factory else None
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)

@@ -14,11 +14,11 @@ from src.reports import ReportKind, ReportRequest
 from .jobs import MAX_PENDING
 from .report_control import ManagedReport
 
-FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)
+FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX)
 DEFAULT_REQUESTS = tuple(ReportRequest(kind) for kind in FINITE)
 BACKGROUND_STAGGER = 15
 RECENT_SECONDS = 1800
-SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'comparisons', 'settings'}
+SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'settings'}
 MAX_ENTRIES = 12
 LEASE_SECONDS = 90
 WORKER_INTERRUPTS = {'report_unavailable', 'worker_unavailable', 'cancelled'}

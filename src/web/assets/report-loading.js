@@ -1,7 +1,7 @@
 'use strict';
 // Pending-work presentation and admission only; never scans or clock-driven progress.
 const ReportLoading = (() => {
-  const sections = ['models', 'token-mix', 'ai-stats', 'comparisons'];
+  const sections = ['models', 'token-mix', 'ai-stats'];
   const phases = {authorizing: [0, 5, 'Authorizing browser session'], queued: [5, 10, 'Waiting for report slot…'],
     pricing: [10, 20, 'Loading reference prices'], catalog: [20, 30, 'Loading source'],
     history: [30, 80, 'Checking history'], projection: [80, 94, 'Preparing report'],

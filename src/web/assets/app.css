@@ -9,7 +9,6 @@
 .comparison-table .numeric { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .comparison-facts { display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; margin-top: .6rem; font-size: .85rem; color: var(--muted); }
 .comparison-state { font-size: .8rem; }
-[data-section="comparisons"] .report-search { display: none; }
 :root {
   color-scheme: light dark;
   font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -634,9 +633,6 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .report-loading progress, .report-loading progress::-webkit-progress-value { transition: none; animation: none; }
 .sessions-catalog > [hidden] { display: none; }
 .comparison-groups + .pager { min-height: 2.5rem; }
-.comparisons-view .pager[hidden] { visibility: hidden; pointer-events: none; }
-[data-section="comparisons"] #notice:empty, [data-section="comparisons"] .report-search { display: none; }
-.comparisons-view > p { min-height: 3.6em; }
 .model-section-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2rem .5rem; margin: 0 0 .65rem; }
 .model-source { font-size: .8rem; font-weight: 400; color: var(--muted); }
 .model-source a { font: inherit; }

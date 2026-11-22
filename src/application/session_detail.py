@@ -13,6 +13,7 @@ from uuid import uuid4
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError, SessionExportError
 
+from .detail_archive import archived_page, load_detail, save_detail
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
 from .session_values import INVALID_REASONS, value_authority
@@ -37,13 +38,22 @@ def prompt_activity(rows):
 
 
 class SessionDetails:
-    def __init__(self, *, clock=time.monotonic):
+    def __init__(self, *, clock=time.monotonic, archive=None):
         self.clock = clock
         self.lock = Lock()
         self.histories = OrderedDict()
         self.leases = OrderedDict()
         self.quota_context = None
         self.quota_capacities = {}
+        self.archive = archive
+        self.partition = None
+
+    def bind_archive(self, partition):
+        with self.lock:
+            if self.partition is not None and partition != self.partition:
+                self.leases.clear()
+                self.histories.clear()
+            self.partition = partition
 
     def observe_accounts(self, accounts, source, now_ms, *, stale=False):
         # One shared Live observation; no IO and no table/history revaluation.
@@ -308,6 +318,11 @@ class SessionDetails:
                         entry['prompt_activity'] = activity
                         entry['activity_revision'] = entry['revision']
                 entry.update(outcome['metadata'])
+                if (self.archive and not entry['history'].retained and outcome['state'] == 'observed'
+                        and entry['history'].revision != entry.get('saved_revision')):
+                    if save_detail(self.archive, self.partition, key, entry['history'].revision, report,
+                                   outcome['metadata']):
+                        entry['saved_revision'] = entry['history'].revision
                 signal = entry.get('activity_signal')
                 if signal and (signal[1] == entry['captured_source_revision']
                         or previous_scope != (entry['activity'] or {}).get('scope')):
@@ -389,6 +404,13 @@ class SessionDetails:
             lease = self.leases.get(token)
             if lease is None:
                 raise KeyError("detail_expired")
+            saved = lease.get('cached_reading')
+            if saved and revision == identity(('durable-history', saved.revision, saved.observed_ms)):
+                lease['touched'] = self.clock()
+                activity = saved.value['activity']
+                if activity is None:
+                    raise KeyError('detail_expired')
+                return dict(revision=revision, **activity_page(activity, offset))
             capture = lease.get("reading") or lease["frozen"]
             if capture is None or capture["revision"] != revision or capture["activity"] is None:
                 raise KeyError("detail_expired")
@@ -396,6 +418,33 @@ class SessionDetails:
             return dict(revision=revision, **activity_page(capture["activity"], offset))
 
     def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False):
+        if self.archive:
+            with self.lock:
+                lease = self.leases.get(token)
+                if lease is None:
+                    raise KeyError('detail_expired')
+                key = lease['session_id']
+                entry = self.histories[key]
+                saved = lease.get('cached_reading') if chunk else None
+                use_cache = entry['result'] is None and lease['frozen'] is None
+                partition, mode = self.partition, lease['mode']
+                if use_cache or saved:
+                    lease['touched'] = self.clock()
+                    status = self.acquisition_status(entry)
+            if use_cache and not chunk:
+                saved = load_detail(self.archive, partition, key)
+                if saved:
+                    with self.lock:
+                        if self.leases.get(token) is not lease or partition != self.partition:
+                            raise KeyError('detail_expired')
+                        if begin:
+                            lease['cached_reading'] = saved
+            if saved:
+                return archived_page(saved, revision, offset, anchor, mode=mode, begin=begin, chunk=chunk,
+                                     acquisition=status if status['phase'] == 'failed' else None)
+            if begin:
+                with self.lock:
+                    lease.pop('cached_reading', None)
         with self.lock:
             lease = self.leases.get(token)
             if lease is None:

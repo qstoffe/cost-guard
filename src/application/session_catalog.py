@@ -13,6 +13,7 @@ from uuid import uuid4
 from src.analysis.cache import dependency_signature
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.analysis.model_identity import payload_current
+from src.cache.web_archive import source_partition
 from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -21,6 +22,7 @@ from src.sources.errors import SourceError
 from src.watch.models import SessionPreview
 
 from .projection import project
+from .session_archive import SessionArchive, cached_page
 from .session_navigation import Navigation
 from .session_catalog_scope import (
     CatalogEpoch, PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population,
@@ -111,7 +113,8 @@ def retain_pending_metrics(row, previous):
 
 
 class SessionCatalog:
-    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000), timezone_id="UTC"):
+    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000),
+                 timezone_id="UTC", archive=None):
         self.clock = clock
         self.clock_ms = clock_ms
         self.lock = Lock()
@@ -159,6 +162,48 @@ class SessionCatalog:
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
+        self.archive = SessionArchive(archive) if archive is not None else None
+        self.history_pending = {}
+        self.archive_retry_at = 0
+
+    def bind_archive(self, generation, instance):
+        if self.archive is None:
+            return
+        partition = source_partition(generation, instance)
+        if not partition or partition == self.archive.partition or self.clock() < self.archive_retry_at:
+            return
+        with self.lock:
+            if self.archive.partition:
+                self.rows.clear()
+                self.valid.clear()
+                self.archive.rows = {}
+                self.archive.authorities = {}
+                self.archive.partition = None
+                self.orders.clear()
+                self.wake_revision += 1
+        saved = self.archive.load(partition)
+        if saved is None:
+            self.archive_retry_at = self.clock() + 5
+            return
+        with self.lock:
+            self.archive.partition = partition
+            self.archive.rows, self.archive.authorities = saved
+            self.orders.clear()
+            self.wake_revision += 1
+
+    def _restore_archived_rows(self):
+        if self.archive is None or self.dependencies is None:
+            return
+        for key in self.archive.rows.keys() & self.roots.keys():
+            revision, dependencies, models = self.archive.authorities[key]
+            if key in self.rows or key in self.active or key in self.running_roots:
+                continue
+            if dependencies == self.dependencies and revision == self.revisions.get(key):
+                row = self.archive.rows[key]
+                self.rows[key] = row
+                self.valid[key] = self.revisions[key], self.clock()
+                self.activity_valid[key] = self.revisions[key]
+                self.model_dependencies[key] = models
 
     def live_hint(self):
         """Constant-size wake hint, not row/membership or scalar-value proof."""
@@ -181,6 +226,8 @@ class SessionCatalog:
                 else self.clock() - lease['touched'] <= 300)
 
     def _targets(self):
+        if self.archive is not None:
+            return self.roots.keys()
         browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
         selected = set()
         for lease in browsing:
@@ -350,6 +397,10 @@ class SessionCatalog:
             self.state = "observed"
             self.interrupted = False
             self.observed = self.clock()
+            if self.archive is not None:
+                self._restore_archived_rows()
+                self.history_pending = {key: self.activity.get(key) for key in self.roots
+                    if not self._current(key) and key not in self.active and key not in self.recent_arrivals}
 
     def observe_prompts(self, evidence):
         """Canonical Watch captures only: root identity, revision and original time.
@@ -459,6 +510,16 @@ class SessionCatalog:
         candidates = [key for key in self._targets() if self._eligible(key)]
         if not candidates:
             return None
+        if self.archive is not None:
+            if extension:
+                return None
+            visible = {key for lease in self.leases.values() if self._browsing(lease)
+                       for key in lease.get('visible', ())}
+            def priority(key):
+                observed = self.activity.get(key) or 0
+                urgent = key in self.active or key in self.running_roots or key in self.recent_arrivals
+                return (not urgent, -(observed // 900_000), key not in visible, -observed, key)
+            return min(candidates, key=priority)
         navigations = [lease['navigation'] for lease in self.leases.values() if self._browsing(lease)
             and lease.get('navigation') is not None and not lease['navigation'].invalid]
         if extension and not any(nav.expanded_period and any(
@@ -504,6 +565,7 @@ class SessionCatalog:
                 self.failure_reasons.clear()
                 self.generation += 1
                 self.dependencies = dependencies
+                self._restore_archived_rows()
             self.timezone_id = service.timezone_id
             self.unit = service.config.get("ccostDisplayUnit", "credits")
         start = self.clock()
@@ -511,6 +573,9 @@ class SessionCatalog:
             targets = self._targets()
             identities = {key: self.model_dependencies[key] for key in targets
                           if key in self.valid and key in self.model_dependencies}
+            if self.archive is not None:
+                identities = {key: values for key, values in identities.items()
+                              if key in self.active or key in self.changed_roots}
         # Native model/default observations can change without a history revision.
         # Validate only this lane's eligible roots, using the source's bounded catalog.
         changed = [key for key, values in identities.items() if not payload_current(service.source, values)]
@@ -575,6 +640,7 @@ class SessionCatalog:
                             and epoch == self.last_observation.source_epoch
                             and revision == self.revisions.get(key)):
                         if actual == revision:
+                            previous_row = self.rows.get(key)
                             self.rows[key] = retain_pending_metrics(row, self.rows.get(key))
                             self.model_dependencies[key] = identity_values
                             self.valid[key] = actual, self.clock()
@@ -594,6 +660,19 @@ class SessionCatalog:
                                 self.failures.pop(key, None)
                                 self.failure_counts.pop(key, None)
                                 self.failure_reasons.pop(key, None)
+                            if self.archive is not None:
+                                if self.rows[key] != previous_row:
+                                    self.wake_revision += 1
+                                if (self.archive.partition and isinstance(actual, str) and not row.running
+                                        and not active and row.activity_qualified and row.context_qualified
+                                        and row.effort_qualified and not row.effort_pending and not row.model_pending):
+                                    if self.archive.save(self.archive.partition, key, actual, row, captured_at,
+                                                         dependencies, identity_values):
+                                        self.archive.rows[key] = row
+                                        self.archive.authorities[key] = actual, dependencies, identity_values
+                                    else:
+                                        self.valid.pop(key, None)  # a later bounded turn retries durability
+                                self.history_pending.pop(key, None)
                             for nav in navigations:
                                 nav.capture(self, {key: memberships[nav.window]} if nav.window in memberships else None,
                                             keys=(key,))
@@ -705,6 +784,9 @@ class SessionCatalog:
         with self.lock:
             if period not in PERIODS:
                 raise ValueError("invalid_request")
+            if self.archive is not None:
+                return cached_page(self, ordered, token=token, offset=offset, sort=sort, direction=direction,
+                                   period=period, navigation=navigation)
             # An epoch names an order independently of the slice, including
             # page one. Passive page-one reads use it only as a fallback.
             pinned = bool(offset or epoch and not passive)
