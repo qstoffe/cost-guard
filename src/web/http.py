@@ -588,7 +588,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(429, {"error": "catalog_busy"})
 
     def cached_sessions(self, value, *, detail=False):
-        fields = {"session_id", "offset"} if detail else {"period", "sort", "direction", "offset", "known"}
+        fields = {"session_id", "offset"} if detail else {"period", "sort", "direction", "offset", "known", "cursor"}
         if set(value) - fields:
             self.reply(400, {"error": "invalid_request"})
             return

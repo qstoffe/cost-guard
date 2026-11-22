@@ -1,6 +1,7 @@
 """Cache-only Sessions query model; cannot admit work or read OpenCode."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import re
+from secrets import token_bytes
 import time
 
 from src.cache.display_history import DisplayHistory, EMPTY_HISTORY_EVIDENCE, FIELD_EVIDENCE_BITS, SORT_COLUMNS
@@ -8,6 +9,7 @@ from src.cache.display_history import DisplayHistory, EMPTY_HISTORY_EVIDENCE, FI
 from .contracts import record
 from .display import with_display
 from .session_catalog_scope import PAGE_SIZE, PERIODS, catalog_window
+from .session_page_cursor import issue, read
 
 
 _SCALAR_FIELDS = dict(activity="activity_ms", model="model", ccost="ccost", prompts="prompts",
@@ -46,6 +48,7 @@ class CachedSessionViews:
     binding: str = ""
     coverage_supported: bool = False
     native_export_supported: bool = False
+    _cursor_seal: bytes = field(default_factory=lambda: token_bytes(32), init=False, compare=False, repr=False)
 
     def detail(self, *, session_id, offset=0):
         if (not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id)
@@ -71,7 +74,7 @@ class CachedSessionViews:
                     export_supported=(self.native_export_supported and bool(summary and summary["source_present"])
                                       and bool(re.fullmatch(r"ses_[A-Za-z0-9_-]{1,160}", session_id))))
 
-    def page(self, *, period="today", sort="activity", direction=-1, offset=0, known=None, now_ms=None):
+    def page(self, *, period="today", sort="activity", direction=-1, offset=0, known=None, cursor=None, now_ms=None):
         if (period not in PERIODS or sort not in SORT_COLUMNS or type(direction) is not int
                 or direction not in (-1, 1) or type(offset) is not int
                 or not 0 <= offset <= 1_000_000 or offset % PAGE_SIZE):
@@ -83,7 +86,8 @@ class CachedSessionViews:
         end = None if window.start_ms is None else window.end_ms
         scope = dict(period=period, sort=sort, direction=direction, offset=offset,
                      size=PAGE_SIZE, binding=self.binding, timezone_id=window.timezone_id,
-                     start_ms=window.start_ms, end_ms=end)
+                      start_ms=window.start_ms, end_ms=end)
+        seek = read(self._cursor_seal, scope, cursor) if cursor is not None else None
         if known is not None and self._same_query(known, scope):
             changes = self.history.session_changes(self.source, known["generation"])
             # Time advances even when no rows have been written. If a known
@@ -96,7 +100,7 @@ class CachedSessionViews:
                 return dict(**scope, generation=changes.generation, unchanged=True)
         result = self.history.session_page(self.source, sort=sort, direction=direction, limit=PAGE_SIZE,
                                            offset=offset, start_ms=window.start_ms, end_ms=end,
-                                           live_binding=self.binding, now_ms=now_ms)
+                                           live_binding=self.binding, now_ms=now_ms, seek=seek)
         rows = []
         for row in result.rows:
             values = {"model": row.model, "ccost": row.ccost, "prompts": row.prompts,
@@ -120,8 +124,15 @@ class CachedSessionViews:
             coverage = "as-of" if result.coverage.covers(window.start_ms) else "pending"
         else:
             coverage = "pending" if self.coverage_supported else "unknown"
+        previous, following = None, None
+        if result.running_expires_ms is None and result.rows:
+            if offset:
+                previous = issue(self._cursor_seal, scope, result, result.rows[0], offset - PAGE_SIZE, forward=False)
+            if offset + PAGE_SIZE < result.total:
+                following = issue(self._cursor_seal, scope, result, result.rows[-1], offset + PAGE_SIZE, forward=True)
         return dict(**scope, generation=result.generation, cached_total=result.total, rows=rows,
-                    history_coverage=coverage,
+                     history_coverage=coverage,
+                     previous_cursor=previous, next_cursor=following,
                     running_refresh_ms=(result.running_expires_ms - now_ms if result.running_expires_ms else None))
 
     @staticmethod

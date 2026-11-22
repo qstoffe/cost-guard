@@ -22,6 +22,7 @@ from .display_models import benchmark_references, models_schema, read_models, wr
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_watch_quota import watch_quota_schema
+from .display_session_seek import seek_keys
 from .display_sort_keys import decimal_key
 from .display_stats_evidence import stats_evidence_schema, stats_interval_page
 from .display_stats_geometry_revision import geometry_schema
@@ -32,7 +33,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -269,6 +270,7 @@ class DisplayHistory:
                       {models_schema()}
                       {account_schema()}
                       {watch_quota_schema()}
+                      {self._name_indexes(upgrade=True)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -378,8 +380,18 @@ class DisplayHistory:
         return "\n".join(
             f"CREATE INDEX IF NOT EXISTS sessions_{sort}_{direction.lower()} "
             f"ON sessions(source, ({column} IS NULL), {column} {direction}, session_id, {PERIOD_CLOCK});"
-            for sort, column in SORT_COLUMNS.items() for direction in ("ASC", "DESC")
-        ) + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
+            for sort, column in SORT_COLUMNS.items() if sort != "name" for direction in ("ASC", "DESC")
+        ) + DisplayHistory._name_indexes() + f"\nCREATE INDEX IF NOT EXISTS sessions_period ON sessions(source, {PERIOD_CLOCK});"
+
+    @staticmethod
+    def _name_indexes(*, upgrade=False):
+        # title_key is NOT NULL; SQLite simplifies its null expression away,
+        # so indexing that expression obstructs seeks and index-order scans.
+        return "\n".join(
+            (f"DROP INDEX IF EXISTS sessions_name_{direction.lower()};" if upgrade else "") +
+            f"CREATE INDEX IF NOT EXISTS sessions_name_{direction.lower()} "
+            f"ON sessions(source, title_key {direction}, session_id, {PERIOD_CLOCK});"
+            for direction in ("ASC", "DESC"))
 
     def commit_sessions(self, source, updates=(), *, missing=(), present=(), archive_epoch=0):
         """Apply qualified facts and membership changes, without deleting old values.
@@ -1019,7 +1031,7 @@ class DisplayHistory:
                 (source, binding)).fetchone() is not None
 
     def session_page(self, source, *, sort="activity", direction=-1, start_ms=None, end_ms=None,
-                     limit=25, offset=0, live_binding=None, now_ms=None):
+                     limit=25, offset=0, live_binding=None, now_ms=None, seek=None):
         if (not source or sort not in SORT_COLUMNS or type(direction) is not int or direction not in (-1, 1)
                 or type(limit) is not int or not 1 <= limit <= PAGE_LIMIT
                 or type(offset) is not int or not 0 <= offset <= 1_000_000):
@@ -1027,6 +1039,8 @@ class DisplayHistory:
         column = SORT_COLUMNS[sort]
         order = "ASC" if direction == 1 else "DESC"
         index = f"sessions_{sort}_{order.lower()}"
+        nullable = sort != "name"
+        ordering = f"({column} IS NULL), {column} {order}" if nullable else f"{column} {order}"
         conditions, params = ["source=?"], [source]
         if start_ms is not None:
             conditions.append(f"{PERIOD_CLOCK}>=?")
@@ -1042,9 +1056,20 @@ class DisplayHistory:
                 return SessionPage(0, 0, ())
             generation, total = state
             coverage = self._session_coverage(db, source)
+            active, expires = self._running_page(db, source, live_binding, now_ms) if live_binding else ((), None)
+            if seek is not None and not active and seek.generation == generation:
+                same_end = seek.end_ms == end_ms
+                passed_empty = (seek.end_ms is not None and end_ms is not None and seek.end_ms < end_ms and
+                    db.execute(f"SELECT 1 FROM sessions WHERE source=? AND {PERIOD_CLOCK}>=? AND {PERIOD_CLOCK}<? LIMIT 1",
+                               (source, seek.end_ms, end_ms)).fetchone() is None)
+                if same_end or passed_empty:
+                    keys = seek_keys(db, source, column=column, index=index, direction=direction, where=where,
+                                     params=params, limit=limit, seek=seek, nullable=nullable)
+                    if keys is not None and len(keys) == min(limit, seek.total - offset):
+                        rows = self._seek_session_rows(db, source, keys)
+                        return SessionPage(generation, seek.total, rows, coverage=coverage)
             if len(params) > 1:
                 total = db.execute(f"SELECT count(*) FROM sessions WHERE {where}", params).fetchone()[0]
-            active, expires = self._running_page(db, source, live_binding, now_ms) if live_binding else ((), None)
             if active:
                 marks = ", ".join("?" for _ in active)
                 ids = tuple(row.session_id for row in active)
@@ -1062,7 +1087,7 @@ class DisplayHistory:
             rows = db.execute(f"""
                 WITH selected AS (
                     SELECT session_id FROM sessions INDEXED BY {index} WHERE {where}
-                    ORDER BY ({column} IS NULL), {column} {order}, session_id
+                    ORDER BY {ordering}, session_id
                     LIMIT ? OFFSET ?
                 )
                 SELECT s.session_id, revision, title, activity_ms, model, ccost,
@@ -1071,12 +1096,29 @@ class DisplayHistory:
                     context_detail, model_help, has_model_details
                 FROM selected CROSS JOIN sessions AS s
                 WHERE s.source=? AND s.session_id=selected.session_id
-                ORDER BY ({column} IS NULL), {column} {order}, s.session_id
+                ORDER BY {ordering}, s.session_id
             """, (*params, limit - len(running_slice), max(0, offset - len(active)), source)).fetchall()
-        rows = tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:14], field_evidence=row[14],
+        return SessionPage(generation, total, running_slice + self._decode_session_rows(rows), expires, coverage)
+
+    @classmethod
+    def _seek_session_rows(cls, db, source, keys):
+        if not keys:
+            return ()
+        marks = ",".join("?" for _ in keys)
+        rows = cls._decode_session_rows(db.execute(f"""
+            SELECT session_id, revision, title, activity_ms, model, ccost, prompts, duration_ms, context_tokens,
+                source_present, latest_activity_ms, prompt_started_ms, activity_origin, catalog_activity_ms,
+                field_evidence, context_detail, model_help, has_model_details
+            FROM sessions WHERE source=? AND session_id IN ({marks})
+        """, (source, *keys)))
+        by_id = {row.session_id: row for row in rows}
+        return tuple(by_id[key] for key in keys)
+
+    @staticmethod
+    def _decode_session_rows(rows):
+        return tuple(SessionSnapshot(*row[:9], bool(row[9]), *row[10:14], field_evidence=row[14],
                                      context_detail=row[15], model_help=row[16], has_model_details=row[17])
                      for row in rows)
-        return SessionPage(generation, total, running_slice + rows, expires, coverage)
 
     @staticmethod
     def _running_page(db, source, binding, now_ms):

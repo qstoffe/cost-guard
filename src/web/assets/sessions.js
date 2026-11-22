@@ -750,6 +750,10 @@ const SessionsCatalog = (() => {
       if (data && Object.keys(request).every(key => data[key] === request[key])) {
         request.known = Object.fromEntries([...Object.keys(request), 'generation', 'binding', 'start_ms', 'end_ms']
           .map(key => [key, data[key]]));
+      } else if (data && ['period', 'sort', 'direction'].every(key => data[key] === request[key])) {
+        const delta = request.offset - data.offset;
+        const cursor = delta === data.size ? data.next_cursor : delta === -data.size ? data.previous_cursor : null;
+        if (cursor) request.cursor = cursor;
       }
       const flight = new AbortController();
       this.flight = flight;
