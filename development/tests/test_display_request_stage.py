@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from src.cache.display_history import DisplayHistory
+from src.cache.display_request_overlay import RequestSlot, request_birth_slice, request_clock_slice
 from src.cache.display_request_stage import (
     RequestInputScope,
     append_request_attribution,
@@ -18,7 +19,7 @@ from src.cache.display_request_stage import (
     request_stage_schema,
     seal_request_input,
 )
-from src.cache.display_requests import DisplayRequest, RequestRoster, publish_roster
+from src.cache.display_requests import REQUEST_COLUMNS, DisplayRequest, RequestRoster, publish_roster
 from src.cache.display_stats_evidence import ResponseTiming
 from src.cache.display_stats_requests import StatsRequestIdentity
 from src.cache.display_usage_reader import usage_version
@@ -196,6 +197,115 @@ class DisplayRequestStageTests(unittest.TestCase):
                 SELECT request_key,prompt_id FROM archive_input_attribution WHERE run='spool' ORDER BY prompt_id
             """).fetchall())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_prompt_attribution").fetchone())
+
+    def test_effective_clock_scan_cannot_jump_an_unresolved_shadow_prefix(self):
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", (
+                _request(b"left", clock=10), _request(b"middle", clock=20), _request(b"keep", clock=30),
+                _request(b"moved-in", clock=90),
+            ), ()))
+        self._stage((_request(b"left", clock=70), _request(b"middle", clock=80), _request(b"moved-in", clock=40)))
+        self._prepare("candidate")
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            old = request_clock_slice(db, SOURCE, 1, 50, limit=2)
+            self.assertEqual([10, 20], [row[1] for row in old.rows])
+
+            with self.write() as writer:
+                self.assertEqual(1, _install(writer, "candidate"))
+                attempt, birth = writer.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone()
+                slot = RequestSlot(attempt, birth)
+            old_tail = request_clock_slice(db, SOURCE, 1, 50, cursor=old.next_cursor, limit=2)
+            self.assertEqual([30], [row[1] for row in old_tail.rows])
+            self.assertIsNone(old_tail.next_cursor)
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            first = request_clock_slice(db, SOURCE, 1, 50, slot=slot, limit=2)
+            self.assertEqual((), first.rows)
+            self.assertIsNotNone(first.next_cursor)
+            self.assertEqual((20, b"middle"), first.next_cursor.scanned_through)
+            self.assertIsNone(request_clock_slice(db, SOURCE, 1, 50, slot=slot, cursor=old.next_cursor, limit=2))
+            final = request_clock_slice(db, SOURCE, 1, 50, slot=slot, cursor=first.next_cursor, limit=2)
+            self.assertEqual([(b"keep", 30), (b"moved-in", 40)], [row[:2] for row in final.rows])
+            self.assertEqual([1, 1], [row[-1] for row in final.rows])
+            self.assertIsNone(final.next_cursor)
+
+    def test_clock_cursor_rejects_layout_change_even_at_identical_usage_revision(self):
+        self._stage(tuple(_request(key, clock=20) for key in (b"a", b"b", b"c")))
+        self._prepare("candidate")
+        with self.write() as db:
+            self.assertEqual(1, _install(db, "candidate"))
+            attempt, birth = db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone()
+        slot = RequestSlot(attempt, birth)
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            first = request_clock_slice(db, SOURCE, 1, 50, slot=slot, limit=2)
+            self.assertEqual([b"a", b"b"], [row[0] for row in first.rows])
+            version = usage_version(db, SOURCE)
+
+        # Fixture simulates one representation-only move, not production fold.
+        with self.write() as db:
+            columns = ",".join(REQUEST_COLUMNS)
+            db.execute(f"""
+                INSERT INTO archive_requests(source,{columns},first_revision)
+                SELECT ?,{columns},? FROM archive_prepare_requests WHERE source=? AND request_key=?
+            """, (SOURCE, birth, slot.attempt, b"c"))
+            db.execute("DELETE FROM archive_prepare_requests WHERE source=? AND request_key=?",
+                       (slot.attempt, b"c"))
+        moved = replace(slot, layout=1)
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            self.assertEqual(version, usage_version(db, SOURCE))
+            self.assertIsNone(request_clock_slice(db, SOURCE, 1, 50, slot=moved, cursor=first.next_cursor, limit=2))
+            current = request_clock_slice(db, SOURCE, 1, 50, slot=moved, limit=2)
+            tail = request_clock_slice(db, SOURCE, 1, 50, slot=moved, cursor=current.next_cursor, limit=2)
+            self.assertEqual([b"a", b"b", b"c"], [row[0] for row in current.rows + tail.rows])
+            self.assertIsNone(tail.next_cursor)
+
+    def test_birth_scan_preserves_correction_birth_and_seeks_through_equal_revision_keys(self):
+        count = 1366
+        keys = tuple(number.to_bytes(2, "big") for number in range(count))
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A",
+                           RequestRoster("price", tuple(_request(key) for key in keys), ()))
+        self._stage(tuple(_request(key, tokens=70) for key in keys) + (_request(b"\0", tokens=20),))
+        self._prepare("candidate")
+        with self.write() as db:
+            self.assertEqual(1, _install(db, "candidate"))
+            attempt, birth = db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone()
+        slot = RequestSlot(attempt, birth)
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            self.assertIsNone(request_birth_slice(db, SOURCE, 1, slot=slot))
+            steps = 0
+
+            def progress():
+                nonlocal steps
+                steps += 1
+                return 0
+
+            db.set_progress_handler(progress, 1)
+            found, work = [], []
+            cursor = None
+            for _ in range(50):
+                steps = 0
+                page = request_birth_slice(db, SOURCE, 2, slot=slot, cursor=cursor, limit=32)
+                self.assertLessEqual(len(page.rows), 32)
+                found.extend((row[0], row[9], row[-1]) for row in page.rows)
+                work.append(steps)
+                cursor = page.next_cursor
+                if cursor is None:
+                    break
+            else:
+                self.fail("effective birth scan exceeded 50 slices")
+            db.set_progress_handler(None, 0)
+
+        expected = [(key, 70, 1) for key in keys] + [(b"\0", 20, 2)]
+        self.assertEqual(expected, found)
+        self.assertLess(max(work), 6000)
 
     def test_peer_commit_invalidates_next_prepare_page_and_spool_replays_without_early_birth(self):
         shared = b"z-shared"

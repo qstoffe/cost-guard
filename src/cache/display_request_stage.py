@@ -69,6 +69,7 @@ def request_stage_schema():
         CREATE INDEX archive_prepare_candidates ON archive_prepare_requests(
             source,fork_key,dedup_tree,request_ordinal,session_id,request_key);
         CREATE INDEX archive_prepare_clock ON archive_prepare_requests(source,clock_ms,request_key);
+        CREATE INDEX archive_prepare_birth ON archive_prepare_requests(source,first_revision,request_key);
     """
 
 
