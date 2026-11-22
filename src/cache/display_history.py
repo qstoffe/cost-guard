@@ -17,9 +17,10 @@ from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_total
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
+from .display_stats_evidence import stats_evidence_schema
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -247,6 +248,7 @@ class DisplayHistory:
                      {mix_total_schema()}
                      {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
                      {mix_identity_schema()}
+                     {stats_evidence_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -298,6 +300,7 @@ class DisplayHistory:
                 {mix_total_schema()}
                  {mix_groups_schema()}
                  {mix_identity_schema()}
+                 {stats_evidence_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -603,6 +606,7 @@ class DisplayHistory:
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_stats_revisions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))
@@ -703,18 +707,27 @@ class DisplayHistory:
             """, (source, after, BATCH_LIMIT))
             return tuple((key, SessionCheckpoint(revision, progress), present) for key, revision, progress, present in rows)
 
-    def completed_sessions(self, source, revisions, dependency):
+    def completed_sessions(self, source, revisions, dependency, *, with_history=False):
         """Match exact dependency evidence, never infer freshness from revision alone."""
         if not source or not dependency or len(revisions) > BATCH_LIMIT:
             raise ValueError("invalid_archive_progress_query")
         if not revisions:
             return frozenset()
         marks = ",".join("?" for _ in revisions)
+        # Scalar-only capture can serve Sessions but is not evidence that
+        # usage, prompt detail and Stats geometry for this revision exist.
+        roster_check = """
+            AND EXISTS(SELECT 1 FROM archive_stats_roots AS stats
+                JOIN archive_prompt_state AS detail USING(source,root_id)
+                WHERE stats.source=p.source AND stats.root_id=p.session_id
+                    AND stats.source_revision=p.revision AND detail.revision=p.revision)
+        """ if with_history else ""
         with self._connect(read=True) as db:
             return frozenset(key for key, revision in db.execute(f"""
                 SELECT p.session_id, p.revision FROM session_progress AS p
                 JOIN sessions AS s USING (source, session_id, revision)
                 WHERE p.source=? AND p.dependency=? AND p.session_id IN ({marks}) AND s.source_present=1
+                {roster_check}
             """, (source, dependency, *revisions)) if revisions[key] == revision)
 
     def session_coverage_slice(self, source, revisions):

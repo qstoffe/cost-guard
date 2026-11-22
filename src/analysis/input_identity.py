@@ -1,7 +1,7 @@
 """Versioned exact first-input identity from normalized, ordered semantic parts.
 
 No filesystem/URL acquisition. Unverifiable attachment references and unknown
-part kinds fail closed. Only the digest may enter a disposable match index.
+part kinds fail closed. Only the digest may enter a match index.
 """
 import base64
 import binascii

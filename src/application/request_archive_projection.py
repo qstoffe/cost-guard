@@ -10,6 +10,8 @@ from src.domain import CostDisposition
 from src.reports.prompts import build_prompt_block
 from src.reports.token_mix_history import history_prompt_keys
 
+from .archive_stats_evidence import StatsResponses, stats_capture
+
 
 def _key(value):
     return bytes.fromhex(dependency_signature(value))
@@ -98,6 +100,8 @@ def request_roster(snapshot, bundle, reference, *, config=None):
                 return None
 
     tree_members = _qualified_tree_members(snapshot)
+    with_stats = config is not None and len(snapshot.sessions) + prompt_count <= ROOT_WRITE_LIMIT
+    responses = StatsResponses(snapshot) if with_stats else None
     requests = []
     for key, entry in chosen.items():
         known = sum(1 << index for index, name in enumerate(TOKEN_FIELDS) if name in entry.tokens.known_fields)
@@ -119,6 +123,7 @@ def request_roster(snapshot, bundle, reference, *, config=None):
             entry.cost_disposition.value, amounts, entry.selected_effort or entry.variant, entry.summary,
             snapshot.root.session_id if entry.session_id in tree_members else None,
             entry.sort_order,
+            responses.observation(entry) if responses is not None else None,
         ))
     detail = () if config is not None else None
     if config is not None and prompt_count:
@@ -129,4 +134,5 @@ def request_roster(snapshot, bundle, reference, *, config=None):
                        for row in block.rows)
         if any(not row.event_id for row in detail) or len({row.event_id for row in detail}) != len(detail):
             return None
-    return RequestRoster(reference.analysis_signature, tuple(requests), tuple(sorted(attributed)), detail)
+    return RequestRoster(reference.analysis_signature, tuple(requests), tuple(sorted(attributed)), detail,
+                         stats_capture(snapshot, bundle) if with_stats else None)

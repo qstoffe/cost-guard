@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .display_prompts import DisplayPrompt, publish_prompts
+from .display_stats_evidence import ResponseTiming, StatsCapture, publish_stats_evidence
 from .display_usage_reader import advance_usage_revision, usage_version
 
 TOKEN_FIELDS = ("input", "cache_read", "cache_write", "output", "reasoning")
@@ -31,6 +32,7 @@ class DisplayRequest:
     summary: bool
     dedup_tree: str | None = None
     ordinal: int = 0
+    response: ResponseTiming | None = None
 
     def values(self, pricing):
         amounts = tuple(str(value) for value in self.category_costs) if self.category_costs else (None,) * 4
@@ -48,6 +50,7 @@ class RequestRoster:
     requests: tuple[DisplayRequest, ...]
     attribution: tuple[tuple[bytes, str], ...]  # physical key → causal root prompt
     prompts: tuple[DisplayPrompt, ...] | None = None
+    stats: StatsCapture | None = None
 
 
 REQUEST_COLUMNS = (
@@ -197,6 +200,7 @@ def publish_roster(db, source, root_id, revision, roster):
     requests = {request.key: request for request in roster.requests}
     if (len(requests) != len(roster.requests)
             or len(requests) + len(roster.attribution) + len(roster.prompts or ()) > ROOT_WRITE_LIMIT
+            or roster.stats is not None and len(roster.stats.intervals) + len(roster.stats.parents) > ROOT_WRITE_LIMIT
             or any(request.dedup_tree not in {None, root_id} for request in roster.requests)
             or not roster.pricing or any(key not in requests or not prompt for key, prompt in roster.attribution)):
         raise ValueError("invalid_request_roster")
@@ -242,5 +246,7 @@ def publish_roster(db, source, root_id, revision, roster):
     db.executemany("INSERT OR IGNORE INTO archive_request_membership VALUES(?, ?, ?)",
                    ((source, root_id, key) for key in requests))
     db.executemany("INSERT OR IGNORE INTO archive_prompt_attribution VALUES(?, ?, ?, ?)",
-                   ((source, root_id, key, prompt) for key, prompt in roster.attribution))
+                    ((source, root_id, key, prompt) for key, prompt in roster.attribution))
+    if roster.stats is not None:
+        publish_stats_evidence(db, source, root_id, revision, roster.stats, roster.requests)
     return roster.prompts is not None and publish_prompts(db, source, root_id, revision, roster.prompts)
