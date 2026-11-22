@@ -1,5 +1,6 @@
 """The archive projection shares the existing background history lane."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 import shutil
@@ -17,6 +18,7 @@ from src.cache.display_history import SessionChange, SessionFact
 from src.cache.display_stats_evidence import StatsInterval
 from src.cache.display_usage_reader import USAGE_SLICE
 from src.pricing.catalog import PricingCatalog
+from src.pricing.base import PricingUnavailableError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.web.dispatch import DataDispatcher
@@ -35,6 +37,39 @@ class WebMixRefreshTests(unittest.TestCase):
         completed = subprocess.run([shutil.which("node"), "development/tests/integration/cached_stats.cjs"],
             cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+    def test_catalog_lanes_keep_progress_when_every_coverage_turn_fails(self):
+        calls = []
+
+        def held_coverage(*_):
+            calls.append("coverage")
+            raise PricingUnavailableError("fixture coverage dependency unavailable")
+
+        archive = SimpleNamespace(
+            catalog_pending=lambda _: True, summary_pending=lambda _: True,
+            priority_summary_pending=lambda _: True, coverage_pending=lambda _: True,
+            next_projection=lambda *_, **__: None,
+            publish_catalog=lambda *_: calls.append("membership"), check_coverage=held_coverage,
+            acquire_summaries=lambda *_: calls.append("sweep"))
+        catalog = Mock(display_archive=archive)
+        catalog.needed.return_value = True
+        catalog.tick.side_effect = lambda _: calls.append("scalar")
+        service = SimpleNamespace(timezone_id="UTC", source=object(),
+                                  close_accounts=lambda: calls.append("close"))
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            owner = SimpleNamespace(report_service=service, catalog_observation=None,
+                cards=SimpleNamespace(sessions={}), catalog_job=None, clock_ms=lambda: 1_750_000_000_000,
+                _closed=False, catalog_pool=executor, catalog_turn=0, history_factory=lambda _: service,
+                reads=SimpleNamespace(using=lambda _: nullcontext()))
+            owner._catalog_capture = WebWatchCoordinator._catalog_capture.__get__(owner)
+
+            for _ in range(8):
+                WebWatchCoordinator.tick_catalog(owner, catalog)
+                owner.catalog_job.result(timeout=3)
+
+        self.assertEqual([part for step in ("coverage", "sweep", "scalar", "sweep") * 2
+                          for part in ("membership", step, "close")], calls)
+        self.assertEqual(2, catalog.index_failed.call_count)
 
     def test_existing_lane_interleaves_scalar_with_bounded_mix_and_notifies_after_commit(self):
         now = 1_750_000_000_000

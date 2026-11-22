@@ -190,10 +190,14 @@ class WebWatchCoordinator(WatchCoordinator):
             # Reserve bounded progress even under continuous legacy demand. Both
             # jobs share the original lane; Watch/Mini observation never waits here.
             turn = self.catalog_turn % 4
-            sweep = sweep_needed and (not scalar_needed or turn == 0
-                                      or turn != 3 and archive.priority_summary_pending(catalog))
+            # Coverage owns a separate slice. If its dependencies fail or stall,
+            # it cannot run ahead of and suppress every actual acquisition turn.
+            coverage = coverage_needed and (turn == 1 or not (scalar_needed or sweep_needed))
+            sweep = not coverage and sweep_needed and (not scalar_needed or turn == 0
+                                                       or turn != 3 and archive.priority_summary_pending(catalog))
             self.catalog_job = self.catalog_pool.submit(
-                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep, coverage_needed)
+                self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not (sweep or coverage),
+                sweep, coverage)
         return running
 
     def enable_session_finishes(self):
@@ -232,7 +236,7 @@ class WebWatchCoordinator(WatchCoordinator):
             with self.reads.using(service.source):
                 if coverage:
                     catalog.display_archive.check_coverage(catalog, service)
-                if sweep:
+                elif sweep:
                     catalog.display_archive.acquire_summaries(catalog, service)
                 elif scalar_needed:
                     catalog.tick(service)
