@@ -9,6 +9,7 @@ import unittest
 from src.cache.display_history import DisplayHistory
 from src.cache.display_request_stage import (
     RequestInputScope,
+    append_request_attribution,
     append_request_input,
     open_request_input,
     open_request_preparation,
@@ -176,6 +177,25 @@ class DisplayRequestStageTests(unittest.TestCase):
         with self.history._connect(read=True) as db:
             self.assertEqual((0, 0), db.execute("SELECT next_page,sealed FROM archive_request_inputs").fetchone())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_input_requests").fetchone())
+
+    def test_causal_edges_are_atomic_ordered_and_can_share_a_physical_call(self):
+        with self.write() as db:
+            self.assertTrue(open_request_input(db, "spool", SCOPE))
+            self.assertTrue(append_request_input(db, "spool", 0, (_request(b"one"),)))
+            self.assertFalse(append_request_attribution(db, "spool", 2, ((b"one", "a"),)))
+        with self.assertRaises(sqlite3.IntegrityError), self.write() as db:
+            append_request_attribution(db, "spool", 1, ((b"one", "a"), (b"one", "a")))
+        with self.write() as db:
+            self.assertTrue(append_request_attribution(db, "spool", 1, ((b"one", "a"), (b"one", "b"))))
+            self.assertFalse(append_request_input(db, "spool", 2, (_request(b"late"),)))
+            self.assertTrue(seal_request_input(db, "spool", 2))
+            self.assertFalse(append_request_attribution(db, "spool", 2, ((b"one", "late"),)))
+
+        with self.history._connect(read=True) as db:
+            self.assertEqual([(b"one", "a"), (b"one", "b")], db.execute("""
+                SELECT request_key,prompt_id FROM archive_input_attribution WHERE run='spool' ORDER BY prompt_id
+            """).fetchall())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_prompt_attribution").fetchone())
 
     def test_peer_commit_invalidates_next_prepare_page_and_spool_replays_without_early_birth(self):
         shared = b"z-shared"

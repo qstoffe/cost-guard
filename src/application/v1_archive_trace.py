@@ -32,9 +32,8 @@ class V1TraceRow:
 class V1ArchiveTrace:
     """The caller owns the cursor and a separate, disposable staging database.
 
-    All facts are tentative until the source pin reaches EOF. This is only
-    usage trace and executing-prompt identity; it has no descendant causal
-    attribution, coverage or display authority.
+    All facts are tentative until the source pin reaches EOF. The stage has
+    no display or coverage authority, even after trace and attribution EOF.
     """
     def __init__(self, source, cursor, stage, *, subscription_providers=frozenset(),
                  tracked_provider=TRACKED_PROVIDER_DEFAULT):
@@ -118,12 +117,24 @@ class V1ArchiveTrace:
                 facts.save_call(db, call)
                 db.execute("UPDATE trace_messages SET step=1 WHERE session=? AND id=? AND NOT step", key)
 
+    def acquisition_scope(self):
+        if self._phase in ("input", "invalid"):
+            raise SourceDataError("V1 projection requires source EOF", phase="archive")
+        return self._root, self._source.source_instance
+
+    def qualify_child_launch_turn(self):
+        """Prepare one page of tool winners without enumerating their windows."""
+        return self._child_turn(self._launches.qualify_turn)
+
     def child_launch_turn(self):
         """Visit direct launches after source EOF, independently of trace replay."""
+        return self._child_turn(self._launches.turn)
+
+    def _child_turn(self, advance):
         if self._phase in ("input", "invalid"):
             raise SourceDataError("V1 child launch stage is not ready", phase="archive")
         try:
-            return self._launches.turn()
+            return advance()
         except BaseException:
             self._phase = "invalid"
             raise
@@ -149,6 +160,11 @@ class V1ArchiveTrace:
             raise SourceDataError("V1 prompt allocation requires prepared trace", phase="archive")
         return v1_prompt_calls.RootPromptCalls(self._db, self._launches, self._root, prompt_id,
                                                self._tracked_provider)
+
+    def root_prompt_page(self, after):
+        if self._phase not in ("trace", "done"):
+            raise SourceDataError("V1 root prompt seek requires prepared trace", phase="archive")
+        return v1_prompt_calls.root_prompt_page(self._db, self._root, after)
 
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""

@@ -33,7 +33,8 @@ def request_stage_schema():
             source TEXT NOT NULL, binding TEXT NOT NULL, archive_epoch INTEGER NOT NULL,
             incarnation INTEGER NOT NULL, root_id TEXT NOT NULL, revision TEXT NOT NULL,
             progress INTEGER NOT NULL, pricing TEXT NOT NULL, dependency TEXT NOT NULL,
-            next_page INTEGER NOT NULL DEFAULT 0, sealed INTEGER NOT NULL DEFAULT 0
+            next_page INTEGER NOT NULL DEFAULT 0, sealed INTEGER NOT NULL DEFAULT 0,
+            edges_started INTEGER NOT NULL DEFAULT 0
         ) WITHOUT ROWID;
         CREATE TABLE archive_request_preparations (
             attempt TEXT PRIMARY KEY, run TEXT NOT NULL REFERENCES archive_request_inputs(run),
@@ -55,7 +56,13 @@ def request_stage_schema():
             timing_start INTEGER, timing_duration INTEGER, timing_excluded INTEGER,
             message_key BLOB, step_key BLOB, sample_hash BLOB, source_model_key BLOB, stats_effort TEXT,
         """,
-    ) + request_table_schema(
+    ) + """
+        CREATE TABLE archive_input_attribution(
+            run TEXT NOT NULL, request_key BLOB NOT NULL, prompt_id TEXT NOT NULL,
+            PRIMARY KEY(run,request_key,prompt_id),
+            FOREIGN KEY(run,request_key) REFERENCES archive_input_requests(source,request_key)
+        ) WITHOUT ROWID;
+    """ + request_table_schema(
         "archive_prepare_requests", "REFERENCES archive_request_preparations(attempt)",
         extra_columns="first_revision INTEGER,",
     ) + """
@@ -94,7 +101,7 @@ def _input_row(request, pricing, root):
 
 def _open_input(db, run, page):
     row = db.execute("""
-        SELECT i.root_id,i.pricing FROM archive_request_inputs AS i
+        SELECT i.root_id,i.pricing,i.edges_started FROM archive_request_inputs AS i
         JOIN sources AS s USING(source)
         WHERE run=? AND NOT sealed AND next_page=? AND s.archive_epoch=i.archive_epoch
     """, (run, page)).fetchone()
@@ -106,9 +113,9 @@ def append_request_input(db, run, page, requests):
     if not isinstance(requests, tuple) or not 1 <= len(requests) <= STAGE_ROWS:
         raise ValueError("invalid_request_input_page")
     state = _open_input(db, run, page)
-    if state is None:
+    if state is None or state[2]:
         return False
-    root, pricing = state
+    root, pricing, _ = state
     rows = tuple(_input_row(request, pricing, root) for request in requests)
     size = sum(len(value.encode("utf-8")) if isinstance(value, str) else len(value) if isinstance(value, bytes) else 8
                for row in rows for value in row)
@@ -120,8 +127,35 @@ def append_request_input(db, run, page, requests):
             message_key,step_key,sample_hash,source_model_key,stats_effort)
         VALUES(?,{_MARKS},?,?,?,?,?,?,?,?)
     """, ((run, *row) for row in rows))
-    db.execute("UPDATE archive_request_inputs SET next_page=next_page+1 WHERE run=?", (run,))
+    _advance_input(db, run)
     return True
+
+
+def append_request_attribution(db, run, page, edges):
+    """Stage bounded positive causal edges to already captured physical rows."""
+    if not isinstance(edges, tuple) or not 1 <= len(edges) <= STAGE_ROWS:
+        raise ValueError("invalid_request_attribution_page")
+    if _open_input(db, run, page) is None:
+        return False
+    size = 0
+    for key, prompt in edges:
+        if not isinstance(key, bytes) or not key or not isinstance(prompt, str) or not prompt:
+            raise ValueError("invalid_request_attribution")
+        size += len(key) + len(prompt.encode("utf-8"))
+        if size > STAGE_BYTES:
+            raise ValueError("request_attribution_page_exceeds_size")
+        if not db.execute("SELECT 1 FROM archive_input_requests WHERE source=? AND request_key=?",
+                          (run, key)).fetchone():
+            raise ValueError("request_attribution_without_request")
+    db.executemany("INSERT INTO archive_input_attribution VALUES(?,?,?)",
+                   ((run, key, prompt) for key, prompt in edges))
+    _advance_input(db, run, edges_started=True)
+    return True
+
+
+def _advance_input(db, run, *, edges_started=False):
+    db.execute("UPDATE archive_request_inputs SET next_page=next_page+1,edges_started=? WHERE run=?",
+               (edges_started, run))
 
 
 def seal_request_input(db, run, page):

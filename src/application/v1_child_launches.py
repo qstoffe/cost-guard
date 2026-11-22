@@ -61,6 +61,11 @@ class ChildLaunches:
         if not self._qualified:
             raise SourceDataError("V1 child launches are not ready for a message seek", phase="archive")
 
+    def qualify_turn(self):
+        if not self._qualified:
+            self._qualify_turn()
+        return self._qualified
+
     def links_for_message(self, session, message, after):
         self.require_qualified()
         rows = self._db.execute("""
@@ -106,7 +111,7 @@ class ChildLaunches:
         if self._done:
             return None
         if not self._qualified:
-            self._qualify_turn()
+            self.qualify_turn()
             return ()
         rows = self._db.execute("""
             SELECT * FROM trace_launches WHERE ordinal>? ORDER BY ordinal LIMIT ?

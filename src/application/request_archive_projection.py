@@ -7,7 +7,7 @@ from src.analysis.ai_stats_buckets import selected_effort
 from src.analysis.ai_stats_responses import sample_hash
 from src.analysis.billing import billing_request_fingerprint
 from src.analysis.cache import dependency_signature
-from src.analysis.valuation import physical_usage_key
+from src.analysis.valuation import physical_request_identity
 from src.cache.display_prompts import DisplayPrompt
 from src.cache.display_requests import DisplayRequest, RequestRoster, ROOT_WRITE_LIMIT, TOKEN_FIELDS
 from src.cache.display_stats_requests import StatsRequestIdentity
@@ -23,8 +23,9 @@ def _key(value):
     return bytes.fromhex(dependency_signature(value))
 
 
-def physical_request_key(entry):
-    identity = physical_usage_key(entry)
+def physical_request_key(entry, *, source_instance=None):
+    source = entry.source_instance if source_instance is None else source_instance
+    identity = physical_request_identity(source, entry)
     return _key(identity) if identity is not None else None
 
 

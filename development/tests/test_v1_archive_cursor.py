@@ -9,9 +9,13 @@ from unittest.mock import patch
 from src.analysis import analyze_snapshot
 from src.analysis.causal import trace_entries
 from src.application.request_archive_projection import physical_request_key, project_request, request_roster
+from src.application.v1_archive_projection import V1ArchiveProjection
 from src.application.v1_archive_trace import V1ArchiveTrace
 from src.cache.display_history import DisplayHistory
-from src.cache.display_request_stage import RequestInputScope, append_request_input, open_request_input, request_stage_schema, seal_request_input
+from src.cache.display_request_stage import (
+    RequestInputScope, append_request_attribution, append_request_input, open_request_input,
+    request_stage_schema, seal_request_input,
+)
 from src.cache.display_requests import REQUEST_COLUMNS
 from src.pricing.catalog import PricingCatalog
 from src.reports.token_mix_history import history_prompt_keys
@@ -726,6 +730,98 @@ class V1ArchiveCursorTests(unittest.TestCase):
                 builder.trace_turn()
 
         self.assertEqual(before, self.path.read_bytes())
+
+    def test_paged_projection_stages_both_populations_above_the_combined_write_limit(self):
+        # Shared fixture creates tied eligible prompts and independent observed
+        # calls. Add a tied continuation shared by every prompt in this pin.
+        _seed(self.path)
+        with closing(sqlite3.connect(self.path)) as db, db:
+            for number in range(PROMPTS):
+                _prompt(db, ROOT, number)
+            db.executemany("INSERT INTO message VALUES(?,?,?,?,?)", [
+                ("resume", ROOT, 1120, 1120, '{"role":"user"}'),
+                ("shared", ROOT, 1200, 1300, """{"role":"assistant","parentID":"resume",
+                    "providerID":"synthetic","modelID":"sample","tokens":{"input":7}}"""),
+            ])
+        source, reference = _MeasuredSource(self.path), PricingCatalog(())
+        snapshot = source.load_session_snapshot(ROOT)
+        bundle = analyze_snapshot(snapshot, now_ms=100_000, tracked_provider="synthetic")
+        self.assertIsNone(request_roster(snapshot, bundle, reference))
+        executing = history_prompt_keys(bundle)
+        expected_requests = sorted(
+            project_request(entry, physical_request_key(entry), reference,
+                            prompt=executing.get(entry, (None, None))[1], tree=ROOT).values(reference.analysis_signature)
+            for entry in bundle.trace_entries
+        )
+        expected_edges = sorted((physical_request_key(entry), prompt.prompt_id)
+                                for prompt in bundle.prompts for entry in prompt.entries)
+        history = DisplayHistory(self.path.parent)
+        history.initialize()
+        with history._connect() as display:
+            display.executescript(request_stage_schema())
+            display.execute("INSERT INTO sources(source) VALUES('pinned-source')")
+
+        with closing(sqlite3.connect(self.path.with_name("trace-stage.db"))) as db, \
+                closing(sqlite3.connect(":memory:")) as revision_db:
+            with source.archive_cursor(ROOT) as cursor:
+                revision = V1RevisionStamp(cursor, revision_db)
+                trace = V1ArchiveTrace(source, revision, db, tracked_provider="synthetic")
+                with self.assertRaisesRegex(SourceDataError, "source EOF"):
+                    V1ArchiveProjection(trace, reference)
+                for _ in range(100):
+                    if trace.capture_turn():
+                        break
+                else:
+                    self.fail("dense input did not reach EOF")
+            stamp = revision.digest_turn()
+            self.assertEqual(snapshot.source_revision, stamp)
+            source_work = source.steps
+            scope = RequestInputScope("pinned-source", source.source_instance, 0, 1, ROOT, stamp, 0,
+                                      reference.analysis_signature, "test-dependency")
+            with history._connect() as display:
+                self.assertTrue(open_request_input(display, "dense", scope))
+                with self.assertRaisesRegex(ValueError, "without_request"):
+                    append_request_attribution(display, "dense", 0, ((b"unknown", "prompt"),))
+                projection = V1ArchiveProjection(trace, reference)
+                page_number = 0
+                request_sizes, edge_sizes = [], []
+                for _ in range(12_000):
+                    page = projection.turn()
+                    if page is None:
+                        break
+                    if not page.requests and not page.attribution:
+                        continue
+                    display.execute("BEGIN IMMEDIATE")
+                    if page.requests:
+                        self.assertFalse(page.attribution)
+                        self.assertTrue(append_request_input(display, "dense", page_number, page.requests))
+                        request_sizes.append(len(page.requests))
+                    else:
+                        self.assertTrue(append_request_attribution(display, "dense", page_number, page.attribution))
+                        edge_sizes.append(len(page.attribution))
+                    display.commit()
+                    page_number += 1
+                else:
+                    self.fail("dense projection did not reach EOF")
+                display.execute("BEGIN IMMEDIATE")
+                self.assertTrue(seal_request_input(display, "dense", page_number))
+                display.commit()
+
+        self.assertEqual(source_work, source.steps)
+        self.assertEqual(1367, len(expected_requests))
+        self.assertEqual(2732, len(expected_edges))
+        self.assertEqual([32] * 42 + [23], request_sizes)
+        self.assertEqual([32] * 85 + [12], edge_sizes)
+        with history._connect(read=True) as display:
+            self.assertEqual(expected_requests, display.execute(f"""
+                SELECT {','.join(REQUEST_COLUMNS)} FROM archive_input_requests WHERE source='dense' ORDER BY request_key
+            """).fetchall())
+            self.assertEqual(expected_edges, display.execute("""
+                SELECT request_key,prompt_id FROM archive_input_attribution WHERE run='dense'
+                ORDER BY request_key,prompt_id
+            """).fetchall())
+            self.assertIsNone(display.execute("SELECT 1 FROM archive_requests LIMIT 1").fetchone())
+            self.assertIsNone(display.execute("SELECT 1 FROM archive_prompt_attribution LIMIT 1").fetchone())
 
 
 if __name__ == "__main__":

@@ -12,6 +12,11 @@ from .v1_trace_facts import OTHER, PROMPT, SUBTASK, SYNTHETIC
 
 _VISIBLE = f"kind IN ({PROMPT},{SUBTASK})"
 _INVISIBLE = f"kind IN ({OTHER},{SYNTHETIC})"
+_PROMPT_PAGE = f"""
+    SELECT created,id FROM trace_messages INDEXED BY trace_visible
+    WHERE session=? AND {_VISIBLE} AND {{seek}} ORDER BY created,id LIMIT ?
+"""
+PROMPT_ROWS = 32
 SCHEMA = """
     CREATE TABLE trace_prompt_runs(id INTEGER PRIMARY KEY);
     CREATE TABLE trace_prompt_seen(
@@ -20,6 +25,17 @@ SCHEMA = """
         PRIMARY KEY(run,session,invoc,message,step)
     ) WITHOUT ROWID;
 """
+
+
+def root_prompt_page(db, root, after):
+    if after is None:
+        return db.execute(_PROMPT_PAGE.format(seek="created>=0"), (root, PROMPT_ROWS)).fetchall()
+    clock, prompt = after
+    rows = db.execute(_PROMPT_PAGE.format(seek="created=? AND id>?"), (root, clock, prompt, PROMPT_ROWS)).fetchall()
+    if len(rows) < PROMPT_ROWS:
+        rows.extend(db.execute(_PROMPT_PAGE.format(seek="created>?"),
+                               (root, clock, PROMPT_ROWS - len(rows))).fetchall())
+    return rows
 
 
 class RootPromptCalls:
