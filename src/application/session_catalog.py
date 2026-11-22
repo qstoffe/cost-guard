@@ -29,6 +29,7 @@ from .session_catalog_scope import (
     event_members, in_window, live_activity_order, provisional_order, retained_positions,
 )
 from .session_coverage import in_recent_tail, older_roster_changed
+from .session_preview_order import preview_keys
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
@@ -152,6 +153,7 @@ class SessionCatalog:
         self.recent_arrivals = {}
         self.discovery_sequence = 0
         self.preview_totals = {}
+        self.preview_roots = ()
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
 
@@ -320,6 +322,7 @@ class SessionCatalog:
             if (source_changed or self.observed is None or self.roots.keys() != previous_roots.keys()
                     or self.revisions.keys() != previous_revisions.keys()):
                 self.membership_generation += 1
+                self.preview_roots = tuple(sorted(self.roots))
             self.changed_roots.intersection_update(self.roots)
             revised = {key for key in self.roots if key in previous_roots
                        and (previous_revisions.get(key) != self.revisions.get(key)
@@ -1029,8 +1032,6 @@ class SessionCatalog:
                 row = self.rows.get(key)
                 current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
                     and not self.failures.get(key, (None, False))[1])
-                if key in excluded or self._running(key):
-                    return None
                 at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
                 at = at if type(at) is int and 0 < at <= now else None
                 scope = total_scope(key)
@@ -1050,10 +1051,7 @@ class SessionCatalog:
                 return SessionPreview(key, self.roots[key].title or "Untitled session", at,
                     "events" if self._activity_current(key) else "catalog",
                     total, total is not None, total_state=total_state)
-            # Bounded top-K output/memory; no full-history sort or capture.
-            selected = tuple(nsmallest(limit, (value for key in self.roots
-                if (value := candidate(key)) is not None),
-                key=lambda value: (-(value.activity_ms or 0), value.session_id)))
+            selected = tuple(map(candidate, preview_keys(self, excluded, now, limit)))
             self.preview_totals = {value.session_id: (total_scope(value.session_id), value.total_ccost)
                 for value in selected if value.total_ccost is not None}
             return selected

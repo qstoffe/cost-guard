@@ -1,4 +1,5 @@
 """Watch and Mini read one committed source-scoped observation."""
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -15,7 +16,7 @@ from src.analysis.timezones import local_date_range
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
-from src.cache.display_history import DisplayHistory
+from src.cache.display_history import BATCH_LIMIT, DisplayHistory, SessionChange, SessionFact
 from src.cache.display_watch import WATCH_LIVE_MS, WATCH_ROW_LIMIT, publish_watch
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
@@ -237,6 +238,68 @@ class DisplayWatchTests(unittest.TestCase):
         self.assertIsNone(placeholder)
         self.assertTrue(oversized.truncated)
         self.assertEqual(WATCH_ROW_LIMIT, len(oversized.facts))
+
+    def test_live_publication_progresses_while_five_thousand_root_catalog_work_is_held(self):
+        path = self.root / "catalog"
+        path.write_bytes(b"fixture identity")
+        selection = SimpleNamespace(selected="v1", source=OpenCodeV1Source(path))
+        service = SimpleNamespace(timezone_id="UTC", selection=selection)
+        driver = SimpleNamespace(error=None, terminal=False,
+            coordinator=SimpleNamespace(catalog_observation=None, report_service=service))
+        archive = DisplayArchive(self.root, lambda *_: None, watch_enabled=True)
+        self.addCleanup(archive.close)
+        archive.observe(driver, before_tick=True)
+        source = archive.views.source
+        ready, release = Event(), Event()
+
+        def historical_turn():
+            for start in range(0, 5_000, BATCH_LIMIT):
+                archive.history.commit_sessions(source, tuple(
+                    SessionChange(SessionFact(f"old-{i}", "r1", "Older session"), None)
+                    for i in range(start, min(start + BATCH_LIMIT, 5_000))))
+            ready.set()
+            if not release.wait(5):
+                raise AssertionError("fixture did not release history")
+
+        with ThreadPoolExecutor(max_workers=1) as catalog_lane:
+            history = catalog_lane.submit(historical_turn)
+            try:
+                self.assertTrue(ready.wait(10))
+                base = int(time.time() * 1000) - 1000
+                for step, count in enumerate((0, 1, 5, 26)):
+                    now = base + step
+                    frame = running_frame(now)
+                    card, = frame.active_cards
+                    roots = tuple(replace(card, session_id=f"active-{index}") for index in range(count))
+                    frame = replace(frame, active_cards=roots)
+                    archive.publish_watch(frame, now)
+                    archive._watch_write.result(timeout=3)
+
+                    full = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+                    mini = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+                    self.assertEqual(full, mini)
+                    self.assertEqual(count, len(full["view"]["active_cards"]))
+                    self.assertFalse(history.done())
+                    if count:
+                        fact = full["cards"][-1]
+                        self.assertEqual(("0.125", "1.25000001", 773),
+                                         (fact["prompt_cost"], fact["session_cost"], fact["context_tokens"]))
+
+                now = base + 4
+                row, = card.rows
+                finished = replace(row.prompt, in_progress=False, completed_successfully=True, completed_at_ms=now)
+                recent = tuple(replace(card, session_id=f"finished-{i}", rows=(replace(row, prompt=finished),))
+                               for i in range(250))
+                archive.publish_watch(replace(frame, now_ms=now, recent_finished_cards=recent), now)
+                archive._watch_write.result(timeout=3)
+                latest = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+                self.assertFalse(history.done())
+                self.assertEqual(250, len(latest["view"]["recent_finished_cards"]))
+                self.assertEqual({now}, {item["finish_ms"] for item in latest["cards"] if item["outcome"] == "finished"})
+            finally:
+                release.set()
+            history.result(timeout=3)
+        self.assertEqual(5_000, archive.views.page(period="all")["cached_total"])
 
     def test_publisher_has_one_watch_write_under_pressure_and_notifies_after_commit(self):
         path = self.root / "fixture.db"
