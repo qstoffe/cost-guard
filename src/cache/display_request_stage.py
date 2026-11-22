@@ -76,6 +76,9 @@ def request_stage_schema():
     """ + request_table_schema(
         "archive_prepare_requests", "REFERENCES archive_request_preparations(attempt)",
         extra_columns="first_revision INTEGER,",
+    ) + request_table_schema(
+        "archive_prepare_before", "REFERENCES archive_request_preparations(attempt)",
+        extra_columns="first_revision INTEGER NOT NULL,",
     ) + """
         CREATE INDEX archive_prepare_candidates ON archive_prepare_requests(
             source,fork_key,dedup_tree,request_ordinal,session_id,request_key);
@@ -215,12 +218,23 @@ def prepare_request_page(db, attempt):
     if keys:
         params = ",".join("?" for _ in keys)
         db.execute(f"""
-            INSERT INTO archive_prepare_requests(source,first_revision,{_COLUMNS})
+            INSERT INTO archive_prepare_before(source,first_revision,{_COLUMNS})
             SELECT ?,first_revision,{_COLUMNS} FROM archive_requests
             WHERE source=? AND request_key IN ({params})
         """, (attempt, source, *keys))
+        db.execute(f"""
+            INSERT INTO archive_prepare_requests(source,first_revision,{_COLUMNS})
+            SELECT source,first_revision,{_COLUMNS} FROM archive_prepare_before
+            WHERE source=? AND request_key IN ({params})
+        """, (attempt, *keys))
         upsert_request_values(db, attempt, None, rows, private=True)
         _discard_identical(db, source, attempt, keys, params)
+        db.execute(f"""
+            DELETE FROM archive_prepare_before AS b
+            WHERE b.source=? AND b.request_key IN ({params})
+              AND NOT EXISTS(SELECT 1 FROM archive_prepare_requests p
+                             WHERE p.source=b.source AND p.request_key=b.request_key)
+        """, (attempt, *keys))
         edits, corrections = db.execute(f"""
             SELECT count(*),count(first_revision) FROM archive_prepare_requests
             WHERE source=? AND request_key IN ({params})
@@ -241,7 +255,19 @@ def _discard_identical(db, source, attempt, keys, params):
         DELETE FROM archive_prepare_requests AS p WHERE p.source=? AND p.request_key IN ({params})
           AND EXISTS(SELECT 1 FROM archive_requests AS b
               WHERE b.source=? AND b.request_key=p.request_key AND ({base}) IS ({staged}))
-    """, (attempt, *keys, source))
+          AND NOT EXISTS(
+              SELECT 1 FROM archive_request_preparations AS a
+              JOIN archive_input_requests AS i ON i.source=a.run AND i.request_key=p.request_key
+              LEFT JOIN archive_stats_request_identity AS j ON j.source=? AND j.request_key=i.request_key
+              WHERE a.attempt=p.source AND i.message_key IS NOT NULL
+                AND (i.clock_ms,i.dedup_tree,i.provider,i.model,i.recorded_model,i.known_fields,i.effort,
+                     i.request_ordinal,i.logical_prompt_id) IS
+                    (p.clock_ms,p.dedup_tree,p.provider,p.model,p.recorded_model,p.known_fields,p.effort,
+                     p.request_ordinal,p.logical_prompt_id)
+                AND (i.message_key,i.step_key,i.sample_hash,i.source_model_key,i.stats_effort) IS NOT
+                    (j.message_key,j.step_key,j.sample_hash,j.source_model_key,j.effort)
+          )
+    """, (attempt, *keys, source, source))
 
 
 def _mark_fork_changes(db, source, attempt, keys, params):

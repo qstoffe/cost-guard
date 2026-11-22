@@ -10,9 +10,11 @@ from .display_stats_revision import StatsVersion, retained_stats_version
 from .display_usage_reader import USAGE_SLICE, UsageInput
 
 
-_SHAPE = tuple(REQUEST_COLUMNS.index(column) for column in (
-    "clock_ms", "dedup_tree", "provider", "model", "recorded_model", "known_fields", "effort", "request_ordinal",
-))
+TIMING_SHAPE = ("clock_ms", "dedup_tree")
+IDENTITY_SHAPE = (*TIMING_SHAPE, "provider", "model", "recorded_model", "known_fields", "effort", "request_ordinal",
+                  "logical_prompt_id")
+_SHAPE = tuple(REQUEST_COLUMNS.index(column) for column in IDENTITY_SHAPE)
+_BASE_SHAPE = ",".join(f"r.{column}" for column in IDENTITY_SHAPE)
 _PRICING = REQUEST_COLUMNS.index("pricing")
 _CATEGORY = slice(REQUEST_COLUMNS.index("input_cost"), _PRICING)
 
@@ -44,12 +46,12 @@ def slot_stats_candidates(db, source, *, slot, expected=None, cursor=None, limit
                                cursor=cursor.birth if cursor else None, limit=limit)
     if page is None:
         return None
-    entries = tuple(_candidate(db, source, version.evidence, row) for row in page.rows)
+    entries = tuple(_candidate(db, source, version.evidence, slot, row) for row in page.rows)
     resume = SlotStatsCursor(version, page.next_cursor) if page.next_cursor is not None else None
     return SlotStatsSlice(version, entries, resume)
 
 
-def _candidate(db, source, evidence, row):
+def _candidate(db, source, evidence, slot, row):
     key, clock, fork, session, prompt, provider, model, recorded, account = row[:9]
     pricing = row[_PRICING]
     costs = None if pricing is None else tuple(map(Decimal, row[_CATEGORY]))
@@ -57,13 +59,13 @@ def _candidate(db, source, evidence, row):
                        row[9:14], row[14], costs, pricing)
     shape = tuple(row[index] for index in _SHAPE)
     *_, tree, ordinal, _ = row
-    identity, timing = _compatible_evidence(db, source, evidence, key, shape)
+    identity, timing = _compatible_evidence(db, source, evidence, slot, key, shape)
     return StatsCandidate(usage, identity, timing, fork, tree, ordinal)
 
 
-def _compatible_evidence(db, source, evidence, key, shape):
-    evidence_row = db.execute("""
-        SELECT r.clock_ms,r.dedup_tree,r.provider,r.model,r.recorded_model,r.known_fields,r.effort,r.request_ordinal,
+def _compatible_evidence(db, source, evidence, slot, key, shape):
+    evidence_row = db.execute(f"""
+        SELECT {_BASE_SHAPE},
                i.message_key,i.step_key,i.sample_hash,i.source_model_key,i.effort,
                t.start_ms,t.duration_ms,t.excluded
         FROM archive_requests AS r
@@ -75,8 +77,26 @@ def _compatible_evidence(db, source, evidence, key, shape):
     """, (evidence, evidence, source, key)).fetchone()
     if evidence_row is None:
         return None, None
-    identity = (StatsRequestIdentity(*evidence_row[8:13])
-                if evidence_row[:8] == shape and evidence_row[8] is not None else None)
-    timing = (ResponseTiming(evidence_row[13], evidence_row[14], bool(evidence_row[15]))
-              if evidence_row[:2] == shape[:2] and evidence_row[15] is not None else None)
+    base, (message, step, sample, model, effort, start, duration, excluded) = (
+        evidence_row[:len(_SHAPE)], evidence_row[len(_SHAPE):])
+    identity = StatsRequestIdentity(message, step, sample, model, effort) if base == shape and message is not None else None
+    if identity is not None and slot is not None:
+        observed = slot_stats_recipe(db, slot, key)
+        if observed is not None and observed != (message, step, sample, model, effort):
+            identity = None
+    timing = ResponseTiming(start, duration, bool(excluded)) if base[:2] == shape[:2] and excluded is not None else None
     return identity, timing
+
+
+def slot_stats_recipe(db, slot, key):
+    """None means no sparse after-image; a tuple of NULLs means no recipe."""
+    compatible = " AND ".join(f"i.{name} IS p.{name}" for name in IDENTITY_SHAPE)
+    values = ",".join(f"CASE WHEN {compatible} THEN i.{name} END"
+                      for name in ("message_key", "step_key", "sample_hash", "source_model_key", "stats_effort"))
+    return db.execute(f"""
+        SELECT {values}
+        FROM archive_request_preparations a
+        JOIN archive_prepare_requests p ON p.source=a.attempt AND p.request_key=?
+        JOIN archive_input_requests i ON i.source=a.run AND i.request_key=p.request_key
+        WHERE a.attempt=?
+    """, (key, slot.attempt)).fetchone()

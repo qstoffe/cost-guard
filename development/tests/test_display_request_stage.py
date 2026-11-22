@@ -10,7 +10,7 @@ import unittest
 
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
-from src.cache.display_request_materialize import materialize_slot_timing
+from src.cache.display_request_materialize import fixture_usage_fold_schema, fold_slot_correction, materialize_slot_timing
 from src.cache.display_request_overlay import RequestSlot, countable_request_rows, request_birth_slice, request_clock_slice
 from src.cache.display_request_slot_stats import slot_stats_candidates
 from src.cache.display_request_stage import (
@@ -632,6 +632,7 @@ class DisplayRequestStageTests(unittest.TestCase):
                     db.set_progress_handler(None, 0)
                     db.execute("DELETE FROM probe_installed")
                     db.execute("DELETE FROM archive_prepare_requests")
+                    db.execute("DELETE FROM archive_prepare_before")
                     db.execute("DELETE FROM archive_request_preparations")
                     db.execute("DELETE FROM archive_input_requests")
                     db.execute("DELETE FROM archive_request_inputs")
@@ -764,12 +765,14 @@ class DisplayRequestStageTests(unittest.TestCase):
         recipe = StatsRequestIdentity(b"m" * 32, None, b"s" * 32, b"p" * 32, "medium")
         timing = ResponseTiming(10, 25)
         requests = tuple(replace(_request(key, clock=60), stats_identity=recipe, response=timing)
-                         for key in (b"clock", b"effort", b"tokens"))
+                         for key in (b"clock", b"effort", b"missing", b"parent", b"tokens"))
         with self.write() as db:
             publish_roster(db, SOURCE, "A", "rev-A",
                            RequestRoster("price", requests, (), stats=StatsCapture((), False, None, ())))
         self._stage((replace(requests[0], clock_ms=70), replace(requests[1], effort="high"),
-                     replace(requests[2], tokens=(70, 1, 0, 2, 0)), _request(b"new", clock=75)))
+                     replace(requests[2], tokens=(65, 1, 0, 2, 0), stats_identity=None),
+                     replace(requests[3], stats_identity=replace(recipe, sample_hash=b"q" * 32)),
+                     replace(requests[4], tokens=(70, 1, 0, 2, 0)), _request(b"new", clock=75)))
         self._prepare("candidate")
         witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 1, 0)
 
@@ -786,16 +789,79 @@ class DisplayRequestStageTests(unittest.TestCase):
             reader.execute("BEGIN")
             self.assertIsNone(slot_stats_candidates(reader, SOURCE, expected=old.version, slot=slot))
             fresh = slot_stats_candidates(reader, SOURCE, slot=slot, limit=2)
-            tail = slot_stats_candidates(reader, SOURCE, slot=slot, cursor=fresh.next_cursor, limit=2)
-            visible = {item.usage.request_key: item for item in fresh.entries + tail.entries}
+            middle = slot_stats_candidates(reader, SOURCE, slot=slot, cursor=fresh.next_cursor, limit=2)
+            tail = slot_stats_candidates(reader, SOURCE, slot=slot, cursor=middle.next_cursor, limit=2)
+            visible = {item.usage.request_key: item for item in fresh.entries + middle.entries + tail.entries}
             self.assertIsNone(tail.next_cursor)
             self.assertEqual({
                 b"clock": (70, None, None),
                 b"effort": (60, None, timing),
+                b"missing": (60, None, timing),
+                b"parent": (60, None, timing),
                 b"tokens": (60, recipe, timing),
                 b"new": (75, None, None),
             }, {key: (item.usage.clock_ms, item.identity, item.response) for key, item in visible.items()})
             self.assertEqual(70, visible[b"tokens"].usage.tokens[0])
+            self.assertEqual((b"s" * 32,), reader.execute("""
+                SELECT sample_hash FROM archive_stats_request_identity WHERE source=? AND request_key=?
+            """, (SOURCE, b"missing")).fetchone())
+        with self.history._connect() as db:
+            db.executescript(fixture_usage_fold_schema())
+        with self.history._write_lock, self.write() as db:
+            self.assertFalse(fold_slot_correction(db, slot, witness, b"missing", eligible=lambda: True))
+            self.assertEqual((65,), db.execute("""
+                SELECT input_tokens FROM archive_prepare_requests WHERE source='candidate' AND request_key=?
+            """, (b"missing",)).fetchone())
+            self.assertTrue(fold_slot_correction(db, slot, witness, b"parent", eligible=lambda: True))
+            self.assertIsNone(db.execute("""
+                SELECT 1 FROM archive_stats_request_identity WHERE source=? AND request_key=?
+            """, (SOURCE, b"parent")).fetchone())
+
+    def test_restart_fold_keeps_effective_request_and_never_resurrects_stale_identity(self):
+        key = b"corrected"
+        recipe = StatsRequestIdentity(b"m" * 32, None, b"s" * 32, b"p" * 32, "medium")
+        original = replace(_request(key, clock=60), stats_identity=recipe, response=ResponseTiming(10, 25))
+        with self.history._connect() as db:
+            db.executescript(fixture_usage_fold_schema())
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A",
+                           RequestRoster("price", (original,), (), stats=StatsCapture((), False, None, ())))
+            old = usage_version(db, SOURCE)
+        self._stage((replace(original, clock_ms=80, effort="high"),))
+        self._prepare("candidate")
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 1, 0)
+        with self.write() as db:
+            slot = install_usage_slot(db, "candidate", witness, eligible=lambda: True)
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            before = slot_stats_candidates(db, SOURCE, slot=slot)
+            self.assertIsNone(before.entries[0].identity)
+            self.assertIsNone(before.entries[0].response)
+
+        with self.history._write_lock, self.write() as db:
+            self.assertFalse(fold_slot_correction(db, slot, replace(witness, geometry=1), key, eligible=lambda: True))
+            eligibility = iter((True, False))
+            self.assertFalse(fold_slot_correction(db, slot, witness, key, eligible=lambda: next(eligibility)))
+            self.assertEqual((60,), db.execute("SELECT clock_ms FROM archive_requests").fetchone())
+            self.assertEqual((80,), db.execute("SELECT clock_ms FROM archive_prepare_requests").fetchone())
+            db.execute("SAVEPOINT peer")
+            db.execute("UPDATE archive_requests SET input_tokens=99 WHERE request_key=?", (key,))
+            self.assertFalse(fold_slot_correction(db, slot, witness, key, eligible=lambda: True))
+            self.assertEqual((99,), db.execute("SELECT input_tokens FROM archive_requests").fetchone())
+            self.assertEqual((80,), db.execute("SELECT clock_ms FROM archive_prepare_requests").fetchone())
+            db.execute("ROLLBACK TO peer")
+            db.execute("RELEASE peer")
+            self.assertTrue(fold_slot_correction(db, slot, witness, key, eligible=lambda: True))
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            current = RequestSlot(*db.execute("SELECT attempt,birth,layout FROM archive_request_slots").fetchone())
+            self.assertEqual(replace(slot, layout=1), current)
+            self.assertEqual(before, slot_stats_candidates(db, SOURCE, slot=current))
+            self.assertIsNone(retained_usage_version(db, SOURCE, old))
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_usage_fold_guard").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_prepare_before").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
 
     def test_fork_preparation_resumes_past_tied_shadowed_candidates(self):
         fork = b"fork"
@@ -905,6 +971,7 @@ class DisplayRequestStageTests(unittest.TestCase):
         with self.history._connect(read=True) as db:
             self.assertEqual((0,), db.execute("SELECT edits FROM archive_request_preparations").fetchone())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_prepare_requests").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_prepare_before").fetchone())
             self.assertEqual((1,), db.execute("SELECT usage_revision FROM probe_installed").fetchone())
             self.assertEqual([(b"known", 20, 9, 1, "A"), (b"same", 20, 9, 1, "A")], _visible(db, 0, 100))
 

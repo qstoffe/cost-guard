@@ -1,11 +1,11 @@
 """Source-free, paged physical requests and root causal edges from a V1 pin."""
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from src.cache.display_requests import DisplayRequest
 from src.sources.errors import SourceDataError
 
-from .request_archive_projection import physical_request_key, project_request
+from .request_archive_projection import physical_request_key, project_request, stats_request_identity
 from .v1_scoped_calls import CALL_ROWS
 
 
@@ -67,7 +67,9 @@ class V1ArchiveProjection:
                                       prompt=row.executing_prompt_id, tree=self._root)
             if request is None:
                 raise SourceDataError("V1 request projection has invalid valuation", phase="archive")
-            requests.append(request)
+            # The source trace proves a recipe, not response timing, measured
+            # geometry, or a complete eligible Stats population.
+            requests.append(replace(request, stats_identity=stats_request_identity(entry)))
         return ProjectionPage(requests=tuple(requests))
 
     def _attribution(self):

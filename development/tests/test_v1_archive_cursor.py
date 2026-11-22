@@ -1,4 +1,5 @@
 from contextlib import closing, contextmanager
+from dataclasses import replace
 import json
 from pathlib import Path
 import sqlite3
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 from src.analysis import analyze_snapshot
 from src.analysis.causal import trace_entries
-from src.application.request_archive_projection import physical_request_key, project_request, request_roster
+from src.application.request_archive_projection import physical_request_key, project_request, request_roster, stats_request_identity
 from src.application.v1_archive_projection import V1ArchiveProjection
 from src.application.v1_archive_trace import V1ArchiveTrace
 from src.cache.display_history import DisplayHistory
@@ -755,6 +756,18 @@ class V1ArchiveCursorTests(unittest.TestCase):
         )
         expected_edges = sorted((physical_request_key(entry), prompt.prompt_id)
                                 for prompt in bundle.prompts for entry in prompt.entries)
+        expected_recipes = []
+        for entry in bundle.trace_entries:
+            recipe = stats_request_identity(entry)
+            expected_recipes.append((physical_request_key(entry), recipe.message_key, recipe.step_key, recipe.sample_hash,
+                                     recipe.source_model_key, recipe.effort))
+        original = bundle.trace_entries[0]
+        alternate = replace(original, parent_event_id="another-invisible-event")
+        self.assertEqual(
+            project_request(original, physical_request_key(original), reference, prompt="user-0000", tree=ROOT),
+            project_request(alternate, physical_request_key(alternate), reference, prompt="user-0000", tree=ROOT),
+        )
+        self.assertNotEqual(stats_request_identity(original), stats_request_identity(alternate))
         history = DisplayHistory(self.path.parent)
         history.initialize()
         with history._connect() as display:
@@ -819,6 +832,10 @@ class V1ArchiveCursorTests(unittest.TestCase):
             self.assertEqual(expected_edges, display.execute("""
                 SELECT request_key,prompt_id FROM archive_input_attribution WHERE run='dense'
                 ORDER BY request_key,prompt_id
+            """).fetchall())
+            self.assertEqual(sorted(expected_recipes), display.execute("""
+                SELECT request_key,message_key,step_key,sample_hash,source_model_key,stats_effort
+                FROM archive_input_requests WHERE source='dense' ORDER BY request_key
             """).fetchall())
             self.assertIsNone(display.execute("SELECT 1 FROM archive_requests LIMIT 1").fetchone())
             self.assertIsNone(display.execute("SELECT 1 FROM archive_prompt_attribution LIMIT 1").fetchone())

@@ -29,7 +29,7 @@ def physical_request_key(entry, *, source_instance=None):
     return _key(identity) if identity is not None else None
 
 
-def _stats_identity(entry):
+def stats_request_identity(entry):
     step = _key(entry.step_part_id) if entry.step_part_id else None
     return StatsRequestIdentity(_key(request_message_identity(entry)), step, sample_hash(entry),
                                 _key(source_model_key(entry)), selected_effort(entry))
@@ -150,7 +150,7 @@ def request_roster(snapshot, bundle, reference, *, config=None):
         if request is None:
             return None
         if with_stats:
-            request = replace(request, response=responses.observation(entry), stats_identity=_stats_identity(entry))
+            request = replace(request, response=responses.observation(entry), stats_identity=stats_request_identity(entry))
         requests.append(request)
     detail = () if config is not None else None
     if config is not None and prompt_count:
