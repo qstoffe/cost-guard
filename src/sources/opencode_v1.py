@@ -453,6 +453,21 @@ class OpenCodeV1Source:
             self._require_schema(connection)
             return batch_revisions(connection, session_ids)
 
+    @contextmanager
+    def archive_cursor(self, session_id: str):
+        """Read tentative normalized pages; only this context owns their pin."""
+        from .v1_archive_cursor import V1ArchiveCursor
+
+        with self._connection() as connection:
+            connection.execute("PRAGMA busy_timeout = 0")
+            connection.execute("BEGIN")
+            self._require_schema(connection)
+            cursor = V1ArchiveCursor(self, connection, session_id)
+            try:
+                yield cursor
+            finally:
+                cursor.close()
+
     @staticmethod
     def _json_object(raw: Any, *, context: str) -> dict[str, Any]:
         if not isinstance(raw, str):
