@@ -7,6 +7,7 @@ import http.client
 import io
 import json
 from pathlib import Path
+import shutil
 import socket
 import tempfile
 from threading import Event, Thread
@@ -593,6 +594,31 @@ class WebRuntimeTests(unittest.TestCase):
                              (stale, unconfirmed, csrf_missing, remaining, cleared, replay, retired))
             self.assertEqual(0, archive.history.session_page(bound).total)
             self.assertEqual(b"another source", original.read_bytes())
+
+    def test_normal_web_host_enables_all_display_cache_routes_by_default(self):
+        from src.web.host import WebHost
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "config").mkdir()
+            shutil.copyfile(Path("config/default-config.jsonc"), root / "config/default-config.jsonc")
+            host = WebHost(root)
+            self.addCleanup(host.close)
+            self.assertIsNotNone(host.display_archive)
+            self.assertTrue(host.display_archive.watch_enabled)
+            self.assertIsNotNone(host.display_archive.mix_refresh)
+            self.assertIsNotNone(host.display_archive.stats)
+            self.assertIsNotNone(host.display_archive.models)
+            self.assertIsNotNone(host.display_archive.accounts)
+            self.assertTrue(host.benchmark.requested)
+            self.login()
+            self.server.lifecycle = host
+            status, _, body = self.request("/api/status")
+            self.assertEqual(200, status)
+            payload = json.loads(body)
+            for key in ("cached_sessions", "cached_watch", "cached_mix",
+                        "cached_stats", "cached_models", "cached_accounts"):
+                self.assertTrue(payload[key], key)
 
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()

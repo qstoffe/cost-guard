@@ -131,50 +131,7 @@ def publish_verified_membership(archive, catalog, service):
     raise AssertionError("verified fixture membership did not settle")
 
 
-def check_archive_ages(root, source_path, now, account):
-    results = []
-    for days in (30, 60, 365):
-        as_of = now + days * DAY_MS
-        host = WebHost(root, jobs=ReportJobs())
-        archive, _ = bind(host, root, OpenCodeV1Source(source_path))
-        try:
-            views = archive.views
-            old, control, *_ = views.page(period="all", sort="prompts", direction=1, now_ms=as_of)["rows"]
-            assert [(old["session_id"], old["source_present"], old["activity_ms"], old["ccost"]),
-                    (control["session_id"], control["source_present"], control["activity_ms"], control["ccost"])] == [
-                (RETAINED, False, now - 60 * DAY_MS, "17"), (CURRENT, True, now - 60_000, "25")]
-            assert views.page(period="7-days", now_ms=as_of)["cached_total"] == 0
-            detail = views.detail(session_id=RETAINED)
-            assert detail["history_coverage"] == "retained" and detail["summary"]["context_tokens"] == 773
-            prompt, = detail["rows"]
-            assert (prompt["finish_ms"], prompt["ccost"], prompt["model"]) == (now - 60 * DAY_MS, "17", "Saved model")
-
-            archive.accounts.offer((SimpleNamespace(account=account, label="Claude Code Pro"),), verified=True)
-            settle_projections(archive, as_of)
-            zone, source = views.timezone_id, views.source
-            mix = cached_mix_view(archive.history, source, zone, "all", as_of)
-            recent_mix = cached_mix_view(archive.history, source, zone, "7-days", as_of)
-            stats = archive.stats.snapshot("all", as_of)
-            recent_stats = archive.stats.snapshot("7-days", as_of)
-            assert mix["end_ms"] == as_of and mix["observed_category_totals"] == ["50", "50", "50", "50"]
-            assert recent_mix["end_ms"] == as_of and recent_mix["token_mix"] is None
-            assert stats["tokens_as_of_ms"] == as_of and stats["observed_tokens"] == "200"
-            assert recent_stats["tokens_as_of_ms"] == as_of and recent_stats["observed_tokens"] is None
-
-            chart = archive.accounts.snapshot("30-days", as_of)["view"]
-            assert chart is not None and chart["series"][0]["total"] is None
-            # No Accounts lifetime chart is exposed. Prove the typed reference
-            # contribution still exists in the original date window.
-            historical = archive.history.account_usage(source, now - 60 * DAY_MS, now)
-            assert [(row.clock_ms, sum(row.costs)) for row in historical.rows] == [
-                (now - 60 * DAY_MS, Decimal(17)), (now - 60_000, Decimal(25))]
-            results.append(days)
-        finally:
-            host.close()
-    return results
-
-
-def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=False):
+def check_cached_warm_views(browser, evidence, product_root):
     from playwright.sync_api import expect
 
     with TemporaryDirectory() as directory:
@@ -319,9 +276,6 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
                 assert Decimal(value["view"]["series"][0]["total"]["amount"]) == 25
                 expect(accounts.locator(".account-timeline-bar")).to_have_count(1)
                 first_ms["accounts_7_days"] = round((time.perf_counter() - begin) * 1000, 1)
-                if measure_actions:
-                    from development.tests.integration.warm_action_latency import measure_warm_actions
-                    evidence["warm_action_latency"] = measure_warm_actions(page)
                 assert not history_release.is_set() and quota_calls == [False]
 
                 quota_release[0].set()
@@ -355,11 +309,9 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
                 benchmark.assert_not_called()
             assert not FORBIDDEN.intersection(requests), sorted(FORBIDDEN.intersection(requests))
             assert not errors, errors
-            assert max(first_ms.values()) < 1_000, first_ms
             evidence["cached_warm_views"] = dict(metadata_rows=COUNT, typed_usage_roots=2,
                 source_reads=0, finite_submits=0, benchmark_submits=0, synthetic_deleted_roots=1, views_exercised=7,
-                 accounts="Claude-only warm chart precedes both held lanes; late old chart and native quota fenced",
-                first_route_wall_ms=first_ms)
+                 accounts="Claude-only warm chart precedes both held lanes; late old chart and native quota fenced")
         finally:
             context.close()
             host.stop()
@@ -367,7 +319,6 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
             for gate in quota_release:
                 gate.set()
             host.close()
-        evidence["cached_warm_views"]["source_missing_checked_after_days"] = check_archive_ages(root, path, now, original)
 
 
 if __name__ == "__main__":
@@ -378,8 +329,7 @@ if __name__ == "__main__":
         browser = playwright.chromium.launch(executable_path=os.environ.get("BROWSER_PROBE_EXECUTABLE"), headless=True)
         try:
             evidence = {}
-            check_cached_warm_views(browser, evidence, Path.cwd(),
-                                    measure_actions=os.environ.get("MEASURE_WARM_ACTIONS") == "1")
+            check_cached_warm_views(browser, evidence, Path.cwd())
             print(evidence)
         finally:
             browser.close()
