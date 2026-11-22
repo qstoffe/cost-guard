@@ -15,6 +15,11 @@ def fixture_help(provider, model):
     return "Local scripted fixture; not a billed model consultation." if (provider, model) == ("fixture", "scripted") else ""
 
 
+def attribution_label(basis):
+    return {"inferred": "Linked by prompt timing",
+            "mixed": "Verified and timing-inferred work"}.get(basis, "")
+
+
 def prompt_display_help(row):
     """Consumer identity copy from structured row facts, not cost-help text."""
     label = row.watch_model or row.model_effort or "N/A"
@@ -25,6 +30,9 @@ def prompt_display_help(row):
     lines = [label]
     for part in row.cost_parts[:24]:
         role = "Main prompt" if not part.agent else f"Subagent {part.agent}"
+        if 0 < part.agent <= len(row.agent_coverage):
+            if basis := attribution_label(row.agent_coverage[part.agent - 1].attribution):
+                role += f" ({basis})"
         name = catalog_display_name(part.provider_id, part.model)
         identity = f"{part.provider_id}/{name}" if part.provider_id else name
         efforts = " / ".join(dict.fromkeys(effort_help(e) for e in part.effort_evidence))

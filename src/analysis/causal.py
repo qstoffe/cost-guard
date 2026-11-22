@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Iterable, Mapping, Sequence
+from collections import defaultdict
 from dataclasses import dataclass
 from src.domain.progress import observe_work
 
@@ -175,7 +176,8 @@ def prompt_references(
             any(item.termination or item.error_name or item.completed_at_ms is None for item in attempt_messages)
             or bool(snapshot.root.active is True and latest_visible)
         )
-        if not window & parent_ids and not has_error_or_live and not timeline.children.scopes(attempt_messages):
+        if not window & parent_ids and not has_error_or_live and not timeline.children.scopes(
+                attempt_messages, prompt=(event.session_id, event.event_id)):
             continue
         refs.append(PromptReference(
             session_id=snapshot.root.session_id,
@@ -397,9 +399,12 @@ def build_prompt_record(
     timeline = timeline or _root_timeline(snapshot, subscription_providers, tracked_provider)
     parent_ids = _synthetic_parent_ids(snapshot, ref, timeline)
     attempt_messages = timeline.index.attempt_messages(parent_ids, timeline.messages)
-    scopes = timeline.children.scopes(attempt_messages)
-    child_ids = {scope.session_id for scope in scopes}
-    child_messages = timeline.children.messages(scopes)
+    scopes = timeline.children.scopes(attempt_messages, prompt=(ref.session_id, ref.prompt_id))
+    verified_scopes = tuple(scope for scope in scopes if not scope.inferred_path)
+    verified_ids = {scope.session_id for scope in verified_scopes}
+    inferred_ids = {scope.session_id for scope in scopes if scope.inferred_path}
+    child_ids = tuple(sorted(verified_ids | inferred_ids))
+    child_messages = timeline.children.messages(verified_scopes)
     # A continuation may fail before producing an assistant. The newest attempt,
     # not an earlier response or session inactivity, owns the logical outcome.
     latest = _latest_attempt_message(attempt_messages)
@@ -412,7 +417,7 @@ def build_prompt_record(
     foreground_work = _prompt_has_active_work(
         snapshot, attempt_messages, continuation_superseded=superseded,
     )
-    child_active, child_unverified = descendant_activity(snapshot, timeline.children, scopes)
+    child_active, child_unverified = descendant_activity(snapshot, timeline.children, verified_scopes)
     background = _outstanding_background(snapshot, child_messages, superseded=superseded)
 
     def running(active_work: bool) -> bool:
@@ -453,8 +458,19 @@ def build_prompt_record(
         (entry for parent in parent_ids for entry in timeline.index.entries.get(parent, ())),
         key=lambda entry: (entry.completed_at_ms, entry.sort_order),
     )
-    child_entries = scoped_entries(snapshot, timeline.entries, scopes, tracked_provider) if scopes else []
-    agents = child_coverage(snapshot, sorted(child_ids), child_messages, child_entries)
+    child_entries = scoped_entries(snapshot, timeline.index, scopes, tracked_provider)
+    verified_entries = (scoped_entries(snapshot, timeline.index, verified_scopes, tracked_provider)
+                        if inferred_ids else child_entries)
+    attribution = {sid: "mixed" if sid in verified_ids else "inferred" for sid in inferred_ids}
+    by_turn = defaultdict(list)
+    if inferred_ids:
+        for entry in child_entries:
+            by_turn[(entry.session_id, entry.logical_prompt_id)].append(entry)
+    inferred_turns = ((scope.session_id, timeline.children.messages((scope,)),
+                       by_turn[(scope.session_id, scope.owner_id)])
+                      for scope in scopes if scope.timing_only)
+    agents = child_coverage(snapshot, child_ids, timeline.children.messages(scopes) if inferred_ids else child_messages,
+                            child_entries, attribution=attribution, turns=inferred_turns)
     background_fields.update(agent_coverage=agents,
         usage_coverage_complete=snapshot.complete and coverage_complete(agents)
             and not unrepresented_usage(attempt_messages, root_entries))
@@ -510,7 +526,7 @@ def build_prompt_record(
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if not in_progress and not unverified else 0,
             execution_duration_ms=None if unverified else prompt_duration(ref, (*attempt_messages, *child_messages), latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
-            linked_session_ids=tuple(sorted(child_ids)),
+            linked_session_ids=child_ids,
             **background_fields,
         )
 
@@ -521,10 +537,12 @@ def build_prompt_record(
     prompt_end = last.completed_at_ms
     if not in_progress and not unverified and terminal_time <= 0:
         terminal_time = abort_time or prompt_end
-    causal_end = now_ms if in_progress else max(prompt_end, terminal_time)
+    causal_request_end = max((entry.completed_at_ms for entry in (*root_entries, *verified_entries)),
+                             default=prompt_start)
+    causal_end = now_ms if in_progress else max(causal_request_end, terminal_time)
     local_intervals = _local_intervals(attempt_messages, prompt_start, causal_end)
     entries = [*root_entries, *child_entries]
-    for scope in scopes:
+    for scope in verified_scopes:
         local_intervals.extend(_local_intervals(timeline.children.messages((scope,)), scope.start_ms, scope.end_ms))
 
     billed = measure_prompt_billing(entries, len(root_entries), estimator)
@@ -543,7 +561,7 @@ def build_prompt_record(
     # Keep Watch's historical metadata-based metric separate from qualified
     # report execution_duration_ms and causal request/terminal boundaries.
     watch_end = causal_end if in_progress else max(
-        (session.updated_at_ms for session in snapshot.sessions if session.session_id in child_ids),
+        (session.updated_at_ms for session in snapshot.sessions if session.session_id in verified_ids),
         default=causal_end,
     )
     duration = max(0, max(causal_end, watch_end) - prompt_start)
@@ -566,7 +584,8 @@ def build_prompt_record(
         output_tokens=output_total, cache_read_tokens=billed.cache_read_tokens,
         cache_write_tokens=billed.cache_write_tokens, input_context_tokens=meaningful_first.request_input_approx,
         total_token_volume=total_volume, model_costs=billed.model_costs, duration_ms=duration,
-        execution_duration_ms=None if unverified else prompt_duration(ref, (*attempt_messages, *child_messages), latest, entries, timeline.messages,
+        execution_duration_ms=None if unverified else prompt_duration(
+            ref, (*attempt_messages, *child_messages), latest, (*root_entries, *verified_entries), timeline.messages,
                                               in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,
@@ -575,7 +594,7 @@ def build_prompt_record(
         last_root_entry=last_root_for_next, aborted=aborted, watch_error=watch_error,
         abort_time_ms=abort_time, in_progress=in_progress,
         completed_successfully=successful_final,
-        linked_session_ids=tuple(sorted(child_ids)),
+        linked_session_ids=child_ids,
         **background_fields,
     )
 

@@ -3,6 +3,7 @@ from bisect import bisect_left, bisect_right
 
 from src.domain import EventKind, MessageRole
 from .billing import provider_matches
+from .valuation import unique_usage
 
 
 def prompt_windows(events, visible):
@@ -24,10 +25,12 @@ def prompt_windows(events, visible):
     return windows
 
 
-def prompt_owners(snapshot):
+def prompt_owners(snapshot, *, event_filter=None):
     """Resolve request parents to real prompts in their own session, never by request time."""
     sessions, candidates = {}, {}
     for event in snapshot.events:
+        if event_filter and not event_filter(event):
+            continue
         sessions.setdefault(event.session_id, []).append(event)
     for session, events in sessions.items():
         visible = [event for event in events if event.kind in {EventKind.USER_PROMPT, EventKind.SUBTASK}]
@@ -52,6 +55,11 @@ class PromptIndex:
                 if entry.request_input_approx > 0:
                     meaningful.append(entry)
         self.meaningful = meaningful
+        self.child_session_entries = {}
+        self.child_prompt_entries = {}
+        for entry in unique_usage(entry for entry in entries if entry.session_id != snapshot.root.session_id):
+            self.child_session_entries.setdefault(entry.session_id, []).append(entry)
+            self.child_prompt_entries.setdefault((entry.session_id, entry.logical_prompt_id), []).append(entry)
         self.times = [entry.completed_at_ms for entry in meaningful]
         self.keys = [(entry.completed_at_ms, entry.sort_order) for entry in meaningful]
         self.windows = prompt_windows([event for event in snapshot.events
