@@ -67,7 +67,7 @@ def running_snapshot(catalog, evidence):
                     or not 0 <= now - captured_at < RUNNING_FRESH_MS or not 0 < start <= captured_at
                     or revision != catalog.revisions.get(key)):
                 continue
-            recent[key] = RunningSession(key, root.title or "Untitled session", start, captured_at)
+            recent[key] = RunningSession(key, root.title or "Untitled session", start, captured_at, prompt_id)
         return tuple(nsmallest(BATCH_LIMIT, recent.values(), key=lambda item: (-item.started_ms, item.session_id)))
 
 

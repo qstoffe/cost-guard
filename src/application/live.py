@@ -11,6 +11,7 @@ from .contracts import record
 from .live_projection import project_live
 from .session_detail import SessionDetails
 from .session_catalog import SessionCatalog
+from .session_live_metrics import with_live_metrics
 from .session_quota import source_scope
 
 
@@ -154,7 +155,8 @@ class LiveRuntime:
         quota_hint = None
         if self.display_archive is not None:
             refresh = getattr(driver.coordinator, "accounts", None)
-            quota_hint = self.display_archive.publish_live(running, frame if verified else None, driver.observed_at_ms,
+            current = frame if verified else None
+            quota_hint = self.display_archive.publish_live(with_live_metrics(running, current), current, driver.observed_at_ms,
                 account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None,
                 source_unavailable=driver.error is not None)
         timeline_scope = self._tick_timeline(driver, frame)

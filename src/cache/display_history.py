@@ -33,12 +33,14 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
 CHANGE_WINDOW = 64
 RUNNING_FRESH_MS = 15_000
+_RUNNING_METRICS = (("ccost", "TEXT"), ("context_tokens", "INTEGER"),
+                    ("context_invalidated", "INTEGER NOT NULL DEFAULT 0"))
 SORT_COLUMNS = {
     "activity": "activity_ms", "name": "title_key", "model": "model_key",
     "ccost": "cost_key", "prompts": "prompts", "duration": "duration_ms", "ctx": "context_tokens",
@@ -116,6 +118,10 @@ class RunningSession:
     title: str
     started_ms: int
     observed_ms: int
+    prompt_id: str = ""
+    ccost: Decimal | None = None
+    context_tokens: int | None = None
+    context_invalidated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,11 +264,15 @@ class DisplayHistory:
                 prompts = prompt_schema() if version < 9 else ""
                 countable = countable_schema(upgrade=version >= 8) if version < 10 else ""
                 mix_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_mix_state)")}
+                running_columns = {row[1] for row in db.execute("PRAGMA table_info(session_running)")}
+                running_metrics = "\n".join(f"ALTER TABLE session_running ADD COLUMN {name} {kind};"
+                    for name, kind in _RUNNING_METRICS if running_columns and name not in running_columns)
                 db.executescript(f"""
                     BEGIN IMMEDIATE;
                     {progress}
                     {clocks}
                     {self._live_schema()}
+                    {running_metrics}
                     {evidence}
                     {self._coverage_schema()}
                     {help_columns}
@@ -364,7 +374,8 @@ class DisplayHistory:
 
     @staticmethod
     def _live_schema():
-        return """
+        metrics = ", ".join(f"{name} {kind}" for name, kind in _RUNNING_METRICS)
+        return f"""
             CREATE TABLE IF NOT EXISTS session_running (
                 source TEXT NOT NULL REFERENCES sources(source),
                 binding TEXT NOT NULL,
@@ -372,6 +383,7 @@ class DisplayHistory:
                 title TEXT NOT NULL,
                 started_ms INTEGER NOT NULL,
                 observed_ms INTEGER NOT NULL,
+                {metrics},
                 PRIMARY KEY (source, session_id)
             ) WITHOUT ROWID;
         """
@@ -531,17 +543,23 @@ class DisplayHistory:
 
     def _replace_running(self, db, source, binding, running, generation):
         previous = tuple(db.execute("""
-            SELECT binding, session_id, title, started_ms, observed_ms FROM session_running
+            SELECT binding, session_id, title, started_ms, ccost, context_tokens, context_invalidated, observed_ms
+            FROM session_running
             WHERE source=? ORDER BY session_id
         """, (source,)))
-        replacement = tuple(sorted((binding, item.session_id, item.title, item.started_ms, item.observed_ms)
-                                   for item in running))
+        replacement = tuple((binding, item.session_id, item.title, item.started_ms,
+                             str(item.ccost) if item.ccost is not None else None,
+                             item.context_tokens, int(item.context_invalidated), item.observed_ms)
+                            for item in sorted(running, key=lambda row: row.session_id))
         if previous == replacement:
             return None
         db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
         db.execute("DELETE FROM session_running WHERE source=?", (source,))
-        db.executemany("INSERT INTO session_running VALUES(?, ?, ?, ?, ?, ?)",
-                       ((source, *row) for row in replacement))
+        db.executemany("""
+            INSERT INTO session_running
+                (source, binding, session_id, title, started_ms, ccost, context_tokens, context_invalidated, observed_ms)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, ((source, *row) for row in replacement))
         now = int(time.time() * 1000)
         if (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
                 or any(old[-1] + RUNNING_FRESH_MS <= now < new[-1] + RUNNING_FRESH_MS
@@ -1161,8 +1179,11 @@ class DisplayHistory:
         if type(now_ms) is not int:
             raise ValueError("invalid_running_clock")
         rows = tuple(db.execute("""
-            SELECT r.session_id, r.title, r.started_ms, r.observed_ms, s.revision, s.model, s.ccost, s.prompts, s.duration_ms,
-                   s.context_tokens, s.context_detail, s.model_help, s.has_model_details
+            SELECT r.session_id, r.title, r.started_ms, r.observed_ms, s.revision, s.model,
+                   coalesce(r.ccost, s.ccost), s.prompts, s.duration_ms,
+                   CASE WHEN r.context_invalidated THEN NULL ELSE coalesce(r.context_tokens, s.context_tokens) END,
+                   CASE WHEN NOT r.context_invalidated AND r.context_tokens IS NULL THEN s.context_detail END,
+                   s.model_help, s.has_model_details
             FROM session_running AS r LEFT JOIN sessions AS s USING (source, session_id)
             WHERE r.source=? AND r.binding=? AND r.observed_ms>? AND r.observed_ms<=?
             ORDER BY r.started_ms DESC, r.session_id
