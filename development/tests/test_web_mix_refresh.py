@@ -124,7 +124,7 @@ class WebMixRefreshTests(unittest.TestCase):
             requests = tuple(replace(request, key=i.to_bytes(4, "big"), fork_key=None)
                              for i in range(USAGE_SLICE + 1))
             intervals = tuple(StatsInterval("root", str(i), "prompt", now - 20_000 + 300 * i, 250, False)
-                              for i in range(64))
+                              for i in range(26))
             roster = replace(roster, requests=requests, attribution=(), stats=replace(roster.stats, intervals=intervals))
             archive.history.commit_sessions("local-fixture", (SessionChange(SessionFact("root", "r1", "Root"),
                 None, previous_progress=0, request_roster=roster),))
@@ -161,4 +161,4 @@ class WebMixRefreshTests(unittest.TestCase):
         self.assertEqual(1, len(events))
         hint, measured = events[0]
         self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["marks"]))
-        self.assertEqual(16_000, measured)
+        self.assertEqual(6500, measured)

@@ -23,7 +23,7 @@ from .display_stats_revision import retained_stats_version, stats_revision_schem
 from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256

@@ -65,10 +65,12 @@ class DisplayStats:
         # This is not the canonical estimated working-time card. Even a current
         # subtotal has no authority over unseen, provisional or unmeasured work.
         calendar = value.row.calendar if value else None
+        roots = value.row.roots if value else None
         return dict(binding=views.binding, archive_epoch=epoch, period=period, start_ms=start,
                     as_of_ms=value.stamp.as_of if value else None,
                     measured_working_ms=value.row.working_ms if value else None,
-                    measured_calendar=asdict(calendar) if calendar else None, coverage="unknown")
+                    measured_calendar=asdict(calendar) if calendar else None,
+                    measured_root_time=asdict(roots) if roots else None, coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()

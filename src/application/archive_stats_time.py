@@ -1,4 +1,5 @@
 """One pinned, cooperative reduction of measured overlap-safe execution."""
+from dataclasses import replace
 import sqlite3
 
 from src.analysis.ai_stats import windows
@@ -6,6 +7,7 @@ from src.cache.display_stats_time import StatsTimeStamp
 from src.cache.display_usage_reader import USAGE_SLICE
 
 from .archive_stats_calendar import MeasuredCalendar
+from .archive_stats_root_time import MeasuredRootTime
 
 
 class ArchiveStatsTime:
@@ -20,6 +22,7 @@ class ArchiveStatsTime:
         try:
             self._db.execute("PRAGMA cache_size=-512")
             self._db.execute("CREATE TABLE spans(start INTEGER, end INTEGER, PRIMARY KEY(start,end)) WITHOUT ROWID")
+            self._root_time = MeasuredRootTime(self._db, self.scopes)
         except BaseException:
             self.close()
             raise
@@ -48,14 +51,17 @@ class ArchiveStatsTime:
             return self._stage(history)
         if self._output is None:
             self._output = self._reduce_turns()
-        for _ in range(USAGE_SLICE):
-            if not next(self._output, False):
-                return self._publish(history, eligible)
+        with self._db:
+            finished = any(not next(self._output, False) for _ in range(USAGE_SLICE))
+        if finished:
+            return self._publish(history, eligible)
         return True
 
     def _publish(self, history, eligible):
         stamp = StatsTimeStamp(self._version, self.zone, self.now_ms, self._next_end)
-        self.publication = history.publish_stats_time(self.source, stamp, self._calendar.rows(), eligible=eligible)
+        root_time = self._root_time.rows()
+        rows = tuple(replace(row, roots=root_time[row.period]) for row in self._calendar.rows())
+        self.publication = history.publish_stats_time(self.source, stamp, rows, eligible=eligible)
         return False
 
     def _stage(self, history):
@@ -63,7 +69,7 @@ class ArchiveStatsTime:
         if evidence is None:
             return False
         spans = []
-        for row in evidence.intervals:
+        for root, row in zip(evidence.roots, evidence.intervals, strict=True):
             if (row.provisional or row.start_ms is None or row.start_ms <= 0
                     or row.duration_ms is None or row.duration_ms <= 0):
                 continue
@@ -71,11 +77,12 @@ class ArchiveStatsTime:
             if end > (1 << 63) - 1:
                 continue  # Unsupported clock geometry cannot become a durable deadline.
             if end <= self.now_ms:
-                spans.append((row.start_ms, end))
+                spans.append((root, row.start_ms, end))
             elif self._next_end is None or end < self._next_end:
                 self._next_end = end
         with self._db:
-            self._db.executemany("INSERT OR IGNORE INTO spans VALUES(?,?)", spans)
+            self._db.executemany("INSERT OR IGNORE INTO spans VALUES(?,?)", ((a, b) for _, a, b in spans))
+            self._root_time.stage(spans)
         self._version = evidence.version
         self._input = evidence.next_cursor
         self._reading = self._input is not None
@@ -100,3 +107,4 @@ class ArchiveStatsTime:
             after = page[-1]
         if pending:
             yield from self._calendar.add_span(*pending)
+        yield from self._root_time.reduce()

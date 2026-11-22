@@ -11,7 +11,7 @@ from src.analysis.ai_stats import windows
 from src.application.archive_stats_time import ArchiveStatsTime
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_stats_evidence import StatsInterval
-from src.cache.display_stats_time import StatsCalendar, StatsTimeRow
+from src.cache.display_stats_time import StatsCalendar, StatsRootTime, StatsTimeRow
 from src.cache.display_usage_reader import USAGE_SLICE
 
 
@@ -31,6 +31,9 @@ class ArchiveStatsTimeTests(TestCase):
     def commit(self, intervals, *, source="bound", root="root", sequence=1):
         previous = f"r{sequence - 1}" if sequence > 1 else None
         roster = replace(self.base, stats=replace(self.base.stats, intervals=intervals))
+        if root != "root":
+            roster = replace(roster, requests=(), attribution=(), prompts=None,
+                             stats=replace(roster.stats, parents=((root, None),), first_input=None))
         self.history.commit_sessions(source, (SessionChange(SessionFact(root, f"r{sequence}", root), previous,
             previous_progress=sequence - 1, request_roster=roster),))
 
@@ -64,9 +67,9 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertEqual(USAGE_SLICE, len(first.intervals))
         self.assertEqual(5, len(tail.intervals))
         self.assertIsNone(tail.next_cursor)
-        self.assertEqual(5, turns)  # Two input turns, then three bounded sort/calendar turns.
-        self.assertEqual(StatsTimeRow("all", None, 393, StatsCalendar(date(1970, 1, 1).toordinal(), 393, 393, 1)),
-                         cached.row)
+        self.assertEqual(8, turns)  # Two input turns, then six bounded projection turns.
+        self.assertEqual(StatsTimeRow("all", None, 393, StatsCalendar(date(1970, 1, 1).toordinal(), 393, 393, 1),
+                                     StatsRootTime("root", 393, 1)), cached.row)
         self.assertEqual(publication.stamp, cached.stamp)
         self.assertTrue(cached.current)
         self.assertIsNone(reopened.stats_time("foreign", "UTC", "all", None, 2001))
@@ -134,6 +137,7 @@ class ArchiveStatsTimeTests(TestCase):
         pin = self.history.stats_geometry("bound").version
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_geometry_cohort")
+            db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("DROP TABLE archive_stats_time")
             db.execute("DROP TABLE archive_stats_time_state")
@@ -151,6 +155,7 @@ class ArchiveStatsTimeTests(TestCase):
         self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
         self.reduce(2000)
         with self.history._connect() as db:
+            db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("PRAGMA user_version=20")
         self.history = DisplayHistory(self.root)
@@ -203,3 +208,40 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertEqual(3, turns)
         self.assertEqual(days * day, result.working_ms)
         self.assertEqual(StatsCalendar(date(2025, 1, 1).toordinal(), day, days * 8 * hour, days), result.calendar)
+
+    def test_concurrency_counts_distinct_roots_and_longest_uses_each_scope(self):
+        midnight = utc("2026-10-25T00:00:00")
+        self.commit((StatsInterval("a", "root", "prompt", midnight - 800, 1000, False),
+                     StatsInterval("linked", "child", "prompt", midnight - 100, 600, False)), root="a")
+        self.commit((StatsInterval("b", "p", "prompt", midnight - 200, 300, False),), root="b")
+        self.commit((StatsInterval("c", "p", "prompt", midnight + 100, 700, False),), root="c")
+        self.commit((StatsInterval("d", "p", "prompt", midnight + 800, 100, False),), root="d")
+        self.commit((StatsInterval("e", "p", "prompt", midnight + 1000, 700, False),), root="e")
+        now = midnight + 2000
+
+        self.reduce(now)
+        all_time = self.history.stats_time("bound", "UTC", "all", None, now).row
+        today = self.history.stats_time("bound", "UTC", "today", midnight, now).row
+
+        self.assertEqual((2400, StatsRootTime("a", 1300, 2)), (all_time.working_ms, all_time.roots))
+        self.assertEqual((1600, StatsRootTime("c", 700, 2)), (today.working_ms, today.roots))
+
+    def test_v21_calendar_remains_readable_before_root_projection_backfill(self):
+        self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
+        self.reduce(2000)
+        with self.history._connect() as db:
+            db.execute("DROP TABLE archive_stats_root_time")
+            db.execute("PRAGMA user_version=21")
+        self.history = DisplayHistory(self.root)
+        self.history.initialize()
+
+        prior = self.history.stats_time("bound", "UTC", "all", None, 2000)
+        due = self.history.stats_time_due("bound", "UTC", windows("UTC", 2000), 2000)
+        self.reduce(2000)
+        updated = self.history.stats_time("bound", "UTC", "all", None, 2000)
+
+        self.assertEqual(250, prior.row.working_ms)
+        self.assertEqual(250, prior.row.calendar.night_ms)
+        self.assertIsNone(prior.row.roots)
+        self.assertTrue(due)
+        self.assertEqual(StatsRootTime("root", 250, 1), updated.row.roots)

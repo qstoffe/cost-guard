@@ -173,6 +173,7 @@ class ArchiveStatsEvidenceTests(TestCase):
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_root_cohort")
             db.execute("DROP INDEX archive_stats_geometry_cohort")
+            db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("DROP TABLE archive_stats_time")
             db.execute("DROP TABLE archive_stats_time_state")

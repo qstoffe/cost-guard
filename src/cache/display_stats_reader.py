@@ -34,6 +34,7 @@ class StatsGeometrySlice:
     version: StatsVersion
     intervals: tuple[StatsInterval, ...]
     next_cursor: tuple[int, str, str, str, str] | None
+    roots: tuple[str, ...]
 
 
 def read_stats_usage(db, source, *, expected=None, after=None):
@@ -88,4 +89,5 @@ def read_stats_geometry(db, source, *, expected=None, after=None):
         WHERE source=? AND first_revision<=? {resume} ORDER BY {key} LIMIT ?
     """, (source, version.evidence, *(after or ()), USAGE_SLICE + 1)).fetchall()
     intervals = tuple(StatsInterval(*row[2:7], bool(row[7])) for row in rows[:USAGE_SLICE])
-    return StatsGeometrySlice(version, intervals, rows[USAGE_SLICE - 1][:5] if len(rows) > USAGE_SLICE else None)
+    return StatsGeometrySlice(version, intervals, rows[USAGE_SLICE - 1][:5] if len(rows) > USAGE_SLICE else None,
+                              tuple(row[1] for row in rows[:USAGE_SLICE]))
