@@ -598,12 +598,11 @@ const SessionsCatalog = (() => {
   // Committed-cache controller. The hash names just a local query. Visible
   // missing rows may give a separate hint after that query has painted.
   class CachedView extends View {
-    constructor(api) {
+    constructor(api, demand = {tab: crypto.randomUUID().replaceAll('-', ''), sequence: 0}) {
       super(api, {cached: true});
       this.hint = null;
       this.blocked = false;
-      this.demandTab = crypto.randomUUID().replaceAll('-', '');
-      this.demandSequence = 0;
+      this.demand = demand;
       this.olderHistory = el('span', undefined, 'metric-spinner sessions-history-spinner');
       this.olderHistory.setAttribute('role', 'img');
       this.olderHistory.setAttribute('aria-label', 'Loading older history');
@@ -759,7 +758,7 @@ const SessionsCatalog = (() => {
     }
     sendDemand({binding, demand_epoch}, session_ids, remember = false) {
       this.api('/api/cache/sessions/demand', {binding, demand_epoch, session_ids,
-        tab: this.demandTab, sequence: ++this.demandSequence, ...(remember ? {remember} : {})}).catch(() => {});
+        tab: this.demand.tab, sequence: ++this.demand.sequence, ...(remember ? {remember} : {})}).catch(() => {});
     }
     async poll() {
       if (!this.attached || document.hidden || this.blocked || this.flight) return;

@@ -1,4 +1,5 @@
 """The archive cannot be rebound from a client hint or a reused local path."""
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import replace
 from decimal import Decimal
@@ -358,7 +359,7 @@ class DisplayBindingTests(unittest.TestCase):
             self.assertEqual(visited, after_sweep)
             self.assertGreater(archive.views.detail(session_id="ses_root")["cached_total"], 0)
 
-    def test_detail_priority_is_source_bound_coalesced_and_keeps_existing_cooldown(self):
+    def test_visible_demand_does_not_touch_lifecycle_cooldown_or_read_history(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             archive = DisplayArchive(root, lambda *_: None)
@@ -374,18 +375,90 @@ class DisplayBindingTests(unittest.TestCase):
                 catalog._archive_priority("a")
                 catalog._archive_priority("b", delay=15, attempts=2)
 
-            wrong_binding = archive.prioritize_detail(catalog, "retired", "a")
-            prioritized = archive.prioritize_detail(catalog, binding, "b")
-            duplicate = archive.prioritize_detail(catalog, binding, "b")
-            absent = archive.prioritize_detail(catalog, binding, "missing")
+            with patch.object(archive, "admit_summary", side_effect=AssertionError("hint admitted work")), \
+                 patch.object(archive.history, "session_checkpoints", side_effect=AssertionError("hint read SQL")):
+                wrong_binding = archive.offer_visible(catalog, "retired", 0, "tab", 1, ("a",))
+                prioritized = archive.offer_visible(catalog, binding, 0, "tab", 2, ("b",))
+                absent = archive.offer_visible(catalog, binding, 0, "peer", 1, ("missing",))
             queued = tuple(catalog.archive_urgent.items())
             first = archive.sweep._urgent(catalog, (binding, 0))
+            second = archive.sweep._urgent(catalog, (binding, 0))
 
             self.assertIsNone(wrong_binding)
-            self.assertTrue(prioritized and duplicate)
-            self.assertFalse(absent)
-            self.assertEqual((("b", (115, 2)), ("a", (100, 0))), queued)
+            self.assertEqual((1, 0), (prioritized, absent))
+            self.assertEqual((("a", (100, 0)), ("b", (115, 2))), queued)
             self.assertEqual("a", first[0])
+            self.assertIsNone(second)
+            self.assertEqual({"b": (115, 2)}, catalog.archive_urgent)
+
+    def test_replaced_detail_demand_does_not_cancel_an_admitted_read_or_create_a_lifecycle_retry(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, catalog, roots = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            revisions = dict.fromkeys(("old", "recent"), "r1")
+            catalog.observe(CatalogObservation(roots, (), {}, revisions))
+            binding = archive.views.binding
+            entered, release = Event(), Event()
+
+            def source_read(_service, root, revision, **_):
+                if root.session_id == "old":
+                    entered.set()
+                    if not release.wait(5):
+                        raise AssertionError("fixture did not release the source read")
+                    raise SourceUnavailableError("fixture")
+                return SessionUsageRow(root.session_id, root.title, "Model", False, Decimal("2"), 1), revision
+
+            archive.offer_visible(catalog, binding, 0, "tab", 1, ("old",))
+            with patch("src.application.session_archive_sweep.session_summary", side_effect=source_read) as read, \
+                 ThreadPoolExecutor(max_workers=1) as worker:
+                job = worker.submit(archive.acquire_summaries, catalog, service)
+                try:
+                    self.assertTrue(entered.wait(5))
+                    joined = archive.offer_visible(catalog, binding, 0, "peer", 1, ("old",))
+                    archive.offer_visible(catalog, binding, 0, "tab", 3, ("recent",))
+                    replay = archive.offer_visible(catalog, binding, 0, "tab", 2, ("old",))
+                    self.assertFalse(job.done())
+                finally:
+                    release.set()
+                job.result(timeout=5)
+                archive.acquire_summaries(catalog, service)
+                visited = [attempt.args[1].session_id for attempt in read.call_args_list]
+
+            self.assertEqual((0, 0), (joined, replay))
+            self.assertEqual(["old", "recent"], visited)
+            self.assertFalse(archive.priority_summary_pending(catalog))
+            self.assertEqual({}, catalog.archive_urgent)
+
+    def test_demand_selected_before_clear_cannot_admit_against_the_new_archive(self):
+        with TemporaryDirectory() as tmp:
+            archive, service, catalog, roots = archive_sweep_fixture(Path(tmp))
+            self.addCleanup(archive.close)
+            observation = CatalogObservation(roots, (), {}, dict.fromkeys(("old", "recent"), "r1"))
+            catalog.observe(observation)
+            archive.publish_catalog(catalog, service)
+            binding = archive.views.binding
+            saved = archive.clear_snapshot()
+            archive.offer_visible(catalog, binding, 0, "tab", 1, ("recent",))
+            load_catalog = service._load_catalog
+
+            def cross_clear():
+                archive.clear_confirmed(binding, HistoryState(saved["generation"], saved["archive_epoch"]),
+                                        catalog, service, eligible=lambda: True)
+                catalog.observe(replace(observation))
+                return load_catalog()
+
+            with patch.object(service, "_load_catalog", side_effect=cross_clear), \
+                 patch("src.application.session_archive_sweep.session_summary",
+                       side_effect=AssertionError("pre-clear demand opened source")):
+                archive.acquire_summaries(catalog, service)
+            stale = archive.offer_visible(catalog, binding, 0, "tab", 2, ("recent",))
+            ready_without_fresh_hint = archive.priority_summary_pending(catalog)
+            fresh = archive.offer_visible(catalog, binding, 1, "tab", 3, ("old",))
+
+            self.assertIsNone(stale)
+            self.assertFalse(ready_without_fresh_hint)
+            self.assertEqual(1, fresh)
+            self.assertTrue(archive.priority_summary_pending(catalog))
 
     def test_same_revision_terminal_waits_for_linked_work_and_retries_without_losing_the_prior_clock(self):
         with TemporaryDirectory() as tmp:

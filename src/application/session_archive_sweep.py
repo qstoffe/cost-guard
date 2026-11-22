@@ -67,6 +67,7 @@ class SessionArchiveSweep:
         self._urgent_turn = 0
         self._nearby_turn = 0
         self._visible = SessionDemand()
+        self._inflight = None
 
     def due(self, catalog, binding):
         return (catalog.state == "observed" and binding is not None and
@@ -93,24 +94,15 @@ class SessionArchiveSweep:
         try:
             if catalog.state != "observed" or not eligible():
                 return 0
-            selected = tuple(key for key in keys if self._candidate(catalog, key) is not None)
-            return self._visible.replace(self._demand_scope(catalog, binding), tab, sequence, selected,
-                                         catalog.clock(), remember=remember)
-        finally:
-            catalog.lock.release()
-
-    def prioritize_detail(self, catalog, key, *, eligible):
-        """A view hint can reorder existing work, but never open the source."""
-        if not catalog.lock.acquire(blocking=False):
-            return False
-        try:
-            if catalog.state != "observed" or not eligible() or self._candidate(catalog, key) is None:
-                return False
-            if key not in catalog.archive_urgent:
-                catalog._archive_priority(key, front=True)
-            else:
-                catalog.archive_urgent.move_to_end(key, last=False)
-            return True
+            candidates = {key: candidate for key in keys if (candidate := self._candidate(catalog, key)) is not None}
+            scope, now = self._demand_scope(catalog, binding), catalog.clock()
+            joined = None
+            if self._inflight is not None:
+                active_scope, key, candidate = self._inflight
+                if scope == active_scope and candidates.get(key) == candidate:
+                    joined = key
+            return self._visible.replace(scope, tab, sequence, tuple(candidates), now,
+                                         remember=remember, joined=joined)
         finally:
             catalog.lock.release()
 
@@ -174,7 +166,7 @@ class SessionArchiveSweep:
                 return None  # Bounded burst of recent revisions, then old history.
             key = self._visible.take(scope, now)
             if key is not None and (candidate := self._candidate(catalog, key)) is not None:
-                due, attempts = catalog.archive_urgent.get(key, (now, 0))
+                due, attempts = catalog.archive_urgent.get(key, (now, None))
                 if due <= now:
                     catalog.archive_urgent.pop(key, None)
                     return key, candidate, attempts
@@ -213,7 +205,7 @@ class SessionArchiveSweep:
             except (PricingUnavailableError, SourceError):
                 self._retry(catalog, key, candidate, attempts)
                 raise
-            if not self._try_acquire(catalog, archive, service, binding, base, key, candidate):
+            if not self._try_acquire(catalog, archive, service, binding, cohort, base, key, candidate):
                 self._retry(catalog, key, candidate, attempts)
             return
         nearby = self._nearby(catalog, cohort)
@@ -221,7 +213,7 @@ class SessionArchiveSweep:
             key, candidate = nearby
             # Lower priority misses fall back to the normal sweep, never to
             # the independent lifecycle retry queue.
-            self._try_acquire(catalog, archive, service, binding, scalar_dependency(service), key, candidate)
+            self._try_acquire(catalog, archive, service, binding, cohort, scalar_dependency(service), key, candidate)
             return
         candidates = self._candidates(catalog, cohort)
         if not candidates:
@@ -242,13 +234,13 @@ class SessionArchiveSweep:
                 continue
             candidate = candidates[key]
             if candidate.terminal is None:
-                settled = self._acquire(catalog, archive, service, base, key, candidate)
+                settled = self._acquire(catalog, archive, service, cohort, base, key, candidate)
             else:
-                settled = self._try_acquire(catalog, archive, service, binding, base, key, candidate)
+                settled = self._try_acquire(catalog, archive, service, binding, cohort, base, key, candidate)
             self._incomplete |= not settled
             return
 
-    def _try_acquire(self, catalog, archive, service, binding, base, key, candidate):
+    def _try_acquire(self, catalog, archive, service, binding, cohort, base, key, candidate):
         if service.selection.selected == "v1":
             complete = archive.completed_summary_keys(binding, {key: candidate.revision},
                                                       checkpoint_dependency(base, (), candidate.terminal))
@@ -256,25 +248,35 @@ class SessionArchiveSweep:
                 return False
             if key in complete:
                 return True
-        return self._acquire(catalog, archive, service, base, key, candidate)
+        return self._acquire(catalog, archive, service, cohort, base, key, candidate)
 
     def _retry(self, catalog, key, candidate, attempts):
         self._incomplete = True
         self._next_walk = min(self._next_walk, catalog.clock() + RETRY_SECONDS)
-        if attempts >= len(PRIORITY_BACKOFF):
+        if attempts is None or attempts >= len(PRIORITY_BACKOFF):
             return
         with catalog.lock:
             if (catalog.state == "observed" and self._candidate(catalog, key) == candidate
                     and key not in catalog.archive_urgent):
                 catalog._archive_priority(key, delay=PRIORITY_BACKOFF[attempts], attempts=attempts + 1)
 
-    def _acquire(self, catalog, archive, service, base, key, candidate):
-        revision = candidate.revision
+    def _acquire(self, catalog, archive, service, cohort, base, key, candidate):
         with catalog.lock:
             if catalog.state != "observed" or self._candidate(catalog, key) != candidate:
                 return False
             sequence = catalog.observation_sequence
-        admission = archive.admit_summary(service, key, revision, observation_sequence=sequence)
+            scope = self._demand_scope(catalog, cohort)
+            self._inflight = scope, key, candidate
+            self._visible.consume(scope, key, catalog.clock())
+        try:
+            return self._capture(catalog, archive, service, cohort, base, key, candidate, sequence)
+        finally:
+            with catalog.lock:
+                self._inflight = None
+
+    def _capture(self, catalog, archive, service, cohort, base, key, candidate, sequence):
+        revision = candidate.revision
+        admission = archive.admit_summary(service, key, revision, observation_sequence=sequence, expected_cohort=cohort)
         if admission is None:
             return False
         authorities = []

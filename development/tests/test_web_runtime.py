@@ -522,6 +522,34 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual([False, True, False],
                          [attempt.kwargs["remember"] for attempt in archive.offer_visible.call_args_list])
 
+    def test_cached_detail_hint_requires_a_fenced_tab_sequence_and_accepts_withdrawal(self):
+        archive = Mock(prioritize_detail=Mock(return_value=True))
+        catalog = object()
+        self.server.lifecycle = SimpleNamespace(display_archive=archive, cached_sessions_enabled=True,
+            nonce="test-instance", observations=Mock(), stopping=Event(), live=SimpleNamespace(catalog=catalog))
+        endpoint = "/api/cache/session-detail/demand"
+        unauthorized = self.request(endpoint, {"binding": "a" * 32, "session_id": "root"})[0]
+        self.login()
+        payload = dict(binding="a" * 32, demand_epoch=7, tab="b" * 32, sequence=1, session_id="root")
+        archive.offer_visible.side_effect = (1, 0, None)
+
+        statuses = (
+            self.request(endpoint, {"binding": payload["binding"], "session_id": "root"})[0],
+            self.request(endpoint, dict(payload, session_id=["root"]))[0],
+            self.request(endpoint, dict(payload, remember=True))[0],
+            self.request(endpoint, payload, headers={"X-CG-CSRF": ""})[0],
+            self.request(endpoint, payload)[0],
+            self.request(endpoint, dict(payload, sequence=2, session_id=None))[0],
+            self.request(endpoint, dict(payload, demand_epoch=6))[0],
+        )
+
+        self.assertEqual(401, unauthorized)
+        self.assertEqual((400, 400, 400, 403, 202, 202, 409), statuses)
+        self.assertEqual([(catalog, "a" * 32, 7, "b" * 32, 1, ["root"]),
+                          (catalog, "a" * 32, 7, "b" * 32, 2, []),
+                          (catalog, "a" * 32, 6, "b" * 32, 1, ["root"])],
+                         [call.args for call in archive.offer_visible.call_args_list])
+
     def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
         from src.application.session_catalog import SessionCatalog
         from src.cache.display_history import SessionChange, SessionFact

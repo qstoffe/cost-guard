@@ -383,14 +383,6 @@ class DisplayArchive:
                 and self.sessions.observation_fence(catalog.observation_sequence) is not None
                 and self.sweep.priority_due(catalog, (views.binding, self.sessions.clear_fence)))
 
-    def prioritize_detail(self, catalog, binding, session_id):
-        views = self.views
-        if views is None or views.binding != binding:
-            return None
-        def eligible():
-            return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) is not None
-        return self.sweep.prioritize_detail(catalog, session_id, eligible=eligible)
-
     def offer_visible(self, catalog, binding, fence, tab, sequence, session_ids, *, remember=False):
         views = self.views
         if views is None or views.binding != binding or self.sessions.clear_fence != fence:
@@ -519,10 +511,11 @@ class DisplayArchive:
 
         self._cache_write(reconcile)
 
-    def admit_summary(self, service, session_id, revision, *, observation_sequence):
+    def admit_summary(self, service, session_id, revision, *, observation_sequence, expected_cohort=None):
         binding = self._writer_binding(service)
         fence = self.sessions.observation_fence(observation_sequence)
-        if binding is None or fence is None or not revision:
+        if (binding is None or fence is None or not revision
+                or expected_cohort is not None and (binding[1], fence) != expected_cohort):
             return None
         admission = None
 

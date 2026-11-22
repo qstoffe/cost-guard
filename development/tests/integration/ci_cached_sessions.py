@@ -13,10 +13,12 @@ from src.application.session_catalog import SessionCatalog
 from src.cache.display_history import RunningSession, SessionCoverage
 from src.cache.display_prompts import DisplayPrompt
 from src.cache.display_requests import RequestRoster
+from src.domain import NormalizedSession, Provenance, SessionCapabilities
 from src.domain.effort import EffortEvidence
 from src.reports.models import SessionUsageRow
 from src.reports.session_models import SessionModel
 from src.sources.opencode_v1 import OpenCodeV1Source
+from src.watch.observers import CatalogObservation
 from src.web.display_archive import DisplayArchive
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
@@ -145,6 +147,7 @@ def check_cached_sessions(browser, evidence, product_root):
             detail.get_by_role("button", name="Next").click()
             expect(detail.locator(".page-navigation")).to_contain_text("26–30 of 30 cached events")
             assert "/api/cache/session-detail" in requests and "/api/detail" not in requests
+            assert "/api/cache/session-detail/demand" not in requests
             reads = requests.count("/api/cache/session-detail")
             unrelated = owner.commit(owner.admit({"s-030": "revision"}), {}, {}, missing=("s-030",))
             first.wait_for_function("generation => current.detail.observedHint?.generation === generation", arg=unrelated)
@@ -191,6 +194,7 @@ def check_cached_sessions(browser, evidence, product_root):
             owner.commit_live(views.source, views.binding, running=(), clear_fence=0)
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("Session 1")
             assert "offset=25" in second.url
+            check_detail_demand(first, second, host, hint)
             owner.publish_coverage(views.source, views.binding, 0, SessionCoverage(now, False, False, None),
                                    eligible=lambda: True)
             expect(older).to_be_hidden()
@@ -209,7 +213,63 @@ def check_cached_sessions(browser, evidence, product_root):
             expect(pager).to_contain_text("Session cache unavailable", timeout=5000)
             expect(first.locator(".sessions-catalog tbody tr")).to_have_count(0)
             evidence["cached_sessions"] = dict(first_cache_dom_ms=round(first_ms, 1), committed_rows=40,
-                checked="cold empty, held source, period/sort/page, scoped spinner, field help, root-scoped detail, two-tab requery, running, confirmed clear, source unbind")
+                 checked="cold empty, held source, period/sort/page, scoped spinner, field help, root-scoped detail, "
+                         "replaceable detail demand, two-tab requery, running, confirmed clear, source unbind")
         finally:
             context.close()
             host.close()
+
+
+def check_detail_demand(first, peer, host, list_hint):
+    from playwright.sync_api import expect
+
+    ids = ("s-026", "s-027")
+    catalog = host.live.catalog
+    roots = tuple(NormalizedSession(key, key, 1, 2, Provenance("fixture", key), SessionCapabilities()) for key in ids)
+    catalog.observe(CatalogObservation(roots, (), {}, dict.fromkeys(ids, "revision")))
+    first_destination, peer_destination = first.url, peer.url
+    first.evaluate("""() => {
+      const fetchImpl = window.fetch;
+      window.detailDemandAtPaint = [];
+      window.fetch = (path, options) => {
+        if (path === '/api/cache/session-detail/demand' && JSON.parse(options.body).session_id) {
+          window.detailDemandAtPaint.push(document.querySelector('.session-detail-cache h1')?.textContent);
+        }
+        return fetchImpl(path, options);
+      };
+    }""")
+
+    def is_hint(request, key):
+        return (urlsplit(request.url).path == "/api/cache/session-detail/demand"
+                and request.post_data_json["session_id"] == key)
+
+    def open_detail(page, key, title):
+        with page.expect_response(lambda response: is_hint(response.request, key)) as result:
+            page.evaluate("key => { location.hash = '#/sessions/' + key; }", key)
+        expect(page.locator(".session-detail-cache h1")).to_have_text(title)
+        assert result.value.json() == {"prioritized": 1}
+        return result.value.request.post_data_json
+
+    previous = open_detail(first, "s-026", "Session 26")
+    peer_hint = open_detail(peer, "s-026", "Session 26")
+    with first.expect_request(lambda request: is_hint(request, None)) as withdrawal:
+        current = open_detail(first, "s-027", "Session 27")
+    withdrawn = withdrawal.value.post_data_json
+    assert list_hint["tab"] == previous["tab"] == withdrawn["tab"] == current["tab"] != peer_hint["tab"]
+    assert list_hint["sequence"] < previous["sequence"] < withdrawn["sequence"] < current["sequence"]
+    assert previous["demand_epoch"] == current["demand_epoch"] == peer_hint["demand_epoch"] == 0
+    assert first.evaluate("window.detailDemandAtPaint") == ["Session 26", "Session 27"]
+
+    # Network reordering must not reinstate A in the first tab or cancel the peer's A.
+    response = first.evaluate("value => api('/api/cache/session-detail/demand', value)", previous)
+    assert response == {"prioritized": 0}
+    sweep = host.display_archive.sweep
+    scope = host.cached_session_views.binding, 0
+    assert {sweep._urgent(catalog, scope)[0], sweep._urgent(catalog, scope)[0]} == set(ids)
+    assert sweep._urgent(catalog, scope) is None
+    with first.expect_request(lambda request: is_hint(request, None)) as detached:
+        first.evaluate("url => { location.hash = new URL(url).hash; }", first_destination)
+    assert detached.value.post_data_json["sequence"] > current["sequence"]
+    peer.evaluate("url => { location.hash = new URL(url).hash; }", peer_destination)
+    for page in (first, peer):
+        expect(page.locator(".sessions-catalog .page-navigation")).to_contain_text("of 40 cached sessions")

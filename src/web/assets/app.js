@@ -742,7 +742,7 @@ function navigate() {
   modelsCache?.activate(current.cachedModels && !document.hidden ? current : null);
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && (sessionDetailAvailable || cachedSessionsAvailable) && !current.detail) {
-    current.detail = cachedSessionsAvailable ? new SessionDetail.CachedView(api, match[1], sessionCacheHint) :
+    current.detail = cachedSessionsAvailable ? new SessionDetail.CachedView(api, match[1], sessionCacheHint, sessionDemand()) :
       new SessionDetail.View(api, match[1], () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
     current.message = '';
   }
@@ -755,7 +755,7 @@ function navigate() {
    if (route.catalog && csrf && (sessionDetailAvailable || cachedSessionsAvailable) && typeof SessionsCatalog !== 'undefined') {
      if (!current.catalog) {
        const Controller = cachedSessionsAvailable ? SessionsCatalog.CachedView : SessionsCatalog.View;
-       current.catalog = new Controller(api);
+        current.catalog = cachedSessionsAvailable ? new Controller(api, sessionDemand()) : new Controller(api);
        const blocked = hostState.terminal || hostState.sourceBlocked;
        current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
        current.catalog.cacheHint?.(sessionCacheHint);
@@ -783,6 +783,10 @@ function navigate() {
     }
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   firstReport();
+}
+let sessionDemandState;
+function sessionDemand() {
+  return sessionDemandState ||= {tab: crypto.randomUUID().replaceAll('-', ''), sequence: 0};
 }
 async function connect() {
   try {
@@ -915,6 +919,7 @@ window.addEventListener('offline', () => connectionStatus('OFFLINE — last obse
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
+  current?.detail?.interest?.();
   current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
   mixCache?.activate(!document.hidden && current?.cachedMix ? current.period : null);
   statsCache?.activate(!document.hidden && current?.cachedStats ? current.period : null);

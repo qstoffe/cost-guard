@@ -615,7 +615,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     or archive is not None and fence != archive.sessions.clear_fence):
                 self.reply(503, {"error": "cache_source_unbound"})
             else:
-                if not detail and fence is not None:
+                if fence is not None:
                     result = dict(result, demand_epoch=fence)
                 self.reply(200, result)
 

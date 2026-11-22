@@ -63,7 +63,7 @@ class SessionDemandTests(unittest.TestCase):
             second = sweep._urgent(catalog, binding)
             third = sweep._urgent(catalog, binding)
 
-        self.assertEqual(("new-page", "proof-new-page", 0), first)
+        self.assertEqual(("new-page", "proof-new-page", None), first)
         self.assertEqual(("lifecycle", "proof-lifecycle", 1), second)
         self.assertIsNone(third)
 
@@ -91,7 +91,7 @@ class SessionDemandTests(unittest.TestCase):
             expired = sweep._nearby(catalog, binding)
 
         self.assertIsNone(lower_while_visible)
-        self.assertEqual(("visible", "proof-visible", 0), visible)
+        self.assertEqual(("visible", "proof-visible", None), visible)
         self.assertIsNone(lower_while_active)
         self.assertEqual(("lifecycle", "proof-lifecycle", 0), lifecycle)
         self.assertEqual(("recent-c", "proof-recent-c"), recent)

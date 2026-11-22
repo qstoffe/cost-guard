@@ -521,8 +521,8 @@ const SessionDetail = (() => {
     }
   }
   class CachedView {
-    constructor(api, id, hint) {
-      Object.assign(this, {api, id, hint, observedHint: hint, offset: 0, data: null, attached: false, dirty: true});
+    constructor(api, id, hint, demand) {
+      Object.assign(this, {api, id, hint, demand, observedHint: hint, offset: 0, data: null, attached: false, dirty: true});
       this.root = el('section', undefined, 'session-detail session-detail-cache');
       this.root.setAttribute('aria-label', 'Session detail');
       this.back = el('a', '↩ Back to Show All Sessions'); this.back.href = '#/sessions';
@@ -565,7 +565,7 @@ const SessionDetail = (() => {
       }
     }
     detach() {
-      this.attached = false; this.retire(); this.exporter?.close(); this.demanded = null;
+      this.attached = false; this.retire(); this.releaseDemand(); this.exporter?.close();
       document.removeEventListener('selectionchange', this.resumePaint);
     }
     retire() {
@@ -573,6 +573,7 @@ const SessionDetail = (() => {
       clearTimeout(this.timer); this.timer = null;
     }
     reset(message) {
+      this.releaseDemand();
       this.data = null; this.pendingRender = false; this.heading.textContent = 'Session detail';
       this.exporter?.close();
       ReportView.text(this.summary, ''); ReportView.text(this.status, message); this.range.textContent = '';
@@ -581,8 +582,9 @@ const SessionDetail = (() => {
     }
     invalidateValues() {
       this.retire(); this.hint = this.observedHint = null;
-      this.demanded = null; this.reset('Session cache unavailable.');
+      this.reset('Session cache unavailable.');
     }
+    interest() { if (document.hidden) this.releaseDemand(); }
     updateInvocations() {} // Committed history cannot assert active invocation state.
     wake() {} // Source signals never supply facts to the cache-only view.
     cacheHint(hint, resync = false) {
@@ -611,6 +613,41 @@ const SessionDetail = (() => {
       }
     }
     catchUp() { this.dirty = true; this.read(); }
+    hintMissing() {
+      const data = this.data;
+      if (!this.attached || document.hidden || !data?.binding || !Number.isSafeInteger(data.demand_epoch) ||
+          !['pending', 'retained'].includes(data.history_coverage) || data.summary?.source_present === false) {
+        this.releaseDemand();
+        return;
+      }
+      const {binding, demand_epoch} = data;
+      if (binding !== this.lastDemand?.binding || demand_epoch !== this.lastDemand.demand_epoch) {
+        this.releaseDemand();
+        this.lastDemand = {binding, demand_epoch};
+      }
+      if (this.demandFrame != null || this.demandTimer != null) return;
+      // Give the cached projection a paint before sending background interest.
+      this.demandFrame = requestAnimationFrame(() => {
+        this.demandFrame = requestAnimationFrame(() => {
+          this.demandFrame = null;
+          if (!this.attached || document.hidden) { this.releaseDemand(); return; }
+          this.sendDemand(this.lastDemand, this.id);
+          this.demandSent = true;
+          this.demandTimer = setTimeout(() => { this.demandTimer = null; this.hintMissing(); }, 15000);
+        });
+      });
+    }
+    releaseDemand() {
+      cancelAnimationFrame(this.demandFrame); this.demandFrame = null;
+      clearTimeout(this.demandTimer); this.demandTimer = null;
+      if (this.demandSent) this.sendDemand(this.lastDemand, null);
+      this.demandSent = false;
+      this.lastDemand = null;
+    }
+    sendDemand(scope, session_id) {
+      this.api('/api/cache/session-detail/demand', {...scope, session_id,
+        tab: this.demand.tab, sequence: ++this.demand.sequence}).catch(() => {});
+    }
     async read() {
       if (!this.attached || document.hidden || this.flight) return;
       this.dirty = false;
@@ -638,11 +675,7 @@ const SessionDetail = (() => {
       const summary = data.summary, previous = this.data;
       this.data = data;
       this.exporter?.update(data.binding, data.export_supported === true, summary?.title);
-      if (['pending', 'retained'].includes(data.history_coverage) && summary?.source_present !== false &&
-          data.binding && this.demanded !== data.binding) {
-        this.demanded = data.binding;
-        this.api('/api/cache/session-detail/demand', {binding: data.binding, session_id: this.id}).catch(() => {});
-      }
+      this.hintMissing();
       if (!this.pendingRender && previous?.binding === data.binding && previous.generation === data.generation &&
           previous.offset === data.offset) return;
       this.pendingRender = false;

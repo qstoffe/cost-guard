@@ -31,7 +31,7 @@ class SessionDemand:
                 del self._recent[key]
         return self._leases
 
-    def replace(self, scope, tab, sequence, keys, now, *, remember=False):
+    def replace(self, scope, tab, sequence, keys, now, *, remember=False, joined=None):
         if scope != self._scope:
             self._scope = scope
             self._leases.clear()
@@ -43,6 +43,8 @@ class SessionDemand:
             return 0
         # Renewing the same viewport must not re-admit already consumed work.
         pending = keys if prior is None or prior.keys != keys else prior.pending
+        if joined is not None:
+            pending = tuple(key for key in pending if key != joined)
         if prior is not None and remember:
             # Formerly visible is lower priority, not queue cancellation or
             # a reason to reacquire an already consumed foreground root.
@@ -66,12 +68,16 @@ class SessionDemand:
                 key = lease.pending[0]
                 # Give the next visible document a turn; shared demand is one job.
                 leases[tab] = leases.pop(tab)
-                for offered in leases.values():
-                    if key in offered.pending:
-                        offered.pending = tuple(item for item in offered.pending if item != key)
-                self._recent.pop(key, None)
+                self.consume(scope, key, now)
                 return key
         return None
+
+    def consume(self, scope, key, now):
+        if scope == self._scope:
+            for lease in self._current(now).values():
+                if key in lease.pending:
+                    lease.pending = tuple(item for item in lease.pending if item != key)
+            self._recent.pop(key, None)
 
     def nearby(self, scope, now):
         if scope != self._scope:
