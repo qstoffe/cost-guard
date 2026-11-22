@@ -74,10 +74,11 @@ const CachedStats = (() => {
       return end != null && end <= this.timing.now();
     }
 
-    async read() {
+    async read(allowRolloverRetry = true) {
       if (!this.period || this.blocked || this.flight || this.hint && !this.hint.binding) return;
       const period = this.period, flight = this.flight = new AbortController();
       this.dirty = false;
+      let renew = false;
       try {
         const value = await this.api('/api/cache/ai-stats', {period}, flight.signal);
         if (this.flight !== flight || this.dirty) return;
@@ -86,9 +87,20 @@ const CachedStats = (() => {
             !value.display || typeof value.display !== 'object') throw new Error('cache_unavailable');
         if (this.hint && (this.hint.binding !== value.binding ||
             this.hint.archive_epoch != null && value.archive_epoch !== this.hint.archive_epoch)) return;
+        const end = value.valid_until_ms;
+        if (end != null && !Number.isSafeInteger(end)) throw new Error('cache_unavailable');
+        if (end != null && end <= this.timing.now()) {
+          // The GET and the browser can straddle midnight. Retry once locally;
+          // if clocks still disagree, only a later scope hint can wake it.
+          this.value = null;
+          this.error = null;
+          this.timing.cancel(this.expiry);
+          this.expiry = null;
+          renew = allowRolloverRetry;
+          return;
+        }
         this.value = value;
         this.error = null;
-        const end = value.valid_until_ms;
         this.timing.cancel(this.expiry);
         if (end != null && Number.isSafeInteger(end) && end > this.timing.now()) {
           // Cap the delay on very long months to avoid a 32-bit timeout overflow.
@@ -105,7 +117,10 @@ const CachedStats = (() => {
         if (this.flight === flight) {
           this.flight = null;
           if (this.dirty) this.read();
-          else this.changed();
+          else {
+            this.changed();
+            if (renew && this.period === period) this.read(false);
+          }
         }
       }
     }

@@ -55,5 +55,17 @@ vm.runInNewContext(`${fs.readFileSync('src/web/assets/cached-stats.js', 'utf8')}
   controller.health(true);
   await finish(7, result('today', b, 0, 'expired session'));
   assert.equal(controller.snapshot().value, null);
-  assert.ok(!renders.some(value => ['obsolete', 'purged', 'wrong period', 'expired session'].includes(value)));
+  controller.health(false);
+  await finish(8, result('today', b, 0, 'crossed midnight in flight', 20));
+  assert.equal(requests.length, 10, 'an in-flight rollover immediately gets one local re-read');
+  assert.equal(requests[9].period, 'today');
+  await finish(9, result('today', b, 0, 'server still on old day', 20));
+  assert.equal(requests.length, 10, 'clock skew does not turn renewal into polling');
+  assert.equal(controller.snapshot().value, null);
+  controller.committed({binding: b, archive_epoch: 0, marks: {today: [2, 20]}});
+  await finish(10, result('today', b, 0, 'new day', 30));
+  assert.equal(controller.snapshot().value.display.working, 'new day');
+  const discarded = ['obsolete', 'purged', 'wrong period', 'expired session', 'crossed midnight in flight',
+    'server still on old day'];
+  assert.ok(!renders.some(value => discarded.includes(value)));
 })().catch(error => { console.error(error); process.exitCode = 1; });
