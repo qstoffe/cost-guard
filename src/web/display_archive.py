@@ -547,12 +547,9 @@ class DisplayArchive:
             return False
         accepted = False
 
-        def check():
+        def write():
             nonlocal accepted
-            accepted = eligible is None or eligible()
-            return accepted
+            accepted = self.sessions.commit_summary(admission, row, revision, dependency=dependency,
+                                                     eligible=eligible, usage=usage)
 
-        if self._cache_write(lambda: self.sessions.commit(admission, {row.session_id: row},
-                {row.session_id: revision}, dependency=dependency, eligible=check, usage=usage)):
-            return accepted
-        return False
+        return self._cache_write(write) and accepted

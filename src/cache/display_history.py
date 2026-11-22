@@ -176,6 +176,12 @@ class HistoryState:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionCommit:
+    generation: int | None = None
+    applied: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class SessionChanges:
     generation: int
     resync: bool = False
@@ -400,21 +406,31 @@ class DisplayHistory:
         source membership observation, not a failed source request. Return the
         durable generation only when visible data changed, and only after COMMIT.
         """
+        return self._commit_sessions(source, updates, missing=missing, present=present,
+                                     archive_epoch=archive_epoch).generation
+
+    def commit_summary(self, source, change, *, archive_epoch, eligible):
+        """Distinguish a confirmed current summary from a lost compare-and-swap."""
+        return self._commit_sessions(source, (change,), missing=(), present=(),
+                                     archive_epoch=archive_epoch, eligible=eligible)
+
+    def _commit_sessions(self, source, updates, *, missing, present, archive_epoch, eligible=None):
         if (not source or type(archive_epoch) is not int or archive_epoch < 0
                 or len(updates) + len(missing) + len(present) > BATCH_LIMIT
                 or sum(change.request_roster is not None for change in updates) > 1):
             raise ValueError("invalid_display_batch")
         if not updates and not missing and not present:
-            return None
+            return SessionCommit()
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             state = self._state(db, source)
-            if state.archive_epoch != archive_epoch:
-                return None
+            if state.archive_epoch != archive_epoch or eligible is not None and not eligible():
+                return SessionCommit()
             db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
             clocks = []
             changed = False
             inserted = 0
+            applied = 0
             for change in updates:
                 session_id = change.fact.session_id
                 if change.dependency is not None and (not change.dependency or change.previous_progress is None
@@ -431,6 +447,7 @@ class DisplayHistory:
                 if (change.previous_revision != revision or
                         change.previous_progress is not None and change.previous_progress != progress):
                     continue
+                applied += 1
                 visible = self._apply_session(db, source, change)
                 if visible:
                     changed = True
@@ -460,8 +477,11 @@ class DisplayHistory:
                 generation = state.generation + 1
                 known = [clock for clock in clocks if clock is not None]
                 self._append_change(db, source, generation, inserted, min(known, default=None), max(known, default=None))
+            if eligible is not None and not eligible():
+                db.rollback()
+                return SessionCommit()
             db.commit()
-            return generation
+            return SessionCommit(generation, applied)
 
     @staticmethod
     def _append_change(db, source, generation, inserted, earliest, latest):

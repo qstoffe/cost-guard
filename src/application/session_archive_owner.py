@@ -98,6 +98,24 @@ class SessionArchiveOwner:
                             and current_revisions.get(proof.session_id) == proof.source_revision)
             return self._commit(admission, updates, present=present)
 
+    def commit_summary(self, admission, row, revision, *, dependency, eligible, usage):
+        binding = admission.source, admission.epoch
+
+        def current():
+            return (eligible is None or eligible()) and self._binding == binding
+
+        with self._lock:
+            if len(admission.facts) != 1 or not current():
+                return False
+            change = admission.facts[0].project(row, current_revision=revision, current_epoch=admission.epoch,
+                                                dependency=dependency, usage=usage)
+            if change is None:
+                return False
+            result = self.history.commit_summary(admission.source, change, archive_epoch=admission.archive_epoch,
+                                                 eligible=current)
+            self._announce(*binding, result.generation)
+            return result.applied == 1
+
     def _commit(self, admission, updates, missing=(), present=()):
         generation = self.history.commit_sessions(admission.source, updates, missing=missing, present=present,
                                                     archive_epoch=admission.archive_epoch)
