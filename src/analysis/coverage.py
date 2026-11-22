@@ -61,7 +61,7 @@ def child_coverage(snapshot, session_ids, messages, entries, *, attribution=None
             state = "pending"
         elif own_entries:
             state = "usage-observed"
-        elif turn_states[identity] == {"not-executed"} and basis == "inferred":
+        elif turn_states[identity] == {"not-executed"}:
             state = "not-executed"
         elif not any(message.role is MessageRole.ASSISTANT for message in own_messages) and active is False:
             state = "not-executed"

@@ -8,6 +8,7 @@ from src.domain import EventKind, MessageRole
 
 OPEN_END = 2**63 - 1
 PROMPT_KINDS = {EventKind.USER_PROMPT, EventKind.SUBTASK}
+_SHELL_ACTIVITIES = {"shell", "bash", "functions.shell", "functions.bash"}
 
 
 def source_identity(provenance):
@@ -32,12 +33,45 @@ def _declared_background(part, state):
                for value in (state.get("input"), state.get("metadata"), part.data.get("metadata")))
 
 
+def _background_index(snapshot):
+    exact, approximate = defaultdict(set), defaultdict(set)
+    for activity in snapshot.background:
+        owner = (activity.session_id, activity.owner_message_id)
+        if activity.tool_part_id:
+            exact[(*owner, "part", activity.tool_part_id)].add(activity)
+        if activity.tool_call_id:
+            exact[(*owner, "call", activity.tool_call_id)].add(activity)
+        if not activity.tool_part_id and not activity.tool_call_id:
+            approximate[(*owner, activity.started_at_ms)].add(activity)
+    return exact, approximate
+
+
+def _background_end(message, part, start, activities, weak_match):
+    exact, approximate = activities
+    owner = (message.session_id, message.message_id)
+    call = part.data.get("callID")
+    matches = exact[(*owner, "part", part.part_id)]
+    if isinstance(call, str) and call:
+        matches = matches | exact[(*owner, "call", call)]
+    is_exact = bool(matches)
+    if not is_exact and weak_match:
+        matches = approximate[(*owner, start)]
+    if len(matches) != 1:
+        return OPEN_END
+    activity = next(iter(matches))
+    if is_exact and activity.kind in _SHELL_ACTIVITIES:
+        return 0  # Source-qualified shell work cannot be a subagent launch.
+    end = activity.ended_at_ms
+    return end if not activity.running and end is not None and end >= start > 0 else OPEN_END
+
+
 def _attempt_ends(message, source, verified_parts, activities, part_time):
     """Observed work and unresolved overlap are different boundaries."""
     terminal = _terminal(message)
     observed = max(message.created_at_ms, terminal, message.completed_at_ms or 0)
     foreground = 0 if terminal or message.completed_at_ms else message.created_at_ms
     asynchronous = 0
+    tools = []
     for part in message.parts:
         state = part.data.get("state")
         if (part.kind != "tool" or not isinstance(state, Mapping) or part.session_id != message.session_id
@@ -45,18 +79,23 @@ def _attempt_ends(message, source, verified_parts, activities, part_time):
             continue
         if (part.session_id, part.part_id) in verified_parts:
             continue  # Its work is addressed by the direct invocation evidence.
-        call = state.get("callID") or part.data.get("callID")
-        if ((part.session_id, "part", part.part_id) in activities or
-                isinstance(call, str) and (part.session_id, "call", call) in activities):
-            continue  # A source-qualified shell job is not a child launch.
         start, end = part_time(part)
+        tools.append((part, state, start, end))
+    start_counts = defaultdict(int)
+    for _, _, start, _ in tools:
+        start_counts[start] += 1
+    for part, state, start, end in tools:
+        declared_background = _declared_background(part, state)
+        background_end = _background_end(message, part, start, activities, start_counts[start] == 1)
+        if background_end == 0:
+            continue
         if end >= start > 0:
             observed = max(observed, end)
         pending = str(state.get("status", "")).lower() in {"pending", "streaming", "running"}
-        if _declared_background(part, state):
+        if declared_background:
             # Tool completion may be just the launch acknowledgement. Where an
             # async launch cannot be bound or verified finished, do not guess.
-            asynchronous = OPEN_END
+            asynchronous = max(asynchronous, background_end)
         elif pending and not terminal:
             foreground = max(foreground, start or message.created_at_ms)
     return observed, foreground, asynchronous
@@ -99,12 +138,7 @@ def _event_clocks(snapshot, sessions, source):
 
 
 def _attempt_clocks(snapshot, sessions, source, owners, events_by_key, verified_parts, part_time, uncertain):
-    activities = set()
-    for activity in snapshot.background:
-        if activity.tool_part_id:
-            activities.add((activity.session_id, "part", activity.tool_part_id))
-        if activity.tool_call_id:
-            activities.add((activity.session_id, "call", activity.tool_call_id))
+    activities = _background_index(snapshot)
     attempts, ownerless, boundaries = defaultdict(list), defaultdict(list), defaultdict(list)
     resumed = defaultdict(list)
     for event in snapshot.events:

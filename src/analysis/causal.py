@@ -466,11 +466,12 @@ def build_prompt_record(
     if inferred_ids:
         for entry in child_entries:
             by_turn[(entry.session_id, entry.logical_prompt_id)].append(entry)
-    inferred_turns = ((scope.session_id, timeline.children.messages((scope,)),
-                       by_turn[(scope.session_id, scope.owner_id)])
-                      for scope in scopes if scope.timing_only)
+    coverage_turns = ((scope.session_id, timeline.children.messages((scope,)),
+                       by_turn[(scope.session_id, scope.owner_id)] if scope.timing_only else
+                       scoped_entries(snapshot, timeline.index, (scope,), tracked_provider))
+                      for scope in scopes if scope.inferred_path or scope.session_id in inferred_ids)
     agents = child_coverage(snapshot, child_ids, timeline.children.messages(scopes) if inferred_ids else child_messages,
-                            child_entries, attribution=attribution, turns=inferred_turns)
+                            child_entries, attribution=attribution, turns=coverage_turns)
     background_fields.update(agent_coverage=agents,
         usage_coverage_complete=snapshot.complete and coverage_complete(agents)
             and not unrepresented_usage(attempt_messages, root_entries))

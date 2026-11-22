@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 import re
 
-from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
+from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot, TerminalOutcome
 
 from .billing import ProviderScope, provider_matches
 from .child_inference import OPEN_END, PROMPT_KINDS, inferred_children, source_identity, source_member
@@ -75,7 +75,8 @@ class ChildScope:
     timing_only: bool = False
     inferred_path: bool = False
     excluded_ids: tuple[str, ...] = ()
-    bound_background: bool = False
+    bound_continuations: bool = False
+    stale: bool = False
 
 
 def _candidate(part, message, sessions):
@@ -92,7 +93,12 @@ def _candidate(part, message, sessions):
     inputs = state.get("input")
     background = any(isinstance(value, Mapping) and value.get("background") is True
                      for value in (state.get("metadata"), part.data.get("metadata"), inputs))
-    return ChildScope(child.session_id, start, OPEN_END if background or not end else end, background)
+    terminal = message.termination
+    failed_at = (terminal.completed_at_ms if terminal and terminal.outcome is not TerminalOutcome.SUCCESS
+                 else message.completed_at_ms if message.error_name else None)
+    stale = not background and not end and failed_at is not None and failed_at > start
+    return ChildScope(child.session_id, start, failed_at if stale else OPEN_END if background or not end else end,
+                      background, stale=stale)
 
 
 class ChildLinkIndex:
@@ -105,11 +111,12 @@ class ChildLinkIndex:
         sessions = _tree_sessions(snapshot, self.source)
         self.owners = prompt_owners(snapshot, event_filter=lambda event: (
             event.session_id in sessions and source_member(event, self.source)))
-        turns = defaultdict(list)
+        turn_observations = defaultdict(dict)
         for event in snapshot.events:
             if (event.session_id in sessions and source_member(event, self.source)
                     and event.kind in PROMPT_KINDS | {EventKind.COMPACTION}):
-                turns[event.session_id].append(event)
+                turn_observations[event.session_id].setdefault(event.event_id, event)
+        turns = {sid: tuple(values.values()) for sid, values in turn_observations.items()}
         self.turns = turns
         self.messages_by_prompt = defaultdict(list)
         calls = defaultdict(list)
@@ -152,31 +159,34 @@ class ChildLinkIndex:
             times = starts[scope.session_id]
             index = bisect_right(times, scope.start_ms)
             end = times[index] if index < len(times) else OPEN_END
-            owned_turns = sorted((item for item in turns[scope.session_id]
+            child_turns = turns.get(scope.session_id, ())
+            owned_turns = sorted((item for item in child_turns
                 if scope.start_ms <= item.created_at_ms < min(end, scope.end_ms)),
                 key=lambda item: (item.created_at_ms, item.event_id))
-            if not owned_turns and scope.start_ms <= sessions[scope.session_id].created_at_ms < scope.end_ms:
+            if (not owned_turns and not scope.stale
+                    and scope.start_ms <= sessions[scope.session_id].created_at_ms < scope.end_ms):
                 # A freshly created child may enqueue its first user turn only
                 # after the asynchronous launch acknowledgement has returned.
-                owned_turns = sorted((item for item in turns[scope.session_id]
+                owned_turns = sorted((item for item in child_turns
                     if scope.start_ms <= item.created_at_ms < end),
                     key=lambda item: (item.created_at_ms, item.event_id))[:1]
             prompt_turns = [item for item in owned_turns if item.kind in PROMPT_KINDS]
             if scope.background and prompt_turns:
                 # A native launch owns its first turn, not the remainder of a
                 # reused conversation. Already bound replies may finish later.
-                if len(prompt_turns) > 1:
-                    end = min(end, prompt_turns[1].created_at_ms)
+                later_turn = next((turn for turn in prompt_turns if turn.created_at_ms > prompt_turns[0].created_at_ms), None)
+                if later_turn:
+                    end = min(end, later_turn.created_at_ms)
                 owned_turns = [item for item in owned_turns if item.created_at_ms < end]
             if owned_turns:
                 # Independent child prompts close the live ownership window too.
-                end = min(end, min((item.created_at_ms for item in turns[scope.session_id]
+                end = min(end, min((item.created_at_ms for item in child_turns
                     if item.created_at_ms >= scope.end_ms and item.created_at_ms > owned_turns[0].created_at_ms),
                     default=OPEN_END))
             first_turn = next((item for item in owned_turns if item.kind in PROMPT_KINDS), None)
             scope = replace(scope, end_ms=min(end, scope.end_ms), invocation_end_ms=end,
                 owner_id=first_turn.event_id if first_turn else "",
-                bound_background=scope.background and first_turn is not None)
+                bound_continuations=(scope.background or scope.stale) and first_turn is not None)
             # A tool's return/abort ends its launch window, not an assistant
             # already executing inside it. Bind that physical attempt before
             # extending, so an unrelated later child request stays unallocated.
@@ -220,14 +230,14 @@ class ChildLinkIndex:
                         child_keys.add((scope.session_id, owner))
             for key in child_keys:
                 claims[key].add(parent_key)
-            candidates.append((parent, scope, child_keys))
+            candidates.append((parent, scope, bound, child_keys))
         owners = {key: next(iter(possible)) for key, claimants in claims.items()
                   if len(possible := bindings.get(key, claimants)) == 1}
-        for parent, scope, keys in candidates:
+        for parent, scope, bound, keys in candidates:
             parent_key = (parent.session_id, self.owners.get((parent.session_id, parent.parent_message_id),
                                                             parent.parent_message_id or parent.message_id))
             excluded = {key for key in keys if owners.get(key) != parent_key}
-            if keys and keys <= excluded:
+            if bound and keys <= excluded:
                 continue
             self.links_by_message[(parent.session_id, parent.message_id)].append(
                 replace(scope, excluded_ids=tuple(sorted(key[1] for key in excluded))))
@@ -235,7 +245,7 @@ class ChildLinkIndex:
         for child, launch_times in fences.items():
             # A rejected launch cannot establish a new window. Fence the first
             # turn at/after each launch and any turn already spanning it.
-            child_turns = sorted(turns[child], key=lambda item: item.created_at_ms)
+            child_turns = sorted(turns.get(child, ()), key=lambda item: item.created_at_ms)
             for start in launch_times:
                 following = next((turn for turn in child_turns if turn.created_at_ms >= start), None)
                 preceding = next((turn for turn in reversed(child_turns) if turn.created_at_ms < start), None)
@@ -306,7 +316,7 @@ class ChildLinkIndex:
                     for child in self.messages((scope,)))
                 if prompt:
                     logical.extend(((scope.session_id, event.event_id), scope.start_ms, scope.invocation_end_ms)
-                        for event in self.turns[scope.session_id]
+                        for event in self.turns.get(scope.session_id, ())
                         if event.kind in PROMPT_KINDS and event.event_id not in scope.excluded_ids
                         and (event.event_id == scope.owner_id or scope.start_ms <= event.created_at_ms < scope.end_ms))
         return tuple(sorted(found, key=lambda scope: (
@@ -338,13 +348,13 @@ def _contains_request(scope, entry, invocation):
     if scope.timing_only:
         return (entry.logical_prompt_id == scope.owner_id and invocation.created_at_ms >= scope.start_ms
                 and not invocation.summary)
-    if scope.bound_background and entry.logical_prompt_id == scope.owner_id:
+    if scope.bound_continuations and entry.logical_prompt_id == scope.owner_id:
         return invocation.created_at_ms >= scope.start_ms
     return _within_window(scope, entry.message_id, invocation.created_at_ms, entry.completed_at_ms)
 
 
 def _message_upper(scope, owner, continuing):
-    if scope.bound_background and owner == scope.owner_id:
+    if scope.bound_continuations and owner == scope.owner_id:
         return OPEN_END
     return scope.invocation_end_ms if continuing else scope.end_ms
 
@@ -398,7 +408,7 @@ def _resolved_launches(calls, sessions):
                 scope = _candidate(part, message, sessions)
         if scope is not None:
             qualified.append((message, scope))
-            verified_parts.update((observed.session_id, observed.part_id) for _, observed in current)
+            verified_parts.update((observed.session_id, observed.part_id) for _, _, observed in observations)
         for _, observed_message, observed in observations:
             child = child_session_id(observed)
             start = part_time(observed)[0] or observed_message.created_at_ms
