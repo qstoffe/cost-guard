@@ -73,14 +73,14 @@ def request_clock_slice(db, source, start, end, *, slot=None, cursor=None, limit
 
 
 def request_birth_slice(db, source, through, *, slot=None, cursor=None, limit=USAGE_SLICE):
-    """Scan by birth revision and key; a slot is readable only at its head."""
+    """Scan by birth revision and key under the matching retained usage fence."""
     _require_pinned(db, limit)
     version = usage_version(db, source)
-    if slot is None:
+    if slot is None or version.revision == slot.birth:
         if retained_usage_version(db, source, UsageVersion(version.archive_epoch, through)) is None:
             return None
     elif through != slot.birth:
-        # This staging reader has no independent effective correction floor.
+        # A fixture-only manifest without a published usage fence proves head only.
         return None
     after = cursor.scanned_through if cursor is not None else None
     if cursor is not None and cursor != BirthCursor(source, through, version, slot, after):

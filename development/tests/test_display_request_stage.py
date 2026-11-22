@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from src.cache.display_history import DisplayHistory
+from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
 from src.cache.display_request_overlay import RequestSlot, request_birth_slice, request_clock_slice
 from src.cache.display_request_stage import (
     RequestInputScope,
@@ -147,7 +148,7 @@ class DisplayRequestStageTests(unittest.TestCase):
         self.history = DisplayHistory(Path(temp.name))
         self.history.initialize()
         with self.history._connect() as db:
-            db.executescript(request_stage_schema() + _SLOT)
+            db.executescript(request_stage_schema() + INSTALL_SCHEMA + _SLOT)
         with self.write() as db:
             db.execute("INSERT INTO sources(source) VALUES(?)", (SOURCE,))
             db.executemany("""
@@ -589,6 +590,64 @@ class DisplayRequestStageTests(unittest.TestCase):
                 counts.append(len(vm_steps))
         self.assertLessEqual(counts[1], counts[0] + 20)
         self.assertLess(counts[1], 1500)
+
+    def test_usage_slot_cas_checks_independent_stats_fences_and_advances_retention_atomically(self):
+        updated = b"corrected"
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", (_request(updated),), ()))
+            old = usage_version(db, SOURCE)
+        self._stage((_request(updated, tokens=70), _request(b"new")))
+        self._prepare("candidate")
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 0, 0)
+
+        with self.history._connect(read=True) as reader:
+            reader.execute("BEGIN")
+            self.assertEqual(old, usage_version(reader, SOURCE))
+            with self.write() as db:
+                db.execute("INSERT INTO archive_stats_revisions VALUES(?,1,0)", (SOURCE,))
+                self.assertIsNone(install_usage_slot(db, "candidate", witness, eligible=lambda: True))
+                db.execute("INSERT INTO archive_stats_geometry_revisions VALUES(?,1,0)", (SOURCE,))
+                self.assertIsNone(install_usage_slot(db, "candidate", replace(witness, evidence=1),
+                                                     eligible=lambda: True))
+                latest = replace(witness, evidence=1, geometry=1)
+                self.assertIsNone(install_usage_slot(db, "candidate", latest, eligible=lambda: False))
+                self.assertEqual(old, usage_version(db, SOURCE))
+                self.assertIsNone(db.execute("SELECT 1 FROM archive_request_slots").fetchone())
+                slot = install_usage_slot(db, "candidate", latest, eligible=lambda: True)
+                self.assertEqual(RequestSlot("candidate", 2), slot)
+            self.assertIsNone(reader.execute("SELECT 1 FROM archive_request_slots").fetchone())
+            self.assertEqual(old, retained_usage_version(reader, SOURCE, old))
+
+        with self.history._connect(read=True) as db:
+            db.execute("BEGIN")
+            self.assertEqual(("candidate", 2, 0), db.execute(
+                "SELECT attempt,birth,layout FROM archive_request_slots WHERE source=?", (SOURCE,)).fetchone())
+            self.assertEqual(2, usage_version(db, SOURCE).revision)
+            self.assertIsNone(retained_usage_version(db, SOURCE, old))
+            page = request_birth_slice(db, SOURCE, 2, slot=slot)
+            self.assertEqual([(updated, 70, 1), (b"new", 9, 2)],
+                             [(row[0], row[9], row[-1]) for row in page.rows])
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_prompt_attribution").fetchone())
+
+    def test_append_only_usage_slot_retains_old_revision_without_relabeling_new_keys(self):
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", (_request(b"old"),), ()))
+            old = usage_version(db, SOURCE)
+        self._stage((_request(b"new"),))
+        self._prepare("candidate")
+
+        with self.write() as db:
+            slot = install_usage_slot(db, "candidate",
+                                      RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 0, 0),
+                                      eligible=lambda: True)
+            self.assertEqual(old, retained_usage_version(db, SOURCE, old))
+            self.assertEqual(RequestSlot("candidate", 2), slot)
+            retained = request_birth_slice(db, SOURCE, old.revision, slot=slot)
+            self.assertEqual([(b"old", 1)], [(row[0], row[-1]) for row in retained.rows])
+            self.assertEqual((1, 0, 0), db.execute("""
+                SELECT edits,corrections,winner_changes FROM archive_request_preparations WHERE attempt='candidate'
+            """).fetchone())
 
     def test_fork_preparation_resumes_past_tied_shadowed_candidates(self):
         fork = b"fork"

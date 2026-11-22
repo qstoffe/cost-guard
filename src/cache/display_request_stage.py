@@ -39,7 +39,8 @@ def request_stage_schema():
         CREATE TABLE archive_request_preparations (
             attempt TEXT PRIMARY KEY, run TEXT NOT NULL REFERENCES archive_request_inputs(run),
             usage_revision INTEGER NOT NULL, after_key BLOB, sealed INTEGER NOT NULL DEFAULT 0,
-            edits INTEGER NOT NULL DEFAULT 0
+            edits INTEGER NOT NULL DEFAULT 0, corrections INTEGER NOT NULL DEFAULT 0,
+            winner_changes INTEGER NOT NULL DEFAULT 0
         ) WITHOUT ROWID;
         CREATE TABLE archive_prepare_forks (
             attempt TEXT NOT NULL REFERENCES archive_request_preparations(attempt),
@@ -210,7 +211,7 @@ def prepare_request_page(db, attempt):
         WHERE source=? {resume} ORDER BY request_key LIMIT ?
     """, (run, *((after,) if after is not None else ()), STAGE_ROWS)).fetchall()
     keys = tuple(row[0] for row in rows)
-    edits = 0
+    edits = corrections = 0
     if keys:
         params = ",".join("?" for _ in keys)
         db.execute(f"""
@@ -218,12 +219,18 @@ def prepare_request_page(db, attempt):
             SELECT ?,first_revision,{_COLUMNS} FROM archive_requests
             WHERE source=? AND request_key IN ({params})
         """, (attempt, source, *keys))
-        edits = upsert_request_values(db, attempt, None, rows, private=True)
+        upsert_request_values(db, attempt, None, rows, private=True)
         _discard_identical(db, source, attempt, keys, params)
+        edits, corrections = db.execute(f"""
+            SELECT count(*),count(first_revision) FROM archive_prepare_requests
+            WHERE source=? AND request_key IN ({params})
+        """, (attempt, *keys)).fetchone()
         _mark_fork_changes(db, source, attempt, keys, params)
     eof = len(rows) < STAGE_ROWS
-    db.execute("UPDATE archive_request_preparations SET after_key=?,sealed=?,edits=edits+? WHERE attempt=?",
-               (keys[-1] if keys else after, eof, edits, attempt))
+    db.execute("""
+        UPDATE archive_request_preparations SET after_key=?,sealed=?,edits=edits+?,corrections=corrections+?
+        WHERE attempt=?
+    """, (keys[-1] if keys else after, eof, edits, corrections, attempt))
     return eof
 
 
@@ -379,8 +386,12 @@ def _prepare_winner(db, source, attempt):
         ORDER BY multiplicity DESC,first_ordinal,first_session,dedup_tree LIMIT 1
     """, (source, fork)).fetchone()
     winner = first[-1] if first is not None else None
+    changed = old is not None and old[0] != winner
     db.execute("UPDATE archive_prepare_winners SET winner=?,changed=?,done=1 WHERE attempt=? AND fork_key=?",
-               (winner, old is not None and old[0] != winner, attempt, fork))
+               (winner, changed, attempt, fork))
+    if changed:
+        db.execute("UPDATE archive_request_preparations SET winner_changes=winner_changes+1 WHERE attempt=?",
+                   (attempt,))
     return False
 
 
