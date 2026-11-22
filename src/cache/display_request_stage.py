@@ -50,6 +50,16 @@ def request_stage_schema():
         ) WITHOUT ROWID;
         CREATE INDEX archive_prepare_pending_forks ON archive_prepare_forks(attempt,fork_key,dedup_tree)
             WHERE NOT done;
+        CREATE INDEX archive_prepare_fork_rank ON archive_prepare_forks(
+            attempt,fork_key,multiplicity DESC,first_ordinal,first_session,dedup_tree)
+            WHERE done AND multiplicity>0;
+        CREATE TABLE archive_prepare_winners (
+            attempt TEXT NOT NULL REFERENCES archive_request_preparations(attempt), fork_key BLOB NOT NULL,
+            after_count INTEGER, after_ordinal INTEGER, after_session TEXT, after_tree TEXT,
+            winner TEXT, changed INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(attempt,fork_key)
+        ) WITHOUT ROWID;
+        CREATE INDEX archive_prepare_pending_winners ON archive_prepare_winners(attempt,fork_key) WHERE NOT done;
     """ + request_table_schema(
         "archive_input_requests", "REFERENCES archive_request_inputs(run)",
         extra_columns="""
@@ -243,6 +253,10 @@ def _mark_fork_changes(db, source, attempt, keys, params):
            for old_fork, old_tree, new_fork, new_tree in rows
            for fork, tree, delta in ((old_fork, old_tree, -1), (new_fork, new_tree, 1))
            if fork is not None and tree is not None))
+    db.executemany("INSERT OR IGNORE INTO archive_prepare_winners(attempt,fork_key) VALUES(?,?)",
+                   ((attempt, fork) for old_fork, old_tree, new_fork, new_tree in rows
+                    for fork, tree in ((old_fork, old_tree), (new_fork, new_tree))
+                    if fork is not None and tree is not None))
 
 
 def _pending_fork(db, attempt):
@@ -268,7 +282,7 @@ def prepare_fork_page(db, attempt):
         return None
     pending = _pending_fork(db, attempt)
     if pending is None:
-        return True
+        return _prepare_winner(db, source, attempt)
     fork, tree, change, ordinal, session, key = pending
     previous = db.execute("""
         SELECT multiplicity FROM archive_fork_trees WHERE source=? AND fork_key=? AND dedup_tree=?
@@ -332,3 +346,66 @@ def _base_fork_candidates(db, source, fork, tree, attempt, lower, args, limit):
             ORDER BY request_ordinal,session_id,request_key LIMIT ?
         ) AS b
     """, (attempt, source, fork, tree, *args, limit)).fetchall()
+
+
+def _prepare_winner(db, source, attempt):
+    """Resolve one affected global winner, with a bounded shadow-prefix seek."""
+    pending = db.execute("""
+        SELECT fork_key,after_count,after_ordinal,after_session,after_tree
+        FROM archive_prepare_winners INDEXED BY archive_prepare_pending_winners
+        WHERE attempt=? AND NOT done ORDER BY fork_key LIMIT 1
+    """, (attempt,)).fetchone()
+    if pending is None:
+        return True
+    fork, *after = pending
+    rows = _ranked_base_page(db, source, fork, attempt, after)
+    base = next((row[:4] for row in rows if not row[-1]), None)
+    if base is None and len(rows) == STAGE_ROWS:
+        db.execute("""
+            UPDATE archive_prepare_winners SET (after_count,after_ordinal,after_session,after_tree)=(?,?,?,?)
+            WHERE attempt=? AND fork_key=?
+        """, (*rows[-1][:4], attempt, fork))
+        return False
+    staged = db.execute("""
+        SELECT multiplicity,first_ordinal,first_session,dedup_tree
+        FROM archive_prepare_forks INDEXED BY archive_prepare_fork_rank
+        WHERE attempt=? AND fork_key=? AND done AND multiplicity>0
+        ORDER BY multiplicity DESC,first_ordinal,first_session,dedup_tree LIMIT 1
+    """, (attempt, fork)).fetchone()
+    first = min((row for row in (base, staged) if row is not None),
+                key=lambda row: (-row[0], *row[1:]), default=None)
+    old = db.execute("""
+        SELECT dedup_tree FROM archive_fork_trees INDEXED BY archive_fork_rank WHERE source=? AND fork_key=?
+        ORDER BY multiplicity DESC,first_ordinal,first_session,dedup_tree LIMIT 1
+    """, (source, fork)).fetchone()
+    winner = first[-1] if first is not None else None
+    db.execute("UPDATE archive_prepare_winners SET winner=?,changed=?,done=1 WHERE attempt=? AND fork_key=?",
+               (winner, old is not None and old[0] != winner, attempt, fork))
+    return False
+
+
+def _ranked_base_page(db, source, fork, attempt, after):
+    query = """
+        SELECT b.*,EXISTS(SELECT 1 FROM archive_prepare_forks f
+                         WHERE f.attempt=? AND f.fork_key=? AND f.dedup_tree=b.dedup_tree)
+        FROM (
+            SELECT multiplicity,first_ordinal,first_session,dedup_tree
+            FROM archive_fork_trees INDEXED BY archive_fork_rank WHERE source=? AND fork_key=? {lower}
+            ORDER BY multiplicity DESC,first_ordinal,first_session,dedup_tree LIMIT ?
+        ) b
+    """
+    args = attempt, fork, source, fork
+    if after[0] is None:
+        return db.execute(query.format(lower=""), (*args, STAGE_ROWS)).fetchall()
+    rows = []
+    ranges = (
+        ("AND multiplicity=? AND first_ordinal=? AND first_session=? AND dedup_tree>?", after),
+        ("AND multiplicity=? AND first_ordinal=? AND first_session>?", after[:3]),
+        ("AND multiplicity=? AND first_ordinal>?", after[:2]),
+        ("AND multiplicity<?", after[:1]),
+    )
+    for lower, bounds in ranges:
+        if len(rows) == STAGE_ROWS:
+            break
+        rows.extend(db.execute(query.format(lower=lower), (*args, *bounds, STAGE_ROWS - len(rows))).fetchall())
+    return rows

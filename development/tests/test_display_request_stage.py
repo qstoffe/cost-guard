@@ -57,7 +57,9 @@ def _install(db, attempt, *, incarnation=5, dependency="dependency"):
           AND root.source_present AND root.revision=i.revision AND coalesce(r.progress,0)=i.progress
           AND s.archive_epoch=i.archive_epoch AND coalesce(u.revision,0)=p.usage_revision
           AND NOT EXISTS(SELECT 1 FROM archive_prepare_forks f INDEXED BY archive_prepare_pending_forks
-                         WHERE f.attempt=p.attempt AND NOT f.done)
+                          WHERE f.attempt=p.attempt AND NOT f.done)
+          AND NOT EXISTS(SELECT 1 FROM archive_prepare_winners w INDEXED BY archive_prepare_pending_winners
+                          WHERE w.attempt=p.attempt AND NOT w.done)
         ON CONFLICT(source) DO NOTHING
     """, (attempt, incarnation, dependency)).rowcount
 
@@ -397,6 +399,9 @@ class DisplayRequestStageTests(unittest.TestCase):
             self.assertEqual([(b"omitted", 15, 9, 1, "A"), (b"peer-only", 30, 9, 2, "B")], _visible(db, 0, 100))
             self.assertEqual([(b"shared", 120, 70, 2, "A"), (b"new", 140, 9, 3, "A")], _visible(db, 100, 200))
             self.assertEqual([("A", 3, 6, "member"), ("B", 1, 5, "member")], forks)
+            self.assertEqual(("A", 1), db.execute("""
+                SELECT winner,changed FROM archive_prepare_winners WHERE attempt='ready' AND fork_key=? AND done
+            """, (fork,)).fetchone())
         with self.write() as db:
             db.execute("DELETE FROM probe_installed")
             publish_roster(db, SOURCE, "A", "rev-A", RequestRoster("price", correction, ()))
@@ -455,12 +460,52 @@ class DisplayRequestStageTests(unittest.TestCase):
             else:
                 self.fail("shadowed candidates never exhausted")
             db.set_progress_handler(None, 0)
-            self.assertEqual(44, len(counts))
+            self.assertEqual(45, len(counts))
             self.assertLess(max(counts), 3500, counts)
             self.assertEqual(1, _install(db, "ready"))
 
         with self.history._connect(read=True) as db:
             self.assertEqual([("A", 1366, 0, "member"), ("B", 1, 0, "member")], _forks(db, fork))
+
+    def test_winner_preparation_seeks_past_tied_shadowed_trees(self):
+        fork = b"fork"
+        with self.write() as db:
+            db.executemany("INSERT INTO archive_fork_trees VALUES(?,?,?,1,0,'member')",
+                           ((SOURCE, fork, f"tree-{n:04d}") for n in range(1372)))
+        self._stage(())
+        with self.write() as db:
+            self.assertTrue(open_request_preparation(db, "spool", "ready"))
+            self.assertTrue(prepare_request_page(db, "ready"))
+            db.executemany("""
+                INSERT INTO archive_prepare_forks(attempt,fork_key,dedup_tree,change,multiplicity,done)
+                VALUES('ready',?,?,-1,0,1)
+            """, ((fork, f"tree-{n:04d}") for n in range(1366)))
+            db.execute("INSERT INTO archive_prepare_winners(attempt,fork_key) VALUES('ready',?)", (fork,))
+            self.assertEqual(0, _install(db, "ready"))
+
+            steps = 0
+
+            def measure():
+                nonlocal steps
+                steps += 1
+                return 0
+
+            db.set_progress_handler(measure, 1)
+            work = []
+            for _ in range(45):
+                steps = 0
+                if prepare_fork_page(db, "ready"):
+                    break
+                work.append(steps)
+            else:
+                self.fail("shadowed winner prefix never exhausted")
+            db.set_progress_handler(None, 0)
+            self.assertEqual(43, len(work))
+            self.assertLess(max(work), 3500)
+            self.assertEqual(1, _install(db, "ready"))
+            self.assertEqual(("tree-1366", 1), db.execute("""
+                SELECT winner,changed FROM archive_prepare_winners WHERE attempt='ready' AND fork_key=? AND done
+            """, (fork,)).fetchone())
 
     def test_same_revision_reappearance_rejects_pre_gap_payload(self):
         self._stage((_request(b"before-gap"),))
