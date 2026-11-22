@@ -55,8 +55,7 @@ class RootPromptCalls:
             WHERE session=? AND {_VISIBLE} AND created>? ORDER BY created LIMIT 1
         """, (root, self._start)).fetchone()
         self._end = following[0] if following else OPEN_END
-        with db:
-            self._run = db.execute("INSERT INTO trace_prompt_runs DEFAULT VALUES").lastrowid
+        self._run = None
         self._after_event = None
         self._walk = None
         self._scopes = deque()
@@ -125,8 +124,10 @@ class RootPromptCalls:
             self._direct_pending = False
         else:
             self._call_after = rows[-1][:2]
-        return self._unique(ScopedCall(self._root, invocation, message, step)
-                            for _, invocation, message, step in rows if self._tracked(message))
+        # Root calls have a single captured initiating event and cannot also
+        # be descendants of this root. Only overlapping child windows dedup.
+        return tuple(ScopedCall(self._root, invocation, message, step)
+                     for _, invocation, message, step in rows if self._tracked(message))
 
     def _tracked(self, message):
         if self._provider is None:
@@ -154,7 +155,11 @@ class RootPromptCalls:
         return ()
 
     def _unique(self, calls):
+        if not calls:
+            return ()
         with self._db:
+            if self._run is None:
+                self._run = self._db.execute("INSERT INTO trace_prompt_runs DEFAULT VALUES").lastrowid
             return tuple(call for call in calls if self._db.execute("""
                 INSERT OR IGNORE INTO trace_prompt_seen VALUES(?,?,?,?,?)
             """, (self._run, call.session_id, call.invocation_id, call.message_id, call.step_part_id or "")).rowcount)

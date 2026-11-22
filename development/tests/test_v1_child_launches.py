@@ -430,6 +430,7 @@ class V1ChildLaunchTests(unittest.TestCase):
                 self.fail("dense prompt allocation did not finish within 50 turns")
             db.set_progress_handler(None, 0)
             self.assertEqual(0, db.execute("SELECT count(*) FROM trace_walks").fetchone()[0])
+            self.assertEqual(0, db.execute("SELECT count(*) FROM trace_prompt_runs").fetchone()[0])
 
         self.assertEqual(1366, len(calls))
         self.assertEqual(expected, set(calls))

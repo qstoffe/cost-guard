@@ -121,6 +121,25 @@ def _fold_one(db, slot, key, expected):
     return bool(changed)
 
 
+def _install_fixture_fold_guard(db):
+    """Only in the test database: distinguish exact materialization from writes."""
+    db.execute("CREATE TABLE probe_fold_before AS SELECT * FROM archive_requests WHERE 0")
+    columns = (*REQUEST_COLUMNS, "first_revision")
+    old = " AND ".join(f"OLD.{column} IS b.{column}" for column in columns)
+    new = " AND ".join(f"NEW.{column} IS p.{column}" for column in columns)
+    guard = f"""NOT EXISTS(
+        SELECT 1 FROM probe_fold_before b JOIN probe_installed i USING(source)
+        JOIN archive_prepare_requests p ON p.source=i.attempt AND p.request_key=b.request_key
+        WHERE OLD.source=b.source AND NEW.source=b.source AND {old} AND {new}
+    )"""
+    for trigger, connective in (("archive_usage_correction", "WHEN"),
+                                ("archive_stats_request_identity_stale", "AND")):
+        sql, = db.execute("SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?", (trigger,)).fetchone()
+        before, body = sql.split("BEGIN", 1)
+        db.execute(f"DROP TRIGGER {trigger}")
+        db.execute(f"{before} {connective} {guard} BEGIN {body}")
+
+
 class DisplayRequestStageTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -408,6 +427,47 @@ class DisplayRequestStageTests(unittest.TestCase):
                 SELECT request_key,request.first_revision,duration_ms
                 FROM archive_response_timing JOIN archive_requests AS request USING(source,request_key)
             """).fetchone())
+
+    def test_exact_fixture_fold_guard_preserves_fresh_fences_but_does_not_exempt_other_updates(self):
+        key = b"same"
+        recipe = StatsRequestIdentity(b"m" * 32, None, b"s" * 32, b"p" * 32, "medium")
+        initial = replace(_request(key), stats_identity=recipe)
+        columns = ",".join(REQUEST_COLUMNS)
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A",
+                           RequestRoster("price", (initial,), (), stats=StatsCapture((), False, None, ())))
+            expected = db.execute(f"SELECT {columns},first_revision FROM archive_requests").fetchone()
+            old = usage_version(db, SOURCE)
+        self._stage((replace(initial, effort="high"),))
+        self._prepare("candidate")
+
+        with self.write() as db:
+            self.assertEqual(1, _install(db, "candidate"))
+            slot = RequestSlot(*db.execute("SELECT attempt,usage_revision FROM probe_installed").fetchone())
+            advance_usage_revision(db, SOURCE, changed_winner=True)
+            new = usage_version(db, SOURCE)
+            db.execute("UPDATE archive_stats_request_identity SET effort='high',first_revision=2")
+            db.execute("UPDATE archive_stats_revisions SET revision=2 WHERE source=?", (SOURCE,))
+            evidence = StatsVersion(new, 2)
+            _install_fixture_fold_guard(db)
+            db.execute("INSERT INTO probe_fold_before SELECT * FROM archive_requests WHERE source=? AND request_key=?",
+                       (SOURCE, key))
+
+            db.execute("SAVEPOINT ordinary")
+            db.execute("UPDATE archive_requests SET effort='low' WHERE source=? AND request_key=?", (SOURCE, key))
+            self.assertIsNone(retained_usage_version(db, SOURCE, new))
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_identity").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
+            db.execute("ROLLBACK TO ordinary")
+            db.execute("RELEASE ordinary")
+
+            self.assertTrue(_fold_one(db, slot, key, expected))
+            self.assertIsNone(retained_usage_version(db, SOURCE, old))
+            self.assertEqual(new, retained_usage_version(db, SOURCE, new))
+            self.assertEqual(evidence, retained_stats_version(db, SOURCE, evidence))
+            self.assertEqual("high", db.execute("SELECT effort FROM archive_stats_request_identity").fetchone()[0])
+            self.assertEqual(("rev-A",), db.execute("SELECT source_revision FROM archive_stats_request_ready").fetchone())
+            self.assertIsNone(db.execute("SELECT 1 FROM archive_prepare_requests").fetchone())
 
     def test_peer_commit_invalidates_next_prepare_page_and_spool_replays_without_early_birth(self):
         shared = b"z-shared"
