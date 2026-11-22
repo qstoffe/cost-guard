@@ -425,6 +425,7 @@ class WebRuntimeTests(unittest.TestCase):
         from development.tests.test_archive_stats_evidence import capture
         from src.cache.display_history import SessionChange, SessionFact
         from src.cache.display_stats_evidence import StatsInterval
+        from src.web.dispatch import DataDispatcher
         from src.web.display_archive import DisplayArchive
 
         endpoint = "/api/cache/ai-stats"
@@ -437,7 +438,8 @@ class WebRuntimeTests(unittest.TestCase):
                 archive.initialize()
                 archive._set_binding(SimpleNamespace(scope="verified-fixture"))
                 self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
-                                                       display_archive=archive)
+                    display_archive=archive, cached_stats_enabled=True,
+                    dispatcher=DataDispatcher(self.jobs, cache_only_stats=True))
                 cold = self.request(endpoint, {"period": "all"})
                 roster = capture(one_request(running=False))
                 geometry = (StatsInterval("root", "past", "prompt", 1000, 500, False),
@@ -450,6 +452,13 @@ class WebRuntimeTests(unittest.TestCase):
                     periods = ("today", "7-days", "30-days", "month", "all")
                     responses = {period: self.request(endpoint, {"period": period}) for period in periods}
                     invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
+                report = {"kind": "ai-stats", "stats_scope": "today"}
+                self.assertEqual(400, self.request("/api/reports", report)[0])
+                self.assertEqual(400, self.request("/api/data", {"request": report, "retry": False})[0])
+                self.assertEqual(400, self.request("/api/interest", {
+                    "tab": "1" * 32, "section": "ai-stats", "visible": True, "request": report})[0])
+                self.assertFalse(any(request.kind.value == "ai-stats" for request in
+                                     self.server.lifecycle.dispatcher.default_requests))
                 read = archive.history.stats_time_view
 
                 def read_then_unbind(*args):

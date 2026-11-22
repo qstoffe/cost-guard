@@ -1,6 +1,7 @@
 """AI Stats-only fun figures; canonical accounting and timing remain unchanged."""
 from dataclasses import dataclass, replace
 from bisect import bisect_right
+from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -65,6 +66,16 @@ def windows(zone, now):
             ('30-days', local_day_start_ms(zone, now_ms=now, days_ago=29)),
             ('month', local_month_start_ms(zone, now_ms=now)),
             ('all', None))
+
+
+def scope_rollover(period, zone, now):
+    if period == 'all':
+        return None
+    tomorrow = -1
+    if period == 'month':
+        local = datetime.fromtimestamp(now / 1000, timezone.utc).astimezone(resolve_timezone(zone))
+        tomorrow = local.day - monthrange(local.year, local.month)[1] - 1
+    return local_day_start_ms(zone, now_ms=now, days_ago=tomorrow)
 
 
 def union(intervals):

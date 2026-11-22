@@ -2,8 +2,9 @@
 from dataclasses import asdict
 from threading import Lock
 
-from src.analysis.ai_stats import windows
+from src.analysis.ai_stats import scope_rollover, windows
 from src.application.archive_stats_refresh import ArchiveStatsRefresh
+from src.presentation.cached_stats import measured_stats
 
 
 class DisplayStats:
@@ -65,10 +66,12 @@ class DisplayStats:
         calendar = value.row.calendar if value else None
         roots = value.row.roots if value else None
         return dict(binding=views.binding, archive_epoch=epoch, period=period, start_ms=start,
+                    valid_until_ms=scope_rollover(period, views.timezone_id, now_ms),
                     as_of_ms=value.stamp.as_of if value else None,
                     measured_working_ms=value.row.working_ms if value else None,
                     measured_calendar=asdict(calendar) if calendar else None,
-                    measured_root_time=asdict(roots) if roots else None, coverage="unknown")
+                    measured_root_time=asdict(roots) if roots else None,
+                    display=measured_stats(value.row if value else None), coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()

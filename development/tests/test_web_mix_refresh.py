@@ -29,6 +29,12 @@ class WebMixRefreshTests(unittest.TestCase):
             cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
 
+    @unittest.skipUnless(shutil.which("node"), "node unavailable")
+    def test_stats_browser_withdraws_pending_reads_at_period_binding_clear_or_auth_fences(self):
+        completed = subprocess.run([shutil.which("node"), "development/tests/integration/cached_stats.cjs"],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_existing_lane_interleaves_scalar_with_bounded_mix_and_notifies_after_commit(self):
         now = 1_750_000_000_000
         ready, release = Event(), Event()

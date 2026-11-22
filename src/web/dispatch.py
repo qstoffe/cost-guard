@@ -66,6 +66,12 @@ def token_mix_coverage(result):
     return {'unknown': 0, 'partial': 1}.get(period.get('coverage'), 2)
 
 
+def cache_only_reports(owner):
+    return frozenset(kind for kind, feature in
+                     ((ReportKind.TOKEN_MIX, 'cached_mix_enabled'), (ReportKind.AI_STATS, 'cached_stats_enabled'))
+                     if getattr(owner, feature, False))
+
+
 def cadence(request, result, foreground):
     if request.kind is ReportKind.NORMAL:
         qualified = (result or {}).get('view', {}).get('model_comparison_sample_size', 0)
@@ -76,7 +82,8 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, cache_only_mix=False):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, cache_only_mix=False,
+                 cache_only_stats=False):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -91,7 +98,8 @@ class DataDispatcher:
         self.ready = False
         self.warm_allowed = False
         self.default_requests = tuple(request for request in DEFAULT_REQUESTS
-                                      if not cache_only_mix or request.kind is not ReportKind.TOKEN_MIX)
+                                      if (not cache_only_mix or request.kind is not ReportKind.TOKEN_MIX)
+                                      and (not cache_only_stats or request.kind is not ReportKind.AI_STATS))
 
     def price_refresh(self, key):
         with self.lock:

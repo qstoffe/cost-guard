@@ -4,7 +4,7 @@
 const LiveConnection = (() => {
   function connect(api, update, status, sourceFactory = url => new EventSource(url),
       clock = {now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), cancel: id => clearTimeout(id)},
-       onCache = () => {}, onWatchCache = () => {}, onMixCache = () => {}) {
+       onCache = () => {}, onWatchCache = () => {}, onMixCache = () => {}, onStatsCache = () => {}) {
     let source = null, instance = null, sequence = 0, syncing = null, stopped = false;
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     let sourceOutage = false, healthOwner = null, healthCheck = -1;
@@ -51,10 +51,13 @@ const LiveConnection = (() => {
         onWatchCache(values[kind]);
       } else if (kind === 'token-mix-cache') {
         onMixCache(values[kind]);
+      } else if (kind === 'ai-stats-cache') {
+        onStatsCache(values[kind]);
       } else {
         if (validate) health();
         if (kind === null) {
           onCache(values.cache, true); onWatchCache(values['watch-cache'], true); onMixCache(values['token-mix-cache'], true);
+          onStatsCache(values['ai-stats-cache'], true);
         }
         update(values.live, values.progress);
       }
@@ -120,7 +123,7 @@ const LiveConnection = (() => {
       const opened = sourceFactory('/api/events'); // No reusable secret or query string.
       source = opened;
       const current = () => !stopped && source === opened;
-      for (const kind of ['live', 'cache', 'watch-cache', 'token-mix-cache', 'progress', 'terminal'])
+      for (const kind of ['live', 'cache', 'watch-cache', 'token-mix-cache', 'ai-stats-cache', 'progress', 'terminal'])
         opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
       opened.addEventListener('resync', () => { if (current()) sync(); });
       opened.addEventListener('authorization_required', () => {

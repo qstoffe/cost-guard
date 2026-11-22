@@ -16,6 +16,7 @@ let liveConnection = null;
 let liveValue = null;
 let watchCache = null;
 let mixCache = null;
+let statsCache = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let cachedSessionsAvailable = false;
@@ -34,10 +35,10 @@ function sourceNoticeGeometry() {
   document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
 }
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
-function historical(state) { return !state?.cachedMix && !!CachedReports.cadences[state?.section]; }
+function historical(state) { return !state?.cachedMix && !state?.cachedStats && !!CachedReports.cadences[state?.section]; }
 function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
 function firstReport(state = current) {
-  if (csrf && hostState.writable && state?.request && !state.cachedMix && !state.detail && !state.result && !state.attempted && !document.hidden) {
+  if (csrf && hostState.writable && state?.request && !state.cachedMix && !state.cachedStats && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
 }
@@ -78,6 +79,11 @@ function enterCachedReport(state) {
 function selectStats(state, period) {
   if (state.period === period) return;
   state.period = period;
+  if (state.cachedStats) {
+    statsCache.activate(document.hidden ? null : period);
+    show(state);
+    return;
+  }
   state.request = {kind: 'ai-stats', stats_scope: period};
   demand?.update();
   state.result = state.statsResults?.get(period) || null;
@@ -155,6 +161,7 @@ function connectionStatus(message, state = {}) {
   const blocked = hostState.terminal || hostState.sourceBlocked;
   watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind));
   mixCache?.health(blocked);
+  statsCache?.health(blocked);
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
   const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
@@ -271,6 +278,12 @@ function show(state) {
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
+    if (state.cachedStats) {
+      output.setAttribute('aria-busy', 'false');
+      state.cachedStatsView ||= new CachedStats.View(period => selectStats(state, period));
+      state.cachedStatsView.attach(output, state.period, statsCache.snapshot());
+      return;
+    }
     output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
@@ -394,7 +407,7 @@ function failure(code, state) {
   return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
-  if (state.loading || state.cachedMix || !hostState.writable) return;
+  if (state.loading || state.cachedMix || state.cachedStats || !hostState.writable) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
   let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
@@ -654,7 +667,8 @@ function navigate() {
   // not the active route. Navigation never abandons it or starts another attempt.
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
-    current.request = {kind: 'ai-stats', stats_scope: current.period};
+    current.cachedStats = !!statsCache;
+    current.request = current.cachedStats ? null : {kind: 'ai-stats', stats_scope: current.period};
   }
   if (current.section === 'token-mix') {
     current.period ||= current.request?.token_mix_scope || 'all';
@@ -662,6 +676,7 @@ function navigate() {
     current.request = current.cachedMix ? null : {kind: 'token-mix', token_mix_scope: current.period};
   }
   mixCache?.activate(current.cachedMix && !document.hidden ? current.period : null);
+  statsCache?.activate(current.cachedStats && !document.hidden ? current.period : null);
   if (route.section === 'models') {
     const models = current;
     models.refreshPrices = () => acquire(models, false, true);
@@ -740,10 +755,14 @@ async function connect() {
        });
        watchCache.catchUp();
      }
-     if (state.cached_mix === true && typeof CachedMix !== 'undefined') {
+      if (state.cached_mix === true && typeof CachedMix !== 'undefined') {
        mixCache ||= new CachedMix.Controller(api, () => { if (current?.cachedMix) show(current); });
        if (current?.section === 'token-mix') { current.cachedMix = true; current.request = null; }
-     }
+      }
+      if (state.cached_stats === true && typeof CachedStats !== 'undefined') {
+        statsCache ||= new CachedStats.Controller(api, () => { if (current?.cachedStats) show(current); });
+        if (current?.section === 'ai-stats') { current.cachedStats = true; current.request = null; }
+      }
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -778,7 +797,8 @@ async function connect() {
          sessionCacheHint = hint;
          current?.catalog?.cacheHint?.(hint, resync);
          current?.detail?.cacheHint?.(hint, resync);
-       }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync));
+        }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync),
+           (hint, resync) => statsCache?.committed(hint, resync));
     }
     navigate();
   } catch (_) {
@@ -830,6 +850,7 @@ document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
   current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
   mixCache?.activate(!document.hidden && current?.cachedMix ? current.period : null);
+  statsCache?.activate(!document.hidden && current?.cachedStats ? current.period : null);
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {

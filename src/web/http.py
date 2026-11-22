@@ -19,6 +19,7 @@ from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 from .session_catalog import catalog_page
+from .dispatch import cache_only_reports
 from .dispatch_http import handle as handle_dispatch
 from .session_export import SessionExports
 
@@ -39,6 +40,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
               "/session-export.js": ("session-export.js", "text/javascript; charset=utf-8"),
               "/cached-watch.js": ("cached-watch.js", "text/javascript; charset=utf-8"),
               "/cached-mix.js": ("cached-mix.js", "text/javascript; charset=utf-8"),
+              "/cached-stats.js": ("cached-stats.js", "text/javascript; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
@@ -372,8 +374,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         request = ModelsPriceRefresh()
                     else:
                         request = parse_report(value)
-                        cached_mix = getattr(self.server.lifecycle, "cached_mix_enabled", False)
-                        if request.kind is ReportKind.COMPARISONS or cached_mix and request.kind is ReportKind.TOKEN_MIX:
+                        if request.kind is ReportKind.COMPARISONS or request.kind in cache_only_reports(self.server.lifecycle):
                             raise ValueError("invalid_request")
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})
@@ -475,6 +476,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     value["cached_sessions"] = getattr(self.server.lifecycle, "cached_sessions_enabled", False)
                     value["cached_watch"] = getattr(self.server.lifecycle, "cached_watch_enabled", False)
                     value["cached_mix"] = getattr(self.server.lifecycle, "cached_mix_enabled", False)
+                    value["cached_stats"] = getattr(self.server.lifecycle, "cached_stats_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)

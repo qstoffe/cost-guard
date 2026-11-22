@@ -375,6 +375,8 @@ def main():
                 check_cached_sessions(browser, evidence, ROOT)
                 check_cached_watch(browser, evidence, ROOT)
                 check_cached_mix(browser, evidence, ROOT)
+                from development.tests.integration.ci_cached_stats import check_cached_stats
+                check_cached_stats(browser, evidence, ROOT)
                 check_extended_browser(browser, evidence)
             finally:
                 browser.close()
