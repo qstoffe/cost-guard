@@ -37,13 +37,13 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
   await command('Page.bringToFront',{},covered.sessionId);
   await until('document.hidden && !miniWatch.window.document.hidden');
   await evaluate(`window.leaseUpdate=miniWatch.update.bind(miniWatch);miniWatch.update=p=>leaseUpdate(window.leasePublication||p)`);
-  const capacity=async count=>evaluate(`(async()=>applySettings(await api('/api/settings/mini-non-running-rows',
-    {miniWatchNonRunningRows:${JSON.stringify(count)}})))()`);
+  const capacity=async count=>evaluate(`(async()=>applySettings(await api('/api/settings/mini-rows',
+    {miniWatchRows:${JSON.stringify(count)}})))()`);
   for(const {running,ended,rows,history} of [
-    {running:12,ended:2,rows:2,history:false},
-    {running:12,ended:2,rows:10,history:true},
-    {running:1,ended:10,rows:10,history:false},
-    {running:12,ended:0,rows:2,history:true},
+    {running:12,ended:2,rows:0,history:false},
+    {running:1,ended:2,rows:7,history:true},
+    {running:1,ended:10,rows:7,history:false},
+    {running:4,ended:0,rows:5,history:true},
   ]) {
     const offset=interest.length;
     await capacity(rows);
@@ -56,7 +56,7 @@ module.exports = async ({command,evaluate,until,sessionId,targetId,interest,erro
         return card;
       });
       window.leasePublication=p;miniWatch.update(p);})()`);
-    await until(`miniWatch.view.promptRows.size===${running+ended}`);
+    await until(`miniWatch.view.promptRows.size===${running+Math.min(ended,Math.max(0,rows-running))}`);
     assert.equal(await evaluate('miniWatch.view.needsHistory'),history);
     await accepted(firstTab,offset,true,history);
     checks.push(`${running} running + ${ended} non-running at capacity ${rows}: history interest ${history}`);

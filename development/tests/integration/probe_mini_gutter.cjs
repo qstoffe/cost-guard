@@ -34,8 +34,8 @@ module.exports=async({evaluate,until,fixture,command,sessionId,open,close,captur
     assert.equal(after.gutter,0,JSON.stringify(after));
     assert.equal(after.scrollbarGutter,'auto');assert.deepEqual(after.outer,before.outer);
     if(before.gutter>0)assert.ok(before.insets[1]-after.insets[1]>=before.gutter-1);
-    for(const count of [0,1,3,5,6,10,5,1]) {
-      await fixture(`history-${count}-3-1`);await until(`miniWatch.view.promptRows.size===${count+3}`);await settle();
+    for(const count of [3,10,1]) {
+      await fixture(`history-5-${count}-1`);await until(`liveValue.view.active_cards.length===${count} && miniWatch.view.promptRows.size===${Math.max(5,count)}`);await settle();
       const value=await read();layouts.push({case:`gutter-${theme}-${color}-${count}`, ...value});
       assert.equal(value.vertical,count>5,JSON.stringify(value));
       assert.equal(value.documentOverflow,false);assert.equal(value.horizontal,false);
@@ -56,6 +56,6 @@ module.exports=async({evaluate,until,fixture,command,sessionId,open,close,captur
     await close();
   }
   await evaluate(`(async()=>applySettings(await api('/api/settings/theme',{theme:'default'})))()`);
-  checks.push('Paired stable/shipped gutter geometry in Classic/Web light/dark: three running rows plus 0–10 non-running; sticky header, internal scrolling, reachable last row, symmetric padding and no passive native resize');
+  checks.push('Paired stable/shipped gutter geometry in Classic/Web light/dark: Running overflow and bounded fillers; sticky header, internal scrolling, reachable last row, symmetric padding and no passive native resize');
 };
 module.exports.inspect=inspect;

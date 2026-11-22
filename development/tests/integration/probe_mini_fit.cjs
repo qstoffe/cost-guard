@@ -167,7 +167,7 @@ async function main() {
     }
     evidence.checks.push('0/1/3/5/6/10 running sessions × 0/1/6 accounts: no dropped rows or passive native resize; clamps recorded');
     await fixture('history-5-1-1');await until('liveValue.view.history_cards.length===5');await open();
-    assert.equal(await evaluate('miniWatch.view.promptRows.size'),6);
+    assert.equal(await evaluate('miniWatch.view.promptRows.size'),5);
     await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
      await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
      if(scope!=='layout-only')await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});

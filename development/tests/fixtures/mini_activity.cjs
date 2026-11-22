@@ -76,7 +76,7 @@ module.exports = function activity(vm, context, controller, view, input, helpTex
   const old = Array.from({length:5}, (_, i) => ({...card('old' + i, now - (800 - i * 100) * day), focal_id:''}));
   show([], old);
   assert.equal(view.promptRows.size, 5, 'all five historical slots retain 100+ day and multi-year sessions');
-  assert.deepEqual(view.body.children.filter(row => row.dataset.id).map(row => row.dataset.id), old.map(c => c.session_id));
+  assert.deepEqual(view.body.children.filter(row => row.dataset.id).map(row => row.dataset.id), ['old4','old3','old2','old1','old0']);
   assert.equal(time('old0'), '2y ago');
   const retained = view.promptRows.get('old4');
   const run = card('old4', now, {in_progress:true, completed_successfully:false, at_ms:now - 13 * hour, completed_at_ms:null},

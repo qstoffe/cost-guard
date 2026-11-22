@@ -94,10 +94,11 @@ function setup() {
   }
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
   assert.equal(view.body.children.length, 2);
-    assert.equal(view.body.children[0].children[2].textContent, '2');
-    assert.equal(view.body.children[1].children[2].textContent, '3');
-    assert.equal(view.body.children[1].children[3].textContent, '4583');
-    assert.match(helpText(view.body.children[1].children[2].children[0]), /Duration: 20m/);
+  const cardRow = index => view.promptRows.get(input.view.active_cards[index].session_id);
+  assert.equal(cardRow(0).children[2].textContent, '2');
+  assert.equal(cardRow(1).children[2].textContent, '3');
+  assert.equal(cardRow(1).children[3].textContent, '4583');
+  assert.match(helpText(cardRow(1).children[2].children[0]), /Duration: 20m/);
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
     assert.equal(headers[4].textContent, 'Ctx');
@@ -109,17 +110,17 @@ function setup() {
     assert.equal(helpText(view.fitButton),'Fit Mini Watch Height');
     assert.equal(helpText(view.summary),'Return to Watch in the Existing Parent Tab');
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
-  assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
-  assert.match(view.body.children[0].children[0].textContent, /^▶ /);
+  assert.match(cardRow(0).attributes['aria-label'], /Prompt 23 · Running/);
+  assert.match(cardRow(0).children[0].textContent, /^▶ /);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
     controller.update(input);
-     assert.equal(view.body.children[0].children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
+     assert.equal(cardRow(0).children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
   }
   contextItem.live_context = null; controller.update(input);
-  assert.equal(view.body.children[0].children[4].textContent, '');
-  assert.equal(view.body.children[0].children[4].children[0].attributes['aria-label'], 'Loading context');
+  assert.equal(cardRow(0).children[4].textContent, '');
+  assert.equal(cardRow(0).children[4].children[0].attributes['aria-label'], 'Loading context');
   contextItem.live_context = originalContext; controller.update(input);
   const guidanceWarning=input.view.active_cards[0].session_summary.context.warning;
   const originalWarning=structuredClone(guidanceWarning);
@@ -127,10 +128,10 @@ function setup() {
     guidanceWarning.guidance_state=state;
     guidanceWarning.multiplier=state==='ready'?'2.4':null;
     guidanceWarning.display.warning_cost='('+wording+')';controller.update(input);
-    assert.equal(view.body.children[0].children[4].dataset.guidance,state);
-    assert.equal(view.body.children[0].contextHelp,state==='ready'
+    assert.equal(cardRow(0).children[4].dataset.guidance,state);
+    assert.equal(cardRow(0).contextHelp,state==='ready'
       ? guidanceWarning.text.replace(/^\[|\]$/g,'')+' · 2.4x more expensive' : '');
-    assert.equal(view.body.children[0].children[4].textContent,originalContext.display.watch_next_context_tokens);
+    assert.equal(cardRow(0).children[4].textContent,originalContext.display.watch_next_context_tokens);
   }
   Object.assign(guidanceWarning,originalWarning);controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
@@ -281,9 +282,9 @@ function setup() {
   input.view.active_cards = [originals[1], originals[0], originals[0], {session_id:'pending',focal_id:'',rows:[]}];
   controller.update(input);
   assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
-  assert.equal(view.body.children[0], firstRow, 'canonical ascending start order and keyed row');
+  assert.equal(view.body.children[0], firstRow, 'canonical newest start first and keyed row');
   assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
-   assert.match(view.body.children[1].attributes['aria-label'], /Prompt 24 · Running/);
+   assert.match(firstRow.attributes['aria-label'], /Prompt 24 · Running/);
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
@@ -343,8 +344,8 @@ function setup() {
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; primary.quota = savedQuota; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-    assert.equal(view.body.children[0].children[2].textContent, '$0.01');
-    assert.equal(view.body.children[0].children[3].textContent, '$45.82'); assert.match(retained.textContent, /\(\$20.88\)/);
+    assert.equal(cardRow(0).children[2].textContent, '$0.01');
+    assert.equal(cardRow(0).children[3].textContent, '$45.82'); assert.match(retained.textContent, /\(\$20.88\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   const themeStyle = child.document.documentElement.style;
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');
@@ -364,7 +365,7 @@ function setup() {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
-     assert.match(helpText(view.body.children[1].children[2].children[0]), /Duration: 20m/);
+     assert.match(helpText(view.body.children[0].children[2].children[0]), /Duration: 20m/);
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;
