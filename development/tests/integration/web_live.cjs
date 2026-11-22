@@ -1,5 +1,6 @@
 // Pure JavaScript VM, not browser/UI automation. No package dependencies.
 const assert = require('node:assert/strict');
+const pending = require('../fixtures/pending_value.cjs');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -88,7 +89,8 @@ async function tokenMix(context, frames, helpText) {
       assert.equal(context.state.watch.cards.size,0,'terminal source update removes running card');
       continue;
     }
-    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20','Loading…','25/75/0/0'][index]);
+    if (index === 3) pending(row.children[7].children[0], 'token mix');
+    else assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20',null,'25/75/0/0'][index]);
     assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
     const acceptedCost = costText(frames[index].view.active_cards.at(-1).rows[0].prompt);
     assert.equal(cost(), acceptedCost);
@@ -228,7 +230,7 @@ async function main() {
   }
   assert.match(firstRow.children[0].textContent, /^\d\d:\d\d$/);
   assert.equal(firstRow.children[2].children[0].children[0].textContent, '#' + input.view.active_cards[0].rows[0].prompt.prompt_number);
-  assert.equal(firstRow.children[7].textContent, 'Loading…');
+  pending(firstRow.children[7].children[0], 'token mix');
   assert.equal(firstRow.children[8].textContent, input.view.active_cards[0].rows[0].prompt.display.incoming_context_tokens);
   assert.equal(firstRow.children[9].textContent, input.view.active_cards[0].rows[0].live_context.display.watch_delta_context_tokens);
   assert.equal(watch.earlier,undefined);

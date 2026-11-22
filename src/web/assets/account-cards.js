@@ -389,7 +389,9 @@ const AccountCards = (() => {
             !quota.label.toLowerCase().includes(quota.model_id.toLowerCase()) ? ` · ${quota.model_id}` : '';
           const label = quota.label.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
           ReportView.text(line.children[0], `${label}${suffix}`);
-          ReportView.text(line.children[1], quota.percent);
+          ReportView.valueSlot(line.children[1], quota.percent, {
+            pending: quota.state === 'pending', field: `${label}${suffix} quota share`
+          });
           ContextHelp.value(line.children[1], quota.reason || 'Session-equivalent consumption, not account total Used.');
           ContextHelp.refresh(line.children[1]);
           if (card.root.children[index + 1] !== line)

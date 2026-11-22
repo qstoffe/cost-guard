@@ -1,5 +1,6 @@
 // Detail display observations are qualified independently; raw DTOs never change.
 const assert = require('node:assert/strict');
+const pending = require('./pending_value.cjs');
 module.exports = ({vm, context, Node, input, document}) => {
   vm.runInContext("globalThis.stable = new SessionDetail.View(api, 'root-0000')", context);
   const view = context.stable;
@@ -16,10 +17,11 @@ module.exports = ({vm, context, Node, input, document}) => {
   const cold = JSON.parse(JSON.stringify(data));
   cold.result.view.prompt_blocks[0].rows[0].token_mix_percent=[2,96,1,1];
   view.update(cold);
-  assert.equal(mix(),'Loading…','partial raw percentages alone cannot establish qualified retention');
+  const mixSlot = () => view.body.children[0].children[9].firstChild;
+  const indicator = pending(mixSlot(), 'prompt token mix');
   view.update(data);
-  assert.equal(mix(), 'Loading…');
-  assert.equal(view.footer.children[4].textContent, 'Loading…');
+  assert.equal(pending(mixSlot(), 'prompt token mix'), indicator, 'raw, unqualified percentages do not resolve the slot');
+  pending(view.footer.children[4].firstChild, 'session total calls');
   row.token_mix_percent = [2,96,1,1]; row.display.token_mix_percent = '2/96/1/1';
   block.total_calls=42; block.duration_ms=9000; block.total_ccost='12';
   block.total_incoming_context_ccost='70'; block.total_extra_ccost='30'; block.total_token_mix_percent=[2,96,1,1];
@@ -31,6 +33,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   view.update(data);
   const cells=[...view.footer.children], targets=cells.map(cell=>cell.children[0]), before=cells.map(cell=>cell.textContent);
   assert.equal(mix(), '2/96/1/1');
+  assert.equal(indicator.parentNode, null);
   assert.deepEqual(before.slice(3), ['12','42','9s','—','70','30','2/96/1/1']);
   const raw=JSON.stringify(data);
   for (let poll=0;poll<5;poll++) view.update(data);
@@ -74,7 +77,7 @@ module.exports = ({vm, context, Node, input, document}) => {
    assert.equal(mix(),'?','supported withdrawal explains missing recorded token evidence');
   row.id='new-prompt';row.event_id='new-prompt';row.in_progress=true;
   data.value_authority.rows={'new-prompt':'pending'};view.update(data);
-  assert.equal(mix(),'Loading…','no cross-prompt reuse');
+  pending(mixSlot(), 'prompt token mix'); // No cross-prompt reuse.
   data.value_authority.scope='other-source';view.update(data);
   assert.equal(cells[5].parentNode,null,'incompatible source clears even protected old cells');
   assert.notEqual(view.footer.children[7].textContent,'70','source switch clears prior component');

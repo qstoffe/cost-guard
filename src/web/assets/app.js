@@ -77,6 +77,7 @@ function selectStats(state, period) {
   state.request = {kind: 'ai-stats', stats_scope: period};
   demand?.update();
   state.result = state.statsResults?.get(period) || null;
+  state.statsAcquisitionFailed = false;
   state.failed = false; state.message = '';
   state.actionRequested = true;
   ReportLoading.reset(state);
@@ -259,10 +260,11 @@ function show(state) {
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
-    output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
+    output.setAttribute('aria-busy', String(state.loading && !state.result && !hostState.sourceBlocked &&
+      !state.interrupted && !state.statsAcquisitionFailed));
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
-    state.stats.update(state); state.stats.attach(output);
+    state.stats.update(state, hostState.sourceBlocked); state.stats.attach(output);
     return;
   }
   if (state.section === 'token-mix') {
@@ -382,8 +384,9 @@ async function acquire(state, background = false, prices = false) {
   for (const event of priceFocusEvents) document.addEventListener(event, movedPriceFocus);
    const request = state.request;
    const mix = state.section === 'token-mix';
-   state.userInitiated = !background && (prices || state.actionRequested === true);
-   state.actionRequested = false;
+    state.userInitiated = !background && (prices || state.actionRequested === true);
+    state.actionRequested = false;
+  if (state.section === 'ai-stats' && state.userInitiated) state.statsAcquisitionFailed = false;
   let publication = null;
   let retry = !!state.failed && !background && !automaticHistory(state);
   state.loading = true;
@@ -420,8 +423,13 @@ async function acquire(state, background = false, prices = false) {
         if (attempt.retries && !automaticHistory(state)) ReportLoading.reset(state);
         if (demand && !prices) {
           // Retained publication identity is independent of an active refresh.
-          state.dispatchRefresh = admission.refresh;
-          state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
+           state.dispatchRefresh = admission.refresh;
+           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
+           if (state.section === 'ai-stats' && scope === state.request && state.statsAcquisitionFailed &&
+               admission.terminal === false && !admission.result) {
+             state.statsAcquisitionFailed = false;
+             show(state);
+           }
            if (mix) bindTokenMix(state, admission);
            else if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
                state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
@@ -547,8 +555,11 @@ async function acquire(state, background = false, prices = false) {
     state.failed = !prices; // A retained price failure belongs only to its toolbar.
   } finally {
      const owned = state.attempt === attempt;
-     if (owned) {
-     if (state.dispatchError && !prices) { state.failed = true; state.message = state.userInitiated ? failure(state.dispatchError, state) : ''; }
+      if (owned) {
+      if (state.dispatchError && !prices) { state.failed = true; state.message = state.userInitiated ? failure(state.dispatchError, state) : ''; }
+      // A background lookup alone does not make failed metrics pending again.
+      if (state.section === 'ai-stats' && state.failed && !ReportLoading.interrupted(hostState) && !hostState.sourceBlocked)
+        state.statsAcquisitionFailed = true;
       state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
       show(state); scheduleCachedReport();
      }

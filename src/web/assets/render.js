@@ -139,6 +139,32 @@ const ReportView = (() => {
     prompt_ccost: 'No prompt is recorded for this session.'
   };
   const metricIndicators = new WeakMap();
+  function paintValue(node, value, pending, field) {
+    let spinner = metricIndicators.get(node);
+    if (!pending) {
+      if (spinner?.parentNode === node) spinner.remove();
+      text(node, value);
+      return;
+    }
+    bindings.delete(node);
+    if (!spinner) {
+      spinner = node.ownerDocument.createElement('span');
+      spinner.className = 'metric-spinner';
+      spinner.setAttribute('role', 'img');
+      metricIndicators.set(node, spinner);
+    }
+    const label = 'Loading ' + field;
+    if (spinner.getAttribute('aria-label') !== label) spinner.setAttribute('aria-label', label);
+    if (spinner.parentNode !== node) {
+      text(node, '');
+      node.append(spinner);
+    }
+  }
+  // The caller decides whether evidence is pending; display text is never a state signal.
+  function valueSlot(node, value, {pending = false, field} = {}) {
+    effects.delete(node);
+    paintValue(node, value, pending, field);
+  }
   const metricToken = (row, key) => {
     const token = display(row, key);
     return token === 'N/A' || token === '' ? null : token;
@@ -156,23 +182,7 @@ const ReportView = (() => {
       }
       if (shown != null && label) node.setAttribute('aria-label', label(shown));
       else node.removeAttribute('aria-label');
-      if (!pending) {
-        metricIndicators.get(node)?.remove();
-        text(node, absence ? '?' : shown);
-        return;
-      }
-      let spinner = metricIndicators.get(node);
-      if (!spinner) {
-        spinner = node.ownerDocument.createElement('span');
-        spinner.className = 'metric-spinner';
-        spinner.setAttribute('role', 'img');
-        spinner.setAttribute('aria-label', 'Loading ' + metricLabels[field]);
-        metricIndicators.set(node, spinner);
-      }
-      if (spinner.parentNode !== node) {
-        text(node, '');
-        node.append(spinner);
-      }
+      paintValue(node, absence ? '?' : shown, pending, metricLabels[field]);
     };
     if (typeof value === 'function') bind(node, render);
     else { effects.delete(node); render(); }
@@ -921,5 +931,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

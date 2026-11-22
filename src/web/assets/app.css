@@ -459,7 +459,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-quota-usage[hidden] { display: none; }
 .session-quota-row { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem;
   margin-block: .5rem; font-variant-numeric: tabular-nums; }
-.session-quota-row > :last-child { flex: none; }
+.session-quota-row > :last-child { flex: none; min-inline-size: 6ch; text-align: end; }
 .session-detail .pager input { width: 7rem; }
 .session-detail > p:empty, .session-detail .warning:empty { display: none; }
 .session-detail .table-scroll { overflow-anchor: auto; }
@@ -480,6 +480,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .sessions-table th, .sessions-table td { min-width: 0; white-space: nowrap; text-align: left; }
 .sessions-table th button { white-space: nowrap; }
+.session-history-table tfoot td:nth-child(4) > span,
+.session-history-table tfoot td:nth-child(6) > span { display: inline-block; min-inline-size: 8ch; }
+.session-history-table td:nth-child(10) > span { display: inline-block; min-inline-size: 11ch; }
 .sessions-table .session-name, .session-preview { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-prompt-label { display: flex; align-items: baseline; gap: .45em; min-width: 0; max-width: 60ch; }
 .session-prompt-label > :not(.session-preview) { flex-shrink: 0; }
@@ -730,6 +733,8 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-prompt-table th { background: var(--surface); }
 .watch-prompt-table th:not(:last-child), .watch-prompt-table td:not(:last-child) { border-right: 1px solid var(--line); }
 .watch-prompt-table th:first-child, .watch-prompt-table td:first-child { min-width: 0; white-space: nowrap; }
+.watch-prompt-table td:nth-child(8) > span { display: inline-block; min-inline-size: 11ch; }
+.watch-prompt-table td:nth-child(10) > span { display: inline-block; min-inline-size: 8ch; }
 .watch-prompt-table th:nth-child(3), .watch-prompt-table td:nth-child(3) { text-align: left; overflow: hidden; }
 .watch-prompt-label { display: flex; gap: .4em; min-width: 0; }
 .watch-prompt-number { flex: none; }

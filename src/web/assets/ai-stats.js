@@ -1,6 +1,6 @@
 'use strict';
 // AI Stats = BEST EFFORT / NEVER Unavailable, for every present and future card.
-// Sparse/partial/estimated ready observations show fun values; unresolved Loading and real
+// Sparse/partial/estimated ready observations show fun values; pending metrics and real
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
@@ -78,6 +78,7 @@ const AIStatsView = (() => {
     if (state.statsIdentity !== identity) {
       if (state.statsObserved > seen) return;
       state.statsResults.clear(); state.statsIdentity = identity;
+      state.statsAcquisitionFailed = false;
     }
     state.statsObserved = Math.max(state.statsObserved || 0, seen || 0);
     for (const row of result.view.ai_stats) {
@@ -89,6 +90,7 @@ const AIStatsView = (() => {
         state.statsResults.set(row.period, result);
     }
     state.result = state.statsResults.get(state.period) || null;
+    if (state.result) state.statsAcquisitionFailed = false;
   }
   function observe(state, job) {
     if (job.result) remember(state, job.result);
@@ -160,7 +162,7 @@ const AIStatsView = (() => {
           }
           const trait = e('p', '', 'ai-stat-trait');
           grid.append(card);
-          this.cards.set(key, Object.assign(retained, {card, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
+          this.cards.set(key, Object.assign(retained, {card, title, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
           card.append(heading, value, podium, detail, trait);
         }
         if (name === 'Fun Facts') {
@@ -204,7 +206,7 @@ const AIStatsView = (() => {
       ReportView.text(this.databaseValues.get('opencode_bytes'), openCodeSize);
       ReportView.text(this.databaseValues.get('cache_bytes'), formatFileSize(sizes?.cache_bytes));
     }
-    update(state) {
+    update(state, sourceBlocked) {
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;
@@ -224,10 +226,10 @@ const AIStatsView = (() => {
       if (!row) {
         if (this.readyScope === scope) return;
         this.readyScope = null;
-        const message = 'Loading…';
-        for (const item of this.cards.values()) {
+        const pending = !sourceBlocked && !state.interrupted && !state.statsAcquisitionFailed;
+        for (const [key, item] of this.cards) {
           item.metric = null;
-          ReportView.text(item.value, message);
+          ReportView.valueSlot(item.value, key === 'token-rate' ? '' : '—', {pending, field: item.title});
           ReportView.text(item.detail, ''); ReportView.text(item.trait, '');
           if (item.podiumNode.firstChild) item.podiumNode.replaceChildren();
         }
@@ -248,7 +250,7 @@ const AIStatsView = (() => {
         const card = this.cards.get(metric.metric);
         if (costMetrics.has(metric.metric)) card.costScope = scope;
         card.metric = metric;
-        ReportView.text(card.value, () => face(ReportView.display(metric, 'value')));
+        ReportView.valueSlot(card.value, () => face(ReportView.display(metric, 'value')));
         if (card.podium.length) {
           if (metric.podium.length) {
             for (const [index, item] of card.podium.entries()) {

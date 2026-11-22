@@ -37,6 +37,16 @@ module.exports = (controller, view, input, helpText) => {
   }
   show();
   const row=view.promptRows.get('preview-0');
+  const clock=row.children[0].children[0].children[1];
+  const missing={...previews[0],activity_ms:null,display:{...previews[0].display,activity_clock:'Loading…'}};
+  const showClock=state=>show([],[],[{...missing,hydration_state:state}]);
+  showClock('waiting');
+  const pendingClock=require('./pending_value.cjs');
+  const clockSpinner=pendingClock(clock,'session activity');
+  showClock('retrying');assert.equal(pendingClock(clock,'session activity'),clockSpinner);
+  showClock('unavailable');assert.equal(clock.textContent,'—');
+  assert.equal(clock.children.length,0);
+  show();assert.equal(clock.textContent,'14:26');
   assertPending(row,[0,1,2]);
   const [promptSpinner,,contextSpinner] = indicators(row);
   const qualified={...previews[0],total_ccost:'0',display:{...previews[0].display,total_ccost:'0'}};

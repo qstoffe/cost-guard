@@ -120,12 +120,13 @@ module.exports = async ({vm, context, Node, input, document, delays}) => {
   new Node('main').append(recovered.root); recovered.attached = true;
   await recovered.poll();
   const revision = recovered.data.revision, footerNode = recovered.footer.children[4].firstChild;
-  assert.equal(footerNode.textContent, 'Loading…');
+  const spinner = require('./pending_value.cjs')(footerNode, 'session total calls');
   response.value_authority = qualified;
   await recovered.poll();
   assert.equal(recovered.data.revision, revision, 'authority recovery does not need a table revision');
   assert.equal(recovered.footer.children[4].firstChild, footerNode);
   assert.equal(footerNode.textContent, String(response.result.view.prompt_blocks[0].total_calls));
-  assert.notEqual(recovered.footer.children[9].textContent, 'Loading…');
+  assert.equal(spinner.parentNode, null);
+  assert.ok(!recovered.footer.children[9].querySelector('.metric-spinner'));
   recovered.detach();
 };

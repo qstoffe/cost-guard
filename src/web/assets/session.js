@@ -14,6 +14,14 @@ const SessionDetail = (() => {
     ['Extra CCost', 'Other reference cost: output, later requests and linked subagents.'],
     ['Token Mix %', 'Token percentages in Input / Cached input / Cache write / Output order. Output includes reasoning. Not cost.']
   ];
+  const footerMetrics = {
+    3: ['total_ccost', 'session total CCost'],
+    4: ['total_calls', 'session total calls'],
+    5: ['duration_ms', 'session total duration'],
+    9: ['total_token_mix_percent', 'session total token mix']
+  };
+  const validMix = values => Array.isArray(values) && values.length === 4 &&
+    values.every(value => Number.isFinite(value) && value >= 0);
   class Values {
     constructor() { this.clear(); }
     clear() { this.scope = null; this.retained = false; this.mixes = new Map(); this.totals = new Map(); }
@@ -40,33 +48,24 @@ const SessionDetail = (() => {
       const rows = block.rows.map(row => {
         const key = JSON.stringify([row.id, row.event_id, row.at_ms]); wanted.add(key);
         const cache = this.mixes.get(key) || new Map(); this.mixes.set(key, cache);
-        const valid = Array.isArray(row.token_mix_percent) && row.token_mix_percent.length === 4 &&
-          row.token_mix_percent.every(value => Number.isFinite(value) && value >= 0);
         const state = authority?.rows?.[row.event_id];
-        let value = this.select(row, 'token_mix_percent', state === 'known' && !valid ? 'unavailable' : state, cache);
-        if (!Array.isArray(value.token_mix_percent) || value.token_mix_percent.length !== 4 ||
-            state === 'pending' && !cache.has('token_mix_percent')) {
-          const token = state !== 'invalidated' && (row.in_progress || state === 'pending') ? 'Loading…' :
-            row.calls > 0 ? '?' : 'N/A';
-          value = {...value, display: {...value.display, token_mix_percent: token},
-            display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
-              [unit, {...value.display_units?.[unit], token_mix_percent: token}]))};
-        }
-        return value;
+        const value = this.select(row, 'token_mix_percent',
+          state === 'known' && !validMix(row.token_mix_percent) ? 'unavailable' : state, cache);
+        const pending = state === 'pending' ? !cache.has('token_mix_percent') :
+          state == null && row.in_progress && !validMix(value.token_mix_percent);
+        return {...value, tokenMixPending: pending === true,
+          tokenMixAvailable: state !== 'invalidated' && !pending && validMix(value.token_mix_percent)};
       });
       for (const key of this.mixes.keys()) if (!wanted.has(key)) this.mixes.delete(key);
       let result = {...block, rows};
+      const pendingTotals = [];
       for (const key of ['total_calls', 'duration_ms', 'total_ccost', 'total_incoming_context_ccost',
         'total_extra_ccost', 'total_token_mix_percent']) {
-        result = this.select(result, key, authority?.totals?.[key], this.totals);
-        if (authority?.totals?.[key] === 'pending' && !this.totals.has(key) &&
-            !['total_incoming_context_ccost', 'total_extra_ccost'].includes(key)) {
-          result = {...result, [key]: 'Loading…', display: {...result.display, [key]: 'Loading…'},
-            display_units: Object.fromEntries(['credits', 'usd'].map(unit =>
-              [unit, {...result.display_units?.[unit], [key]: 'Loading…'}]))};
-        }
+        const state = authority?.totals?.[key];
+        result = this.select(result, key, state, this.totals);
+        if (state === 'pending' && !this.totals.has(key)) pendingTotals.push(key);
       }
-      return result;
+      return {...result, pendingTotals};
     }
   }
   function protection() {
@@ -83,7 +82,7 @@ const SessionDetail = (() => {
       `${name} · Multiple models or different effort levels`);
     else node.removeAttribute('aria-label');
   }
-  function cells(value, modelValue = () => value) {
+  function cells(value, modelValue, mixNode) {
     const label = el('span', undefined, 'session-prompt-label');
     const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
     const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
@@ -99,14 +98,16 @@ const SessionDetail = (() => {
     const calls = ContextHelp.value(el('span', value.display?.calls ?? String(value.calls ?? 'N/A')),
       () => value.watch_calls_help || 'Model/effort request details unavailable.');
     const effort = el('span', value.watch_effort || 'N/A');
+    const mix = mixNode || ContextHelp.value(el('span'),
+      'Token percentages use recorded Input / Cached input / Cache write / Output counts. ' +
+      'Spinner: acquisition pending. ?: recorded token breakdown unavailable or incomplete; ' +
+      'CCost can reflect only the known priced portion. N/A: no nonzero token mix.');
+    ReportView.valueSlot(mix, value.tokenMixAvailable ? ReportView.display(value, 'token_mix_percent') :
+      value.calls > 0 ? '?' : 'N/A', {pending: value.tokenMixPending, field: 'prompt token mix'});
     return [label, model, effort, cost,
-      calls, ReportView.display(value, 'duration_ms'),
-      firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
-       ReportView.costValue(value, 'extra_ccost'), ContextHelp.value(
-         el('span', ReportView.display(value, 'token_mix_percent')),
-         'Token percentages use recorded Input / Cached input / Cache write / Output counts. ' +
-         'Loading…: acquisition pending. ?: recorded token breakdown unavailable or incomplete; ' +
-         'CCost can reflect only the known priced portion. N/A: no nonzero token mix.')];
+       calls, ReportView.display(value, 'duration_ms'),
+       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
+       ReportView.costValue(value, 'extra_ccost'), mix];
   }
   class View {
     constructor(api, id, live = () => null) {
@@ -471,11 +472,11 @@ const SessionDetail = (() => {
         if (data.value_authority?.rows?.[value.event_id] === 'invalidated') ContextHelp.dismiss(row);
         if (row.signature !== signature && protectedRow) this.pendingRender = true;
         if (row.signature !== signature && !protectedRow) {
-          const content = cells(value, () => row.modelValue);
+          const content = cells(value, () => row.modelValue, row.children[9]?.firstChild);
           content.forEach((item, column) => {
             const td = row.children[column] || el('td');
             // A gesture owns its ancestor chain too: never detach/reparent Model.
-            if (column !== 1 || !model)
+            if ((column !== 1 || !model) && td.firstChild !== item)
               td.replaceChildren(typeof item === 'object' ? item : el('span', () => cellsText(value, column)));
             if (!td.parentNode) row.append(td);
           }); row.signature = signature;
@@ -485,7 +486,7 @@ const SessionDetail = (() => {
         else if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
       });
       for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
-      this.updateFooter(block, data.value_authority);
+      this.updateFooter(block);
       if (anchor?.isConnected && top != null) {
         const delta = anchor.getBoundingClientRect().top - top;
         if (delta) window.scrollBy(0, delta);
@@ -494,26 +495,26 @@ const SessionDetail = (() => {
       this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
       this.freshness();
     }
-    updateFooter(block, authority) {
+    updateFooter(block) {
       this.footerBlock = block;
       const value = index => {
         const row = this.footerBlock;
         return ['Complete session', '', '', ReportView.display(row, 'total_ccost'),
           String(row.total_calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), '—',
           ReportView.display(row, 'total_incoming_context_ccost'), ReportView.display(row, 'total_extra_ccost'),
-          Array.isArray(row.total_token_mix_percent) ? row.total_token_mix_percent.join('/') :
-             row.total_token_mix_percent === 'Loading…' ? 'Loading…' : row.total_calls > 0 ? '?' : 'N/A'][index];
+           Array.isArray(row.total_token_mix_percent) ? row.total_token_mix_percent.join('/') :
+              row.total_calls > 0 ? '?' : 'N/A'][index];
       };
       for (let index = 0; index < 10; index++) {
         const cell = this.footer.children[index] || el('td'), node = cell.children[0] || el('span');
-        ReportView.text(node, () => index === 3 && authority?.totals?.total_ccost === 'pending' &&
-          !this.values.totals.has('total_ccost') ? 'Loading…' : value(index));
+        const [key, field] = footerMetrics[index] || [];
+        ReportView.valueSlot(node, () => value(index), {pending: block.pendingTotals.includes(key), field});
         if (index === 3) ContextHelp.value(node, () => ReportView.display(this.footerBlock, 'session_cost_help') +
           (Number.isFinite(this.footerBlock.duration_ms) ?
              '\n\nDuration: ' + ReportView.display(this.footerBlock, 'duration_ms') : ''));
         if (index === 9) ContextHelp.value(node,
           'Complete-session token mix uses raw recorded counts, not an average of prompt percentages. ' +
-          '?: the recorded breakdown is incomplete or has no positive denominator. Loading…: acquisition pending.');
+          '?: the recorded breakdown is incomplete or has no positive denominator. Spinner: acquisition pending.');
         if (!node.parentNode) cell.append(node);
         if (!cell.parentNode) this.footer.append(cell);
       }
