@@ -23,13 +23,16 @@ from development.tests.test_web_account_restart import claude_identity
 from src.accounts.claude_code import ClaudeCodeAccountProvider
 from src.accounts.claude_transport import ClaudeUsageResult
 from src.analysis.cache import dependency_signature
+from src.application.cached_mix_view import cached_mix_view
 from src.application.live import LiveRuntime
+from src.application.session_catalog import SessionCatalog
 from src.cache.display_history import BATCH_LIMIT, RunningSession, SessionChange, SessionFact
 from src.cache.display_prompts import DisplayPrompt
 from src.cache.display_stats_evidence import StatsInterval
 from src.domain import AccountSnapshot
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.watch.acquisition import LiveAcquisition
+from src.watch.observers import observe_catalog
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.web.display_archive import DisplayArchive
 from src.web.host import WebHost
@@ -60,17 +63,19 @@ def request_facts(key, index, clock, account):
     sample, = captured.requests
     identity = replace(sample.stats_identity, message_key=key.encode().ljust(32, b"-"))
     digest = bytes.fromhex(dependency_signature(account.key))
-    request = replace(observation(index, clock, costs=("25", "0", "0", "0"), root=key,
+    cost = 17 if index == 0 else 25
+    tokens = (10, 20, 30, 40, 0) if index == 0 else (40, 30, 20, 10, 0)
+    request = replace(observation(index, clock, costs=(str(cost), "0", "0", "0"), root=key,
                                   digest=digest, provider="claude-agent"),
-                      session_id=key, stats_identity=identity, tokens=(40, 30, 20, 10, 0))
+                      session_id=key, stats_identity=identity, tokens=tokens)
     interval = StatsInterval(key, "prompt", "prompt", clock - 60_000, 60_000, False)
     prompt = DisplayPrompt("prompt", clock - 60_000, clock, 60_000, "prompt", 1, "Saved model", "medium",
-                           1, 773, Decimal(25), True, None, None, "40,30,20,10", "finished")
+                            1, 773, Decimal(cost), True, None, None, ",".join(map(str, tokens[:4])), "finished")
     return replace(captured, pricing="fixture", requests=(request,), attribution=(), prompts=(prompt,),
                    stats=replace(captured.stats, intervals=(interval,), parents=((key, None),), first_input=None))
 
 
-def seed(archive, now, account):
+def seed(archive, now, account, revisions):
     source = archive.views.source
     for start in range(0, COUNT, BATCH_LIMIT):
         changes = []
@@ -79,8 +84,12 @@ def seed(archive, now, account):
             clock = now - (60 * DAY_MS if index == 0 else index * 60_000)
             title = "Retained oldest fixture" if index == 0 else f"Saved session {index:05d}"
             facts = request_facts(key, index, clock, account) if index in (0, 1) else None
-            change = SessionChange(SessionFact(key, "seed", title, clock, "Saved model",
-                Decimal(index), index, 60_000, 773), None, previous_progress=0 if facts else None, request_roster=facts)
+            revision = revisions[key]
+            cost = (17, 25)[index] if facts else index
+            prompts = 1 if facts else index
+            change = SessionChange(SessionFact(key, revision, title, clock, "Saved model",
+                Decimal(cost), prompts, 60_000, 773), revision,
+                previous_progress=0 if facts else None, request_roster=facts)
             if facts is not None:
                 archive.history.commit_sessions(source, (change,))
             else:
@@ -92,6 +101,13 @@ def seed(archive, now, account):
         scope=source, observed=now), eligible=lambda: True)
     roster = (SimpleNamespace(account=account, label="Claude Code Pro"),)
     archive.accounts.offer(roster, verified=True)
+    settle_projections(archive, now)
+    frame = running_frame(now)
+    archive.publish_live((RunningSession("root", "Observed title", now - 2000, now),), frame, now)
+    assert archive._live_write.result(timeout=5)
+
+
+def settle_projections(archive, now):
     for _ in range(300):
         turn = archive.next_projection(lambda: None)
         if turn is None:
@@ -99,9 +115,63 @@ def seed(archive, now, account):
         turn(now, active=lambda: True)
     else:
         raise AssertionError("warm fixture did not settle its synthetic projections")
-    frame = running_frame(now)
-    archive.publish_live((RunningSession("root", "Observed title", now - 2000, now),), frame, now)
-    assert archive._live_write.result(timeout=5)
+
+
+def publish_verified_membership(archive, catalog, service):
+    observed = observe_catalog(service.selection.source, include_archived_revisions=True)
+    assert observed.atomic_archive_roster
+    catalog.observe(observed)
+    # The normal catalog writer visits the bounded present-roster and saved-
+    # membership slices. Exercise both, not a direct missing-state mutation.
+    limit = 2 * (COUNT // BATCH_LIMIT + 2)
+    for _ in range(limit):
+        if not archive.catalog_pending(catalog):
+            return observed
+        archive.publish_catalog(catalog, service)
+    raise AssertionError("verified fixture membership did not settle")
+
+
+def check_archive_ages(root, source_path, now, account):
+    results = []
+    for days in (30, 60, 365):
+        as_of = now + days * DAY_MS
+        host = WebHost(root, jobs=ReportJobs())
+        archive, _ = bind(host, root, OpenCodeV1Source(source_path))
+        try:
+            views = archive.views
+            old, control, *_ = views.page(period="all", sort="prompts", direction=1, now_ms=as_of)["rows"]
+            assert [(old["session_id"], old["source_present"], old["activity_ms"], old["ccost"]),
+                    (control["session_id"], control["source_present"], control["activity_ms"], control["ccost"])] == [
+                (RETAINED, False, now - 60 * DAY_MS, "17"), (CURRENT, True, now - 60_000, "25")]
+            assert views.page(period="7-days", now_ms=as_of)["cached_total"] == 0
+            detail = views.detail(session_id=RETAINED)
+            assert detail["history_coverage"] == "retained" and detail["summary"]["context_tokens"] == 773
+            prompt, = detail["rows"]
+            assert (prompt["finish_ms"], prompt["ccost"], prompt["model"]) == (now - 60 * DAY_MS, "17", "Saved model")
+
+            archive.accounts.offer((SimpleNamespace(account=account, label="Claude Code Pro"),), verified=True)
+            settle_projections(archive, as_of)
+            zone, source = views.timezone_id, views.source
+            mix = cached_mix_view(archive.history, source, zone, "all", as_of)
+            recent_mix = cached_mix_view(archive.history, source, zone, "7-days", as_of)
+            stats = archive.stats.snapshot("all", as_of)
+            recent_stats = archive.stats.snapshot("7-days", as_of)
+            assert mix["end_ms"] == as_of and mix["observed_category_totals"] == ["50", "50", "50", "50"]
+            assert recent_mix["end_ms"] == as_of and recent_mix["token_mix"] is None
+            assert stats["tokens_as_of_ms"] == as_of and stats["observed_tokens"] == "200"
+            assert recent_stats["tokens_as_of_ms"] == as_of and recent_stats["observed_tokens"] is None
+
+            chart = archive.accounts.snapshot("30-days", as_of)["view"]
+            assert chart is not None and chart["series"][0]["total"] is None
+            # No Accounts lifetime chart is exposed. Prove the typed reference
+            # contribution still exists in the original date window.
+            historical = archive.history.account_usage(source, now - 60 * DAY_MS, now)
+            assert [(row.clock_ms, sum(row.costs)) for row in historical.rows] == [
+                (now - 60 * DAY_MS, Decimal(17)), (now - 60_000, Decimal(25))]
+            results.append(days)
+        finally:
+            host.close()
+    return results
 
 
 def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=False):
@@ -115,21 +185,24 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
         now = int(time.time() * 1000)
         profile = root / "fixture-claude"
         original = AccountSnapshot(claude_identity("first@example.invalid", profile), now, "Claude Code", plan="Pro")
-        _populate(path, now)
-        with closing(sqlite3.connect(path)) as db, db:
-            db.execute("UPDATE session SET time_updated=? WHERE id=?", (now - 60 * DAY_MS, RETAINED))
+        _populate(path, now, lambda clock, index: clock - (60 * DAY_MS if index == 0 else index * 60_000),
+                  count=COUNT)
         first_host = WebHost(root, jobs=ReportJobs())
-        archive, _ = bind(first_host, root, OpenCodeV1Source(path))
+        archive, first_driver = bind(first_host, root, OpenCodeV1Source(path))
+        catalog = SessionCatalog()
+        initial_service = first_driver.coordinator.report_service
         try:
-            seed(archive, now, original)
-            # Delete one seeded root from the real V1 fixture; explicitly feed
-            # that proven absence into the archive's membership write.
+            initial = publish_verified_membership(archive, catalog, initial_service)
+            assert len(initial.roots) == COUNT
+            seed(archive, now, original, initial.revisions)
+            assert archive.views.detail(session_id=RETAINED)["summary"]["source_present"]
             with closing(sqlite3.connect(path)) as db, db:
                 assert db.execute("DELETE FROM session WHERE id=?", (RETAINED,)).rowcount == 1
-                assert db.execute("SELECT id FROM session WHERE id=?", (RETAINED,)).fetchone() is None
-            partition = archive.views.source
-            checkpoint = archive.history.session_checkpoints(partition, (RETAINED,))[RETAINED]
-            assert archive.history.commit_sessions(partition, missing=((RETAINED, checkpoint),)) is not None
+            latest = publish_verified_membership(archive, catalog, initial_service)
+            assert len(latest.roots) == COUNT - 1 and RETAINED not in latest.revisions
+            assert latest.revisions[CURRENT] == initial.revisions[CURRENT]
+            assert not archive.views.detail(session_id=RETAINED)["summary"]["source_present"]
+            assert archive.views.detail(session_id=CURRENT)["summary"]["source_present"]
         finally:
             first_host.close()
 
@@ -292,6 +365,7 @@ def check_cached_warm_views(browser, evidence, product_root, *, measure_actions=
             for gate in quota_release:
                 gate.set()
             host.close()
+        evidence["cached_warm_views"]["source_missing_checked_after_days"] = check_archive_ages(root, path, now, original)
 
 
 if __name__ == "__main__":

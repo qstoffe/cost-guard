@@ -25,9 +25,9 @@ SESSION_SORTS = {"activity": "Last activity", "name": "Session name", "model": "
 FORBIDDEN = {"/api/data", "/api/reports", "/api/sessions", "/api/detail", "/api/accounts/timeline"}
 
 
-def _populate(path, now_ms, activity=None):
+def _populate(path, now_ms, activity=None, *, count=10_000):
     def roots():
-        for index in range(10_000):
+        for index in range(count):
             clock = activity(now_ms, index) if activity is not None else now_ms - index * 60_000
             yield f"ses_cold_{index:05d}", "fixture", "/fixture", f"Synthetic root {index}", clock - 60_000, clock
 
@@ -36,7 +36,7 @@ def _populate(path, now_ms, activity=None):
         db.executemany("""
             INSERT INTO session(id,project_id,directory,title,time_created,time_updated) VALUES(?,?,?,?,?,?)
         """, roots())
-        assert db.execute("SELECT count(*) FROM session").fetchone() == (10_000,)
+        assert db.execute("SELECT count(*) FROM session").fetchone() == (count,)
 
 
 def _periods(page, panel, endpoint, *, start, empty, keys=tuple(PERIODS)):
