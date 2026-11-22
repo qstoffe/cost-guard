@@ -79,9 +79,12 @@ class PromptCostDetailTests(unittest.TestCase):
         invocations = tuple(replace(item, model=ModelRef("github-copilot", "claude-test"),
             variant="low") if item.invocation_id == "i_syn" else item
             for item in snapshot.invocations if item.session_id == "root")
-        messages = tuple(replace(item, parts=()) if item.message_id == "a_sub" else item for item in snapshot.messages)
+        messages = tuple(replace(item, parts=()) if item.message_id == "a_sub" else item
+                         for item in snapshot.messages if item.session_id == "root")
+        events = tuple(event for event in snapshot.events if event.session_id == "root")
 
-        row = self.project(replace(snapshot, invocations=invocations, messages=messages))
+        row = self.project(replace(snapshot, sessions=(snapshot.root,), invocations=invocations,
+            messages=messages, events=events, parts=tuple(p for m in messages for p in m.parts)))
 
         self.assertEqual(0, row.linked_agent_count)
         self.assertEqual((0, 0), tuple(item.agent for item in row.cost_parts))
@@ -150,8 +153,8 @@ class PromptCostDetailTests(unittest.TestCase):
             replace(m, parts=(*m.parts, nested)) if m.message_id == "ca" else m for m in snapshot.messages)
         requests = tuple(ModelInvocation(sid, sid, 1300, MODEL, TokenUsage(input=100, output=10),
             prov(sid, sid), completed_at_ms=1350, variant="low") for sid in ("other", "nested"))
-        sessions = (*snapshot.sessions, replace(snapshot.sessions[1], session_id="other"),
-            replace(snapshot.sessions[1], session_id="nested", parent_session_id="child"))
+        sessions = (*snapshot.sessions, replace(snapshot.sessions[1], session_id="other", provenance=prov("other")),
+            replace(snapshot.sessions[1], session_id="nested", parent_session_id="child", provenance=prov("nested")))
 
         row = self.project(replace(snapshot, sessions=sessions, messages=messages, invocations=(*snapshot.invocations, *requests)))
 
@@ -179,7 +182,7 @@ class PromptCostDetailTests(unittest.TestCase):
     def test_one_linked_agent_with_multiple_efforts_has_distinct_group_subtotals(self):
         snapshot = make_uncompacted_snapshot()
         extra = ModelInvocation("extra", "child", 1300, ModelRef("github-copilot", "claude-test"),
-            TokenUsage(input=100000), prov("extra", "child"), completed_at_ms=1350, variant="high")
+            TokenUsage(input=100000), prov("child", "extra"), completed_at_ms=1350, variant="high")
 
         row = self.project(replace(snapshot, invocations=(*snapshot.invocations, extra)))
         child_parts = tuple(part for part in row.cost_parts if part.session_id == "child")
@@ -295,10 +298,12 @@ class PromptCostDetailTests(unittest.TestCase):
         messages = tuple(replace(m, parts=(*m.parts, nested)) if m.message_id == "ca" else m for m in snapshot.messages)
         event = NormalizedEvent("cu", "nested", EventKind.USER_PROMPT, 1260, prov("nested", "cu"))
         request = replace(snapshot.invocations[1], session_id="nested", invocation_id="nested-request",
-            message_id="nested-reply", created_at_ms=1300, completed_at_ms=1380)
+            message_id="nested-reply", created_at_ms=1300, completed_at_ms=1380,
+            provenance=prov("nested", "nested-request"))
 
         row = self.project(replace(snapshot, messages=messages, events=(*snapshot.events, event),
-            sessions=(*snapshot.sessions, replace(snapshot.sessions[1], session_id="nested", parent_session_id="child")),
+            sessions=(*snapshot.sessions, replace(snapshot.sessions[1], session_id="nested",
+                parent_session_id="child", provenance=prov("nested"))),
             invocations=(*snapshot.invocations, request)))
         group = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"][1]
 
