@@ -9,7 +9,7 @@ const {setTimeout: pause} = require('node:timers/promises');
 
 const hostEntry = (snapshot, section) => snapshot?.entries?.find(row=>
   row.scope.kind===(section==='models'?'normal':section) &&
-  row.scope.default_scope && (section!=='ai-stats' || row.scope.stats_scope==='30-days'));
+  row.scope.default_scope && (section!=='ai-stats' || row.scope.stats_scope==='30-days') && !row.scope.comparison_offset);
 
 function connectedUsablePaint(section, value) {
   if (!['accounts','accounts-switch'].includes(section)) return value.height>0 && value.text_length>100;
@@ -230,7 +230,7 @@ async function main() {
     assert.deepEqual(exceptions, []);
     facts.outcome = 'PASS';
   };
-  const finiteSections = ['models', 'token-mix', 'ai-stats'];
+  const finiteSections = ['models', 'token-mix', 'ai-stats', 'comparisons'];
   let checkpointSequence = 0, lastAcknowledgedSequence = 0;
   const checkpoint = async label => {
     try {
@@ -251,8 +251,8 @@ async function main() {
       const result=state?.result, view=result?.view, seen=result?.source?.observed_at_ms;
       const shape=!result?false:${section==='models' ? `view?.model_comparison_sample_size===100 &&
         view.model_catalog?.rows?.length>=5 && view.model_availability_unverified===false` :
-        section==='token-mix' ? 'TokenMixView.valid(result)' :
-        `AIStatsView.valid(result) && view.ai_stats.some(row=>row.period==='30-days')`};
+        section==='token-mix' ? 'TokenMixView.valid(result)' : section==='ai-stats' ?
+        `AIStatsView.valid(result) && view.ai_stats.some(row=>row.period==='30-days')` : 'ComparisonsView.valid(result)'};
       return {qualified:!!shape && !state.failed && !state.withheld && !result.error &&
           Number.isSafeInteger(seen) && seen<=Date.now() && ['acquired','partial'].includes(result.source.status),
         view_present:!!state, acquisition_started:!!(state?.attempt || state?.active || state?.loading || result || state?.dataRevision),
@@ -466,7 +466,7 @@ async function main() {
     facts.checks.push('Actual Models paint with 100 qualified prompts and verified model availability');
     if (spec.untouched_warm) await passiveUntouchedWarm();
     const visited = new Set(['models']);
-    for (const section of ['token-mix', 'ai-stats']) {
+    for (const section of ['token-mix', 'ai-stats', 'comparisons']) {
       let attempt = null;
       if (spec.untouched_warm) {
         attempt = {section,status:'qualifying',attempted_wall_ms:Date.now()};
@@ -485,6 +485,8 @@ async function main() {
       visited.add(section);
       await evaluate(`location.hash=${JSON.stringify('#/'+section)}`);
       await until(reportReady(section));
+      if (section === 'comparisons') assert.equal(await evaluate(`current.result.view.comparisons.groups.some(
+        group=>new Set(group.runs.map(run=>run.model)).size>1)`), true);
       await recordRoute(section, routeStart);
       if (attempt) {
         const painted = await clientFacts(section), host = attempt.host_before;

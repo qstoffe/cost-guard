@@ -29,6 +29,7 @@ from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from development.tests.fixtures.model_views import model_report
 from development.tests.fixtures.ai_stats_views import AIStatsJobs, evidence_views
 from development.tests.fixtures.stats_slices import slice_report
+from development.tests.fixtures.matched_inputs import ComparisonsJobs
 from development.tests.fixtures.report_loading import LoadingJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
@@ -68,6 +69,8 @@ def main():
                 multiprocessing.set_executable(str(executable))
             os.environ.update(COST_GUARD_STATS_FIXTURE=str(root), COST_GUARD_STATS_BROWSER='1')
             jobs = ReportJobs(target=slice_report)
+        if sys.argv[2:] == ['--comparisons']:
+            jobs = ComparisonsJobs()
         if sys.argv[2:] == ['--report-loading']:
             jobs = LoadingJobs()
         if sys.argv[2:] == ['--models-refresh']:

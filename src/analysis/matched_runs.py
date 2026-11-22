@@ -51,6 +51,24 @@ class RunGap:
     samples: int
 
 
+@dataclass(frozen=True, slots=True)
+class MatchGroup:
+    runs: tuple[MatchedRun, ...]
+    preview: str
+    facts: tuple[RunGap, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MatchesPage:
+    groups: tuple[MatchGroup, ...]
+    offset: int
+    total: int
+    revision: str
+    complete: bool
+    scanned: int
+    excluded: int
+
+
 def grouped(runs):
     index = defaultdict(dict)
     for run in runs:
@@ -72,6 +90,23 @@ def gap(runs, kind):
     return RunGap(kind, first.session_id, last.session_id, first.title or first.model,
         last.title or last.model, low, high, high - low,
         Decimal(high) / Decimal(low) if low > 0 else None, len(values))
+
+
+def facts(runs):
+    result = [value for kind in ('time', 'cost') if (value := gap(runs, kind)) is not None]
+    same = defaultdict(list)
+    for run in runs:
+        if not run.mixed and run.provider and run.model and run.effort:
+            same[run.provider, run.model, run.effort].append(run)
+    # One quiet same-model snippet, selected deterministically by repeat count.
+    for key, repeats in sorted(same.items(), key=lambda pair: (-len(pair[1]), pair[0])):
+        value = gap(repeats, 'time') or gap(repeats, 'cost')
+        if value is not None:
+            from dataclasses import replace
+            result.append(replace(value, kind='same-' + value.kind,
+                low_label='/'.join(key), high_label='/'.join(key)))
+            break
+    return tuple(result)
 
 
 def period_fact(runs, start, end, *, complete):

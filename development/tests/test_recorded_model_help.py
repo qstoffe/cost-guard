@@ -10,6 +10,7 @@ from development.tests.fixtures.quick_aborts import quick_aborts
 from src.analysis import analyze_snapshot
 from src.analysis.ai_stats_responses import ResponseCall, response_rows
 from src.application.ai_stats import response_tokens
+from src.application.comparisons import run
 from src.application.display import with_display
 from src.application.model_help import session_model_tokens
 from src.application.projection import prompt
@@ -69,7 +70,7 @@ class RecordedModelHelpTests(unittest.TestCase):
         self.assertIn('claude-agent/claude-sonnet-5-5', wire['display']['model_detail_help'])
         self.assertEqual(1, wire['display']['model_detail_help'].count('Catalog modelID:'))
 
-    def test_first_prompt_codec_retains_exact_per_effort_raw_models_not_root_wide_dependencies(self):
+    def test_comparison_codec_retains_exact_per_effort_raw_models_not_root_wide_dependencies(self):
         source = DesktopSource((snapshot(),))
         original = source.load_session_snapshot('root-0000')
         request = original.invocations[0]
@@ -80,12 +81,13 @@ class RecordedModelHelpTests(unittest.TestCase):
 
         value = project_run(mixed, bundle, catalog(), {})
         restored = decode_run(encode_run(value))
+        wire = with_display(run(restored)).to_json()
 
         self.assertEqual(value, restored)
-        recorded = {(provider, effort): models for provider, _model, effort, models in restored.recorded_models}
-        self.assertEqual(2, len(recorded))
-        self.assertEqual(('claude-sonnet-5-5',), recorded['github-copilot', 'high'])
-        self.assertIn(('sonnet',), recorded.values())
+        first, second = wire['contributors']
+        self.assertIn('claude-agent/sonnet', first['model_help'])
+        self.assertNotIn('github-copilot', first['model_help'])
+        self.assertEqual('github-copilot/claude-sonnet-5-5', second['model_help'])
         old = encode_run(value)
         old.pop('recorded_models')
         with self.assertRaisesRegex(ValueError, 'invalid_match_fields'):

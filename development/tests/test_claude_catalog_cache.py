@@ -63,7 +63,7 @@ class ClaudeCatalogCacheTests(unittest.TestCase):
             self.assertEqual(raw, original.source.snapshots)
 
     def test_snapshot_to_live_turnover_revalidates_compact_caches_but_not_pinned_history(self):
-        for mode in ('analysis', 'summary', 'mix', 'stats'):
+        for mode in ('analysis', 'summary', 'mix', 'stats', 'matches'):
             with self.subTest(mode=mode):
                 original = desktop_service(self)
                 original.source.model = None
@@ -98,8 +98,12 @@ class ClaudeCatalogCacheTests(unittest.TestCase):
                     self.assertIn('Claude Sonnet 4.5', [row.model for row in result.model_token_mix])
                 elif mode == 'stats':
                     build_ai_stats(fresh, 'all')
+                else:
+                    result = fresh.build(ReportRequest(ReportKind.COMPARISONS))
+                    self.assertIn('Claude Sonnet 4.5',
+                        [run.model_label for group in result.comparisons.groups for run in group.runs])
 
-                self.assertEqual(loads + 1, fresh.source.load_count)
+                self.assertEqual(loads + (2 if mode == 'matches' else 1), fresh.source.load_count)
                 self.assertEqual(pinned_before, original.cache_repository.get('derived-analysis', pinned_key))
                 self.assertEqual(raw, tuple(original.source.snapshots.values()))
 

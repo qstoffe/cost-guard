@@ -4,24 +4,15 @@ from __future__ import annotations
 import sqlite3
 
 
-def catalog_rows(connection: sqlite3.Connection, *, archive_clock=False) -> list[sqlite3.Row]:
+def catalog_rows(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     """Payload-free activity includes child message/part changes missed by session clocks."""
-    # The canonical normalizer prefers the embedded message clock. An invalid
-    # or noninteger payload cannot prove a recent lower bound. No text leaves SQL.
-    floor = """, MIN(CASE WHEN json_valid(data) THEN
-                   CASE WHEN json_type(data, '$.time.created') = 'integer' THEN json_extract(data, '$.time.created')
-                        WHEN json_type(data, '$.time.created') IS NULL THEN time_created ELSE 0 END
-                   ELSE 0 END) AS earliest""" if archive_clock else ""
-    minimum = ", MIN(s.time_created, COALESCE(m.earliest, s.time_created)) AS archive_floor" if archive_clock else ""
-    return connection.execute(f"""
+    return connection.execute("""
         WITH messages AS (
-          SELECT session_id, MAX(MAX(time_created, time_updated)) AS activity{floor}
-          FROM message GROUP BY session_id
+          SELECT session_id, MAX(MAX(time_created, time_updated)) AS activity FROM message GROUP BY session_id
         ), parts AS (
           SELECT session_id, MAX(MAX(time_created, time_updated)) AS activity FROM part GROUP BY session_id
         )
         SELECT s.*, MAX(s.time_updated, s.time_created, COALESCE(m.activity, 0), COALESCE(p.activity, 0)) AS activity
-               {minimum}
         FROM session s LEFT JOIN messages m ON m.session_id = s.id LEFT JOIN parts p ON p.session_id = s.id
         ORDER BY activity DESC, s.id DESC
     """).fetchall()

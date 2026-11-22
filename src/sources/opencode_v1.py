@@ -395,23 +395,6 @@ class OpenCodeV1Source:
             rows = catalog_rows(connection)
             return tuple(self._normalize_session(row) for row in rows if since_ms is None or row["activity"] >= since_ms)
 
-    def archive_catalog(self):
-        """Observe the full roster, revision vector and live candidates at one SQLite snapshot."""
-        with self._connection() as connection:
-            connection.execute("BEGIN")
-            self._require_schema(connection)
-            with self.metrics.measure("catalog"):
-                self.metrics.add("full_catalog_fetches")
-                rows = catalog_rows(connection, archive_clock=True)
-                sessions = tuple(self._normalize_session(row) for row in rows)
-            keys = tuple(item.session_id for item in sessions if item.parent_session_id is None)
-            with self.metrics.measure("revision"):
-                self.metrics.add("revision_checks", len(keys))
-                revisions = batch_revisions(connection, keys)
-            with self.metrics.measure("liveness"):
-                candidates = watch_candidates(connection)
-        return sessions, revisions, candidates, {str(row["id"]): _safe_int(row["archive_floor"]) for row in rows}
-
     def watch_candidate_session_ids(self) -> frozenset[str]:
         with self.metrics.measure("liveness"), self._connection() as connection:
             self._require_schema(connection)

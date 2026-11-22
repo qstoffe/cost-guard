@@ -13,7 +13,7 @@ RETENTION_MS = 30 * 24 * HOUR_MS
 TOUCH_ROWS = 64
 PRUNE_ROWS = 8
 NAMESPACES = frozenset({'derived-analysis', 'web-token-mix-evidence', 'ai-stats-evidence', 'account-timeline-history',
-    'ai-stats-coverage-2', 'ai-stats-transient', 'session-summary', 'session-ccost-v1'})
+    'ai-stats-coverage-2', 'ai-stats-transient', 'matched-first-runs', 'session-summary', 'session-ccost-v1'})
 # The one-hour grace compensates for coalesced touches without shortening the
 # rolling retention interval. Neither a write nor passive observation is a view.
 EXPIRY = 'max(activity_ms, used_ms + 3600000)'

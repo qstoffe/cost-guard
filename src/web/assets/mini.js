@@ -524,10 +524,7 @@ const MiniWatch = (() => {
       this.dailyValue = value;
       ReportView.text(this.dailyLead, 'CCost Today ');
       ReportView.text(this.dailyAmount, () => ReportView.display(value, 'daily_ccost'));
-      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count}${value.cached && !value.prompt_count_complete ?
-        ' observed' : ''} prompts` : '');
-      if (value?.cached) this.daily.setAttribute('aria-description', 'Last observed ' + ReportView.display(value, 'observed_at_ms'));
-      else this.daily.removeAttribute('aria-description');
+      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
       ReportView.text(this.dailyNote, '');
       this.daily.className = 'mini-daily';
     }
@@ -554,7 +551,7 @@ const MiniWatch = (() => {
         }
         row.dataset.running = String(running);
         if (preview) { this.drawPreview(row, card, now, today); wanted.push(row); continue; }
-        const outcome = prompt?.execution_unverified || prompt?.outcome_unknown ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
+        const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
         const reason = !running && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
         const summaryContext = card.session_summary?.context;
@@ -754,22 +751,6 @@ const MiniWatch = (() => {
       this.observations.update(value, Date.now());
       this.publication = value; this.sync(); this.render();
     }
-    updateCached(readPublication) {
-      // The opener already supplies authoritative SQLite retention/revocation.
-      // Do not independently keep older rows over a committed partial snapshot.
-      this.readCachedPublication = readPublication;
-      this.sync(); this.render();
-    }
-    draw(view, now) {
-      if (this.readCachedPublication) {
-        // Check local expiry even when the opener's timer is throttled. This
-        // reads its in-memory publication, not another HTTP/SQLite snapshot.
-        const value = this.readCachedPublication();
-        view.update(value, this.healthState, false, {snapshot: () => value?.view}, now);
-      } else {
-        view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
-      }
-    }
     health(value) {
       const wasWritable = this.healthState.writable;
       this.healthState = value;
@@ -815,7 +796,7 @@ const MiniWatch = (() => {
       const now = Date.now();
       const followLatest = this.view.atLatest();
       this.view.nonRunningRows = this.nonRunningRows ?? defaultNonRunningRows;
-      this.draw(this.view, now);
+      this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
       this.view.boundSessions(followLatest);
     }
     defaultContentWidth() {
@@ -865,7 +846,7 @@ const MiniWatch = (() => {
     read(controller) {
       const owner = this.owner, view = this.view, now = Date.now();
       view.nonRunningRows = controller.nonRunningRows ?? defaultNonRunningRows;
-      controller.draw(view, now);
+      view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
       // First-open native frame estimate is intentionally conservative; the API has
       // no pre-open frame/zoom query. Screen clamps remain browser-owned and scrollable.
       const frameWidth = 16, frameHeight = 48;

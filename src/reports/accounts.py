@@ -17,9 +17,19 @@ from src.pricing.catalog import PricingCatalog
 from .models import AccountProjection, AccountsQuotasProjection, QuotaPeriodProjection
 
 
-def account_display_labels(accounts: Sequence[AccountSnapshot]):
+def account_projections(
+    accounts: Sequence[AccountSnapshot], entries: Sequence[TraceEntry],
+    catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
+    timezone_id: str = "UTC", workday_calendar: str = "",
+    period_index: PeriodCCostIndex | None = None, watch: bool = False,
+    observed_start_ms: int | None = None, require_history: bool = False,
+) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
+    providers = Counter(route for item in accounts for route in account_usage_routes(item))
+    index = period_index or PeriodCCostIndex(entries, catalog.reference_valuation)
+    explained = set()
     labels: dict[str, int] = {}
+    projections = []
     # Stable capacity/name/identity ordering, never balance, percentage or timing.
     for account in sorted(accounts, key=lambda item: (
         item.capacity_kind != "credit", item.provider_label.casefold(),
@@ -33,21 +43,6 @@ def account_display_labels(accounts: Sequence[AccountSnapshot]):
         labels[label] = labels.get(label, 0) + 1
         if multiple and (not account.ref.account_label or labels[label] > 1):
             label += f" · account {labels[label]}"
-        yield account, label
-
-
-def account_projections(
-    accounts: Sequence[AccountSnapshot], entries: Sequence[TraceEntry],
-    catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
-    timezone_id: str = "UTC", workday_calendar: str = "",
-    period_index: PeriodCCostIndex | None = None, watch: bool = False,
-    observed_start_ms: int | None = None, require_history: bool = False,
-) -> tuple[AccountProjection, ...]:
-    providers = Counter(route for item in accounts for route in account_usage_routes(item))
-    index = period_index or PeriodCCostIndex(entries, catalog.reference_valuation)
-    explained = set()
-    projections = []
-    for account, label in account_display_labels(accounts):
         attributed = tuple(entry for entry in entries if entry.account_ref and entry.account_ref.key == account.key
                            and entry.model.provider == account.ref.provider_id)
         scopes, notes, account_unknown, provider_notes, estimated_scopes = _period_scopes(account, index, providers, explained, today_start_ms,

@@ -8,13 +8,13 @@ import json
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
 from src.analysis.ai_stats import POLICY as STATS_POLICY
-from src.numbers import exact_decimal_sum
 from src.pricing.catalog import FIXED_REFERENCE_MIX
 from src.reports.models import ReportKind
 
 from .contracts import ObjectValue, record
 from .display import with_display
 from .prompt_costs import cost_detail, mini_cost_detail, watch_calls
+from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
 from .benchmark import benchmark_view
 from .session_effort import session_effort_help
@@ -52,7 +52,7 @@ def token_mix(value, *, category_help=False, observed=None):
         exact_totals=tuple(None if item is None else str(item) for item in value.totals),
         exact_total_tokens=None if value.total_tokens is None else str(value.total_tokens),
         known_total_tokens=None if value.known_total_tokens is None else Decimal(value.known_total_tokens),
-        total_cost=None if value.costs is None else exact_decimal_sum(value.costs),
+        total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
         **({'category_cost_help': True} if category_help else {}),
         **({'observed_totals': tuple(str(item) for item in observed),
             'observed_total_tokens': str(sum(observed))} if observed is not None else {}),
@@ -254,6 +254,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             for key, value in report.ai_stats_work.get('scopes', {}).items()}),
             **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining', 'checkpoint_error')
                if key in report.ai_stats_work}) if report.ai_stats_work else None,
+        comparisons=comparisons_page(report.comparisons),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,

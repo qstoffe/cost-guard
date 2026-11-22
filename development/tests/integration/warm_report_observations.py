@@ -35,6 +35,7 @@ class WarmReportObservations:
         from src.reports import ReportRequest
         default = ReportRequest(request.kind)
         return dict(kind=request.kind.value, stats_scope=getattr(request, 'stats_scope', None),
+            comparison_offset=getattr(request, 'comparison_offset', 0),
             default_scope=all(getattr(request, name) == getattr(default, name)
                 for name in ReportRequest.__dataclass_fields__))
 

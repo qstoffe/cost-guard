@@ -20,7 +20,6 @@ class TokenMixReport(ReportRequest):
 @dataclass(frozen=True, slots=True)
 class ManagedReport(TokenMixReport):
     source_identity: str = ''
-    models_scope: str = ''
     quantum_seconds: float = 0.1
     observation_ms: int = 0
     history_batch_size: int = 64

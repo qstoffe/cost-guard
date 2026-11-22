@@ -12,7 +12,7 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
     assert.equal(await run(`!!document.getElementById('report-updating')`),false);
   };
   if(!sessionsOnly) {
-  for(const section of ['models','token-mix','ai-stats']) {
+  for(const section of ['models','token-mix','ai-stats','comparisons']) {
     await run(`location.hash='#/${section}'`);
     await ready(`current.section==='${section}' && !!current.result && !current.loading`);
     await audit();
@@ -142,7 +142,7 @@ module.exports = async ({command,evaluate,until,owner,checks,layouts,sessionsOnl
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},owner);
     await run(`document.documentElement.dataset.theme='${theme==='classic'?'classic':'web'}'`);
-    for(const route of ['models','watch','accounts','sessions','sessions/quiet-0','token-mix','ai-stats','settings']) {
+    for(const route of ['models','watch','accounts','sessions','sessions/quiet-0','token-mix','ai-stats','comparisons','settings']) {
       await run(`location.hash='#/${route}'`);
       await ready(`!current.loading && (current.result || current.live || current.catalog?.data || current.detail?.data || current.section==='settings')`);
       await audit();layouts.push({route,width,theme});

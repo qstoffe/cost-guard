@@ -72,12 +72,8 @@ def token_mix(usages: Iterable[TokenUsage], *, sample_size: int = 0) -> TokenMix
             totals[index] += getattr(usage, name)
         # Canonical reasoning is separate; the established display folds it into O.
         totals[3] += usage.reasoning
-    return summarize_token_mix(totals, known, count, observed, sample_size=sample_size)
-
-
-def summarize_token_mix(totals, known, count, observed, *, sample_size=0) -> TokenMix:
-    """Finalize independently reduced numerators using canonical mix semantics."""
-    values = tuple(value if count and name in known else None for name, value in zip(MIX_FIELDS, totals))
+    values = tuple(value if count and name in known else None
+                   for name, value in zip(MIX_FIELDS, totals))
     total = sum(totals)
     if not count or len(known) != 4 or not total:
         # An unknown category makes the denominator unknown for every share.

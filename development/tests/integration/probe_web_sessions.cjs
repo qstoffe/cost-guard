@@ -385,7 +385,7 @@ async function main() {
      for(const width of [1920,360]) {
        await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
        assert.deepEqual(await evaluate('[...document.querySelectorAll("nav a")].map(node=>node.textContent)'),
-        ['Models','Watch','Sessions','Accounts','Token Mix','AI Stats','Settings']);
+        ['Models','Watch','Sessions','Accounts','Token Mix','AI Stats','Comparisons','Settings']);
        assert.equal(await evaluate(`[...document.querySelectorAll('a')].filter(node=>node.getAttribute('href')?.startsWith('#/reports')).length`),0);
        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
      }

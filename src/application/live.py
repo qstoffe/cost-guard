@@ -3,7 +3,6 @@ from threading import Event, Thread
 import time
 
 from src.sources.errors import SourceError
-from src.watch.account_refresh import WatchAccountRefresh
 from src.watch.account_timeline import FOREGROUND_SLICE_MS
 from src.watch.source_status import SourceStatus
 
@@ -11,24 +10,20 @@ from .contracts import record
 from .live_projection import project_live
 from .session_detail import SessionDetails
 from .session_catalog import SessionCatalog
-from .session_live_metrics import with_live_metrics
 from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, display_archive=None,
-                 capture_session_finishes=False):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
         self.timeline_demand = timeline_demand
-        self.display_archive = display_archive
-        self.capture_session_finishes = capture_session_finishes
         self.stopping = Event()
         self.thread = None
         self.failure = None
         self.details = SessionDetails()
-        self.catalog = SessionCatalog(display_archive=display_archive)
+        self.catalog = SessionCatalog()
         self.driver = None
         self.source_failure = None
         self.observed = Event()
@@ -60,15 +55,7 @@ class LiveRuntime:
             publication_due = time.monotonic()
             timeline_due = publication_due
             coordinator = driver.coordinator
-            enable_finishes = getattr(type(coordinator), "enable_session_finishes", None)
-            if self.capture_session_finishes and self.display_archive is not None and enable_finishes is not None:
-                enable_finishes(coordinator)
             timeline = getattr(coordinator, 'account_timeline', None) if self.timeline_demand is not None else None
-            accounts = self.display_archive.accounts if self.display_archive is not None else None
-            if accounts is not None:
-                service = coordinator.report_service
-                if callable(getattr(type(service), "start_account_archive", None)):
-                    service.start_account_archive(accounts.target, accounts.offer_identity)
             frame = None
             while not self.stopping.is_set():
                 now = time.monotonic()
@@ -94,15 +81,10 @@ class LiveRuntime:
                     continue
                 self.working.set()
                 try:
-                    if self.display_archive is not None:
-                        self.display_archive.observe(driver, before_tick=True)
                     frame = driver.tick()
-                    if self.display_archive is not None:
-                        self.display_archive.observe(driver, before_tick=False)
-                    running = None
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
                         health = getattr(driver, 'source_status', None)
-                        running = driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
+                        driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
                             source_interrupted=driver.terminal or isinstance(health, SourceStatus) and health.outage_confirmed())
                     if callable(getattr(type(driver.coordinator), "catalog_frame", None)):
                         frame = driver.coordinator.catalog_frame(self.catalog, frame)
@@ -110,7 +92,7 @@ class LiveRuntime:
                         driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
                     else:
                         self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
-                    self._publish_frame(driver, frame, running=running)
+                    self._publish_frame(driver, frame)
                 finally:
                     self.working.clear()
                 if driver.terminal:
@@ -130,8 +112,6 @@ class LiveRuntime:
             else:
                 raise
         finally:
-            if self.display_archive is not None:
-                self.display_archive.close()
             if driver is not None:
                 try:
                     driver.close()
@@ -144,36 +124,22 @@ class LiveRuntime:
 
     def _tick_timeline(self, driver, frame):
         coordinator = driver.coordinator
-        if self.display_archive is not None and self.display_archive.accounts is not None:
-            return None  # Opted-in chart uses only the archive lane; never warm both.
         if self.timeline_demand is not None and callable(getattr(type(coordinator), 'tick_account_timeline', None)):
             verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
             return coordinator.tick_account_timeline(frame, self.timeline_demand,
                 available=verified, terminal=driver.terminal)
         return None
 
-    def _publish_frame(self, driver, frame, *, running=None):
+    def _publish_frame(self, driver, frame):
         health = getattr(driver, 'source_status', None)
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
-        quota_hint = None
-        if self.display_archive is not None:
-            refresh = getattr(driver.coordinator, "accounts", None)
-            current = frame if verified else None
-            finish_reader = getattr(type(driver.coordinator), "cached_session_finishes", None)
-            finishes, finishes_current = (finish_reader(driver.coordinator, self.catalog)
-                                           if verified and self.capture_session_finishes and finish_reader is not None
-                                           else ((), None))
-            quota_hint = self.display_archive.publish_live(with_live_metrics(running, current), current, driver.observed_at_ms,
-                account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None,
-                source_unavailable=driver.error is not None, finishes=finishes, finishes_current=finishes_current)
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
                 frame.now_ms, stale=frame.quota_stale or not verified)
         self.publish("live", record(state=driver.source_state,
-             watch_quota_hint=record(**quota_hint) if quota_hint is not None else None,
              account_timeline_scope=timeline_scope,
              catalog_hint=self.catalog.live_hint(),
              detail_hints=tuple(record(**hint) for hint in self.details.live_hints()),

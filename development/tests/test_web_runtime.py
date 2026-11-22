@@ -7,7 +7,6 @@ import http.client
 import io
 import json
 from pathlib import Path
-import shutil
 import socket
 import tempfile
 from threading import Event, Thread
@@ -214,416 +213,10 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
 
-    def test_unknown_report_kind_cannot_admit_a_web_report(self):
-        self.login()
-        dispatcher = Mock(identity='source')
-        self.server.lifecycle = SimpleNamespace(dispatcher=dispatcher,
-            stopping=Event(), nonce='test-instance', observations=Mock())
-        report = {'kind': 'unsupported'}
-        attempts = (
-            ('/api/reports', report),
-            ('/api/data', {'request': report, 'retry': True}),
-            ('/api/interest', {'tab': 'a' * 32, 'section': 'models', 'visible': True, 'request': report}),
-        )
-
-        with patch.object(self.jobs, 'submit') as submit:
-            for path, request in attempts:
-                with self.subTest(path=path):
-                    status, _, body = self.request(path, request)
-                    self.assertEqual(400, status)
-                    self.assertEqual({'error': 'invalid_request'}, json.loads(body))
-            submit.assert_not_called()
-        dispatcher.lookup.assert_not_called()
-        dispatcher.interest.assert_not_called()
-
-    def test_cached_sessions_reads_committed_sql_without_source_or_job_admission(self):
-        from src.application.cached_session_views import CachedSessionViews
-        from src.cache.display_history import DisplayHistory, SessionChange, SessionCheckpoint, SessionFact
-
-        endpoint = "/api/cache/sessions"
-        request = {'sort': 'prompts', 'direction': -1, 'period': 'all', 'offset': 0}
-        self.assertEqual(401, self.request(endpoint, request)[0])
-        self.login()
-        source_startup = Mock()
-        self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(),
-            nonce='test-instance', source_startup=source_startup)
-        self.assertEqual(503, self.request(endpoint, request)[0])
-
-        with tempfile.TemporaryDirectory() as tmp, patch.object(self.jobs, 'submit') as submit:
-            root = Path(tmp)
-            history = DisplayHistory(root)
-            self.server.lifecycle.cached_session_views = CachedSessionViews(history, 'bound', 'UTC')
-            status, _, body = self.request(endpoint, request)
-            self.assertEqual((503, {'error': 'cache_unavailable'}), (status, json.loads(body)))
-            history.initialize()
-            status, _, body = self.request(endpoint, request)
-            self.assertEqual(200, status)
-            self.assertEqual((0, []), (json.loads(body)['cached_total'], json.loads(body)['rows']))
-
-            history.commit_sessions('bound', (
-                SessionChange(SessionFact('pending', 'known-rev', 'Pending'), None),
-                SessionChange(SessionFact('ready', 'ready-rev', 'Known', prompts=3), None),
-            ))
-            history.commit_sessions('bound', missing=(('pending', SessionCheckpoint('known-rev', 0)),))
-            history.commit_sessions('other', (SessionChange(SessionFact('other', 'r1', 'Not visible'), None),))
-
-            status, _, body = self.request(endpoint, request)
-            result = json.loads(body)
-
-            self.assertEqual((200, 2, 2), (status, result['generation'], result['cached_total']))
-            self.assertEqual(['ready', 'pending'], [row['session_id'] for row in result['rows']])
-            self.assertEqual('source-history-missing', result['rows'][1]['fields']['prompts'])
-            self.assertNotIn('source_revision', result['rows'][0])
-            self.assertEqual(400, self.request(endpoint, dict(request, source='other'))[0])
-            self.assertEqual(400, self.request(endpoint, dict(request, offset=1))[0])
-            submit.assert_not_called()
-        source_startup.report_status.assert_not_called()
-
-    def test_shared_watch_endpoint_reads_only_the_current_authorized_cache(self):
-        from development.tests.fixtures.display_watch import running_frame
-        from src.web.display_archive import DisplayArchive
-
-        endpoint = "/api/cache/watch"
-        self.assertEqual(401, self.request(endpoint)[0])
-        self.login()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            identity = root / "fixture.db"
-            identity.write_bytes(b"fixture identity")
-            source = OpenCodeV1Source(identity)
-            selection = SimpleNamespace(selected="v1", source=source)
-            service = SimpleNamespace(timezone_id="UTC", selection=selection)
-            driver = SimpleNamespace(error=None, terminal=False, observed_at_ms=None,
-                coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
-            archive = DisplayArchive(root, lambda *_: None, watch_enabled=True)
-            self.addCleanup(archive.close)
-            archive.initialize()
-            archive.observe(driver, before_tick=True)
-            owner = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
-                display_archive=archive, cached_watch_enabled=True, live=SimpleNamespace(driver=driver))
-            self.server.lifecycle = owner
-            empty = self.request(endpoint)
-            at = int(time.time() * 1000)
-            driver.observed_at_ms = at
-            archive.publish_live(None, running_frame(at), at)
-            archive._live_write.result(timeout=5)
-
-            with patch.object(source, "list_sessions", side_effect=AssertionError("cache route read the source")) as scan:
-                full = self.request(endpoint)
-                mini = self.request(endpoint)
-                driver.observed_at_ms = None
-                held = self.request(endpoint)
-                archive.unbind()
-                unbound = self.request(endpoint)
-            scan.assert_not_called()
-
-        self.assertEqual((200, []), (empty[0], json.loads(empty[2])["cards"]))
-        self.assertEqual(200, full[0])
-        self.assertEqual(json.loads(full[2]), json.loads(mini[2]))
-        self.assertEqual("running", json.loads(full[2])["cards"][0]["outcome"])
-        self.assertEqual("unverified", json.loads(held[2])["cards"][0]["outcome"])
-        self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
-
-    def test_token_mix_endpoint_reads_only_a_materialized_authorized_period(self):
-        from dataclasses import replace
-        from development.tests.fixtures.session_snapshots import make_snapshot
-        from src.analysis import analyze_snapshot
-        from src.application.archive_mix_build import ArchiveMixBuild, MixBuildState
-        from src.application.request_archive_projection import request_roster
-        from src.cache.display_history import SessionChange, SessionFact
-        from src.web.display_archive import DisplayArchive
-
-        endpoint = "/api/cache/token-mix"
-        group_url = endpoint + "/groups"
-        group_request = {"period": "today", "kind": "model", "sort": "tokens", "direction": "desc"}
-        self.assertEqual(401, self.request(endpoint, {"period": "today"})[0])
-        self.assertEqual(401, self.request(group_url, group_request)[0])
-        self.login()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            identity = root / "source.db"
-            identity.write_bytes(b"identity only; no source query can succeed")
-            source = OpenCodeV1Source(identity)
-            selection = SimpleNamespace(selected="v1", source=source)
-            driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(
-                report_service=SimpleNamespace(timezone_id="UTC", selection=selection), catalog_observation=None))
-            archive = DisplayArchive(root, lambda *_: None)
-            try:
-                archive.initialize()
-                archive.observe(driver, before_tick=True)
-                owner = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
-                                        display_archive=archive, cached_mix_enabled=True)
-                self.server.lifecycle = owner
-                with patch.object(archive.history, "usage_inputs", side_effect=AssertionError("request scanned usage")):
-                    cold = self.request(endpoint, {"period": "today"})
-                at = int(time.time() * 1000)
-                snapshot = make_snapshot()
-                price = SimpleNamespace(analysis_signature="fixture", reference_category_valuation=lambda *_: None)
-                roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), price)
-                child = next(item for item in roster.requests if item.session_id == "child")
-                entry = replace(child, clock_ms=at, category_costs=None, known=0b1011,
-                                tokens=(20, 3, 0, 5, 1), fork_key=None)
-                archive.history.commit_sessions(archive.views.source,
-                    (SessionChange(SessionFact("root", "r1", "Fixture"), None, previous_progress=0,
-                        request_roster=replace(roster, requests=(entry,), attribution=())),))
-                with ArchiveMixBuild(archive.views.source, "UTC", at, grouped=True) as build:
-                    self.assertEqual(MixBuildState.MORE, build.step(archive.history))
-                    self.assertEqual(MixBuildState.MORE, build.step(archive.history))
-                    self.assertEqual(MixBuildState.PUBLISHED, build.step(archive.history))
-                with patch.object(archive.history, "usage_inputs", side_effect=AssertionError("request scanned usage")):
-                    periods = ("today", "7-days", "30-days", "month", "all")
-                    responses = {period: self.request(endpoint, {"period": period}) for period in periods}
-                    group_page = self.request(group_url, group_request)
-                    invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
-                    invalid_sort = self.request(group_url, {**group_request, "sort": "activity"})
-                    invalid_kind = self.request(group_url, {**group_request, "sort": "model", "kind": "publisher"})
-                read = archive.history.mix_total
-
-                def read_after_auth_revoked(*args, **kwargs):
-                    saved = read(*args, **kwargs)
-                    authenticated.return_value = False
-                    return saved
-
-                with patch.object(self.server.session, "authenticated", wraps=self.server.session.authenticated) as authenticated:
-                    with patch.object(archive.history, "mix_total", side_effect=read_after_auth_revoked):
-                        expired = self.request(endpoint, {"period": "today"})
-
-                def revoke_binding(*args, **kwargs):
-                    saved = read(*args, **kwargs)
-                    archive.unbind()
-                    return saved
-
-                with patch.object(archive.history, "mix_total", side_effect=revoke_binding):
-                    unbound = self.request(endpoint, {"period": "today"})
-            finally:
-                archive.close()
-
-        self.assertEqual((200, "unknown", None), (cold[0], json.loads(cold[2])["coverage"], json.loads(cold[2])["token_mix"]))
-        for period, (status, _, body) in responses.items():
-            with self.subTest(period=period):
-                self.assertEqual(200, status)
-                projection = json.loads(body)
-                self.assertEqual((period, "partial", ["20", "3", "0", "6"]),
-                                 (projection["scope"], projection["coverage"], projection["observed_category_totals"]))
-                mix = projection["token_mix"]
-                self.assertEqual((1, [20, 3, None, 6], [None] * 4, None),
-                                 (mix["request_count"], mix["totals"], mix["shares"], mix["costs"]))
-                self.assertEqual("N/A", mix["display"]["mix_write_share"])
-        self.assertEqual(400, invalid[0])
-        self.assertEqual(400, invalid_sort[0])
-        self.assertEqual(400, invalid_kind[0])
-        page = json.loads(group_page[2])
-        self.assertEqual((200, "today", "model", ["tokens", "desc"], 1),
-                         (group_page[0], page["scope"], page["kind"], page["order"], len(page["rows"])))
-        self.assertEqual(json.loads(responses["today"][2])["groups"]["revision"], page["revision"])
-        self.assertEqual(401, expired[0])
-        self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
-
-    def test_ai_stats_endpoint_reads_only_committed_subtotals_and_fences_rebind(self):
-        from dataclasses import replace
-        from development.tests.fixtures.session_snapshots import one_request
-        from development.tests.test_archive_stats_evidence import capture
-        from src.cache.display_history import SessionChange, SessionFact
-        from src.cache.display_stats_evidence import StatsInterval
-        from src.web.dispatch import DataDispatcher
-        from src.web.display_archive import DisplayArchive
-
-        endpoint = "/api/cache/ai-stats"
-        self.assertEqual(401, self.request(endpoint, {"period": "today"})[0])
-        self.login()
-        at = int(time.time() * 1000)
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = DisplayArchive(Path(tmp), lambda *_: None, stats_enabled=True)
-            try:
-                archive.initialize()
-                archive._set_binding(SimpleNamespace(scope="verified-fixture"))
-                self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
-                    display_archive=archive, cached_stats_enabled=True,
-                    dispatcher=DataDispatcher(self.jobs, cache_only_stats=True))
-                cold = self.request(endpoint, {"period": "all"})
-                roster = capture(one_request(running=False))
-                geometry = (StatsInterval("root", "past", "prompt", 1000, 500, False),
-                            StatsInterval("root", "recent", "prompt", at - 1000, 100, False))
-                archive.history.commit_sessions("verified-fixture", (SessionChange(SessionFact("root", "r1", "Root"),
-                    None, previous_progress=0, request_roster=replace(roster, stats=replace(roster.stats, intervals=geometry))),))
-                for _ in range(50):
-                    archive.stats.advance(at, active=lambda: True)
-                    if not archive.stats.pending():
-                        break
-                with patch.object(archive.history, "stats_geometry", side_effect=AssertionError("route reduced geometry")), \
-                     patch.object(archive.history, "stats_candidates", side_effect=AssertionError("route reduced requests")):
-                    periods = ("today", "7-days", "30-days", "month", "all")
-                    responses = {period: self.request(endpoint, {"period": period}) for period in periods}
-                    invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
-                report = {"kind": "ai-stats", "stats_scope": "today"}
-                self.assertEqual(400, self.request("/api/reports", report)[0])
-                self.assertEqual(400, self.request("/api/data", {"request": report, "retry": False})[0])
-                self.assertEqual(400, self.request("/api/interest", {
-                    "tab": "1" * 32, "section": "ai-stats", "visible": True, "request": report})[0])
-                self.assertFalse(any(request.kind.value == "ai-stats" for request in
-                                     self.server.lifecycle.dispatcher.default_requests))
-                read = archive.history.stats_view
-
-                def read_then_unbind(*args):
-                    value = read(*args)
-                    archive.unbind()
-                    return value
-
-                with patch.object(archive.history, "stats_view", side_effect=read_then_unbind):
-                    unbound = self.request(endpoint, {"period": "all"})
-            finally:
-                archive.close_catalog_work()
-                archive.close()
-
-        self.assertEqual((200, None), (cold[0], json.loads(cold[2])["measured_working_ms"]))
-        self.assertIsNone(json.loads(cold[2])["observed_tokens"])
-        for period, (status, _, body) in responses.items():
-            with self.subTest(period=period):
-                result = json.loads(body)
-                self.assertEqual((200, period, "unknown", at), (status, result["period"], result["coverage"], result["as_of_ms"]))
-        self.assertEqual(600, json.loads(responses["all"][2])["measured_working_ms"])
-        self.assertLess(json.loads(responses["today"][2])["measured_working_ms"] or 0, 600)
-        self.assertEqual("34", json.loads(responses["all"][2])["observed_tokens"])
-        self.assertIsNone(json.loads(responses["today"][2])["observed_tokens"])
-        self.assertEqual(400, invalid[0])
-        self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
-
-    def test_cached_sessions_demand_is_bounded_and_separate_from_reads(self):
-        archive = Mock()
-        catalog = object()
-        lifecycle = SimpleNamespace(display_archive=archive, cached_sessions_enabled=True, nonce="test-instance",
-            observations=Mock(), stopping=Event(), live=SimpleNamespace(catalog=catalog))
-        self.server.lifecycle = lifecycle
-        endpoint = "/api/cache/sessions/demand"
-        binding = "a" * 32
-        tab = "b" * 32
-        payload = dict(binding=binding, demand_epoch=7, tab=tab, sequence=1, session_ids=["two", "one"])
-        archive.offer_visible.side_effect = (2, 0, None)
-
-        unauthorized = self.request(endpoint, payload)[0]
-        self.login()
-        csrf_missing = self.request(endpoint, payload, headers={"X-CG-CSRF": ""})[0]
-        duplicates = self.request(endpoint, dict(payload, session_ids=["one", "one"]))[0]
-        too_many = self.request(endpoint, dict(payload, session_ids=[str(i) for i in range(9)]))[0]
-        bad_sequence = self.request(endpoint, dict(payload, sequence=True))[0]
-        bad_recent = self.request(endpoint, dict(payload, remember=True))[0]
-        accepted, _, result = self.request(endpoint, payload)
-        withdrawn, _, empty = self.request(endpoint, dict(payload, sequence=2, session_ids=[], remember=True))
-        retired = self.request(endpoint, dict(payload, demand_epoch=6))[0]
-
-        self.assertEqual((401, 403, 400, 400, 400, 400, 202, 202, 409),
-                         (unauthorized, csrf_missing, duplicates, too_many, bad_sequence, bad_recent,
-                          accepted, withdrawn, retired))
-        self.assertEqual({"prioritized": 2}, json.loads(result))
-        self.assertEqual({"prioritized": 0}, json.loads(empty))
-        self.assertEqual([(catalog, binding, 7, tab, 1, ["two", "one"]),
-                          (catalog, binding, 7, tab, 2, []), (catalog, binding, 6, tab, 1, ["two", "one"])],
-                         [attempt.args for attempt in archive.offer_visible.call_args_list])
-        self.assertEqual([False, True, False],
-                         [attempt.kwargs["remember"] for attempt in archive.offer_visible.call_args_list])
-
-    def test_cached_detail_hint_requires_a_fenced_tab_sequence_and_accepts_withdrawal(self):
-        archive = Mock(prioritize_detail=Mock(return_value=True))
-        catalog = object()
-        self.server.lifecycle = SimpleNamespace(display_archive=archive, cached_sessions_enabled=True,
-            nonce="test-instance", observations=Mock(), stopping=Event(), live=SimpleNamespace(catalog=catalog))
-        endpoint = "/api/cache/session-detail/demand"
-        unauthorized = self.request(endpoint, {"binding": "a" * 32, "session_id": "root"})[0]
-        self.login()
-        payload = dict(binding="a" * 32, demand_epoch=7, tab="b" * 32, sequence=1, session_id="root")
-        archive.offer_visible.side_effect = (1, 0, None)
-
-        statuses = (
-            self.request(endpoint, {"binding": payload["binding"], "session_id": "root"})[0],
-            self.request(endpoint, dict(payload, session_id=["root"]))[0],
-            self.request(endpoint, dict(payload, remember=True))[0],
-            self.request(endpoint, payload, headers={"X-CG-CSRF": ""})[0],
-            self.request(endpoint, payload)[0],
-            self.request(endpoint, dict(payload, sequence=2, session_id=None))[0],
-            self.request(endpoint, dict(payload, demand_epoch=6))[0],
-        )
-
-        self.assertEqual(401, unauthorized)
-        self.assertEqual((400, 400, 400, 403, 202, 202, 409), statuses)
-        self.assertEqual([(catalog, "a" * 32, 7, "b" * 32, 1, ["root"]),
-                          (catalog, "a" * 32, 7, "b" * 32, 2, []),
-                          (catalog, "a" * 32, 6, "b" * 32, 1, ["root"])],
-                         [call.args for call in archive.offer_visible.call_args_list])
-
-    def test_explicit_sessions_clear_requires_confirmation_current_generation_and_current_source(self):
-        from src.application.session_catalog import SessionCatalog
-        from src.cache.display_history import SessionChange, SessionFact
-        from src.sources.opencode_v1 import OpenCodeV1Source
-        from src.web.display_archive import DisplayArchive
-
-        endpoint = "/api/cache/sessions/clear"
-        self.assertEqual(401, self.request(endpoint)[0])
-        self.login()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            original = root / "fixture.db"
-            original.write_bytes(b"synthetic source")
-            service = SimpleNamespace(selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(original)),
-                                      timezone_id="UTC")
-            driver = SimpleNamespace(terminal=False, error=None,
-                                     coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
-            archive = DisplayArchive(root, lambda *_: None)
-            self.addCleanup(archive.close)
-            archive.initialize()
-            archive.observe(driver, before_tick=True)
-            bound = archive.views.source
-            self.server.lifecycle = SimpleNamespace(stopping=Event(), observations=Mock(), nonce="test-instance",
-                display_archive=archive, cached_sessions_enabled=True, live=SimpleNamespace(
-                    driver=driver, catalog=SessionCatalog()))
-            snapshot = json.loads(self.request(endpoint)[2])
-            archive.history.commit_sessions(bound, (SessionChange(SessionFact("saved", "r1", "Saved"), None),))
-
-            stale = self.request(endpoint, dict(snapshot, confirm=True))[0]
-            current = json.loads(self.request(endpoint)[2])
-            unconfirmed = self.request(endpoint, current)[0]
-            csrf_missing = self.request(endpoint, dict(current, confirm=True), headers={"X-CG-CSRF": ""})[0]
-            remaining = archive.history.session_page(bound).total
-            cleared, _, result = self.request(endpoint, dict(current, confirm=True))
-            replay = self.request(endpoint, dict(current, confirm=True))[0]
-            replacement = root / "replacement"
-            replacement.write_bytes(b"another source")
-            replacement.replace(original)
-            retired = self.request(endpoint, dict(json.loads(result), confirm=True))[0]
-
-            self.assertEqual((409, 400, 403, 1, 200, 409, 409),
-                             (stale, unconfirmed, csrf_missing, remaining, cleared, replay, retired))
-            self.assertEqual(0, archive.history.session_page(bound).total)
-            self.assertEqual(b"another source", original.read_bytes())
-
-    def test_normal_web_host_enables_all_display_cache_routes_by_default(self):
-        from src.web.host import WebHost
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "config").mkdir()
-            shutil.copyfile(Path("config/default-config.jsonc"), root / "config/default-config.jsonc")
-            host = WebHost(root)
-            self.addCleanup(host.close)
-            self.assertIsNotNone(host.display_archive)
-            self.assertTrue(host.display_archive.watch_enabled)
-            self.assertIsNotNone(host.display_archive.mix_refresh)
-            self.assertIsNotNone(host.display_archive.stats)
-            self.assertIsNotNone(host.display_archive.models)
-            self.assertIsNotNone(host.display_archive.accounts)
-            self.assertTrue(host.benchmark.requested)
-            self.login()
-            self.server.lifecycle = host
-            status, _, body = self.request("/api/status")
-            self.assertEqual(200, status)
-            payload = json.loads(body)
-            for key in ("cached_sessions", "cached_watch", "cached_mix",
-                        "cached_stats", "cached_models", "cached_accounts"):
-                self.assertTrue(payload[key], key)
-
     def test_view_touches_only_successful_protected_explicit_browser_delivery_including_job_polling(self):
         self.login()
         delivered = Event()
-        demand = SimpleNamespace(delivered=Mock(side_effect=lambda *_: delivered.set()))
+        demand = SimpleNamespace(request=lambda _path: contextlib.nullcontext(), delivered=Mock(side_effect=lambda *_: delivered.set()))
         result = {'id': 'a' * 32, 'status': 'complete', 'result': {'view': {'kind': 'normal'}}}
         dispatcher = Mock(identity='source')
         dispatcher.lookup.return_value = dict(result, terminal=False)
@@ -1124,7 +717,7 @@ class JobBoundaryTests(unittest.TestCase):
         warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
         jobs.prioritize({warm: 2})
         jobs.tick()
-        demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
+        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
         jobs.prioritize({warm: 2, demand: 0})
 
         jobs.tick()
@@ -1142,7 +735,7 @@ class JobBoundaryTests(unittest.TestCase):
         background.process.terminate.assert_called_once()
         background.receiver.send.assert_not_called()
         background.process.close.assert_called_once()
-        self.assertEqual([ReportKind.TOKEN_MIX, ReportKind.ALL_MODELS, ReportKind.TOKEN_MIX],
+        self.assertEqual([ReportKind.TOKEN_MIX, ReportKind.COMPARISONS, ReportKind.TOKEN_MIX],
             [request.kind for request in requests])
         self.assertEqual(requests[0].observation_ms, requests[2].observation_ms)
         restarted.process.terminate.assert_not_called()
@@ -1161,7 +754,7 @@ class JobBoundaryTests(unittest.TestCase):
         warm = jobs.submit(ManagedReport(ReportKind.AI_STATS))
         jobs.prioritize({warm: 2})
         jobs.tick()
-        demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
+        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
         jobs.prioritize({warm: 2, demand: 0})
         jobs.tick()
         burst.messages.append(('result', done))
@@ -1175,7 +768,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs.tick()
 
         requests = [spawn.kwargs['args'][2] for spawn in context.Process.call_args_list]
-        self.assertEqual([ReportKind.AI_STATS, ReportKind.ALL_MODELS, ReportKind.AI_STATS, ReportKind.AI_STATS,
+        self.assertEqual([ReportKind.AI_STATS, ReportKind.COMPARISONS, ReportKind.AI_STATS, ReportKind.AI_STATS,
             ReportKind.SESSIONS], [request.kind for request in requests])
         self.assertEqual(1, len({(request.observation_ms, request.scan) for request in requests if
             request.kind is ReportKind.AI_STATS}))
@@ -1199,7 +792,7 @@ class JobBoundaryTests(unittest.TestCase):
                 background.messages.append(('admit', None))
                 if case == 'granted':
                     jobs.tick()
-                demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
+                demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
                 jobs.prioritize({warm: 0 if case == 'promoted' else 2,
                                  demand: 1 if case == 'requested-demand' else 0})
 
@@ -1238,7 +831,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs.tick()
         jobs.tick()
         alone = list(child.receiver.send.call_args_list)
-        other = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
+        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
         jobs.prioritize({key: 0, other: 0})
         jobs.tick()
         jobs.tick()
@@ -1282,7 +875,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs = ReportJobs(context=context)
         self.addCleanup(jobs.close)
         key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
-        other = jobs.submit(ManagedReport(ReportKind.AI_STATS))
+        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
         jobs.prioritize({key: 0, other: 0})
         jobs.tick()
         jobs.tick()
@@ -1389,7 +982,7 @@ class JobBoundaryTests(unittest.TestCase):
         child = ReportProcess(messages=[('result', json.dumps(dict(error=None,
             source=dict(status='acquired'))).encode())])
         jobs = ReportJobs(context=child.context)
-        request = ReportRequest(ReportKind.ALL_MODELS)
+        request = ReportRequest(ReportKind.COMPARISONS)
         key = jobs.submit(request)
         with patch('src.web.jobs.time.monotonic', return_value=10):
             jobs.tick()
@@ -1434,7 +1027,7 @@ class JobBoundaryTests(unittest.TestCase):
     def test_retirees_count_as_resident_children_and_withhold_only_fresh_launches(self):
         from src.web.report_control import ManagedReport
         jobs = ReportJobs(context=ReportProcess().context)
-        parked = [jobs.submit(ManagedReport(kind)) for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS)]
+        parked = [jobs.submit(ManagedReport(kind)) for kind in (ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)]
         fresh = jobs.submit(ReportRequest(ReportKind.SESSIONS))
         retirees = [dict(process=Mock(), receiver=Mock(), stage=0, deadline=float('inf')) for _ in range(2)]
         for retiree in retirees:

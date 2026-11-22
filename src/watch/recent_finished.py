@@ -13,7 +13,7 @@ class RecentFinished:
         if (not owner.started_at_ms or snapshot is None or not snapshot.complete
                 or not capture.authoritative or capture.retained
                 or entry.verified_generation != entry.generation):
-            return ()
+            return
         events = {event.event_id for event in snapshot.events
             if event.session_id == entry.root.session_id and event.kind is EventKind.USER_PROMPT}
         rows = [row for row in source_rows if row.event_id in events and not row.is_compaction
@@ -24,13 +24,12 @@ class RecentFinished:
         key = entry.root.session_id
         if not rows:
             self.entries.pop(key, None)
-            return ()
+            return
         row = max(rows, key=lambda row: (row.completed_at_ms, row.event_id))
         card = owner._card(entry, None, now_ms, representative=row)
         self.entries[key] = (entry.generation, entry.root.provenance, card)
         ranked = sorted(self.entries, key=lambda key: self.rank(self.entries[key][2]), reverse=True)
         self.entries = {key: self.entries[key] for key in ranked[:5]}
-        return rows
 
     @staticmethod
     def rank(card):

@@ -15,6 +15,7 @@ from typing import Mapping
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.active_hour import ActiveHour
 from src.analysis.ai_stats import StatsPeriod
+from src.analysis.matched_runs import MatchesPage
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.session_cost import SessionCostGroup
@@ -38,6 +39,7 @@ class ReportKind(str, Enum):
     TOKEN_MIX = "token-mix"
     COST_PER_HOUR = "cost-per-hour"  # Web-only explicit finite capture; no CLI option.
     AI_STATS = "ai-stats"
+    COMPARISONS = "comparisons"
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +334,7 @@ class ReportProjection:
     model_catalog: ModelCatalogProjection | None = None
     ai_stats: tuple[StatsPeriod, ...] = ()
     ai_stats_work: Mapping[str, object] = field(default_factory=dict)
+    comparisons: MatchesPage | None = None
     history_omitted_roots: int = 0
     model_comparison_mix: tuple[Decimal, Decimal, Decimal, Decimal] | None = None
     token_mix_period: Mapping[str, object] = field(default_factory=dict)

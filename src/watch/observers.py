@@ -22,8 +22,6 @@ class CatalogObservation:
     active_candidates: frozenset[str] = frozenset()
     live_candidates: frozenset[str] = frozenset()
     source_epoch: str | None = None
-    atomic_archive_roster: bool = False
-    activity_floor: Mapping[str, int] | None = None
 
 
 def _root_map(sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, str]]:
@@ -47,18 +45,6 @@ def _revisions(source: SessionSource, root_ids: Sequence[str]) -> Mapping[str, s
 
 def observe_catalog(source: SessionSource, *, session_id: str | None = None,
                     include_archived_revisions=False) -> CatalogObservation:
-    archive_reader = getattr(source, "archive_catalog", None)
-    if include_archived_revisions and session_id is None and callable(archive_reader):
-        sessions, revisions, candidates, floors = archive_reader()
-        roots, mapping = _root_map(sessions)
-        active = frozenset(mapping[key] for key in candidates if key in mapping)
-        earliest = {}
-        for session_id, at in floors.items():
-            root = mapping.get(session_id, session_id)
-            earliest[root] = min(earliest.get(root, at), at)
-        return CatalogObservation(sessions, roots, mapping, revisions, active, active,
-                                  getattr(source, "observation_epoch", None), atomic_archive_roster=True,
-                                  activity_floor=earliest)
     sessions = tuple(source.list_sessions())
     roots, root_by_session = _root_map(sessions)
     if session_id is not None:

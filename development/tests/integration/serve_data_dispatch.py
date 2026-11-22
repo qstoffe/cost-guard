@@ -32,8 +32,10 @@ class DispatchJobs(LoadingJobs):
         observed = int(time.time() * 1000)
         result['observed_at_ms'] = observed
         result['source'] = dict(status='acquired', observed_at_ms=observed)
-        if request.kind.value in {'ai-stats', 'token-mix'}:
+        if request.kind.value in {'ai-stats', 'comparisons', 'token-mix'}:
             result['source'].update(status='partial', omitted_roots=3)
+            if request.kind.value == 'comparisons':
+                result['view']['comparisons']['complete'] = False
         return key
 
     def prioritize(self, priorities):

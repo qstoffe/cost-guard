@@ -85,7 +85,7 @@ def session_model_tokens(values):
     return {'model_help': text}
 
 
-def session_model_help(item, *, qualify_effort=False):
+def session_model_help(item):
     sections = []
     remaining = 32_000
     omitted = False
@@ -98,8 +98,7 @@ def session_model_help(item, *, qualify_effort=False):
             text = request_model_help(part.provider, (part.model,), catalog_model=part.catalog_model)
             if fixture_help(part.provider, part.model):
                 text += "\n" + fixture_help(part.provider, part.model)
-            details = [effort_help(evidence, value_cell=qualify_effort)
-                       for evidence in part.efforts if evidence.selected is not None]
+            details = [effort_help(evidence) for evidence in part.efforts if evidence.selected is not None]
             if details:
                 text += "\nEffort: " + "; ".join(dict.fromkeys(details))
             bullet = "• " + text.replace("\n", "\n  ")

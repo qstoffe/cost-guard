@@ -23,12 +23,12 @@ from src.version import DISPLAY_VERSION
 def check_pagers(browser, evidence):
     """Real viewports/media/input, independent of source-cache and job-lifetime proof."""
     from playwright.sync_api import expect
-    from development.tests.fixtures.repeated_inputs import source
+    from development.tests.fixtures.matched_inputs import ComparisonsJobs, source
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / 'config').mkdir()
         shutil.copyfile(ROOT / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
-        host = WebHost(root, jobs=ReportJobs(target=current_report))
+        host = WebHost(root, jobs=ComparisonsJobs(groups=321))
         host.live = SyntheticSessionsRuntime(root, source=source(321))
         host.start()
         host.publish_ready()
@@ -42,43 +42,45 @@ def check_pagers(browser, evidence):
             page.goto(host.browser_url())
             expect(page.locator('#result .overview-models')).to_be_visible(timeout=30000)
             layouts = []
-            page.get_by_role('link', name='Sessions', exact=True).click()
-            page.get_by_role('button', name='All time', exact=True).click()
-            expect(page.locator('.page-navigation')).to_contain_text('Showing 1–25 of 963 sessions', timeout=30000)
-            expect(page.locator('.page-navigation button').first).to_be_disabled()
-            for width in (360, 1366, 1920):
-                page.set_viewport_size({'width': width, 'height': 900})
-                for theme in ('classic', 'web'):
-                    for scheme in ('light', 'dark'):
-                        page.emulate_media(color_scheme=scheme)
-                        page.evaluate('(theme) => document.documentElement.dataset.theme=theme', theme)
-                        geometry = page.locator('.page-navigation').evaluate('''bar => {
+            for section, summary in [('sessions', 'Showing 1–25 of 963 sessions'), ('comparisons', 'Showing 1–10 of 321 groups')]:
+                page.get_by_role('link', name=section.title(), exact=True).click()
+                if section == 'sessions':
+                    page.get_by_role('button', name='All time', exact=True).click()
+                expect(page.locator('.page-navigation')).to_contain_text(summary, timeout=30000)
+                expect(page.locator('.page-navigation button').first).to_be_disabled()
+                for width in (360, 1366, 1920):
+                    page.set_viewport_size({'width': width, 'height': 900})
+                    for theme in ('classic', 'web'):
+                        for scheme in ('light', 'dark'):
+                            page.emulate_media(color_scheme=scheme)
+                            page.evaluate('(theme) => document.documentElement.dataset.theme=theme', theme)
+                            geometry = page.locator('.page-navigation').evaluate('''bar => {
                                 const label=bar.querySelector(':scope > span').getBoundingClientRect(),
                                     buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()), rect=bar.getBoundingClientRect();
                                 return {viewport:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,
                                     centerError:Math.abs(label.left+label.right-rect.left-rect.right)/2,
                                     above:label.bottom<=buttons[0].top,
                                     buttonHeights:buttons.map(b=>b.height), live:bar.querySelector(':scope > span').getAttribute('aria-live')};
-                        }''')
-                        assert not geometry['overflow']
-                        assert geometry['centerError'] <= 1
-                        assert width != 360 or geometry['above']
-                        assert min(geometry['buttonHeights']) >= 30
-                        assert geometry['live'] == 'polite'
-                        layouts.append(dict(section='sessions', width=width, theme=theme, scheme=scheme, **geometry))
-            page.set_viewport_size({'width': 1366, 'height': 900})
-            next_button = page.get_by_role('button', name='Next', exact=True)
-            next_button.click()
-            expect(page.locator('.page-navigation')).to_contain_text('Showing 26–50', timeout=30000)
-            expect(next_button).to_be_focused()
-            page.keyboard.press('Enter')
-            expect(page.locator('.page-navigation')).to_contain_text('Showing 51–75', timeout=30000)
-            next_button.tap()
-            expect(page.locator('.page-navigation')).to_contain_text('Showing 76–100', timeout=30000)
+                            }''')
+                            assert not geometry['overflow']
+                            assert geometry['centerError'] <= 1
+                            assert width != 360 or geometry['above']
+                            assert min(geometry['buttonHeights']) >= 30
+                            assert geometry['live'] == 'polite'
+                            layouts.append(dict(section=section, width=width, theme=theme, scheme=scheme, **geometry))
+                page.set_viewport_size({'width': 1366, 'height': 900})
+                next_button = page.get_by_role('button', name='Next', exact=True)
+                next_button.click()
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 26–50' if section == 'sessions' else 'Showing 11–20', timeout=30000)
+                expect(next_button).to_be_focused()
+                page.keyboard.press('Enter')
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 51–75' if section == 'sessions' else 'Showing 21–30', timeout=30000)
+                next_button.tap()
+                expect(page.locator('.page-navigation')).to_contain_text('Showing 76–100' if section == 'sessions' else 'Showing 31–40', timeout=30000)
             assert not errors
             assert host.live.failure is None
             evidence['pager_layouts'] = layouts
-            evidence['checks'].append('Sessions pager: 360/1366/1920px, Classic/Web and light/dark media, actual mouse/keyboard/emulated touch, focus and live summary')
+            evidence['checks'].append('shared Sessions/321-group Comparisons pagers: 360/1366/1920px, Classic/Web and light/dark media, actual mouse/keyboard/emulated touch, focus and live summary')
         finally:
             context.close()
             host.close()
@@ -180,17 +182,6 @@ def main():
                 page.go_forward()
                 expect(page.locator("#heading")).to_contain_text("Accounts")
                 evidence["checks"].append("rendered navigation and browser Back/Forward")
-                expect(page.get_by_role("link", name="Comparisons", exact=True)).to_have_count(0)
-                report_starts = []
-                def count_report_start(request):
-                    if request.url.endswith(("/api/reports", "/api/data")):
-                        report_starts.append(request.url)
-                page.on("request", count_report_start)
-                page.goto(origin + "/#/comparisons")
-                expect(page.locator("#heading")).to_have_text("Page not found")
-                page.remove_listener("request", count_report_start)
-                assert not report_starts, "Deleted Comparisons bookmark must not acquire"
-                evidence["checks"].append("Comparisons is absent from navigation and its old bookmark starts no report")
                 page.goto(origin + "/#/sessions/root")
                 expect(page.locator("#result tbody tr").first).to_be_visible(timeout=30000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
@@ -369,22 +360,6 @@ def main():
                 assert owner.stopped.wait(10)
                 assert not errors
                 evidence["checks"].append("terminal SSE and clean owned server shutdown; no JavaScript errors")
-                from development.tests.integration.ci_cached_mix import check_cached_mix
-                from development.tests.integration.ci_cached_sessions import check_cached_sessions
-                from development.tests.integration.ci_cached_watch import check_cached_watch
-                check_cached_sessions(browser, evidence, ROOT)
-                check_cached_watch(browser, evidence, ROOT)
-                check_cached_mix(browser, evidence, ROOT)
-                from development.tests.integration.ci_cached_stats import check_cached_stats
-                check_cached_stats(browser, evidence, ROOT)
-                from development.tests.integration.ci_cached_models import check_cached_models
-                check_cached_models(browser, evidence, ROOT)
-                from development.tests.integration.ci_cached_accounts import check_cached_accounts
-                check_cached_accounts(browser, evidence, ROOT)
-                from development.tests.integration.ci_cached_cold_views import check_cached_cold_views
-                check_cached_cold_views(browser, evidence, ROOT)
-                from development.tests.integration.ci_cached_warm_views import check_cached_warm_views
-                check_cached_warm_views(browser, evidence, ROOT)
                 check_extended_browser(browser, evidence)
             finally:
                 browser.close()

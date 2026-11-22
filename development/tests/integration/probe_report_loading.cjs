@@ -44,7 +44,7 @@ async function main(){
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     await command('Page.navigate',{url:launch.url});
     await until(`typeof current!=='undefined' && current?.active && document.querySelector('.report-loading')`);
-    for(const section of modelsOnly?['models']:['models','token-mix','ai-stats']){
+    for(const section of modelsOnly?['models']:['models','token-mix','ai-stats','comparisons']){
       await fixture('hold');
       if(section!=='models')await evaluate(`location.hash='#/${section}'`);
        await until(`current?.section==='${section}' && current.active && document.querySelector('.report-loading')`);
@@ -69,6 +69,12 @@ async function main(){
             overflow:document.documentElement.scrollWidth>innerWidth,value:__bar.value,max:__bar.max,accessible:__bar.getAttribute('aria-valuetext'),text:__loader.textContent};})()`);
         assert.equal(layout.max,100);assert.equal(layout.below,true);assert.ok(layout.center<1);assert.equal(layout.overflow,false);
         assert.match(layout.accessible,/^\d+ percent$/);assert.doesNotMatch(layout.text,/≈|Approximately|~\d/);
+         if(section==='comparisons'){
+           const chrome=await evaluate(`({notice:getComputedStyle(document.getElementById('notice')).display,
+             search:getComputedStyle(document.querySelector('.report-search')).display,
+             pager:getComputedStyle(document.querySelector('.comparisons-view .pager')).visibility})`);
+           assert.deepEqual(chrome,{notice:'none',search:'none',pager:'hidden'},'no blank notice or visible empty pager');
+         }
          layouts.push({section,theme,...layout});
       }
       const ax=await command('Accessibility.getFullAXTree');assert.ok(ax.nodes.some(n=>n.role?.value==='progressbar'&&n.value?.value===values.at(-1)));
@@ -77,6 +83,13 @@ async function main(){
         await evaluate(`window.__state=current;window.__job=current.active;location.hash='#/watch'`);
         await until(`current.section==='watch'`);
         const cover=await command('Target.createTarget',{url:'about:blank'});
+        if(section==='comparisons'){
+          const peer=(await command('Target.attachToTarget',{targetId:cover.targetId,flatten:true})).sessionId;
+          await command('Runtime.enable',{},peer);await command('Page.enable',{},peer);
+          await command('Page.navigate',{url:launch.url.split('#')[0]+'#/comparisons'},peer);
+          await until(`typeof current!=='undefined' && !!current?.active`,peer);
+          assert.equal(await evaluate(`current.active`,peer),await evaluate(`__job`),'competing tab coalesces the original Comparisons job');
+        }
         await command('Target.activateTarget',{targetId:cover.targetId});await until(`document.hidden`);
         await fixture('complete');await until(`!__state.loading && !!__state.result`);
         await command('Target.closeTarget',{targetId:cover.targetId});
@@ -112,7 +125,7 @@ async function main(){
      await until(`current.section==='watch' && !!__waiting.active`);
      assert.equal(await evaluate(`__waiting.attempt===__attempt && !__attempt.reason`),true);
      await fixture('complete');await until(`!__waiting.loading && !__waiting.failed`);
-     await evaluate(`history.back()`);await until(`current.section==='ai-stats'`);
+     await evaluate(`history.back()`);await until(`current.section==='comparisons'`);
      facts.push('temporary 429 pending intent survives navigation and admits once with bounded backoff');
     }
     assert.deepEqual(errors,[]);outcome='PASS';console.log(JSON.stringify({outcome,checks:facts.length,layouts:layouts.length}));

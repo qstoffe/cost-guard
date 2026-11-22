@@ -121,7 +121,7 @@ def main():
             synthetic_snapshot(1, 'claude-sonnet-5-5', 'github-copilot')))
         result['synthetic_views'] = {kind.value: project(fixture.build(ReportRequest(kind,
             **({'session_id': 'root-0000'} if kind is ReportKind.SESSION else {}))), prompt_details=True).to_json()
-            for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.AI_STATS)}
+            for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.COMPARISONS, ReportKind.AI_STATS)}
         saved = make_snapshot()
         saved = replace(saved, invocations=tuple(replace(item,
             model=ModelRef('openrouter', 'vendor/future-release') if item.summary else

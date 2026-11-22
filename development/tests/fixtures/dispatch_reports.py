@@ -11,7 +11,7 @@ from src.web.report_control import ManagedReport
 
 def quantum_report(sender, request):
     quantum = Quantum(sender, .03)
-    total = 50 if request.kind is ReportKind.COST_PER_HOUR else 3
+    total = 50 if request.kind is ReportKind.COMPARISONS else 3
     try:
         for completed in range(total):
             quantum.checkpoint()

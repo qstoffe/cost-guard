@@ -14,11 +14,11 @@ from src.reports import ReportKind, ReportRequest
 from .jobs import MAX_PENDING
 from .report_control import ManagedReport
 
-FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX)
+FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)
 DEFAULT_REQUESTS = tuple(ReportRequest(kind) for kind in FINITE)
 BACKGROUND_STAGGER = 15
 RECENT_SECONDS = 1800
-SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'settings'}
+SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'comparisons', 'settings'}
 MAX_ENTRIES = 12
 LEASE_SECONDS = 90
 WORKER_INTERRUPTS = {'report_unavailable', 'worker_unavailable', 'cancelled'}
@@ -66,13 +66,6 @@ def token_mix_coverage(result):
     return {'unknown': 0, 'partial': 1}.get(period.get('coverage'), 2)
 
 
-def cache_only_reports(owner):
-    return frozenset(kind for kind, feature in
-                     ((ReportKind.TOKEN_MIX, 'cached_mix_enabled'), (ReportKind.AI_STATS, 'cached_stats_enabled'),
-                      (ReportKind.NORMAL, 'cached_models_enabled'), (ReportKind.ALL_MODELS, 'cached_models_enabled'))
-                     if getattr(owner, feature, False))
-
-
 def cadence(request, result, foreground):
     if request.kind is ReportKind.NORMAL:
         qualified = (result or {}).get('view', {}).get('model_comparison_sample_size', 0)
@@ -83,13 +76,11 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, cache_only_mix=False,
-                 cache_only_stats=False, models=None):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
         self.tabs = OrderedDict()
-        self._visible_leases = ()
         self.initialized = False
         self.identity = ''
         self.projection_epoch = 0
@@ -99,11 +90,6 @@ class DataDispatcher:
         self.price_actions = set()
         self.ready = False
         self.warm_allowed = False
-        self.models = models
-        self.model_binding = None
-        self.default_requests = tuple(request for request in DEFAULT_REQUESTS
-                                      if (not cache_only_mix or request.kind is not ReportKind.TOKEN_MIX)
-                                      and (not cache_only_stats or request.kind is not ReportKind.AI_STATS))
 
     def price_refresh(self, key):
         with self.lock:
@@ -113,8 +99,6 @@ class DataDispatcher:
         """Known projection dependency changed; no stale completed-job reuse."""
         with self.lock:
             self.projection_epoch += 1
-            if self.models is not None:
-                self.models.invalidate_prices(int(self.wall_clock() * 1000))
             for entry in self.entries.values():
                 if entry['job']:
                     self.jobs.cancel(entry['job'])
@@ -133,7 +117,7 @@ class DataDispatcher:
         if request not in self.entries:
             while len(self.entries) >= MAX_ENTRIES:
                 victim = next((key for key, value in self.entries.items() if not value['job']
-                               and key not in self.default_requests and key not in self._foreground()), None)
+                               and key not in DEFAULT_REQUESTS and key not in self._foreground()), None)
                 if victim is None:
                     raise RuntimeError('busy')
                 del self.entries[victim]
@@ -149,8 +133,6 @@ class DataDispatcher:
                 raise RuntimeError('busy')
             self.tabs[tab] = dict(section=section, visible=visible, request=request, history=history,
                                   account_period=account_period, touched=self.clock())
-            self._visible_leases = tuple((lease['section'], lease['touched'] + LEASE_SECONDS)
-                                         for lease in self.tabs.values() if lease['visible'])
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
@@ -173,16 +155,8 @@ class DataDispatcher:
             if self.clock() - value['touched'] >= LEASE_SECONDS:
                 del self.tabs[tab]
 
-    def visible_sections(self):
-        # Live reads this immutable snapshot without entering the finite jobs lock.
-        now = self.clock()
-        return frozenset(section for section, expires in self._visible_leases if now < expires)
-
     def _foreground(self):
-        requests = {tab['request'] for tab in self.tabs.values() if tab['visible'] and tab['request']}
-        if self.model_binding is not None and 'models' in self.visible_sections():
-            requests.add(ReportRequest(ReportKind.NORMAL))
-        return requests
+        return {tab['request'] for tab in self.tabs.values() if tab['visible'] and tab['request']}
 
     def lookup(self, request, *, retry=False):
         with self.lock:
@@ -211,40 +185,11 @@ class DataDispatcher:
 
     def _submit(self, request, entry):
         managed = ManagedReport(**{name: getattr(request, name) for name in ReportRequest.__dataclass_fields__},
-                                source_identity=self.identity,
-                                models_scope=self.model_binding[0].source if self._cached_models(request) else '')
+                                source_identity=self.identity)
         entry['job'] = self.jobs.submit(managed)
         if (request in self._foreground() and request.kind is ReportKind.AI_STATS
                 and hasattr(self.jobs, 'select_scope')):
             self.jobs.select_scope(entry['job'], request.stats_scope)
-
-    def _cached_models(self, request):
-        return self.models is not None and request.kind is ReportKind.NORMAL
-
-    def _sync_models(self):
-        if self.models is None:
-            return
-        bound = self.models.binding()
-        if self.model_binding == bound:
-            return
-        self.model_binding = bound
-        entry = self.entries.pop(ReportRequest(ReportKind.NORMAL), None)
-        if entry and entry['job']:
-            self.jobs.cancel(entry['job'])
-        if bound is not None:
-            self._entry(ReportRequest(ReportKind.NORMAL))
-
-    def _offer_models(self, request, snapshot, result, ready):
-        if not self._cached_models(request):
-            return ready, False
-        if snapshot['status'] != 'complete' or not ready:
-            return False, False
-        now = int(self.wall_clock() * 1000)
-        if self.model_binding is None or not current_result(request, result, now):
-            return False, False
-        epoch = self.projection_epoch
-        accepted = self.models.offer(self.model_binding, result, eligible=lambda: self.projection_epoch == epoch)
-        return accepted, False  # Data/benchmark HTTP cannot borrow the worker payload.
 
     def _collect(self):
         for request, entry in self.entries.items():
@@ -267,8 +212,6 @@ class DataDispatcher:
                 ready = ready and scoped.get(request.stats_scope, {}).get('ready') is True
             ready = ready and not old_schema
             replace_result, degraded = ready, False
-            if self._cached_models(request):
-                ready, replace_result = self._offer_models(request, snapshot, result, ready)
             token_mix = request.kind is ReportKind.TOKEN_MIX
             if token_mix and ready:
                 now = int(self.wall_clock() * 1000)
@@ -288,11 +231,6 @@ class DataDispatcher:
                 spread = int(dependency_signature(str(request))[:4], 16) % 90
                 if degraded:
                     delay, spread = 30, spread % 15  # Reconcile coverage sooner on the low-priority lane.
-                if self._cached_models(request):
-                    boundary = result['source'].get('model_price_boundary_ms')
-                    if type(boundary) is int:
-                        remaining = (boundary - int(self.wall_clock() * 1000)) / 1000
-                        delay, spread = min(delay, max(30, remaining)), 0
                 entry.update(due=self.clock() + delay + spread, terminal=False, finished=self.clock(), requested=False)
             elif token_mix and snapshot['status'] == 'complete' and result and not result.get('error'):
                 period = (result.get('view') or {}).get('token_mix_period') or {}
@@ -335,7 +273,6 @@ class DataDispatcher:
                 self.projection_epoch += 1
                 self.initialized = False
             self.identity = identity
-            self._sync_models()
             self._prices()
             self._collect()
             if not ready:
@@ -364,7 +301,7 @@ class DataDispatcher:
             if not self.initialized:
                 self.initialized = True
                 self.next_background = self.clock() + BACKGROUND_STAGGER
-                for request in self.default_requests:
+                for request in DEFAULT_REQUESTS:
                     self._entry(request)
             self.warm_allowed = True
             for request in foreground:
@@ -390,12 +327,11 @@ class DataDispatcher:
             return  # Keep room for newly visible work (coalesced scopes count once).
         due = []
         for request, entry in self.entries.items():
-            default = request in self.default_requests
+            default = request in DEFAULT_REQUESTS
             recent = entry['visited'] is not None and now - entry['visited'] < RECENT_SECONDS
             optional = recent and ((request.kind is ReportKind.AI_STATS and request.stats_scope != 'all')
                                    or (request.kind is ReportKind.TOKEN_MIX and request.token_mix_scope != 'all'))
             if (request not in foreground and not entry['job'] and not entry['terminal']
-                    and (not self._cached_models(request) or self.model_binding is not None)
                     and now >= entry['due'] and (default or optional)):
                 due.append((not default, entry['due'], request, entry))
         if not due:

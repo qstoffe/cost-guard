@@ -58,13 +58,13 @@ async function main() {
     assert.equal(await evaluate(`probeStreams.length`), 1);
     const notice = await evaluate(`sourceNotice.textContent`);
     assert.match(notice, /supports V1 with polling; native session export requires V2/);
-    for (const route of ['models', 'watch', 'sessions', 'accounts', 'token-mix', 'ai-stats', 'settings']) {
+    for (const route of ['models', 'watch', 'sessions', 'accounts', 'token-mix', 'ai-stats', 'comparisons', 'settings']) {
       await evaluate(`location.hash='#/${route}'`); await until(`document.body.dataset.section==='${route}'`);
       assert.equal(await evaluate(`document.querySelectorAll('#source-compatibility').length===1 && !sourceNotice.hidden && sourceNotice.nextElementSibling.id==='host-state'`), true);
     }
-    await evaluate(`history.back()`); await until(`document.body.dataset.section==='ai-stats'`);
+    await evaluate(`history.back()`); await until(`document.body.dataset.section==='comparisons'`);
     await evaluate(`history.forward()`); await until(`document.body.dataset.section==='settings'`);
-    evidence.checks.push('authoritative V1; all seven routes; Back/Forward; one top-level notice and SSE');
+    evidence.checks.push('authoritative V1; all eight routes; Back/Forward; one top-level notice and SSE');
     await evaluate(`location.hash='#/watch'`); await until(`current?.watch && miniWatch.measure?.ready`);
     await evaluate(`document.getElementById('search').value='Root';document.getElementById('search').dispatchEvent(new Event('input'))`);
     await evaluate(`miniWatch.toggle()`, true); await until(`!!miniWatch.view`);
