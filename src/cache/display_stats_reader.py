@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 
 from .display_stats_evidence import ResponseTiming, StatsInterval, StatsMatch, response_timings
+from .display_stats_geometry_revision import MEASURED_GEOMETRY, StatsGeometryVersion, retained_geometry_version
 from .display_stats_revision import StatsVersion, retained_stats_version
 from .display_usage_reader import USAGE_SLICE, UsageSlice, read_usage_slice
 
@@ -31,7 +32,7 @@ class StatsRootSlice:
 
 @dataclass(frozen=True, slots=True)
 class StatsGeometrySlice:
-    version: StatsVersion
+    version: StatsGeometryVersion
     intervals: tuple[StatsInterval, ...]
     next_cursor: tuple[int, str, str, str, str] | None
     roots: tuple[str, ...]
@@ -78,16 +79,16 @@ def read_stats_parents(db, source, root, through, after=None):
 
 
 def read_stats_geometry(db, source, *, expected=None, after=None):
-    version = retained_stats_version(db, source, expected)
+    version = retained_geometry_version(db, source, expected)
     if version is None:
         return None
     key = "first_revision,root_id,session_id,event_id,kind"
     resume = f"AND ({key})>(?,?,?,?,?)" if after is not None else ""
     rows = db.execute(f"""
         SELECT {key},start_ms,duration_ms,provisional
-        FROM archive_stats_intervals INDEXED BY archive_stats_geometry_cohort
-        WHERE source=? AND first_revision<=? {resume} ORDER BY {key} LIMIT ?
-    """, (source, version.evidence, *(after or ()), USAGE_SLICE + 1)).fetchall()
+        FROM archive_stats_intervals INDEXED BY archive_stats_measured_cohort
+        WHERE source=? AND first_revision<=? AND {MEASURED_GEOMETRY} {resume} ORDER BY {key} LIMIT ?
+    """, (source, version.revision, *(after or ()), USAGE_SLICE + 1)).fetchall()
     intervals = tuple(StatsInterval(*row[2:7], bool(row[7])) for row in rows[:USAGE_SLICE])
     return StatsGeometrySlice(version, intervals, rows[USAGE_SLICE - 1][:5] if len(rows) > USAGE_SLICE else None,
                               tuple(row[1] for row in rows[:USAGE_SLICE]))

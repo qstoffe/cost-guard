@@ -1,8 +1,7 @@
 """Committed AI Stats measured working time; no estimated or live geometry."""
 from dataclasses import astuple, dataclass
 
-from .display_stats_revision import StatsVersion, retained_stats_version
-from .display_usage_reader import UsageVersion
+from .display_stats_geometry_revision import StatsGeometryVersion, retained_geometry_version
 
 _PERIODS = frozenset({"today", "7-days", "30-days", "month", "all"})
 
@@ -33,7 +32,7 @@ class StatsTimeRow:
 
 @dataclass(frozen=True, slots=True)
 class StatsTimeStamp:
-    version: StatsVersion
+    version: StatsGeometryVersion
     zone: str
     as_of: int
     next_end: int | None
@@ -52,11 +51,16 @@ class StatsTimeSnapshot:
     current: bool  # Current against the archive, not proof of historical coverage.
 
 
-def stats_time_schema():
-    return """
+def stats_time_schema(*, upgrade=False):
+    migration = """
+        ALTER TABLE archive_stats_time_state DROP COLUMN usage_revision;
+        ALTER TABLE archive_stats_time_state RENAME COLUMN evidence_revision TO geometry_revision;
+        UPDATE archive_stats_time_state SET geometry_revision=-1;
+    """ if upgrade else ""
+    return migration + """
         CREATE TABLE IF NOT EXISTS archive_stats_time_state (
             source TEXT PRIMARY KEY REFERENCES sources(source),
-            archive_epoch INTEGER NOT NULL, usage_revision INTEGER NOT NULL, evidence_revision INTEGER NOT NULL,
+            archive_epoch INTEGER NOT NULL, geometry_revision INTEGER NOT NULL,
             timezone_id TEXT NOT NULL, end_ms INTEGER NOT NULL, next_end INTEGER
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS archive_stats_time (
@@ -89,9 +93,9 @@ _ROWS = """
 
 
 def time_stamp(db, source):
-    row = db.execute("SELECT archive_epoch,usage_revision,evidence_revision,timezone_id,end_ms,next_end "
+    row = db.execute("SELECT archive_epoch,geometry_revision,timezone_id,end_ms,next_end "
                      "FROM archive_stats_time_state WHERE source=?", (source,)).fetchone()
-    return StatsTimeStamp(StatsVersion(UsageVersion(*row[:2]), row[2]), *row[3:]) if row else None
+    return StatsTimeStamp(StatsGeometryVersion(*row[:2]), *row[2:]) if row else None
 
 
 def commit_time(db, source, stamp, rows):
@@ -113,24 +117,22 @@ def commit_time(db, source, stamp, rows):
         if roots and (row.working_ms is None or not 0 < roots.longest_ms <= row.working_ms or roots.peak_roots <= 0
                       or not roots.longest_root):
             raise ValueError("invalid_stats_root_time_row")
-    if retained_stats_version(db, source, stamp.version) is None:
+    if retained_geometry_version(db, source, stamp.version) is None:
         return None
     old = time_stamp(db, source)
     prior = {}
-    if old and stamp.version.usage.archive_epoch == old.version.usage.archive_epoch:
-        if (stamp.as_of < old.as_of or stamp.version.evidence < old.version.evidence
-                or stamp.version.usage.revision < old.version.usage.revision):
+    if old and stamp.version.archive_epoch == old.version.archive_epoch:
+        if stamp.as_of < old.as_of or stamp.version.revision < old.version.revision:
             return None
         if old.zone == stamp.zone:
             prior = {row[0]: _decode(row) for row in db.execute(_ROWS, (source,))}
     db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
     db.execute("""
-        INSERT INTO archive_stats_time_state VALUES(?,?,?,?,?,?,?)
-        ON CONFLICT(source) DO UPDATE SET (archive_epoch,usage_revision,evidence_revision,timezone_id,end_ms,next_end)=
-            (excluded.archive_epoch,excluded.usage_revision,excluded.evidence_revision,
-             excluded.timezone_id,excluded.end_ms,excluded.next_end)
-    """, (source, stamp.version.usage.archive_epoch, stamp.version.usage.revision,
-          stamp.version.evidence, stamp.zone, stamp.as_of, stamp.next_end))
+        INSERT INTO archive_stats_time_state(source,archive_epoch,geometry_revision,timezone_id,end_ms,next_end)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(source) DO UPDATE SET (archive_epoch,geometry_revision,timezone_id,end_ms,next_end)=
+            (excluded.archive_epoch,excluded.geometry_revision,excluded.timezone_id,excluded.end_ms,excluded.next_end)
+    """, (source, stamp.version.archive_epoch, stamp.version.revision, stamp.zone, stamp.as_of, stamp.next_end))
     db.executemany("""
         INSERT INTO archive_stats_time VALUES(?,?,?,?)
         ON CONFLICT(source,period) DO UPDATE SET (start_ms,working_ms)=(excluded.start_ms,excluded.working_ms)
@@ -174,8 +176,8 @@ def read_time(db, source, zone, period, start_ms, now_ms):
     stamp = time_stamp(db, source)
     if stamp is None or stamp.zone != zone or stamp.as_of > now_ms:
         return None
-    version = retained_stats_version(db, source)
-    if stamp.version.usage.archive_epoch != version.usage.archive_epoch:
+    version = retained_geometry_version(db, source)
+    if stamp.version.archive_epoch != version.archive_epoch:
         return None
     row = db.execute(_ROWS + " AND period=? AND start_ms IS ?", (source, period, start_ms)).fetchone()
     if row is None:
@@ -194,7 +196,7 @@ def _values(value, count):
 
 
 def _current(db, source, stamp, now_ms):
-    return _unexpired(stamp, now_ms) and retained_stats_version(db, source) == stamp.version
+    return _unexpired(stamp, now_ms) and retained_geometry_version(db, source) == stamp.version
 
 
 def _unexpired(stamp, now_ms):

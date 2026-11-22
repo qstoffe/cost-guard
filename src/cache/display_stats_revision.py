@@ -33,8 +33,6 @@ def stats_revision_schema(*, upgrade=False):
     return columns + triggers + """
         CREATE INDEX IF NOT EXISTS archive_stats_root_cohort
         ON archive_stats_roots(source,first_revision,root_id);
-        CREATE INDEX IF NOT EXISTS archive_stats_geometry_cohort
-        ON archive_stats_intervals(source,first_revision,root_id,session_id,event_id,kind);
     """
 
 

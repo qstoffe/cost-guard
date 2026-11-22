@@ -18,12 +18,13 @@ from .display_usage_reader import read_usage_slice, retained_usage_version, usag
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
 from .display_stats_evidence import stats_evidence_schema, stats_interval_page
+from .display_stats_geometry_revision import geometry_schema
 from .display_stats_reader import read_stats_geometry, read_stats_parents, read_stats_roots, read_stats_usage
 from .display_stats_revision import retained_stats_version, stats_revision_schema
 from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -253,7 +254,8 @@ class DisplayHistory:
                      {mix_identity_schema()}
                       {stats_evidence_schema()}
                       {stats_revision_schema(upgrade=version == 18)}
-                      {stats_time_schema()}
+                      {geometry_schema(seed=version >= 18)}
+                      {stats_time_schema(upgrade=version >= 20)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -307,6 +309,7 @@ class DisplayHistory:
                  {mix_identity_schema()}
                   {stats_evidence_schema()}
                   {stats_revision_schema()}
+                  {geometry_schema()}
                   {stats_time_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
@@ -667,6 +670,7 @@ class DisplayHistory:
             db.execute("DELETE FROM sessions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_requests WHERE source=?", (source,))
             db.execute("DELETE FROM archive_stats_revisions WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_stats_geometry_revisions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_stats_time_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))

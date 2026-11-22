@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+from development.tests.fixtures.archive_stats_schema import remove_measured_cohort, restore_v20_cohort, restore_v20_stamp
 from development.tests.fixtures.session_snapshots import one_request
 from development.tests.test_archive_stats_evidence import capture
 from src.analysis.ai_stats import windows
@@ -65,7 +66,7 @@ class ArchiveStatsTimeTests(TestCase):
         cached = reopened.stats_time("bound", "UTC", "all", None, 2001)
 
         self.assertEqual(USAGE_SLICE, len(first.intervals))
-        self.assertEqual(5, len(tail.intervals))
+        self.assertEqual(3, len(tail.intervals))  # Provisional and missing-duration inputs never occupy its cohort.
         self.assertIsNone(tail.next_cursor)
         self.assertEqual(8, turns)  # Two input turns, then six bounded projection turns.
         self.assertEqual(StatsTimeRow("all", None, 393, StatsCalendar(date(1970, 1, 1).toordinal(), 393, 393, 1),
@@ -134,9 +135,9 @@ class ArchiveStatsTimeTests(TestCase):
 
     def test_v19_upgrade_adds_projection_without_discarding_existing_geometry_or_pins(self):
         self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
-        pin = self.history.stats_geometry("bound").version
+        before = self.history.stats_geometry("bound")
         with self.history._connect() as db:
-            db.execute("DROP INDEX archive_stats_geometry_cohort")
+            remove_measured_cohort(db)
             db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("DROP TABLE archive_stats_time")
@@ -145,16 +146,19 @@ class ArchiveStatsTimeTests(TestCase):
 
         self.history = DisplayHistory(self.root)
         self.history.initialize()
-        geometry = self.history.stats_geometry("bound", expected=pin)
+        geometry = self.history.stats_geometry("bound")
         self.reduce(2000)
 
-        self.assertEqual(pin, geometry.version)
+        self.assertEqual(before.intervals, geometry.intervals)
         self.assertEqual(250, self.history.stats_time("bound", "UTC", "all", None, 2000).row.working_ms)
 
     def test_v20_measured_time_remains_readable_while_calendar_is_added(self):
         self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
         self.reduce(2000)
         with self.history._connect() as db:
+            remove_measured_cohort(db)
+            restore_v20_cohort(db)
+            restore_v20_stamp(db)
             db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("PRAGMA user_version=20")
@@ -230,6 +234,9 @@ class ArchiveStatsTimeTests(TestCase):
         self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
         self.reduce(2000)
         with self.history._connect() as db:
+            remove_measured_cohort(db)
+            restore_v20_cohort(db)
+            restore_v20_stamp(db)
             db.execute("DROP TABLE archive_stats_root_time")
             db.execute("PRAGMA user_version=21")
         self.history = DisplayHistory(self.root)
@@ -245,3 +252,27 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertIsNone(prior.row.roots)
         self.assertTrue(due)
         self.assertEqual(StatsRootTime("root", 250, 1), updated.row.roots)
+
+    def test_unrelated_activity_does_not_invalidate_an_inflight_measured_projection(self):
+        span = StatsInterval("root", "measured", "prompt", 1000, 250, False)
+        self.commit((span,))
+        pin = self.history.stats_geometry("bound").version
+        previous_stats = self.history.stats_usage("bound").version
+        running = StatsInterval("root", "ongoing", "prompt", 1400, None, True)
+        self.commit((span, running), sequence=2)
+
+        retained = self.history.stats_geometry("bound", expected=pin)
+        unchanged = self.history.stats_geometry("bound")
+        obsolete_full_stats = self.history.stats_usage("bound", expected=previous_stats)
+        self.commit((span, replace(running, provisional=False, duration_ms=200)), sequence=3)
+        stale = self.history.stats_geometry("bound", expected=pin)
+        corrected = self.history.stats_geometry("bound")
+        self.commit((StatsInterval("b", "append", "prompt", 1800, 100, False),), root="b")
+        pinned = self.history.stats_geometry("bound", expected=corrected.version)
+
+        self.assertEqual((span,), retained.intervals)
+        self.assertEqual(pin, unchanged.version)
+        self.assertIsNone(obsolete_full_stats)
+        self.assertIsNone(stale)  # A now-measured prior interval must not leak into an old pin.
+        self.assertEqual(2, len(pinned.intervals))
+        self.assertEqual(3, len(self.history.stats_geometry("bound").intervals))

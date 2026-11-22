@@ -36,13 +36,11 @@ class DisplayStats:
         if published is None or not published.changed_periods:
             return
         stamp = published.stamp
-        usage = stamp.version.usage
         with self._signal:
             if not eligible():
                 return
-            self._marks.update(dict.fromkeys(published.changed_periods, (usage.revision, stamp.version.evidence,
-                                                                          stamp.as_of)))
-            self._publish("ai-stats-cache", dict(binding=views.binding, archive_epoch=usage.archive_epoch,
+            self._marks.update(dict.fromkeys(published.changed_periods, (stamp.version.revision, stamp.as_of)))
+            self._publish("ai-stats-cache", dict(binding=views.binding, archive_epoch=stamp.version.archive_epoch,
                 periods=published.changed_periods, marks=self._marks.copy()))
 
     def reset(self, views, *, archive_epoch=None):

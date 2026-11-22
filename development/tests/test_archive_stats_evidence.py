@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+from development.tests.fixtures.archive_stats_schema import remove_measured_cohort
 from development.tests.fixtures.session_snapshots import make_snapshot, one_request
 from src.analysis import analyze_snapshot
 from src.analysis.input_identity import fingerprint, first_input
@@ -172,7 +173,7 @@ class ArchiveStatsEvidenceTests(TestCase):
                   "archive_stats_first_inputs", "archive_response_timing")
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_root_cohort")
-            db.execute("DROP INDEX archive_stats_geometry_cohort")
+            remove_measured_cohort(db)
             db.execute("DROP TABLE archive_stats_root_time")
             db.execute("DROP TABLE archive_stats_calendar")
             db.execute("DROP TABLE archive_stats_time")
@@ -190,5 +191,5 @@ class ArchiveStatsEvidenceTests(TestCase):
 
         self.assertEqual(before, retained)
         self.assertIsNone(older)
-        self.assertTrue(reopened.stats_geometry("trusted", expected=before.version).intervals)
+        self.assertTrue(reopened.stats_geometry("trusted").intervals)
         self.assertIsNone(reopened.stats_time("trusted", "UTC", "all", None, 10_000))
