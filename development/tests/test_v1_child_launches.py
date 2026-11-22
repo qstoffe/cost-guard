@@ -9,6 +9,7 @@ from development.tests.test_v1_archive_cursor import ROOT, _seed, _session
 from src.analysis.child_links import ChildLinkIndex, OPEN_END
 from src.application.v1_archive_trace import V1ArchiveTrace
 from src.application.v1_child_launches import DirectChildWindow
+from src.application.v1_child_membership import ChildAssistant
 from src.sources.errors import SourceDataError
 from src.sources.opencode_v1 import OpenCodeV1Source
 
@@ -68,10 +69,18 @@ class V1ChildLaunchTests(unittest.TestCase):
             _turn(db, "late-start", "next-independent", 3500)
             _message(db, "child", "crossing", 3100, role="assistant", parentID="in-second",
                      time={"completed": 3500})
+            _message(db, "child", "continuation", 3340, role="assistant", parentID="in-second",
+                     time={"completed": 3600})
+            _message(db, "child", "unrelated-after-return", 3360, role="assistant", parentID="other",
+                     time={"completed": 3370})
+            _message(db, "child", "unrelated-after-cutoff", 3500, role="assistant", parentID="independent",
+                     time={"completed": 3600})
+            _message(db, "late-start", "post-ack", 3350, role="assistant", parentID="first-after-ack",
+                     time={"completed": 3600})
         source = OpenCodeV1Source(self.source_path)
         snapshot = source.load_session_snapshot(ROOT)
 
-        windows, sizes, work = self._windows(source)
+        windows, sizes, work, members = self._windows(source)
 
         self.assertEqual({
             DirectChildWindow(ROOT, "origin", "child", 2000, 3000, 3000, "in-first", True),
@@ -84,8 +93,20 @@ class V1ChildLaunchTests(unittest.TestCase):
                                    scope.invocation_end_ms, scope.owner_id, scope.background)
                  for mid, scopes in index.links_by_message.items() for scope in scopes}
         self.assertEqual(whole, set(windows))
-        self.assertEqual(("crossing",), next(scope for scope in index.links_by_message["next"]
-                                            if scope.session_id == "child").continuing_ids)
+        self.assertEqual({
+            ("child", 2000): [],
+            ("child", 3000): [ChildAssistant("crossing", 3100, 3500, True),
+                              ChildAssistant("continuation", 3340, 3600, True)],
+            ("late-start", 3200): [ChildAssistant("post-ack", 3350, 3600, True)],
+            ("empty", 1900): [],
+        }, members)
+        for window in windows:
+            scope = next(scope for scope in index.links_by_message[window.message_id]
+                         if scope.session_id == window.session_id and scope.start_ms == window.start_ms)
+            self.assertEqual({msg.message_id for msg in index.messages((scope,))},
+                             {msg.message_id for msg in members[window.session_id, window.start_ms]})
+            self.assertEqual(set(scope.continuing_ids), {msg.message_id
+                             for msg in members[window.session_id, window.start_ms] if msg.continuing})
         self.assertEqual([0, 4], sizes)
         self.assertLess(max(work), 2500)
         self.assertNotIn(b"FIXTURE_ONLY_TEXT", self.stage_path.read_bytes())
@@ -108,7 +129,7 @@ class V1ChildLaunchTests(unittest.TestCase):
         source = OpenCodeV1Source(self.source_path)
         index = ChildLinkIndex(source.load_session_snapshot(ROOT))
 
-        windows, sizes, work = self._windows(source)
+        windows, sizes, work, _ = self._windows(source)
 
         self.assertEqual([DirectChildWindow(ROOT, "m-Ā", "first-child", 2000, 2200, OPEN_END, "", False)], windows)
         self.assertEqual(["m-Ā"], list(index.links_by_message))
@@ -135,13 +156,58 @@ class V1ChildLaunchTests(unittest.TestCase):
                 return 0
 
             db.set_progress_handler(progress, 1)
-            windows, sizes, work = [], [], []
+            windows, sizes, work, members = [], [], [], {}
             for _ in range(32):
                 before = steps
                 page = stage.child_launch_turn()
                 if page is None:
-                    return windows, sizes, work
+                    break
                 windows.extend(page)
                 sizes.append(len(page))
                 work.append(steps - before)
-        self.fail("child launch stage did not reach EOF")
+            else:
+                self.fail("child launch stage did not reach EOF")
+            for window in windows:
+                membership = stage.child_window_membership(window)
+                rows = []
+                for _ in range(32):
+                    before = steps
+                    page = membership.turn()
+                    if page is None:
+                        break
+                    rows.extend(page)
+                    work.append(steps - before)
+                else:
+                    self.fail("child membership stage did not reach EOF")
+                members[window.session_id, window.start_ms] = rows
+        return windows, sizes, work, members
+
+    def test_crossing_membership_seeks_dense_equal_clocks_and_does_not_invent_late_owner(self):
+        with closing(sqlite3.connect(self.source_path)) as db, db:
+            _session(db, "wide-child", ROOT)
+            db.execute("UPDATE session SET time_created=2050 WHERE id='wide-child'")
+            _message(db, ROOT, "launch", 1500, role="assistant")
+            _tool(db, ROOT, "launch", "open", "open", 2000, 2200, 2300, metadata={"sessionID": "wide-child"})
+            _turn(db, "wide-child", "owner-after-ack", 2220)
+            _turn(db, "wide-child", "next", 3000)
+            _message(db, "wide-child", "old-attempt", 1975, role="assistant", parentID="owner-after-ack",
+                     time={"completed": 1999})
+            _message(db, "wide-child", "no-late-binding", 2240, role="assistant", parentID="owner-after-ack")
+            for number in reversed(range(256)):
+                _message(db, "wide-child", f"wide-{number:03d}", 2125, role="assistant", parentID="wide-owner",
+                         time={"completed": 2150}, finish="tool-calls" if number == 255 else "stop")
+            _message(db, "wide-child", "continued", 2500, role="assistant", parentID="wide-owner")
+            _message(db, "wide-child", "beyond", 3000, role="assistant", parentID="wide-owner")
+        source = OpenCodeV1Source(self.source_path)
+        index = ChildLinkIndex(source.load_session_snapshot(ROOT))
+
+        windows, _, work, members = self._windows(source)
+
+        self.assertEqual([DirectChildWindow(ROOT, "launch", "wide-child", 2000, 2200, 3000,
+                                            "owner-after-ack", False)], windows)
+        rows = members["wide-child", 2000]
+        expected = [f"wide-{number:03d}" for number in range(256)] + ["continued"]
+        self.assertEqual(expected, [row.message_id for row in rows])
+        self.assertTrue(all(row.continuing for row in rows))
+        self.assertEqual(set(expected), set(index.links_by_message["launch"][0].continuing_ids))
+        self.assertLess(max(work), 2500)

@@ -21,6 +21,8 @@ SCHEMA = f"""
     CREATE INDEX trace_visible ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK});
     CREATE INDEX trace_subtasks ON trace_messages(session,created,id) WHERE kind={SUBTASK};
     CREATE INDEX trace_turns ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK},{COMPACTION});
+    CREATE INDEX trace_assistants ON trace_messages(session,created,id) WHERE role='assistant';
+    CREATE INDEX trace_attempts ON trace_messages(session,parent,created,id) WHERE role='assistant';
     CREATE TABLE trace_choices(
         session TEXT NOT NULL,message TEXT NOT NULL,field TEXT NOT NULL,clock INTEGER NOT NULL,part TEXT NOT NULL,
         value TEXT NOT NULL,PRIMARY KEY(session,message,field)

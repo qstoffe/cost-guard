@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from src.analysis.child_links import OPEN_END, tool_call_key, tool_launch
 
+from . import v1_child_membership
 from .v1_trace_facts import COMPACTION, PROMPT, SUBTASK
 
 
@@ -43,7 +44,12 @@ class ChildLaunches:
         self._window_after = 0
         self._qualified = False
         self._done = False
-        db.executescript(SCHEMA)
+        self._membership_id = 0
+        db.executescript(SCHEMA + v1_child_membership.SCHEMA)
+
+    def membership(self, window):
+        self._membership_id += 1
+        return v1_child_membership.ChildWindowMembership(self._db, self._membership_id, window)
 
     def accept(self, part, message, native_message, native_part):
         key = tool_call_key(part, message)

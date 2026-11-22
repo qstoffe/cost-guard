@@ -127,6 +127,12 @@ class V1ArchiveTrace:
             self._phase = "invalid"
             raise
 
+    def child_window_membership(self, window):
+        """Prepare and read assistants for one returned direct window."""
+        if self._phase in ("input", "invalid"):
+            raise SourceDataError("V1 child launch stage is not ready", phase="archive")
+        return self._launches.membership(window)
+
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""
         self._require("fallback")
