@@ -64,20 +64,7 @@ REQUEST_COLUMNS = (
 
 
 def request_schema():
-    return """
-        CREATE TABLE archive_requests (
-            source TEXT NOT NULL REFERENCES sources(source),
-            request_key BLOB NOT NULL,
-            clock_ms INTEGER, fork_key BLOB,
-            session_id TEXT NOT NULL, logical_prompt_id TEXT,
-            provider TEXT NOT NULL, model TEXT NOT NULL, recorded_model TEXT NOT NULL, account_key BLOB,
-            input_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
-            output_tokens INTEGER NOT NULL, reasoning_tokens INTEGER NOT NULL, known_fields INTEGER NOT NULL,
-            billed TEXT, currency TEXT, disposition TEXT NOT NULL,
-            input_cost TEXT, cache_read_cost TEXT, cache_write_cost TEXT, output_cost TEXT, pricing TEXT,
-            effort TEXT, summary INTEGER NOT NULL, dedup_tree TEXT, request_ordinal INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY(source, request_key)
-        ) WITHOUT ROWID;
+    return request_table_schema("archive_requests", "REFERENCES sources(source)") + """
         CREATE INDEX archive_request_clock ON archive_requests(source, clock_ms, request_key);
         CREATE TABLE archive_request_rosters (
             source TEXT NOT NULL, root_id TEXT NOT NULL, revision TEXT NOT NULL, pricing TEXT NOT NULL,
@@ -96,6 +83,26 @@ def request_schema():
             PRIMARY KEY(source, root_id, request_key, prompt_id),
             FOREIGN KEY(source, root_id, request_key)
                 REFERENCES archive_request_membership(source, root_id, request_key) ON DELETE CASCADE
+        ) WITHOUT ROWID;
+    """
+
+
+def request_table_schema(table, owner, *, extra_columns=""):
+    """Shared row shape for positive usage evidence, not a raw source payload."""
+    return f"""
+        CREATE TABLE {table} (
+            source TEXT NOT NULL {owner},
+            request_key BLOB NOT NULL,
+            clock_ms INTEGER, fork_key BLOB,
+            session_id TEXT NOT NULL, logical_prompt_id TEXT,
+            provider TEXT NOT NULL, model TEXT NOT NULL, recorded_model TEXT NOT NULL, account_key BLOB,
+            input_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
+            output_tokens INTEGER NOT NULL, reasoning_tokens INTEGER NOT NULL, known_fields INTEGER NOT NULL,
+            billed TEXT, currency TEXT, disposition TEXT NOT NULL,
+            input_cost TEXT, cache_read_cost TEXT, cache_write_cost TEXT, output_cost TEXT, pricing TEXT,
+            effort TEXT, summary INTEGER NOT NULL, dedup_tree TEXT, request_ordinal INTEGER NOT NULL DEFAULT 0,
+            {extra_columns}
+            PRIMARY KEY(source, request_key)
         ) WITHOUT ROWID;
     """
 
@@ -210,37 +217,11 @@ def publish_roster(db, source, root_id, revision, roster):
         INSERT INTO archive_request_rosters VALUES(?, ?, ?, ?)
         ON CONFLICT(source, root_id) DO UPDATE SET revision=excluded.revision, pricing=excluded.pricing
     """, (source, root_id, revision, roster.pricing))
-    fields = ", ".join(REQUEST_COLUMNS)
-    marks = ", ".join("?" for _ in REQUEST_COLUMNS)
-    # A new price failure on unchanged inputs is not evidence against the
-    # prior valuation. Never attach old valuation to a changed token vector.
-    valuation_columns = ("provider", "model", "recorded_model", *(
-        f"{field}_tokens" for field in TOKEN_FIELDS), "known_fields")
-    left = ",".join(f"excluded.{column}" for column in valuation_columns)
-    right = ",".join(f"archive_requests.{column}" for column in valuation_columns)
-    keep_previous = f"excluded.pricing IS NULL AND ({left}) IS ({right})"
-    prices = {"input_cost", "cache_read_cost", "cache_write_cost", "output_cost", "pricing"}
     keys = tuple(requests)
     before = _fork_candidates(db, source, keys)
-    values = {column: f"excluded.{column}" for column in REQUEST_COLUMNS[1:]}
-    for column in prices:
-        values[column] = f"CASE WHEN {keep_previous} THEN archive_requests.{column} ELSE excluded.{column} END"
-    values["logical_prompt_id"] = """
-        CASE WHEN excluded.summary THEN NULL ELSE coalesce(excluded.logical_prompt_id,
-                                                            archive_requests.logical_prompt_id) END
-    """
-    updates = ", ".join(f"{column}={value}" for column, value in values.items())
-    compared = ", ".join(f"archive_requests.{column}" for column in values)
-    proposed = ", ".join(values.values())
     first_revision = usage_version(db, source).revision + 1
-    written = db.executemany(f"""
-        INSERT INTO archive_requests(source,first_revision, {fields}) VALUES(?, ?, {marks})
-        ON CONFLICT(source, request_key) DO UPDATE SET {updates}
-        WHERE (excluded.known_fields & archive_requests.known_fields) = archive_requests.known_fields
-          AND (excluded.dedup_tree IS NOT NULL OR archive_requests.dedup_tree IS NULL)
-          AND ({compared}) IS NOT ({proposed})
-    """, ((source, first_revision, *request.values(roster.pricing)) for request in roster.requests))
-    if written.rowcount:
+    values = (request.values(roster.pricing) for request in roster.requests)
+    if upsert_request_values(db, source, first_revision, values):
         changed_winner = _update_fork_trees(db, source, before, _fork_candidates(db, source, keys))
         advance_usage_revision(db, source, changed_winner=changed_winner)
     # Missing requests/children may have been deleted from OpenCode, even when
@@ -248,7 +229,43 @@ def publish_roster(db, source, root_id, revision, roster):
     db.executemany("INSERT OR IGNORE INTO archive_request_membership VALUES(?, ?, ?)",
                    ((source, root_id, key) for key in requests))
     db.executemany("INSERT OR IGNORE INTO archive_prompt_attribution VALUES(?, ?, ?, ?)",
-                    ((source, root_id, key, prompt) for key, prompt in roster.attribution))
+                   ((source, root_id, key, prompt) for key, prompt in roster.attribution))
     if roster.stats is not None:
         publish_stats_evidence(db, source, root_id, revision, roster.stats, roster.requests)
     return roster.prompts is not None and publish_prompts(db, source, root_id, revision, roster.prompts)
+
+
+def upsert_request_values(db, source, first_revision, rows, *, private=False):
+    """Apply the same positive-evidence merge to published or private rows.
+
+    Private after-images use the same shape + key but are seeded from the
+    current committed rows. They deliberately have no visible-table triggers.
+    """
+    table = "archive_prepare_requests" if private else "archive_requests"
+    fields = ", ".join(REQUEST_COLUMNS)
+    marks = ", ".join("?" for _ in REQUEST_COLUMNS)
+    # A new price failure on unchanged inputs is not evidence against the
+    # prior valuation. Never attach old valuation to a changed token vector.
+    valuation_columns = ("provider", "model", "recorded_model", *(
+        f"{field}_tokens" for field in TOKEN_FIELDS), "known_fields")
+    left = ",".join(f"excluded.{column}" for column in valuation_columns)
+    right = ",".join(f"{table}.{column}" for column in valuation_columns)
+    keep_previous = f"excluded.pricing IS NULL AND ({left}) IS ({right})"
+    prices = {"input_cost", "cache_read_cost", "cache_write_cost", "output_cost", "pricing"}
+    values = {column: f"excluded.{column}" for column in REQUEST_COLUMNS[1:]}
+    for column in prices:
+        values[column] = f"CASE WHEN {keep_previous} THEN {table}.{column} ELSE excluded.{column} END"
+    values["logical_prompt_id"] = f"""
+        CASE WHEN excluded.summary THEN NULL ELSE coalesce(excluded.logical_prompt_id,
+                                                            {table}.logical_prompt_id) END
+    """
+    updates = ", ".join(f"{column}={value}" for column, value in values.items())
+    compared = ", ".join(f"{table}.{column}" for column in values)
+    proposed = ", ".join(values.values())
+    return db.executemany(f"""
+        INSERT INTO {table}(source,first_revision, {fields}) VALUES(?, ?, {marks})
+        ON CONFLICT(source, request_key) DO UPDATE SET {updates}
+        WHERE (excluded.known_fields & {table}.known_fields) = {table}.known_fields
+          AND (excluded.dedup_tree IS NOT NULL OR {table}.dedup_tree IS NULL)
+          AND ({compared}) IS NOT ({proposed})
+    """, ((source, first_revision, *value) for value in rows)).rowcount
