@@ -378,21 +378,28 @@ class DisplayArchive:
                 and self.sweep.due(catalog, (views.binding, self.sessions.clear_fence)))
 
     def priority_summary_pending(self, catalog):
-        return (self.views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
+        views = self.views
+        return (views is not None and catalog.state == "observed" and time.monotonic() >= self._retry_at
                 and self.sessions.observation_fence(catalog.observation_sequence) is not None
-                and self.sweep.priority_due(catalog))
+                and self.sweep.priority_due(catalog, (views.binding, self.sessions.clear_fence)))
 
     def prioritize_detail(self, catalog, binding, session_id):
-        result = self.prioritize_visible(catalog, binding, (session_id,))
-        return None if result is None else bool(result)
-
-    def prioritize_visible(self, catalog, binding, session_ids):
         views = self.views
         if views is None or views.binding != binding:
             return None
         def eligible():
             return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) is not None
-        return self.sweep.prioritize_visible(catalog, session_ids, eligible=eligible)
+        return self.sweep.prioritize_detail(catalog, session_id, eligible=eligible)
+
+    def offer_visible(self, catalog, binding, fence, tab, sequence, session_ids):
+        views = self.views
+        if views is None or views.binding != binding or self.sessions.clear_fence != fence:
+            return None
+
+        def eligible():
+            return self.views is views and self.sessions.observation_fence(catalog.observation_sequence) == fence
+
+        return self.sweep.offer_visible(catalog, (binding, fence), tab, sequence, session_ids, eligible=eligible)
 
     def export_epoch(self, service, views):
         """Only the currently authorized V2 partition can authorize native export."""

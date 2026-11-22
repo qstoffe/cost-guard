@@ -602,6 +602,8 @@ const SessionsCatalog = (() => {
       super(api, {cached: true});
       this.hint = null;
       this.blocked = false;
+      this.demandTab = crypto.randomUUID().replaceAll('-', '');
+      this.demandSequence = 0;
       this.olderHistory = el('span', undefined, 'metric-spinner sessions-history-spinner');
       this.olderHistory.setAttribute('role', 'img');
       this.olderHistory.setAttribute('aria-label', 'Loading older history');
@@ -669,10 +671,12 @@ const SessionsCatalog = (() => {
     }
     detach() {
       this.attached = false;
-      this.lastDemand = null;
       this.retire();
     }
-    interest() {}
+    interest() {
+      if (document.hidden) this.releaseDemand();
+      else this.hintMissing();
+    }
     sourceHealth(_unverified, blocked) {
       if (this.blocked === blocked) return;
       this.blocked = blocked;
@@ -712,10 +716,11 @@ const SessionsCatalog = (() => {
       this.runningTimer = null;
       cancelAnimationFrame(this.demandFrame);
       this.demandFrame = null;
+      this.releaseDemand();
     }
     unavailable() {
+      this.releaseDemand();
       this.data = null;
-      this.lastDemand = null;
       this.olderHistory.hidden = true;
       this.clearControls.open = false;
       this.clearControls.hidden = true;
@@ -730,15 +735,30 @@ const SessionsCatalog = (() => {
       this.demandFrame = requestAnimationFrame(() => {
         this.demandFrame = null;
         const data = this.data;
-        if (!data || !this.attached || this.blocked || document.hidden ||
+        if (!data || !Number.isSafeInteger(data.demand_epoch) || !this.attached || this.blocked || document.hidden ||
             ['period', 'sort', 'direction', 'offset'].some(key => data[key] !== this[key])) return;
         const keys = data.rows.filter(row => row.source_present && !row.running &&
           Object.values(row.fields).includes('pending')).slice(0, 8).map(row => row.session_id);
-        const mark = keys.length ? JSON.stringify([data.binding, keys]) : null;
-        if (mark === this.lastDemand) return;
-        this.lastDemand = mark;
-        if (mark) this.api('/api/cache/sessions/demand', {binding: data.binding, session_ids: keys}).catch(() => {});
+        if (!keys.length) { this.releaseDemand(); return; }
+        const {binding, demand_epoch} = data;
+        const mark = JSON.stringify([binding, demand_epoch, keys]);
+        if (mark === this.lastDemand?.mark && this.demandTimer) return;
+        this.lastDemand = {binding, demand_epoch, mark};
+        this.sendDemand(this.lastDemand, keys);
+        clearTimeout(this.demandTimer);
+        this.demandTimer = setTimeout(() => { this.demandTimer = null; this.hintMissing(); }, 15000);
       });
+    }
+    releaseDemand() {
+      clearTimeout(this.demandTimer);
+      this.demandTimer = null;
+      if (!this.lastDemand) return;
+      this.sendDemand(this.lastDemand, []);
+      this.lastDemand = null;
+    }
+    sendDemand({binding, demand_epoch}, session_ids) {
+      this.api('/api/cache/sessions/demand', {binding, demand_epoch, session_ids,
+        tab: this.demandTab, sequence: ++this.demandSequence}).catch(() => {});
     }
     async poll() {
       if (!this.attached || document.hidden || this.blocked || this.flight) return;

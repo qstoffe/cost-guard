@@ -95,7 +95,9 @@ def check_cached_sessions(browser, evidence, product_root):
             request = page_two.value.request.post_data_json
             assert request.pop("cursor")
             assert request == dict(period="all", sort="prompts", direction=1, offset=25)
-            assert demand.value.post_data_json == dict(binding=views.binding, session_ids=["s-027"])
+            hint = demand.value.post_data_json
+            assert hint["binding"] == views.binding and hint["demand_epoch"] == 0 and hint["session_ids"] == ["s-027"]
+            assert len(hint["tab"]) == 32 and hint["sequence"] >= 1
             expect(pager).to_contain_text("26–30 of 30 cached sessions", timeout=5000)
             names = first.locator(".sessions-catalog tbody .session-name")
             expect(names).to_have_text([f"Session {index}" for index in range(26, 31)])
@@ -124,7 +126,11 @@ def check_cached_sessions(browser, evidence, product_root):
             owner.commit(admitted, {"s-028": detail_summary}, {"s-028": "revision"},
                          usage=RequestRoster("fixture-prices", (), (), detail_rows))
             owner.commit(owner.admit({"s-028": "revision"}), {}, {}, missing=("s-028",))
-            archived.get_by_role("link", name="Session 28").click()
+            with first.expect_request(lambda request: urlsplit(request.url).path == "/api/cache/sessions/demand"
+                                      and request.post_data_json.get("session_ids") == []) as withdrawn:
+                archived.get_by_role("link", name="Session 28").click()
+            expiry = withdrawn.value.post_data_json
+            assert expiry["tab"] == hint["tab"] and expiry["sequence"] > hint["sequence"]
             detail = first.locator(".session-detail-cache")
             expect(detail.get_by_text("Saved history; the original source session is unavailable.")).to_be_visible()
             expect(detail.locator(".page-navigation")).to_contain_text("1–25 of 30 cached events")

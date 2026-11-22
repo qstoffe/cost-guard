@@ -11,9 +11,9 @@ from src.sources.errors import SourceError
 
 from .request_archive_projection import request_roster
 from .session_catalog_lifecycle import is_running, terminal_prompt
+from .session_demand import SessionDemand
 
 SCAN_WINDOW = 32
-VISIBLE_HINT_LIMIT = 8
 RETRY_SECONDS = 60
 RECHECK_SECONDS = 900
 PRIORITY_BACKOFF = (2, 5, 15)
@@ -65,31 +65,45 @@ class SessionArchiveSweep:
         self._next_walk = 0
         self._incomplete = False
         self._urgent_turn = 0
+        self._visible = SessionDemand()
 
     def due(self, catalog, binding):
         return (catalog.state == "observed" and binding is not None and
-                (self.priority_due(catalog) or self._background_due(catalog, binding)))
+                (self.priority_due(catalog, binding) or self._background_due(catalog, binding)))
 
-    @staticmethod
-    def priority_due(catalog):
+    def priority_due(self, catalog, binding):
         with catalog.lock:
             now = catalog.clock()
-            return any(ready <= now for ready, _ in catalog.archive_urgent.values())
+            return (self._visible.ready(self._demand_scope(catalog, binding), now)
+                    or any(ready <= now for ready, _ in catalog.archive_urgent.values()))
 
-    def prioritize_visible(self, catalog, keys, *, eligible):
-        """A view hint can reorder existing work, but never open the source."""
+    @staticmethod
+    def _demand_scope(catalog, binding):
+        return binding, catalog.archive_incarnation
+
+    def offer_visible(self, catalog, binding, tab, sequence, keys, *, eligible):
         if not catalog.lock.acquire(blocking=False):
             return 0
         try:
             if catalog.state != "observed" or not eligible():
                 return 0
             selected = tuple(key for key in keys if self._candidate(catalog, key) is not None)
-            for key in reversed(selected):
-                if key not in catalog.archive_urgent:
-                    catalog._archive_priority(key, front=True)
-                else:
-                    catalog.archive_urgent.move_to_end(key, last=False)
-            return len(selected)
+            return self._visible.replace(self._demand_scope(catalog, binding), tab, sequence, selected, catalog.clock())
+        finally:
+            catalog.lock.release()
+
+    def prioritize_detail(self, catalog, key, *, eligible):
+        """A view hint can reorder existing work, but never open the source."""
+        if not catalog.lock.acquire(blocking=False):
+            return False
+        try:
+            if catalog.state != "observed" or not eligible() or self._candidate(catalog, key) is None:
+                return False
+            if key not in catalog.archive_urgent:
+                catalog._archive_priority(key, front=True)
+            else:
+                catalog.archive_urgent.move_to_end(key, last=False)
+            return True
         finally:
             catalog.lock.release()
 
@@ -144,12 +158,19 @@ class SessionArchiveSweep:
     def _urgent(self, catalog, binding):
         with catalog.lock:
             now = catalog.clock()
+            scope = self._demand_scope(catalog, binding)
             ready = tuple((key, attempts) for key, (due, attempts) in catalog.archive_urgent.items() if due <= now)
-            if catalog.state != "observed" or not ready:
+            if catalog.state != "observed" or not (ready or self._visible.ready(scope, now)):
                 return None
             self._urgent_turn += 1
             if self._urgent_turn % 4 == 0 and self._background_due(catalog, binding):
                 return None  # Bounded burst of recent revisions, then old history.
+            key = self._visible.take(scope, now)
+            if key is not None and (candidate := self._candidate(catalog, key)) is not None:
+                due, attempts = catalog.archive_urgent.get(key, (now, 0))
+                if due <= now:
+                    catalog.archive_urgent.pop(key, None)
+                    return key, candidate, attempts
             for key, attempts in islice(ready, SCAN_WINDOW):
                 del catalog.archive_urgent[key]
                 candidate = self._candidate(catalog, key)

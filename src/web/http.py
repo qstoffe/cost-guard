@@ -602,6 +602,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if views is None:
             self.reply(503, {"error": "cache_source_unbound"})
             return
+        archive = getattr(owner, "display_archive", None)
+        fence = archive.sessions.clear_fence if archive is not None else None
         try:
             result = views.detail(**value) if detail else views.page(**value)
         except (TypeError, ValueError):
@@ -609,9 +611,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (OSError, sqlite3.Error):
             self.reply(503, {"error": "cache_unavailable"})
         else:
-            if views is not getattr(owner, "cached_session_views", None):
+            if (views is not getattr(owner, "cached_session_views", None)
+                    or archive is not None and fence != archive.sessions.clear_fence):
                 self.reply(503, {"error": "cache_source_unbound"})
             else:
+                if not detail and fence is not None:
+                    result = dict(result, demand_epoch=fence)
                 self.reply(200, result)
 
     def cached_mix_total(self, value, *, grouped):
