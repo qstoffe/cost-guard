@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 from threading import Event
 import time
@@ -16,7 +17,7 @@ from src.analysis.timezones import local_date_range
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
-from src.cache.display_history import BATCH_LIMIT, DisplayHistory, SessionChange, SessionFact
+from src.cache.display_history import BATCH_LIMIT, DisplayHistory, RunningSession, SessionChange, SessionFact
 from src.cache.display_watch import WATCH_LIVE_MS, WATCH_ROW_LIMIT, publish_watch
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
@@ -272,13 +273,17 @@ class DisplayWatchTests(unittest.TestCase):
                     card, = frame.active_cards
                     roots = tuple(replace(card, session_id=f"active-{index}") for index in range(count))
                     frame = replace(frame, active_cards=roots)
-                    archive.publish_watch(frame, now)
-                    archive._watch_write.result(timeout=3)
+                    running = tuple(RunningSession(card.session_id, card.title, now - 2000, now) for card in roots)
+                    archive.publish_live(running, frame, now)
+                    self.assertTrue(archive._live_write.result(timeout=3))
 
                     full = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
                     mini = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+                    page = archive.views.page(period="all")
                     self.assertEqual(full, mini)
                     self.assertEqual(count, len(full["view"]["active_cards"]))
+                    self.assertEqual(5_000 + count, page["cached_total"])
+                    self.assertEqual(min(count, page["size"]), sum(row["running"] for row in page["rows"]))
                     self.assertFalse(history.done())
                     if count:
                         fact = full["cards"][-1]
@@ -290,8 +295,8 @@ class DisplayWatchTests(unittest.TestCase):
                 finished = replace(row.prompt, in_progress=False, completed_successfully=True, completed_at_ms=now)
                 recent = tuple(replace(card, session_id=f"finished-{i}", rows=(replace(row, prompt=finished),))
                                for i in range(250))
-                archive.publish_watch(replace(frame, now_ms=now, recent_finished_cards=recent), now)
-                archive._watch_write.result(timeout=3)
+                archive.publish_live((), replace(frame, now_ms=now, active_cards=(), recent_finished_cards=recent), now)
+                self.assertTrue(archive._live_write.result(timeout=3))
                 latest = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
                 self.assertFalse(history.done())
                 self.assertEqual(250, len(latest["view"]["recent_finished_cards"]))
@@ -301,47 +306,194 @@ class DisplayWatchTests(unittest.TestCase):
             history.result(timeout=3)
         self.assertEqual(5_000, archive.views.page(period="all")["cached_total"])
 
-    def test_publisher_has_one_watch_write_under_pressure_and_notifies_after_commit(self):
+    def test_readers_and_notifications_see_both_slices_only_after_one_commit(self):
+        notifications = []
+
+        def observe_hint(kind, hint):
+            if "generation" in hint:
+                notifications.append((kind, hint, snapshot()))
+
+        def snapshot():
+            watch = archive.watch_snapshot(live_eligible=lambda: True)
+            page = archive.views.page(period="all")
+            return ([row["title"] for row in page["rows"] if row["running"]],
+                    [row["title"] for row in watch["cards"]])
+
+        archive, _ = self.bound_archive(observe_hint)
+        at = int(time.time() * 1000) - 100
+        publish_cycle(archive, at, "previous")
+        self.assertTrue(archive._live_write.result(timeout=5))
+        notifications.clear()
+        staged, release = Event(), Event()
+
+        def held_watch(db, source, binding, observation):
+            # Running has already changed in this transaction, but the
+            # other connections must not see the uncommitted replacement.
+            staged.set()
+            if not release.wait(5):
+                raise AssertionError("fixture did not release SQLite writer")
+            return publish_watch(db, source, binding, observation)
+
+        with patch("src.cache.display_history.publish_watch", side_effect=held_watch) as write_watch:
+            try:
+                publish_cycle(archive, at + 1, "next")
+                turn = archive._live_write
+                self.assertTrue(staged.wait(5))
+                publish_cycle(archive, at + 2, "not queued")
+                self.assertIs(turn, archive._live_write)
+                self.assertEqual((["previous"], ["previous"]), snapshot())
+                self.assertEqual([], notifications)
+            finally:
+                release.set()
+            self.assertTrue(turn.result(timeout=5))
+
+        self.assertEqual(1, write_watch.call_count)
+        self.assertEqual((["next"], ["next"]), snapshot())
+        self.assertEqual([("cache", 2, (["next"], ["next"])), ("watch-cache", 2, (["next"], ["next"]))],
+                         [(kind, hint["generation"], committed) for kind, hint, committed in notifications])
+        self.assertEqual([], notifications[0][1]["detail_roots"])
+
+    def test_failed_second_slice_rolls_back_running_and_both_hints(self):
+        events = []
+        archive, _ = self.bound_archive(lambda kind, hint: events.append((kind, hint)))
+        now = int(time.time() * 1000) - 100
+        publish_cycle(archive, now, "before")
+        self.assertTrue(archive._live_write.result(timeout=5))
+        before = list(events)
+
+        def fail_after_watch(*args):
+            publish_watch(*args)
+            raise sqlite3.OperationalError("injected second-slice failure after SQL mutations")
+
+        with patch("src.cache.display_history.publish_watch", side_effect=fail_after_watch):
+            publish_cycle(archive, now + 1, "failed")
+            self.assertFalse(archive._live_write.result(timeout=5))
+
+        page = archive.views.page(period="all")
+        watch = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual((1, ["before"]), (page["generation"], [row["title"] for row in page["rows"]]))
+        self.assertEqual((1, ["before"]), (watch["generation"], [row["title"] for row in watch["cards"]]))
+        self.assertEqual(before, events)
+
+    def test_rebind_during_transaction_rejects_both_slices_even_for_same_source(self):
+        events = []
+        archive, driver = self.bound_archive(lambda kind, hint: events.append((kind, hint)))
+        views = archive.views
+        now = int(time.time() * 1000) - 100
+        publish_cycle(archive, now, "retained")
+        self.assertTrue(archive._live_write.result(timeout=5))
+        events.clear()
+        staged, release = Event(), Event()
+
+        def held_watch(*args):
+            generation = publish_watch(*args)
+            staged.set()
+            if not release.wait(5):
+                raise AssertionError("fixture did not release SQLite writer")
+            return generation
+
+        with patch("src.cache.display_history.publish_watch", side_effect=held_watch):
+            try:
+                publish_cycle(archive, now + 1, "stale")
+                turn = archive._live_write
+                self.assertTrue(staged.wait(5))
+                archive.unbind()
+                archive.observe(driver, before_tick=True)
+            finally:
+                release.set()
+            self.assertFalse(turn.result(timeout=5))
+
+        self.assertEqual(views.source, archive.views.source)
+        self.assertNotEqual(views.binding, archive.views.binding)
+        self.assertEqual([], [hint for _, hint in events if "generation" in hint])
+        self.assertEqual(0, archive.views.page(period="all")["cached_total"])
+        watch = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual(("as-of", "retained", 1), (watch["freshness"], watch["cards"][0]["title"], watch["generation"]))
+
+    def test_outage_withdraws_running_without_overwriting_the_watch_snapshot(self):
+        archive, _ = self.bound_archive(lambda *_: None)
+        at = int(time.time() * 1000)
+        publish_cycle(archive, at, "known")
+        self.assertTrue(archive._live_write.result(timeout=5))
+        archive.publish_live((), source_unavailable=True)
+        self.assertTrue(archive._live_write.result(timeout=5))
+
+        self.assertEqual(0, archive.views.page(period="all")["cached_total"])
+        # Even recovery of the driver's health does not re-qualify old cards.
+        watch = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual(("as-of", at, 2), (watch["freshness"], watch["observed_ms"], watch["generation"]))
+        self.assertEqual([("known", "unverified")], [(card["title"], card["outcome"]) for card in watch["cards"]])
+
+    def test_source_loss_and_recovery_invalidates_a_turn_held_inside_sqlite(self):
+        archive, _ = self.bound_archive(lambda *_: None)
+        now = int(time.time() * 1000) - 100
+        staged, release = Event(), Event()
+
+        def held_watch(*args):
+            generation = publish_watch(*args)
+            staged.set()
+            if not release.wait(5):
+                raise AssertionError("fixture did not release SQLite writer")
+            return generation
+
+        with patch("src.cache.display_history.publish_watch", side_effect=held_watch):
+            try:
+                publish_cycle(archive, now, "stale")
+                pending = archive._live_write
+                self.assertTrue(staged.wait(5))
+                archive.publish_live((), source_unavailable=True)
+                publish_cycle(archive, now + 1, "first recovery offer")
+            finally:
+                release.set()
+            self.assertFalse(pending.result(timeout=5))
+        empty = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual(("empty", 0), (empty["freshness"], archive.views.page(period="all")["cached_total"]))
+
+        publish_cycle(archive, now + 2, "fresh")
+        self.assertTrue(archive._live_write.result(timeout=5))
+        watch = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual("fresh", watch["cards"][0]["title"])
+        self.assertEqual(1, archive.views.page(period="all")["cached_total"])
+
+    def test_clear_rejects_an_old_offer_and_does_not_promote_a_preclear_card_capture(self):
+        archive, _ = self.bound_archive(lambda *_: None)
+        source, binding = archive.views.source, archive.views.binding
+        now = int(time.time() * 1000)
+        at = now - 10
+        frame = running_frame(at)
+        observed = archive_watch_observation(frame, at)
+        running = (RunningSession("root", "Observed title", at - 2000, at),)
+        publish_cycle(archive, at, "before clear")
+        self.assertTrue(archive._live_write.result(timeout=5))
+
+        before = archive.history.source_state(source)
+        with patch("src.application.session_archive_owner.time.time", return_value=now / 1000):
+            cleared = archive.sessions.clear(source, binding, before, eligible=lambda: True,
+                                             current_observation=lambda: 1)
+            rejected = archive.sessions.commit_live(source, binding, running=running, watch=observed, clear_fence=0)
+            empty = archive.watch_snapshot(live_eligible=lambda: True)
+            # A fresh outer tick does not make the card's retained capture fresh.
+            after_clear = replace(observed, observed_ms=now + 1, projected_ms=now + 1)
+            accepted = archive.sessions.commit_live(source, binding, running=running, watch=after_clear, clear_fence=1)
+
+        self.assertEqual(1, cleared.archive_epoch)
+        self.assertFalse(rejected)
+        self.assertEqual(("empty", []), (empty["freshness"], empty["cards"]))
+        self.assertTrue(accepted)
+        self.assertEqual(0, archive.views.page(period="all")["cached_total"])
+        watch = archive.watch_snapshot(live_eligible=lambda: True)
+        self.assertEqual("unverified", watch["cards"][0]["outcome"])
+
+    def bound_archive(self, publish):
         path = self.root / "fixture.db"
         path.write_bytes(b"fixture identity")
         source = OpenCodeV1Source(path)
         driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(catalog_observation=None,
             report_service=SimpleNamespace(timezone_id="UTC", selection=SimpleNamespace(selected="v1", source=source))))
-        notifications = []
-        archive = DisplayArchive(self.root, lambda kind, hint: notifications.append((kind, hint)), watch_enabled=True)
+        archive = DisplayArchive(self.root, publish, watch_enabled=True)
         self.addCleanup(archive.close)
         archive.observe(driver, before_tick=True)
-        started, release = Event(), Event()
-        commit = archive.sessions.commit_watch
-        at = int(time.time() * 1000)
-
-        def held(*args, **kwargs):
-            started.set()
-            if not release.wait(5):
-                raise AssertionError("fixture did not release SQLite writer")
-            return commit(*args, **kwargs)
-
-        with patch.object(archive.sessions, "commit_watch", side_effect=held) as writes:
-            try:
-                archive.publish_watch(running_frame(at), at)
-                first = archive._watch_write
-                self.assertTrue(started.wait(5))
-                archive.publish_watch(running_frame(at + 1), at + 1)
-                frozen = archive.watch_snapshot(live_eligible=lambda: True)
-                self.assertIs(first, archive._watch_write)
-                self.assertEqual([], [hint for _, hint in notifications if "generation" in hint])
-            finally:
-                release.set()
-            first.result(timeout=5)
-            archive.publish_watch(running_frame(at + 2), at + 2)
-            archive._watch_write.result(timeout=5)
-        latest = archive.watch_snapshot(live_eligible=lambda: True)
-
-        self.assertEqual("empty", frozen["freshness"])
-        self.assertEqual(2, writes.call_count)
-        self.assertEqual(at + 2, latest["observed_ms"])
-        self.assertEqual([1, 2], [hint["generation"] for kind, hint in notifications
-                                 if kind == "watch-cache" and "generation" in hint])
+        return archive, driver
 
     def test_health_lost_during_watch_read_withdraws_running_without_rereading_sqlite(self):
         path = self.root / "fixture.db"
@@ -353,8 +505,8 @@ class DisplayWatchTests(unittest.TestCase):
         self.addCleanup(archive.close)
         archive.observe(driver, before_tick=True)
         at = int(time.time() * 1000)
-        archive.publish_watch(running_frame(at), at)
-        archive._watch_write.result(timeout=5)
+        archive.publish_live(None, running_frame(at), at)
+        archive._live_write.result(timeout=5)
         eligible = iter((True, False))
 
         with patch.object(archive.history, "watch", wraps=archive.history.watch) as read:
@@ -365,3 +517,10 @@ class DisplayWatchTests(unittest.TestCase):
         self.assertEqual("unverified", result["cards"][0]["outcome"])
         self.assertEqual([], result["view"]["active_cards"])
         self.assertEqual("Observed title", result["view"]["earlier_cards"][0]["title"])
+
+
+def publish_cycle(archive, at, title):
+    frame = running_frame(at)
+    card = replace(frame.active_cards[0], title=title)
+    running = (RunningSession(card.session_id, title, at - 2000, at),)
+    archive.publish_live(running, replace(frame, active_cards=(card,)), at)

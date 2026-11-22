@@ -34,8 +34,8 @@ class DisplayWatchQuotaTests(unittest.TestCase):
 
     def publish(self, now, refresh, frame=None):
         self.clock.return_value = now / 1000
-        hint = self.archive.publish_watch(frame, frame.now_ms if frame else None, account_refresh=refresh)
-        self.archive._watch_write.result(timeout=5)
+        hint = self.archive.publish_live(None, frame, frame.now_ms if frame else None, account_refresh=refresh)
+        self.archive._live_write.result(timeout=5)
         return hint
 
     def read(self, *, healthy=False):
@@ -78,9 +78,9 @@ class DisplayWatchQuotaTests(unittest.TestCase):
         self.clock.return_value = 101
 
         with self.archive.history._write_lock:
-            hint = self.archive.publish_watch(None, None, account_refresh=refresh)
+            hint = self.archive.publish_live(None, account_refresh=refresh)
             held = self.read(healthy=True)
-        self.archive._watch_write.result(timeout=5)
+        self.archive._live_write.result(timeout=5)
         committed = self.read(healthy=True)
 
         self.assertGreater(hint["revision"], initial["revision"])
@@ -118,7 +118,7 @@ class DisplayWatchQuotaTests(unittest.TestCase):
 
         refresh.refresh(now_ms=101_000)
         live._publish_frame(self.driver, None)
-        self.archive._watch_write.result(timeout=5)
+        self.archive._live_write.result(timeout=5)
         stored = self.read()
 
         live_read, = publications

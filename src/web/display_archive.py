@@ -54,15 +54,12 @@ class DisplayArchive:
         self._pending = ()
         self._membership_after = None
         self._retry_at = 0
-        self._running_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-display-live")
-        self._running_write = None
-        self._running_offered = None
-        self._running_committed = None
-        self._running_retry_at = 0
-        self._watch_write = None
-        self._watch_offered = None
-        self._watch_committed = None
-        self._watch_retry_at = 0
+        self._live_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-display-live")
+        self._live_write = None
+        self._live_offered = None
+        self._live_committed = None
+        self._live_retry = None
+        self._live_health = None
         self._watch_bound_ms = 0
         self._watch_quota = None
         self._watch_quota_revision = 0
@@ -122,82 +119,66 @@ class DisplayArchive:
 
     def close(self):
         self.unbind()
-        self._running_writer.shutdown(wait=True, cancel_futures=True)
+        self._live_writer.shutdown(wait=True, cancel_futures=True)
 
-    def publish_running(self, running):
-        """Offer the newest qualified observation without queueing future turns."""
-        if self._running_write is not None:
-            if not self._running_write.done():
-                return
-            if self._running_write.result():
-                self._running_committed = self._running_offered
-            else:
-                self._running_retry_at = time.monotonic() + 2
-            self._running_write = None
-        views = self.views
-        if views is None or time.monotonic() < self._running_retry_at:
-            return
-        offered = views.source, views.binding, self.sessions.clear_fence, running
-        if self._running_committed == offered:
-            return
-        self._running_offered = offered
-        self._running_write = self._running_writer.submit(self._write_running, *offered)
-
-    def _write_running(self, source, binding, fence, running):
-        try:
-            self.sessions.commit_running(source, binding, running, clear_fence=fence)
-        except (OSError, sqlite3.Error):
-            return False  # No failed or partial transaction becomes a cache event.
-        return True
-
-    def publish_watch(self, frame, observed_ms, *, account_refresh=None):
-        if not self.watch_enabled:
-            return None
+    def publish_live(self, running, frame=None, observed_ms=None, *, account_refresh=None, source_unavailable=False):
+        """One in-flight turn, with independent proof for each display slice."""
         views = self.views
         if views is None:
             return None
         fence = self.sessions.clear_fence
+        scope = (views.binding, fence)
+        status = views.binding, source_unavailable
+        if self._live_health is None or self._live_health[:2] != status:
+            self._live_health = (*status, object())
+        health = self._live_health
         now = int(time.time() * 1000)
-        if account_refresh is not None or self._watch_quota is not None:
-            facts = native_quotas(account_refresh, bound_ms=self._watch_bound_ms, now_ms=now)
-            scope = (views.binding, fence)
+        batch = self._offer_watch_quota(scope, account_refresh, now) if self.watch_enabled else None
+        hint = dict(binding=views.binding, revision=batch.revision) if batch is not None else None
+        if self._live_write is not None:
+            if not self._live_write.done():
+                return hint
+            if self._live_write.result():
+                self._live_committed = self._live_offered
+            else:
+                self._live_retry = self._live_offered[0], time.monotonic() + 2
+            self._live_write = None
+        if self._live_retry is not None and (scope, health) == self._live_retry[0] and time.monotonic() < self._live_retry[1]:
+            return hint
+        watch = None
+        if self.watch_enabled:
+            if frame is not None and not source_unavailable:
+                watch = archive_watch_observation(frame, observed_ms, views.timezone_id)
+            if watch is not None:
+                watch = replace(watch, quotas=batch)
+            elif batch is not None or source_unavailable:
+                watch = WatchObservation(now, now, None, False, None, quotas=batch, withdraw_live=source_unavailable)
+        if watch is None and running is None:
+            return hint
+        # Ignore projection time alone (and synthetic clocks for quota/outage-only turns).
+        watch_key = (watch.observed_ms if watch.facts is not None else None, watch.state, watch.truncated,
+                     watch.facts, watch.daily, watch.quotas, watch.withdraw_live) if watch is not None else None
+        key = (scope, health), running, watch_key
+        if key != self._live_committed:
+            self._live_offered = key
+            self._live_write = self._live_writer.submit(self._write_live, views, fence, health, running, watch)
+        return hint
+
+    def _offer_watch_quota(self, scope, refresh, now):
+        if refresh is not None or self._watch_quota is not None:
+            facts = native_quotas(refresh, bound_ms=self._watch_bound_ms, now_ms=now)
             if self._watch_quota is None or (scope, facts) != (self._watch_quota[0], self._watch_quota[1].facts):
                 self._watch_quota_revision += 1
                 self._watch_quota = scope, WatchQuotaBatch(self._watch_quota_revision, facts)
-        batch = self._watch_quota[1] if self._watch_quota is not None else None
-        hint = dict(binding=views.binding, revision=batch.revision) if batch is not None else None
-        if self._watch_write is not None:
-            if not self._watch_write.done():
-                return hint
-            if self._watch_write.result():
-                self._watch_committed = self._watch_offered
-            else:
-                self._watch_retry_at = time.monotonic() + 2
-            self._watch_write = None
-        if time.monotonic() < self._watch_retry_at:
-            return hint
-        observation = archive_watch_observation(frame, observed_ms, views.timezone_id) if frame is not None else None
-        if observation is None:
-            if batch is None:
-                return hint
-            observation = WatchObservation(now, now, None, False, None)
-        observation = replace(observation, quotas=batch)
-        # Ignore the cosmetic tick clock when none of the saved evidence changed.
-        key = (views.binding, fence, observation.observed_ms if observation.facts is not None else None,
-               observation.state, observation.truncated, observation.facts, observation.daily, batch)
-        if key == self._watch_committed:
-            return hint
-        self._watch_offered = key
-        self._watch_write = self._running_writer.submit(
-            self._write_watch, views.source, views.binding, fence, observation)
-        return hint
+            return self._watch_quota[1]
+        return None
 
-    def _write_watch(self, source, binding, fence, observation):
+    def _write_live(self, views, fence, health, running, watch):
         try:
-            self.sessions.commit_watch(source, binding, observation, clear_fence=fence)
+            return self.sessions.commit_live(views.source, views.binding, running=running, watch=watch,
+                clear_fence=fence, eligible=lambda: self.views is views and self._live_health is health)
         except (OSError, sqlite3.Error):
-            return False
-        return True
+            return False  # No failed or partial transaction becomes a cache event.
 
     def watch_snapshot(self, *, live_eligible, presentation=False):
         views = self.views

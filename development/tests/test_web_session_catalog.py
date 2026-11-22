@@ -9,7 +9,7 @@ from threading import Event, Lock
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.context_deltas import context_snapshot
@@ -613,19 +613,20 @@ class SessionCatalogTests(unittest.TestCase):
         owner = SimpleNamespace(report_service=service, catalog_observation=observe_catalog(source, include_archived_revisions=True),
             cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
             catalog_job=None, _closed=True)
-        catalog = SessionCatalog(clock=lambda: self.clock, clock_ms=lambda: 6000)
+        catalog = SessionCatalog(clock=lambda: self.clock, clock_ms=lambda: 6000, display_archive=Mock())
         loads = source.load_count
-        WebWatchCoordinator.tick_catalog(owner, catalog)
+        running, = WebWatchCoordinator.tick_catalog(owner, catalog)
         cold = catalog.page(period="all")["view"]["session_usage"][0]
+        self.assertEqual((root.session_id, capture.observed_at_ms), (running.session_id, running.observed_ms))
         self.assertTrue(cold["running"])
         self.assertFalse(cold["has_summary"])
         self.assertEqual(source.load_count, loads)
         entry.source_status.failed_at = 0
-        WebWatchCoordinator.tick_catalog(owner, catalog)
+        self.assertEqual((), WebWatchCoordinator.tick_catalog(owner, catalog))
         self.assertTrue(catalog.page(period="all")["view"]["session_usage"][0]["running"])
         entry.source_status.failed_at = None
         entry.capture = replace(capture, retained=True)
-        WebWatchCoordinator.tick_catalog(owner, catalog)
+        self.assertEqual((), WebWatchCoordinator.tick_catalog(owner, catalog))
         self.assertTrue(catalog.page(period="all")["view"]["session_usage"][0]["running"])
 
     def test_pending_model_requires_pre_request_execution_not_an_unknown_physical_model(self):

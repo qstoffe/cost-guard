@@ -168,13 +168,13 @@ def check_cached_sessions(browser, evidence, product_root):
             assert "offset=25" in first.url and "offset=25" in second.url
             assert "/api/cache/sessions" in requests and "/api/sessions" not in requests and "/api/reports" not in requests
             assert host.display_archive.history.session_page(views.source).total == 40
-            owner.commit_running(views.source, views.binding, (RunningSession("running", "Live fixture", now - 1000,
-                                                                             int(time.time() * 1000)),), clear_fence=0)
+            owner.commit_live(views.source, views.binding, running=(RunningSession("running", "Live fixture", now - 1000,
+                                                                                 int(time.time() * 1000)),), clear_fence=0)
             expect(pager).to_contain_text("26–41 of 41 cached sessions")
             expect(second.locator(".sessions-catalog .page-navigation")).to_contain_text("26–41 of 41 cached sessions")
             first.get_by_role("button", name="Previous", exact=True).click()
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("[RUNNING] Live fixture")
-            owner.commit_running(views.source, views.binding, (), clear_fence=0)
+            owner.commit_live(views.source, views.binding, running=(), clear_fence=0)
             expect(first.locator(".sessions-catalog tbody .session-name").first).to_have_text("Session 1")
             assert "offset=25" in second.url
             owner.publish_coverage(views.source, views.binding, 0, SessionCoverage(now, False, False, None),

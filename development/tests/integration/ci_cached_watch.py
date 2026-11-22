@@ -85,8 +85,8 @@ def check_cached_watch(browser, evidence, product_root):
             account = native_account(now)
             refresh = SimpleNamespace(snapshots=(account,), seen_ms={account.key: now})
             driver.observed_at_ms = now
-            archive.publish_watch(frame, now, account_refresh=refresh)
-            archive._watch_write.result(timeout=5)
+            archive.publish_live(None, frame, now, account_refresh=refresh)
+            archive._live_write.result(timeout=5)
             page.wait_for_function("() => watchCache?.value?.cards[0]?.title === 'Observed title'")
             start = time.perf_counter()
             page.get_by_role("link", name="Watch", exact=True).click()
@@ -131,8 +131,8 @@ def check_cached_watch(browser, evidence, product_root):
             later = now + 1
             updated = replace(frame, now_ms=later, active_cards=(replace(frame.active_cards[0], title="New commit"),))
             driver.observed_at_ms = later
-            archive.publish_watch(updated, later, account_refresh=refresh)
-            archive._watch_write.result(timeout=5)
+            archive.publish_live(None, updated, later, account_refresh=refresh)
+            archive._live_write.result(timeout=5)
             expect(title).to_have_text("New commit")
             expect(title).to_be_focused()
             expect(peer.locator(".watch-active article h3")).to_have_text("New commit")
@@ -142,20 +142,21 @@ def check_cached_watch(browser, evidence, product_root):
 
             # The provider can revoke access without a fresh prompt/source tick.
             refresh.snapshots = (replace(account, availability="error", observations={"parser_reason": "auth_failure"}),)
-            archive.publish_watch(None, None, account_refresh=refresh)
-            archive._watch_write.result(timeout=5)
+            archive.publish_live(None, account_refresh=refresh)
+            archive._live_write.result(timeout=5)
             expect(quota).to_have_text("Subscription quota unavailable")
             expect(peer_quota).to_have_text("Subscription quota unavailable")
             if mini is not None:
                 assert mini_quota(page) == "Subscription quota unavailable"
             expect(title).to_have_text("New commit")
 
-            # Auth expires while a visible tab still holds a running snapshot.
-            # Its next authenticated read must remove both renderers' data.
+            # Any protected read (including a simultaneous connection resync)
+            # can discover auth loss first and cancel the scheduled Watch read.
+            peer.bring_to_front()
             peer_context.clear_cookies()
-            with peer.expect_response(lambda response: response.url.endswith("/api/cache/watch")) as response:
-                peer.evaluate("() => watchCache.catchUp()")
-            assert response.value.status == 401
+            peer.evaluate("() => watchCache.catchUp()")
+            expect(peer.locator("#host-state")).to_have_attribute("data-kind", "authorization_required")
+            assert peer_context.request.get(origin + "/api/cache/watch").status == 401
             expect(peer.locator(".watch-card")).to_have_count(0)
             if mini is not None:
                 assert mini_rows(peer) == []

@@ -60,6 +60,7 @@ class WatchObservation:
     facts: tuple[WatchFact, ...] | None
     daily: WatchDaily | None = None
     quotas: WatchQuotaBatch | None = None
+    withdraw_live: bool = False
 
 
 def watch_schema(*, upgrade=False):
@@ -88,13 +89,15 @@ def watch_schema(*, upgrade=False):
 
 def publish_watch(db, source, binding, observation):
     if (not source or not binding or not 0 < observation.observed_ms <= observation.projected_ms
-            or len(observation.facts or ()) > WATCH_ROW_LIMIT):
+            or len(observation.facts or ()) > WATCH_ROW_LIMIT
+            or observation.withdraw_live and observation.facts is not None):
         raise ValueError("invalid_watch_observation")
     old = db.execute("""
         SELECT binding,generation,observed_ms,projected_ms FROM archive_watch_state WHERE source=?
     """, (source,)).fetchone()
     newer_cards = observation.facts is not None and (old is None or old[0] != binding
         or (observation.observed_ms, observation.projected_ms) > old[2:])
+    withdrawn = observation.withdraw_live and old is not None and old[0] == binding and bool(old[2])
     generation = old[1] + 1 if old else 1
     if newer_cards:
         db.execute("""
@@ -115,9 +118,13 @@ def publish_watch(db, source, binding, observation):
     newer_daily = publish_daily(db, source, observation.daily)
     newer_quotas = publish_watch_quotas(db, source, binding, observation.quotas)
     if not newer_cards:
-        if not newer_daily and not newer_quotas:
+        if not withdrawn and not newer_daily and not newer_quotas:
             return None
-        db.execute("UPDATE archive_watch_state SET generation=? WHERE source=?", (generation, source))
+        if withdrawn:
+            # Do not replace the last known roster with empty or renew its clock.
+            db.execute("UPDATE archive_watch_state SET binding='', generation=? WHERE source=?", (generation, source))
+        else:
+            db.execute("UPDATE archive_watch_state SET generation=? WHERE source=?", (generation, source))
     return generation
 
 

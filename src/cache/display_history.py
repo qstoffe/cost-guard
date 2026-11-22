@@ -119,6 +119,12 @@ class RunningSession:
 
 
 @dataclass(frozen=True, slots=True)
+class LiveCommit:
+    sessions_generation: int | None
+    watch_generation: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class SessionSnapshot:
     session_id: str
     revision: str
@@ -492,49 +498,58 @@ class DisplayHistory:
         db.execute("DELETE FROM session_changes WHERE source=? AND generation<=?", (source, generation - CHANGE_WINDOW))
 
     def replace_running(self, source, binding, running, *, archive_epoch):
-        """Replace the whole bounded observation. Old host rows never become current."""
-        if (not source or not binding or len(running) > BATCH_LIMIT or
-                any(not item.session_id or type(item.started_ms) is not int or type(item.observed_ms) is not int
-                    or not 0 < item.started_ms <= item.observed_ms
-                    for item in running)):
-            raise ValueError("invalid_running_observation")
+        outcome = self.replace_live(source, binding, running=running, archive_epoch=archive_epoch)
+        return outcome.sessions_generation if outcome is not None else None
+
+    def replace_watch(self, source, binding, observation, *, archive_epoch):
+        outcome = self.replace_live(source, binding, watch=observation, archive_epoch=archive_epoch)
+        return outcome.watch_generation if outcome is not None else None
+
+    def replace_live(self, source, binding, *, running=None, watch=None, archive_epoch, eligible=lambda: True):
+        """Commit the two qualified slices together; None means no update to that slice."""
+        if (not source or not binding or running is not None and
+                (len(running) > BATCH_LIMIT or any(
+                    not item.session_id or type(item.started_ms) is not int or type(item.observed_ms) is not int
+                    or not 0 < item.started_ms <= item.observed_ms for item in running))):
+            raise ValueError("invalid_live_observation")
         with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             state = self._state(db, source)
-            if state.archive_epoch != archive_epoch:
+            if state.archive_epoch != archive_epoch or not eligible():
                 return None
-            previous = tuple(db.execute("""
-                SELECT binding, session_id, title, started_ms, observed_ms FROM session_running
-                WHERE source=? ORDER BY session_id
-            """, (source,)))
-            replacement = tuple(sorted((binding, item.session_id, item.title, item.started_ms, item.observed_ms)
-                                       for item in running))
-            if previous == replacement:
+            sessions_generation = watch_generation = None
+            if running is not None:
+                sessions_generation = self._replace_running(db, source, binding, running, state.generation)
+            if watch is not None:
+                db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+                watch_generation = publish_watch(db, source, binding, watch)
+            if not eligible():
+                db.rollback()
                 return None
-            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
-            db.execute("DELETE FROM session_running WHERE source=?", (source,))
-            db.executemany("INSERT INTO session_running VALUES(?, ?, ?, ?, ?, ?)",
-                           ((source, *row) for row in replacement))
-            generation = None
-            now = int(time.time() * 1000)
-            if (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
-                    or any(old[-1] + RUNNING_FRESH_MS <= now < new[-1] + RUNNING_FRESH_MS
-                           for old, new in zip(previous, replacement))):
-                generation = state.generation + 1
-                # Running sessions can cross midnight and affect every period.
-                self._append_change(db, source, generation, 0, 0, (1 << 63) - 1)
             db.commit()
-            return generation
+            return LiveCommit(sessions_generation, watch_generation)
 
-    def replace_watch(self, source, binding, observation, *, archive_epoch):
-        with self._write_lock, self._connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            if self._state(db, source).archive_epoch != archive_epoch:
-                return None
-            db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
-            generation = publish_watch(db, source, binding, observation)
-            db.commit()
-            return generation
+    def _replace_running(self, db, source, binding, running, generation):
+        previous = tuple(db.execute("""
+            SELECT binding, session_id, title, started_ms, observed_ms FROM session_running
+            WHERE source=? ORDER BY session_id
+        """, (source,)))
+        replacement = tuple(sorted((binding, item.session_id, item.title, item.started_ms, item.observed_ms)
+                                   for item in running))
+        if previous == replacement:
+            return None
+        db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
+        db.execute("DELETE FROM session_running WHERE source=?", (source,))
+        db.executemany("INSERT INTO session_running VALUES(?, ?, ?, ?, ?, ?)",
+                       ((source, *row) for row in replacement))
+        now = int(time.time() * 1000)
+        if (tuple(row[:-1] for row in previous) != tuple(row[:-1] for row in replacement)
+                or any(old[-1] + RUNNING_FRESH_MS <= now < new[-1] + RUNNING_FRESH_MS
+                       for old, new in zip(previous, replacement))):
+            # Running sessions can cross midnight and affect every period.
+            self._append_change(db, source, generation + 1, 0, 0, (1 << 63) - 1)
+            return generation + 1
+        return None
 
     def watch(self, source, binding, now_ms, *, live_eligible, timezone_id="UTC"):
         with self._connect(read=True) as db:

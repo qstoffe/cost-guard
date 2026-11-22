@@ -125,15 +125,32 @@ class SessionArchiveOwner:
         self._announce(admission.source, admission.epoch, result.generation, detail_roots=result.detail_roots)
         return result.generation
 
-    def commit_running(self, source, epoch, running, *, clear_fence):
+    def commit_live(self, source, epoch, *, running=None, watch=None, clear_fence, eligible=lambda: True):
+        def current():
+            return (source, epoch) == self._binding and clear_fence == self.clear_fence and eligible()
+
         with self._lock:
-            fence, cleared_ms, _ = self._clear_fence
-            if (source, epoch) != self._binding or clear_fence != fence:
-                return
+            if not current():
+                return False
+            _, cleared_ms, _ = self._clear_fence
             archive_epoch = self.history.source_state(source).archive_epoch
-            fresh = tuple(item for item in running if item.observed_ms > cleared_ms)
-            generation = self.history.replace_running(source, epoch, fresh, archive_epoch=archive_epoch)
-            self._announce(source, epoch, generation, detail_roots=())
+            if cleared_ms:
+                if running is not None:
+                    running = tuple(item for item in running if item.observed_ms > cleared_ms)
+                if watch is not None:
+                    watch = _watch_after_clear(watch, cleared_ms)
+            outcome = self.history.replace_live(source, epoch, running=running, watch=watch,
+                                                archive_epoch=archive_epoch, eligible=current)
+            if outcome is None:
+                return False
+            with self._signal:
+                if not current():
+                    return False
+                self._announce_sessions(epoch, outcome.sessions_generation, detail_roots=())
+                if outcome.watch_generation is not None:
+                    self.publish("watch-cache", dict(binding=epoch, archive_epoch=archive_epoch,
+                                                     generation=outcome.watch_generation))
+            return True
 
     def commit_models(self, source, epoch, catalog, *, clear_fence, eligible):
         with self._lock:
@@ -144,25 +161,6 @@ class SessionArchiveOwner:
             archive_epoch = self.history.source_state(source).archive_epoch
             return self.history.publish_model_catalog(source, catalog, archive_epoch=archive_epoch,
                 eligible=lambda: self._binding == (source, epoch) and eligible())
-
-    def commit_watch(self, source, epoch, observation, *, clear_fence):
-        with self._lock:
-            fence, cleared_ms, _ = self._clear_fence
-            if (source, epoch) != self._binding or clear_fence != fence or observation.observed_ms <= cleared_ms:
-                return
-            if observation.daily is not None and observation.daily.observed_at_ms <= cleared_ms:
-                observation = replace(observation, daily=None)
-            if observation.quotas is not None and cleared_ms:
-                batch = observation.quotas
-                observation = replace(observation, quotas=replace(
-                    batch, facts=tuple(fact for fact in batch.facts if fact.observed_ms > cleared_ms)))
-            archive_epoch = self.history.source_state(source).archive_epoch
-            generation = self.history.replace_watch(source, epoch, observation, archive_epoch=archive_epoch)
-            if generation is not None:
-                with self._signal:
-                    if (source, epoch) == self._binding:
-                        self.publish("watch-cache", dict(binding=epoch, archive_epoch=archive_epoch,
-                                                        generation=generation))
 
     def clear(self, source, epoch, expected, *, eligible, current_observation):
         """Serialize with both archive producers without holding the Live lock."""
@@ -188,9 +186,32 @@ class SessionArchiveOwner:
         if generation is not None:
             with self._signal:
                 if (source, epoch) == self._binding:
-                    hint = {"view": "sessions", "binding": epoch, "generation": generation}
-                    if detail_roots is not None and len(detail_roots) <= DETAIL_HINT_LIMIT:
-                        # Only routable IDs; no titles, fields or unbounded payload.
-                        hint["detail_roots"] = sorted(root for root in detail_roots
-                                                      if re.fullmatch(r"[A-Za-z0-9_-]{1,200}", root))
-                    self.publish("cache", hint)
+                    self._announce_sessions(epoch, generation, detail_roots=detail_roots)
+
+    def _announce_sessions(self, epoch, generation, *, detail_roots):
+        if generation is None:
+            return
+        hint = {"view": "sessions", "binding": epoch, "generation": generation}
+        if detail_roots is not None and len(detail_roots) <= DETAIL_HINT_LIMIT:
+            # Only routable IDs; no titles, fields or unbounded payload.
+            hint["detail_roots"] = sorted(root for root in detail_roots
+                                          if re.fullmatch(r"[A-Za-z0-9_-]{1,200}", root))
+        self.publish("cache", hint)
+
+
+def _watch_after_clear(watch, cleared_ms):
+    facts = watch.facts if watch.observed_ms > cleared_ms else None
+    if facts is not None:
+        facts = tuple(
+            replace(fact, qualified_ms=None, outcome="unverified", prompt_duration_ms=None, context_delta_tokens=None)
+            if fact.outcome == "running" and (fact.qualified_ms is None or fact.qualified_ms <= cleared_ms) else fact
+            for fact in facts)
+    daily = watch.daily
+    if daily is not None and daily.observed_at_ms <= cleared_ms:
+        daily = None
+    quotas = watch.quotas
+    if quotas is not None:
+        quotas = replace(quotas, facts=tuple(fact for fact in quotas.facts if fact.observed_ms > cleared_ms))
+    if facts is None and daily is None and quotas is None:
+        return None
+    return replace(watch, facts=facts, daily=daily, quotas=quotas)

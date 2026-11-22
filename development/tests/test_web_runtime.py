@@ -305,8 +305,8 @@ class WebRuntimeTests(unittest.TestCase):
             empty = self.request(endpoint)
             at = int(time.time() * 1000)
             driver.observed_at_ms = at
-            archive.publish_watch(running_frame(at), at)
-            archive._watch_write.result(timeout=5)
+            archive.publish_live(None, running_frame(at), at)
+            archive._live_write.result(timeout=5)
 
             with patch.object(source, "list_sessions", side_effect=AssertionError("cache route read the source")) as scan:
                 full = self.request(endpoint)

@@ -36,27 +36,27 @@ class DisplayBindingTests(unittest.TestCase):
             archive = DisplayArchive(root, lambda *_: None)
             archive.initialize()
             archive.observe(v1_driver(root), before_tick=True)
-            committed = archive.sessions.commit_running
+            committed = archive.sessions.commit_live
             started, release = Event(), Event()
 
             def held_write(*args, **kwargs):
                 started.set()
                 if not release.wait(5):
                     raise AssertionError("fixture did not release the SQLite writer")
-                committed(*args, **kwargs)
+                return committed(*args, **kwargs)
 
             try:
-                with patch.object(archive.sessions, "commit_running", side_effect=held_write) as writes:
-                    archive.publish_running((RunningSession("a", "First", 100, 110),))
+                with patch.object(archive.sessions, "commit_live", side_effect=held_write) as writes:
+                    archive.publish_live((RunningSession("a", "First", 100, 110),))
                     self.assertTrue(started.wait(5))
-                    archive.publish_running((RunningSession("b", "Intermediate", 120, 130),))
-                    first_job = archive._running_write
+                    archive.publish_live((RunningSession("b", "Intermediate", 120, 130),))
+                    first_job = archive._live_write
                     self.assertFalse(first_job.done())
                     self.assertEqual(1, writes.call_count)
                     release.set()
                     first_job.result(timeout=5)
-                    archive.publish_running((RunningSession("c", "Latest", 140, 150),))
-                    archive._running_write.result(timeout=5)
+                    archive.publish_live((RunningSession("c", "Latest", 140, 150),))
+                    archive._live_write.result(timeout=5)
                     current = archive.views.page(period="all", now_ms=200)
 
                 self.assertEqual(["c"], [row["session_id"] for row in current["rows"]])
@@ -424,15 +424,15 @@ class DisplayBindingTests(unittest.TestCase):
             start = (live_root, revision, now_ms - 400, event.event_id, event.created_at_ms)
             stop = (live_root, revision, now_ms - 200, event.event_id, event.created_at_ms)
             catalog.observe_prompts(((*start, True, None, False),))
-            archive.sessions.commit_running(archive.views.source, archive.views.binding,
-                catalog.archive_running(((*start, True, None, False),)), clear_fence=0)
+            archive.sessions.commit_live(archive.views.source, archive.views.binding,
+                running=catalog.archive_running(((*start, True, None, False),)), clear_fence=0)
             running, = archive.views.page(period="all", now_ms=now_ms)["rows"]
 
             with (patch.object(source, "get_session_tree_revision", return_value=revision),
                   patch.object(source, "load_session_snapshot",
                               side_effect=(SourceUnavailableError("fixture"), unsettled, settled)) as load):
                 catalog.observe_prompts(((*stop, False, None, True),))
-                archive.sessions.commit_running(archive.views.source, archive.views.binding, (), clear_fence=0)
+                archive.sessions.commit_live(archive.views.source, archive.views.binding, running=(), clear_fence=0)
                 archive.acquire_summaries(catalog, service)
                 failed, = archive.views.page(period="all", now_ms=now_ms)["rows"]
                 clock[0] = 102
@@ -510,15 +510,15 @@ class DisplayBindingTests(unittest.TestCase):
             admission = archive.admit_summary(service, "old", "late", observation_sequence=1)
             start = int(time.time() * 1000)
             offered = (RunningSession("pending", "Pending", start - 10, start),)
-            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=0)
+            archive.sessions.commit_live(views.source, views.binding, running=offered, clear_fence=0)
             saved = archive.clear_snapshot()
 
             archive.clear_confirmed(saved["binding"], HistoryState(saved["generation"], saved["archive_epoch"]),
                                     catalog, service, eligible=lambda: True)
             archive.publish_summary(service, admission,
                 SessionUsageRow("old", "Pre-clear", "Model", False, Decimal("4"), 1), "late")
-            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=0)
-            archive.sessions.commit_running(views.source, views.binding, offered, clear_fence=1)
+            archive.sessions.commit_live(views.source, views.binding, running=offered, clear_fence=0)
+            archive.sessions.commit_live(views.source, views.binding, running=offered, clear_fence=1)
             archive.publish_catalog(catalog, service)
             blank = archive.views.page(period="all", now_ms=start + 1)
             catalog.observe(replace(observation))

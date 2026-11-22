@@ -88,9 +88,10 @@ class LiveRuntime:
                     frame = driver.tick()
                     if self.display_archive is not None:
                         self.display_archive.observe(driver, before_tick=False)
+                    running = None
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
                         health = getattr(driver, 'source_status', None)
-                        driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
+                        running = driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
                             source_interrupted=driver.terminal or isinstance(health, SourceStatus) and health.outage_confirmed())
                     if callable(getattr(type(driver.coordinator), "catalog_frame", None)):
                         frame = driver.coordinator.catalog_frame(self.catalog, frame)
@@ -98,7 +99,7 @@ class LiveRuntime:
                         driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
                     else:
                         self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
-                    self._publish_frame(driver, frame)
+                    self._publish_frame(driver, frame, running=running)
                 finally:
                     self.working.clear()
                 if driver.terminal:
@@ -140,7 +141,7 @@ class LiveRuntime:
                 available=verified, terminal=driver.terminal)
         return None
 
-    def _publish_frame(self, driver, frame):
+    def _publish_frame(self, driver, frame, *, running=None):
         health = getattr(driver, 'source_status', None)
         selection = getattr(driver.coordinator, "selection", None)
         generation = getattr(selection, "selected", None)
@@ -148,8 +149,9 @@ class LiveRuntime:
         quota_hint = None
         if self.display_archive is not None:
             refresh = getattr(driver.coordinator, "accounts", None)
-            quota_hint = self.display_archive.publish_watch(frame if verified else None, driver.observed_at_ms,
-                account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None)
+            quota_hint = self.display_archive.publish_live(running, frame if verified else None, driver.observed_at_ms,
+                account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None,
+                source_unavailable=driver.error is not None)
         if verified and self.display_archive is not None:
             if self.display_archive.accounts is not None and frame.quota is not None and not frame.quota_stale:
                 self.display_archive.accounts.offer(frame.quota.accounts, verified=True)

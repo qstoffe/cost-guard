@@ -89,7 +89,6 @@ class WebMixRefreshTests(unittest.TestCase):
                 with patch.object(archive, "catalog_pending", return_value=False), \
                      patch.object(archive, "summary_pending", return_value=False), \
                      patch.object(archive, "coverage_pending", return_value=False), \
-                     patch.object(archive, "publish_running"), \
                      patch.object(archive.history, "usage_inputs", side_effect=hold_first_slice):
                     WebWatchCoordinator.tick_catalog(owner, catalog)
                     self.assertTrue(ready.wait(3))
@@ -153,7 +152,6 @@ class WebMixRefreshTests(unittest.TestCase):
                 with patch.object(archive, "catalog_pending", return_value=False), \
                      patch.object(archive, "summary_pending", return_value=False), \
                      patch.object(archive, "coverage_pending", return_value=False), \
-                     patch.object(archive, "publish_running"), \
                      patch.object(archive, "advance_mix", side_effect=track("mix", mix)), \
                      patch.object(archive.stats, "advance", side_effect=track("stats", stats)):
                     for _ in range(25):

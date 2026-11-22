@@ -162,11 +162,10 @@ class WebWatchCoordinator(WatchCoordinator):
                              prompt, start, running, None, ended))
         catalog.observe_prompts(evidence)
         archive = catalog.display_archive
-        if archive is not None:
-            archive.publish_running(() if unavailable else catalog.archive_running(evidence))
+        running = None if archive is None else () if unavailable else catalog.archive_running(evidence)
         if self.catalog_job is not None:
             if not self.catalog_job.done():
-                return
+                return running
             job, self.catalog_job = self.catalog_job, None
             try:
                 job.result()
@@ -178,7 +177,7 @@ class WebWatchCoordinator(WatchCoordinator):
         coverage_needed = archive is not None and archive.coverage_pending(catalog)
         history_needed = scalar_needed or archive_needed or sweep_needed or coverage_needed
         if self._closed:
-            return
+            return running
         projection = (archive.next_projection(lambda: _cached_mix_reference(self.report_service),
                                               history_pending=history_needed)
                       if archive is not None else None)
@@ -194,6 +193,7 @@ class WebWatchCoordinator(WatchCoordinator):
                                       or turn != 3 and archive.priority_summary_pending(catalog))
             self.catalog_job = self.catalog_pool.submit(
                 self._catalog_capture, catalog, int(self.clock_ms()), scalar_needed and not sweep, sweep, coverage_needed)
+        return running
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
