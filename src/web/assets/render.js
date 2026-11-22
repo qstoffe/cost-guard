@@ -146,7 +146,9 @@ const ReportView = (() => {
   function metric(node, field, {value, reason, help, label, onHelpLost} = {}) {
     const render = () => {
       const shown = typeof value === 'function' ? value() : value;
-      const absence = shown == null && reason === 'complete_empty_history' ? emptyHistoryHelp[field] : '';
+      const absence = shown != null ? '' : reason === 'complete_empty_history' ? emptyHistoryHelp[field] :
+        reason === 'source-history-missing' ? `The ${metricLabels[field]} was not cached, and its source history is no longer available.` :
+        reason === 'source-field-unavailable' ? `The source did not provide ${metricLabels[field]} for this session.` : '';
       const pending = shown == null && !absence;
       const hint = absence || (shown != null && help);
       if (hint) ContextHelp.value(node, hint);
@@ -566,7 +568,7 @@ const ReportView = (() => {
       const wrap = element('label'), input = element('input');
       input.type = 'checkbox'; input.checked = choice[key]; ContextHelp.attach(input, help);
       input.setAttribute('data-model-control', key);
-      input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
+      input.addEventListener('change', () => { choice[key] = input.checked; select(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
     checkbox('Show all Copilot-priced models', 'all', 'Show the full priced catalog instead of the available-model list.');
@@ -596,7 +598,7 @@ const ReportView = (() => {
           if (existing) choice.sorts[choice.sorts.indexOf(existing)] = sort;
           else choice.sorts.push(sort);
         } else choice.sorts = [sort];
-        draw();
+        select();
       }
       button.addEventListener('click', activate);
       button.addEventListener('keydown', event => {
@@ -608,6 +610,26 @@ const ReportView = (() => {
     });
     head.append(header);
     const empty = element('p', undefined, 'warning');
+    let cached = null;
+    const page = state.cachedModels ? element('div', undefined, 'pager') : null;
+    const previous = page && element('button', 'Previous'), next = page && element('button', 'Next');
+    const range = page && element('span');
+    if (page) {
+      previous.setAttribute('aria-label', 'Previous page: reference models');
+      next.setAttribute('aria-label', 'Next page: reference models');
+      range.setAttribute('aria-live', 'polite');
+      previous.addEventListener('click', () => {
+        if (cached?.offset > 0) select(cached.offset - cached.size);
+      });
+      next.addEventListener('click', () => {
+        if (cached && cached.offset + cached.rows.length < cached.count) select(cached.offset + cached.size);
+      });
+      page.append(previous, range, next);
+    }
+    function select(offset = 0) {
+      if (state.cachedModels) state.selectModels(offset);
+      else draw();
+    }
     const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
     function key(row, index) {
       return [row.publisher || null, row.model || null,
@@ -619,9 +641,9 @@ const ReportView = (() => {
       const levels = models.flatMap(row => display(row, 'relative_cost').split(' → '));
       grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
       grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
-      const candidates = models.filter(row => choice.all || row.selectable !== false);
-      const shown = candidates.filter(row => !choice.latest || !(choice.all ? row.superseded : catalog ? row.superseded_selectable : row.superseded));
-      shown.sort((a, b) => {
+      const candidates = state.cachedModels ? models : models.filter(row => choice.all || row.selectable !== false);
+      const shown = state.cachedModels ? candidates : candidates.filter(row => !choice.latest || !(choice.all ? row.superseded : catalog ? row.superseded_selectable : row.superseded));
+      if (!state.cachedModels) shown.sort((a, b) => {
         for (const sort of choice.sorts) {
           const x = key(a, sort.index), y = key(b, sort.index);
           const order = sort.index < 2 && x != null && y != null ? collator.compare(x, y) * sort.direction : sortedCompare(x, y, sort.direction);
@@ -669,9 +691,16 @@ const ReportView = (() => {
       for (const row of [...body.children]) if (!keep.has(row)) row.remove();
       wanted.forEach((row, index) => { if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null); });
       for (const [identity, entry] of rows) if (!keep.has(entry.row)) rows.delete(identity);
-      text(empty, shown.length ? '' : 'No matching models.');
+      text(empty, shown.length ? '' : state.cachedModels && cached?.count == null ?
+        'No Models snapshot is available for this selection.' : 'No matching models.');
+      if (page) {
+        previous.setAttribute('aria-disabled', String(!(cached?.offset > 0)));
+        next.setAttribute('aria-disabled', String(!(cached && cached.offset + shown.length < cached.count)));
+        text(range, shown.length ? `${cached.offset + 1}–${cached.offset + shown.length} of ${cached.count}` : '');
+      }
     }
     grid.append(head, body); scroll.append(grid); root.append(scroll);
+    if (page) root.append(page);
     root.append(empty);
     if (typeof BenchmarkView !== 'undefined') {
       state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(root);
@@ -687,17 +716,34 @@ const ReportView = (() => {
     more.append(element('h2', 'More Coding Benchmarks'), links);
     const availability = element('p', undefined, 'warning');
     root.append(availability, more);
+    const cacheStatus = state.cachedModels && element('p', undefined, 'warning');
+    if (cacheStatus) tools.append(cacheStatus);
     state.modelView = {
       root, choice,
       attach(target) { if (root.parentNode !== target) target.replaceChildren(root); },
-      update(value) {
+      update(value, publication = null) {
         view = value; catalog = view.model_catalog; models = catalog?.rows || view.model_comparison;
+        cached = publication?.value;
         text(fetched, 'Last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
-        text(availability, view.model_availability_empty ? 'No available OpenCode models match the pricing catalog.' : '');
-        availability.hidden = !view.model_availability_empty; draw();
+        text(availability, view.model_availability_empty ? 'No available OpenCode models match the pricing catalog.' :
+          cached?.availability_unverified ? 'OpenCode availability was not verified; showing the priced catalog.' : '');
+        availability.hidden = !view.model_availability_empty && !cached?.availability_unverified;
+        if (cacheStatus) text(cacheStatus, publication && (publication.blocked || publication.error) ?
+          'The local Models cache is unavailable.' : cached?.observed_ms != null && !cached.prices_valid ?
+          'Cached rates are no longer current.' : cached?.prices_historical ? 'Showing historical reference prices.' : '');
+        draw();
       }
     };
     state.modelView.update(view); state.modelView.attach(parent);
+  }
+  function renderCachedModels(parent, publication, state) {
+    const value = publication.value;
+    const view = {model_catalog: {rows: value?.rows || []},
+      pricing_retrieved_at_ms: value?.pricing_ms, display: {pricing_retrieved_at_ms: value?.pricing_label},
+      model_availability_empty: value?.availability_empty};
+    if (!state.modelView) overviewModels(parent, view, state);
+    state.modelView.update(view, publication);
+    state.modelView.attach(parent);
   }
   function modelRelative(row) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
@@ -921,5 +967,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, renderCachedModels, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

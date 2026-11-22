@@ -14,9 +14,17 @@ let csrf = null;
 let current = null;
 let liveConnection = null;
 let liveValue = null;
+let watchCache = null;
+let mixCache = null;
+let statsCache = null;
+let modelsCache = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
+let cachedSessionsAvailable = false;
+let sessionCacheHint = null;
 let accountTimelineAvailable = false;
+let cachedAccountsAvailable = false;
+let accountsCacheHint = null;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
@@ -30,17 +38,17 @@ function sourceNoticeGeometry() {
   document.documentElement.style.setProperty('--source-notice-height', `${sourceNotice?.getBoundingClientRect().height || 0}px`);
 }
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
-function historical(state) { return !!CachedReports.cadences[state?.section]; }
+function historical(state) { return !state?.cachedMix && !state?.cachedStats && !state?.cachedModels && !!CachedReports.cadences[state?.section]; }
 function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
 function firstReport(state = current) {
-  if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
+  if (csrf && hostState.writable && state?.request && !state.cachedMix && !state.cachedStats && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
 }
 function scheduleCachedReport() {
   const state = current;
   const recoverCold = automaticHistory(state) && state.failed && state.section !== 'token-mix';
-  if (!historical(state) || !state.result && !recoverCold || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
+  if (!historical(state) || !state.result && !recoverCold || state.loading || document.hidden || !hostState.writable) {
     clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
   }
   // Live health arrives more often than the lookup interval. Keep the existing
@@ -64,7 +72,6 @@ function scheduleCachedReport() {
 }
 function enterCachedReport(state) {
   if (!historical(state)) return;
-  if (state.pageNavigation && state.failed) return; // Explicit Retry owns failed paging, not a lookup timer.
   const band = CachedReports.entry(state.result, state.section);
   state.withheld = state.section === 'ai-stats' ? !!state.result && !AIStatsView.valid(state.result) : band === 'withhold';
   if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
@@ -74,6 +81,11 @@ function enterCachedReport(state) {
 function selectStats(state, period) {
   if (state.period === period) return;
   state.period = period;
+  if (state.cachedStats) {
+    statsCache.activate(document.hidden ? null : period);
+    show(state);
+    return;
+  }
   state.request = {kind: 'ai-stats', stats_scope: period};
   demand?.update();
   state.result = state.statsResults?.get(period) || null;
@@ -87,6 +99,12 @@ function selectStats(state, period) {
 }
 function selectTokenMix(state, period) {
   if (state.period === period) return;
+  if (state.cachedMix) {
+    state.period = period;
+    mixCache.activate(document.hidden ? null : period);
+    show(state);
+    return;
+  }
   // Retire only this browser attempt, not shared host work or another tab's demand.
   state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
   state.period = period; state.request = {kind: 'token-mix', token_mix_scope: period};
@@ -120,11 +138,36 @@ function applySettings(value) {
     state.accountTimeline?.draw();
     if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
     if (state.stats) ReportView.syncUnits(state.stats.root);
-    if (state.comparisons) ReportView.syncUnits(state.comparisons.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }
+function modelsSelectionActive(state) {
+  const body = state.modelView?.root.querySelector('.overview-model-table tbody');
+  if (!body) return false;
+  const selection = document.getSelection?.();
+  return body.contains(document.activeElement) || !!(selection && !selection.isCollapsed &&
+    (body.contains(selection.anchorNode) || body.contains(selection.focusNode)));
+}
+function updateCachedModels(urgent = false) {
+  if (!current?.cachedModels) return;
+  const state = current, value = modelsCache.snapshot().value;
+  state.deferModels = !urgent && modelsSelectionActive(state);
+  if (value?.observed_ms != null && value.observed_ms !== state.modelsObservation) {
+    state.modelsObservation = value.observed_ms;
+    if (!document.hidden && hostState.writable) state.benchmark?.load(api, true);
+  }
+  show(state);
+}
+function releaseModelsSelection() {
+  const state = current;
+  if (state?.deferModels && !modelsSelectionActive(state)) {
+    state.deferModels = false;
+    show(state);
+  }
+}
+document.addEventListener('selectionchange', releaseModelsSelection);
+output.addEventListener('focusout', () => queueMicrotask(releaseModelsSelection));
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
@@ -142,6 +185,12 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal) demand?.close?.(false);
   else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
+  const blocked = hostState.terminal || hostState.sourceBlocked;
+  watchCache?.health(blocked, ['source_retrying', 'source_unavailable', 'reconnecting', 'offline'].includes(hostState.kind),
+    ['reconnecting', 'offline'].includes(hostState.kind));
+  mixCache?.health(blocked);
+  statsCache?.health(blocked);
+  modelsCache?.health(blocked);
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
   const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
@@ -165,7 +214,6 @@ function connectionStatus(message, state = {}) {
       ReportView.text(warning, '');
     }
   }
-  const blocked = hostState.terminal || hostState.sourceBlocked;
   for (const view of views.values()) {
     view.catalog?.sourceHealth(blocked || hostState.sourceOutage, blocked);
   if (blocked) {
@@ -258,7 +306,24 @@ function show(state) {
    if (state.section === 'models') { refresh.textContent = 'Try again'; refresh.hidden = !state.failed || !!state.result; heading.hidden = true; }
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
+  if (state.cachedModels) {
+    output.setAttribute('aria-busy', 'false');
+    const publication = modelsCache.snapshot();
+    if (!state.deferModels || !state.modelView || !publication.value || !publication.value.prices_valid)
+      ReportView.renderCachedModels(output, publication, state);
+    state.priceControls?.(!!csrf && hostState.writable);
+    state.benchmark?.controls(!!csrf && hostState.writable, api);
+    if (state.benchmark && (!state.benchmark.checked || state.benchmark.manual) &&
+        csrf && hostState.writable && !document.hidden) state.benchmark.load(api);
+    return;
+  }
   if (state.section === 'ai-stats') {
+    if (state.cachedStats) {
+      output.setAttribute('aria-busy', 'false');
+      state.cachedStatsView ||= new CachedStats.View(period => selectStats(state, period));
+      state.cachedStatsView.attach(output, state.period, statsCache.snapshot());
+      return;
+    }
     output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
@@ -267,6 +332,14 @@ function show(state) {
   }
   if (state.section === 'token-mix') {
     ReportView.defaultUnit();
+    if (state.cachedMix) {
+      output.setAttribute('aria-busy', 'false');
+      state.cachedMixView ||= new CachedMix.View(period => selectTokenMix(state, period),
+         (kind, after, order, signal) => mixCache.page(kind, after, order, signal),
+         (kind, order) => { mixCache.orders[kind] = order; });
+      state.cachedMixView.attach(output, state.period, mixCache.snapshot());
+      return;
+    }
     state.tokenMix ||= new TokenMixView.View(period => selectTokenMix(state, period));
     const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
       (!state.mixBinding || state.mixBinding === tokenMixBinding);
@@ -279,20 +352,6 @@ function show(state) {
       if (state.mixLoading.parentNode !== state.tokenMix.root) state.tokenMix.root.append(state.mixLoading);
       ReportLoading.show(state.mixLoading, state);
     } else state.mixLoading?.remove();
-    return;
-  }
-  if (state.section === 'comparisons') {
-    refresh.textContent = 'Retry Comparisons'; refresh.hidden = !state.failed;
-    notice.textContent = '';
-    ReportView.defaultUnit();
-    state.comparisons ||= new ComparisonsView.View((offset, revision) => {
-      if (state.loading) return;
-      state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
-      state.pageNavigation = true; state.orderRetried = false; state.orderReset = false;
-      state.actionRequested = true;
-      demand?.update(); acquire(state);
-    });
-    state.comparisons.update(state); state.comparisons.attach(output);
     return;
   }
   if (state.section === 'settings') {
@@ -322,18 +381,25 @@ function show(state) {
       state.accounts.update(liveValue?.view || {});
       state.accounts.attach(output);
       if (accountTimelineAvailable) {
-        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
+        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update(), {archived: cachedAccountsAvailable});
         const chart = state.accountTimeline;
-        if (!hostState.terminal && !hostState.sourceBlocked) chart.setScope(liveValue?.account_timeline_scope ?? null);
+        if (!hostState.terminal && !hostState.sourceBlocked) {
+          if (cachedAccountsAvailable) chart.cacheHint(accountsCacheHint);
+          else chart.setScope(liveValue?.account_timeline_scope ?? null);
+        }
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
         chart.active(!document.hidden && !!csrf && hostState.writable);
       }
-    } else if (liveValue?.view) {
-      state.miniControls = miniWatch?.button.parentNode;
-      ReportView.renderLive(output, liveValue, state);
     } else {
-      // Host/source health owns startup and failure feedback, not an elapsed timer.
-      output.replaceChildren();
+      const publication = watchCache ? watchCache.publication() : liveValue;
+      state.miniControls = miniWatch?.button.parentNode;
+      if (publication?.view) ReportView.renderLive(output, publication, state);
+      else {
+        if (watchCache) state.watch = null;
+        // Host/source health owns startup and failure feedback, not an elapsed timer.
+        if (watchCache && state.miniControls) output.replaceChildren(state.miniControls);
+        else output.replaceChildren();
+      }
     }
    } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
@@ -370,7 +436,7 @@ function failure(code, state) {
   return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
-  if (state.loading || !hostState.writable) return;
+  if (state.loading || state.cachedMix || state.cachedStats || state.cachedModels && !prices || !hostState.writable) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
   let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
@@ -387,7 +453,7 @@ async function acquire(state, background = false, prices = false) {
   let publication = null;
   let retry = !!state.failed && !background && !automaticHistory(state);
   state.loading = true;
-  const attempt = state.attempt = new ReportLoading.Attempt({paging: state.pageNavigation === true});
+  const attempt = state.attempt = new ReportLoading.Attempt();
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   state.dispatchError = null;
@@ -402,12 +468,12 @@ async function acquire(state, background = false, prices = false) {
      return mix ? ReportLoading.retryable(error) || error.retryable === true : ReportLoading.retryable(error);
    }
    async function pause(error) {
-     ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
+     ReportLoading.waiting(state, error.message); show(state);
      await attempt.backoff(error, mix);
    }
    async function admit() {
     while (true) {
-      attempt.check(hostState, true);
+      attempt.check(hostState);
       try {
         const scope = state.section === 'ai-stats' ? state.request : request;
         const retryOnce = retry;
@@ -426,7 +492,7 @@ async function acquire(state, background = false, prices = false) {
            else if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
                state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
             }
-           if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
+           if (!admission.result && state.result && !automaticHistory(state)) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
              publication_id: admission.result_id || admission.id};
            else if (mix && state.result && !admission.terminal && TokenMixView.compatible(state.result, state.period)) {
@@ -440,7 +506,7 @@ async function acquire(state, background = false, prices = false) {
         state.progressSequence = 0;
         return;
       } catch (error) {
-         if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !canRetry(error)) throw error;
+         if (!canRetry(error)) throw error;
          if (mix && state.result && TokenMixView.compatible(state.result, state.period)) { keepRetained = true; return; }
          await pause(error);
       }
@@ -485,16 +551,14 @@ async function acquire(state, background = false, prices = false) {
            if (demand && automaticHistory(state)) { state.active = null; await admit(); continue; }
           const error = new Error(job.result?.error?.code || job.error || job.status);
           error.retryable = job.result?.error?.retryable === true;
-            if (state.section === 'comparisons' && error.message === 'session_catalog_changed' || !ReportLoading.retryable(error)) throw error;
-           state.active = null; ReportLoading.waiting(state, error.message, attempt.paging ? attempt.retries + 1 : null); show(state);
+            if (!ReportLoading.retryable(error)) throw error;
+           state.active = null; ReportLoading.waiting(state, error.message); show(state);
           await attempt.backoff(error); await admit(); continue;
         }
         if (hostState.terminal) break;
            if (state.section === 'token-mix' && (!TokenMixView.valid(job.result) ||
                job.result.view.token_mix_period?.period !== state.period)) throw new Error('report_invalid_result');
           if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_invalid_result');
-         if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
-          if (state.section === 'comparisons') state.pageNavigation = false;
           if (state.section === 'ai-stats' && !job.result.view.ai_stats_work?.scopes?.[state.period]?.ready) {
             // A finished slice is not a ready period. Keep demand and a bounded
             // lookup interval even for an old host's incomplete publication.
@@ -504,8 +568,12 @@ async function acquire(state, background = false, prices = false) {
           const revision = [job.publication_id || state.active, job.result.instance_id,
             job.result.sequence, CachedReports.observation(job.result)].join(':');
           if (demand && !prices && state.result && state.dataRevision === revision) break;
-         if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
+          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
+          if (state.cachedModels) {
+            state.priceMessage = 'Price list refreshed. Updating the local Models cache.';
+            break; // Only SQLite publications supply browser table rows.
+          }
           if (state.section === 'ai-stats') {
             AIStatsView.remember(state, job.result);
             if (!state.result) throw new Error('report_unavailable');
@@ -525,22 +593,16 @@ async function acquire(state, background = false, prices = false) {
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-       attempt.observe(job.progress);
-       attempt.check(hostState, true);
+       attempt.check(hostState);
            if (!statsProgress) ReportLoading.observe(state, job.progress);
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
          if (state === current && (!background || statsProgress)) show(state);
-        await attempt.poll(state.active, state.pageNavigation ? 1000 : 500);
+        await attempt.poll(state.active, 500);
     }
   } catch (error) {
     if (state.attempt !== attempt) return;
     if (attempt.reason) error = new Error(attempt.reason);
-    if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
-      state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
-      state.orderRetried = true;
-      demand?.update(); // Retire the old pin's foreground interest as well as its browser retry.
-    }
     if (mix) state.mixFailure = error.message;
     state.message = prices || state.userInitiated ? 'Could not load. Try again.' : '';
     if (prices) state.priceMessage = state.message;
@@ -555,9 +617,6 @@ async function acquire(state, background = false, prices = false) {
     for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);
     if (owned && priceFocus && state === current && document.activeElement === document.body)
       output.querySelector('[data-model-control="refresh"]')?.focus({preventScroll: true});
-    if (owned && state.retryOrder && state === current && !document.hidden && hostState.writable) {
-      state.retryOrder = false; acquire(state);
-    }
     if (owned && state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
          JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }
@@ -578,11 +637,12 @@ function navigate() {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
   }
-  let route = ReportRoutes.resolve(location.hash);
+  const capabilities = {cachedSessions: cachedSessionsAvailable};
+  let route = ReportRoutes.resolve(location.hash, capabilities);
   const redirected = !!route.redirect;
   if (redirected) {
     history.replaceState(null, '', '/' + route.redirect);
-    route = ReportRoutes.resolve(location.hash);
+    route = ReportRoutes.resolve(location.hash, capabilities);
   }
   const match = route.session;
   if (match) rememberedSession = '#/sessions/' + match[1];
@@ -624,26 +684,39 @@ function navigate() {
   if (current !== previous) {
     previous?.catalog?.detach();
     previous?.accountTimeline?.active(false);
+    if (previous?.cachedModels) previous.deferModels = false;
   }
   // A requested report (including bounded admission backoff) belongs to its view,
   // not the active route. Navigation never abandons it or starts another attempt.
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
-    current.request = {kind: 'ai-stats', stats_scope: current.period};
+    current.cachedStats = !!statsCache;
+    current.request = current.cachedStats ? null : {kind: 'ai-stats', stats_scope: current.period};
   }
   if (current.section === 'token-mix') {
     current.period ||= current.request?.token_mix_scope || 'all';
-    current.request = {kind: 'token-mix', token_mix_scope: current.period};
+    current.cachedMix = !!mixCache;
+    current.request = current.cachedMix ? null : {kind: 'token-mix', token_mix_scope: current.period};
   }
+  mixCache?.activate(current.cachedMix && !document.hidden ? current.period : null);
+  statsCache?.activate(current.cachedStats && !document.hidden ? current.period : null);
   if (route.section === 'models') {
     const models = current;
+    models.cachedModels = !!modelsCache;
+    if (models.cachedModels) {
+      models.request = null;
+      models.result = null;
+      models.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
+      models.selectModels = offset => modelsCache.select(offset);
+    }
     models.refreshPrices = () => acquire(models, false, true);
     if (csrf && hostState.writable && !document.hidden) models.benchmark?.load(api);
   }
+  modelsCache?.activate(current.cachedModels && !document.hidden ? current : null);
   document.getElementById('search').value = current.search || '';
-  if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
-    current.detail = new SessionDetail.View(api, match[1],
-      () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
+  if (match && csrf && !hostState.terminal && (sessionDetailAvailable || cachedSessionsAvailable) && !current.detail) {
+    current.detail = cachedSessionsAvailable ? new SessionDetail.CachedView(api, match[1], sessionCacheHint, sessionDemand()) :
+      new SessionDetail.View(api, match[1], () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
     current.message = '';
   }
   if (match && current.detail) {
@@ -652,16 +725,18 @@ function navigate() {
     const origin = history.state?.sessionsReturn;
     current.detail.back.href = origin?.detail === location.hash ? origin.list : '#/sessions';
   }
-   if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
-    if (!current.catalog) {
-      current.catalog = new SessionsCatalog.View(api);
-      const blocked = hostState.terminal || hostState.sourceBlocked;
-      current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+   if (route.catalog && csrf && (sessionDetailAvailable || cachedSessionsAvailable) && typeof SessionsCatalog !== 'undefined') {
+     if (!current.catalog) {
+       const Controller = cachedSessionsAvailable ? SessionsCatalog.CachedView : SessionsCatalog.View;
+        current.catalog = cachedSessionsAvailable ? new Controller(api, sessionDemand()) : new Controller(api);
+       const blocked = hostState.terminal || hostState.sourceBlocked;
+       current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+       current.catalog.cacheHint?.(sessionCacheHint);
     }
     current.catalog.configure(route.params);
      current.request = null; current.message = '';
    }
-   if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
+   if ((match || route.catalog) && !cachedSessionsAvailable && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
   if (csrf && !hostState.terminal && current.stats && (current !== previous || !current.stats.databaseRefresh))
@@ -682,6 +757,10 @@ function navigate() {
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   firstReport();
 }
+let sessionDemandState;
+function sessionDemand() {
+  return sessionDemandState ||= {tab: crypto.randomUUID().replaceAll('-', ''), sequence: 0};
+}
 async function connect() {
   try {
     const session = credential ? await api('/api/bootstrap', {credential}) : await api('/api/session');
@@ -695,13 +774,34 @@ async function connect() {
        demand = new DataDemand.Controller(api, () => current && {...current,
          history: false}, writable,
          {history: state.history_demand === true});
-       if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
+        if (state.history_demand === true && state.cached_watch !== true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
          () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
          writable, {owner: win, history: true}));
      }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
-    accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
+    cachedSessionsAvailable = state.cached_sessions === true;
+     cachedAccountsAvailable = state.cached_accounts === true;
+     accountTimelineAvailable = (cachedAccountsAvailable || state.account_timeline === true) && typeof AccountTimelineView !== 'undefined';
+     if (state.cached_watch === true && typeof CachedWatch !== 'undefined') {
+       watchCache ||= new CachedWatch.Controller(api, publication => {
+         miniWatch?.updateCached(() => watchCache.publication());
+         if (current?.section === 'watch') show(current);
+         else if (!publication) for (const view of views.values()) view.watch = null;
+       });
+       watchCache.catchUp();
+     }
+      if (state.cached_mix === true && typeof CachedMix !== 'undefined') {
+       mixCache ||= new CachedMix.Controller(api, () => { if (current?.cachedMix) show(current); });
+       if (current?.section === 'token-mix') { current.cachedMix = true; current.request = null; }
+      }
+      if (state.cached_stats === true && typeof CachedStats !== 'undefined') {
+        statsCache ||= new CachedStats.Controller(api, () => { if (current?.cachedStats) show(current); });
+        if (current?.section === 'ai-stats') { current.cachedStats = true; current.request = null; }
+      }
+      if (state.cached_models === true && typeof CachedModels !== 'undefined') {
+        modelsCache ||= new CachedModels.Controller(api, urgent => updateCachedModels(urgent));
+      }
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -712,7 +812,8 @@ async function connect() {
         // readiness signal once rather than polling the optional facts.
         if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
           current.stats.refreshDatabaseSizes();
-        miniWatch?.update(liveValue);
+         if (!watchCache) miniWatch?.update(liveValue);
+         watchCache?.quotaHint(value?.watch_quota_hint);
         current?.catalog?.wake(value?.catalog_hint);
         current?.detail?.wake(value?.detail_hints);
         current?.detail?.updateInvocations();
@@ -731,7 +832,18 @@ async function connect() {
                 !['queued', 'running'].includes(job.status)) current.attempt.notify(job.id);
         }
          firstReport();
-      }, connectionStatus);
+      }, connectionStatus, undefined, undefined, (hint, resync) => {
+        if (hint?.view !== 'sessions') return;
+        sessionCacheHint = hint;
+        current?.catalog?.cacheHint?.(hint, resync);
+        current?.detail?.cacheHint?.(hint, resync);
+        statsCache?.sessionCommit(hint, resync);
+        }, (hint, resync) => watchCache?.cacheHint(hint, resync), (hint, resync) => mixCache?.committed(hint, resync),
+           (hint, resync) => statsCache?.committed(hint, resync), (hint, resync) => modelsCache?.committed(hint, resync),
+           (hint, resync) => {
+             accountsCacheHint = hint;
+             if (!hostState.terminal && !hostState.sourceBlocked) current?.accountTimeline?.cacheHint(hint, resync);
+           });
     }
     navigate();
   } catch (_) {
@@ -781,7 +893,11 @@ window.addEventListener('offline', () => connectionStatus('OFFLINE — last obse
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
+  current?.detail?.interest?.();
   current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
+  mixCache?.activate(!document.hidden && current?.cachedMix ? current.period : null);
+  statsCache?.activate(!document.hidden && current?.cachedStats ? current.period : null);
+  modelsCache?.activate(!document.hidden && current?.cachedModels ? current : null);
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {

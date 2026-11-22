@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+from tempfile import TemporaryDirectory
 from threading import Event, Thread
 import time
 from types import SimpleNamespace
@@ -13,9 +14,11 @@ from unittest.mock import patch
 
 from development.tests.fixtures.session_export import export_source, SESSION, TRANSFER
 from src.application.session_detail import SessionDetails
+from src.cache.display_history import SessionChange, SessionFact
 from src.sources.errors import SessionExportError
 from src.sources.opencode_v2_export import MAX_EXPORT_BYTES
 from src.web.http import LoopbackServer
+from src.web.display_archive import DisplayArchive
 from src.web.observations import WebObservations
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -147,6 +150,65 @@ class NativeExportTests(unittest.TestCase):
 
 
 class ExportHttpTests(unittest.TestCase):
+    def test_cached_export_requires_current_binding_and_preserves_local_archived_rows(self):
+        with export_source() as (source, upstream, _), TemporaryDirectory() as tmp:
+            archive = DisplayArchive(Path(tmp), lambda *_: None)
+            self.addCleanup(archive.close)
+            service = SimpleNamespace(source=source, selection=SimpleNamespace(selected='v2', source=source),
+                                      timezone_id='UTC')
+            driver = SimpleNamespace(terminal=False, error=None,
+                coordinator=SimpleNamespace(report_service=service, catalog_observation=None))
+            archive.initialize()
+            archive.observe(driver, before_tick=True)
+            views = archive.views
+            archive.history.commit_sessions(views.source, (SessionChange(SessionFact(SESSION, 'r1', 'Saved'), None),))
+            archive.history.commit_sessions('other', (SessionChange(SessionFact('ses_other', 'r1', 'Other'), None),))
+            owner = SimpleNamespace(root=ROOT, nonce='cached-host', observations=WebObservations(), stopping=Event(),
+                live=SimpleNamespace(driver=driver), display_archive=archive, cached_sessions_enabled=True)
+            server = LoopbackServer(SimpleNamespace(), owner)
+            thread = Thread(target=server.serve_forever, args=(.02,))
+            thread.start()
+            cookie, csrf = server.session.exchange(server.session.bootstrap())
+            request = dict(binding=views.binding, session_id=SESSION)
+
+            def post(body, *, path='/api/cache/session-detail/export', nonce=owner.nonce, authorized=True):
+                headers = {'Origin': server.origin, 'Content-Type': 'application/json', 'X-CG-CSRF': csrf,
+                           'X-CG-Instance': nonce}
+                if authorized:
+                    headers['Cookie'] = server.session.cookie_name + '=' + cookie
+                connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                try:
+                    connection.request('POST', path, json.dumps(body), headers)
+                    response = connection.getresponse()
+                    return response.status, response.read()
+                finally:
+                    connection.close()
+            owner.cached_session_views = views
+            try:
+                no_access = post(request, authorized=False)
+                stale_host = post(request, nonce='old-host')
+                stale_binding = post(dict(request, binding='a' * 32))
+                wrong_partition = post(dict(request, session_id='ses_other'))
+                detail = post({'session_id': SESSION}, path='/api/cache/session-detail')
+                before_click = tuple(upstream.requests)
+                exported = post(request)
+                checkpoint = archive.history.session_checkpoints(views.source, (SESSION,))[SESSION]
+                archive.history.commit_sessions(views.source, missing=((SESSION, checkpoint),))
+                archived = post(request)
+                retained = archive.history.session_page(views.source).total
+            finally:
+                server.shutdown()
+                thread.join(3)
+                server.server_close()
+
+            self.assertEqual([401, 409, 409, 409], [result[0] for result in (no_access, stale_host, stale_binding, wrong_partition)])
+            self.assertEqual((200, True), (detail[0], json.loads(detail[1])['export_supported']))
+            self.assertEqual((), before_click)
+            self.assertEqual((200, TRANSFER), (exported[0], json.loads(exported[1])))
+            self.assertEqual((409, {'error': 'export_unavailable'}), (archived[0], json.loads(archived[1])))
+            self.assertEqual(1, retained)
+            self.assertEqual(2, len(upstream.requests))
+
     def test_protected_post_exact_selection_headers_limits_and_shutdown(self):
         with export_source() as (source, state, _):
             details, token = selected_details(source)

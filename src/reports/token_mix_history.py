@@ -11,11 +11,9 @@ from typing import TYPE_CHECKING, Callable
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import unique_usage
 from src.analysis.ai_stats import windows
-from src.domain import ModelRef
 from src.domain.progress import WorkProgress
-from src.pricing.identities import reference_identity, unverified_alias
-from src.pricing.publishers import model_publisher, token_mix_publisher
-
+from .history_mix_identity import (UNKNOWN_PUBLISHER, history_model_key, history_publisher, history_reference_model,
+                                   web_model_label)
 from .migration_notice import migration_gap_notes
 from .models import ModelTokenMixProjection, PublisherTokenMixProjection, ReportKind, ReportProjection
 
@@ -25,12 +23,6 @@ if TYPE_CHECKING:
 HistoryProgress = Callable[[str, int | None], None]
 HISTORY_NOTE = ("History includes OpenCode usage data that is still available; "
                 "deleted or pruned history is not reconstructed.")
-
-
-def _model_key(model: ModelRef) -> str:
-    if unverified_alias(model.model, model.provider):
-        return f"{model.provider.lower()}/{reference_identity(model.model)}"
-    return reference_identity(model.model) or (model.model or "").lower()
 
 
 def observed_totals(entries):
@@ -91,7 +83,7 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         usage = [entry for entry in usage if (start is None or
             entry.completed_at_ms >= start) and entry.completed_at_ms <= service.now_ms]
         period = dict(period=scope, start_ms=start, end_ms=service.now_ms)
-    groups = model_token_mixes(usage, prompt_of, valuation, model_key=_model_key)
+    groups = model_token_mixes(usage, prompt_of, valuation, model_key=history_model_key)
     warnings = tuple(service.selection.warnings)
     if undated:
         warnings += (f"Request time unavailable for {undated} recorded calls; undated usage is included only in All time.",)
@@ -102,34 +94,30 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
     rows = []
     by_model = {}
     for entry in usage:
-        by_model.setdefault(_model_key(entry.model), []).append(entry)
+        by_model.setdefault(history_model_key(entry.model), []).append(entry)
 
     def catalog_model(model):
-        return None if unverified_alias(model.model, model.provider) else reference.resolve_reference(model.model)
+        return history_reference_model(model, reference)
 
     def publisher_key(model):
-        matched = catalog_model(model)
-        publisher = token_mix_publisher(model, matched) if scope is not None else model_publisher(matched)
-        return publisher or "Unknown / unverified"
+        return history_publisher(model, catalog_model(model), web=scope is not None)
 
     for group in groups:
         matched = catalog_model(group.model)
         name = (group.model.display_name if group.model.resolution and group.model.display_name else
                 reference.display_name(group.model.model, group.model.provider, exact=True))
-        web_name = (matched.model.display_name or matched.model.model) if matched else (
-            group.model.recorded_model if unverified_alias(group.model.model, group.model.provider) else
-            group.model.display_name or group.model.recorded_model)
-        key = _model_key(group.model)
+        web_name = web_model_label(group.model, matched)
+        key = history_model_key(group.model)
         # Model groups can span routes. Never infer their manufacturer from the
         # last request; publisher aggregates below still use each request's facts.
         manufacturers = {publisher_key(entry.model) for entry in by_model[key]}
-        publisher = next(iter(manufacturers)) if len(manufacturers) == 1 else "Unknown / unverified"
+        publisher = next(iter(manufacturers)) if len(manufacturers) == 1 else UNKNOWN_PUBLISHER
         rows.append(ModelTokenMixProjection(name, group.prompts, group.calls, group.mix,
-            "—" if publisher == "Unknown / unverified" else publisher, key, observed_totals(by_model[key]), web_name))
+            "—" if publisher == UNKNOWN_PUBLISHER else publisher, key, observed_totals(by_model[key]), web_name))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
-    shown_keys = {_model_key(group.model) for group in groups}
-    shown_usage = [entry for entry in usage if _model_key(entry.model) in shown_keys]
+    shown_keys = {history_model_key(group.model) for group in groups}
+    shown_usage = [entry for entry in usage if history_model_key(entry.model) in shown_keys]
     by_publisher = {}
     for entry in shown_usage:
         by_publisher.setdefault(publisher_key(entry.model), []).append(entry)

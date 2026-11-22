@@ -22,6 +22,7 @@ from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, re
 from .projection import identity, project
 from src.reports.ai_stats import StatsCheckpointError
 from src.reports.history_work import HistoryContinuation, HistoryCheckpointError
+from src.reports.model_comparison import model_price_boundary
 
 
 ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
@@ -30,8 +31,7 @@ _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "a
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
                      "account-load", "account-analysis", "account-projection", "finalizing",
                      "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis",
-                     "history-cache", "history-load", "history-projection", "history-verify",
-                     "comparison-verify", "comparison-groups", "comparison-previews"})
+                     "history-cache", "history-load", "history-projection", "history-verify"})
 
 
 class ReportApplication:
@@ -45,9 +45,10 @@ class ReportApplication:
     """
 
     def __init__(self, factory: ServiceFactory, *, clock: Callable[[], int] | None = None,
-                 models_only: bool = False):
+                 models_only: bool = False, models_binding=None):
         self._factory = factory
         self._models_only = models_only
+        self._models_binding = models_binding
         self._clock = clock or (lambda: time_ns() // 1_000_000)
         self._instance_id = str(uuid4())
         self._lock = Lock()
@@ -99,7 +100,6 @@ class ReportApplication:
                     ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
                     ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
                     ReportKind.AI_STATS: "available_execution_history",
-                    ReportKind.COMPARISONS: "all_available_root_first_inputs",
                 }[request.kind]),
                 ("local_day_start_ms", local_day_start_ms(service.timezone_id, now_ms=now)),
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
@@ -111,7 +111,8 @@ class ReportApplication:
                     return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
-            if self._models_only and request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}:
+            models_report = self._models_only and request.kind in {ReportKind.NORMAL, ReportKind.ALL_MODELS}
+            if models_report:
                 report = service.build_model_price_list(request)
             elif request.kind is ReportKind.TOKEN_MIX:
                 report = service.build_token_mix_history(lambda label, _percent: observe(label), scope=request.token_mix_scope)
@@ -129,12 +130,18 @@ class ReportApplication:
                 observed_at_ms=now, revisions=revisions, atomicity="per_root_snapshot",
                 accounts_atomic_with_sessions=False,
             )
+            if models_report and self._models_binding is not None:
+                source = ObjectValue(source.fields + (
+                    ("model_scope", self._models_binding(service.selection)),
+                    ("model_price_boundary_ms", model_price_boundary(service._load_catalog(), now)),
+                    ("model_price_stale", service._load_catalog().reference_stale),
+                ))
             requests = tuple(record(id=identity(parts), session_id=parts[0], event_id=parts[1],
                                     message_id=parts[2], step_part_id=parts[3])
                              # Normal is an aggregate comparison/account report. Its
                              # month-wide causal identities are not displayed and can
                              # dwarf the report; per-root revision evidence stays above.
-                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS, ReportKind.COMPARISONS}
+                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS}
                                            else service.report_request_identities()))
             observe(WorkProgress("Preparing report", "finalizing", 1, 2, stage="finalizing"))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
@@ -163,8 +170,7 @@ class ReportApplication:
                                 error=ReportError("pricing_unavailable", True))
         except SessionCatalogChangedError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
-                                error=ReportError("session_catalog_changed",
-                                    not (request.kind is ReportKind.COMPARISONS and request.comparison_revision)))
+                                error=ReportError("session_catalog_changed", True))
         except SessionNotFoundError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("session_not_found"))
@@ -201,8 +207,6 @@ class ReportApplication:
         if request.stats_scope not in ('today', '7-days', '30-days', 'month', 'all'):
             return 'invalid_request'
         if request.token_mix_scope not in ('today', '7-days', '30-days', 'month', 'all'):
-            return 'invalid_request'
-        if type(request.comparison_offset) is not int or request.comparison_offset < 0 or request.comparison_offset % 10:
             return 'invalid_request'
         if request.kind is ReportKind.SESSION and not request.session_id:
             return "invalid_request"

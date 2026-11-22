@@ -33,7 +33,7 @@ def capture(test):
     reports = service(test, snapshots=saved)
     views = {kind.value: project(reports.build(ReportRequest(kind,
         **({"session_id": "root-0000"} if kind is ReportKind.SESSION else {}))), prompt_details=True).to_json()
-        for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.COMPARISONS, ReportKind.AI_STATS)}
+        for kind in (ReportKind.SESSIONS, ReportKind.SESSION, ReportKind.AI_STATS)}
     rows = []
     for value in saved:
         bundle = analyze_snapshot(value, tracked_provider=None)

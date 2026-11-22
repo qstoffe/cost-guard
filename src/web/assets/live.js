@@ -3,7 +3,9 @@
 // Complete publications are atomic; no browser-side totals or lifecycle inference.
 const LiveConnection = (() => {
   function connect(api, update, status, sourceFactory = url => new EventSource(url),
-      clock = {now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), cancel: id => clearTimeout(id)}) {
+      clock = {now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), cancel: id => clearTimeout(id)},
+       onCache = () => {}, onWatchCache = () => {}, onMixCache = () => {}, onStatsCache = () => {},
+       onModelsCache = () => {}, onAccountsCache = () => {}) {
     let source = null, instance = null, sequence = 0, syncing = null, stopped = false;
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     let sourceOutage = false, healthOwner = null, healthCheck = -1;
@@ -41,10 +43,31 @@ const LiveConnection = (() => {
       else if (live.state !== 'running') report('source_unavailable', 'SOURCE UNAVAILABLE — HTTP connected; last source observation retained, not live.');
       else report('connected', 'Live connected.');
     }
-    function publish(validate = false) {
+    function publish(validate = false, kind = null) {
       if (values.terminal) {
         stop(`STOPPED — NOT LIVE · ${values.terminal.reason}: host stopped. Run the launcher again using the OS launcher.`);
-      } else { if (validate) health(); update(values.live, values.progress); }
+      } else if (kind === 'cache') {
+        onCache(values.cache);
+      } else if (kind === 'watch-cache') {
+        onWatchCache(values[kind]);
+      } else if (kind === 'token-mix-cache') {
+        onMixCache(values[kind]);
+      } else if (kind === 'ai-stats-cache') {
+        onStatsCache(values[kind]);
+      } else if (kind === 'models-cache') {
+        onModelsCache(values[kind]);
+      } else if (kind === 'accounts-cache') {
+        onAccountsCache(values[kind]);
+      } else {
+        if (validate) health();
+        if (kind === null) {
+          onCache(values.cache, true); onWatchCache(values['watch-cache'], true); onMixCache(values['token-mix-cache'], true);
+          onStatsCache(values['ai-stats-cache'], true);
+          onModelsCache(values['models-cache'], true);
+          onAccountsCache(values['accounts-cache'], true);
+        }
+        update(values.live, values.progress);
+      }
     }
     async function sync() {
       if (stopped) return;
@@ -100,14 +123,16 @@ const LiveConnection = (() => {
       if (number !== sequence + 1) { sync(); return; }
       try { values[kind] = JSON.parse(event.data); }
       catch (_) { sync(); return; }
-      sequence = number; publish(kind === 'live');
+      sequence = number; publish(kind === 'live', kind);
     }
     function openStream() {
       if (stopped || source || !instance) return;
       const opened = sourceFactory('/api/events'); // No reusable secret or query string.
       source = opened;
       const current = () => !stopped && source === opened;
-      for (const kind of ['live', 'progress', 'terminal']) opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
+      for (const kind of ['live', 'cache', 'watch-cache', 'token-mix-cache', 'ai-stats-cache', 'models-cache',
+          'accounts-cache', 'progress', 'terminal'])
+        opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
       opened.addEventListener('resync', () => { if (current()) sync(); });
       opened.addEventListener('authorization_required', () => {
         if (!current()) return;

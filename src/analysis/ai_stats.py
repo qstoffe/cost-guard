@@ -1,6 +1,7 @@
 """AI Stats-only fun figures; canonical accounting and timing remain unchanged."""
 from dataclasses import dataclass, replace
 from bisect import bisect_right
+from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -67,6 +68,16 @@ def windows(zone, now):
             ('all', None))
 
 
+def scope_rollover(period, zone, now):
+    if period == 'all':
+        return None
+    tomorrow = -1
+    if period == 'month':
+        local = datetime.fromtimestamp(now / 1000, timezone.utc).astimezone(resolve_timezone(zone))
+        tomorrow = local.day - monthrange(local.year, local.month)[1] - 1
+    return local_day_start_ms(zone, now_ms=now, days_ago=tomorrow)
+
+
 def union(intervals):
     """Half-open boundaries: touching sessions never inflate peak concurrency."""
     result = []
@@ -76,6 +87,14 @@ def union(intervals):
         elif right > left:
             result.append((left, right))
     return result
+
+
+def calendar_bounds(day, tz):
+    """UTC clocks for the local day's midnight, 06:00, 22:00, and next midnight."""
+    next_day = day + timedelta(days=1)
+    return (*(int(datetime(day.year, day.month, day.day, hour, tzinfo=tz).timestamp() * 1000)
+              for hour in (0, 6, 22)),
+            int(datetime(next_day.year, next_day.month, next_day.day, tzinfo=tz).timestamp() * 1000))
 
 
 def calendar_activity(intervals, zone):
@@ -88,9 +107,7 @@ def calendar_activity(intervals, zone):
             next_day = day + timedelta(days=1)
             bounds = boundaries.get(day)
             if bounds is None:
-                bounds = [int(datetime(day.year, day.month, day.day, hour, tzinfo=tz).timestamp() * 1000)
-                          for hour in (0, 6, 22)]
-                bounds.append(int(datetime(next_day.year, next_day.month, next_day.day, tzinfo=tz).timestamp() * 1000))
+                bounds = calendar_bounds(day, tz)
                 boundaries[day] = bounds
             for index, (start, end) in enumerate(zip(bounds, bounds[1:])):
                 amount = max(0, min(right, end) - max(left, start))

@@ -29,8 +29,8 @@ const SessionExport = (() => {
     return `${stem}.json`;
   }
   class Action {
-    constructor(api, id) {
-      Object.assign(this, {api, id, token: null, available: false, operation: null, filename: filename(null, id)});
+    constructor(api, id, cached = false) {
+      Object.assign(this, {api, id, cached, token: null, available: false, operation: null, filename: filename(null, id)});
       this.root = ReportView.element('div', undefined, 'session-export');
       this.button = ReportView.element('button', 'Export Sanitized JSON'); this.button.type = 'button'; this.button.disabled = true;
       this.notice = ReportView.element('span', '');
@@ -66,7 +66,9 @@ const SessionExport = (() => {
         }) : null;
         if (operation.signal.aborted || token !== this.token) return;
         this.notice.textContent = 'Exporting sanitized session…';
-        const {blob} = await this.api('/api/detail/export', {token}, operation.signal, true);
+        const {blob} = this.cached
+          ? await this.api('/api/cache/session-detail/export', {binding: token, session_id: this.id}, operation.signal, true)
+          : await this.api('/api/detail/export', {token}, operation.signal, true);
         if (operation.signal.aborted || token !== this.token) return;
         if (handle) {
           writable = await handle.createWritable();

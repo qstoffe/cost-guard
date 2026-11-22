@@ -1,7 +1,7 @@
 """Versioned exact first-input identity from normalized, ordered semantic parts.
 
 No filesystem/URL acquisition. Unverifiable attachment references and unknown
-part kinds fail closed. Only the digest may enter a disposable match index.
+part kinds fail closed. Only the digest may enter a match index.
 """
 import base64
 import binascii
@@ -62,16 +62,3 @@ def fingerprint(message):
         return None
     encoded = json.dumps([IDENTITY_VERSION, parts], ensure_ascii=True, separators=(',', ':')).encode('ascii')
     return sha256(encoded).hexdigest()
-
-
-def preview(message):
-    """Ephemeral bounded display only, never a match key or persisted payload."""
-    if message is None:
-        return 'Input preview unavailable'
-    text = ' '.join(part.data.get('text', '') for part in message.parts
-        if part.kind == 'text' and not part.data.get('synthetic') and not part.data.get('ignored'))
-    # Avoid displaying likely credentials/private key material even in a short preview.
-    if any(word in text.lower() for word in ('private key', 'bearer ', 'password', 'api_key', 'access_token')):
-        return 'Input preview withheld (potentially private)'
-    compact = ' '.join(text.split())
-    return compact[:120] + ('…' if len(compact) > 120 else '') if compact else 'Attachment input'

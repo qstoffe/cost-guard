@@ -25,7 +25,7 @@ class V1WebWatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root, closing(V1Watch(root)) as scenario:
             before = scenario.path.read_bytes()
             for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS, ReportKind.SESSIONS,
-                    ReportKind.SESSION, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+                    ReportKind.SESSION, ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
                 with self.subTest(kind=kind):
                     report = scenario.cli.report_service.build(ReportRequest(kind,
                         session_id="ses_root" if kind is ReportKind.SESSION else None))

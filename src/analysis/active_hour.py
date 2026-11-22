@@ -43,6 +43,11 @@ def period_windows(timezone_id, now_ms):
             ("Rolling 30 days", now_ms - ROLLING_MS))
 
 
+def request_message_identity(entry):
+    message = entry.message_id or (entry.parent_event_id, entry.sort_order)
+    return entry.source_instance, entry.session_id, message
+
+
 def deduplicated_requests(entries: Iterable[TraceEntry]):
     """Canonical identity reconciliation before the existing clone deduplication.
 
@@ -52,8 +57,7 @@ def deduplicated_requests(entries: Iterable[TraceEntry]):
     values = {}
     stepped = set()
     for entry in entries:
-        message = entry.message_id or (entry.parent_event_id, entry.sort_order)
-        base = entry.source_instance, entry.session_id, message
+        base = request_message_identity(entry)
         if entry.step_part_id:
             values.pop((*base, None), None)
             stepped.add(base)

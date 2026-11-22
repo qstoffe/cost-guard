@@ -58,17 +58,22 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None):
+                    on_activity=None, activity_end_ms=None, persist_legacy=True, on_observation=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
     epoch = getattr(service.source, "observation_epoch", None)
-    key = summary_key(service, root)
-    try:
-        cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
-    except (OSError, sqlite3.Error):
-        cached = None
-    if not active and cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
+    key = summary_key(service, root) if persist_legacy or on_observation is None else None
+    cached = None
+    # The legacy scalar caller can reuse a qualified scalar hit and optionally
+    # hand off a fresh capture on misses. A dedicated archive turn needs facts,
+    # not just the old scalar, and therefore bypasses the scalar cache.
+    if not active and (on_observation is None or persist_legacy):
+        try:
+            cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
+        except (OSError, sqlite3.Error):
+            pass
+    if cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
         try:
             values = dict(cached.payload)
             semantics = values.pop("model_identity_semantics", None)
@@ -172,11 +177,13 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
     actual = item.bundle.source_revision
+    if actual == revision and on_observation is not None:
+        on_observation(item.snapshot, item.bundle, service._load_comparison_catalog())
     identity_values = dependencies((*item.bundle.trace_entries,
         *(message for message in item.snapshot.messages if message.model is not None)))
     if on_dependencies is not None:
         on_dependencies(identity_values)
-    if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
+    if persist_legacy and item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = identity_values

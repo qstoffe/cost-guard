@@ -1,22 +1,25 @@
 """Fixed-route, bounded loopback HTTP shell. No generic filesystem handler."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
 import re
 import socket
 from socketserver import TCPServer
+import sqlite3
 import time
 from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
 from src.analysis.account_timeline import PERIODS as ACCOUNT_PERIODS
+from src.cache.display_history import HistoryState
+from src.reports import ReportKind
 from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
-from .session_catalog import catalog_page
+from .session_catalog import cached_priority, catalog_page
+from .dispatch import cache_only_reports
 from .dispatch_http import handle as handle_dispatch
 from .session_export import SessionExports
 
@@ -35,10 +38,13 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
               "/session.js": ("session.js", "text/javascript; charset=utf-8"),
               "/session-export.js": ("session-export.js", "text/javascript; charset=utf-8"),
+              "/cached-watch.js": ("cached-watch.js", "text/javascript; charset=utf-8"),
+              "/cached-mix.js": ("cached-mix.js", "text/javascript; charset=utf-8"),
+              "/cached-stats.js": ("cached-stats.js", "text/javascript; charset=utf-8"),
+              "/cached-models.js": ("cached-models.js", "text/javascript; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
-             "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
              "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
              "/data-demand.js": ("data-demand.js", "text/javascript; charset=utf-8"),
             "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
@@ -207,9 +213,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not self.parse_request():
                 return
             self.close_connection = True
-            housekeeping = getattr(self.server.lifecycle, 'cache_housekeeping', None)
-            with housekeeping.request(self.path) if housekeeping else nullcontext():
-                self.route()
+            self.route()
         except ReportWorkerStopError as error:
             if self.server.lifecycle:
                 self.server.lifecycle.runtime_failed(error)
@@ -336,6 +340,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if handle_dispatch(self, value):
                 return
             if self.path == '/api/accounts/timeline':
+                if getattr(self.server.lifecycle, "cached_accounts_enabled", False):
+                    self.reply(400, {"error": "invalid_request"})
+                    return
                 period, revision = value.get('period'), value.get('revision')
                 if (set(value) != {'period', 'revision'} or period not in ACCOUNT_PERIODS
                         or revision is not None and (type(revision) is not int or revision < 0)):
@@ -348,8 +355,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                            dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False,
                                 acquiring=False))
                 return
-            if self.path == '/api/detail/export':
-                self.server.exports.handle(self, value)
+            if self.path in ('/api/detail/export', '/api/cache/session-detail/export'):
+                self.server.exports.handle(self, value, cached=self.path == '/api/cache/session-detail/export')
                 return
             if self.path == '/api/models/benchmark/refresh':
                 lane = getattr(self.server.lifecycle, 'benchmark', None)
@@ -370,6 +377,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                         request = ModelsPriceRefresh()
                     else:
                         request = parse_report(value)
+                        if request.kind in cache_only_reports(self.server.lifecycle):
+                            raise ValueError("invalid_request")
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})
                     return
@@ -400,22 +409,62 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/sessions" and self.server.lifecycle and self.server.lifecycle.live:
                 self.session_catalog(value)
                 return
+            if self.path == "/api/cache/sessions":
+                self.cached_sessions(value)
+                return
+            if self.path == "/api/cache/session-detail":
+                self.cached_sessions(value, detail=True)
+                return
+            if self.path in {"/api/cache/token-mix", "/api/cache/token-mix/groups"}:
+                self.cached_mix_total(value, grouped=self.path.endswith("/groups"))
+                return
+            if self.path == "/api/cache/ai-stats":
+                self.cached_ai_stats(value)
+                return
+            if self.path == "/api/cache/models":
+                from .models_http import cached_models
+                cached_models(self, value)
+                return
+            if self.path == "/api/cache/accounts":
+                from .accounts_http import cached_accounts
+                cached_accounts(self, value)
+                return
+            if self.path in {"/api/cache/session-detail/demand", "/api/cache/sessions/demand"}:
+                cached_priority(self, value, detail=self.path == "/api/cache/session-detail/demand")
+                return
+            if self.path == "/api/cache/sessions/clear":
+                self.clear_cached_sessions(value)
+                return
             match = JOB_PATH.fullmatch(self.path)
             if match and match[2] and not value:
                 found = self.server.jobs.cancel(match[1])
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
+            if self.path == "/api/cache/sessions/clear":
+                self.clear_cached_sessions()
+                return
+            if self.path == "/api/cache/watch":
+                self.cached_watch()
+                return
             if self.path == '/api/database-sizes':
                 sizes = getattr(self.server.lifecycle, 'database_sizes', None)
                 self.reply(200, sizes() if sizes else {'opencode_bytes': None, 'cache_bytes': None})
                 return
             if self.path == '/api/models/benchmark':
-                lane = getattr(self.server.lifecycle, 'benchmark', None)
+                owner = self.server.lifecycle
+                lane = getattr(owner, 'benchmark', None)
+                cache_only = getattr(owner, 'cached_models_enabled', False)
                 references = ()
                 timezone_id = 'UTC'
-                dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
-                if dispatcher:
+                dispatcher = getattr(owner, 'dispatcher', None)
+                models = getattr(getattr(owner, 'display_archive', None), 'models', None) if cache_only else None
+                if models is not None:
+                    try:
+                        references, timezone_id = models.benchmark_references()
+                    except (OSError, sqlite3.Error):
+                        pass
+                elif dispatcher and not cache_only:
                     with dispatcher.lock:
                         for request, entry in dispatcher.entries.items():
                             if request.kind.value == 'normal' and entry['result']:
@@ -423,7 +472,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 references = (view.get('model_catalog') or {}).get('rows', ())
                                 timezone_id = view.get('timezone_id', 'UTC')
                                 break
-                self.reply(200, lane.view(references, timezone_id=timezone_id) if lane else dict(rows=[], fetched_at_ms=None))
+                options = {"request_refresh": False} if cache_only else {}
+                self.reply(200, lane.view(references, timezone_id=timezone_id, **options)
+                           if lane else dict(rows=[], fetched_at_ms=None))
                 return
             if self.path == "/api/settings":
                 self.web_settings()
@@ -443,6 +494,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None
+                    value["cached_sessions"] = getattr(self.server.lifecycle, "cached_sessions_enabled", False)
+                    value["cached_watch"] = getattr(self.server.lifecycle, "cached_watch_enabled", False)
+                    value["cached_mix"] = getattr(self.server.lifecycle, "cached_mix_enabled", False)
+                    value["cached_stats"] = getattr(self.server.lifecycle, "cached_stats_enabled", False)
+                    value["cached_models"] = getattr(self.server.lifecycle, "cached_models_enabled", False)
+                    value["cached_accounts"] = getattr(self.server.lifecycle, "cached_accounts_enabled", False)
                     if getattr(self.server.lifecycle, "source_startup", None) is not None:
                         value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)
@@ -533,6 +590,161 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(410, {"error": "catalog_expired"})
         except RuntimeError:
             self.reply(429, {"error": "catalog_busy"})
+
+    def cached_sessions(self, value, *, detail=False):
+        fields = {"session_id", "offset"} if detail else {"period", "sort", "direction", "offset", "known", "cursor"}
+        if set(value) - fields:
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        views = getattr(owner, "cached_session_views", None)
+        if views is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+            return
+        archive = getattr(owner, "display_archive", None)
+        fence = archive.sessions.clear_fence if archive is not None else None
+        try:
+            result = views.detail(**value) if detail else views.page(**value)
+        except (TypeError, ValueError):
+            self.reply(400, {"error": "invalid_request"})
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+        else:
+            if (views is not getattr(owner, "cached_session_views", None)
+                    or archive is not None and fence != archive.sessions.clear_fence):
+                self.reply(503, {"error": "cache_source_unbound"})
+            else:
+                if fence is not None:
+                    result = dict(result, demand_epoch=fence)
+                self.reply(200, result)
+
+    def cached_mix_total(self, value, *, grouped):
+        from src.cache.display_mix_order import MIX_GROUP_DEFAULT, MIX_GROUP_SORTS, valid_group_revision
+        from src.cache.display_mix_totals import MIX_PERIODS
+
+        period = value.get("period")
+        fields = {"period", "kind", "after", "known", "sort", "direction"} if grouped else {"period", "orders"}
+        if set(value) - fields or type(period) is not str or period not in MIX_PERIODS:
+            self.reply(400, {"error": "invalid_request"})
+            return
+        def valid_order(kind, sort, direction):
+            return (kind in ("model", "publisher") and sort in MIX_GROUP_SORTS and
+                    (sort != "model" or kind == "model") and direction in ("asc", "desc"))
+
+        if grouped:
+            kind, after, known = value.get("kind"), value.get("after", ""), value.get("known")
+            sort, direction = value.get("sort", MIX_GROUP_DEFAULT[0]), value.get("direction", MIX_GROUP_DEFAULT[1])
+            if (not valid_order(kind, sort, direction) or not isinstance(after, str) or len(after) > 256 or
+                    known is not None and not valid_group_revision(known)):
+                self.reply(400, {"error": "invalid_request"})
+                return
+            options = dict(kind=kind, after=after, known=known, order=(sort, direction))
+        else:
+            orders = value.get("orders", {})
+            if type(orders) is not dict or any(type(order) is not list or len(order) != 2 or
+                    not valid_order(kind, *order) for kind, order in orders.items()):
+                self.reply(400, {"error": "invalid_request"})
+                return
+            options = dict(orders=orders)
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        if archive is None or not getattr(owner, "cached_mix_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        try:
+            result = archive.mix_total(period, **options)
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif owner.display_archive is not archive or result is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, result)
+
+    def cached_watch(self):
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        if archive is None or not getattr(owner, "cached_watch_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        live = getattr(owner, "live", None)
+        driver = getattr(live, "driver", None)
+
+        def healthy():
+            return (driver is not None and owner.live is live and live.driver is driver and not driver.terminal
+                    and driver.error is None and driver.observed_at_ms is not None)
+
+        try:
+            value = archive.watch_snapshot(live_eligible=healthy, presentation=True)
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif owner.display_archive is not archive or value is None:
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, value)
+
+    def cached_ai_stats(self, value):
+        period = value.get("period")
+        if (set(value) != {"period"} or type(period) is not str
+                or period not in ("today", "7-days", "30-days", "month", "all")):
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        stats = getattr(archive, "stats", None)
+        if stats is None:
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        views, fence = archive.views, archive.sessions.clear_fence
+        try:
+            result = stats.snapshot(period, int(time.time() * 1000))
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif (owner.display_archive is not archive or result is None or archive.views is not views
+                or archive.sessions.clear_fence != fence):
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, result)
+
+    def clear_cached_sessions(self, value=None):
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        live = getattr(owner, "live", None)
+        catalog = getattr(live, "catalog", None)
+        driver = getattr(live, "driver", None)
+        service = getattr(getattr(driver, "coordinator", None), "report_service", None)
+        if archive is None or catalog is None or service is None or not getattr(owner, "cached_sessions_enabled", False):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        try:
+            if value is None:
+                result = archive.clear_snapshot()
+                self.reply(200 if result is not None else 503, result or {"error": "cache_source_unbound"})
+                return
+            if (set(value) != {"confirm", "binding", "generation", "archive_epoch"} or value["confirm"] is not True
+                    or not isinstance(value["binding"], str) or len(value["binding"]) != 32
+                    or any(type(value[key]) is not int or not 0 <= value[key] <= 2**53 - 1
+                           for key in ("generation", "archive_epoch"))):
+                self.reply(400, {"error": "invalid_request"})
+                return
+
+            def eligible():
+                return (not owner.stopping.is_set() and live.driver is driver and not driver.terminal
+                        and self.server.session.authenticated(self.headers.get("Cookie")))
+
+            expected = HistoryState(value["generation"], value["archive_epoch"])
+            result = archive.clear_confirmed(value["binding"], expected, catalog, service, eligible=eligible)
+            self.reply(200 if result is not None else 409, result or {"error": "cache_clear_changed"})
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
 
     def stream_events(self):
         if not self.server._streams.acquire(blocking=False):

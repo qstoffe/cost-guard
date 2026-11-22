@@ -15,14 +15,26 @@ from .prompt_rows import PromptRowProjector
 DECIMALS = ('ccost', 'main_ccost', 'subagent_ccost', 'incoming_context_ccost', 'extra_ccost')
 
 
-def project_run(snapshot, bundle, reference, config):
+def matched_input(snapshot, bundle):
     message = first_input(snapshot)
     identity = fingerprint(message)
     if identity is None:
         return None
     record = next((prompt for prompt in bundle.prompts if prompt.prompt_id == message.message_id), None)
-    if record is None:
+    return (identity, record) if record is not None else None
+
+
+def matched_execution_status(record):
+    return ('running' if record.in_progress else 'failed' if record.watch_error else
+            'aborted' if record.aborted else 'complete' if record.completed_successfully
+            and record.execution_duration_ms is not None else 'unknown')
+
+
+def project_run(snapshot, bundle, reference, config):
+    evidence = matched_input(snapshot, bundle)
+    if evidence is None:
         return None
+    identity, record = evidence
     row = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=reference, config=config).prompt(record)
     entries = unique_usage(record.entries)
     valuation = comparison_cost(entries, reference.reference_valuation)
@@ -34,9 +46,7 @@ def project_run(snapshot, bundle, reference, config):
     for key, requests in sorted(contributors.items()):
         cost = comparison_cost(requests, reference.reference_valuation)
         groups.append((*key, len(requests), cost.known_ccost, cost.complete))
-    status = ('running' if record.in_progress else 'failed' if record.watch_error else
-              'aborted' if record.aborted else 'complete' if record.completed_successfully
-              and record.execution_duration_ms is not None else 'unknown')
+    status = matched_execution_status(record)
     duration = record.execution_duration_ms if status != 'running' else None
     selected = record.main_provider_id, record.main_model_id
     mixed = len(contributors) > 1 or any(key[:2] != selected for key in contributors)

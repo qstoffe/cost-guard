@@ -87,28 +87,25 @@ module.exports = async function defaultEffort({command,evaluate,until,owner,mini
     window.effortDetailData={result:{view:{...effortCapture.synthetic_views.session,prompt_blocks:[{
       ...effortCapture.synthetic_views.session.prompt_blocks[0],rows:effortCapture.browser_rows.map((r,i)=>({...r,id:'effort-'+i}))}]}}};
     effortDetail.update(effortDetailData);
-    window.effortComparisons=new ComparisonsView.View(()=>{});effortAudit.append(effortComparisons.root);
-    effortComparisons.update({result:{view:effortCapture.synthetic_views.comparisons},withheld:false,loading:false});
     window.effortStats=new AIStatsView.View(()=>{});effortAudit.append(effortStats.root);
     effortStats.update({period:'all',result:{view:effortCapture.synthetic_views['ai-stats']}});
     [...effortStats.cards.get('token-rate').podium].find((n,i)=>
       effortStats.cards.get('token-rate').metric.podium[i]?.model_help.includes('default (high)')).label.classList.add('effort-racer');`);
   const detail=(index,col)=>`.session-history-table tr[data-id="effort-${index}"] td:nth-child(${col}) .help-value`;
-  const comparison=(index,col)=>`.comparison-table tr[data-session="root-000${index}"] td:nth-child(${col}) button`;
-  for(let index=0;index<5;index++) for(const selector of [detail(index,2),detail(index,3),comparison(index,3),comparison(index,4)]) {
+  for(let index=0;index<5;index++) for(const selector of [detail(index,2),detail(index,3)]) {
     const text=await open(owner,selector);
     if(index===4) assert.doesNotMatch(text,/default \(|Likely effort|Inferred from current|Observed in the recorded/);
-    else check(text,index===1?'low':index===3?'unknown':'high',selector===detail(index,3)||selector===comparison(index,4));
+    else check(text,index===1?'low':index===3?'unknown':'high',selector===detail(index,3));
   }
   for(const theme of ['classic','light','dark']) for(const width of [1280,360]) for(const zoom of [1,1.5]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},owner);
     await evaluate(owner,`document.documentElement.dataset.theme='${theme==='classic'?'classic':'web'}';document.documentElement.style.zoom='${zoom}'`);
-    for(const mode of ['focus','hover','touch']) for(const selector of [detail(0,2),detail(0,3),detail(0,4),detail(0,5),comparison(0,3),comparison(0,4),'.effort-racer'])
-      check(await open(owner,selector,mode),'high',selector===detail(0,3)||selector===comparison(0,4));
+    for(const mode of ['focus','hover','touch']) for(const selector of [detail(0,2),detail(0,3),detail(0,4),detail(0,5),'.effort-racer'])
+      check(await open(owner,selector,mode),'high',selector===detail(0,3));
     const catalog=await open(owner,'.sessions-table tr[data-id="root-0000"] td:nth-child(3) .help-value');
     assert.doesNotMatch(catalog,/default \(|Likely effort|Inferred from current|Observed in the recorded/,'catalog identity help invents no effort');
-    layouts.push({theme,width,zoom,surfaces:'Sessions identity, detail Model/Effort/CCost/Calls, Comparisons Model/Effort, Stats podium',modes:['focus','hover','touch']});
+    layouts.push({theme,width,zoom,surfaces:'Sessions identity, detail Model/Effort/CCost/Calls, Stats podium',modes:['focus','hover','touch']});
   }
   await open(owner,detail(0,3),'focus',true);
   await evaluate(owner,`window.retainedDetail=document.activeElement;effortDetail.update(effortDetailData)`);
@@ -121,7 +118,7 @@ module.exports = async function defaultEffort({command,evaluate,until,owner,mini
     assert.match(text,/Subagent 1 — anthropic\/claude-opus-5-5 · default \(medium\)/);
     assert.doesNotMatch(text,/default \([a-z]+\)\*|Likely effort/);
   }
-  for(const selector of ['.watch-active th:nth-child(5) button','.session-history-table th:nth-child(3) button','.comparison-table th:nth-child(4) button'])
+  for(const selector of ['.watch-active th:nth-child(5) button','.session-history-table th:nth-child(3) button'])
     assert.doesNotMatch(await open(owner,selector),/default \(|Likely effort|Inferred from current|Observed in the recorded/);
   checks.push('All five evidence/selection classes preserve visible cells; only dedicated Effort values have source-sensitive footnotes.');
   checks.push('Classic/light/dark, 360/1280, 100/150% zoom; hover/focus/tap, clamped help, ARIA, real PiP and retained Watch/detail focus.');

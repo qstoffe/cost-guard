@@ -76,14 +76,38 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.tick()
         self.assertEqual(1, len(self.jobs.values))
 
-        for _ in range(3):
+        for _ in range(4):
             self.now += 15
             self.dispatch.tick()
 
         self.assertTrue(self.dispatch.warm_allowed)
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS},
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX},
                          {job['request'].kind for job in self.jobs.values.values()})
-        self.assertEqual({'0': 0, '1': 2, '2': 2, '3': 2}, self.jobs.priorities)
+        self.assertEqual({'0': 0, '1': 2, '2': 2}, self.jobs.priorities)
+
+    def test_opt_in_cached_mix_does_not_admit_legacy_mix_even_when_requested_by_scope(self):
+        from src.web.dispatch_http import handle
+
+        jobs = RecordingJobs()
+        dispatch = DataDispatcher(jobs, clock=lambda: self.now, wall_clock=lambda: self.now, cache_only_mix=True)
+        dispatch.tick(identity='source')
+        owner = SimpleNamespace(dispatcher=dispatch, cached_mix_enabled=True)
+        results = []
+        handler = SimpleNamespace(path='/api/data', server=SimpleNamespace(lifecycle=owner),
+                                  reply=lambda status, _: results.append(status))
+        request = {'kind': 'token-mix', 'token_mix_scope': 'today'}
+
+        handle(handler, {'request': request, 'retry': False})
+        handler.path = '/api/interest'
+        interest = dict(tab='a' * 32, section='token-mix', visible=True, request=request)
+        handle(handler, interest)
+        handle(handler, dict(interest, request=None))
+        for _ in range(4):
+            self.now += 15
+            dispatch.tick()
+
+        self.assertEqual([400, 400, 200], results)
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS}, {job['request'].kind for job in jobs.values.values()})
 
     def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -209,7 +233,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(0, self.dispatch.entries[self.models]['failures'])
 
     def test_age_boundary_and_qualified_sample_cadence(self):
-        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
             value = result(1_000_000)
             value['scope'] = dict(kind=kind.value, timezone_id='UTC', local_day_start_ms=0)
             for minutes, expected in [(0, True), (15, True), (59, True), (60, True), (61, True), (2880, True)]:
@@ -388,21 +412,6 @@ class DispatcherTests(unittest.TestCase):
             self.assertEqual('not_acquired', value['source']['status'])
             self.assertIsNone(value['view'])
 
-    def test_rejected_comparison_pin_is_terminal_and_new_first_page_can_run(self):
-        pinned = ReportRequest(ReportKind.COMPARISONS, comparison_offset=10, comparison_revision='a' * 64)
-        self.dispatch.interest('one', 'comparisons', True, pinned)
-        key = self.dispatch.lookup(pinned)['id']
-        self.jobs.values[key].update(status='complete', result=dict(
-            error=dict(code='session_catalog_changed', retryable=False)))
-        self.dispatch.tick()
-        self.now += 10000
-        self.assertTrue(self.dispatch.lookup(pinned)['terminal'])
-        self.dispatch.tick()
-        self.assertEqual(1, sum(job['request'].comparison_revision == 'a' * 64 for job in self.jobs.values.values()))
-        first = ReportRequest(ReportKind.COMPARISONS)
-        self.dispatch.interest('one', 'comparisons', True, first)
-        self.assertIsNotNone(self.dispatch.lookup(first)['id'])
-
     def test_completed_human_work_returns_to_idle_priority_and_sleep_due_work_staggers(self):
         self.dispatch.interest('one', 'models', True, self.models)
         key = self.dispatch.lookup(self.models)['id']
@@ -419,7 +428,7 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.interest('one', 'watch', False)
         self.now += 7200
         seen = []
-        for number in range(4):
+        for number in range(3):
             self.dispatch.tick()
             pending = [(key, value) for key, value in self.jobs.values.items() if value['status'] == 'queued']
             self.assertEqual(1, len(pending))
@@ -432,9 +441,9 @@ class DispatcherTests(unittest.TestCase):
             self.dispatch.tick()
             self.assertEqual(number + 1, len(self.jobs.values), 'no simultaneous due-product stampede')
             self.now += 1
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}, set(seen))
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX}, set(seen))
         self.dispatch.tick()
-        self.assertEqual(4, len(self.jobs.values), 'missed periods are not replayed')
+        self.assertEqual(3, len(self.jobs.values), 'missed periods are not replayed')
 
     def test_source_terminal_error_preserves_valid_result_but_never_launches_new_work(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -573,7 +582,7 @@ class DispatcherTests(unittest.TestCase):
     def test_managed_terminal_jobs_never_override_dispatcher_invalidation(self):
         jobs = ReportJobs()
         self.addCleanup(jobs.close)
-        for kind in (ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS):
+        for kind in (ReportKind.AI_STATS, ReportKind.TOKEN_MIX):
             with self.subTest(kind=kind):
                 request = ManagedReport(kind, source_identity='source')
                 key = jobs.submit(request)
@@ -700,7 +709,7 @@ class QuantumProcessTests(unittest.TestCase):
     def test_two_background_reports_make_real_progress_during_a_long_foreground_scan(self):
         jobs = ReportJobs(target=quantum_report)
         self.addCleanup(jobs.close)
-        foreground = jobs.submit(ManagedReport(ReportKind.COMPARISONS, comparison_offset=20))
+        foreground = jobs.submit(ManagedReport(ReportKind.COST_PER_HOUR))
         requested = jobs.submit(ManagedReport())
         warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
         jobs.prioritize({foreground: 0, requested: 1, warm: 2})
@@ -729,8 +738,8 @@ class QuantumProcessTests(unittest.TestCase):
         self.addCleanup(jobs.close)
         dispatch = DataDispatcher(jobs)
         dispatch.tick(identity='source')
-        request = ReportRequest(ReportKind.COMPARISONS)
-        dispatch.interest('opener', 'comparisons', True, request)
+        request = ReportRequest(ReportKind.COST_PER_HOUR)
+        dispatch.interest('opener', 'models', True, request)
         dispatch.tick()
         key = dispatch.entries[request]['job']
         jobs.prioritize({key: 2})
@@ -781,7 +790,7 @@ from src.web.report_control import ManagedReport
 from src.reports import ReportKind
 from development.tests.fixtures.dispatch_reports import quantum_report
 jobs = ReportJobs(target=quantum_report)
-key = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+key = jobs.submit(ManagedReport(ReportKind.COST_PER_HOUR))
 jobs.prioritize({key: 2})
 while not jobs._parked:
     jobs.tick()
@@ -817,7 +826,7 @@ time.sleep(30)
     def test_foreground_finishes_before_background_then_original_stack_resumes(self):
         jobs = ReportJobs(target=quantum_report)
         self.addCleanup(jobs.close)
-        background = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        background = jobs.submit(ManagedReport(ReportKind.COST_PER_HOUR))
         jobs.prioritize({background: 2})
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
@@ -904,7 +913,7 @@ class SharedEvidenceTests(unittest.TestCase):
     def test_unstable_roots_keep_partial_provenance_and_stats_retains_changed_activity(self):
         from src.application import ReportApplication
         for kind, later_changed in ((kind, changed) for kind in
-                (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS) for changed in (False, True)):
+                (ReportKind.TOKEN_MIX, ReportKind.AI_STATS) for changed in (False, True)):
             with self.subTest(kind=kind, later_changed=later_changed):
                 source = SyntheticMonthSource(3, 3, month_start_ms=NOW - 86400000)
                 source.snapshots = {sid: replace(value, complete=True) for sid, value in source.snapshots.items()}
@@ -930,12 +939,10 @@ class SharedEvidenceTests(unittest.TestCase):
                 elif kind is ReportKind.AI_STATS:
                     row = next(row for row in value['view']['ai_stats'] if row['period'] == '30-days')
                     self.assertTrue(any('source-incomplete' in metric['reasons'] for metric in row['metrics']))
-                else:
-                    self.assertFalse(value['view']['comparisons']['complete'])
 
     def test_unverifiable_history_rejects_precise_reports_and_keeps_stats_cost_unknown(self):
         from src.application import ReportApplication
-        for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+        for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
             with self.subTest(kind=kind):
                 source = SyntheticMonthSource(1, 3, month_start_ms=NOW - 86400000)
                 service = report_service(self, source)
@@ -1052,7 +1059,7 @@ class SharedEvidenceTests(unittest.TestCase):
         original = report_service(self, source)
         original.selection = replace(original.selection, warnings=())
         actual = {}
-        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
             service = ReportService(selection=original.selection, pricing_provider=original.pricing_provider,
                 account_provider=None, cache_repository=original.cache_repository,
                 config=original.config, now_ms=NOW, cache_token_mix_history=True)
@@ -1071,8 +1078,6 @@ class SharedEvidenceTests(unittest.TestCase):
                          actual[ReportKind.AI_STATS].ai_stats)
         self.assertEqual(expected_service.build_token_mix_history().model_token_mix,
                          actual[ReportKind.TOKEN_MIX].model_token_mix)
-        self.assertEqual(expected_service.build(ReportRequest(ReportKind.COMPARISONS)).comparisons,
-                          actual[ReportKind.COMPARISONS].comparisons)
 
     def test_incomplete_snapshots_do_not_publish_shared_complete_evidence(self):
         from src.reports.shared_evidence import publish
@@ -1204,7 +1209,7 @@ class HistoryJobTests(unittest.TestCase):
     def test_cancel_parked_child_cannot_release_a_different_active_owner(self):
         from unittest.mock import Mock
         jobs = ReportJobs()
-        parked = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        parked = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
         active = jobs.submit(ManagedReport())
         child, connection, other_child, other_connection = Mock(), Mock(), Mock(), Mock()
         child.is_alive.return_value = other_child.is_alive.return_value = False

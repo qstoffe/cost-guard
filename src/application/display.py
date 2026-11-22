@@ -17,7 +17,6 @@ from .quota_ccost import quota_ccost_pace, quota_ccost_tokens, quota_ccost_value
 from .quota_estimates import estimate_amount, estimate_help
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
-from .comparisons import display_tokens as comparison_tokens
 from .reference_cost import cost_help_tokens
 from .model_help import session_model_tokens
 from .mini_costs import mini_cost_tokens
@@ -37,7 +36,8 @@ def amount_tokens(values):
     tokens = {}
     if "day_start_ms" in values and "prompt_count_complete" in values:
         total = dict(values["total"].fields)
-        tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]))
+        tokens["daily_ccost"] = ccost_amount(decimal(total["known_ccost"]),
+                                            unresolved=values.get("cached", False) and not total["complete"])
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
                 "total_incoming_context_ccost", "total_extra_ccost",
@@ -328,7 +328,7 @@ def history_tokens(values, timezone_id, *, times=None):
                 shown = ccost_amount(amount) + ("" if ccost_unit() == "usd" else " Credits")
                 tokens["mix_" + name + "_cost_value"] = shown
                 tokens["mix_" + name + "_cost_help"] = f"{label} CCost: {shown}"
-        tokens["total_cost"] = ccost_amount(sum((decimal(item) for item in costs), Decimal(0)) if priced else None)
+        tokens["total_cost"] = ccost_amount(decimal(values["total_cost"]) if priced else None)
         tokens["mix_total_cost"] = tokens["total_cost"]
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),
@@ -373,7 +373,6 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(detail_tokens(values))
             alternate.update(mini_cost_tokens(values))
             alternate.update(stat_tokens(values))
-            alternate.update(comparison_tokens(values, timezone_id))
             alternate.update(unavailable_tokens(values))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])

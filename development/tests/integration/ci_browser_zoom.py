@@ -45,7 +45,7 @@ def check_zoom(browser, host, root, evidence):
             host.dispatcher.invalidate()
             page.goto(host.server.origin + '/#/sessions')
             page.reload()
-            page.wait_for_function('() => current.catalog?.usable && !current.catalog.busy', timeout=30000)
+            page.wait_for_function('() => current.catalog?.data && !current.catalog.busy', timeout=30000)
             page.evaluate(TRACE)
             outgoing = page.evaluate('() => {scrollTo(0,document.documentElement.scrollHeight);recordNavigation("activation");return scrollY;}')
             assert outgoing > 100

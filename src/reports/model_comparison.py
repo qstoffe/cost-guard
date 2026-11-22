@@ -6,7 +6,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from src.analysis.comparisons import model_comparison_rows
-from src.pricing.promotions import promotion_price_ratios
+from src.pricing.promotions import model_promotion, promotion_price_ratios
 from .models import ModelCatalogProjection, ModelComparisonProjection
 from .semantics import active_model_promotion, active_promotion_notes, model_is_recent, recent_model_notice_details
 
@@ -104,6 +104,19 @@ def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository, pro
         cache_repository=cache_repository)[0]) for row in rows if row.recent)
     return ModelCatalogProjection(tuple(rows), tuple((row.publisher, row.model) for row in rows
         if (row.publisher, row.model) in selected_names), notes, notices)
+
+
+def model_price_boundary(catalog: PricingCatalog, now_ms: int) -> int | None:
+    """Protect ratios too: even one offer expiry can change the denominator."""
+    boundaries = []
+    for model in catalog.models:
+        offer = model_promotion(model)
+        if offer is not None:
+            # The producer has no qualified pre-offer tiers for this state.
+            if offer.starts_ms is not None and now_ms < offer.starts_ms:
+                return now_ms
+            boundaries.append(offer.expires_ms)
+    return min(boundaries, default=None)
 
 
 def price_summary(catalog: PricingCatalog, model_name: str) -> str:

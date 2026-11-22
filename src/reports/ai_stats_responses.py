@@ -6,7 +6,7 @@ from src.analysis.active_hour import deduplicated_requests
 from src.analysis.ai_stats_models import ModelActivity
 
 
-def _source_model_key(entry):
+def source_model_key(entry):
     # Preserve the existing compact evidence/sampling contract. Friendly period
     # buckets resample these candidates to ONE shared cap, without rehydration.
     resolution = entry.model.resolution
@@ -90,7 +90,7 @@ def encode_responses(bundle, snapshot, now):
                 yield ResponseCall(entry, duration)
 
     indices = {call_key(e): i for i, e in enumerate(bundle.trace_entries)}
-    calls = [(indices[call_key(c.entry)], c.duration_ms) for c in sample(candidates(), key=_source_model_key)]
+    calls = [(indices[call_key(c.entry)], c.duration_ms) for c in sample(candidates(), key=source_model_key)]
     return dict(as_of=now, next_completion=future, calls=calls, activity=activity)
 
 
@@ -106,7 +106,7 @@ def decode_responses(value, facts, now=None):
             raise ValueError('invalid_response_sample')
         seen.add(index)
         calls.append(ResponseCall(facts[index][0], duration))
-    bounded = sample(calls, key=_source_model_key)
+    bounded = sample(calls, key=source_model_key)
     if len(bounded) != len(calls):
         raise ValueError('invalid_response_sample')
     return bounded

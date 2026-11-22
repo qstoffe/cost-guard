@@ -90,8 +90,6 @@ class ReportRequest:
     session_offset: int = 0
     session_catalog_revision: str | None = None
     stats_scope: str = '30-days'
-    comparison_offset: int = 0
-    comparison_revision: str | None = None
     token_mix_scope: str = 'all'
 
 
@@ -185,6 +183,10 @@ class ReportService:
         # readable; CLI and Live keep their original derived-cache ownership.
         self._derived.write_enabled = not enabled
 
+    def retain_derived_cache_read_only(self):
+        """Allow reuse of compatible derived rows without growing the legacy cache."""
+        self._derived.write_enabled = False
+
     def _load_catalog(self) -> PricingCatalog:
         if self.catalog is None:
             self.progress(WorkProgress("Loading pricing catalog", "pricing"))
@@ -264,6 +266,13 @@ class ReportService:
                 if self._watch_accounts else AccountAcquisition(self.account_providers, self.source.source_id))
         if self._account_work.start(self.now_ms):
             self.progress("Checking account quotas")
+
+    def start_account_archive(self, target, publish) -> None:
+        """Start the existing Watch account owner before the first source-history turn."""
+        if self._watch_accounts and self._account_work is None:
+            self._account_work = AccountRefreshLoop(self.account_providers, self.source.source_id,
+                evidence_sink=self._record_account_refresh, archive_target=target, archive_publish=publish)
+            self._account_work.start(self.now_ms)
 
     def poll_account_refresh(self) -> AccountUpdate | None:
         if self._account_work is None:
@@ -700,9 +709,6 @@ class ReportService:
     def build(self, request: ReportRequest, *, include_model_catalog: bool = False) -> ReportProjection:
         self.metrics.mode = request.kind.value
         try:
-            if request.kind is ReportKind.COMPARISONS:
-                from .matched_inputs import build_comparisons
-                return build_comparisons(self, request)
             if request.kind is ReportKind.AI_STATS:
                 from .ai_stats import build_ai_stats
                 return build_ai_stats(self, request.stats_scope)

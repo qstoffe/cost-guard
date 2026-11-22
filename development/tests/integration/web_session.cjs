@@ -24,7 +24,7 @@ async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null, addEventListener(){}};
-     const context = vm.createContext({document, console, Date, URLSearchParams, AbortController, TextEncoder, location: {},
+     const context = vm.createContext({document, console, Date, URLSearchParams, AbortController, TextEncoder, location: {}, crypto: require('node:crypto').webcrypto,
      history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
     clearTimeout: id => timers.delete(id),
@@ -504,7 +504,8 @@ async function main() {
        cell.textContent, cell.children[0].children[0].attributes['aria-label']
      ]), ['model','CCost','prompt count','duration','context'].map(field => ['',`Loading ${field}`]));
    assert.equal(catalog.body.children[0].className,'');
-    await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
+     await require('../fixtures/sessions_navigation_vm.cjs')({vm, context, Node, timers});
+     await require('../fixtures/sessions_cached_vm.cjs')({vm, context, Node});
     const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';
    ictxPage.result.view.prompt_blocks[0].rows[0].display.incoming_context_tokens='2K → 19K';
    ictxPage.result.view.prompt_blocks[0].rows[0].display.first_incoming_context_tokens='17K';

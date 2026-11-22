@@ -1,8 +1,8 @@
-"""Rendered paging lifetime and navigation evidence using only owned synthetic data."""
+"""Rendered navigation and scroll evidence using only owned synthetic data."""
 import subprocess
 import time
 
-from development.tests.integration.serve_comparisons_paging import ROOT, fixture
+from development.tests.integration.serve_navigation import ROOT, fixture
 from development.tools.ci_web_beta import notice
 
 BASELINE = '288b08358ad3b543d86447c68f40677ecb92fe25'
@@ -31,23 +31,17 @@ def route(page, section):
 
 
 def ready(page):
-    page.wait_for_function('() => current && !current.loading && !current.failed && (current.result || current.live || current.catalog?.usable)', timeout=30000)
-
-
-def page_at(page, offset):
-    page.wait_for_function('offset=>current.section==="comparisons" && !current.loading && !current.failed && current.result?.view.comparisons.offset===offset', arg=offset, timeout=30000)
+    page.wait_for_function('() => current && !current.loading && !current.failed && (current.result || current.live || current.catalog?.data)', timeout=30000)
 
 
 def navigation(page, evidence, *, enforce):
     ready(page)
     page.evaluate(TRACE)
     observations = []
-    for section in ('comparisons', 'sessions', 'token-mix', 'accounts', 'watch'):
+    for section in ('sessions', 'token-mix', 'accounts', 'watch'):
         evidence['scenario'] = ('current-' if enforce else 'baseline-') + section + '-models'
         route(page, section)
         ready(page)
-        if section == 'comparisons':
-            page_at(page, 0)
         if section == 'sessions':
             if page.locator('.sessions-periods').count():
                 page.get_by_role('button', name='All time', exact=True).click()
@@ -72,14 +66,14 @@ def navigation(page, evidence, *, enforce):
             assert all(item['y'] == 0 for item in after['trace'] if item['phase'].startswith('frame-'))
         observations.append(dict(origin=section, before=before, **after))
     # Cached browser Back/Forward must apply the same new-route policy.
-    route(page, 'comparisons')
+    route(page, 'token-mix')
     page.go_back()
     page.wait_for_function('() => current.section==="models"')
     page.evaluate('() => renderedFrames()')
     if enforce:
         assert page.evaluate('scrollY') == 0
     page.go_forward()
-    page.wait_for_function('() => current.section==="comparisons"')
+    page.wait_for_function('() => current.section==="token-mix"')
     notice('Models routes', dict(arm='current' if enforce else 'baseline', routes=[
         {key: item[key] for key in ('origin', 'before', 'y', 'focus')} for item in observations]))
     return observations
@@ -91,7 +85,7 @@ def cold_models(context, host, root, evidence):
     page = context.new_page()
     try:
         page.goto(host.server.origin + '/#/sessions?period=all')
-        page.wait_for_function('() => current.catalog?.usable && !current.catalog.busy', timeout=30000)
+        page.wait_for_function('() => current.catalog?.data && !current.catalog.busy', timeout=30000)
         page.evaluate(TRACE)
         before = page.evaluate('() => {scrollTo(0,document.documentElement.scrollHeight);recordNavigation("activation");return scrollY;}')
         assert before > 100
@@ -152,119 +146,6 @@ def cold_models(context, host, root, evidence):
         (root / 'models-delay').write_text('0')
 
 
-def paging(page, host, root, evidence):
-    route(page, 'comparisons')
-    page_at(page, 0)
-    revision = page.evaluate('current.result.view.comparisons.revision')
-    ranges = []
-    for name, offset in [('Next', 10), ('Previous', 0)]:
-        page.get_by_role('button', name=name, exact=True).click()
-        page_at(page, offset)
-        assert page.evaluate('current.result.view.comparisons.revision') == revision
-        ranges.append(page.locator('.page-navigation').inner_text())
-    # Large offsets use the same real pager callback, not a hand-built publication.
-    for offset in (170, 320, 0):
-        page.evaluate('''offset=>{const s=current;s.request={kind:'comparisons',comparison_offset:offset,
-            comparison_revision:s.result.view.comparisons.revision};s.pageNavigation=true;s.orderRetried=false;
-            demand.update();acquire(s);}''', offset)
-        page_at(page, offset)
-        assert page.evaluate('current.result.view.comparisons.revision') == revision
-        assert page.locator('.comparison-group').count() == (1 if offset == 320 else 10)
-        if offset == 320:
-            assert page.get_by_role('button', name='Next', exact=True).is_disabled()
-        ranges.append(page.locator('.page-navigation').inner_text())
-    notice('paging ranges', ranges)
-    (root / 'mode').write_text('slow')
-    host.dispatcher.invalidate()
-    page.evaluate('''() => {
-        window.pagingProgress=[];const render=show;
-        show=state=>{render(state);if(state.section==='comparisons' && state.loading) {
-            const value={stage:state.stage,percent:state.percent};
-            if(JSON.stringify(pagingProgress.at(-1))!==JSON.stringify(value)) pagingProgress.push(value);
-        }};
-    }''')
-    page.get_by_role('button', name='Next', exact=True).click()
-    page_at(page, 10)
-    progress = page.evaluate('pagingProgress')
-    previews = [item for item in progress if item['stage'].startswith('Reading page previews (')]
-    assert len(previews) >= 2
-    assert [item['percent'] for item in progress] == sorted(item['percent'] for item in progress)
-    (root / 'mode').write_text('stable')
-    page.get_by_role('button', name='Previous', exact=True).click()
-    page_at(page, 0)
-    # Actual source failure/admission faults, not only immediate fake jobs.
-    faults = []
-    for mode in ('busy', 'source-error', 'preview-error'):
-        evidence['scenario'] = 'paging-' + mode
-        (root / 'mode').write_text(mode)
-        host.dispatcher.invalidate()
-        page.get_by_role('button', name='Next', exact=True).click()
-        page.wait_for_function('() => !current.loading && current.failed', timeout=30000)
-        assert page.locator('.comparison-group').count() == 10
-        assert page.evaluate('current.result.view.comparisons.offset') == 0
-        faults.append(dict(mode=mode, message=page.locator('.comparison-feedback').inner_text()))
-        (root / 'mode').write_text('stable')
-        page.get_by_role('button', name='Retry Comparisons', exact=True).click()
-        page_at(page, 10)
-        page.get_by_role('button', name='Previous', exact=True).click()
-        page_at(page, 0)
-        # Rejecting host entries may retain a completed page10; discard only fixture jobs.
-        host.dispatcher.invalidate()
-    notice('paging faults', faults)
-    (root / 'mode').write_text('changed')
-    evidence['scenario'] = 'paging-changed-pin'
-    page.get_by_role('button', name='Next', exact=True).click()
-    page.wait_for_function('() => current.orderReset && !current.loading && !current.failed', timeout=30000)
-    page_at(page, 0)
-    assert 'history changed' in page.locator('.comparison-feedback').inner_text()
-    (root / 'mode').write_text('stable')
-    # Rebase to stable first, then stop work at a real comparison-groups callback.
-    host.dispatcher.invalidate()
-    page.evaluate('() => acquire(current)')
-    page_at(page, 0)
-    (root / 'mode').write_text('stalled')
-    (root / 'stall-reached').unlink(missing_ok=True)
-    evidence['scenario'] = 'paging-no-progress'
-    host.dispatcher.invalidate()
-    started = time.monotonic()
-    page.get_by_role('button', name='Next', exact=True).click()
-    # Progress IPC coalesces callbacks inside 100ms. The real source may block
-    # before that pending stage is published; synchronize on source, not UI text.
-    while not (root / 'stall-reached').exists():
-        assert time.monotonic() - started < 30, 'synthetic source never reached its stall'
-        page.wait_for_timeout(50)
-    assert page.evaluate('current.loading && !current.failed')
-    route(page, 'models')
-    # Navigation stays interactive; a different finite report need not finish
-    # while the same worker is deliberately blocked inside source acquisition.
-    assert page.get_by_role('link', name='Models', exact=True).get_attribute('aria-current') == 'page'
-    route(page, 'comparisons')
-    page.wait_for_function('() => !current.loading && current.failed', timeout=60000)
-    seconds = time.monotonic() - started
-    assert 45 <= seconds < 60
-    assert 'no forward progress for 45 seconds' in page.locator('.comparison-feedback').inner_text()
-    assert page.locator('.comparison-group').count() == 10
-    assert page.evaluate('current.result.view.comparisons.offset') == 0
-    (root / 'mode').write_text('stable')
-    page.get_by_role('button', name='Retry Comparisons', exact=True).click()
-    page_at(page, 10)
-    notice('paging stalled recovery', dict(seconds=round(seconds, 2), retained_offset=0, retry_offset=10))
-    empty = []
-    for count in (0, 1):
-        evidence['scenario'] = 'paging-groups-' + str(count)
-        (root / 'groups').write_text(str(count))
-        host.dispatcher.invalidate()
-        page.evaluate('() => {current.request={kind:"comparisons"};demand.update();return acquire(current);}')
-        page_at(page, 0)
-        assert page.locator('.comparison-group').count() == count
-        if count == 0:
-            assert not page.locator('.page-navigation').is_visible()
-        else:
-            assert page.get_by_role('button', name='Next', exact=True).is_disabled()
-        empty.append(dict(groups=count, total=page.evaluate('current.result.view.comparisons.total')))
-    return dict(ranges=ranges, progress=progress, faults=faults, stalled_seconds=round(seconds, 2), retry=True, empty=empty)
-
-
 def check_navigation_paging(browser, evidence):
     from playwright.sync_api import expect
     with fixture() as (host, root):
@@ -303,15 +184,11 @@ def check_navigation_paging(browser, evidence):
             notice('Models delayed', evidence['models_delayed'])
             from development.tests.integration.ci_browser_zoom import check_zoom
             check_zoom(browser, host, root, evidence)
-            evidence['scenario'] = 'real-source-paging-lifetime'
-            evidence['paging_lifetime'] = paging(page, host, root, evidence)
-            notice('paging lifetime', evidence['paging_lifetime'])
             assert not errors
-            evidence['checks'].append('real job/dispatcher/source lifecycle: pinned321-group pages, bounded faults/45s no-progress/Retry, empty/one; Models anchor navigation and delayed publication')
+            evidence['checks'].append('real job/dispatcher lifecycle: Models anchor navigation and delayed publication')
         except Exception:
             evidence['current_observation'] = page.evaluate('''() => ({section:current?.section,loading:current?.loading,
-                failed:current?.failed,message:current?.message,stage:current?.stage,
-                offset:current?.result?.view.comparisons?.offset,total:current?.result?.view.comparisons?.total})''')
+                failed:current?.failed,message:current?.message,stage:current?.stage})''')
             notice('scenario state', dict(scenario=evidence.get('scenario'), **evidence['current_observation']))
             raise
         finally:

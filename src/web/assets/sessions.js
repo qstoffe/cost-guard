@@ -25,7 +25,7 @@ const SessionsCatalog = (() => {
     return '#/sessions?' + params;
   }
   class View {
-    constructor(api) {
+    constructor(api, {cached = false} = {}) {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', undefined, 'sessions-action-status'); this.status.setAttribute('role', 'status');
@@ -48,8 +48,9 @@ const SessionsCatalog = (() => {
       const head = el('thead'), header = el('tr'); this.headers = [];
       for (const [key, name, help] of columns) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
-        const label = ContextHelp.heading(button, help + (key === 'activity' ? '' :
-          '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
+        const label = ContextHelp.heading(button, cached ? key === 'activity' ?
+          'Running prompts come first. Otherwise, sort by the verified finish. A star marks a start or preliminary catalog time when a finish is unknown.' : help :
+          help + (key === 'activity' ? '' : '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
           this.navigateTo(destination(0, null, key, direction, this.period), null, 'sort');
@@ -557,8 +558,10 @@ const SessionsCatalog = (() => {
         const current = value;
         const helps = [
           () => ReportView.metricToken(value, 'model_help'),
-          () => ReportView.sessionCostHelp(value, value), null, null,
-          current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
+          () => value.cache_only ? (value.ccost == null ? null : 'Last committed session reference cost.') :
+            ReportView.sessionCostHelp(value, value), null, null,
+          current.context_tokens == null ? null :
+            [`~${current.context_tokens.toLocaleString()} tokens`, current.context_detail].filter(Boolean).join('\n')
         ];
         row.metrics.forEach((node, index) => {
           const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
@@ -592,5 +595,258 @@ const SessionsCatalog = (() => {
       });
     }
   }
-  return {View};
+  // Committed-cache controller. The hash names just a local query. Visible
+  // missing rows may give a separate hint after that query has painted.
+  class CachedView extends View {
+    constructor(api, demand = {tab: crypto.randomUUID().replaceAll('-', ''), sequence: 0}) {
+      super(api, {cached: true});
+      this.hint = null;
+      this.blocked = false;
+      this.demand = demand;
+      this.olderHistory = el('span', undefined, 'metric-spinner sessions-history-spinner');
+      this.olderHistory.setAttribute('role', 'img');
+      this.olderHistory.setAttribute('aria-label', 'Loading older history');
+      this.olderHistory.hidden = true;
+      this.periods.append(this.olderHistory);
+      this.clearEndpoint = '/api/cache/sessions/clear';
+      this.clearControls = el('details', undefined, 'sessions-clear-cache');
+      const toggle = el('summary', 'Clear saved Sessions history…');
+      const text = el('p', 'This removes Sessions history saved by Cost Guard for the current source. It never deletes OpenCode data. History no longer in OpenCode may be lost; current source sessions can be cached again.');
+      this.clearConfirm = el('button', 'Clear local Sessions history'); this.clearConfirm.type = 'button';
+      this.clearMessage = el('p'); this.clearMessage.setAttribute('role', 'status');
+      this.clearConfirm.addEventListener('click', () => this.clearLocalHistory());
+      this.clearControls.append(toggle, text, this.clearConfirm, this.clearMessage);
+      this.clearControls.hidden = true;
+      this.root.append(this.clearControls);
+    }
+    async clearLocalHistory() {
+      if (!this.data || this.clearPending) return;
+      const binding = this.data.binding;
+      this.clearPending = true;
+      this.clearConfirm.setAttribute('aria-disabled', 'true');
+      ReportView.text(this.clearMessage, '');
+      try {
+        const snapshot = await this.api(this.clearEndpoint);
+        if (!this.attached || this.blocked || !this.clearControls.open || snapshot.binding !== binding ||
+            this.data?.binding !== binding) return;
+        const result = await this.api(this.clearEndpoint, {...snapshot, confirm: true});
+        if (this.attached && !this.blocked && this.data?.binding === result.binding) {
+          ReportView.text(this.clearMessage, 'Saved Sessions history cleared.');
+          this.cacheHint({view: 'sessions', binding: result.binding, generation: result.generation}, true);
+        }
+      } catch (error) {
+        ReportView.text(this.clearMessage, error?.message === 'cache_clear_changed'
+          ? 'The archive changed. Review the warning and try again.' : 'Could not confirm the clear. Check the current cache before trying again.');
+      } finally {
+        this.clearPending = false;
+        this.clearConfirm.removeAttribute('aria-disabled');
+      }
+    }
+    navigateTo(target) {
+      if (target !== location.hash) location.hash = target;
+    }
+    configure(params) {
+      const requestedOffset = Number(params?.get('offset') || 0);
+      const query = {
+        offset: Number.isSafeInteger(requestedOffset) && requestedOffset >= 0 &&
+          requestedOffset <= 1000000 && requestedOffset % 25 === 0 ? requestedOffset : 0,
+        sort: columns.find(([key]) => key === params?.get('sort'))?.[0] || 'activity',
+        direction: params?.get('direction') === '1' ? 1 : -1,
+        period: periods.find(([key]) => key === params?.get('period'))?.[0] || 'today'
+      };
+      if (Object.keys(query).every(key => query[key] === this[key])) return;
+      this.releaseDemand({remember: true}); // nearby after a period/sort/page movement
+      this.retire();
+      Object.assign(this, query); this.periodSelection();
+      this.needsRead = true;
+      this.poll();
+    }
+    attach(parent) {
+      if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
+      if (!this.attached) {
+        this.attached = true;
+        this.needsRead = true;
+      }
+      if (this.needsRead) this.poll();
+    }
+    detach() {
+      this.attached = false;
+      this.retire();
+    }
+    interest() {
+      if (document.hidden) this.releaseDemand();
+      else this.hintMissing();
+    }
+    sourceHealth(_unverified, blocked) {
+      if (this.blocked === blocked) return;
+      this.blocked = blocked;
+      if (blocked) {
+        this.retire();
+        this.unavailable();
+      } else {
+        this.needsRead = true;
+        this.poll();
+      }
+    }
+    wake() {} // Live source notifications do not authorize cached values.
+    cacheHint(hint, resync = false) {
+      if (hint?.view !== 'sessions') return;
+      const changed = this.hint?.binding !== hint.binding;
+      if (!resync && !changed && hint.generation === this.hint?.generation) return;
+      if (!changed && this.hint.generation > hint.generation) return;
+      this.hint = hint;
+      this.needsRead = Boolean(hint.binding);
+      if (changed && (!hint.binding || this.data && this.data.binding !== hint.binding)) {
+        this.retire();
+        this.unavailable();
+      }
+      if (this.needsRead && this.attached && !document.hidden && !this.flight && !this.timer) {
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          this.poll();
+        }, 50);
+      }
+    }
+    retire() {
+      this.flight?.abort();
+      this.flight = null;
+      clearTimeout(this.timer);
+      this.timer = null;
+      clearTimeout(this.runningTimer);
+      this.runningTimer = null;
+      cancelAnimationFrame(this.demandFrame);
+      this.demandFrame = null;
+      this.releaseDemand();
+    }
+    unavailable() {
+      this.releaseDemand();
+      this.data = null;
+      this.olderHistory.hidden = true;
+      this.clearControls.open = false;
+      this.clearControls.hidden = true;
+      ReportView.text(this.clearMessage, '');
+      this.costs = null;
+      this.rows([]);
+      ReportView.text(this.label, 'Session cache unavailable.');
+      this.pagerState();
+    }
+    hintMissing() {
+      if (this.demandFrame) return;
+      this.demandFrame = requestAnimationFrame(() => {
+        this.demandFrame = null;
+        const data = this.data;
+        if (!data || !Number.isSafeInteger(data.demand_epoch) || !this.attached || this.blocked || document.hidden ||
+            ['period', 'sort', 'direction', 'offset'].some(key => data[key] !== this[key])) return;
+        const keys = data.rows.filter(row => row.source_present && !row.running &&
+          Object.values(row.fields).includes('pending')).slice(0, 8).map(row => row.session_id);
+        if (!keys.length) { this.releaseDemand(); return; }
+        const {binding, demand_epoch} = data;
+        const mark = JSON.stringify([binding, demand_epoch, keys]);
+        if (mark === this.lastDemand?.mark && this.demandTimer) return;
+        this.lastDemand = {binding, demand_epoch, mark};
+        this.sendDemand(this.lastDemand, keys);
+        clearTimeout(this.demandTimer);
+        this.demandTimer = setTimeout(() => { this.demandTimer = null; this.hintMissing(); }, 15000);
+      });
+    }
+    releaseDemand({remember = false} = {}) {
+      clearTimeout(this.demandTimer);
+      this.demandTimer = null;
+      if (!this.lastDemand) return;
+      this.sendDemand(this.lastDemand, [], remember);
+      this.lastDemand = null;
+    }
+    sendDemand({binding, demand_epoch}, session_ids, remember = false) {
+      this.api('/api/cache/sessions/demand', {binding, demand_epoch, session_ids,
+        tab: this.demand.tab, sequence: ++this.demand.sequence, ...(remember ? {remember} : {})}).catch(() => {});
+    }
+    async poll() {
+      if (!this.attached || document.hidden || this.blocked || this.flight) return;
+      clearTimeout(this.timer);
+      this.timer = null;
+      this.needsRead = false;
+      const request = {offset: this.offset, period: this.period, sort: this.sort, direction: this.direction};
+      const data = this.data;
+      if (data && Object.keys(request).every(key => data[key] === request[key])) {
+        request.known = Object.fromEntries([...Object.keys(request), 'generation', 'binding', 'start_ms', 'end_ms']
+          .map(key => [key, data[key]]));
+      } else if (data && ['period', 'sort', 'direction'].every(key => data[key] === request[key])) {
+        const delta = request.offset - data.offset;
+        const cursor = delta === data.size ? data.next_cursor : delta === -data.size ? data.previous_cursor : null;
+        if (cursor) request.cursor = cursor;
+      }
+      const flight = new AbortController();
+      this.flight = flight;
+      const hint = this.hint;
+      try {
+        const result = await this.api('/api/cache/sessions', request, flight.signal);
+        if (this.flight !== flight || this.blocked) return;
+        const current = this.hint;
+        if (current !== hint && current?.binding !== result.binding) return;
+        if (current && current.binding === result.binding && current.generation > result.generation) this.needsRead = true;
+        if (result.unchanged && data?.binding === result.binding) this.data = {...data, ...result};
+        else this.paint(result);
+      } catch (_) {
+        if (this.flight === flight) this.unavailable();
+      } finally {
+        if (this.flight === flight) {
+          this.flight = null;
+          if (this.needsRead && this.attached && !document.hidden) {
+            this.timer = setTimeout(() => { this.timer = null; this.poll(); }, 50);
+          }
+        }
+      }
+    }
+    paint(data) {
+      this.data = data;
+      this.olderHistory.hidden = data.history_coverage !== 'pending';
+      this.clearControls.hidden = false;
+      clearTimeout(this.runningTimer);
+      this.runningTimer = null;
+      if (Number.isSafeInteger(data.running_refresh_ms) && data.running_refresh_ms > 0) {
+        // A held or offline source cannot leave a stale start marked Running.
+        // Re-query only at the committed observation's expiry, not on a poll loop.
+        this.runningTimer = setTimeout(() => {
+          this.needsRead = true;
+          this.poll();
+        }, data.running_refresh_ms);
+      }
+      this.renderTimezone = data.timezone_id;
+      Object.assign(data, {total: data.cached_total, state: 'observed', source: {identity: data.binding}});
+      for (const {key, name, th, label} of this.headers) {
+        const active = key === data.sort;
+        th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
+        ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ''));
+      }
+      this.rows(data.rows.map(row => ({
+        ...row, cache_only: true, last_activity_ms: row.activity_ms, prompt_count: row.prompts,
+        has_summary: row.ccost != null, complete: row.ccost != null,
+        metric_states: Object.fromEntries(Object.entries(row.fields).map(([key, value]) =>
+          [key, value === 'as-of' ? 'ready' : value === 'retained' ? 'retained' : 'pending'])),
+        metric_absences: Object.fromEntries(Object.entries(row.fields)
+          .filter(([, value]) => ['complete_empty_history', 'source-history-missing', 'source-field-unavailable'].includes(value)))
+      })));
+      const count = data.rows.length;
+      const range = count ? `Showing ${data.offset + 1}–${data.offset + count} of ${data.total} cached sessions` :
+        data.total ? `No rows on this page · ${data.total} cached sessions` :
+          data.history_coverage === 'as-of' ? 'No cached sessions in this period' : 'No cached sessions yet';
+      const pages = Math.max(1, Math.ceil(data.total / data.size));
+      ReportView.text(this.label, data.offset < pages * data.size ?
+        `${range} · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}` : range);
+      this.pagerState();
+      this.hintMissing();
+    }
+    pagerState() {
+      const data = this.data || {size: 25, total: 0, offset: this.offset || 0, period: this.period,
+        sort: this.sort, direction: this.direction};
+      const last = Math.max(0, Math.ceil(data.total / data.size) - 1) * data.size;
+      this.previous.destination = this.data && data.offset ? this.pageDestination(data, Math.min(last, data.offset - data.size)) : null;
+      this.next.destination = data.offset + data.size < data.total ? this.pageDestination(data, data.offset + data.size) : null;
+      this.numberedPages(data);
+      this.pagerBusy();
+    }
+    pageDestination(data, offset) { return destination(offset, null, data.sort, data.direction, data.period); }
+    sectionDestination() { return this.offset ? this.pageDestination(this, this.offset) : this.firstPageDestination(); }
+  }
+  return {View, CachedView};
 })();

@@ -80,6 +80,7 @@ class CardWorkers:
         self.reads = SourceReads()
         self.readers = readers
         self.defer_guidance = False
+        self.finish_since_ms = None
 
     @contextmanager
     def _service(self, now_ms):
@@ -160,6 +161,8 @@ class CardWorkers:
         try:
             with self._service(now_ms) as service:
                 options = {'defer_guidance': True} if self.defer_guidance else {}
+                if self.finish_since_ms is not None:
+                    options['finish_since_ms'] = self.finish_since_ms
                 capture, item = capture_rows(service, root, previous, focal_ids, **options)
                 snapshot = item.snapshot
                 origins = active_skill_origins(service.source, snapshot, capture)
@@ -211,6 +214,8 @@ class CardWorkers:
                         options = {'fresh': snapshots[root.session_id]} if callable(loader) else {}
                         if self.defer_guidance:
                             options['defer_guidance'] = True
+                        if self.finish_since_ms is not None:
+                            options['finish_since_ms'] = self.finish_since_ms
                         capture, item = capture_rows(service, root, request.previous, request.focal_ids,
                             **options)
                         snapshot = item.snapshot

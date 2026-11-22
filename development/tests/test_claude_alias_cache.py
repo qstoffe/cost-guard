@@ -128,7 +128,7 @@ class ClaudeAliasCacheTests(unittest.TestCase):
         self.assertGreater(D(recovered['view']['ai_stats'][-1]['metrics'][1]['value']), 0)
 
     def test_catalog_turnover_revalidates_all_compact_caches_without_reloading_pinned_roots(self):
-        for mode in ('analysis', 'summary', 'mix', 'stats', 'matches'):
+        for mode in ('analysis', 'summary', 'mix', 'stats'):
             with self.subTest(mode=mode):
                 original = desktop_service(self)
                 raw = tuple(original.source.snapshots.values())
@@ -157,11 +157,7 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                     self.assertIn('Sonnet 4', [row.model for row in report.model_token_mix])
                 elif mode == 'stats':
                     build_ai_stats(fresh, 'all')
-                else:
-                    report = fresh.build(ReportRequest(ReportKind.COMPARISONS))
-                    self.assertIn('Claude Sonnet 4', [run.model_label for group in report.comparisons.groups for run in group.runs])
-                # Match previews read visible representatives in addition to cache repair.
-                self.assertEqual(loads + (2 if mode == 'matches' else 1), fresh.source.load_count)
+                self.assertEqual(loads + 1, fresh.source.load_count)
                 self.assertEqual(raw, tuple(fresh.source.snapshots.values()))
 
     def test_real_v2_wire_cache_restart_uses_exact_location_catalog_and_preserves_raw_alias(self):
@@ -248,7 +244,7 @@ class ClaudeAliasCacheTests(unittest.TestCase):
         self.assertEqual(D(0), row.ccost)
 
     def test_each_persisted_projection_rebuilds_only_affected_analysis_then_reuses_warm_cache(self):
-        for mode in ('summary', 'mix', 'stats', 'comparisons'):
+        for mode in ('summary', 'mix', 'stats'):
             with self.subTest(mode=mode):
                 original = service(self)
                 seed_previous(original)
@@ -274,12 +270,6 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                         self.assertEqual(1, result.token_mix.priced_requests)
                     elif mode == 'stats':
                         result = build_ai_stats(fresh, 'all')
-                    else:
-                        result = fresh.build(ReportRequest(ReportKind.COMPARISONS))
-                        runs = result.comparisons.groups[0].runs
-                        alias = next(run for run in runs if run.model == 'sonnet')
-                        self.assertIsNone(alias.ccost)
-                        self.assertFalse(alias.cost_complete)
                 flush(fresh)
                 self.assertEqual(['root-0000'], analyzed)
                 self.assertNotIn('Claude Sonnet 4\'', str(result))
@@ -295,8 +285,6 @@ class ClaudeAliasCacheTests(unittest.TestCase):
                         again = warm.build_token_mix_history()
                     elif mode == 'stats':
                         again = build_ai_stats(warm, 'all')
-                    else:
-                        again = warm.build(ReportRequest(ReportKind.COMPARISONS))
                 self.assertEqual(result, again)
 
     def test_real_process_restarts_do_not_serve_false_historical_labels_in_cli_web_or_watch(self):
@@ -324,11 +312,10 @@ detail = current.build(ReportRequest(ReportKind.SESSION, session_id=root.session
 watch, _ = capture_rows(current, root)
 mix = current.build_token_mix_history()
 stats = build_ai_stats(current, 'all')
-comparisons = current.build(ReportRequest(ReportKind.COMPARISONS))
 flush(current)
 print(json.dumps(dict(model=row.model, complete=row.complete, watch=watch.rows[0].watch_model,
     cli=rendered(detail), web=project(detail).to_json(), mix=project(mix).to_json(),
-    stats=project(stats).to_json(), comparisons=project(comparisons).to_json())))
+    stats=project(stats).to_json())))
 test.doCleanups()
 '''
         for desktop in (False, True):
@@ -343,7 +330,6 @@ test.doCleanups()
                 self.assertEqual(expected, value['watch'])
                 self.assertEqual(desktop, value['complete'])
                 self.assertIn(expected, value['cli'])
-                self.assertIn(expected, str(value['comparisons']))
                 self.assertNotIn('Claude Sonnet 4"', completed.stdout)
 
     def test_session_cost_revalues_only_alias_request_not_pinned_contribution(self):

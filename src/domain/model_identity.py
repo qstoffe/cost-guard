@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 import re
 
+UNKNOWN_PUBLISHER = "Unknown / unverified"
+UNKNOWN_MODEL = "Unknown model"
+
 _CLAUDE_ROUTES = frozenset({"claude-agent", "claude-code", "anthropic", "github-copilot",
     "amazon-bedrock", "google-vertex-anthropic", "openrouter"})
 _FAMILY_ALIAS = re.compile(r"^(?:claude-)?(sonnet|opus|haiku|fable)(?:-latest)?(?:\[1m\])?$")

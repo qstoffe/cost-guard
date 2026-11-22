@@ -5,7 +5,7 @@ same amount/rate rules without depending on each other's layers.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
-from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, localcontext
+from decimal import Decimal, MAX_EMAX, MIN_EMIN, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, localcontext
 from typing import Sequence
 
 
@@ -32,6 +32,19 @@ def exact_number(value: Decimal | int) -> str:
     """Locale-neutral exact rate/limit/ordinary number, without grouping."""
     text = str(value) if isinstance(value, int) else format(value, "f")
     return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def exact_decimal_sum(values: Sequence[Decimal]) -> Decimal:
+    """Sum finite decimals without rounding away a smaller contribution."""
+    nonzero = tuple(value for value in values if value)
+    if not nonzero:
+        return Decimal(0)
+    with localcontext() as context:
+        context.prec = (max(value.adjusted() for value in nonzero) -
+                        min(value.as_tuple().exponent for value in nonzero) +
+                        len(str(len(nonzero))) + 1)
+        context.Emax, context.Emin = MAX_EMAX, MIN_EMIN
+        return sum(nonzero)
 
 
 def _capacity_amount(value: Decimal, *, rounding: str) -> str:

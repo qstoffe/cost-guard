@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from stat import S_ISREG
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
@@ -51,6 +52,8 @@ def _record(provider: str, path: Path, locator: str, value: object, active: bool
 class CredentialView:
     records: tuple[CredentialRecord, ...] = field(repr=False)
     healthy: bool = True
+    present_integrations: frozenset[str] = frozenset()
+    archive_complete: bool = False
 
 
 def read_credentials(
@@ -64,11 +67,17 @@ def read_credentials(
     records = []
     healthy = True
     present: set[str] = set()
-    if db_path is not None and db_path.is_file():
+    complete = db_path is None
+    try:
+        db_file = db_path is not None and S_ISREG(db_path.stat().st_mode)
+    except OSError:
+        db_file = False
+    if db_file:
         try:
             with closing(sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)) as conn:
                 conn.execute("PRAGMA query_only=ON")
                 if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='credential'").fetchone():
+                    complete = True
                     columns = {row[1] for row in conn.execute("PRAGMA table_info(credential)")}
                     if not {"integration_id", "value"} <= columns:
                         return CredentialView((), False)
@@ -81,6 +90,8 @@ def read_credentials(
                         f"{where}ORDER BY {identity}", tuple(providers or ()),
                     ).fetchall()
                     for row_id, provider, raw, is_active in rows:
+                        if not isinstance(provider, str) or not provider:
+                            complete = False
                         present.add(provider)
                         try:
                             value = json.loads(raw)
@@ -101,12 +112,15 @@ def read_credentials(
         healthy = False
     if not isinstance(auth, Mapping):
         healthy = False
+    installations = set(present)
     if isinstance(auth, Mapping):
         for provider in providers if providers is not None else auth:
             # V2 OpenAI owns the alias family, even if unusable.
             # A stale legacy codex entry must not resurrect a replaced account.
             openai_ids = {"openai", "openai-codex", "codex"}
             if provider not in present and not (provider in openai_ids and present & openai_ids):
+                if provider in auth:
+                    installations.add(provider)
                 record = _record(provider, auth_path, f"auth:{provider}", auth.get(provider))
                 if record:
                     records.append(record)
@@ -115,7 +129,7 @@ def read_credentials(
         prior = unique.get(record.ref.key)
         if prior is None or record.active:
             unique[record.ref.key] = record
-    return CredentialView(tuple(unique.values()), healthy)
+    return CredentialView(tuple(unique.values()), healthy, frozenset(installations), complete and healthy)
 
 
 def configured_credentials(auth_path: Path, db_path: Path | None,
