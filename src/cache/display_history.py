@@ -509,6 +509,11 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_stats_candidates(db, source, expected=expected, after=after)
 
+    def stats_version(self, source, *, expected=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return retained_stats_version(db, source, expected)
+
     def stats_geometry(self, source, *, expected=None, after=None):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
