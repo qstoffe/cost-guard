@@ -6,11 +6,16 @@ const CachedWatch = (() => {
       Object.assign(this, {api, update, hint: null, value: null, flight: null, blocked: false,
         liveUncertain: false, quotaUncertain: false, healthVersion: 0, dirty: false});
     }
-    quotaView(accounts, now) {
+    quotaView(accounts, now, live) {
       if (!accounts || this.quotaMark?.binding === this.value.binding &&
           this.quotaMark.revision > this.value.quota_revision) return null;
-      return {...accounts, accounts: accounts.accounts.filter(item => now < item.discard_at_ms).map(item =>
-        this.quotaUncertain || now >= item.fresh_until_ms ? {...item, stale: true} : item)};
+      return {...accounts, accounts: accounts.accounts.filter(item => now < item.discard_at_ms).map(item => {
+        const stale = this.quotaUncertain || now >= item.fresh_until_ms;
+        // Lent period detail expires with either authority; native figures keep their own clock.
+        if (!stale && (live || !item.live_primary)) return item;
+        const {live_primary, ...saved} = item;
+        return stale ? {...saved, stale: true} : saved;
+      })};
     }
     quotaHint(hint) {
       if (this.blocked || !hint?.binding || !Number.isSafeInteger(hint.revision)) return;
@@ -24,8 +29,9 @@ const CachedWatch = (() => {
       const {view: saved, freshness, observed_ms: at, expires_ms: expiry} = this.value;
       const now = Date.now();
       const day = saved.daily_usage?.day_end_ms <= now ? {daily_usage: null, daily_state: 'pending'} : {};
-      const view = {...saved, ...day, accounts: this.quotaView(saved.accounts, now), cached_quota: true};
-      if (!this.liveUncertain && !this.needsLiveRead && freshness === 'current' && now < expiry) {
+      const live = !this.liveUncertain && !this.needsLiveRead && freshness === 'current' && now < expiry;
+      const view = {...saved, ...day, accounts: this.quotaView(saved.accounts, now, live), cached_quota: true};
+      if (live) {
         return {state: 'running', source_observed_at_ms: at, view, cached: true};
       }
       const earlier = freshness !== 'current' ? view.earlier_cards : [...view.earlier_cards,

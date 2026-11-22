@@ -119,8 +119,8 @@ def archive_watch_observation(frame, observed_ms, timezone_id="UTC"):
 def with_committed_detail(value, frame, timezone_id):
     """Enrich saved cards from the in-memory frame of that same committed observation.
 
-    Tool, preview and cost-breakdown detail is never persisted. The caller proves
-    binding/clear scope; only a current, matching observation may lend its detail.
+    Tool, preview, cost-breakdown and quota-period detail is never persisted. The caller
+    proves binding/clear scope; only a current, matching observation may lend its detail.
     SQLite still owns membership, grouping and liveness.
     """
     view = value["view"]
@@ -145,7 +145,28 @@ def with_committed_detail(value, frame, timezone_id):
         return saved if detail is None else {**detail, "focal_id": saved["focal_id"],
             "activity_scope": saved["activity_scope"], "live_detail": True}
 
-    return {**view, **{group: [enrich(card) for card in view[group]] for group in _CARD_GROUPS}}
+    return {**view, **{group: [enrich(card) for card in view[group]] for group in _CARD_GROUPS},
+            "accounts": _with_period_detail(view["accounts"], live)}
+
+
+def _quota_observation(item):
+    observed, primary = item["observation"], item["primary"]
+    return (observed["provider_id"], observed["id"], observed["observed_at_ms"],
+            primary["quota"]["label"], primary["quota"]["reset_at_ms"], primary["used_fraction"])
+
+
+def _with_period_detail(saved, live):
+    """Period CCost and pace may accompany, never replace, the same native observation."""
+    if saved is None or not live["accounts"] or live["quota_stale"]:
+        return saved
+    lent = {_quota_observation(item): item["primary"] for item in live["accounts"]["accounts"]
+            if item["observation"]["availability"] in ("available", "partial")}
+
+    def enrich(item):
+        primary = None if item["stale"] else lent.get(_quota_observation(item))
+        return item if primary is None else {**item, "live_primary": primary}
+
+    return {**saved, "accounts": [enrich(item) for item in saved["accounts"]]}
 
 
 def cached_watch_view(value, timezone_id, *, quotas=None, now_ms=None):

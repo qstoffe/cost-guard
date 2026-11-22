@@ -1,5 +1,6 @@
 """Native quota proof, expiry, and revocation on the shared Watch read."""
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -9,7 +10,9 @@ from unittest.mock import Mock, patch
 from development.tests.fixtures.display_watch import native_account, running_frame
 from src.accounts.acquisition import AccountUpdate
 from src.application.live import LiveRuntime
+from src.analysis.valuation import ComparisonCost
 from src.application.watch_native_quota import native_quotas
+from src.reports.models import AccountProjection, AccountsQuotasProjection, QuotaPeriodProjection
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.watch.account_refresh import WatchAccountRefresh
 from src.web.display_archive import DisplayArchive
@@ -88,6 +91,30 @@ class DisplayWatchQuotaTests(unittest.TestCase):
         self.assertEqual((1, 100_000, "running"), (held["generation"], held["observed_ms"], held["cards"][0]["outcome"]))
         self.assertEqual((2, 100_000), (committed["generation"], committed["observed_ms"]))
         self.assertEqual([], committed["view"]["accounts"]["accounts"])
+
+    def test_period_cost_is_lent_only_for_the_same_committed_native_observation(self):
+        account = native_account(100_000)
+        refresh = SimpleNamespace(snapshots=(account,), seen_ms={account.key: 100_000})
+        period = QuotaPeriodProjection(account.quotas[0],
+                                       ComparisonCost(Decimal("31415"), observed_requests=1, priced_requests=1), None)
+        quota = AccountsQuotasProjection(ComparisonCost(), ComparisonCost(), now_ms=100_000,
+            accounts=(AccountProjection(account, "Fixture Pro", quota_periods=(period,)),))
+        frame = replace(running_frame(100_000), quota=quota)
+        self.publish(100_000, refresh, frame)
+
+        current = self.read(healthy=True)
+        uncertain = self.read()
+        newer = replace(account, fetched_at_ms=101_000)
+        self.publish(101_000, SimpleNamespace(snapshots=(newer,), seen_ms={newer.key: 101_000}))
+        superseded = self.read(healthy=True)
+
+        item, = current["view"]["accounts"]["accounts"]
+        self.assertEqual("31415", item["live_primary"]["quota"]["period_ccost"]["cost"]["known_ccost"])
+        self.assertEqual("25%", item["primary"]["used_percent"])
+        for read in (uncertain, superseded):
+            self.assertNotIn("live_primary", read["view"]["accounts"]["accounts"][0])
+        for file in self.archive.history.path.parent.glob(self.archive.history.path.name + "*"):
+            self.assertNotIn(b"31415", file.read_bytes())
 
     def test_seen_time_and_binding_are_required_even_if_native_capacity_exists(self):
         account = native_account(100_000)

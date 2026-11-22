@@ -312,7 +312,7 @@ const AccountCards = (() => {
       const accounts = view?.accounts?.accounts, wanted = [];
       const native = view?.accounts?.cached_native;
       for (const item of accounts || []) {
-        const obs = item.observation, primary = item.primary;
+        const obs = item.observation, primary = item.live_primary || item.primary;
         const key = JSON.stringify([obs.provider_id, obs.id]);
         let line = this.lines.get(key);
         if (!line) {
@@ -327,7 +327,7 @@ const AccountCards = (() => {
           const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
           line.helpText = compactQuotaHelp(primary) +
             (native ? '\nProvider observation: ' + display(obs, 'observed_at_ms') : '');
-          const cost = native ? '' : ` (${display(primary.quota, 'ccost_' + quota.mode)})`;
+          const cost = native && !item.live_primary ? '' : ` (${display(primary.quota, 'ccost_' + quota.mode)})`;
           text(line.children[0].children[0], `${obs.label} · ${used}${cost}${warning}`);
           ContextHelp.refresh(line);
           line.className = item.stale ? '' : quota.exhausted && quota.mode === 'remaining' ?

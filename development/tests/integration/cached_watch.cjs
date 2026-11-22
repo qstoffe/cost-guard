@@ -78,10 +78,11 @@ async function main() {
   const current = snapshot('B', 0, 1, 'current binding');
   current.quota_revision = 1;
   current.view.accounts = {cached_native: true, accounts: [
-    {observation: {id: 'account'}, fresh_until_ms: 2500, discard_at_ms: 3500, stale: false}
+    {observation: {id: 'account'}, live_primary: {}, fresh_until_ms: 2500, discard_at_ms: 3500, stale: false}
   ]};
   await reply(advanceRead(), current);
   assert.equal(rendered.at(-1).state, 'running');
+  assert.ok(rendered.at(-1).view.accounts.accounts[0].live_primary);
 
   now = 2000; // Opener timers have not run; Mini still sees an expired publication.
   const held = controller.publication();
@@ -91,6 +92,7 @@ async function main() {
   assert.equal(held.view.earlier_cards[0].rows[0].prompt.in_progress, false);
   assert.equal(held.view.daily_usage.day_end_ms, 3000, 'card expiry does not invalidate the cached day');
   assert.equal(held.view.accounts.accounts[0].stale, false, 'card expiry does not age the provider');
+  assert.equal(held.view.accounts.accounts[0].live_primary, undefined, 'card expiry withdraws lent period detail');
   now = 3000;
   assert.equal(controller.publication().view.daily_usage, null);
   assert.equal(controller.publication().view.accounts.accounts[0].stale, true, 'Mini sees provider expiry without opener timers');
