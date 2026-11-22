@@ -31,7 +31,7 @@ def run(shared, roots=2700):
         database.initialize()
         cache = CacheRepository(database)
         for cycle in ('cold', 'warm'):
-            for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+            for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS):
                 service = ReportService(selection=SourceSelection(source, 'v1', (), source.probe()),
                     pricing_provider=pricing, account_provider=None, cache_repository=cache,
                     config=config, now_ms=NOW, cache_token_mix_history=True)

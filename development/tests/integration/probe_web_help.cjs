@@ -351,7 +351,7 @@ async function main() {
      checks.push('Verbatim selectable/accessible long hostile session title without row cues; separate Session/cost help, quiet retained row without source-status help, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
     const routes = scope === '--watch-only' ? [] : scope === '--live-status' ?
-      ['models','accounts','token-mix','ai-stats','comparisons','settings'] :
+      ['models','accounts','token-mix','ai-stats','settings'] :
       ['models','sessions','sessions/root','accounts','token-mix','ai-stats','settings'];
     for (const route of routes) {
       await evaluate(owner,`location.hash='#/${route}'`);

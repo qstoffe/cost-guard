@@ -17,7 +17,6 @@ from .quota_ccost import quota_ccost_pace, quota_ccost_tokens, quota_ccost_value
 from .quota_estimates import estimate_amount, estimate_help
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
-from .comparisons import display_tokens as comparison_tokens
 from .reference_cost import cost_help_tokens
 from .model_help import session_model_tokens
 from .mini_costs import mini_cost_tokens
@@ -374,7 +373,6 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(detail_tokens(values))
             alternate.update(mini_cost_tokens(values))
             alternate.update(stat_tokens(values))
-            alternate.update(comparison_tokens(values, timezone_id))
             alternate.update(unavailable_tokens(values))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])

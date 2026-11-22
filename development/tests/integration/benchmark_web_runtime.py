@@ -267,7 +267,7 @@ class Client:
 def backend_journey(client, dispatcher, deadline):
     outcomes = []
     for section, kind in (('models', 'normal'), ('token-mix', 'token-mix'),
-            ('ai-stats', 'ai-stats'), ('comparisons', 'comparisons')):
+            ('ai-stats', 'ai-stats')):
         request = dict(kind=kind)
         started = time.monotonic()
         if dispatcher:
@@ -315,9 +315,6 @@ def backend_journey(client, dispatcher, deadline):
         sample = view.get('model_comparison_sample_size')
         if section == 'models' and sample != 100:
             raise RuntimeError('fixture_models_sample_not_100')
-        if section == 'comparisons' and not any(len({run['model'] for run in group['runs']}) > 1
-                for group in (view.get('comparisons') or {}).get('groups', ())):
-            raise RuntimeError('fixture_comparisons_missing_cross_model_group')
         outcomes.append(dict(section=section, status='complete', seconds=time.monotonic() - started,
             model_sample=sample, stats_periods=len(view.get('ai_stats', ())),
             source_revisions=len(value['source'].get('revisions', ()))))

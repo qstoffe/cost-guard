@@ -32,7 +32,7 @@ async function main() {
     assert.equal(state.percent,opaque, 'no advancement from time in opaque work');
     L.waiting(state,'source_starting'); assert.equal(state.stage,'Waiting for source…');
   }
-  const history = {section:'comparisons'}; L.reset(history);
+  const history = {section:'ai-stats'}; L.reset(history);
   L.observe(history,{stage:'history-load',completed:4,total:100,sequence:1});
   const before = history.percent;
   L.observe(history,{stage:'date-messages',completed:10,total:10,sequence:2});
@@ -74,15 +74,6 @@ async function main() {
   for (const kind of ['offline','stopped','identity_changed','authorization_required'])
     assert.throws(()=>new L.Attempt(()=>now).check({kind,writable:false}),new RegExp(kind));
   assert.doesNotThrow(()=>new L.Attempt(()=>now).check({kind:'reconnecting',writable:false}));
-  const page = new L.Attempt({paging:true});
-  page.observe({stage:'comparison-previews',completed:0,total:10,sequence:1});
-  now+=44000; page.observe({stage:'comparison-previews',completed:1,total:10,sequence:2});
-  assert.doesNotThrow(()=>page.check({},true),'real progress renews only the no-progress budget');
-  now+=44000;page.observe({stage:'comparison-previews',completed:1,total:10,sequence:999});
-  assert.doesNotThrow(()=>page.check({},true));
-  now+=1001;assert.throws(()=>page.check({},true),/comparison_page_no_progress/);
-  for(let index=0;index<3;index++){const wait=page.backoff(new Error('busy'));runTimer();await wait;}
-  await assert.rejects(page.backoff(new Error('busy')),/comparison_page_retries/);
   const frames=new Map(),listeners=new Map();
   context.document={hidden:false,addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
   context.requestAnimationFrame=fn=>{const id=++next;frames.set(id,fn);return id;};

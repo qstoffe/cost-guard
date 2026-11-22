@@ -97,7 +97,7 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
   await exercise(mini,'.mini-fit-height');
   await exercise(mini,'.mini-prompt-table th:first-child button');
   // Every primary navigation entry, both same-route and selected/unselected.
-  for(const route of ['watch','models','sessions','accounts','token-mix','ai-stats','comparisons','settings']) {
+  for(const route of ['watch','models','sessions','accounts','token-mix','ai-stats','settings']) {
     const selector=`nav a[href="#/${route}"]`;
     await exercise(owner,selector);
     await until(owner,`current.section===${JSON.stringify(route)}`);

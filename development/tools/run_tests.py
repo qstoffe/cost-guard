@@ -34,7 +34,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_ai_stats_resume.py",
     "test_warm_restart.py",
     "test_history_cohort.py",
-    "test_matched_inputs.py",
+    "test_first_prompt_runs.py",
     "test_ccost_display_unit.py",
     "test_numeric_table_policy.py",
     "test_ci_web_beta.py",

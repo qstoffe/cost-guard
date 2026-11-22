@@ -133,7 +133,7 @@ for (const key of ['account',JSON.stringify(['provider','account'])]) {
         script = r"""
 const assert = require('node:assert/strict');
 const {qualifyUntouchedEntry} = require('./development/tests/integration/probe_historical_web.cjs');
-const entry = {scope:{kind:'ai-stats',default_scope:true,stats_scope:'30-days',comparison_offset:0},
+const entry = {scope:{kind:'ai-stats',default_scope:true,stats_scope:'30-days'},
   warm_complete:true,publication:'fingerprint'};
 const input = {section:'ai-stats',navigation:2000,visited:false,
   client:{view_present:false,acquisition_started:false},
@@ -146,8 +146,7 @@ for (const change of [
   {checkpoint:{...input.checkpoint,captured_wall_ms:null}},
   ...[null,{...entry,warm_complete:false},{...entry,publication:null},
     {...entry,publication:''}, {...entry,scope:{...entry.scope,default_scope:false}},
-    {...entry,scope:{...entry.scope,stats_scope:'7-days'}},
-    {...entry,scope:{...entry.scope,comparison_offset:1}}]
+    {...entry,scope:{...entry.scope,stats_scope:'7-days'}}]
     .map(value=>({checkpoint:{...input.checkpoint,entries:value?[value]:[]}}))
 ]) assert.equal(qualifyUntouchedEntry({...input,...change}).valid,false,JSON.stringify(change));
 const b0 = qualifyUntouchedEntry({...input,checkpoint:{...input.checkpoint,dispatcher:false,entries:[]}});
@@ -897,17 +896,16 @@ const {requestWarmCheckpoint} = require('./development/tests/integration/probe_h
                     self.kind = value['kind']
                     self.admissions.append(value)
                     return 202, {'id':'fixture_job'}
-                view = {'model_comparison_sample_size':100,
-                    'comparisons':{'groups':[{'runs':[{'model':'model-one'}, {'model':'model-two'}]}]}}
+                view = {'model_comparison_sample_size':100}
                 return 200, {'status':'complete', 'result':{
                     'view':view, 'source':{'status':'acquired', 'revisions':[]}}}
         client = HistoricalClient()
 
         outcomes = backend_journey(client, False, time.monotonic() + 2)
 
-        self.assertEqual(['normal', 'token-mix', 'ai-stats', 'comparisons'],
+        self.assertEqual(['normal', 'token-mix', 'ai-stats'],
             [value['kind'] for value in client.admissions])
-        self.assertEqual(['complete'] * 4, [row['status'] for row in outcomes])
+        self.assertEqual(['complete'] * 3, [row['status'] for row in outcomes])
 
     def test_wire_fixture_scoped_parent_cursor_and_leaf_closure_do_not_return_unrelated_roots(self):
         source = WireHistory(64, 2, 1794053593853, 0)

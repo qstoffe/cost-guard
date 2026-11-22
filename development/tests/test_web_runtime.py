@@ -201,7 +201,6 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertIn(b'progress max="100" value="0"', body)
         self.assertIn(b'href="#/watch">Watch</a>', body)
         self.assertNotIn(b'href="#/live">Live</a>', body)
-        self.assertNotIn(b'href="#/comparisons"', body)
         self.assertIn(b'aria-valuetext="0 percent"', body)
         self.assertNotIn('≈'.encode(), body)
         self.assertIn(b'/reports.js', body)
@@ -214,16 +213,16 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
 
-    def test_parked_comparisons_cannot_admit_a_web_report(self):
+    def test_unknown_report_kind_cannot_admit_a_web_report(self):
         self.login()
         dispatcher = Mock(identity='source')
         self.server.lifecycle = SimpleNamespace(dispatcher=dispatcher,
             stopping=Event(), nonce='test-instance', observations=Mock())
-        report = {'kind': 'comparisons'}
+        report = {'kind': 'unsupported'}
         attempts = (
             ('/api/reports', report),
             ('/api/data', {'request': report, 'retry': True}),
-            ('/api/interest', {'tab': 'a' * 32, 'section': 'comparisons', 'visible': True, 'request': report}),
+            ('/api/interest', {'tab': 'a' * 32, 'section': 'models', 'visible': True, 'request': report}),
         )
 
         with patch.object(self.jobs, 'submit') as submit:
@@ -1099,7 +1098,7 @@ class JobBoundaryTests(unittest.TestCase):
         warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
         jobs.prioritize({warm: 2})
         jobs.tick()
-        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
         jobs.prioritize({warm: 2, demand: 0})
 
         jobs.tick()
@@ -1117,7 +1116,7 @@ class JobBoundaryTests(unittest.TestCase):
         background.process.terminate.assert_called_once()
         background.receiver.send.assert_not_called()
         background.process.close.assert_called_once()
-        self.assertEqual([ReportKind.TOKEN_MIX, ReportKind.COMPARISONS, ReportKind.TOKEN_MIX],
+        self.assertEqual([ReportKind.TOKEN_MIX, ReportKind.ALL_MODELS, ReportKind.TOKEN_MIX],
             [request.kind for request in requests])
         self.assertEqual(requests[0].observation_ms, requests[2].observation_ms)
         restarted.process.terminate.assert_not_called()
@@ -1136,7 +1135,7 @@ class JobBoundaryTests(unittest.TestCase):
         warm = jobs.submit(ManagedReport(ReportKind.AI_STATS))
         jobs.prioritize({warm: 2})
         jobs.tick()
-        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
         jobs.prioritize({warm: 2, demand: 0})
         jobs.tick()
         burst.messages.append(('result', done))
@@ -1150,7 +1149,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs.tick()
 
         requests = [spawn.kwargs['args'][2] for spawn in context.Process.call_args_list]
-        self.assertEqual([ReportKind.AI_STATS, ReportKind.COMPARISONS, ReportKind.AI_STATS, ReportKind.AI_STATS,
+        self.assertEqual([ReportKind.AI_STATS, ReportKind.ALL_MODELS, ReportKind.AI_STATS, ReportKind.AI_STATS,
             ReportKind.SESSIONS], [request.kind for request in requests])
         self.assertEqual(1, len({(request.observation_ms, request.scan) for request in requests if
             request.kind is ReportKind.AI_STATS}))
@@ -1174,7 +1173,7 @@ class JobBoundaryTests(unittest.TestCase):
                 background.messages.append(('admit', None))
                 if case == 'granted':
                     jobs.tick()
-                demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+                demand = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
                 jobs.prioritize({warm: 0 if case == 'promoted' else 2,
                                  demand: 1 if case == 'requested-demand' else 0})
 
@@ -1213,7 +1212,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs.tick()
         jobs.tick()
         alone = list(child.receiver.send.call_args_list)
-        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        other = jobs.submit(ManagedReport(ReportKind.ALL_MODELS))
         jobs.prioritize({key: 0, other: 0})
         jobs.tick()
         jobs.tick()
@@ -1257,7 +1256,7 @@ class JobBoundaryTests(unittest.TestCase):
         jobs = ReportJobs(context=context)
         self.addCleanup(jobs.close)
         key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
-        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        other = jobs.submit(ManagedReport(ReportKind.AI_STATS))
         jobs.prioritize({key: 0, other: 0})
         jobs.tick()
         jobs.tick()
@@ -1364,7 +1363,7 @@ class JobBoundaryTests(unittest.TestCase):
         child = ReportProcess(messages=[('result', json.dumps(dict(error=None,
             source=dict(status='acquired'))).encode())])
         jobs = ReportJobs(context=child.context)
-        request = ReportRequest(ReportKind.COMPARISONS)
+        request = ReportRequest(ReportKind.ALL_MODELS)
         key = jobs.submit(request)
         with patch('src.web.jobs.time.monotonic', return_value=10):
             jobs.tick()
@@ -1409,7 +1408,7 @@ class JobBoundaryTests(unittest.TestCase):
     def test_retirees_count_as_resident_children_and_withhold_only_fresh_launches(self):
         from src.web.report_control import ManagedReport
         jobs = ReportJobs(context=ReportProcess().context)
-        parked = [jobs.submit(ManagedReport(kind)) for kind in (ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)]
+        parked = [jobs.submit(ManagedReport(kind)) for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS)]
         fresh = jobs.submit(ReportRequest(ReportKind.SESSIONS))
         retirees = [dict(process=Mock(), receiver=Mock(), stage=0, deadline=float('inf')) for _ in range(2)]
         for retiree in retirees:

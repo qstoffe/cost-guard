@@ -228,7 +228,7 @@ def format_date_time(
 
 
 def format_execution_boundary(instant: object, mode: DateTimeMode, configured_zone: str) -> str:
-    """Legacy Watch/Comparisons boundary help: distinguish repeated DST wall times."""
+    """Legacy Watch boundary help: distinguish repeated DST wall times."""
     if mode not in (DateTimeMode.DATE_TIME, DateTimeMode.DATE_TIME_SECONDS):
         return _UNKNOWN_DATE_TIME
     value = _display_datetime(instant, configured_zone)

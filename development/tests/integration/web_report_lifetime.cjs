@@ -19,7 +19,7 @@ const context = vm.createContext({document, location, history, URLSearchParams, 
   setTimeout(fn,ms){const id=++sequence;timers.set(id,{fn,ms});return id;}, clearTimeout:id=>timers.delete(id),
   window:{addEventListener:(key,fn)=>{handlers[key]=fn;},scrollTo(){}},console,
   ReportRoutes:{resolve(hash){const section=hash.slice(2);return {section,title:section,
-    live:section==='watch',request:['models','token-mix','ai-stats','comparisons'].includes(section)?
+    live:section==='watch',request:['models','token-mix','ai-stats'].includes(section)?
       {kind:section==='models'?'normal':section}:null};},controls(){}},
   ReportView:{element:node,text(element,value){element.textContent=value;},defaultUnit(){},render(parent,result){parent.replaceChildren(result);}},
   WebSettings:{apply(){return {values:{}};}},
@@ -48,7 +48,7 @@ for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);
   class View {constructor(){this.root=ReportView.element();} selection(){} update(){} attach(){}}
   class StatsView extends View {refreshDatabaseSizes(){this.databaseRefresh=(this.databaseRefresh || 0)+1;}}
-  const TokenMixView={valid:()=>true,compatible:()=>true,View}, ComparisonsView={valid:()=>true,View};
+  const TokenMixView={valid:()=>true,compatible:()=>true,View};
   const AIStatsView={valid:()=>true,View:StatsView,prioritize(){},observe(){return true;},remember(state,result){state.result=result;}};`,context);
 vm.runInContext(fs.readFileSync('src/web/assets/app.js','utf8'),context);
 const run = code=>vm.runInContext(code,context);
@@ -72,7 +72,7 @@ async function main(){
   ids.content.keyboardVisible=true;
   run('focusReport()');
   assert.equal(ids.content.classList.contains('keyboard-focus'),false,'a script cannot infer keyboard intent from the already-focused landmark');
-  for(const section of ['models','token-mix','ai-stats','comparisons']){
+  for(const section of ['models','token-mix','ai-stats']){
     busy=1;const before=admissions.length;
     await go(section);
     const original=run('current'),attempt=original.attempt;
@@ -87,7 +87,7 @@ async function main(){
     assert.equal(run('current'),original);assert.equal(original.active,active);
     assert.equal(admissions.length,count,'return never duplicates in-flight work');
     await hide(true);await go('watch');
-    if(section==='comparisons')now+=150000; // Hidden timers may be throttled past the client budget.
+    if(section==='ai-stats')now+=150000; // Hidden timers may be throttled past the client budget.
     const result={view:{kind:section==='models'?'normal':section,token_mix_period:{period:'all'},ai_stats:[{period:'30-days',start_ms:0,end_ms:now}],
       ai_stats_work:{scopes:{'30-days':{ready:true}}}},
       scope:{timezone_id:'UTC'},source:{status:'acquired',observed_at_ms:now},observed_at_ms:now};
@@ -101,8 +101,8 @@ async function main(){
     assert.equal(run('current.result'),result);assert.equal(admissions.length,count);
   }
   // Long healthy source startup never exhausts admission or requires Retry.
-  await go('watch');run(`views.delete('#/comparisons')`);sourceWait=100;
-  const before=admissions.length;await go('comparisons');const pending=run('current');
+  await go('watch');run(`views.delete('#/models')`);sourceWait=100;
+  const before=admissions.length;await go('models');const pending=run('current');
   await go('watch');await hide(true);
   for(let i=0;i<40;i++)await tick();
   assert.equal(admissions.length,before+41);assert.equal(pending.loading,true);
@@ -110,9 +110,9 @@ async function main(){
   now+=2*86400000;sourceWait=0;await tick();
   const active=pending.active;assert.ok(active);
   assert.equal(pending.failed,false);
-  jobs.get(active).status='complete';jobs.get(active).result={view:{kind:'comparisons'},source:{status:'acquired',observed_at_ms:now}};
+  jobs.get(active).status='complete';jobs.get(active).result={view:{kind:'normal'},source:{status:'acquired',observed_at_ms:now}};
   await tick();assert.equal(pending.loading,false);assert.equal(pending.failed,false);
-  await hide(false);await go('comparisons');
+  await hide(false);await go('models');
   assert.equal(admissions.length,before+42,'return reuses automatic completion without new work');
   assert.equal(document.getElementById('cancel'),null);
   // A visible terminal Live hint wakes only the matching status wait; the job fetch decides.
@@ -131,11 +131,11 @@ async function main(){
   assert.equal(jobFetches[wakeJob],fetchedBefore+1,'one authoritative job fetch');assert.equal(polls(),0);
   liveUpdate(null,{jobs:[{id:wakeJob,status:'complete'}]});await settle();
   assert.equal(jobFetches[wakeJob],fetchedBefore+1,'replayed hints request nothing');
-  await go('watch');run(`views.delete('#/comparisons')`);
-  await go('comparisons');const quiet=run('current'),quietJob=quiet.active;
+  await go('watch');run(`views.delete('#/models')`);
+  await go('models');const quiet=run('current'),quietJob=quiet.active;
   assert.ok(quietJob);await hide(true);
   jobs.get(quietJob).status='complete';
-  jobs.get(quietJob).result={view:{kind:'comparisons'},source:{status:'acquired',observed_at_ms:now}};
+  jobs.get(quietJob).result={view:{kind:'normal'},source:{status:'acquired',observed_at_ms:now}};
   const quietBefore=jobFetches[quietJob];
   liveUpdate(null,{jobs:[{id:quietJob,status:'complete'}]});await settle();
   assert.equal(quiet.loading,true,'hidden documents keep ordinary polling');
@@ -170,36 +170,6 @@ async function main(){
   assert.equal(polls(),0,'completion releases the last poll timer');
   assert.equal(typeof retryAttempt.woken,'string','wake state stores one identity, not a growing history');
   assert.equal(retryAttempt.woken,recoveredJob,'wake state retains only the last identity, not retired jobs');
-  // A changed pinned Comparisons revision must rebase once, never readmit that pin.
-  await go('watch');run(`views.delete('#/comparisons')`);
-  await go('comparisons');const paging=run('current');
-  const firstPage={view:{kind:'comparisons',comparisons:{offset:0,total:321,revision:'a'.repeat(64)}},source:{status:'acquired',observed_at_ms:now}};
-  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=firstPage;await tick();
-  run(`current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
-  const staleJob=paging.active;
-  jobs.get(staleJob).status='complete';jobs.get(staleJob).result={error:{code:'session_catalog_changed',retryable:true}};
-  await tick();
-  console.log(JSON.stringify({trace:'changed-pin',request:paging.request,retries:paging.attempt?.retries,stage:paging.stage}));
-  assert.equal(paging.request.comparison_revision,undefined,'changed pinned revision is retired before any generic retry');
-  assert.equal(paging.orderReset,true);
-  assert.equal(paging.result,firstPage,'last-good page survives rebase');
-  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=firstPage;await tick();
-  // Explicit page faults are bounded; timers never silently retry a failed page.
-  busy=20;
-  run(`current.actionRequested=true;current.pageNavigation=true;current.request={kind:'comparisons',comparison_offset:10,comparison_revision:'a'.repeat(64)};acquire(current)`);await settle();
-  for(let i=0;i<3;i++)await tick();
-  assert.equal(paging.loading,false);assert.equal(paging.failed,true);
-  assert.equal(paging.message,'Could not load. Try again.');assert.equal(paging.result,firstPage);
-  const failedAdmissions=admissions.length;run('scheduleCachedReport();enterCachedReport(current)');await settle();
-  assert.equal(admissions.length,failedAdmissions,'only explicit Retry can restart failed navigation');
-  busy=0;run('current.actionRequested=true;acquire(current)');await settle();
-  now+=45001;await tick();
-  assert.equal(paging.loading,false);assert.equal(paging.failed,true);
-  assert.equal(paging.message,'Could not load. Try again.');assert.equal(paging.result,firstPage);
-  run('acquire(current)');await settle();
-  const nextPage={...firstPage,view:{...firstPage.view,comparisons:{...firstPage.view.comparisons,offset:10}}};
-  jobs.get(paging.active).status='complete';jobs.get(paging.active).result=nextPage;await tick();
-  assert.equal(paging.result,nextPage);assert.equal(paging.failed,false);assert.equal(paging.pageNavigation,false);
   // Managed first completion preserves an actually old as-of, not only a shifted worker timer.
   await go('watch');run(`views.delete('#/models');demand={update(){}};`);
   const started=now;await go('models');const aged=run('current'),owned=aged.active;

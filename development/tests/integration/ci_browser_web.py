@@ -23,7 +23,7 @@ from src.version import DISPLAY_VERSION
 def check_pagers(browser, evidence):
     """Real viewports/media/input, independent of source-cache and job-lifetime proof."""
     from playwright.sync_api import expect
-    from development.tests.fixtures.matched_inputs import source
+    from development.tests.fixtures.repeated_inputs import source
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / 'config').mkdir()
@@ -189,7 +189,7 @@ def main():
                 page.goto(origin + "/#/comparisons")
                 expect(page.locator("#heading")).to_have_text("Page not found")
                 page.remove_listener("request", count_report_start)
-                assert not report_starts, "Parked Comparisons bookmark must not acquire"
+                assert not report_starts, "Deleted Comparisons bookmark must not acquire"
                 evidence["checks"].append("Comparisons is absent from navigation and its old bookmark starts no report")
                 page.goto(origin + "/#/sessions/root")
                 expect(page.locator("#result tbody tr").first).to_be_visible(timeout=30000)

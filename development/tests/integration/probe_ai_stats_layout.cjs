@@ -130,13 +130,12 @@ module.exports = async function({command, evaluate, until, tab, textLayouts, che
     await until(`!current.loading && current.result?.view.ai_stats.some(row=>row.period==='${period}')`);
     await measure('canonical period ' + period);
   }
-  // Both optional labels use the same five non-overlapping tracks and final link.
+  // Both optional labels use the same five non-overlapping tracks.
   for (const metric of ['speed-gap','original-thinker']) {
     await evaluate(`current.result=__statsStress; current.period=__statsStress.view.ai_stats[0].period;
       __statsStress.view.ai_stats[0].matched.metric='${metric}'; current.stats.update(current);`);
     await measure('optional matched card ' + metric);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),15);
-    assert.equal(await evaluate(`current.stats.extra.lastChild.hash`),'#/comparisons');
     assert.equal(await evaluate(`current.stats.extra.nextElementSibling.matches('.ai-stat-databases')`),true);
   }
   await evaluate(`selectStats(current,__statsPeriod)`);

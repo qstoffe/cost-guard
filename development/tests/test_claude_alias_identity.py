@@ -6,7 +6,7 @@ import unittest
 from development.tests.fixtures.claude_alias import LABEL, catalog, snapshot, service, reopen, desktop_service
 from development.tests.fixtures.compact_reports import rendered
 from src.analysis.comparisons import model_timeline_name
-from src.application.comparisons import run as export_run
+from src.reports.matched_runs import project_run
 from src.application.projection import project
 from src.domain import ModelRef, ModelPricing, TokenUsage
 from src.pricing.catalog import PricingCatalog
@@ -280,19 +280,18 @@ class ClaudeAliasIdentityTests(unittest.TestCase):
         self.assertIsNone(reference.reference_valuation(request.model, request.tokens))
         self.assertEqual('model_absent', reference.reference_issue(request.model, request.tokens).reason)
 
-    def test_comparisons_exports_unverified_label_separately_from_raw_request_identity(self):
+    def test_first_prompt_run_keeps_unverified_label_separate_from_raw_request_identity(self):
         original = service(self)
-        report = original.build(ReportRequest(ReportKind.COMPARISONS))
-        alias = next(value for value in report.comparisons.groups[0].runs if value.model == 'sonnet')
+        snapshot = original.source.snapshots['root-0000']
 
-        value = export_run(alias).to_json()
+        value = project_run(snapshot, original._analyze_snapshot(snapshot),
+            original._load_comparison_catalog(), original.config)
 
-        self.assertEqual('sonnet', value['model'])
-        self.assertEqual('claude-agent', value['provider'])
-        self.assertEqual(LABEL, value['model_label'])
-        self.assertEqual('sonnet', value['contributors'][0]['model'])
-        self.assertEqual(LABEL, value['contributors'][0]['model_label'])
-        self.assertIsNone(value['ccost'])
+        self.assertEqual('sonnet', value.model)
+        self.assertEqual('claude-agent', value.provider)
+        self.assertEqual(LABEL, value.model_label)
+        self.assertEqual('sonnet', value.contributors[0][1])
+        self.assertIsNone(value.ccost)
 
 
 if __name__ == '__main__':

@@ -45,7 +45,6 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
-             "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
              "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
              "/data-demand.js": ("data-demand.js", "text/javascript; charset=utf-8"),
             "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
@@ -378,7 +377,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         request = ModelsPriceRefresh()
                     else:
                         request = parse_report(value)
-                        if request.kind is ReportKind.COMPARISONS or request.kind in cache_only_reports(self.server.lifecycle):
+                        if request.kind in cache_only_reports(self.server.lifecycle):
                             raise ValueError("invalid_request")
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})

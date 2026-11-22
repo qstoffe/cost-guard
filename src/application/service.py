@@ -31,8 +31,7 @@ _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "a
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
                      "account-load", "account-analysis", "account-projection", "finalizing",
                      "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis",
-                     "history-cache", "history-load", "history-projection", "history-verify",
-                     "comparison-verify", "comparison-groups", "comparison-previews"})
+                     "history-cache", "history-load", "history-projection", "history-verify"})
 
 
 class ReportApplication:
@@ -101,7 +100,6 @@ class ReportApplication:
                     ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
                     ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
                     ReportKind.AI_STATS: "available_execution_history",
-                    ReportKind.COMPARISONS: "all_available_root_first_inputs",
                 }[request.kind]),
                 ("local_day_start_ms", local_day_start_ms(service.timezone_id, now_ms=now)),
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
@@ -143,7 +141,7 @@ class ReportApplication:
                              # Normal is an aggregate comparison/account report. Its
                              # month-wide causal identities are not displayed and can
                              # dwarf the report; per-root revision evidence stays above.
-                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS, ReportKind.COMPARISONS}
+                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS}
                                            else service.report_request_identities()))
             observe(WorkProgress("Preparing report", "finalizing", 1, 2, stage="finalizing"))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
@@ -172,8 +170,7 @@ class ReportApplication:
                                 error=ReportError("pricing_unavailable", True))
         except SessionCatalogChangedError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
-                                error=ReportError("session_catalog_changed",
-                                    not (request.kind is ReportKind.COMPARISONS and request.comparison_revision)))
+                                error=ReportError("session_catalog_changed", True))
         except SessionNotFoundError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("session_not_found"))
@@ -210,8 +207,6 @@ class ReportApplication:
         if request.stats_scope not in ('today', '7-days', '30-days', 'month', 'all'):
             return 'invalid_request'
         if request.token_mix_scope not in ('today', '7-days', '30-days', 'month', 'all'):
-            return 'invalid_request'
-        if type(request.comparison_offset) is not int or request.comparison_offset < 0 or request.comparison_offset % 10:
             return 'invalid_request'
         if request.kind is ReportKind.SESSION and not request.session_id:
             return "invalid_request"
