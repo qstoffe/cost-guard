@@ -243,7 +243,10 @@ class WebWatchCoordinator(WatchCoordinator):
         except SourceError as error:
             catalog.index_failed(str(error.code), terminal=error.terminal)
         except PricingUnavailableError:
-            catalog.index_failed('pricing_unavailable')
+            if not coverage:
+                catalog.index_failed('pricing_unavailable')
+            # The coverage sweep owns its own retry and does not qualify a
+            # separate scalar acquisition as unavailable for 30 seconds.
         finally:
             if service is not None:
                 service.close_accounts()

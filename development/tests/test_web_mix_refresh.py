@@ -40,10 +40,16 @@ class WebMixRefreshTests(unittest.TestCase):
 
     def test_catalog_lanes_keep_progress_when_every_coverage_turn_fails(self):
         calls = []
+        scalar_available = True
 
         def held_coverage(*_):
             calls.append("coverage")
             raise PricingUnavailableError("fixture coverage dependency unavailable")
+
+        def backoff(*_, **__):
+            # SessionCatalog.needed withdraws work for 30 seconds after index_failed.
+            nonlocal scalar_available
+            scalar_available = False
 
         archive = SimpleNamespace(
             catalog_pending=lambda _: True, summary_pending=lambda _: True,
@@ -52,7 +58,8 @@ class WebMixRefreshTests(unittest.TestCase):
             publish_catalog=lambda *_: calls.append("membership"), check_coverage=held_coverage,
             acquire_summaries=lambda *_: calls.append("sweep"))
         catalog = Mock(display_archive=archive)
-        catalog.needed.return_value = True
+        catalog.needed.side_effect = lambda: scalar_available
+        catalog.index_failed.side_effect = backoff
         catalog.tick.side_effect = lambda _: calls.append("scalar")
         service = SimpleNamespace(timezone_id="UTC", source=object(),
                                   close_accounts=lambda: calls.append("close"))
@@ -69,7 +76,7 @@ class WebMixRefreshTests(unittest.TestCase):
 
         self.assertEqual([part for step in ("coverage", "sweep", "scalar", "sweep") * 2
                           for part in ("membership", step, "close")], calls)
-        self.assertEqual(2, catalog.index_failed.call_count)
+        catalog.index_failed.assert_not_called()
 
     def test_existing_lane_interleaves_scalar_with_bounded_mix_and_notifies_after_commit(self):
         now = 1_750_000_000_000
