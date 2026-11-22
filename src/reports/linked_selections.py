@@ -2,6 +2,7 @@
 from dataclasses import replace
 from src.analysis.child_links import ChildLinkIndex
 from src.analysis.effort import prompt_replies
+from src.analysis.prompt_index import prompt_owners
 from src.domain import ModelRef
 from .model_details import executed
 from .prompt_selection import selection_name
@@ -24,21 +25,29 @@ def selection_index(snapshot, revision):
               if identity(event.provenance) == source}
     users = {(message.session_id, message.message_id): message for message in snapshot.messages
               if identity(message.provenance) == source and message.role.value == "user"}
-    return replies, children, events, users
+    owners = prompt_owners(snapshot)
+    attempts = {}
+    for message in snapshot.messages:
+        if message.role.value == "assistant":
+            owner = owners.get((message.session_id, message.parent_message_id))
+            if owner is not None:
+                attempts.setdefault((message.session_id, owner), []).append(message)
+    return replies, children, events, users, attempts
 
 
 def linked_selections(snapshot, records, catalog, revision, *, index=None):
     index = index if index is not None else selection_index(snapshot, revision)
     if index is None:
         return ()
-    replies, children, events, users = index
+    replies, children, events, users, attempts = index
     lines = []
     for record in records:
-        messages = replies.get((record.session_id, record.prompt_id), ())
-        scopes = children.scopes(messages)
+        key = (record.session_id, record.prompt_id)
+        scopes = children.scopes(attempts.get(key, ()), prompt=key)
         for scope in scopes:
             event = events.get((scope.session_id, scope.owner_id))
-            if event is None or any(entry.session_id == scope.session_id and executed(entry)
+            if event is None or any(entry.session_id == scope.session_id and entry.logical_prompt_id == scope.owner_id
+                                    and executed(entry)
                                     for entry in record.entries):
                 continue
             allowed = {(message.session_id, message.message_id) for message in children.messages((scope,))}
@@ -62,6 +71,8 @@ def linked_selections(snapshot, records, catalog, revision, *, index=None):
             if name != model.recorded_model:
                 qualifier = "catalog estimate; " if model.resolution else ""
                 line += f" ({qualifier}recorded {model.provider}/{model.recorded_model})"
+            if scope.inferred_path:
+                line += " (linked by prompt timing)"
             state = next((agent.state for agent in record.agent_coverage if agent.session_id == scope.session_id), "")
             line += {
                 "not-executed": " — No request recorded in complete child history.",

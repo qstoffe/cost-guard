@@ -18,10 +18,11 @@ from src.analysis.ai_stats import period_stats
 from src.reports.ai_stats_evidence import payload, decoded
 from src.analysis.session_cost import reconcile_session_cost
 from src.analysis.valuation import comparison_cost
+from src.application.display import with_display
 from src.application.live_projection import project_live
 from src.application.projection import block as export_block
 from src.cache import CacheDatabase, CacheRepository
-from src.domain import ModelRef, TokenUsage
+from src.domain import BackgroundActivity, ModelRef, TokenUsage
 from src.presentation import ReportRenderer
 from src.reports.models import ReportKind, ReportProjection
 from src.reports.prompt_rows import PromptRowProjector
@@ -102,6 +103,64 @@ class SubagentAttributionTests(unittest.TestCase):
         self.assertIn("*", stream.getvalue())
         self.assertEqual((D(224), 3), (block.total_ccost, block.total_calls))
 
+    def test_tied_custom_call_and_replayed_native_part_do_not_close_verified_launch(self):
+        with incident_source() as (source, _server):
+            snapshot = source.load_session_snapshot("ses_current")
+
+        parent = next(m for m in snapshot.messages if m.message_id == "a1")
+        native = next(p for p in parent.parts if p.kind == "tool")
+        custom = replace(
+            native,
+            part_id="custom-at-native-start",
+            data={
+                "tool": "custom-worker",
+                "callID": "custom-call",
+                "state": {
+                    "status": "completed",
+                    "input": {},
+                    "time": {"start": 3200, "end": 3300},
+                    "output": "done",
+                },
+            },
+        )
+        expected_calls = [
+            ("ses_current", "a1"),
+            ("ses_current_child", "ca"),
+            ("ses_current", "a2"),
+        ]
+
+        for label, batch in (
+            ("custom first", (custom, native, deepcopy(native))),
+            ("verified first", (native, custom, deepcopy(native))),
+        ):
+            with self.subTest(order=label):
+                parts = tuple(
+                    item for p in parent.parts for item in (batch if p == native else (p,))
+                )
+                messages = tuple(
+                    replace(m, parts=parts) if m == parent else m for m in snapshot.messages
+                )
+                candidate = replace(
+                    snapshot,
+                    messages=messages,
+                    parts=tuple(p for m in messages for p in m.parts),
+                )
+
+                bundle, block = self.project(candidate)
+
+                self.assertEqual(1, len(bundle.prompts))
+                record, = bundle.prompts
+                self.assertCountEqual(
+                    expected_calls,
+                    [(entry.session_id, entry.message_id) for entry in record.entries],
+                )
+                self.assertIn(
+                    ("ses_current_child", "verified"),
+                    [(item.session_id, item.attribution) for item in record.agent_coverage],
+                )
+                row, = export_block(block, details=True).to_json()["rows"]
+                self.assertEqual((61 + 102 + 61, 3), (D(row["ccost"]), row["calls"]))
+
     def test_multiple_nested_overlapping_and_duplicate_links_union_real_request_identities(self):
         with incident_source() as (source, server):
             duplicate = deepcopy(server.messages["ses_current"][1]["content"][0])
@@ -177,6 +236,413 @@ class SubagentAttributionTests(unittest.TestCase):
         self.assertFalse(record.in_progress)
         self.assertTrue(record.completed_successfully)
         self.assertEqual((3, 2500, 5500), (record.model_calls, record.execution_duration_ms, record.terminal_time_ms))
+
+    def test_inferred_custom_child_turns_are_partitioned_in_detail_and_watch_rows(self):
+        with incident_source(name="custom-worker") as (source, server):
+            server.messages["ses_current"].extend((
+                user("u2", 5000),
+                assistant("a3", 5100, 6500),
+            ))
+            server.messages["ses_current_child"].extend((
+                user("cu2", 4600),
+                assistant("ca2", 4700, 4900, model="claude-test"),
+                user("cu3", 5300),
+                assistant("ca3", 5400, 5550, model="claude-test"),
+            ))
+            snapshot = source.load_session_snapshot("ses_current")
+
+        bundle, block = self.project(snapshot)
+
+        root, child = "ses_current", "ses_current_child"
+        expected = (
+            ("u1", [(root, "a1"), (root, "a2"), (child, "ca"), (child, "ca2")], 326),
+            ("u2", [(root, "a3"), (child, "ca3")], 163),
+        )
+        detail_rows = export_block(block, details=True).to_json()["rows"]
+        self.assertEqual(2, len(bundle.prompts))
+        self.assertEqual(2, len(detail_rows))
+        self.assertEqual(2, len(block.rows))
+
+        # Independent physical ledger: three GPT requests at 61 and three Claude
+        # requests at 102. Each must occur in its particular charging row.
+        physical = [(inv.session_id, inv.message_id) for inv in snapshot.invocations]
+        self.assertCountEqual([key for _, keys, _ in expected for key in keys], physical)
+        for index, (uid, keys, cost) in enumerate(expected):
+            with self.subTest(prompt=uid):
+                record = bundle.prompts[index]
+                self.assertCountEqual(keys, [(e.session_id, e.message_id) for e in record.entries])
+                self.assertIn(
+                    (child, "inferred"),
+                    [(item.session_id, item.attribution) for item in record.agent_coverage],
+                )
+                row = block.rows[index]
+                card = WatchCard(root, "Synthetic", uid, (WatchRow(root, "Synthetic", row),), "observed")
+                live = project_live(WatchProjection(
+                    "Watch", "Synthetic", (), now_ms=20_000,
+                    active_cards=(card,), history_cards=(replace(card, focal_id=""),),
+                )).to_json()
+                for view in (
+                    detail_rows[index],
+                    live["active_cards"][0]["rows"][0]["prompt"],
+                    live["history_cards"][0]["rows"][0]["prompt"],
+                ):
+                    self.assertEqual((D(cost), len(keys)), (D(view["ccost"]), view["calls"]))
+        self.assertEqual(D(3 * 61 + 3 * 102), sum(row.ccost for row in block.rows))
+        self.assertEqual((D(489), 6), (block.total_ccost, block.total_calls))
+
+        stream = io.StringIO()
+        ReportRenderer({}, stream=stream, color_enabled=False, terminal_width=180).render(
+            ReportProjection(ReportKind.SESSION, "Synthetic", "v2", prompt_blocks=(block,))
+        )
+        text = stream.getvalue()
+        actual = []
+        for line in text.splitlines():
+            if not line.lstrip().startswith("|"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) < 3:
+                continue
+            label = cells[0]
+            if label.endswith("#1 work") or label.endswith("#2 work") or label == "Total":
+                actual.append((label.split("#")[-1], cells[1], cells[2]))
+        self.assertEqual(
+            [("1 work", "326", "4"), ("2 work", "163", "2"), ("Total", "489", "6")],
+            actual,
+        )
+        self.assertEqual(
+            2, text.count("Some subagent work linked by prompt timing; not verified by a tool call.")
+        )
+
+    def test_later_native_launch_without_a_new_child_turn_is_visible_but_not_charged_again(self):
+        with incident_source() as (source, server):
+            server.messages["ses_current"].extend((
+                user("u2", 4900),
+                assistant("b1", 5000, 6100, content=[
+                    {**link(start=5100, end=6000), "id": "later-link", "callID": "later-call"},
+                ]),
+            ))
+            snapshot = source.load_session_snapshot("ses_current")
+
+        bundle, block = self.project(snapshot)
+
+        first, later = bundle.prompts
+        root, child = "ses_current", "ses_current_child"
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2"), (child, "ca")],
+            [(e.session_id, e.message_id) for e in first.entries],
+        )
+        self.assertEqual([(root, "b1")], [(e.session_id, e.message_id) for e in later.entries])
+        self.assertIn(child, [item.session_id for item in later.agent_coverage])
+        self.assertEqual((3, 1), (first.model_calls, later.model_calls))
+        self.assertEqual((D(224), D(61)), tuple(row.ccost for row in block.rows))
+
+    def test_observed_turn_and_pending_turn_keep_the_known_cost_until_a_real_request_arrives(self):
+        with incident_source() as (source, server):
+            server.messages["ses_current"].extend((
+                user("u2", 4900),
+                assistant("b1", 5000, 6100, content=[
+                    {**link(start=5100, end=6000), "id": "later-link", "callID": "later-call"},
+                ]),
+            ))
+            server.messages["ses_current_child"].append(user("cu2", 5200))
+            server.active = {"ses_current_child": {"type": "running"}}
+            pending = source.load_session_snapshot("ses_current")
+
+            server.messages["ses_current_child"].append(
+                assistant("ca2", 5300, 5600, model="claude-test")
+            )
+            server.active = {}
+            observed = source.load_session_snapshot("ses_current")
+
+        for frame, later_child_calls, later_cost in (
+            (pending, [], 61),
+            (observed, [("ses_current_child", "ca2")], 163),
+        ):
+            with self.subTest(later_cost=later_cost):
+                bundle, block = self.project(frame)
+                first, later = bundle.prompts
+                self.assertCountEqual(
+                    [("ses_current", "a1"), ("ses_current", "a2"), ("ses_current_child", "ca")],
+                    [(e.session_id, e.message_id) for e in first.entries],
+                )
+                self.assertCountEqual(
+                    [("ses_current", "b1"), *later_child_calls],
+                    [(e.session_id, e.message_id) for e in later.entries],
+                )
+                self.assertEqual((D(224), D(later_cost)), tuple(row.ccost for row in block.rows))
+                self.assertIn("ses_current_child", [item.session_id for item in later.agent_coverage])
+                if not later_child_calls:
+                    self.assertTrue(later.subagent_active)
+
+    def test_ownerless_continuation_and_busy_grandchild_cannot_be_charged_to_two_root_rows(self):
+        root, child, nested = "ses_current", "ses_current_child", "ses_nested"
+        with incident_source(background=True, end=3250) as (source, server):
+            server.sessions.append({**server.sessions[1], "id": nested, "parentID": child})
+            server.messages[root].extend((
+                user("u2", 4900),
+                assistant("b1", 5000, 5850, content=[
+                    {**link(start=5100, end=5800), "id": "second-link", "callID": "second-call"},
+                ]),
+                user("u3", 5900),
+                assistant("b2", 6000, 7100, content=[
+                    {**link(start=6100, end=7000), "id": "third-link", "callID": "third-call"},
+                ]),
+            ))
+            server.messages[child] = [
+                user("cu", 3300),
+                assistant("ca", 3400, 3800, model="claude-test", content=[
+                    {**link(child=nested, start=3450, end=3500, background=True),
+                     "id": "nested-first", "callID": "nested-first-call"},
+                ]),
+                {"id": "compact-child", "type": "compaction", "time": {"created": 3850}},
+                assistant("bridge", 3950, 6500, model="claude-test"),
+                user("cu2", 6560),
+                assistant("ca2", 6600, 6900, model="claude-test", content=[
+                    {**link(child=nested, start=6610, end=6880),
+                     "id": "nested-again", "callID": "nested-again-call"},
+                ]),
+            ]
+            # First nested launch owns a real turn. The later launch addresses
+            # the same session while that request is busy, with no new user turn.
+            server.messages[nested] = [
+                user("nu", 3480),
+                assistant("busy", 3490, 6840, model="claude-test"),
+            ]
+            loaded = source.load_session_snapshot(root)
+
+        # Exercise normalized input with a missing parent reference rather than
+        # relying on V2's automatic latest-user relink to produce this condition.
+        snapshot = replace(loaded, messages=tuple(
+            replace(m, parent_message_id=None)
+            if (m.session_id, m.message_id) == (child, "bridge") else m
+            for m in loaded.messages
+        ))
+        physical = [(inv.session_id, inv.message_id) for inv in snapshot.invocations]
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2"), (root, "b1"), (root, "b2"),
+             (child, "ca"), (child, "bridge"), (child, "ca2"), (nested, "busy")],
+            physical,
+        )
+
+        bundle, _block = self.project(snapshot)
+
+        rows = [[(e.session_id, e.message_id) for e in r.entries] for r in bundle.prompts]
+        self.assertEqual(3, len(rows))
+        for index, key in enumerate(((root, "a1"), (root, "b1"), (root, "b2"))):
+            self.assertIn(key, rows[index])
+        self.assertIn((child, "ca"), rows[0])
+        self.assertIn((child, "ca2"), rows[2])
+        # Do not choose an owner for ambiguous work. Check each physical key
+        # against the charging rows *before* any whole-tree union or dedup.
+        for key in physical:
+            with self.subTest(request=key):
+                self.assertLessEqual(sum(row.count(key) for row in rows), 1, rows)
+
+    def test_one_row_retains_known_child_cost_and_marks_the_missing_turn(self):
+        root, child = "ses_current", "ses_current_child"
+        with incident_source() as (source, server):
+            server.messages[child].extend((
+                user("cu2", 4300),
+                assistant("ca2", 4350, 4450, model="claude-test"),
+            ))
+            loaded = source.load_session_snapshot(root)
+
+        # The turn and completed assistant are observed. Only the second
+        # request's usage observation is unavailable; this is not a zero call.
+        missing_key = (child, "ca2")
+        self.assertEqual(
+            1, sum((inv.session_id, inv.message_id) == missing_key for inv in loaded.invocations)
+        )
+        snapshot = replace(loaded, invocations=tuple(
+            inv for inv in loaded.invocations if (inv.session_id, inv.message_id) != missing_key
+        ))
+
+        bundle, block = self.project(snapshot)
+
+        record, = bundle.prompts
+        self.assertEqual(
+            [("mixed", "usage-unavailable")],
+            [(item.attribution, item.state) for item in record.agent_coverage if item.session_id == child],
+        )
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2"), (child, "ca")],
+            [(e.session_id, e.message_id) for e in record.entries],
+        )
+        row, = block.rows
+        self.assertEqual((D(224), 3), (row.ccost, record.model_calls))
+        card = WatchCard(root, "Synthetic", "u1", (WatchRow(root, "Synthetic", row),), "observed")
+        detail, = with_display(
+            export_block(block, details=True), now_ms=20_000
+        ).to_json()["rows"]
+        live = project_live(WatchProjection(
+            "Watch", "Synthetic", (), now_ms=20_000,
+            active_cards=(card,), history_cards=(replace(card, focal_id=""),),
+        )).to_json()
+        for name, view in (
+            ("detail", detail),
+            ("active", live["active_cards"][0]["rows"][0]["prompt"]),
+            ("history", live["history_cards"][0]["rows"][0]["prompt"]),
+        ):
+            with self.subTest(view=name):
+                self.assertEqual((D(224), 3), (D(view["ccost"]), view["calls"]))
+                self.assertIs(view["unresolved_cost"], True)
+                display = view["display"]
+                self.assertEqual(
+                    "Linked child usage/cost unverified. Shown reference CCost covers "
+                    "observed usage, not a proven zero upstream bill.",
+                    display["mini_cost_coverage_help"],
+                )
+                self.assertIn("102 Credits", display["cost_detail_help"])
+                self.assertIn("Request usage unavailable", display["cost_detail_help"])
+                self.assertIn("Verified and timing-inferred work", display["cost_detail_help"])
+
+    def test_idless_background_end_releases_only_a_unique_message_and_start_match(self):
+        root, child = "ses_current", "ses_current_child"
+        with incident_source(background=True, end=3250) as (source, server):
+            server.messages[root].extend((user("u2", 5000), assistant("a3", 5100, 6500)))
+            server.messages[child].extend((
+                user("cu2", 5300),
+                assistant("ca2", 5400, 5550, model="claude-test"),
+            ))
+            loaded = source.load_session_snapshot(root)
+
+        physical = [(inv.session_id, inv.message_id) for inv in loaded.invocations]
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2"), (root, "a3"), (child, "ca"), (child, "ca2")],
+            physical,
+        )
+        parent = next(m for m in loaded.messages if (m.session_id, m.message_id) == (root, "a1"))
+        native = next(p for p in parent.parts if p.kind == "tool")
+        for start, second_keys, second_cost in (
+            (3200, [(root, "a3")], 61),
+            (3230, [(root, "a3"), (child, "ca2")], 163),
+        ):
+            with self.subTest(custom_start=start):
+                custom = replace(
+                    native, part_id="custom", created_at_ms=start, updated_at_ms=3250,
+                    data={
+                        "tool": "custom-worker", "callID": "another",
+                        "state": {
+                            "status": "completed", "input": {"background": True},
+                            "time": {"start": start, "end": 3250},
+                        },
+                    },
+                )
+                messages = tuple(
+                    replace(m, parts=(*m.parts, custom)) if m == parent else m for m in loaded.messages
+                )
+                ended = BackgroundActivity(
+                    "id-less", root, "custom-job", start, "a1", running=False, ended_at_ms=4600
+                )
+                frame = replace(
+                    loaded, messages=messages, parts=tuple(p for m in messages for p in m.parts),
+                    background=(*loaded.background, ended),
+                )
+
+                bundle, block = self.project(frame)
+
+                first, second = bundle.prompts
+                self.assertCountEqual(
+                    [(root, "a1"), (root, "a2"), (child, "ca")],
+                    [(e.session_id, e.message_id) for e in first.entries],
+                )
+                self.assertIn(
+                    (child, "verified"), [(a.session_id, a.attribution) for a in first.agent_coverage]
+                )
+                self.assertCountEqual(second_keys, [(e.session_id, e.message_id) for e in second.entries])
+                self.assertEqual((D(224), D(second_cost)), tuple(row.ccost for row in block.rows))
+
+    def test_equal_root_prompt_timestamps_do_not_resolve_child_ownership_by_sort_order(self):
+        root, child = "ses_current", "ses_current_child"
+        with incident_source() as (source, server):
+            server.messages[root] = [
+                user("u1", 3000),
+                user("u2", 3000),
+                assistant("a1", 3100, 4000),
+                assistant("a2", 3150, 4100),
+            ]
+            loaded = source.load_session_snapshot(root)
+
+        # The flattened V2 fixture relinks both assistants to the last user.
+        # Give each root request an explicit owner at both normalized layers.
+        owners = {"a1": "u1", "a2": "u2"}
+        snapshot = replace(
+            loaded,
+            messages=tuple(
+                replace(m, parent_message_id=owners[m.message_id])
+                if m.session_id == root and m.message_id in owners else m
+                for m in loaded.messages
+            ),
+            invocations=tuple(
+                replace(inv, initiating_event_id=owners[inv.message_id])
+                if inv.session_id == root and inv.message_id in owners else inv
+                for inv in loaded.invocations
+            ),
+        )
+
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2"), (child, "ca")],
+            [(inv.session_id, inv.message_id) for inv in snapshot.invocations],
+        )
+        bundle, block = self.project(snapshot)
+
+        self.assertEqual(2, len(bundle.prompts))
+        self.assertCountEqual(
+            [(root, "a1"), (root, "a2")],
+            [(e.session_id, e.message_id) for r in bundle.prompts for e in r.entries],
+        )
+        self.assertEqual([1, 1], [r.model_calls for r in bundle.prompts])
+        self.assertEqual([D(61), D(61)], [row.ccost for row in block.rows])
+
+    def test_matching_child_id_parent_and_timing_cannot_cross_source_instances(self):
+        root, child = "ses_current", "ses_current_child"
+        with incident_source(name="custom-worker") as (source, server):
+            # Include a child part so its nested and flat representations both
+            # participate in the same source-identity change.
+            server.messages[child][1] = assistant(
+                "ca", 3400, 3800, model="claude-test",
+                content=[{
+                    "type": "tool", "id": "child-read", "callID": "child-read-call",
+                    "name": "read", "time": {"created": 3500, "ran": 3500, "completed": 3600},
+                    "state": {"status": "completed", "input": {}, "output": "done"},
+                }],
+            )
+            local = source.load_session_snapshot(root)
+
+        self.assertTrue(any(p.session_id == child for p in local.parts))
+        foreign_instance = local.root.provenance.source_instance + "-other"
+
+        def move_child(entity):
+            if entity.session_id != child:
+                return entity
+            return replace(entity, provenance=replace(entity.provenance, source_instance=foreign_instance))
+
+        foreign = replace(
+            local,
+            sessions=tuple(move_child(s) for s in local.sessions),
+            messages=tuple(
+                replace(move_child(m), parts=tuple(move_child(p) for p in m.parts))
+                for m in local.messages
+            ),
+            parts=tuple(move_child(p) for p in local.parts),
+            events=tuple(move_child(e) for e in local.events),
+            invocations=tuple(move_child(inv) for inv in local.invocations),
+        )
+
+        for name, snapshot, child_calls, expected_cost in (
+            ("same instance", local, [(child, "ca")], 224),
+            ("foreign instance", foreign, [], 122),
+        ):
+            with self.subTest(source=name):
+                bundle, block = self.project(snapshot)
+                record, = bundle.prompts
+                self.assertCountEqual(
+                    [(root, "a1"), (root, "a2"), *child_calls],
+                    [(entry.session_id, entry.message_id) for entry in record.entries],
+                )
+                self.assertEqual(2 + len(child_calls), record.model_calls)
+                row, = block.rows
+                self.assertEqual(D(expected_cost), row.ccost)
 
     def test_reusing_a_background_child_opens_a_new_window_without_cross_prompt_charges(self):
         with incident_source(background=True, end=3250) as (source, server):

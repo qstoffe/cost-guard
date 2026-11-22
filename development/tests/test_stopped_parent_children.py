@@ -176,6 +176,36 @@ class StoppedParentChildrenTests(unittest.TestCase):
             self.assertEqual(("ses_current_child",), old.linked_session_ids)
             self.assertEqual((), new.linked_session_ids)
 
+    def test_stale_running_parent_part_tracks_continuation_but_releases_on_independent_turn(self):
+        with incident_source(end=0) as (source, server):
+            stop_parent(server)
+            child = "ses_current_child"
+            server.messages[child].extend((
+                {"id": "compact-child", "type": "compaction", "time": {"created": 4200}},
+                assistant("continued", 4300, None, model="claude-test"),
+            ))
+            server.active = {child: {"type": "running"}}
+            continuing = source.load_session_snapshot("ses_current")
+
+            server.messages[child][-1] = assistant("continued", 4300, 4800, model="claude-test")
+            server.messages[child].extend((
+                user("independent", 5100),
+                assistant("other", 5200, None, model="claude-test"),
+            ))
+            # Deliberately leave the active bit and the original running tool
+            # unchanged. Only the identity of the live child turn has changed.
+            independent = source.load_session_snapshot("ses_current")
+
+        bound, = analyze_snapshot(continuing, now_ms=4600).prompts
+        released, = analyze_snapshot(independent, now_ms=5500).prompts
+
+        self.assertTrue(bound.subagent_active)
+        self.assertTrue(bound.in_progress)
+        self.assertFalse(released.subagent_active)
+        self.assertFalse(released.in_progress)
+        self.assertEqual("cancellation", bound.parent_outcome)
+        self.assertEqual("cancellation", released.parent_outcome)
+
     def test_active_compaction_does_not_suppress_original_child(self):
         with incident_source() as (source, server):
             stop_parent(server)

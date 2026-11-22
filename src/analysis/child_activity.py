@@ -26,6 +26,9 @@ def descendant_activity(snapshot, children, scopes):
         by_session.setdefault(message.session_id, []).append(message)
     active = unverified = False
     for scope in scopes:
+        if scope.native_activity_only:
+            active = True
+            continue
         session = sessions[scope.session_id]
         messages = children.messages((scope,))
         latest = max(messages, key=lambda item: (item.created_at_ms, item.message_id), default=None)

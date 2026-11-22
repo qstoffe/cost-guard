@@ -6,7 +6,7 @@ from .contracts import record
 from .effort_help import effort_help
 
 
-def mini_groups(parts, *, complete=True):
+def mini_groups(parts, *, complete=True, attribution=None):
     groups = {}
     for part in parts:
         models = part.selected_models or (part.model_id,)
@@ -16,14 +16,16 @@ def mini_groups(parts, *, complete=True):
                           if part.provider_id and model) or "N/A"
         effort = " / ".join(dict.fromkeys(effort_help(value, explicit=part.effort)
             for value in part.effort_evidence)) if part.effort_evidence else part.effort or "N/A"
-        key = (bool(part.agent), model, effort)
+        basis = attribution.get(part.agent, "") if attribution else ""
+        key = (bool(part.agent), model, effort, basis)
         value = groups.setdefault(key, [Decimal(0), 0, complete])
         value[0] += part.known_ccost
         value[1] += part.priced_requests
         value[2] = value[2] and part.complete
     return tuple(record(subagent=child, model=model, effort=effort,
-        known_ccost=amount, priced_requests=priced, complete=covered)
-        for (child, model, effort), (amount, priced, covered) in sorted(groups.items()))
+         known_ccost=amount, priced_requests=priced, complete=covered,
+         **({"attribution": basis} if basis else {}))
+         for (child, model, effort, basis), (amount, priced, covered) in sorted(groups.items()))
 
 
 def mini_cost_tokens(values):
@@ -37,7 +39,10 @@ def mini_cost_tokens(values):
         cost = ccost_amount(Decimal(part["known_ccost"])) if ready else "N/A"
         if ready and ccost_unit() == "credits":
             cost += " Credits"
-        models.append((label, f"{part['model']} — {part['effort']}"))
+        model = f"{part['model']} — {part['effort']}"
+        if part.get("attribution"):
+            model += f" ({part['attribution']})"
+        models.append((label, model))
         amounts.append(cost)
         evidence.append(ready)
     if values.get("mini_missing_agents", 0) and ("Sub Agents", "N/A — N/A") not in models:

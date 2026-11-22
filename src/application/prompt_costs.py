@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from src.domain.effort import bounded_evidence
 from .contracts import record
-from .model_help import request_model_help
+from .model_help import attribution_label, request_model_help
 from .reference_cost import issue_records
 from .effort_help import evidence_record, evidence_help
 from .mini_costs import mini_groups
@@ -31,6 +31,9 @@ def watch_calls(row):
     missing = any(agent.state not in {"usage-observed", "not-executed"} for agent in row.agent_coverage)
     if observed != row.calls or missing or row.linked_agent_count and not row.cost_parts:
         lines.append("Unknown/unattributed requests: partial model/effort evidence.")
+    for index, agent in enumerate(row.agent_coverage[:MAX_PARTS], 1):
+        if label := attribution_label(agent.attribution):
+            lines.append(f"Subagent {index} — {label}")
     return "\n".join(lines) or "Model/effort request details unavailable."
 
 
@@ -75,7 +78,10 @@ def cost_detail(row):
     agents = tuple(record(agent=index + 1, state=agent.state)
         for index, agent in enumerate(row.agent_coverage))
     known_agents = {part.agent for part in row.cost_parts}
-    missing = tuple(agent for agent in agents if dict(agent.fields)["agent"] not in known_agents)
+    missing = tuple(agent for agent in agents if dict(agent.fields)["agent"] not in known_agents
+                    or dict(agent.fields)["state"] not in {"usage-observed", "not-executed"})
+    attributed = tuple(record(agent=index, label=attribution_label(agent.attribution))
+        for index, agent in enumerate(row.agent_coverage, 1) if agent.attribution != "verified")
     by_agent = {}
     for part in parts:
         value = dict(part.fields)
@@ -94,21 +100,22 @@ def cost_detail(row):
             if part.provider_id and part.model_id}),
         group_count=len(parts), observed_calls=observed_calls,
         calls_complete=bool(parts) and observed_calls == row.calls and
-            (not missing_agents or bool(agents) and all(dict(agent.fields)["state"] in {"usage-observed", "not-executed"}
-                for agent in agents)),
+            (bool(agents) and all(agent.state in {"usage-observed", "not-executed"} for agent in row.agent_coverage)
+             or not agents and not missing_agents),
         agents_without_usage=missing_agents,
         missing_agents=missing[:MAX_PARTS], omitted_agents=max(0, len(missing) - MAX_PARTS),
         agent_totals=totals,
+        attributed_agents=attributed[:MAX_PARTS],
         linked_agent_count=row.linked_agent_count)
 
 
 def mini_cost_detail(row):
-    missing = sum(agent.state != "not-executed" and not any(
-        part.agent == index + 1 for part in row.cost_parts)
-        for index, agent in enumerate(row.agent_coverage))
+    missing = sum(agent.state not in {"usage-observed", "not-executed"} for agent in row.agent_coverage)
     if not row.agent_coverage:
         missing = max(0, row.linked_agent_count - len({part.session_id for part in row.cost_parts if part.agent}))
-    return (("mini_cost_groups", mini_groups(row.cost_parts, complete=not row.unresolved_cost)),
+    return (("mini_cost_groups", mini_groups(row.cost_parts, complete=not row.unresolved_cost,
+            attribution={index: attribution_label(agent.attribution)
+                         for index, agent in enumerate(row.agent_coverage, 1)})),
             ("mini_missing_agents", missing))
 
 
@@ -117,10 +124,14 @@ def detail_tokens(values):
     if detail is None:
         return {}
     detail = dict(detail.fields)
+    attributed_agents = (dict(value.fields) for value in detail.get("attributed_agents", ()))
+    attribution = {agent["agent"]: agent["label"] for agent in attributed_agents}
     models, calls, main_models, efforts = [], [], [], []
     for part in detail["parts"]:
         part = dict(part.fields)
         owner = "Main prompt" if part["role"] == "main" else f"Subagent {part['agent']}"
+        if label := attribution.get(part["agent"]):
+            owner += f" ({label})"
         identity_help = request_model_help(part['provider_id'], part['selected_models'] or (part['model_id'],),
             catalog_model=part['model_id'] if part.get('catalog_estimate') else None)
         identity, _, note = identity_help.partition('\n')

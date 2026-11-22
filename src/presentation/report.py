@@ -264,6 +264,12 @@ class ReportRenderer:
                     total_text=total_text,
                 ), "", "", "", "", "", "", ""))
                 styles.append((None,) * 8)
+            if any(agent.attribution != "verified" for agent in item.agent_coverage):
+                note = "Some subagent work linked by prompt timing; not verified by a tool call."
+                if any(agent.state not in {"usage-observed", "not-executed"} for agent in item.agent_coverage):
+                    note += " Some request usage is unavailable."
+                rows.append((note, "", "", "", "", "", "", ""))
+                styles.append((None,) * 8)
 
         total_index = len(rows)
         rows.append((

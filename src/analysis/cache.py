@@ -17,7 +17,7 @@ from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_curr
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 from .model_identity import encode_model, decode_model
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-22-owned-child-lifecycle"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-23-child-prompt-attribution"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
