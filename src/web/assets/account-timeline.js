@@ -262,6 +262,13 @@ const AccountTimelineView = (() => {
       if (!this.archived || !hint) return;
       const previous = this.hint;
       this.hint = hint;
+      clearTimeout(this.proofTimer);
+      const remaining = Number.isFinite(hint.proof_expires_ms) ? hint.proof_expires_ms - Date.now() : null;
+      if (remaining != null && remaining <= 0) {
+        this.setScope(null);
+        return;
+      }
+      if (remaining != null) this.proofTimer = setTimeout(() => this.setScope(null), remaining);
       if (this.scope !== hint.scope) {
         this.setScope(hint.scope);
       } else if (hint.scope && (hint.marks?.[this.period] !== previous?.marks?.[this.period] || resync && this.cacheError)) {
@@ -271,6 +278,7 @@ const AccountTimelineView = (() => {
     }
 
     invalidate() {
+      clearTimeout(this.proofTimer);
       this.selected.clear();
       this.colors.clear();
       this.setScope(null);
@@ -415,6 +423,10 @@ const AccountTimelineView = (() => {
     }
 
     draw() {
+      if (this.archived && this.scope && this.hint?.proof_expires_ms <= Date.now()) {
+        this.setScope(null);
+        return;
+      }
       clearTimeout(this.expiryTimer);
       let cached = this.cache.get(this.period);
       if (this.archived && Number.isFinite(cached?.expires)) {

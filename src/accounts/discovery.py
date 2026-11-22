@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .credentials import CredentialRecord, CredentialView, read_credentials
+from .claude_code import ClaudeCodeAccountProvider
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,8 +24,10 @@ def _stamp(path: Path | None) -> tuple[object, ...]:
     try:
         stat = path.stat()
         return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
-    except OSError:
+    except FileNotFoundError:
         return (None,)
+    except OSError:
+        return (object(),)  # Never cache an unreadable path as a missing file.
 
 
 class AccountDiscovery:
@@ -38,15 +41,24 @@ class AccountDiscovery:
         self._views: dict[tuple[Path, Path | None], tuple[object, CredentialView]] = {}
         self.failed_slots: set[int] = set()
         self._identities: dict[int, tuple[tuple[CredentialRecord, ...], int]] = {}
+        self.archive_eligible = False
+        self.archive_adapter = None
 
     def discover(self) -> tuple[AccountCandidate, ...]:
         result = []
+        archive_eligible = True
+        archive_adapter = None
         self.failed_slots.clear()
         for slot, provider in enumerate(self.providers):
             if not getattr(provider, "enabled", True):
                 continue
             ids = getattr(provider, "integration_ids", None)
-            if not isinstance(ids, (tuple, list)) or not all(isinstance(value, str) for value in ids) or not hasattr(provider, "auth_json_path"):
+            if (not isinstance(ids, (tuple, list)) or not ids
+                    or not all(isinstance(value, str) for value in ids) or not hasattr(provider, "auth_json_path")):
+                if type(provider) is ClaudeCodeAccountProvider and archive_adapter is None:
+                    archive_adapter = slot, provider
+                else:
+                    archive_eligible = False
                 result.append(AccountCandidate(slot, provider, None))
                 continue
             auth, db = provider.auth_json_path, provider.credential_db_path
@@ -56,6 +68,8 @@ class AccountDiscovery:
             if view is None or view[0] != stamp:
                 view = (stamp, read_credentials(auth, db, None))
                 self._views[key] = view
+            if not view[1].archive_complete or view[1].present_integrations.intersection(ids):
+                archive_eligible = False
             if not view[1].healthy:
                 self.failed_slots.add(slot)
                 if getattr(provider, "provider_id", None) == "openai":
@@ -72,6 +86,8 @@ class AccountDiscovery:
                 pinned = copy(provider)
                 pinned.credential_records = records
                 result.append(AccountCandidate(slot, pinned, (key, generation), records))
+        self.archive_eligible = archive_eligible
+        self.archive_adapter = archive_adapter
         return tuple(result)
 
     def close(self) -> None:

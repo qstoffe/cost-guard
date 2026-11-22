@@ -11,6 +11,8 @@ from src.application.account_timeline import archived_timeline_view
 from src.application.archive_account_history import (
     AccountHistoryPublication, ArchiveAccountHistory, archived_account_roster, roster_signature,
 )
+from src.reports.accounts import account_display_labels
+from src.reports.models import AccountProjection
 
 
 def _valid_until(period, now_ms, zone, rows, view):
@@ -28,7 +30,8 @@ class DisplayAccounts:
         self.archive = archive
         self._publish = publish
         self._clock = clock
-        self._state = None  # Live-owned offer; catalog navigation never mutates it.
+        self._state = None  # Background identity offer; catalog navigation never mutates it.
+        self._deadline = None
         self._building = None
         self._probe_at = 0
         self._last_offer = None
@@ -37,26 +40,48 @@ class DisplayAccounts:
 
     def offer(self, accounts, *, verified):
         """Native quota/balance data do not cross into the historical archive."""
+        target = self.target()
+        if target is not None and verified:
+            self._offer(target, accounts, None)
+
+    def target(self):
         views = self.archive.views
-        if views is None or not verified:
-            return  # Transient outage can still serve already committed history.
+        return (views, self.archive.sessions.clear_fence) if views is not None else None
+
+    def offer_identity(self, target, account, deadline):
+        """Accept only a result pinned before the status observation began."""
+        snapshots = (account,) if account is not None and account.ref.account_id and deadline is not None else ()
+        accounts = tuple(AccountProjection(snapshot, label) for snapshot, label in account_display_labels(snapshots))
+        self._offer(target, accounts, deadline)
+
+    def _offer(self, target, accounts, deadline):
         try:
             roster = archived_account_roster(accounts)
             labels = tuple((bytes.fromhex(dependency_signature(item.account.key)), str(item.label)[:256])
                            for item in accounts if roster is not None)
         except ValueError:
-            return  # An unqualified account list cannot invalidate a saved roster.
+            roster, labels = None, ()
         labels = tuple(dict(labels).items())
-        binding = self.archive.sessions.clear_fence
         with self._signal:
-            if self.archive.views is not views or self.archive.sessions.clear_fence != binding:
+            if self.target() != target:
                 return
-            if roster is None:
-                self._reset()
-            elif self._state is None or self._state[:4] != (views, binding, roster, labels):
-                self._state = (views, binding, roster, labels, uuid4().hex)
+            if not roster:
+                if self._state is not None:
+                    self._reset()
+                return
+            state = (*target, roster, labels)
+            changed = self._state is None or self._state[:4] != state or not self._current()
+            renewed = deadline != self._deadline
+            if changed:
+                self._state = (*state, uuid4().hex)
                 self._marks = {}
+            self._deadline = deadline
+            if changed or renewed:
                 self._announce(self._state[4])
+
+    def _current(self):
+        deadline = self._deadline
+        return deadline is None or deadline.active(self._clock(), int(time.time() * 1000))
 
     def pending(self):
         return self._last_offer is not self._state or (
@@ -73,11 +98,15 @@ class DisplayAccounts:
 
     def _reset(self):
         self._state = None
+        self._deadline = None
         self._marks = {}
         self._announce(self.scope())
 
     def _announce(self, scope):
-        self._publish("accounts-cache", dict(scope=scope, marks=self._marks.copy()))
+        value = dict(scope=scope, marks=self._marks.copy())
+        if self._deadline is not None:
+            value["proof_expires_ms"] = self._deadline.wall_ms
+        self._publish("accounts-cache", value)
 
     def snapshot(self, period, now_ms):
         views = self.archive.views
@@ -89,7 +118,7 @@ class DisplayAccounts:
         def eligible():
             return self._state is state and self.archive.views is views and self.archive.sessions.clear_fence == fence
 
-        if state is None:
+        if state is None or not self._current():
             # A verified source, without a current provider roster, may read
             # an empty chart but must not borrow an archived account identity.
             self.archive.history.source_state(views.source)
@@ -110,7 +139,7 @@ class DisplayAccounts:
                 if view is not None:
                     view = view.to_json()
                     expires = _valid_until(period, now_ms, views.timezone_id, rows, view)
-        if not eligible():
+        if not eligible() or not self._current():
             return None
         return dict(scope=scope, revision=value[1] if view is not None else 0, expires_ms=expires,
                     view=view,
@@ -122,7 +151,7 @@ class DisplayAccounts:
         if views is None:
             return None
         state = self._state
-        if state is None:
+        if state is None or not self._current():
             return views.binding
         return state[4] if state[:2] == (views, self.archive.sessions.clear_fence) else None
 
@@ -137,7 +166,7 @@ class DisplayAccounts:
 
         def eligible():
             return (self._state is state and self.archive.views is views and
-                    self.archive.sessions.clear_fence == fence and active())
+                    self.archive.sessions.clear_fence == fence and self._current() and active())
 
         if not eligible():
             self._building = None

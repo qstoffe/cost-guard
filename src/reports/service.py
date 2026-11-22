@@ -269,6 +269,13 @@ class ReportService:
         if self._account_work.start(self.now_ms):
             self.progress("Checking account quotas")
 
+    def start_account_archive(self, target, publish) -> None:
+        """Start the existing Watch account owner before the first source-history turn."""
+        if self._watch_accounts and self._account_work is None:
+            self._account_work = AccountRefreshLoop(self.account_providers, self.source.source_id,
+                evidence_sink=self._record_account_refresh, archive_target=target, archive_publish=publish)
+            self._account_work.start(self.now_ms)
+
     def poll_account_refresh(self) -> AccountUpdate | None:
         if self._account_work is None:
             return None

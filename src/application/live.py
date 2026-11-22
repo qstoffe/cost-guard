@@ -58,6 +58,11 @@ class LiveRuntime:
             timeline_due = publication_due
             coordinator = driver.coordinator
             timeline = getattr(coordinator, 'account_timeline', None) if self.timeline_demand is not None else None
+            accounts = self.display_archive.accounts if self.display_archive is not None else None
+            if accounts is not None:
+                service = coordinator.report_service
+                if callable(getattr(type(service), "start_account_archive", None)):
+                    service.start_account_archive(accounts.target, accounts.offer_identity)
             frame = None
             while not self.stopping.is_set():
                 now = time.monotonic()
@@ -152,9 +157,6 @@ class LiveRuntime:
             quota_hint = self.display_archive.publish_live(running, frame if verified else None, driver.observed_at_ms,
                 account_refresh=refresh if isinstance(refresh, WatchAccountRefresh) else None,
                 source_unavailable=driver.error is not None)
-        if verified and self.display_archive is not None:
-            if self.display_archive.accounts is not None and frame.quota is not None and not frame.quota_stale:
-                self.display_archive.accounts.offer(frame.quota.accounts, verified=True)
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
             self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),

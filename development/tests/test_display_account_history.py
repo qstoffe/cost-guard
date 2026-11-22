@@ -3,9 +3,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 from types import SimpleNamespace
 import unittest
 
+from src.accounts.archive_identity import IdentityDeadline
 from src.analysis.cache import dependency_signature
 from src.application.account_timeline import archived_timeline_view
 from src.application.archive_account_history import AccountHistoryPublication, ArchiveAccountHistory, archived_account_roster
@@ -204,3 +206,26 @@ class DisplayAccountHistoryTests(unittest.TestCase):
         self.assertEqual("3", shifted["series"][0]["total"]["amount"])
         self.assertEqual([midnight, midnight + day], list(boundary["buckets"][0]))
         self.assertEqual("3", boundary["series"][0]["total"]["amount"])
+
+    def test_identity_deadline_and_new_binding_reject_late_offers(self):
+        archive = DisplayArchive(self.root, lambda *_: None, accounts_enabled=True)
+        self.addCleanup(archive.close)
+        archive._set_binding(DisplayBinding("trusted", "first"))
+        accounts = archive.accounts
+        tick = [10]
+        accounts._clock = lambda: tick[0]
+        first = accounts.target()
+        account = AccountSnapshot(REF, NOW, "OpenAI")
+        proof = IdentityDeadline(11, int(time.time() * 1000) + 60_000)
+
+        accounts.offer_identity(first, account, proof)
+        self.assertTrue(accounts.snapshot("today", NOW)["ready"])
+        tick[0] = 11
+        self.assertEqual((), accounts.snapshot("today", NOW)["series"])
+        archive._set_binding(DisplayBinding("trusted", "second"))
+        accounts.offer_identity(first, account, IdentityDeadline(12, proof.wall_ms))
+
+        withheld = accounts.snapshot("today", NOW)
+        self.assertEqual(archive.views.binding, accounts.scope())
+        self.assertEqual((), withheld["series"])
+        self.assertFalse(withheld["ready"])
