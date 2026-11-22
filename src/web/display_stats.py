@@ -5,7 +5,7 @@ from threading import Lock
 from src.analysis.ai_stats import scope_rollover, windows
 from src.application.archive_stats_refresh import ArchiveStatsRefresh
 from src.cache.display_stats_tokens import StatsTokenPublication
-from src.presentation.cached_stats import cached_stats
+from src.presentation.cached_stats import cached_stats, cached_stats_units
 
 
 class DisplayStats:
@@ -82,8 +82,11 @@ class DisplayStats:
                      measured_calendar=asdict(calendar) if calendar else None,
                      measured_root_time=asdict(roots) if roots else None,
                      observed_tokens=str(token_row.observed) if token_row and token_row.observed is not None else None,
+                     reference_ccost=str(token_row.reference_ccost)
+                         if token_row and token_row.reference_ccost is not None else None,
                      tokens_as_of_ms=token_as_of,
-                     display=cached_stats(value.row if value else None, token_row), coverage="unknown")
+                     display=cached_stats(value.row if value else None, token_row),
+                     display_units=cached_stats_units(token_row), coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()

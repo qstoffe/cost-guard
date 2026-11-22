@@ -1,42 +1,18 @@
 """Reduce stable archive slices, without source or counterfactual valuation."""
 from dataclasses import dataclass, field, replace
-from decimal import Decimal
 
 from src.analysis.ai_stats import windows
 from src.analysis.token_mix import MIX_FIELDS, TokenMix, summarize_token_mix
 from src.cache.display_mix_totals import MixTotalRow
 
-
-@dataclass(slots=True)
-class _ExactCost:
-    """Use integer coefficients, independent of Decimal's ambient context."""
-    coefficient: int = 0
-    exponent: int = 0
-
-    def add(self, value):
-        if not value.is_finite() or value < 0:
-            raise ValueError("invalid_archive_category_cost")
-        _, digits, exponent = value.as_tuple()
-        if not any(digits):
-            return
-        contribution = int("".join(map(str, digits)))
-        if not self.coefficient:
-            self.coefficient, self.exponent = contribution, exponent
-        else:
-            common = min(self.exponent, exponent)
-            self.coefficient = (self.coefficient * 10 ** (self.exponent - common) +
-                                contribution * 10 ** (exponent - common))
-            self.exponent = common
-
-    def amount(self):
-        return Decimal((0, tuple(map(int, str(self.coefficient))), self.exponent))
+from .archive_exact_cost import ExactCost
 
 
 @dataclass(slots=True)
 class MixAccumulator:
     counts: list[int] = field(default_factory=lambda: [0] * 4)
     observed: list[int] = field(default_factory=lambda: [0] * 4)
-    costs: tuple[_ExactCost, ...] = field(default_factory=lambda: tuple(_ExactCost() for _ in range(4)))
+    costs: tuple[ExactCost, ...] = field(default_factory=lambda: tuple(ExactCost() for _ in range(4)))
     known: int = 0b1111
     requests: int = 0
     priced: int = 0

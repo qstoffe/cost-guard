@@ -3,13 +3,23 @@ from datetime import date
 
 from src.analysis.timezones import DateTimeMode, format_date_time
 from src.display import compact_tokens, duration_text
+from src.numbers import ccost_amount
 
 
 def cached_stats(row, token_row):
     result = _measured_stats(row)
-    if token_row is not None and token_row.observed is not None:
-        result["tokens"] = compact_tokens(token_row.observed)
+    if token_row is not None:
+        if token_row.observed is not None:
+            result["tokens"] = compact_tokens(token_row.observed)
+        if token_row.reference_ccost is not None:
+            result["referenceCost"] = ccost_amount(token_row.reference_ccost, unit="credits")
     return result
+
+
+def cached_stats_units(token_row):
+    if token_row is None or token_row.reference_ccost is None:
+        return {}
+    return {"usd": {"referenceCost": ccost_amount(token_row.reference_ccost, unit="usd")}}
 
 
 def _measured_stats(row):

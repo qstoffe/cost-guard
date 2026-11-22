@@ -1,6 +1,7 @@
 """Token subtotals on the existing catalog executor; no source or pricing work."""
 from src.cache.display_stats_tokens import StatsTokenRow, StatsTokenStamp
 
+from .archive_exact_cost import ExactCost
 from .archive_stats_population import ArchiveStatsPopulation, PopulationState
 
 
@@ -25,10 +26,17 @@ class ArchiveStatsTokens:
 
         page = self._population.page(self._period, after=self._cursor)
         self._requests += len(page.keys)
-        for observed, gap in page.observations:
-            self._usage_gaps |= gap
-            if observed is not None:
-                self._subtotal = (self._subtotal or 0) + observed
+        for observation in page.observations:
+            self._usage_gaps |= observation.usage_gap
+            if observation.tokens is not None:
+                self._subtotal = (self._subtotal or 0) + observation.tokens
+            if observation.ccost is not None:
+                self._cost.add(observation.ccost)
+                self._priced += 1
+            if observation.pricing is not None:
+                if self._price is None:
+                    self._price = observation.pricing
+                self._mixed_prices |= self._price != observation.pricing
         self._cursor = page.next_cursor
         if self._cursor is not None:
             return True
@@ -36,7 +44,9 @@ class ArchiveStatsTokens:
         population_gap = self._period in self._population.gaps
         self._rows.append(StatsTokenRow(self._period, self.scopes[self._period],
                                        None if population_gap else self._subtotal, self._requests,
-                                       self._usage_gaps, population_gap))
+                                       self._usage_gaps, population_gap,
+                                       self._cost.amount() if self._priced and not (population_gap or self._mixed_prices)
+                                       else None, self._priced, self._mixed_prices))
         self._next_period()
         if self._period is not None:
             return True
@@ -48,6 +58,7 @@ class ArchiveStatsTokens:
     def _next_period(self):
         self._period = next(self._periods, None)
         self._subtotal, self._requests, self._usage_gaps = None, 0, False
+        self._cost, self._priced, self._price, self._mixed_prices = ExactCost(), 0, None, False
 
     def close(self):
         self._population.close()

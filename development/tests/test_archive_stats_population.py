@@ -1,5 +1,6 @@
 """Period population precedence over the real source-fenced display archive."""
 from dataclasses import replace
+from decimal import Decimal, localcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -37,9 +38,10 @@ class ArchiveStatsPopulationTests(TestCase):
         return replace(self.request, key=key, clock_ms=clock, dedup_tree=root, session_id=root,
                        ordinal=ordinal, response=None, fork_key=fork, stats_identity=identity)
 
-    def record(self, root, requests, *, intervals=(), previous=None, pending=False):
+    def record(self, root, requests, *, intervals=(), previous=None, pricing=None, pending=False):
         revision = "second" if previous else "first"
         roster = replace(self.template, requests=requests, attribution=(), prompts=None,
+                         pricing=pricing or self.template.pricing,
                          stats=StatsCapture(intervals, pending, None, ((root, None),)))
         self.history.commit_sessions("source", (SessionChange(
             SessionFact(root, revision, root), previous, previous_progress=int(previous is not None),
@@ -179,3 +181,66 @@ class ArchiveStatsPopulationTests(TestCase):
         row, _ = self.history.stats_view("source", "UTC", "all", None, NOW)[1]
         self.assertTrue(row.population_gaps)
         self.assertIsNone(row.observed)
+
+    def test_old_missing_recipe_does_not_blank_provably_unrelated_recent_scopes(self):
+        recent = replace(self.request_for("recent", b"known"), tokens=(10, 0, 0, 0, 0), known=0b1111)
+        old = replace(self.request_for("old", b"lost", clock=START - 2 * DAY), stats_identity=None)
+        self.record("recent", (recent,))
+        self.record("old", (old,))
+
+        self.publish_tokens()
+
+        today = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        lifetime = self.history.stats_view("source", "UTC", "all", None, NOW)[1][0]
+        self.assertEqual((10, False), (today.observed, today.population_gaps))
+        self.assertEqual((None, True), (lifetime.observed, lifetime.population_gaps))
+
+    def test_reference_subtotal_is_exact_and_ignores_billed_only_requests(self):
+        full = replace(self.request_for("root", b"known"), category_costs=tuple(
+            map(Decimal, ("0.7", "0.00000000000000000000015", "0", "0.05"))))
+        billed = replace(self.request_for("root", b"billed"), category_costs=None,
+                         billed=Decimal("20"), currency="USD", disposition="billed")
+        self.record("root", (full, billed), pricing="reference-v1")
+
+        with localcontext() as ctx:
+            ctx.prec = 8
+            self.publish_tokens()
+
+        row = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        self.assertEqual((Decimal("0.75000000000000000000015"), 1, 2),
+                         (row.reference_ccost, row.priced, row.requests))
+
+    def test_different_reference_signatures_withhold_only_ascribed_scope_cost(self):
+        current = replace(self.request_for("new", b"new"), category_costs=(Decimal(".1"),) * 4)
+        prior = replace(self.request_for("old", b"old", clock=START - DAY), category_costs=(Decimal(".2"),) * 4)
+        self.record("new", (current,), pricing="price-new")
+        self.record("old", (prior,), pricing="price-old")
+
+        self.publish_tokens()
+
+        today = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        lifetime = self.history.stats_view("source", "UTC", "all", None, NOW)[1][0]
+        self.assertEqual(Decimal("0.4"), today.reference_ccost)
+        self.assertIsNotNone(lifetime.observed)
+        self.assertTrue(lifetime.mixed_prices)
+        self.assertIsNone(lifetime.reference_ccost)
+
+    def test_v25_retains_token_subtotal_and_leaves_reference_cost_due_for_replay(self):
+        current = replace(self.request_for("root", b"root"), category_costs=(Decimal(".1"),) * 4)
+        self.record("root", (current,), pricing="reference-v1")
+        self.publish_tokens()
+        prior = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        with self.history._connect() as db:
+            for column in ("reference_ccost", "priced", "mixed_prices"):
+                db.execute(f"ALTER TABLE archive_stats_tokens DROP COLUMN {column}")
+            db.execute("PRAGMA user_version=25")
+
+        self.history = DisplayHistory(self.history.path.parent.parent)
+        self.history.initialize()
+
+        upgraded = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        self.assertEqual(prior.observed, upgraded.observed)
+        self.assertIsNone(upgraded.reference_ccost)
+        self.assertTrue(self.history.stats_tokens_due("source", "UTC", self.build.scopes, NOW))
+        self.publish_tokens()
+        self.assertEqual(prior, self.history.stats_view("source", "UTC", "today", START, NOW)[1][0])

@@ -1,5 +1,6 @@
 """Real browser and loopback proof for opt-in cached AI Stats subtotals."""
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -58,6 +59,7 @@ def check_cached_stats(browser, evidence, product_root):
             view = page.locator("#result .cached-stats")
             working = view.locator('[data-metric="working"]')
             tokens = view.locator('[data-metric="tokens"]')
+            reference = view.locator('[data-metric="referenceCost"]')
             expect(view.get_by_text("No measured work is cached for this period yet."),
                    f"Page errors: {errors!r}; requests: {[path for path, _ in requests]!r}").to_be_visible()
             for label in ("Today", "7 days", "30 days", "This month", "All time"):
@@ -66,6 +68,7 @@ def check_cached_stats(browser, evidence, product_root):
                 expect(button).to_have_attribute("aria-pressed", "true")
                 expect(working).to_have_text("—")
                 expect(tokens).to_have_text("—")
+                expect(reference).to_have_text("—")
                 expect(page.locator("#result")).to_have_attribute("aria-busy", "false")
 
             now = int(time.time() * 1000)
@@ -77,7 +80,8 @@ def check_cached_stats(browser, evidence, product_root):
                 identity = replace(request.stats_identity, message_key=root_id.encode().ljust(32, b"-"))
                 observed = replace(request, key=root_id.encode(), clock_ms=start + elapsed, session_id=root_id,
                                    dedup_tree=root_id, fork_key=None, stats_identity=identity, response=None,
-                                   tokens=(10, 20, 30, 5, 2), known=0b1111)
+                                   tokens=(10, 20, 30, 5, 2), known=0b1111,
+                                   category_costs=(Decimal(10), Decimal(20), Decimal(5), Decimal(15)))
                 roster = replace(base, requests=(observed,), attribution=(), prompts=None,
                     stats=replace(base.stats, intervals=(interval,), parents=((root_id, None),), first_input=None))
                 archive.history.commit_sessions(archive.views.source, (SessionChange(
@@ -92,6 +96,9 @@ def check_cached_stats(browser, evidence, product_root):
             publish("recent", now - 360_000, 60_000, now)
             expect(working).to_have_text("1m")
             expect(tokens).to_have_text("67")
+            expect(reference).to_have_text("$0.50")
+            view.evaluate("root => ReportView.setUnit('credits', root)")
+            expect(reference).to_have_text("50")
             expect(view.locator('[data-metric="longest"]')).to_have_text("1m")
             expect(view.locator('[data-metric="parallel"]')).to_have_text("1")
             expect(view.get_by_role("button", name="All time", exact=True)).to_be_focused()
@@ -112,6 +119,7 @@ def check_cached_stats(browser, evidence, product_root):
             publish("aged", now - 60 * 86_400_000, 120_000, now + 1)
             expect(working).to_have_text("3m")
             expect(tokens).to_have_text("134")
+            expect(reference).to_have_text("100")
             peer.wait_for_function("(clock) => statsCache.hint?.marks?.all?.[1] === clock", arg=now + 1)
             expect(peer_working).to_have_text("1m")
             expect(peer_tokens).to_have_text("67")
@@ -134,6 +142,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(working).to_have_text("—")
             expect(peer_working).to_have_text("—")
             expect(tokens).to_have_text("—")
+            expect(reference).to_have_text("—")
             archive.observe(driver, before_tick=True)
             expect(working).to_have_text("1m")
             expect(peer_working).to_have_text("1m")

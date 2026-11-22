@@ -3,10 +3,13 @@ import sqlite3
 from collections import deque
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 
 from src.analysis.ai_stats import windows
 from src.cache.display_usage_reader import USAGE_SLICE
+
+from .archive_exact_cost import ExactCost
 
 
 class PopulationState(Enum):
@@ -16,20 +19,34 @@ class PopulationState(Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class PopulationObservation:
+    tokens: int | None
+    usage_gap: bool
+    ccost: Decimal | None
+    pricing: str | None  # A proved zero-usage/request cost has no price dependency.
+
+    @classmethod
+    def decode(cls, tokens, gap, ccost, pricing):
+        return cls(int(tokens) if tokens is not None else None, bool(gap),
+                   Decimal(ccost) if ccost is not None else None, pricing)
+
+
+@dataclass(frozen=True, slots=True)
 class PopulationPage:
     keys: tuple[bytes, ...]
-    observations: tuple[tuple[int | None, bool], ...]
+    observations: tuple[PopulationObservation, ...]
     next_cursor: bytes | None
 
 
 _STAGE = """
     CREATE TABLE roots (
-        id TEXT PRIMARY KEY, last_end INTEGER
+        id TEXT PRIMARY KEY, last_end INTEGER, missing_recipe INTEGER NOT NULL DEFAULT 0
     ) WITHOUT ROWID;
+    CREATE INDEX roots_missing_recipe ON roots(last_end) WHERE missing_recipe=1;
     CREATE TABLE candidates (
         key BLOB PRIMARY KEY, root TEXT NOT NULL, session TEXT NOT NULL,
         clock INTEGER, ordinal INTEGER NOT NULL, message BLOB NOT NULL,
-        slot BLOB NOT NULL, fork BLOB, observed TEXT, usage_gap INTEGER NOT NULL
+        slot BLOB NOT NULL, fork BLOB, observed TEXT, usage_gap INTEGER NOT NULL, ccost TEXT, pricing TEXT
     ) WITHOUT ROWID;
     CREATE TABLE eligible (
         period TEXT NOT NULL, key BLOB NOT NULL, message BLOB NOT NULL, slot BLOB NOT NULL,
@@ -103,13 +120,13 @@ class ArchiveStatsPopulation(AbstractContextManager):
         if not self._ready or self._db is None or period not in self.scopes:
             raise ValueError("stats_population_not_available")
         rows = self._db.execute("""
-            SELECT a.key,c.observed,c.usage_gap FROM accepted AS a
+            SELECT a.key,c.observed,c.usage_gap,c.ccost,c.pricing FROM accepted AS a
             CROSS JOIN candidates AS c ON c.key=a.key
             WHERE a.period=? AND a.key>? ORDER BY a.key LIMIT ?
         """, (period, after or b"", USAGE_SLICE + 1)).fetchall()
         entries = rows[:USAGE_SLICE]
         keys = tuple(row[0] for row in entries)
-        observations = tuple((int(amount) if amount is not None else None, bool(gap)) for _, amount, gap in entries)
+        observations = tuple(PopulationObservation.decode(*row[1:]) for row in entries)
         return PopulationPage(keys, observations, keys[-1] if len(rows) > USAGE_SLICE else None)
 
     def close(self):
@@ -133,7 +150,7 @@ class ArchiveStatsPopulation(AbstractContextManager):
             self.version = evidence.version
             root_after = evidence.next_cursor
             roots.extend(evidence.roots)
-            self._db.executemany("INSERT INTO roots VALUES(?,?)",
+            self._db.executemany("INSERT INTO roots(id,last_end) VALUES(?,?)",
                                  ((row.root, None if row.usage_pending else 0) for row in roots))
             history = yield PopulationState.MORE
             while roots:
@@ -166,6 +183,7 @@ class ArchiveStatsPopulation(AbstractContextManager):
             if after is None:
                 break
 
+        self._record_recipe_gaps()
         yield from self._admit_roots()
         yield from self._reconcile_messages()
         yield from self._select_forks()
@@ -189,18 +207,30 @@ class ArchiveStatsPopulation(AbstractContextManager):
             return
         if candidate.identity is None:
             # A missing, undated or out-of-window request can still be a step
-            # replacing a fallback. Do not convert recipe absence into zero.
-            self._gaps.update(self.scopes)
+            # replacing a fallback if the entire root cannot be excluded.
+            self._db.execute("UPDATE roots SET missing_recipe=1 WHERE id=?", (candidate.tree,))
             return
         recipe = candidate.identity
         known = usage.known & 0b1111
         observed = sum(volume for index, volume in enumerate(usage.tokens[:4]) if known & (1 << index))
         if known & 0b1000:
             observed += usage.tokens[4]  # Canonical observed Stats output includes reasoning once.
-        self._db.execute("INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?,?,?)", (
+        ccost, pricing = _reference_cost(usage, known)
+        self._db.execute("INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (
             usage.request_key, candidate.tree, usage.session_id, usage.clock_ms, candidate.ordinal,
             recipe.message_key, recipe.step_key or b"", candidate.fork, str(observed) if known else None,
-            known != 0b1111))
+            known != 0b1111, ccost, pricing))
+
+    def _record_recipe_gaps(self):
+        missing = "SELECT last_end FROM roots INDEXED BY roots_missing_recipe WHERE missing_recipe=1"
+        undated = self._db.execute(missing + " AND last_end IS NULL LIMIT 1").fetchone()
+        if undated:
+            self._gaps.update(self.scopes)
+            return
+        latest = self._db.execute(missing + " ORDER BY last_end DESC LIMIT 1").fetchone()
+        if latest:
+            self._gaps.update(period for period, start in self.scopes.items()
+                              if start is None or latest[0] >= start)
 
     def _candidate_pages(self):
         after = b""
@@ -299,3 +329,14 @@ def _page_end(intervals):
         if end >= 1 << 63:
             return None
     return end
+
+
+def _reference_cost(usage, known):
+    if known == 0b1111 and not any(usage.tokens):
+        return "0", None
+    if usage.category_costs is None or not usage.pricing:
+        return None, None
+    amount = ExactCost()
+    for value in usage.category_costs:
+        amount.add(value)
+    return str(amount.amount()), usage.pricing

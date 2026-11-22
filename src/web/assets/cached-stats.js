@@ -3,7 +3,8 @@
 const CachedStats = (() => {
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'],
     ['month', 'This month'], ['all', 'All time']];
-  const fields = [['tokens', 'Observed tokens'], ['working', 'Working time'], ['longest', 'Longest session'], ['busiest', 'Busiest day'],
+  const fields = [['tokens', 'Observed tokens'], ['referenceCost', 'Known reference CCost'],
+    ['working', 'Working time'], ['longest', 'Longest session'], ['busiest', 'Busiest day'],
     ['overnight', 'Overnight work'], ['streak', 'Longest streak (days)'], ['parallel', 'Peak parallel sessions']];
   const revoked = new Set(['cache_source_unbound', 'authentication_required', 'host_identity_changed', 'instance_stopping']);
   const mark = (hint, period) => JSON.stringify(hint?.marks?.[period] ?? null);
@@ -141,10 +142,14 @@ const CachedStats = (() => {
       for (const [name, button] of this.buttons) button.setAttribute('aria-pressed', String(name === period));
       const display = value?.period === period ? value.display : {};
       ReportView.text(this.caption, blocked || error ? 'Cached AI Stats are unavailable for this source.' :
-        display.working || display.tokens ? 'Observed cache only. Unobserved and estimated activity is not included.' :
+        display.working || display.tokens || display.referenceCost ?
+          'Observed cache only. Unobserved and estimated activity is not included.' :
         'No measured work is cached for this period yet.');
-      for (const [field, node] of this.values)
-        ReportView.text(node, typeof display[field] === 'string' ? display[field] : '—');
+      for (const [field, node] of this.values) {
+        const item = typeof display[field] === 'string' ? display[field] : '—';
+        ReportView.text(node, field === 'referenceCost' && item !== '—' ?
+          () => ReportView.metricToken(value, field) ?? '—' : item);
+      }
       if (this.root.parentNode !== host) host.replaceChildren(this.root);
     }
   }

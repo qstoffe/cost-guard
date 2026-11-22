@@ -26,7 +26,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -259,7 +259,7 @@ class DisplayHistory:
                       {stats_revision_schema(upgrade=version == 18)}
                       {geometry_schema(seed=18 <= version < 23)}
                       {stats_time_schema(upgrade=20 <= version < 23)}
-                      {stats_token_schema()}
+                      {stats_token_schema(upgrade=version == 25)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
