@@ -20,6 +20,8 @@ SCHEMA = f"""
     ) WITHOUT ROWID;
     CREATE INDEX trace_visible ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK});
     CREATE INDEX trace_subtasks ON trace_messages(session,created,id) WHERE kind={SUBTASK};
+    CREATE INDEX trace_invisible ON trace_messages(session,created,id)
+        WHERE role='user' AND kind IN ({OTHER},{SYNTHETIC});
     CREATE INDEX trace_turns ON trace_messages(session,created,id) WHERE kind IN ({PROMPT},{SUBTASK},{COMPACTION});
     CREATE INDEX trace_assistants ON trace_messages(session,created,id) WHERE role='assistant';
     CREATE INDEX trace_attempts ON trace_messages(session,parent,created,id) WHERE role='assistant';
@@ -30,11 +32,12 @@ SCHEMA = f"""
     CREATE TABLE trace_calls(
         clock INTEGER NOT NULL,id TEXT NOT NULL,session TEXT NOT NULL,message TEXT NOT NULL,step TEXT,cost TEXT,
         input_tokens INTEGER NOT NULL,cache_read INTEGER NOT NULL,cache_write INTEGER NOT NULL,
-        output_tokens INTEGER NOT NULL,reasoning INTEGER NOT NULL,known TEXT NOT NULL,
+        output_tokens INTEGER NOT NULL,reasoning INTEGER NOT NULL,known TEXT NOT NULL,parent TEXT,
         PRIMARY KEY(clock,id)
     ) WITHOUT ROWID;
     CREATE INDEX trace_calls_session ON trace_calls(session,clock,id);
     CREATE INDEX trace_calls_message ON trace_calls(session,message,clock,id);
+    CREATE INDEX trace_calls_parent ON trace_calls(session,parent,clock,id);
 """
 
 
@@ -77,17 +80,18 @@ def save_call(db, invocation):
     completion = invocation.completed_at_ms
     clock = invocation.created_at_ms if completion is None else completion
     db.execute("""
-        INSERT INTO trace_calls VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO trace_calls VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (clock, invocation.invocation_id, invocation.session_id, invocation.message_id, invocation.step_part_id,
-          str(invocation.cost.amount) if invocation.cost else None, *_token_values(invocation.tokens)))
+          str(invocation.cost.amount) if invocation.cost else None, *_token_values(invocation.tokens),
+          invocation.initiating_event_id))
 
 
 def load_call(row, source, header):
-    _, invocation, session, message, step, cost, *tokens = row
+    _, invocation, session, message, step, cost, *tokens, parent = row
     return ModelInvocation(
         invocation, session, header.created_at_ms, header.model, _tokens(tokens),
         source._event_provenance(session, step if step is not None else message),
-        completed_at_ms=header.completed_at_ms, cost=_cost(cost), initiating_event_id=header.parent_message_id,
+        completed_at_ms=header.completed_at_ms, cost=_cost(cost), initiating_event_id=parent,
         message_id=message, step_part_id=step, variant=header.variant, summary=header.summary,
         finish_reason=header.finish_reason, error_name=header.error_name,
     )

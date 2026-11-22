@@ -11,7 +11,7 @@ from src.sources.errors import SourceDataError
 from src.sources.opencode_requests import observed_response
 from src.sources.opencode_v1 import _event_kind, _subtask_selection
 
-from . import v1_child_walk, v1_trace_facts as facts
+from . import v1_child_walk, v1_prompt_calls, v1_trace_facts as facts
 from .v1_child_launches import ChildLaunches
 from .v1_scoped_calls import ScopedCalls
 
@@ -53,7 +53,7 @@ class V1ArchiveTrace:
         self._fallback_after = None
         self._trace_after = None
         self._ordinal = 0
-        stage.executescript(facts.SCHEMA + v1_child_walk.SCHEMA)
+        stage.executescript(facts.SCHEMA + v1_child_walk.SCHEMA + v1_prompt_calls.SCHEMA)
         self._launches = ChildLaunches(stage)
 
     def capture_turn(self):
@@ -143,6 +143,12 @@ class V1ArchiveTrace:
         if self._phase not in ("trace", "done"):
             raise SourceDataError("V1 descendant calls require prepared trace", phase="archive")
         return ScopedCalls(self._db, scope, self._launches.membership(scope.direct), self._tracked_provider)
+
+    def root_prompt_calls(self, prompt_id):
+        if self._phase not in ("trace", "done"):
+            raise SourceDataError("V1 prompt allocation requires prepared trace", phase="archive")
+        return v1_prompt_calls.RootPromptCalls(self._db, self._launches, self._root, prompt_id,
+                                               self._tracked_provider)
 
     def prepare_turn(self):
         """Decide fallback only after all steps are known; visit even noncalls."""

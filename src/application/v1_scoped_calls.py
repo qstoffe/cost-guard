@@ -6,7 +6,9 @@ from src.analysis.billing import provider_matches
 from src.sources.errors import SourceDataError
 
 
-_ROWS = 32
+CALL_ROWS = 32
+_FIRST_CLOCK = -(1 << 63)
+_LAST_CLOCK = (1 << 63) - 1
 _QUERY = """
     SELECT clock,id,message,step FROM trace_calls INDEXED BY {index}
     WHERE {owner} AND {time} ORDER BY clock,id LIMIT ?
@@ -19,6 +21,29 @@ class ScopedCall:
     invocation_id: str
     message_id: str
     step_part_id: str | None
+
+
+def message_call_page(db, session, message, after):
+    return _page(db, "trace_calls_message", "session=? AND message=?", (session, message),
+                 _FIRST_CLOCK, _LAST_CLOCK, after)
+
+
+def parent_call_page(db, session, parent, after):
+    return _page(db, "trace_calls_parent", "session=? AND parent=?", (session, parent),
+                 _FIRST_CLOCK, _LAST_CLOCK, after)
+
+
+def _page(db, index, owner, keys, start, end, after):
+    if after is None:
+        return db.execute(_QUERY.format(index=index, owner=owner, time="clock>=? AND clock<=?"),
+                          (*keys, start, end, CALL_ROWS)).fetchall()
+    clock, invocation = after
+    rows = db.execute(_QUERY.format(index=index, owner=owner, time="clock=? AND id>?"),
+                      (*keys, clock, invocation, CALL_ROWS)).fetchall()
+    if len(rows) < CALL_ROWS:
+        rows.extend(db.execute(_QUERY.format(index=index, owner=owner, time="clock>? AND clock<=?"),
+                               (*keys, clock, end, CALL_ROWS - len(rows))).fetchall())
+    return rows
 
 
 class ScopedCalls:
@@ -59,7 +84,7 @@ class ScopedCalls:
 
     def _window(self):
         start, end = self._scope.direct.start_ms, self._scope.end_ms
-        rows = self._page("trace_calls_session", "session=?", (self._session,), start, end)
+        rows = _page(self._db, "trace_calls_session", "session=?", (self._session,), start, end, self._after)
         result = []
         for _, invocation, message, step in rows:
             created, provider = self._db.execute("""
@@ -67,7 +92,7 @@ class ScopedCalls:
             """, (self._session, message)).fetchone()
             if created >= start and provider_matches(provider, self._provider):
                 result.append(ScopedCall(self._session, invocation, message, step))
-        if len(rows) < _ROWS:
+        if len(rows) < CALL_ROWS:
             self._phase, self._after = "crossing", None
         else:
             self._after = rows[-1][:2]
@@ -80,26 +105,13 @@ class ScopedCalls:
         if not provider_matches(provider, self._provider):
             self._pending.popleft()
             return ()
-        rows = self._page("trace_calls_message", "session=? AND message=?", (self._session, message),
-                          -(1 << 63), (1 << 63) - 1)
+        rows = message_call_page(self._db, self._session, message, self._after)
         start, end = self._scope.direct.start_ms, self._scope.end_ms
         result = tuple(ScopedCall(self._session, invocation, message, step)
                        for clock, invocation, message, step in rows if not start <= clock <= end)
-        if len(rows) < _ROWS:
+        if len(rows) < CALL_ROWS:
             self._pending.popleft()
             self._after = None
         else:
             self._after = rows[-1][:2]
         return result
-
-    def _page(self, index, owner, keys, start, end):
-        if self._after is None:
-            return self._db.execute(_QUERY.format(index=index, owner=owner, time="clock>=? AND clock<=?"),
-                                    (*keys, start, end, _ROWS)).fetchall()
-        clock, invocation = self._after
-        rows = self._db.execute(_QUERY.format(index=index, owner=owner, time="clock=? AND id>?"),
-                                (*keys, clock, invocation, _ROWS)).fetchall()
-        if len(rows) < _ROWS:
-            rows.extend(self._db.execute(_QUERY.format(index=index, owner=owner, time="clock>? AND clock<=?"),
-                                        (*keys, clock, end, _ROWS - len(rows))).fetchall())
-        return rows

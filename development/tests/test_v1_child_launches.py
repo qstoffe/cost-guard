@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from development.tests.test_v1_archive_cursor import ROOT, _seed, _session
+from src.analysis import analyze_snapshot
 from src.analysis.causal import trace_entries
 from src.analysis.child_links import ChildLinkIndex, OPEN_END, scoped_entries
 from src.application.v1_archive_trace import V1ArchiveTrace
@@ -311,3 +312,126 @@ class V1ChildLaunchTests(unittest.TestCase):
                          {item[1] for item in calls})
         self.assertEqual(134, len(calls))
         self.assertEqual(4, sizes.count(32))
+
+    def test_prompt_allocation_keeps_tied_windows_and_deduplicates_child_calls_per_prompt(self):
+        with closing(sqlite3.connect(self.source_path)) as db, db:
+            _session(db, "child", ROOT)
+            _turn(db, ROOT, "prompt-a", 1400)
+            _turn(db, ROOT, "prompt-b", 1400)
+            _turn(db, ROOT, "later-prompt", 1600)
+            _message(db, ROOT, "continuation", 1450, role="user")
+            _message(db, ROOT, "equal-cutoff", 1600, role="user")
+            for name, parent, provider in [
+                ("direct-a", "prompt-a", "tracked"), ("launch-one", "continuation", "tracked"),
+                ("launch-two", "continuation", "other"), ("excluded", "equal-cutoff", "tracked"),
+            ]:
+                _message(db, ROOT, name, 1650, role="assistant", parentID=parent, providerID=provider,
+                         modelID="sample", time={"completed": 1900}, finish="stop", tokens={"input": 2})
+            for suffix in ("one", "two"):
+                _tool(db, ROOT, f"launch-{suffix}", f"link-{suffix}", f"call-{suffix}", 2000, 3000, 3000,
+                      metadata={"sessionID": "child"})
+            _turn(db, "child", "child-prompt", 2100)
+            _message(db, "child", "nested", 2150, role="assistant", parentID="child-prompt", providerID="tracked",
+                     time={"completed": 2400}, modelID="sample", tokens={"input": 3})
+        source = OpenCodeV1Source(self.source_path)
+        bundle = analyze_snapshot(source.load_session_snapshot(ROOT), tracked_provider="tracked", now_ms=100_000)
+
+        with closing(sqlite3.connect(self.stage_path)) as db:
+            with source.archive_cursor(ROOT) as cursor:
+                trace = V1ArchiveTrace(source, cursor, db, tracked_provider="tracked")
+                for _ in range(32):
+                    if trace.capture_turn():
+                        break
+                else:
+                    self.fail("source cursor did not reach EOF")
+            with self.assertRaisesRegex(SourceDataError, "prepared trace"):
+                trace.root_prompt_calls("prompt-a")
+            self.assertTrue(trace.prepare_turn())
+            self.assertEqual((), trace.child_launch_turn())
+            with self.assertRaisesRegex(SourceDataError, "eligible root window"):
+                trace.root_prompt_calls("child-prompt")
+            seen = {}
+            for name in ("prompt-a", "prompt-b", "later-prompt"):
+                build = trace.root_prompt_calls(name)
+                calls = seen[name] = []
+                for _ in range(96):
+                    page = build.turn()
+                    if page is None:
+                        break
+                    calls.extend((call.session_id, call.invocation_id, call.message_id, call.step_part_id)
+                                 for call in page)
+                else:
+                    self.fail(f"bounded prompt allocation for {name} did not finish")
+
+        self.assertEqual({
+            "prompt-a": {("dense-root", "direct-a"), ("dense-root", "launch-one"), ("child", "nested")},
+            "prompt-b": {("dense-root", "launch-one"), ("child", "nested")},
+            "later-prompt": set(),
+        }, {prompt: {row[:2] for row in rows} for prompt, rows in seen.items()})
+        self.assertEqual({"prompt-a": 3, "prompt-b": 2, "later-prompt": 0},
+                         {prompt: len(rows) for prompt, rows in seen.items()})
+        for row in bundle.prompts:
+            self.assertEqual({(entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
+                              for entry in row.entries}, set(seen[row.prompt_id]))
+
+    def test_dense_prompt_pages_calls_without_visiting_every_attempt(self):
+        with closing(sqlite3.connect(self.source_path)) as db, db:
+            _turn(db, ROOT, "dense-prompt", 1400)
+            _message(db, ROOT, "wide", 1500, role="assistant", parentID="dense-prompt",
+                     providerID="tracked", modelID="sample", time={"completed": 2000}, tokens={"input": 99})
+            for number in range(70):
+                _part(db, ROOT, "wide", f"step-{number:04d}", 1900, 1900,
+                      type="step-finish", tokens={"input": 2})
+            for number in range(1336):
+                _message(db, ROOT, f"call-{number:04d}", 1500, role="assistant", parentID="dense-prompt",
+                         providerID="tracked" if number < 1296 else "other", modelID="sample",
+                         time={"completed": 2000}, tokens={"input": 3})
+            for number in range(4100):
+                _message(db, ROOT, f"silent-{number:04d}", 1500, role="assistant", parentID="dense-prompt",
+                         providerID="tracked", modelID="sample", time={"completed": 2000})
+        source = OpenCodeV1Source(self.source_path)
+        bundle = analyze_snapshot(source.load_session_snapshot(ROOT), tracked_provider="tracked", now_ms=100_000)
+        expected = {(entry.session_id, entry.invocation_id, entry.message_id, entry.step_part_id)
+                    for entry in bundle.prompts[0].entries}
+        calls, sizes, work = [], [], []
+        steps = 0
+
+        def tick():
+            nonlocal steps
+            steps += 1
+            return 0
+
+        with closing(sqlite3.connect(self.stage_path)) as db:
+            with source.archive_cursor(ROOT) as cursor:
+                trace = V1ArchiveTrace(source, cursor, db, tracked_provider="tracked")
+                for _ in range(100):
+                    if trace.capture_turn():
+                        break
+                else:
+                    self.fail("source cursor did not reach EOF")
+            for _ in range(200):
+                if trace.prepare_turn():
+                    break
+            else:
+                self.fail("trace did not finish preparing calls")
+            self.assertEqual((), trace.child_launch_turn())
+            db.set_progress_handler(tick, 1)
+            build = trace.root_prompt_calls("dense-prompt")
+            for _ in range(50):
+                steps = 0
+                page = build.turn()
+                work.append(steps)
+                if page is None:
+                    break
+                sizes.append(len(page))
+                calls.extend((call.session_id, call.invocation_id, call.message_id, call.step_part_id)
+                             for call in page)
+            else:
+                self.fail("dense prompt allocation did not finish within 50 turns")
+            db.set_progress_handler(None, 0)
+            self.assertEqual(0, db.execute("SELECT count(*) FROM trace_walks").fetchone()[0])
+
+        self.assertEqual(1366, len(calls))
+        self.assertEqual(expected, set(calls))
+        self.assertLessEqual(max(sizes), 32)
+        self.assertLess(max(work), 2500)

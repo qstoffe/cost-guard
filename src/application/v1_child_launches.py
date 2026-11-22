@@ -24,6 +24,10 @@ SCHEMA = """
     );
     CREATE INDEX trace_child_launch ON trace_launches(target,start);
     CREATE INDEX trace_launch_message ON trace_launches(session,message,ordinal);
+    CREATE TABLE trace_launch_attempts(
+        session TEXT NOT NULL,parent TEXT NOT NULL,message TEXT NOT NULL,
+        PRIMARY KEY(session,parent,message)
+    ) WITHOUT ROWID;
 """
 
 
@@ -65,6 +69,15 @@ class ChildLaunches:
             WHERE session=? AND message=? AND ordinal>? ORDER BY ordinal LIMIT ?
         """, (session, message, after, _WINDOW_ROWS)).fetchall()
         return tuple((row[0], self._window(*row[1:])) for row in rows)
+
+    def next_attempt(self, session, parent, after):
+        self.require_qualified()
+        query = """SELECT message FROM trace_launch_attempts
+                   WHERE session=? AND parent=? {seek} ORDER BY message LIMIT 1"""
+        keys = session, parent
+        row = (self._db.execute(query.format(seek=""), keys).fetchone() if after is None
+               else self._db.execute(query.format(seek="AND message>?"), (*keys, after)).fetchone())
+        return row[0] if row else None
 
     def accept(self, part, message, native_message, native_part):
         key = tool_call_key(part, message)
@@ -124,6 +137,10 @@ class ChildLaunches:
                 db.execute("INSERT INTO trace_launches VALUES(?,?,?,?,?,?,?)",
                            (ordinal, session, message, target, start, OPEN_END if background or not finish else finish,
                             background))
+                db.execute("""
+                    INSERT OR IGNORE INTO trace_launch_attempts
+                    SELECT session,parent,id FROM trace_messages WHERE session=? AND id=? AND parent IS NOT NULL
+                """, (session, message))
         if len(rows) < _WINDOW_ROWS:
             self._qualified = True
         else:
