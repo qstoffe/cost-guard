@@ -31,7 +31,7 @@ def route(page, section):
 
 
 def ready(page):
-    page.wait_for_function('() => current && !current.loading && !current.failed && (current.result || current.live || current.catalog?.usable)', timeout=30000)
+    page.wait_for_function('() => current && !current.loading && !current.failed && (current.result || current.live || current.catalog?.data)', timeout=30000)
 
 
 def navigation(page, evidence, *, enforce):
@@ -85,7 +85,7 @@ def cold_models(context, host, root, evidence):
     page = context.new_page()
     try:
         page.goto(host.server.origin + '/#/sessions?period=all')
-        page.wait_for_function('() => current.catalog?.usable && !current.catalog.busy', timeout=30000)
+        page.wait_for_function('() => current.catalog?.data && !current.catalog.busy', timeout=30000)
         page.evaluate(TRACE)
         before = page.evaluate('() => {scrollTo(0,document.documentElement.scrollHeight);recordNavigation("activation");return scrollY;}')
         assert before > 100
