@@ -29,8 +29,9 @@ const CachedWatch = (() => {
         return {state: 'running', source_observed_at_ms: at, view, cached: true};
       }
       const earlier = freshness !== 'current' ? view.earlier_cards : [...view.earlier_cards,
-        ...view.active_cards.map(card => ({...card, state: 'retained', rows: card.rows.map(row =>
-          row.prompt.in_progress ? {...row, display: undefined, live_context: undefined, prompt: {...row.prompt,
+        ...view.active_cards.map(card => ({...card, state: 'retained', live_detail: false, invocation_verified: false,
+          rows: card.rows.map(row => row.prompt.in_progress ? {...row, display: undefined, live_context: undefined,
+            tool: undefined, prompt: {...row.prompt,
             in_progress: false, execution_unverified: true}} : row)}))];
       return {state: freshness === 'empty' ? 'empty' : 'as-of', source_observed_at_ms: at, cached: true,
         view: {...view, active_cards: [], earlier_cards: earlier, cards_state: 'partial'}};

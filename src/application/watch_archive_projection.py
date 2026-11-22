@@ -1,4 +1,4 @@
-"""Allowlist shared current/recent card facts; never serialize a Live DTO."""
+"""Allowlist persisted current/recent card facts; never persist a Live DTO."""
 from itertools import chain, islice
 
 from src.analysis.timezones import local_day_start_ms
@@ -6,9 +6,11 @@ from src.cache.display_watch import WATCH_ROW_LIMIT, WatchFact, WatchObservation
 from src.cache.display_watch_daily import WatchDaily
 from .contracts import record
 from .display import with_display
+from .live_projection import project_live
 from .watch_native_quota import present_native_quotas
 
 
+_CARD_GROUPS = ("active_cards", "history_cards", "recent_finished_cards", "earlier_cards")
 _ABORT_REASONS = frozenset({"quota_limit", "rate_limit", "tool_call_limit", "step_limit", "user"})
 
 
@@ -112,6 +114,38 @@ def archive_watch_observation(frame, observed_ms, timezone_id="UTC"):
     return WatchObservation(observed_ms, frame.now_ms, frame.cards_state, len(candidates) > WATCH_ROW_LIMIT or
                             len(candidates) + len(frame.earlier_previews) > WATCH_ROW_LIMIT,
                             tuple(indexed.values()) if has_cards else None, daily)
+
+
+def with_committed_detail(value, frame, timezone_id):
+    """Enrich saved cards from the in-memory frame of that same committed observation.
+
+    Tool, preview and cost-breakdown detail is never persisted. The caller proves
+    binding/clear scope; only a current, matching observation may lend its detail.
+    SQLite still owns membership, grouping and liveness.
+    """
+    view = value["view"]
+    if frame is None or value["freshness"] != "current" or value["projected_ms"] != frame.now_ms:
+        return view
+    settled = {(fact["session_id"], fact["event_id"]) for fact in value["cards"]
+               if fact["outcome"] in ("running", "finished", "failed", "aborted")}
+    live = project_live(frame, timezone_id).to_json()
+    details = {}
+    for group in _CARD_GROUPS:
+        for card in live.get(group) or ():
+            events = [row["prompt"]["event_id"] for row in card["rows"]]
+            if events:
+                # Same focal-or-first choice as the persisted fact.
+                event = card["focal_id"] if card["focal_id"] in events else events[0]
+                details.setdefault((card["session_id"], event), card)
+
+    def enrich(saved):
+        key = saved["session_id"], saved["focal_id"]
+        detail = details.get(key) if key in settled else None
+        # The saved fact remains the card identity, with or without detail.
+        return saved if detail is None else {**detail, "focal_id": saved["focal_id"],
+            "activity_scope": saved["activity_scope"], "live_detail": True}
+
+    return {**view, **{group: [enrich(card) for card in view[group]] for group in _CARD_GROUPS}}
 
 
 def cached_watch_view(value, timezone_id, *, quotas=None, now_ms=None):

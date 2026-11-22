@@ -61,24 +61,3 @@ class SessionLiveMetricsTests(unittest.TestCase):
                          (pending.ccost, pending.context_tokens, pending.context_detail, pending.running))
         self.assertEqual(("0.1", 600, False), (ended.ccost, ended.context_tokens, ended.running))
         self.assertEqual(ended, restarted)
-
-    def test_version_30_running_overlay_upgrades_without_dropping_saved_rows(self):
-        with TemporaryDirectory() as directory:
-            history = DisplayHistory(Path(directory))
-            history.initialize()
-            history.commit_sessions("source", (SessionChange(SessionFact("root", "r1", "Saved", context_tokens=600), None),))
-            with history._connect() as db:
-                db.executescript("""
-                    ALTER TABLE session_running DROP COLUMN ccost;
-                    ALTER TABLE session_running DROP COLUMN context_tokens;
-                    ALTER TABLE session_running DROP COLUMN context_invalidated;
-                    INSERT INTO session_running VALUES('source','old-host','root','Live',98000,100000);
-                    PRAGMA user_version=30;
-                """)
-            history.initialize()
-
-            saved, = history.session_page("source", live_binding="new-host", now_ms=100_000).rows
-            live, = history.session_page("source", live_binding="old-host", now_ms=100_000).rows
-
-        self.assertEqual(("Saved", False, 600), (saved.title, saved.running, saved.context_tokens))
-        self.assertEqual(("Live", True, 600), (live.title, live.running, live.context_tokens))

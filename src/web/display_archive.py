@@ -13,7 +13,7 @@ from src.application.cached_session_views import CachedSessionViews
 from src.application.session_archive_owner import SessionArchiveOwner
 from src.application.session_archive_sweep import SessionArchiveSweep
 from src.application.session_coverage import SessionCoverageSweep
-from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view
+from src.application.watch_archive_projection import archive_watch_observation, cached_watch_view, with_committed_detail
 from src.application.watch_native_quota import native_quotas
 from src.cache.display_history import BATCH_LIMIT, DisplayHistory
 from src.cache.display_watch import WatchObservation, withdraw_watch_liveness
@@ -60,6 +60,9 @@ class DisplayArchive:
         self._live_committed = None
         self._live_retry = None
         self._live_health = None
+        # Frames of the last committed and the in-flight observation. A reader can
+        # use one only after finding that observation's markers committed in SQLite.
+        self._watch_committed = self._watch_offered = None
         self._watch_bound_ms = 0
         self._watch_quota = None
         self._watch_quota_revision = 0
@@ -143,6 +146,7 @@ class DisplayArchive:
                 return hint
             if self._live_write.result():
                 self._live_committed = self._live_offered
+                self._watch_committed = self._watch_offered
             else:
                 self._live_retry = self._live_offered[0], time.monotonic() + 2
             self._live_write = None
@@ -164,6 +168,9 @@ class DisplayArchive:
         key = (scope, health), running, watch_key, finishes
         if key != self._live_committed:
             self._live_offered = key
+            # Set before submitting: the commit's own event can race this thread.
+            self._watch_offered = ((scope, watch.observed_ms, frame)
+                                   if watch is not None and watch.facts is not None else self._watch_committed)
             self._live_write = self._live_writer.submit(self._write_live, views, fence, health, running, watch,
                                                        finishes, finishes_current)
         return hint
@@ -205,6 +212,10 @@ class DisplayArchive:
         value["quota_revision"] = batch.revision if matched else None
         if presentation:
             value["view"] = cached_watch_view(value, views.timezone_id, quotas=batch if matched else None, now_ms=now)
+            proof = (views.binding, fence), value["observed_ms"], value["projected_ms"]
+            detail = next((item[2] for item in (self._watch_offered, self._watch_committed)
+                           if item is not None and (item[0], item[1], item[2].now_ms) == proof), None)
+            value["view"] = with_committed_detail(value, detail, views.timezone_id)
             if offered is not self._watch_quota and matched:
                 value["quota_revision"] = None
                 value["view"]["accounts"] = None

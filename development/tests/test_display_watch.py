@@ -21,7 +21,7 @@ from src.cache.display_history import BATCH_LIMIT, DisplayHistory, RunningSessio
 from src.cache.display_watch import WATCH_LIVE_MS, WATCH_ROW_LIMIT, publish_watch
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.web.display_archive import DisplayArchive
-from src.watch.models import SessionPreview
+from src.watch.models import SessionPreview, ToolObservation
 
 
 class DisplayWatchTests(unittest.TestCase):
@@ -447,6 +447,46 @@ class DisplayWatchTests(unittest.TestCase):
         self.addCleanup(archive.close)
         archive.observe(driver, before_tick=True)
         return archive, driver
+
+    def test_rich_detail_is_lent_only_by_the_same_committed_current_observation_and_never_saved(self):
+        path = self.root / "fixture.db"
+        path.write_bytes(b"fixture identity")
+        driver = SimpleNamespace(error=None, terminal=False, coordinator=SimpleNamespace(catalog_observation=None,
+            report_service=SimpleNamespace(timezone_id="UTC",
+                selection=SimpleNamespace(selected="v1", source=OpenCodeV1Source(path)))))
+        archive = DisplayArchive(self.root, lambda *_: None, watch_enabled=True)
+        self.addCleanup(archive.close)
+        archive.observe(driver, before_tick=True)
+        at = int(time.time() * 1000) - 100
+        saved = running_frame(at)
+        card, = saved.active_cards
+        row, = card.rows
+        tool = ToolObservation(running_tool="shell", running_ms=1000, tool_counts=(("shell", 3),))
+        saved = replace(saved, active_cards=(replace(card, rows=(replace(row, tool=tool),)),))
+        unsaved = replace(saved, now_ms=at + 1, active_cards=(replace(card, observed_at_ms=at + 1,
+            rows=(replace(row, prompt=replace(row.prompt, preview="uncommitted sample")),)),))
+        archive.publish_live(None, saved, at)
+        self.assertTrue(archive._live_write.result(timeout=5))
+
+        current = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+        interrupted = archive.watch_snapshot(live_eligible=lambda: False, presentation=True)
+        with patch.object(archive.sessions, "commit_live", return_value=False):
+            archive.publish_live(None, unsaved, at + 1)
+            self.assertFalse(archive._live_write.result(timeout=5))
+        after_failure = archive.watch_snapshot(live_eligible=lambda: True, presentation=True)
+
+        for value in (current, after_failure):
+            live, = value["view"]["active_cards"]
+            self.assertIs(True, live["live_detail"])
+            self.assertEqual(value["binding"], live["activity_scope"])
+            self.assertEqual(("private transcript sample", "shell"),
+                             (live["rows"][0]["prompt"]["preview"], live["rows"][0]["tool"]["running_tool"]))
+        withdrawn, = interrupted["view"]["earlier_cards"]
+        self.assertNotIn("live_detail", withdrawn)
+        self.assertNotIn("preview", withdrawn["rows"][0]["prompt"])
+        for stored in self.history.path.parent.glob(self.history.path.name + "*"):
+            if not stored.name.endswith("-shm"):
+                self.assertNotIn(b"private transcript sample", stored.read_bytes())
 
     def test_health_lost_during_watch_read_withdraws_running_without_rereading_sqlite(self):
         path = self.root / "fixture.db"

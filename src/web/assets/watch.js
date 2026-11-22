@@ -719,7 +719,9 @@ const WatchView = (() => {
           const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history', historical]); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key);
-          card.update(result.cached ? {...value, cached: true} : value, historical, hostOwnsRetry || !connected, clock);
+          // Detail is lent only by the same committed, current host observation.
+          card.update(result.cached && !value.live_detail ? {...value, cached: true} : value,
+            historical, hostOwnsRetry || !connected, clock);
           return card.root;
         });
         reconcile(parent, wanted);
