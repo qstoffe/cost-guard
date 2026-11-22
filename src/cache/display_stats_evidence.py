@@ -1,6 +1,7 @@
 """Typed Stats-only geometry, separate from usage, prompt display and billing."""
 from dataclasses import dataclass
 
+from .display_stats_revision import stats_revision
 from .display_usage_reader import USAGE_SLICE
 
 
@@ -49,23 +50,23 @@ def stats_evidence_schema():
     return """
         CREATE TABLE IF NOT EXISTS archive_stats_revisions (
             source TEXT PRIMARY KEY REFERENCES sources(source),
-            revision INTEGER NOT NULL
+            revision INTEGER NOT NULL, invalidated_through INTEGER NOT NULL DEFAULT 0
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS archive_stats_roots (
             source TEXT NOT NULL, root_id TEXT NOT NULL,
-            source_revision TEXT NOT NULL, usage_pending INTEGER NOT NULL,
+            source_revision TEXT NOT NULL, usage_pending INTEGER NOT NULL, first_revision INTEGER NOT NULL,
             PRIMARY KEY(source,root_id),
             FOREIGN KEY(source,root_id) REFERENCES archive_request_rosters(source,root_id) ON DELETE CASCADE
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS archive_stats_intervals (
             source TEXT NOT NULL, root_id TEXT NOT NULL, session_id TEXT NOT NULL, event_id TEXT NOT NULL,
             kind TEXT NOT NULL, start_ms INTEGER, duration_ms INTEGER,
-            provisional INTEGER NOT NULL CHECK(provisional IN (0,1)),
+            provisional INTEGER NOT NULL CHECK(provisional IN (0,1)), first_revision INTEGER NOT NULL,
             PRIMARY KEY(source,root_id,session_id,event_id,kind),
             FOREIGN KEY(source,root_id) REFERENCES archive_stats_roots(source,root_id) ON DELETE CASCADE
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS archive_stats_parents (
-            source TEXT NOT NULL, root_id TEXT NOT NULL, session_id TEXT NOT NULL, parent_id TEXT,
+            source TEXT NOT NULL, root_id TEXT NOT NULL, session_id TEXT NOT NULL, parent_id TEXT, first_revision INTEGER NOT NULL,
             PRIMARY KEY(source,root_id,session_id),
             FOREIGN KEY(source,root_id) REFERENCES archive_stats_roots(source,root_id) ON DELETE CASCADE
         ) WITHOUT ROWID;
@@ -73,13 +74,14 @@ def stats_evidence_schema():
             source TEXT NOT NULL, root_id TEXT NOT NULL, event_id TEXT NOT NULL,
             fingerprint BLOB NOT NULL CHECK(length(fingerprint)=32), start_ms INTEGER NOT NULL CHECK(start_ms>0),
             duration_ms INTEGER, status TEXT NOT NULL CHECK(status IN ('complete','failed','aborted','unverified','unknown')),
+            first_revision INTEGER NOT NULL,
             PRIMARY KEY(source,root_id),
             FOREIGN KEY(source,root_id) REFERENCES archive_stats_roots(source,root_id) ON DELETE CASCADE
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS archive_stats_match_clock ON archive_stats_first_inputs(source,start_ms,fingerprint);
         CREATE TABLE IF NOT EXISTS archive_response_timing (
             source TEXT NOT NULL, request_key BLOB NOT NULL, completion_ms INTEGER NOT NULL,
-            start_ms INTEGER, duration_ms INTEGER, excluded INTEGER NOT NULL,
+            start_ms INTEGER, duration_ms INTEGER, excluded INTEGER NOT NULL, first_revision INTEGER NOT NULL,
             PRIMARY KEY(source,request_key),
             FOREIGN KEY(source,request_key) REFERENCES archive_requests(source,request_key) ON DELETE CASCADE,
             CHECK((excluded=1 AND start_ms IS NULL AND duration_ms IS NULL)
@@ -91,54 +93,55 @@ def stats_evidence_schema():
 
 def publish_stats_evidence(db, source, root, revision, capture, requests):
     """Independent corrections are atomic with their qualified source capture."""
+    birth = stats_revision(db, source) + 1
     count = db.execute("""
-        INSERT INTO archive_stats_roots VALUES(?,?,?,?)
+        INSERT INTO archive_stats_roots VALUES(?,?,?,?,?)
         ON CONFLICT(source,root_id) DO UPDATE SET
             (source_revision,usage_pending)=(excluded.source_revision,excluded.usage_pending)
         WHERE (source_revision,usage_pending) IS NOT (excluded.source_revision,excluded.usage_pending)
-    """, (source, root, revision, capture.usage_pending)).rowcount
+    """, (source, root, revision, capture.usage_pending, birth)).rowcount
     # Missing or provisional facts cannot erase measured historical geometry.
     # New measured facts on a currently observed event can correct it.
     count += db.executemany("""
-        INSERT INTO archive_stats_intervals VALUES(?,?,?,?,?,?,?,?)
+        INSERT INTO archive_stats_intervals VALUES(?,?,?,?,?,?,?,?,?)
         ON CONFLICT(source,root_id,session_id,event_id,kind) DO UPDATE SET
             (start_ms,duration_ms,provisional)=(excluded.start_ms,excluded.duration_ms,excluded.provisional)
         WHERE (start_ms IS NULL OR excluded.start_ms IS NOT NULL)
           AND (duration_ms IS NULL OR excluded.duration_ms IS NOT NULL)
           AND (provisional OR NOT excluded.provisional)
           AND (start_ms,duration_ms,provisional) IS NOT (excluded.start_ms,excluded.duration_ms,excluded.provisional)
-    """, ((source, root, value.session, value.event, value.kind, value.start_ms, value.duration_ms, value.provisional)
+    """, ((source, root, value.session, value.event, value.kind, value.start_ms, value.duration_ms, value.provisional, birth)
           for value in capture.intervals)).rowcount
     count += db.executemany("""
         INSERT INTO archive_response_timing
-        SELECT source,request_key,clock_ms,?,?,? FROM archive_requests
+        SELECT source,request_key,clock_ms,?,?,?,? FROM archive_requests
         WHERE source=? AND request_key=? AND clock_ms=? AND dedup_tree IS ?
         ON CONFLICT(source,request_key) DO UPDATE SET
             (completion_ms,start_ms,duration_ms,excluded) =
                 (excluded.completion_ms,excluded.start_ms,excluded.duration_ms,excluded.excluded)
         WHERE (completion_ms,start_ms,duration_ms,archive_response_timing.excluded) IS NOT
               (excluded.completion_ms,excluded.start_ms,excluded.duration_ms,excluded.excluded)
-    """, ((value.response.start_ms, value.response.duration_ms, value.response.excluded,
+    """, ((value.response.start_ms, value.response.duration_ms, value.response.excluded, birth,
            source, value.key, value.clock_ms, value.dedup_tree) for value in requests
           if value.response is not None)).rowcount
-    count += _publish_match_and_parents(db, source, root, capture)
+    count += _publish_match_and_parents(db, source, root, capture, birth)
     if count:
         db.execute("""
-            INSERT INTO archive_stats_revisions VALUES(?,1)
+            INSERT INTO archive_stats_revisions(source,revision) VALUES(?,1)
             ON CONFLICT(source) DO UPDATE SET revision=revision+1
         """, (source,))
 
 
-def _publish_match_and_parents(db, source, root, capture):
+def _publish_match_and_parents(db, source, root, capture, birth):
     count = db.executemany("""
-        INSERT INTO archive_stats_parents VALUES(?,?,?,?)
+        INSERT INTO archive_stats_parents VALUES(?,?,?,?,?)
         ON CONFLICT(source,root_id,session_id) DO UPDATE SET parent_id=excluded.parent_id
         WHERE parent_id IS NOT excluded.parent_id
-    """, ((source, root, session, parent) for session, parent in capture.parents)).rowcount
+    """, ((source, root, session, parent, birth) for session, parent in capture.parents)).rowcount
     value = capture.first_input
     if value is not None:
         count += db.execute("""
-            INSERT INTO archive_stats_first_inputs VALUES(?,?,?,?,?,?,?)
+            INSERT INTO archive_stats_first_inputs VALUES(?,?,?,?,?,?,?,?)
             ON CONFLICT(source,root_id) DO UPDATE SET
                 (event_id,fingerprint,start_ms,duration_ms,status)=
                     (excluded.event_id,excluded.fingerprint,excluded.start_ms,excluded.duration_ms,excluded.status)
@@ -148,34 +151,31 @@ def _publish_match_and_parents(db, source, root, capture):
               AND (status NOT IN ('complete','failed','aborted')
                    OR (event_id,fingerprint,start_ms) IS NOT (excluded.event_id,excluded.fingerprint,excluded.start_ms)
                    OR excluded.status IN ('complete','failed','aborted'))
-        """, (source, root, value.event, value.fingerprint, value.start_ms, value.duration_ms, value.status)).rowcount
+        """, (source, root, value.event, value.fingerprint, value.start_ms, value.duration_ms, value.status, birth)).rowcount
     return count
 
 
-def stats_revision(db, source):
-    row = db.execute("SELECT revision FROM archive_stats_revisions WHERE source=?", (source,)).fetchone()
-    return row[0] if row else 0
-
-
-def stats_interval_page(db, source, root, after=None):
+def stats_interval_page(db, source, root, after=None, *, through=None):
     resume = "AND (session_id,event_id,kind)>(?,?,?)" if after is not None else ""
+    bounded = "AND first_revision<=?" if through is not None else ""
     rows = db.execute(f"""
         SELECT session_id,event_id,kind,start_ms,duration_ms,provisional
-        FROM archive_stats_intervals WHERE source=? AND root_id=? {resume}
+        FROM archive_stats_intervals WHERE source=? AND root_id=? {resume} {bounded}
         ORDER BY session_id,event_id,kind LIMIT ?
-    """, (source, root, *(after or ()), USAGE_SLICE + 1)).fetchall()
+    """, (source, root, *(after or ()), *((through,) if through is not None else ()), USAGE_SLICE + 1)).fetchall()
     return StatsIntervalPage(tuple(StatsInterval(*row[:-1], bool(row[-1])) for row in rows[:USAGE_SLICE]),
                              rows[USAGE_SLICE - 1][:3] if len(rows) > USAGE_SLICE else None)
 
 
-def response_timings(db, source, request_keys):
+def response_timings(db, source, request_keys, *, through=None):
     if not request_keys:
         return {}
     if len(request_keys) > USAGE_SLICE:
         raise ValueError("invalid_response_timing_slice")
     marks = ",".join("?" for _ in request_keys)
+    bounded = "AND timing.first_revision<=?" if through is not None else ""
     return {key: ResponseTiming(start, duration, bool(excluded)) for key, start, duration, excluded in db.execute(f"""
         SELECT timing.request_key,start_ms,duration_ms,excluded
         FROM archive_response_timing AS timing JOIN archive_requests AS request USING(source,request_key)
-        WHERE source=? AND request_key IN ({marks}) AND request.clock_ms=timing.completion_ms
-    """, (source, *request_keys))}
+        WHERE source=? AND request_key IN ({marks}) AND request.clock_ms=timing.completion_ms {bounded}
+    """, (source, *request_keys, *((through,) if through is not None else ())))}

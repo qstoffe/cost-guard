@@ -17,10 +17,12 @@ from .display_mix_totals import mix_refresh, mix_total_schema, publish_mix_total
 from .display_usage_reader import read_usage_slice, retained_usage_version, usage_schema
 from .display_watch import publish_watch, watch_schema, watch_snapshot
 from .display_sort_keys import decimal_key
-from .display_stats_evidence import stats_evidence_schema
+from .display_stats_evidence import stats_evidence_schema, stats_interval_page
+from .display_stats_reader import read_stats_parents, read_stats_roots, read_stats_usage
+from .display_stats_revision import retained_stats_version, stats_revision_schema
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -249,6 +251,7 @@ class DisplayHistory:
                      {mix_groups_schema(add_run=bool(mix_columns) and "group_run" not in mix_columns)}
                      {mix_identity_schema()}
                      {stats_evidence_schema()}
+                     {stats_revision_schema(upgrade=version == 18)}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -301,6 +304,7 @@ class DisplayHistory:
                  {mix_groups_schema()}
                  {mix_identity_schema()}
                  {stats_evidence_schema()}
+                 {stats_revision_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -485,6 +489,30 @@ class DisplayHistory:
         with self._connect(read=True) as db:
             db.execute("BEGIN")
             return read_usage_slice(db, source, expected=expected, after=after)
+
+    def stats_usage(self, source, *, expected=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_stats_usage(db, source, expected=expected, after=after)
+
+    def stats_roots(self, source, *, expected=None, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return read_stats_roots(db, source, expected=expected, after=after)
+
+    def stats_intervals(self, source, root, *, expected, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            if retained_stats_version(db, source, expected) is not None:
+                return stats_interval_page(db, source, root, after, through=expected.evidence)
+            return None
+
+    def stats_parents(self, source, root, *, expected, after=None):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            if retained_stats_version(db, source, expected) is not None:
+                return read_stats_parents(db, source, root, expected.evidence, after)
+            return None
 
     def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
                            group_run=None, group_marks=None, reference=None):

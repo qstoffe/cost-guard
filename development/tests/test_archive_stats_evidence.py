@@ -126,3 +126,62 @@ class ArchiveStatsEvidenceTests(TestCase):
 
         self.assertEqual(("u_next", bytes.fromhex(fingerprint(first_input(snapshot))), 2000, 300, "complete"), kept)
         self.assertEqual("failed", corrected)
+
+    def test_usage_and_root_pages_pin_both_revisions_across_independent_appends(self):
+        roster = capture(one_request(running=False))
+        request, = roster.requests
+        self.commit(None, 1, roster)
+        bound = self.history.stats_usage("trusted")
+        original_roots = self.history.stats_roots("trusted", expected=bound.version)
+        staged = replace(roster, requests=(replace(request, key=b"new", dedup_tree=None),),
+                         attribution=(), prompts=None)
+        self.history.commit_sessions("trusted", (SessionChange(SessionFact("append", "r1", "Added"), None,
+            previous_progress=0, request_roster=staged),))
+        retained = self.history.stats_usage("trusted", expected=bound.version)
+        old_roots = self.history.stats_roots("trusted", expected=bound.version)
+        new_roots = self.history.stats_roots("trusted")
+        ancestry, end = self.history.stats_parents("trusted", "root", expected=bound.version)
+        precise = self.history.stats_intervals("trusted", "root", expected=bound.version)
+
+        self.assertEqual((request.key,), tuple(entry.request_key for entry in retained.population.entries))
+        self.assertEqual({request.key: ResponseTiming(2100, 200)}, retained.responses)
+        self.assertEqual(original_roots, old_roots)
+        self.assertEqual(("root", "append"), tuple(row.root for row in new_roots.roots))
+        self.assertEqual(("u_next", "complete"), (old_roots.roots[0].first_input.event, old_roots.roots[0].first_input.status))
+        self.assertEqual((("root", None),), ancestry)
+        self.assertIsNone(end)
+        self.assertEqual(roster.stats.intervals, precise.intervals)
+
+        # Geometry corrections change no physical usage token/completion data.
+        corrected = replace(roster, requests=(replace(request, response=ResponseTiming(2150, 150)),))
+        self.commit("r1", 2, corrected)
+        fresh = self.history.stats_usage("trusted")
+        self.assertEqual(new_roots.version.usage, fresh.version.usage)
+        self.assertGreater(fresh.version.evidence, new_roots.version.evidence)
+        self.assertIsNone(self.history.stats_usage("trusted", expected=bound.version))
+        self.assertIsNone(self.history.stats_roots("trusted", expected=new_roots.version))
+        self.assertEqual(ResponseTiming(2150, 150), fresh.responses[request.key])
+
+        self.history.clear_confirmed_sessions("trusted", self.history.source_state("trusted"))
+        self.assertIsNone(self.history.stats_roots("trusted", expected=fresh.version))
+
+    def test_v18_migration_preserves_facts_without_inventing_old_pins(self):
+        self.commit(None, 1, capture(one_request(running=False)))
+        before = self.history.stats_roots("trusted")
+        tables = ("archive_stats_roots", "archive_stats_intervals", "archive_stats_parents",
+                  "archive_stats_first_inputs", "archive_response_timing")
+        with self.history._connect() as db:
+            db.execute("DROP INDEX archive_stats_root_cohort")
+            for table in tables:
+                db.execute(f"DROP TRIGGER {table}_revision")
+                db.execute(f"ALTER TABLE {table} DROP COLUMN first_revision")
+            db.execute("ALTER TABLE archive_stats_revisions DROP COLUMN invalidated_through")
+            db.execute("PRAGMA user_version=18")
+
+        reopened = DisplayHistory(self.root)
+        reopened.initialize()
+        retained = reopened.stats_roots("trusted", expected=before.version)
+        older = reopened.stats_roots("trusted", expected=replace(before.version, evidence=0))
+
+        self.assertEqual(before, retained)
+        self.assertIsNone(older)
