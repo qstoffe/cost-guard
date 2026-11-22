@@ -8,10 +8,19 @@ _PERIODS = frozenset({"today", "7-days", "30-days", "month", "all"})
 
 
 @dataclass(frozen=True, slots=True)
+class StatsCalendar:
+    busiest_local_day: int  # Gregorian date ordinal, not a UTC timestamp.
+    busiest_ms: int
+    night_ms: int
+    streak_days: int
+
+
+@dataclass(frozen=True, slots=True)
 class StatsTimeRow:
     period: str
     start_ms: int | None
     working_ms: int | None
+    calendar: StatsCalendar | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +56,12 @@ def stats_time_schema():
             period TEXT NOT NULL, start_ms INTEGER, working_ms INTEGER,
             PRIMARY KEY(source,period)
         ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS archive_stats_calendar (
+            source TEXT NOT NULL, period TEXT NOT NULL,
+            busiest_local_day INTEGER, busiest_ms INTEGER, night_ms INTEGER, streak_days INTEGER,
+            PRIMARY KEY(source,period),
+            FOREIGN KEY(source,period) REFERENCES archive_stats_time(source,period) ON DELETE CASCADE
+        ) WITHOUT ROWID;
     """
 
 
@@ -66,6 +81,11 @@ def commit_time(db, source, stamp, rows):
                 or (row.start_ms is not None and row.start_ms > stamp.as_of)
                 or (row.working_ms is not None and not 0 < row.working_ms <= stamp.as_of - max(0, row.start_ms or 0))):
             raise ValueError("invalid_stats_time_row")
+        calendar = row.calendar
+        if calendar and (row.working_ms is None or not 0 < calendar.busiest_ms <= row.working_ms
+                         or not 0 <= calendar.night_ms <= row.working_ms
+                         or calendar.busiest_local_day <= 0 or calendar.streak_days <= 0):
+            raise ValueError("invalid_stats_calendar_row")
     if retained_stats_version(db, source, stamp.version) is None:
         return None
     old = time_stamp(db, source)
@@ -75,8 +95,9 @@ def commit_time(db, source, stamp, rows):
                 or stamp.version.usage.revision < old.version.usage.revision):
             return None
         if old.zone == stamp.zone:
-            prior = {period: (start, duration) for period, start, duration in db.execute("""
-                SELECT period,start_ms,working_ms FROM archive_stats_time WHERE source=?
+            prior = {period: (start, duration, _calendar(stats)) for period, start, duration, *stats in db.execute("""
+                SELECT period,start_ms,working_ms,busiest_local_day,busiest_ms,night_ms,streak_days
+                FROM archive_stats_time LEFT JOIN archive_stats_calendar USING(source,period) WHERE source=?
             """, (source,))}
     db.execute("INSERT OR IGNORE INTO sources(source) VALUES(?)", (source,))
     db.execute("""
@@ -91,7 +112,14 @@ def commit_time(db, source, stamp, rows):
         ON CONFLICT(source,period) DO UPDATE SET (start_ms,working_ms)=(excluded.start_ms,excluded.working_ms)
         WHERE (start_ms,working_ms) IS NOT (excluded.start_ms,excluded.working_ms)
     """, ((source, row.period, row.start_ms, row.working_ms) for row in rows))
-    changed = tuple(row.period for row in rows if prior.get(row.period) != (row.start_ms, row.working_ms))
+    db.executemany("""
+        INSERT INTO archive_stats_calendar VALUES(?,?,?,?,?,?)
+        ON CONFLICT(source,period) DO UPDATE SET (busiest_local_day,busiest_ms,night_ms,streak_days)=
+            (excluded.busiest_local_day,excluded.busiest_ms,excluded.night_ms,excluded.streak_days)
+        WHERE (busiest_local_day,busiest_ms,night_ms,streak_days) IS NOT
+            (excluded.busiest_local_day,excluded.busiest_ms,excluded.night_ms,excluded.streak_days)
+    """, ((source, row.period, *_calendar_values(row.calendar)) for row in rows))
+    changed = tuple(row.period for row in rows if prior.get(row.period) != (row.start_ms, row.working_ms, row.calendar))
     return StatsTimePublication(stamp, changed)
 
 
@@ -103,7 +131,9 @@ def time_due(db, source, zone, scopes, now_ms):
         return False  # Do not overwrite a newer observation on UTC clock reversal.
     if stamp.zone != zone or not _current(db, source, stamp, now_ms):
         return True
-    saved = dict(db.execute("SELECT period,start_ms FROM archive_stats_time WHERE source=?", (source,)))
+    saved = dict(db.execute("""
+        SELECT period,start_ms FROM archive_stats_time JOIN archive_stats_calendar USING(source,period) WHERE source=?
+    """, (source,)))
     return saved != dict(scopes)
 
 
@@ -117,12 +147,24 @@ def read_time(db, source, zone, period, start_ms, now_ms):
     if stamp.version.usage.archive_epoch != version.usage.archive_epoch:
         return None
     row = db.execute("""
-        SELECT working_ms FROM archive_stats_time WHERE source=? AND period=? AND start_ms IS ?
+        SELECT working_ms,busiest_local_day,busiest_ms,night_ms,streak_days
+        FROM archive_stats_time LEFT JOIN archive_stats_calendar USING(source,period)
+        WHERE source=? AND period=? AND start_ms IS ?
     """, (source, period, start_ms)).fetchone()
     if row is None:
         return None
-    return StatsTimeSnapshot(StatsTimeRow(period, start_ms, row[0]), stamp,
+    return StatsTimeSnapshot(StatsTimeRow(period, start_ms, row[0], _calendar(row[1:])), stamp,
                              version == stamp.version and _unexpired(stamp, now_ms))
+
+
+def _calendar(values):
+    return None if values[0] is None else StatsCalendar(*values)
+
+
+def _calendar_values(calendar):
+    if calendar is None:
+        return (None,) * 4
+    return calendar.busiest_local_day, calendar.busiest_ms, calendar.night_ms, calendar.streak_days
 
 
 def _current(db, source, stamp, now_ms):

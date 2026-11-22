@@ -2,17 +2,18 @@
 import sqlite3
 
 from src.analysis.ai_stats import windows
-from src.cache.display_stats_time import StatsTimeRow, StatsTimeStamp
+from src.cache.display_stats_time import StatsTimeStamp
 from src.cache.display_usage_reader import USAGE_SLICE
+
+from .archive_stats_calendar import MeasuredCalendar
 
 
 class ArchiveStatsTime:
     def __init__(self, source, zone, now_ms):
         self.source, self.zone, self.now_ms = source, zone, now_ms
         self.scopes = dict(windows(zone, now_ms))
-        self._totals = dict.fromkeys(self.scopes)
-        self._version = self._input = self._next_end = self._pending = None
-        self._output = (0, 0)
+        self._calendar = MeasuredCalendar(zone, self.scopes)
+        self._version = self._input = self._next_end = self._output = None
         self._reading = True
         self.publication = None
         self._db = sqlite3.connect("")
@@ -24,6 +25,9 @@ class ArchiveStatsTime:
             raise
 
     def close(self):
+        if self._output is not None:
+            self._output.close()
+            self._output = None
         if self._db is not None:
             self._db.close()
             self._db = None
@@ -42,20 +46,16 @@ class ArchiveStatsTime:
     def _step(self, history, eligible):
         if self._reading:
             return self._stage(history)
-        page = self._db.execute("""
-            SELECT start,end FROM spans WHERE (start,end)>(?,?)
-            ORDER BY start,end LIMIT ?
-        """, (*self._output, USAGE_SLICE)).fetchall()
-        if page:
-            for left, right in page:
-                self._merge(left, right)
-            self._output = page[-1]
-            return True
-        if self._pending:
-            self._count(*self._pending)
+        if self._output is None:
+            self._output = self._reduce_turns()
+        for _ in range(USAGE_SLICE):
+            if not next(self._output, False):
+                return self._publish(history, eligible)
+        return True
+
+    def _publish(self, history, eligible):
         stamp = StatsTimeStamp(self._version, self.zone, self.now_ms, self._next_end)
-        rows = tuple(StatsTimeRow(period, start, self._totals[period]) for period, start in self.scopes.items())
-        self.publication = history.publish_stats_time(self.source, stamp, rows, eligible=eligible)
+        self.publication = history.publish_stats_time(self.source, stamp, self._calendar.rows(), eligible=eligible)
         return False
 
     def _stage(self, history):
@@ -81,17 +81,22 @@ class ArchiveStatsTime:
         self._reading = self._input is not None
         return True
 
-    def _merge(self, left, right):
-        if self._pending:
-            start, finish = self._pending
-            if left <= finish:
-                self._pending = start, max(right, finish)
-                return
-            self._count(start, finish)
-        self._pending = left, right
-
-    def _count(self, left, right):
-        for period, start in self.scopes.items():
-            span = right - max(left, start or 0)
-            if span > 0:
-                self._totals[period] = (self._totals[period] or 0) + span
+    def _reduce_turns(self):
+        after, pending = (0, 0), None
+        while True:
+            page = self._db.execute("""
+                SELECT start,end FROM spans WHERE (start,end)>(?,?) ORDER BY start,end LIMIT ?
+            """, (*after, USAGE_SLICE)).fetchall()
+            if not page:
+                break
+            for left, right in page:
+                if pending and left <= pending[1]:
+                    pending = pending[0], max(right, pending[1])
+                else:
+                    if pending:
+                        yield from self._calendar.add_span(*pending)
+                    pending = left, right
+                yield True
+            after = page[-1]
+        if pending:
+            yield from self._calendar.add_span(*pending)

@@ -123,8 +123,9 @@ class WebMixRefreshTests(unittest.TestCase):
             request = roster.requests[0]
             requests = tuple(replace(request, key=i.to_bytes(4, "big"), fork_key=None)
                              for i in range(USAGE_SLICE + 1))
-            interval = StatsInterval("root", "complete", "prompt", now - 1000, 250, False)
-            roster = replace(roster, requests=requests, attribution=(), stats=replace(roster.stats, intervals=(interval,)))
+            intervals = tuple(StatsInterval("root", str(i), "prompt", now - 20_000 + 300 * i, 250, False)
+                              for i in range(64))
+            roster = replace(roster, requests=requests, attribution=(), stats=replace(roster.stats, intervals=intervals))
             archive.history.commit_sessions("local-fixture", (SessionChange(SessionFact("root", "r1", "Root"),
                 None, previous_progress=0, request_roster=roster),))
             catalog = Mock(display_archive=archive)
@@ -160,4 +161,4 @@ class WebMixRefreshTests(unittest.TestCase):
         self.assertEqual(1, len(events))
         hint, measured = events[0]
         self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["marks"]))
-        self.assertEqual(250, measured)
+        self.assertEqual(16_000, measured)

@@ -78,6 +78,14 @@ def union(intervals):
     return result
 
 
+def calendar_bounds(day, tz):
+    """UTC clocks for the local day's midnight, 06:00, 22:00, and next midnight."""
+    next_day = day + timedelta(days=1)
+    return (*(int(datetime(day.year, day.month, day.day, hour, tzinfo=tz).timestamp() * 1000)
+              for hour in (0, 6, 22)),
+            int(datetime(next_day.year, next_day.month, next_day.day, tzinfo=tz).timestamp() * 1000))
+
+
 def calendar_activity(intervals, zone):
     """Split unioned UTC intervals at local midnight, 06:00 and 22:00, including DST."""
     tz = resolve_timezone(zone)
@@ -88,9 +96,7 @@ def calendar_activity(intervals, zone):
             next_day = day + timedelta(days=1)
             bounds = boundaries.get(day)
             if bounds is None:
-                bounds = [int(datetime(day.year, day.month, day.day, hour, tzinfo=tz).timestamp() * 1000)
-                          for hour in (0, 6, 22)]
-                bounds.append(int(datetime(next_day.year, next_day.month, next_day.day, tzinfo=tz).timestamp() * 1000))
+                bounds = calendar_bounds(day, tz)
                 boundaries[day] = bounds
             for index, (start, end) in enumerate(zip(bounds, bounds[1:])):
                 amount = max(0, min(right, end) - max(left, start))

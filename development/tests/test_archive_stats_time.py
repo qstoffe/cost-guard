@@ -1,6 +1,6 @@
 """Bounded Stats measured-time projection from local committed facts only."""
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -11,7 +11,7 @@ from src.analysis.ai_stats import windows
 from src.application.archive_stats_time import ArchiveStatsTime
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_stats_evidence import StatsInterval
-from src.cache.display_stats_time import StatsTimeRow
+from src.cache.display_stats_time import StatsCalendar, StatsTimeRow
 from src.cache.display_usage_reader import USAGE_SLICE
 
 
@@ -64,8 +64,9 @@ class ArchiveStatsTimeTests(TestCase):
         self.assertEqual(USAGE_SLICE, len(first.intervals))
         self.assertEqual(5, len(tail.intervals))
         self.assertIsNone(tail.next_cursor)
-        self.assertEqual(5, turns)  # Two input and two sorted output slices, then one publish.
-        self.assertEqual(StatsTimeRow("all", None, 393), cached.row)
+        self.assertEqual(5, turns)  # Two input turns, then three bounded sort/calendar turns.
+        self.assertEqual(StatsTimeRow("all", None, 393, StatsCalendar(date(1970, 1, 1).toordinal(), 393, 393, 1)),
+                         cached.row)
         self.assertEqual(publication.stamp, cached.stamp)
         self.assertTrue(cached.current)
         self.assertIsNone(reopened.stats_time("foreign", "UTC", "all", None, 2001))
@@ -133,6 +134,7 @@ class ArchiveStatsTimeTests(TestCase):
         pin = self.history.stats_geometry("bound").version
         with self.history._connect() as db:
             db.execute("DROP INDEX archive_stats_geometry_cohort")
+            db.execute("DROP TABLE archive_stats_calendar")
             db.execute("DROP TABLE archive_stats_time")
             db.execute("DROP TABLE archive_stats_time_state")
             db.execute("PRAGMA user_version=19")
@@ -144,3 +146,60 @@ class ArchiveStatsTimeTests(TestCase):
 
         self.assertEqual(pin, geometry.version)
         self.assertEqual(250, self.history.stats_time("bound", "UTC", "all", None, 2000).row.working_ms)
+
+    def test_v20_measured_time_remains_readable_while_calendar_is_added(self):
+        self.commit((StatsInterval("root", "old", "prompt", 1000, 250, False),))
+        self.reduce(2000)
+        with self.history._connect() as db:
+            db.execute("DROP TABLE archive_stats_calendar")
+            db.execute("PRAGMA user_version=20")
+        self.history = DisplayHistory(self.root)
+        self.history.initialize()
+
+        prior = self.history.stats_time("bound", "UTC", "all", None, 2000)
+        due = self.history.stats_time_due("bound", "UTC", windows("UTC", 2000), 2000)
+        self.reduce(2000)
+        updated = self.history.stats_time("bound", "UTC", "all", None, 2000)
+
+        self.assertEqual(250, prior.row.working_ms)
+        self.assertIsNone(prior.row.calendar)
+        self.assertTrue(due)
+        self.assertEqual(250, updated.row.working_ms)
+        self.assertEqual(250, updated.row.calendar.night_ms)
+
+    def test_calendar_uses_local_days_and_excludes_overlap_and_scope_gaps(self):
+        hour = 3_600_000
+        midnight = utc("2026-10-24T22:00:00")
+        next_midnight = utc("2026-10-25T23:00:00")
+        zone = "Europe/Stockholm"
+        self.commit((
+            StatsInterval("root", "before", "prompt", midnight - hour, 2 * hour, False),
+            StatsInterval("root", "dst", "prompt", midnight, 25 * hour, False),
+            StatsInterval("child", "overlap", "prompt", midnight + hour, 3 * hour, False),
+            StatsInterval("root", "later", "prompt", next_midnight + 8 * hour, hour, False),
+            StatsInterval("root", "later-same-day", "prompt", next_midnight + 10 * hour, hour, False),
+        ))
+
+        now = next_midnight + 12 * hour
+        self.reduce(now, zone=zone)
+        all_time = self.history.stats_time("bound", zone, "all", None, now).row
+        today = self.history.stats_time("bound", zone, "today", next_midnight, now).row
+
+        self.assertEqual(28 * hour, all_time.working_ms)
+        self.assertEqual(StatsCalendar(date(2026, 10, 25).toordinal(), 25 * hour, 10 * hour, 3), all_time.calendar)
+        self.assertEqual(2 * hour, today.working_ms)
+        self.assertEqual(StatsCalendar(date(2026, 10, 26).toordinal(), 2 * hour, 0, 1), today.calendar)
+
+    def test_one_long_completed_span_cannot_make_a_turn_unbounded(self):
+        day, hour = 86_400_000, 3_600_000
+        days = 200
+        start = utc("2025-01-01T00:00:00")
+        now = start + days * day
+        self.commit((StatsInterval("root", "long", "prompt", start, days * day, False),))
+
+        _publication, turns = self.reduce(now)
+        result = self.history.stats_time("bound", "UTC", "all", None, now).row
+
+        self.assertEqual(3, turns)
+        self.assertEqual(days * day, result.working_ms)
+        self.assertEqual(StatsCalendar(date(2025, 1, 1).toordinal(), day, days * 8 * hour, days), result.calendar)

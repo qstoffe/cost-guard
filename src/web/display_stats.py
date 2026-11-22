@@ -1,4 +1,5 @@
 """Source-fenced AI Stats cache adapter; no finite report or source fallback."""
+from dataclasses import asdict
 from threading import Lock
 
 from src.analysis.ai_stats import windows
@@ -63,9 +64,11 @@ class DisplayStats:
             return None
         # This is not the canonical estimated working-time card. Even a current
         # subtotal has no authority over unseen, provisional or unmeasured work.
+        calendar = value.row.calendar if value else None
         return dict(binding=views.binding, archive_epoch=epoch, period=period, start_ms=start,
                     as_of_ms=value.stamp.as_of if value else None,
-                    measured_working_ms=value.row.working_ms if value else None, coverage="unknown")
+                    measured_working_ms=value.row.working_ms if value else None,
+                    measured_calendar=asdict(calendar) if calendar else None, coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()
