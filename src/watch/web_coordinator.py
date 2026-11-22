@@ -169,7 +169,7 @@ class WebWatchCoordinator(WatchCoordinator):
         if frame is None:
             return None
         running = {card.session_id for card in frame.active_cards
-            if any(row.prompt.in_progress or row.prompt.execution_unverified for row in card.rows)}
+            if any(row.prompt.in_progress and not row.prompt.execution_unverified for row in card.rows)}
         previews = catalog.previews(running, limit=MINI_PREVIEW_LIMIT)
         self.cards.preview_ids = tuple(item.session_id for item in previews)
         published = []

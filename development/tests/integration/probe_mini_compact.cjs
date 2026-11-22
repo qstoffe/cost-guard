@@ -28,7 +28,7 @@ function measure() {
 
 module.exports = async ({evaluate, until, fixture, open, close, settle, settings, command,
   sessionId, pipSession, evidence}) => {
-  const field = 'miniWatchNonRunningRows', endpoint = 'mini-non-running-rows';
+  const field = 'miniWatchRows', endpoint = 'mini-rows';
   const read = () => evaluate(`(${measure.toString()})()`);
   const widthLayout = () => evaluate(`(${require('./probe_mini_width.cjs').inspect.toString()})(miniWatch.view)`);
   const bounds = () => evaluate('[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
@@ -40,7 +40,7 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
     await until(`liveValue.view.active_cards.length===${running} && liveValue.view.history_cards.length===${ended}`);
   };
   const restore = field => settings(field, {'theme':'theme', 'ccostDisplayUnit':'ccost',
-    'miniWatchNonRunningRows':endpoint, 'miniWatchSize':'mini-size'}[field], 'default');
+    'miniWatchRows':endpoint, 'miniWatchSize':'mini-size'}[field], 'default');
   const fitWarning = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
 
   // Keep the original measured-width relationship under the same fixture, CSS
@@ -62,19 +62,20 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
 
   await publish(4, 15, 0);
   await open();
-  assert.equal(await evaluate('miniWatch.view.nonRunningRows'), 5);
-  for (const capacity of [5, 2, 10]) {
+  assert.equal(await evaluate('miniWatch.view.rowTarget'), 5);
+  assert.deepEqual((await read()).rows.map(row=>row.id),['active-0','active-1','active-2','active-3','earlier-14']);
+  for (const capacity of [0, 7]) {
     await settings(field, endpoint, capacity);
     // A live preference is allowed to exceed the original height. Reopen to
     // test the full configured band against actual native requested bounds.
     await close(); await open();
     const layout = await read(), {rows} = layout;
-    assert.equal(rows.length,19);
+    assert.equal(rows.length,Math.max(4,capacity));
     assert.equal(rows.filter(row => row.running).length,4);
-    const expected = rows.slice(-(capacity + 4));
+    const expected = rows;
     const fullHeight = layout.header + expected.reduce((sum,row) => sum + row.height,0);
     assert.ok(layout.height <= fullHeight + 1, JSON.stringify(layout));
-    assert.ok(layout.scrollHeight > layout.height && layout.scrollTop > 0);
+    assert.equal(layout.scrollTop,0);
     assert.ok(Math.abs(layout.headerOffset) <= 1, JSON.stringify(layout));
     if (layout.height + 1 >= fullHeight) {
       assert.deepEqual(rows.filter(row => row.visible).map(row => row.id),expected.map(row => row.id));
@@ -87,14 +88,14 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
 
   const before = await bounds();
   await evaluate("location.hash='#/settings'");
-  await until("!!document.querySelector('#mini-non-running-rows:not([disabled])')");
-  const options = await evaluate("[...document.querySelector('#mini-non-running-rows').options].map(o=>o.value)");
-  assert.deepEqual(options,['default','2','3','4','5','6','7','8','9','10']);
-  for (const value of ['2','10','default']) {
-    await evaluate(`(()=>{const select=document.querySelector('#mini-non-running-rows');
+  await until("!!document.querySelector('#mini-rows:not([disabled])')");
+  const options = await evaluate("[...document.querySelector('#mini-rows').options].map(o=>o.value)");
+  assert.deepEqual(options,['default','0','1','2','3','4','5','6','7']);
+  for (const value of ['0','7','default']) {
+    await evaluate(`(()=>{const select=document.querySelector('#mini-rows');
       select.value='${value}';select.dispatchEvent(new Event('change'));})()`);
     const capacity = value==='default'?5:Number(value);
-    await until(`miniWatch.view.nonRunningRows===${capacity} && !document.querySelector('#mini-non-running-rows').disabled`);
+    await until(`miniWatch.view.rowTarget===${capacity} && !document.querySelector('#mini-rows').disabled`);
     const saved = await evaluate("api('/api/settings')");
     assert.equal(saved.webSettingsChoices[field], value==='default'?value:capacity);
     assert.deepEqual(await bounds(),before,'changing settings while open cannot resize native PiP');
@@ -102,7 +103,7 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   await evaluate("location.hash='#/watch'");
   for (const [running, accounts] of [[0,0],[1,1],[12,6],[5,1]]) {
     await publish(running,15,accounts);
-    await until(`miniWatch.view.promptRows.size===${15+running}`);
+    await until(`miniWatch.view.promptRows.size===${Math.max(5,running)}`);
     await settle();
     assert.deepEqual(await bounds(),before,'prompt updates do not resize PiP');
     assert.equal((await read()).rows.filter(row => row.running).length,running);
@@ -123,7 +124,7 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   await evaluate(`miniWatch.window.resizeTo(240,220)`,true);
   await settle();
   const narrow = await read();
-  assert.equal(narrow.rows.length,27);
+  assert.equal(narrow.rows.length,12);
   assert.equal(narrow.documentOverflow,false);
   assert.ok(narrow.scrollHeight > narrow.height);
   assert.ok(narrow.height > narrow.header);
@@ -182,7 +183,7 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
     assert.equal(clamped.requested.width,80);
     assert.ok(clamped.inner[0]*evidence.browserZoom>80, JSON.stringify(clamped));
     assert.equal(clamped.documentOverflow,false);
-    assert.equal(clamped.rows.length,27);
+    assert.equal(clamped.rows.length,12);
     assert.ok(clamped.scrollHeight > clamped.height, JSON.stringify(clamped));
     assert.equal(clamped.feedback, fitWarning, JSON.stringify(clamped));
     await publish(10,15,1); await settle();
@@ -192,5 +193,5 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
     await close(); await evaluate('miniWatch.measure.read=readOpening;delete window.readOpening');
   }
   assert.equal(await evaluate('probeStreams'),1);
-  evidence.checks.push('Native PiP compact width against measured legacy request; 2/5/10 real row capacity, Settings default/save while open, scrolling/focus, count/theme/unit updates, manual narrow/short resize, explicit height-only Fit and remembered width');
+  evidence.checks.push('Native PiP compact width against measured legacy request; default-five startup population, 0/7 targets, Settings default/save while open, scrolling/focus, count/theme/unit updates, manual narrow/short resize, explicit height-only Fit and remembered width');
 };

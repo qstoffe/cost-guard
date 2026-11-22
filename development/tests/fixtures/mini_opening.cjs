@@ -37,7 +37,7 @@ const region={style:{},offsetHeight:10,clientHeight:10,
   firstElementChild:{tBodies:[{rows:[]}],tHead:{getBoundingClientRect:()=>({height:20})}}};
 const copy={classList:{add(){}},setAttribute(){},style:{},getBoundingClientRect:()=>({height:123.25}),
   querySelector(){return region;},remove(){removed=true;}};
-const visible={doc:{},nonRunningRows:5,root:{cloneNode:()=>copy,parentNode:{append(node){assert.equal(node,copy);appended=true;}}},
+const visible={doc:{},rowTarget:5,root:{cloneNode:()=>copy,parentNode:{append(node){assert.equal(node,copy);appended=true;}}},
   sessionRow(){throw new Error('No synthetic running-row reserve in manual fit');}};
 assert.equal(contentHeight(visible,417,false),124);
 assert.equal(copy.style.width,'417px');assert.equal(copy.inert,true);

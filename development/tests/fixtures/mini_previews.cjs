@@ -24,9 +24,9 @@ module.exports = (controller, view, input, helpText) => {
   for(const count of [0,1,2,3,5]) {
     const active=Array.from({length:count},(_,i)=>({...structuredClone(base),session_id:'running-'+i}));
     show(active);
-    assert.equal(view.promptRows.size,5+count);
-    assert.equal(view.body.children.length,5+count,'no extra loading/status row');
-    assert.equal(view.needsHistory,true,'unhydrated previews do not release history interest');
+    assert.equal(view.promptRows.size,5);
+    assert.equal(view.body.children.length,5,'no extra loading/status row');
+    assert.equal(view.needsHistory,count<5,'only selected unhydrated previews need history');
     for(const row of view.body.children.filter(r=>r.dataset.id.startsWith('preview-'))) {
       assertPending(row,[0,2]);
       assert.equal(row.className,'');assert.doesNotMatch(row.attributes['aria-label'],/Prompt|Completed|Ended|Running/);

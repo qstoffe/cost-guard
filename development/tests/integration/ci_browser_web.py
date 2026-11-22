@@ -250,13 +250,13 @@ def main():
                 size = page.get_by_role("combobox", name="Mini Watch size", exact=True)
                 expect(size).to_have_value("default")
                 assert size.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Fit on open)", "Fit on open", "Remember last size"]
-                rows = page.get_by_role("combobox", name="Mini Watch non-running rows", exact=True)
+                rows = page.get_by_role("combobox", name="Mini Watch session rows", exact=True)
                 expect(rows).to_have_value("default")
                 assert rows.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label'))") == [
-                    "Default (5)", *map(str, range(2, 11))]
-                rows.select_option("10")
-                expect(page.locator("#settings-feedback")).to_have_text("Mini Watch non-running rows saved.")
-                assert json.loads(user_config.read_text())["webSettings"]["miniWatchNonRunningRows"] == 10
+                    "Default (5)", *map(str, range(8))]
+                rows.select_option("0")
+                expect(page.locator("#settings-feedback")).to_have_text("Mini Watch session rows saved.")
+                assert json.loads(user_config.read_text())["webSettings"]["miniWatchRows"] == 0
                 placement.select_option("remember-last")
                 expect(page.locator("#settings-feedback")).to_have_text("Mini Watch position saved.")
                 expect(placement).to_have_value("remember-last")
@@ -272,7 +272,7 @@ def main():
                 expect(page.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                 expect(page.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                 expect(page.get_by_role("combobox", name="Mini Watch position", exact=True)).to_have_value("remember-last")
-                expect(rows).to_have_value("10")
+                expect(rows).to_have_value("0")
                 expect(page.get_by_role("combobox", name="Quota display", exact=True)).to_have_value("remaining")
                 page.get_by_role("combobox", name="Mini Watch position", exact=True).select_option("default")
                 expect(page.locator("#settings-feedback")).to_have_text("Mini Watch position saved.")
@@ -283,7 +283,7 @@ def main():
                     expect(fresh.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                     expect(fresh.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                     expect(fresh.get_by_role("combobox", name="Mini Watch position", exact=True)).to_have_value("default")
-                    expect(fresh.get_by_role("combobox", name="Mini Watch non-running rows", exact=True)).to_have_value("10")
+                    expect(fresh.get_by_role("combobox", name="Mini Watch session rows", exact=True)).to_have_value("0")
                     expect(fresh.get_by_role("combobox", name="Quota display", exact=True)).to_have_value("remaining")
                     expect(fresh.locator("html")).to_have_attribute("data-theme", "web")
                 finally:
@@ -294,8 +294,8 @@ def main():
                 page.get_by_role("combobox", name="Quota display", exact=True).select_option("default")
                 expect(page.locator("#settings-feedback")).to_have_text("Quota display saved.")
                 rows.select_option("default")
-                expect(page.locator("#settings-feedback")).to_have_text("Mini Watch non-running rows saved.")
-                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default", "miniWatchNonRunningRows": "default", "quotaDisplayMode": "default"}}
+                expect(page.locator("#settings-feedback")).to_have_text("Mini Watch session rows saved.")
+                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default", "miniWatchRows": "default", "quotaDisplayMode": "default"}}
                 assert not report_requests, "Settings must not acquire reports"
                 page.go_back()
                 # Settings reload discarded process-local view state. Reopening

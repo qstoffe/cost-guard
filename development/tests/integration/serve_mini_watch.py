@@ -401,7 +401,9 @@ def main():
                 elif command.startswith('proof-'):
                     state = command.removeprefix('proof-')
                     history = tuple(replace(frame.history_cards[0], session_id=f'proof-{index}',
-                        title=f'Latest sample {index}') for index in range(5))
+                        title=f'Latest sample {index}', rows=(replace(frame.history_cards[0].rows[0],
+                            prompt=replace(frame.history_cards[0].rows[0].prompt,
+                                completed_at_ms=frame.now_ms - 100000 + index)),)) for index in range(5))
                     publish(value=replace(frame, history_cards=history,
                         history_state='loading' if state == 'switch' else state,
                         history_scope='other-source' if state == 'switch' else 'fixed-source',

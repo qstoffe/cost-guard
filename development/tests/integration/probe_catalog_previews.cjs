@@ -5,7 +5,7 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   assert.equal(initial.leases,0);
   const started=Date.now();
   await fixture('preview-cold');await open();
-  await until('miniWatch.view.promptRows.size===15');
+  await until('miniWatch.view.promptRows.size===5');
   const cold=Date.now()-started;
   assert.equal((await fixture('preview-counts')).reads,0,'cold first paint performs no source hydration');
   assert.equal((await fixture('preview-counts')).leases,0,'no Sessions tab/lease is required');
@@ -37,14 +37,14 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   await close();await evaluate(`location.hash='#/sessions'`);
   await until(`current?.catalog?.data?.view.session_usage.length===25&&!current.catalog.data.pending_sort`);
   const sessionsAt=Date.now();
-  const shortlist=await evaluate('current.catalog.data.view.session_usage.slice(0,15).map(r=>r.session_id)');
+  const shortlist=await evaluate('current.catalog.data.view.session_usage.slice(0,5).map(r=>r.session_id)');
   const sessionsCells=await evaluate('current.catalog.body.rows[0].textContent');
   assert.match(sessionsCells,/Synthetic/);
   await fixture('preview-warm');await open();
-  await until('miniWatch.view.promptRows.size===15');
+  await until('miniWatch.view.promptRows.size===5');
   const bounds=await evaluate('[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
   const painted=Date.now();
-  assert.deepEqual((await rows()).map(row=>row.id),shortlist.slice().reverse());
+  assert.deepEqual((await rows()).map(row=>row.id),shortlist);
   assert.equal((await fixture('preview-counts')).reads,warmCounts.reads,'warm Sessions facts are reused');
   const upgrade=shortlist[0];
   const oldTotal=await evaluate(`(()=>{window.upgradeNode=miniWatch.view.promptRows.get(${JSON.stringify(upgrade)});
@@ -57,8 +57,8 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   assert.equal(await evaluate('liveValue.view.history_epoch'),0,'one real representative is not global proof');
   await fixture('preview-two-running');
   await until('miniWatch.view.promptRows.has("preview-running-1")');
-  assert.equal((await rows()).filter(row=>row.id.startsWith('root-')).length,15);
-  assert.equal((await rows()).length,17);
+  assert.equal((await rows()).filter(row=>row.id.startsWith('root-')).length,3);
+  assert.equal((await rows()).length,5);
   const pip=await (async()=>{for(const target of (await command('Target.getTargets')).targetInfos.filter(t=>t.type==='page')){
     const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
     if(await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId))return attached.sessionId;
@@ -103,5 +103,5 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   evidence.previewTiming={coldOpenToShortlistMs:cold,sessionsVisibleToMiniReopenMs:painted-sessionsAt,
     warmReads:warmCounts.reads,checked:20,total:3217};
   evidence.layouts.push({case:'preview-cold-to-warm',...coldGeometry});
-  evidence.checks.push('Catalog previews: cold without Sessions/reads, warm 25-row Sessions reuse, bounded scrollback alongside running rows, labelled spinners, keyed rich upgrade, retained Total/focus, stable native bounds, qualified absence and revision withdrawal');
+  evidence.checks.push('Catalog previews: cold without Sessions/reads, warm 25-row Sessions reuse, combined five rows including Running, labelled spinners, keyed rich upgrade, retained Total/focus, stable native bounds, qualified absence and revision withdrawal');
 };

@@ -22,36 +22,26 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(view.earlierToggle,undefined);assert.equal(view.historyBody,undefined);
   const headers=view.body.parentNode.querySelectorAll('th');
   assert.deepEqual(headers.map(n=>n.textContent),['Activity','Session','CCost','Total','Ctx']);
-   assert.equal(helpText(headers[0].children[0]),'• For a running prompt, shows when it started.\n• For a finished prompt, shows when it finished.\n• While prompt details load, shows session activity.');
+  assert.match(helpText(headers[0].children[0]),/Running sessions come first.*newest activity/);
   assert.equal(helpText(headers[1].children[0]),'The name of the session.');
   assert.equal(helpText(headers[2].children[0]),"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
   assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');
   assert.equal(helpText(headers[4].children[0]),'Estimated context for this session, in tokens.');
-  for(const count of [0,1,4,5,10,12]) {
-    const active=Array.from({length:count},(_,i)=>card('a'+i,200+i,true));show(active,history);
-    assert.equal(rows().length,5+count);
-    assert.deepEqual(ids(),[...history.map(c=>c.session_id),...active.map(c=>c.session_id)]);
-    const expected=require('./mini_history_expected.cjs')(input.view);
-    assert.deepEqual(ids(),expected.map(row=>row.id));
-    if(count===1) assert.notDeepEqual(ids(),history.map(c=>c.session_id),
-      'the obsolete history-only oracle excludes a legitimate running representative');
-    assert.equal(new Set(ids()).size,rows().length);assert.equal(view.needsHistory,false);
-    for(const row of rows()) assert.equal(row.children[0].textContent,row.dataset.id.startsWith('a')?'▶ 12:34':'23:47');
-  }
-  for (const capacity of [2,5,10]) {
-    controller.settings({miniWatchPlacement:'remember-last',miniWatchNonRunningRows:capacity});
-    for (const running of [0,1,4,5,10,12]) for (const nonRunning of [0,2,5,10,19]) {
-      const active=Array.from({length:running},(_,i)=>card('running'+i,200+2*i,true));
-      const ended=Array.from({length:nonRunning},(_,i)=>card('ended'+i,185+3*i));
-      show(active,ended);
-      assert.equal(view.nonRunningRows,capacity);
-      assert.equal(view.needsHistory,nonRunning<capacity);
-      const scrollback=ended.slice(-15);
-      const opening=[...active,...scrollback.slice(-capacity)]
-        .sort((a,b)=>a.rows[0].prompt.at_ms-b.rows[0].prompt.at_ms || a.session_id.localeCompare(b.session_id));
-      assert.deepEqual(ids(),[...scrollback.slice(0,-capacity),...opening].map(value=>value.session_id));
-    }
-  }
+  const runningFour = [2,0,3,1].map(i=>card('a'+i,20+i,true));
+  const fifteen = Array.from({length:15},(_,i)=>card('end'+i,100+i));
+  show(runningFour,fifteen);
+  assert.deepEqual(ids(),['a3','a2','a1','a0','end14']);
+  assert.equal(view.needsHistory,false);
+  controller.settings({miniWatchRows:0});
+  assert.deepEqual(ids(),['a3','a2','a1','a0']);
+  show([],fifteen);assert.deepEqual(ids(),[]);assert.equal(view.needsHistory,false);
+  controller.settings({miniWatchRows:7});
+  show(runningFour,[fifteen[1],fifteen[2],fifteen[2]]);
+  assert.deepEqual(ids(),['a3','a2','a1','a0','end2','end1']);
+  assert.equal(view.needsHistory,true,'duplicate identities cannot satisfy a missing slot');
+  show(runningFour,fifteen);
+  assert.deepEqual(ids(),['a3','a2','a1','a0','end14','end13','end12']);
+  assert.equal(view.needsHistory,false);
   controller.settings({miniWatchPlacement:'remember-last'});
   show([],history);
   const fixed=[...view.body.children];
@@ -77,7 +67,7 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.equal(retained.children[4].textContent,'900','historical context uses session summary, not stale prompt');
   assert.equal(time.textContent,'23:47');assert.equal(helpText(time),activityHelp('2026-10-25 02:30'));
   const resumed=card('h4',300,true);show([resumed],history);
-  assert.equal(view.promptRows.get('h4'),retained,'history promotes in the same keyed row');assert.equal(ids().at(-1),'h4');
+  assert.equal(view.promptRows.get('h4'),retained,'history promotes in the same keyed row');assert.equal(ids()[0],'h4');
    assert.equal(retained.children[4].textContent,'17');assert.equal(time.textContent,'▶ 12:34');
    assert.equal(time.children[0].attributes['aria-hidden'],'true');assert.equal(time.children[0].tabIndex,undefined);
    assert.deepEqual(time.children[0].events,{});assert.equal(time.tabIndex,0);
@@ -105,11 +95,18 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.match(retained.attributes['aria-label'],/Running/,'genuinely running wins over unverified candidate');
    show([unverified],history);assert.match(retained.attributes['aria-label'],/Unverified/);assert.equal(retained.className,'');
    assert.equal(time.textContent,'12:34');
+  const oldStart=card('h4',1,true);oldStart.rows[0].prompt.execution_unverified=true;
+  show([oldStart],[card('h4',300),card('other',250)]);
+  assert.deepEqual(ids(),['h4','other']);
+  assert.match(retained.attributes['aria-label'],/Unverified/);
+  assert.equal(time.textContent,'23:47');
+  assert.match(helpText(time),/^Session activity · /);
+  assert.doesNotMatch(helpText(time),/finished|completed/i);
   helpText(cost);
   assert.equal(view.doc.body.children.at(-1).children.length,0,'unverified Duration is plain text');
   const ended=Array.from({length:5},(_,i)=>{const c=card('h4',400+i);c.focal_id=c.rows[0].prompt.event_id='end'+i;return c;});
   show(ended,history);assert.equal(ids().filter(id=>id==='h4').length,1);assert.equal(view.promptRows.get('h4'),retained);
-   assert.equal(retained.className,'mini-success');assert.equal(ids().at(-1),'h4');
+   assert.equal(retained.className,'mini-success');assert.equal(ids()[0],'h4');
    assert.equal(time.textContent,'23:47');
   const handedOff={...ended.at(-1),focal_id:''};
   show([],[...history.slice(0,4),handedOff]);
@@ -144,16 +141,16 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
    assert.equal(view.promptRows.has('h4'),false);assert.equal(rows()[0].children[0].textContent,'▶ 12:34');
    show([],[card('replacement',600)]);assert.equal(rows()[0].children[0].textContent,'23:47','replacement session clears its own cue');
   const olderGrace=card('grace',50);olderGrace.focal_id='grace';show([olderGrace],history);
-  assert.deepEqual(ids(),['grace',...history.map(c=>c.session_id)],'older grace remains available in scrollback');
-  const unknown=card('unknown',0);unknown.rows[0].prompt.completed_at_ms=null;
-  show([],[unknown,...history.slice(1)]);assert.equal(ids()[0],'unknown');
-  assert.equal(rows()[0].children[0].textContent,'—');assert.equal(helpText(rows()[0].children[0].children[0]),activityHelp('Unknown finish time'));
+  assert.deepEqual(ids(),['h4','h3','h2','h1','h0'],'older grace cannot add a sixth row');
+  const unknown=card('unknown',null);
+  show([],[unknown,...history.slice(1)]);assert.equal(ids().at(-1),'unknown');
+  assert.equal(rows().at(-1).children[0].textContent,'—');assert.equal(helpText(rows().at(-1).children[0].children[0]),activityHelp('Unknown finish time'));
   for(const state of ['loading','unavailable']) {
     show([resumed],history,state);assert.deepEqual(ids(),['h4']);
     assert.doesNotMatch(view.body.textContent,/Loading earlier|Unable to load/);
     assert.equal(view.needsHistory,true);
   }
-  show([],history,'refreshing',1);assert.deepEqual(ids(),history.map(c=>c.session_id));
+  show([],history,'refreshing',1);assert.deepEqual(ids(),['h4','h3','h2','h1','h0']);
   assert.equal(rows().length,5);assert.doesNotMatch(view.body.textContent,/checking for changes/);
   show([],[]);assert.equal(rows().length,0);assert.equal(view.body.children[0].children[0].colSpan,5);
   show([],history.slice(0,2));assert.equal(rows().length,2,'no duplicate/fake data rows');
@@ -196,10 +193,10 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
     summary.cost=cost;summary.state=state;show([partial],[]);
     assert.equal(rows()[0].children[3].textContent,expected);
   }
-  // Full Watch is running-only; Mini's five historical rows remain independent.
+  // Full Watch is running-only; Mini independently fills the combined target.
   show(saved.active_cards,history);context.fullInput=input;context.fullParent=view.el('div');context.fullState={connection:'Live connected.'};
   vm.runInContext('ReportView.renderLive(fullParent,fullInput,fullState)',context);
   assert.equal(context.fullState.watch.history,undefined);
-  assert.equal(view.promptRows.size,saved.active_cards.length+5);
+  assert.equal(view.promptRows.size,5);
   input.view=saved;controller.update(input);
 };

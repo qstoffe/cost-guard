@@ -16,7 +16,7 @@ module.exports = function expectedMiniRows(view) {
   for(const card of view.active_cards || []) for(const {prompt} of card.rows || []) {
     if(prompt.is_compaction || !card.focal_id || prompt.event_id!==card.focal_id) continue;
     const active=!!(prompt.in_progress || prompt.execution_unverified), value=entry(card,prompt,active);
-    const pool=active ? running : finished, old=pool.get(value.id);
+    const pool=value.play ? running : finished, old=pool.get(value.id);
     const preferred=old && active && value.verified!==old.verified ?
       value.verified : !old || ordered(value,old)>0;
     if(preferred) pool.set(value.id,value);
@@ -26,6 +26,7 @@ module.exports = function expectedMiniRows(view) {
     const value=entry(card,card.rows[0].prompt,false), old=finished.get(value.id);
     if(!old || ordered(value,old)>=0) finished.set(value.id,value);
   }
-  const fillers=[...finished.values()].filter(value=>!running.has(value.id)).sort(ordered).slice(-15);
-  return [...fillers.slice(0,-5),...[...running.values(),...fillers.slice(-5)].sort(ordered)];
+  const newest=(a,b)=>(b.at ?? -Infinity)-(a.at ?? -Infinity) || a.id.localeCompare(b.id);
+  const fillers=[...finished.values()].filter(value=>!running.has(value.id)).sort(newest);
+  return [...running.values()].sort(newest).concat(fillers.slice(0,Math.max(0,5-running.size)));
 };
