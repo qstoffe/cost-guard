@@ -23,15 +23,16 @@ from .display_archive import DisplayArchive
 
 
 class WebHost:
-    # Every page reads the shared display archive; acquisition only publishes into it.
-    cached_sessions_enabled = True
-    cached_watch_enabled = True
-    cached_mix_enabled = True
-    cached_stats_enabled = True
-    cached_models_enabled = True
-    cached_accounts_enabled = True
-
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
+        # Normal hosts always serve every page from the shared display archive;
+        # synthetic test hosts with injected jobs start without an archive.
+        cached = jobs is None
+        self.cached_sessions_enabled = cached
+        self.cached_watch_enabled = cached
+        self.cached_mix_enabled = cached
+        self.cached_stats_enabled = cached
+        self.cached_models_enabled = cached
+        self.cached_accounts_enabled = cached
         self.root = root
         self.store = store
         self.nonce = nonce or secrets.token_hex(16)
