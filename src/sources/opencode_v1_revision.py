@@ -18,10 +18,13 @@ _REVISION_FIELDS = (
 def revision_from_rows(rows: Sequence[sqlite3.Row]) -> str:
     digest = hashlib.sha256()
     for row in rows:
-        values = ["" if row[field] is None else str(row[field]) for field in _REVISION_FIELDS]
-        digest.update("\0".join(values).encode("utf-8", errors="surrogatepass"))
-        digest.update(b"\n")
+        digest.update(revision_row_bytes(row[field] for field in _REVISION_FIELDS))
     return "v1-tree:" + digest.hexdigest()
+
+
+def revision_row_bytes(fields):
+    values = ("" if value is None else str(value) for value in fields)
+    return "\0".join(values).encode("utf-8", errors="surrogatepass") + b"\n"
 
 
 def revision_rows(connection: sqlite3.Connection, session_id: str) -> list[sqlite3.Row]:

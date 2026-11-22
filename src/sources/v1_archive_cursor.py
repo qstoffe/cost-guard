@@ -6,16 +6,18 @@ from time import monotonic
 from src.domain import NormalizedMessage, NormalizedPart, NormalizedSession
 
 from .errors import SourceConcurrentChangeError, SourceDataError, SourceSchemaError
+from .v1_archive_revision import MemberRevision
 
 
 PAGE_ROWS = 128
 PAGE_BYTES = 1024 * 1024
 PIN_SECONDS = 30
 MAX_DEPTH = 128
+_REVISION_ID = "CAST(id AS BLOB) AS revision_id"  # Match BINARY order in the source database encoding.
 _TABLES = (
-    ("session", "parent_id", "id,parent_id,title,time_created,time_updated,time_archived"),
-    ("message", "session_id", "id,session_id,time_created,time_updated"),
-    ("part", "session_id", "id,message_id,session_id,time_created,time_updated"),
+    ("session", "parent_id", f"id,parent_id,project_id,title,time_created,time_updated,time_archived,{_REVISION_ID}"),
+    ("message", "session_id", f"id,session_id,time_created,time_updated,{_REVISION_ID}"),
+    ("part", "session_id", f"id,message_id,session_id,time_created,time_updated,{_REVISION_ID}"),
 )
 _KEYS = (("id",), ("time_created", "id"), ("rowid",))
 _DATA_COLUMNS = ("rowid", "typeof(data)")
@@ -27,6 +29,7 @@ class V1ArchivePage:
     messages: tuple[NormalizedMessage, ...] = ()  # Parts arrive separately, keyed by message ID.
     parts: tuple[NormalizedPart, ...] = ()
     eof: bool = False
+    revision_member: tuple[bytes, bytes] | None = None
 
 
 def _identifier(value):
@@ -40,11 +43,16 @@ def _indexes(db, table):
             yield name, row["unique"], tuple(db.execute(f"PRAGMA index_xinfo({name})"))
 
 
-def _unique_id_index(indexes, table):
+def _unique_id_index(db, indexes, table):
     for name, unique, columns in indexes:
         key = [(col["name"], col["coll"]) for col in columns if col["key"]]
         if unique and key == [("id", "BINARY")]:
-            return name
+            plan = tuple(row["detail"] for row in db.execute(
+                f"EXPLAIN QUERY PLAN SELECT id FROM {table} INDEXED BY {name} ORDER BY id LIMIT 1"))
+            if len(plan) == 1 and plan[0].startswith("SCAN "):
+                # ORDER BY id must use the same BINARY ordering as the index;
+                # otherwise the legacy MAX(id) need not match our captured max.
+                return name
     raise SourceSchemaError(f"OpenCode V1 lacks a unique archive identity for {table}", phase="archive")
 
 
@@ -108,6 +116,7 @@ class _Seek:
 @dataclass(slots=True)
 class _Member:
     session_id: str
+    revision: MemberRevision
     phase: int = 1  # Message and part streams, then children.
     after: tuple | None = None
 
@@ -127,7 +136,7 @@ class V1ArchiveCursor:
             if any(row["name"].casefold() == "rowid" for row in db.execute(f"PRAGMA table_xinfo({table})")):
                 raise SourceSchemaError("OpenCode V1 archive row identity is shadowed", phase="archive")
             indexes = tuple(_indexes(db, table))
-            identity_index = _unique_id_index(indexes, table)
+            identity_index = _unique_id_index(db, indexes, table)
             if table == "session":
                 root_sql = f"SELECT {fields} FROM session INDEXED BY {identity_index} WHERE id COLLATE BINARY=?"
             limit = 1 if table == "session" else PAGE_ROWS
@@ -139,7 +148,7 @@ class V1ArchiveCursor:
             raise SourceDataError("OpenCode V1 archive root is not a top-level session", phase="archive")
         _require_ids(root, "id")
         self._root = self._source._normalize_session(root)
-        self._stack = [_Member(self._root.session_id)]
+        self._stack = [_Member(self._root.session_id, MemberRevision.from_row(root))]
 
     def close(self):
         db, self._db = self._db, None
@@ -207,6 +216,8 @@ class V1ArchiveCursor:
                 except UnicodeError as error:
                     raise SourceDataError("OpenCode V1 archive payload has invalid text", phase="archive") from error
                 values.append(normalize(record, ()) if member.phase == 1 else normalize(record))
+            totals = member.revision.messages if member.phase == 1 else member.revision.parts
+            totals.add(row)
             member.after = seek.key(row, trailing_columns=len(_DATA_COLUMNS))
         else:
             if len(values) < PAGE_ROWS:
@@ -218,13 +229,13 @@ class V1ArchiveCursor:
         rows = seek.rows(db, member.session_id, member.after, 1)
         if not rows:
             self._stack.pop()
-            return V1ArchivePage()
+            return V1ArchivePage(revision_member=(member.revision.sort_key, member.revision.bytes()))
         if len(self._stack) >= MAX_DEPTH:
             raise SourceDataError("OpenCode V1 archive tree exceeds the traversal depth budget", phase="archive")
         _require_ids(rows[0], "id", "parent_id")
         child = self._source._normalize_session(rows[0])
         member.after = seek.key(rows[0])
-        self._stack.append(_Member(child.session_id))
+        self._stack.append(_Member(child.session_id, MemberRevision.from_row(rows[0])))
         return V1ArchivePage(sessions=(child,))
 
 

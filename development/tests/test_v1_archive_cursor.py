@@ -17,6 +17,7 @@ from src.pricing.catalog import PricingCatalog
 from src.reports.token_mix_history import history_prompt_keys
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError, SourceSchemaError
 from src.sources.opencode_v1 import OpenCodeV1Source
+from src.sources.v1_archive_revision import V1RevisionStamp
 
 
 SCHEMA = Path(__file__).parent / "fixtures/opencode_v1/schema.sql"
@@ -122,6 +123,20 @@ def _finish(cursor):
             return pages
         pages.append(page)
     raise AssertionError("synthetic archive cursor did not reach EOF")
+
+
+def _stamp(revision, max_turns=350):
+    for _ in range(max_turns):
+        page = revision.read_page()
+        if page.eof:
+            break
+    else:
+        raise AssertionError("revision input did not reach EOF")
+    for _ in range(max_turns):
+        stamp = revision.digest_turn()
+        if stamp is not None:
+            return stamp
+    raise AssertionError("revision digest did not reach EOF")
 
 
 class _MeasuredSource(OpenCodeV1Source):
@@ -366,19 +381,104 @@ class V1ArchiveCursorTests(unittest.TestCase):
                     cursor.read_page()
                 self.assertFalse(source.db.in_transaction)
 
+    def test_equal_incremental_catalog_revision_is_not_exact_reopen_equivalence(self):
+        _seed(self.path)
+        with closing(sqlite3.connect(self.path)) as writer, writer:
+            _prompt(writer, ROOT, 1)
+            _prompt(writer, ROOT, 2)
+        source = OpenCodeV1Source(self.path)
+        previous = source.load_session_snapshot(ROOT)
+        with closing(sqlite3.connect(":memory:")) as db, source.archive_cursor(ROOT) as cursor:
+            old_stamp = _stamp(V1RevisionStamp(cursor, db))
+
+        with closing(sqlite3.connect(self.path)) as writer, writer:
+            writer.execute("UPDATE part SET data=? WHERE id='step-0001'",
+                           ('{"type":"step-finish","tokens":{"input":700,"output":2}}',))
+        current = source.load_session_snapshot(ROOT)
+        with closing(sqlite3.connect(":memory:")) as db, source.archive_cursor(ROOT) as cursor:
+            new_stamp = _stamp(V1RevisionStamp(cursor, db))
+
+        self.assertEqual(previous.source_revision, current.source_revision)
+        self.assertEqual(previous.source_revision, old_stamp)
+        self.assertEqual(old_stamp, new_stamp)
+        self.assertEqual([9, 9], [entry.tokens.input for entry in trace_entries(previous)])
+        self.assertEqual([700, 9], [entry.tokens.input for entry in trace_entries(current)])
+
+    def test_revision_stamp_retains_pinned_member_fields_and_ignores_peer_root_updates(self):
+        _seed(self.path)
+        source = _MeasuredSource(self.path)
+        with closing(sqlite3.connect(self.path)) as writer:
+            writer.execute("PRAGMA journal_mode=WAL")
+            with writer:
+                _session(writer, "A-empty-child", ROOT)
+                _session(writer, "z-used-child", ROOT)
+                _session(writer, "peer")
+                writer.execute("UPDATE session SET project_id='other-project',time_archived=9000 WHERE id='z-used-child'")
+                _prompt(writer, "z-used-child", 7)
+                _prompt(writer, ROOT, 1)
+                _prompt(writer, "peer", 2)
+                writer.execute("INSERT INTO part VALUES(?,?,?,?,?,?)",
+                               ("unused", "not-a-message", ROOT, 9, 17, '{"type":"metadata"}'))
+            expected = source.get_session_tree_revision(ROOT)
+
+            with closing(sqlite3.connect(":memory:")) as stage, source.archive_cursor(ROOT) as cursor:
+                revision = V1RevisionStamp(cursor, stage)
+                with self.assertRaisesRegex(SourceDataError, "source EOF"):
+                    revision.digest_turn()
+                self.assertEqual(ROOT, revision.read_page().sessions[0].session_id)
+                with writer:
+                    writer.execute("UPDATE part SET time_updated=8000 WHERE id='text-0002'")
+                self.assertEqual(expected, _stamp(revision))
+                self.assertFalse(source.db.in_transaction)
+                self.assertFalse(any("WITH RECURSIVE" in sql or "COUNT(" in sql.upper() for sql in source.sql))
+            with closing(sqlite3.connect(":memory:")) as stage, source.archive_cursor(ROOT) as cursor:
+                self.assertEqual(expected, _stamp(V1RevisionStamp(cursor, stage)))
+            with writer:
+                writer.execute("UPDATE part SET time_updated=18 WHERE id='unused'")
+            corrected = source.get_session_tree_revision(ROOT)
+            self.assertNotEqual(expected, corrected)
+            with closing(sqlite3.connect(":memory:")) as stage, source.archive_cursor(ROOT) as cursor:
+                self.assertEqual(corrected, _stamp(V1RevisionStamp(cursor, stage)))
+
+    def test_revision_digest_pages_binary_member_order_without_another_source_read(self):
+        _seed(self.path, encoding="UTF-16le")
+        with closing(sqlite3.connect(self.path)) as db, db:
+            for identifier in reversed(range(70)):
+                _session(db, f"child-{identifier:02d}", ROOT)
+            for identifier in ("ä-member", "Ā-member", "🌕-member"):
+                _session(db, identifier, ROOT)
+            db.executemany("INSERT INTO message VALUES(?,?,?,?,?)", [
+                ("m-ä", ROOT, -25, -20, '{"role":"other"}'),
+                ("m-Ā", ROOT, -40, -25, '{"role":"other"}'),
+            ])
+        source = OpenCodeV1Source(self.path)
+        expected = source.get_session_tree_revision(ROOT)
+        with closing(sqlite3.connect(":memory:")) as stage:
+            with source.archive_cursor(ROOT) as cursor:
+                revision = V1RevisionStamp(cursor, stage)
+                for _ in range(400):
+                    if revision.read_page().eof:
+                        break
+                else:
+                    self.fail("member capture did not reach EOF")
+            for _ in range(2):
+                self.assertIsNone(revision.digest_turn())
+            self.assertEqual(expected, revision.digest_turn())
+
     def test_bounded_trace_matches_whole_snapshot_with_a_late_step_and_tied_continuations(self):
         for size in (140, 2200):
             with self.subTest(parts=size):
                 source_path = self.path.with_name(f"source-{size}.db")
                 stage_path = self.path.with_name(f"stage-{size}.db")
                 _trace_fixture(source_path, size)
-                source = OpenCodeV1Source(source_path)
+                source = _MeasuredSource(source_path)
                 subscriptions = frozenset({"synthetic"})
                 snapshot = source.load_session_snapshot(ROOT)
                 expected = trace_entries(snapshot, subscription_providers=subscriptions)
-                with closing(sqlite3.connect(stage_path)) as db:
+                with closing(sqlite3.connect(stage_path)) as db, closing(sqlite3.connect(":memory:")) as revision_db:
                     with source.archive_cursor(ROOT) as cursor:
-                        builder = V1ArchiveTrace(source, cursor, db, subscription_providers=subscriptions)
+                        revision = V1RevisionStamp(cursor, revision_db)
+                        builder = V1ArchiveTrace(source, revision, db, subscription_providers=subscriptions)
                         with self.assertRaisesRegex(SourceDataError, "not ready"):
                             builder.trace_turn()
                         work = 0
@@ -389,14 +489,17 @@ class V1ArchiveCursorTests(unittest.TestCase):
                             return 0
 
                         db.set_progress_handler(progress, 1)
-                        costs = []
+                        stage_steps, source_steps = [], []
                         for _ in range(80):
-                            start = work
+                            start, source_start = work, source.steps
                             if builder.capture_turn():
                                 break
-                            costs.append(work - start)
+                            stage_steps.append(work - start)
+                            source_steps.append(source.steps - source_start)
                         else:
                             self.fail("source trace capture did not reach EOF")
+                    self.assertEqual(snapshot.source_revision, revision.digest_turn())
+                    self.assertFalse(any("WITH RECURSIVE" in sql or "COUNT(" in sql.upper() for sql in source.sql))
                     for _ in range(25):
                         if builder.prepare_turn():
                             break
@@ -422,7 +525,8 @@ class V1ArchiveCursorTests(unittest.TestCase):
                                  [entry.tokens.known_fields for entry in result])
                 self.assertEqual(17, result[0].tokens.input)
                 self.assertEqual(ROOT, result[2].parent_session_id)
-                self.assertLess(max(costs), 15000)
+                self.assertLess(max(stage_steps), 15000)
+                self.assertLess(max(source_steps), 5000)
                 bundle = analyze_snapshot(snapshot, tracked_provider="synthetic", now_ms=100_000)
                 fallback = history_prompt_keys(bundle)
                 ambiguous = next(entry for entry in bundle.trace_entries if entry.invocation_id == "wide:late-step")
@@ -445,19 +549,24 @@ class V1ArchiveCursorTests(unittest.TestCase):
         with history._connect() as display:
             display.executescript(request_stage_schema())
             display.execute("INSERT INTO sources(source) VALUES('pinned-source')")
-            self.assertTrue(open_request_input(display, "dense", RequestInputScope(
-                "pinned-source", "binding", 0, 1, ROOT, snapshot.source_revision, 0,
-                reference.analysis_signature, "test-dependency",
-            )))
 
-        with closing(sqlite3.connect(":memory:")) as db:
+        with closing(sqlite3.connect(":memory:")) as db, closing(sqlite3.connect(":memory:")) as revision_db:
             with source.archive_cursor(ROOT) as cursor:
-                builder = V1ArchiveTrace(source, cursor, db)
+                revision = V1RevisionStamp(cursor, revision_db)
+                builder = V1ArchiveTrace(source, revision, db)
                 for _ in range(100):
                     if builder.capture_turn():
                         break
                 else:
                     self.fail("dense input did not reach EOF")
+            stamp = revision.digest_turn()
+            self.assertEqual(snapshot.source_revision, stamp)
+            self.assertFalse(any("WITH RECURSIVE" in sql or "COUNT(" in sql.upper() for sql in source.sql))
+            with history._connect() as display:
+                self.assertTrue(open_request_input(display, "dense", RequestInputScope(
+                    "pinned-source", "binding", 0, 1, ROOT, stamp, 0,
+                    reference.analysis_signature, "test-dependency",
+                )))
             for _ in range(100):
                 if builder.prepare_turn():
                     break
