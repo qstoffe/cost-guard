@@ -20,15 +20,18 @@ from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 
 from .display_binding import selected_display_binding
+from .display_stats import DisplayStats
 
 
 class DisplayArchive:
-    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False):
+    def __init__(self, root, publish, *, watch_enabled=False, mix_enabled=False, mix_groups=False, stats_enabled=False):
         self.history = DisplayHistory(root)
         self.sessions = SessionArchiveOwner(self.history, publish)
         self._publish = publish
         self.watch_enabled = watch_enabled
         self.mix_refresh = ArchiveMixRefresh(grouped=mix_groups) if mix_enabled else None
+        self.stats = DisplayStats(self, publish) if stats_enabled else None
+        self._last_projection = None
         self._mix_signal = Lock()
         self._mix_marks = {}
         self.sweep = SessionArchiveSweep()
@@ -201,12 +204,24 @@ class DisplayArchive:
         return self.mix_refresh is not None and self.mix_refresh.due(
             (views.binding, self.sessions.clear_fence) if views is not None else None)
 
+    def next_projection(self, reference):
+        """Offer one fair turn; do not do any projection or I/O on Live."""
+        mix = self.mix_pending()
+        stats = self.stats is not None and self.stats.pending()
+        if stats and (not mix or self._last_projection == "mix"):
+            self._last_projection = "stats"
+            return self.stats.advance
+        if mix:
+            self._last_projection = "mix"
+            return lambda now_ms, *, active: self.advance_mix(now_ms, active=active, reference=reference)
+        return None
+
     def advance_mix(self, now_ms, *, active, reference=lambda: None):
         if self.mix_refresh is None:
             return
         views = self.views
         if views is None or not active():
-            self.close_catalog_work()
+            self.mix_refresh.withdraw()
             return
         fence = self.sessions.clear_fence
 
@@ -229,6 +244,8 @@ class DisplayArchive:
     def close_catalog_work(self):
         if self.mix_refresh is not None:
             self.mix_refresh.withdraw()
+        if self.stats is not None:
+            self.stats.close()
 
     def _mix_reset(self, views, *, archive_epoch=None):
         if self.mix_refresh is not None:
@@ -248,6 +265,8 @@ class DisplayArchive:
             if self.watch_enabled:
                 self._publish("watch-cache", dict(binding=None))
             self._mix_reset(None)
+            if self.stats is not None:
+                self.stats.reset(None)
             return
         epoch = uuid4().hex
         views = CachedSessionViews(self.history, binding.scope, timezone_id, epoch,
@@ -257,6 +276,8 @@ class DisplayArchive:
         if self.watch_enabled:
             self._publish("watch-cache", dict(binding=epoch))
         self._mix_reset(views)
+        if self.stats is not None:
+            self.stats.reset(views)
 
     def _writer_binding(self, service):
         views = self.views
@@ -303,6 +324,8 @@ class DisplayArchive:
             if self.watch_enabled and self.views is views:
                 self._publish("watch-cache", dict(binding=binding, generation=0, archive_epoch=state.archive_epoch))
             self._mix_reset(views, archive_epoch=state.archive_epoch)
+            if self.stats is not None:
+                self.stats.reset(views, archive_epoch=state.archive_epoch)
             return dict(binding=binding, generation=state.generation, archive_epoch=state.archive_epoch)
         return None
 

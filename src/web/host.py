@@ -28,6 +28,7 @@ class WebHost:
     cached_sessions_enabled = False
     cached_watch_enabled = False
     cached_mix_enabled = False
+    cached_stats_enabled = False
 
     def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
@@ -51,7 +52,7 @@ class WebHost:
         self.events = EventHub(self.nonce)
         self.display_archive = DisplayArchive(root, self.events.publish,
              watch_enabled=self.cached_watch_enabled, mix_enabled=self.cached_mix_enabled,
-             mix_groups=self.cached_mix_enabled) if jobs is None else None
+              mix_groups=self.cached_mix_enabled, stats_enabled=self.cached_stats_enabled) if jobs is None else None
         self.observations = WebObservations()
         self.source_startup = None
         if live_factory is None and jobs is None:

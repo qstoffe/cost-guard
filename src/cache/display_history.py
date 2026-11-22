@@ -539,9 +539,12 @@ class DisplayHistory:
             return time_due(db, source, zone, scopes, now_ms)
 
     def stats_time(self, source, zone, period, start_ms, now_ms):
+        return self.stats_time_view(source, zone, period, start_ms, now_ms)[0]
+
+    def stats_time_view(self, source, zone, period, start_ms, now_ms):
         with self._connect(read=True) as db:
             db.execute("BEGIN")
-            return read_time(db, source, zone, period, start_ms, now_ms)
+            return read_time(db, source, zone, period, start_ms, now_ms), self._state(db, source).archive_epoch
 
     def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
                            group_run=None, group_marks=None, reference=None):

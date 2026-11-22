@@ -180,11 +180,12 @@ class WebWatchCoordinator(WatchCoordinator):
         history_needed = scalar_needed or archive_needed or sweep_needed or coverage_needed
         if self._closed:
             return
-        if archive is not None and archive.mix_pending() and (not history_needed or self._catalog_history_turns >= 3):
+        projection = (archive.next_projection(lambda: _cached_mix_reference(self.report_service))
+                      if archive is not None and (not history_needed or self._catalog_history_turns >= 3) else None)
+        if projection is not None:
             self._catalog_archive = archive
             self._catalog_history_turns = 0
-            self.catalog_job = self.catalog_pool.submit(archive.advance_mix, int(self.clock_ms()),
-                 active=lambda: not self._closed, reference=lambda: _cached_mix_reference(self.report_service))
+            self.catalog_job = self.catalog_pool.submit(projection, int(self.clock_ms()), active=lambda: not self._closed)
         elif history_needed:
             # Reserve projection work without removing any turns from the
             # scalar vs. urgent/older archive acquisition pattern below.

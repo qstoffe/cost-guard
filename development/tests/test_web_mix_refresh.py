@@ -14,7 +14,9 @@ from development.tests.fixtures.session_snapshots import make_snapshot
 from src.analysis import analyze_snapshot
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import SessionChange, SessionFact
+from src.cache.display_stats_evidence import StatsInterval
 from src.cache.display_usage_reader import USAGE_SLICE
+from src.pricing.catalog import PricingCatalog
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.web.display_archive import DisplayArchive
@@ -104,3 +106,58 @@ class WebMixRefreshTests(unittest.TestCase):
         hint, (row, current) = events[0]
         self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["periods"]))
         self.assertEqual((USAGE_SLICE + 1, True), (row.calls, current))
+
+    def test_stats_and_mix_share_projection_turns_without_starving_catalog_acquisition(self):
+        now = 1_750_000_000_000
+        events, order = [], []
+        with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=1) as lane:
+            def publish(kind, hint):
+                if kind == "ai-stats-cache" and "periods" in hint:
+                    events.append((hint, archive.stats.snapshot("all", now)["measured_working_ms"]))
+
+            archive = DisplayArchive(Path(tmp), publish, mix_enabled=True, stats_enabled=True)
+            archive.initialize()
+            archive._set_binding(SimpleNamespace(scope="local-fixture"))
+            snapshot = make_snapshot()
+            roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=10_000), PricingCatalog(()), config={})
+            request = roster.requests[0]
+            requests = tuple(replace(request, key=i.to_bytes(4, "big"), fork_key=None)
+                             for i in range(USAGE_SLICE + 1))
+            interval = StatsInterval("root", "complete", "prompt", now - 1000, 250, False)
+            roster = replace(roster, requests=requests, attribution=(), stats=replace(roster.stats, intervals=(interval,)))
+            archive.history.commit_sessions("local-fixture", (SessionChange(SessionFact("root", "r1", "Root"),
+                None, previous_progress=0, request_roster=roster),))
+            catalog = Mock(display_archive=archive)
+            catalog.needed.return_value = True
+            service = SimpleNamespace(timezone_id="UTC")
+            owner = SimpleNamespace(report_service=service, catalog_observation=None, cards=SimpleNamespace(sessions={}),
+                catalog_job=None, clock_ms=lambda: now, _closed=False, catalog_pool=lane,
+                catalog_turn=0, _catalog_history_turns=3, _catalog_capture=lambda *_: order.append("scalar"))
+            mix, stats = archive.advance_mix, archive.stats.advance
+
+            def track(kind, action):
+                def advance(*args, **kwargs):
+                    order.append(kind)
+                    action(*args, **kwargs)
+                return advance
+
+            try:
+                with patch.object(archive, "catalog_pending", return_value=False), \
+                     patch.object(archive, "summary_pending", return_value=False), \
+                     patch.object(archive, "coverage_pending", return_value=False), \
+                     patch.object(archive, "publish_running"), \
+                     patch.object(archive, "advance_mix", side_effect=track("mix", mix)), \
+                     patch.object(archive.stats, "advance", side_effect=track("stats", stats)):
+                    for _ in range(17):
+                        WebWatchCoordinator.tick_catalog(owner, catalog)
+                        owner.catalog_job.result(timeout=3)
+            finally:
+                lane.submit(archive.close_catalog_work).result(timeout=5)
+                archive.close()
+
+        self.assertEqual(["mix", "stats", "mix", "stats", "stats"], order[::4])
+        self.assertTrue(all(order[i:i + 3] == ["scalar"] * 3 for i in (1, 5, 9, 13)))
+        self.assertEqual(1, len(events))
+        hint, measured = events[0]
+        self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["marks"]))
+        self.assertEqual(250, measured)

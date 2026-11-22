@@ -414,6 +414,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path in {"/api/cache/token-mix", "/api/cache/token-mix/groups"}:
                 self.cached_mix_total(value, grouped=self.path.endswith("/groups"))
                 return
+            if self.path == "/api/cache/ai-stats":
+                self.cached_ai_stats(value)
+                return
             if self.path == "/api/cache/session-detail/demand":
                 self.cached_detail_demand(value)
                 return
@@ -672,6 +675,32 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(503, {"error": "cache_source_unbound"})
         else:
             self.reply(200, value)
+
+    def cached_ai_stats(self, value):
+        period = value.get("period")
+        if (set(value) != {"period"} or type(period) is not str
+                or period not in ("today", "7-days", "30-days", "month", "all")):
+            self.reply(400, {"error": "invalid_request"})
+            return
+        owner = self.server.lifecycle
+        archive = getattr(owner, "display_archive", None)
+        stats = getattr(archive, "stats", None)
+        if stats is None:
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        views, fence = archive.views, archive.sessions.clear_fence
+        try:
+            result = stats.snapshot(period, int(time.time() * 1000))
+        except (OSError, sqlite3.Error):
+            self.reply(503, {"error": "cache_unavailable"})
+            return
+        if not self.server.session.authenticated(self.headers.get("Cookie")):
+            self.reply(401, {"error": "authentication_required"})
+        elif (owner.display_archive is not archive or result is None or archive.views is not views
+                or archive.sessions.clear_fence != fence):
+            self.reply(503, {"error": "cache_source_unbound"})
+        else:
+            self.reply(200, result)
 
     def clear_cached_sessions(self, value=None):
         owner = self.server.lifecycle
