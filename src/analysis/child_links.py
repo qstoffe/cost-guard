@@ -5,7 +5,7 @@ wrappers are a fallback only on actual assistant task/subagent tool results.
 All traversal stays inside the already acquired snapshot; no history is fetched.
 """
 from bisect import bisect_left, bisect_right
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 import re
@@ -77,6 +77,7 @@ class ChildScope:
     excluded_ids: tuple[str, ...] = ()
     bound_continuations: bool = False
     stale_at: int = 0
+    native_activity_only: bool = False
 
 
 def _candidate(part, message, sessions):
@@ -143,6 +144,7 @@ class ChildLinkIndex:
         qualified, fences, verified_parts = _resolved_launches(calls.values(), sessions)
         starts = defaultdict(set)
         requests = defaultdict(list)
+        launch_counts = Counter((scope.session_id, scope.start_ms) for _, scope in qualified)
         for invocation in snapshot.invocations:
             if invocation.session_id in sessions and source_member(invocation, self.source):
                 requests[invocation.session_id].append(invocation)
@@ -160,12 +162,22 @@ class ChildLinkIndex:
             index = bisect_right(times, scope.start_ms)
             end = times[index] if index < len(times) else OPEN_END
             child_turns = turns.get(scope.session_id, ())
+            messages = self.messages_by_session.get(scope.session_id, ())
+            native_activity_only = False
             if scope.stale_at:
                 if any(turn.kind in PROMPT_KINDS and scope.start_ms <= turn.created_at_ms < min(end, scope.stale_at)
                        for turn in child_turns):
                     end = min(end, min((turn.created_at_ms for turn in child_turns if turn.kind in PROMPT_KINDS
                                         and turn.created_at_ms >= scope.stale_at), default=OPEN_END))
                 else:
+                    # Preserve positive native status for a unique verified launch with
+                    # no child history, without opening its request accounting window.
+                    native_activity_only = (
+                        end == OPEN_END and launch_counts[scope.session_id, scope.start_ms] == 1
+                        and sessions[scope.session_id].active is True
+                        and not (child_turns or messages or requests.get(scope.session_id)
+                                 or fences.get(scope.session_id))
+                    )
                     end = min(end, scope.stale_at)
             owned_turns = sorted((item for item in child_turns
                 if scope.start_ms <= item.created_at_ms < min(end, scope.end_ms)),
@@ -193,11 +205,11 @@ class ChildLinkIndex:
             first_turn = next((item for item in owned_turns if item.kind in PROMPT_KINDS), None)
             scope = replace(scope, end_ms=min(end, scope.end_ms), invocation_end_ms=end,
                 owner_id=first_turn.event_id if first_turn else "",
-                bound_continuations=bool(scope.background or scope.stale_at) and first_turn is not None)
+                bound_continuations=bool(scope.background or scope.stale_at) and first_turn is not None,
+                native_activity_only=native_activity_only)
             # A tool's return/abort ends its launch window, not an assistant
             # already executing inside it. Bind that physical attempt before
             # extending, so an unrelated later child request stays unallocated.
-            messages = self.messages_by_session.get(scope.session_id, ())
             crossing = {message.parent_message_id for message in messages
                 if scope.start_ms <= message.created_at_ms < scope.end_ms
                 and message.parent_message_id
@@ -313,7 +325,8 @@ class ChildLinkIndex:
                 # A background descendant can outlive its foreground parent,
                 # but its launch must still originate inside that parent's window.
                 scope = replace(link, end_ms=link.end_ms if link.background else min(link.end_ms, upper),
-                                inferred_path=inferred_path)
+                                inferred_path=inferred_path,
+                                native_activity_only=link.native_activity_only and upper == OPEN_END)
                 if scope.start_ms < lower or scope.start_ms >= upper or scope.end_ms <= scope.start_ms or scope in found:
                     continue
                 found.add(scope)
