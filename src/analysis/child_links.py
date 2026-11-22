@@ -418,13 +418,17 @@ def _resolved_launches(calls, sessions):
             verified_parts.update((observed.session_id, observed.part_id) for _, _, observed in observations)
         for _, observed_message, observed in observations:
             child = child_session_id(observed)
-            start = part_time(observed)[0] or observed_message.created_at_ms
+            start, end = part_time(observed)
+            hint = start or observed_message.created_at_ms
             siblings = children[observed_message.session_id]
             if child in siblings and (scope is None or scope.session_id != child):
-                fences[child].add(start)
+                # A reversed clock must not let timing inference bridge a rejected launch.
+                if 0 < end < start:
+                    hint = max(end, observed_message.created_at_ms)
+                fences[child].add(hint)
             elif scope is None and _malformed_native_link(observed):
                 for sibling in siblings:
-                    fences[sibling].add(start)
+                    fences[sibling].add(hint)
     return qualified, fences, verified_parts
 
 
