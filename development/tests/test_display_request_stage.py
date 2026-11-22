@@ -12,6 +12,7 @@ from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_request_install import INSTALL_SCHEMA, RequestInstallWitness, install_usage_slot
 from src.cache.display_request_materialize import materialize_slot_timing
 from src.cache.display_request_overlay import RequestSlot, countable_request_rows, request_birth_slice, request_clock_slice
+from src.cache.display_request_slot_stats import slot_stats_candidates
 from src.cache.display_request_stage import (
     RequestInputScope,
     append_request_attribution,
@@ -25,7 +26,7 @@ from src.cache.display_request_stage import (
 )
 from src.cache.display_requests import REQUEST_COLUMNS, DisplayRequest, RequestRoster, publish_roster
 from src.cache.display_stats_evidence import ResponseTiming, StatsCapture
-from src.cache.display_stats_requests import StatsRequestIdentity
+from src.cache.display_stats_requests import StatsRequestIdentity, read_stats_candidates
 from src.cache.display_stats_revision import StatsVersion, retained_stats_version
 from src.cache.display_usage_reader import advance_usage_revision, retained_usage_version, usage_version
 
@@ -758,6 +759,43 @@ class DisplayRequestStageTests(unittest.TestCase):
                              [row[:2] for row in request_clock_slice(db, SOURCE, 20, 110, slot=current).rows])
             self.assertEqual([(b"later",)], db.execute("SELECT request_key FROM archive_prepare_requests").fetchall())
             self.assertIsNone(db.execute("SELECT 1 FROM archive_stats_request_ready").fetchone())
+
+    def test_slot_stats_reuses_only_evidence_compatible_with_the_effective_request(self):
+        recipe = StatsRequestIdentity(b"m" * 32, None, b"s" * 32, b"p" * 32, "medium")
+        timing = ResponseTiming(10, 25)
+        requests = tuple(replace(_request(key, clock=60), stats_identity=recipe, response=timing)
+                         for key in (b"clock", b"effort", b"tokens"))
+        with self.write() as db:
+            publish_roster(db, SOURCE, "A", "rev-A",
+                           RequestRoster("price", requests, (), stats=StatsCapture((), False, None, ())))
+        self._stage((replace(requests[0], clock_ms=70), replace(requests[1], effort="high"),
+                     replace(requests[2], tokens=(70, 1, 0, 2, 0)), _request(b"new", clock=75)))
+        self._prepare("candidate")
+        witness = RequestInstallWitness(SOURCE, "binding", 5, "price", "dependency", 1, 0)
+
+        with self.history._connect(read=True) as reader:
+            reader.execute("BEGIN")
+            old = read_stats_candidates(reader, SOURCE)
+            self.assertEqual(old.entries, slot_stats_candidates(reader, SOURCE, slot=None).entries)
+            with self.write() as db:
+                slot = install_usage_slot(db, "candidate", witness, eligible=lambda: True)
+                self.assertEqual(RequestSlot("candidate", 2), slot)
+            self.assertEqual(old, read_stats_candidates(reader, SOURCE))
+
+        with self.history._connect(read=True) as reader:
+            reader.execute("BEGIN")
+            self.assertIsNone(slot_stats_candidates(reader, SOURCE, expected=old.version, slot=slot))
+            fresh = slot_stats_candidates(reader, SOURCE, slot=slot, limit=2)
+            tail = slot_stats_candidates(reader, SOURCE, slot=slot, cursor=fresh.next_cursor, limit=2)
+            visible = {item.usage.request_key: item for item in fresh.entries + tail.entries}
+            self.assertIsNone(tail.next_cursor)
+            self.assertEqual({
+                b"clock": (70, None, None),
+                b"effort": (60, None, timing),
+                b"tokens": (60, recipe, timing),
+                b"new": (75, None, None),
+            }, {key: (item.usage.clock_ms, item.identity, item.response) for key, item in visible.items()})
+            self.assertEqual(70, visible[b"tokens"].usage.tokens[0])
 
     def test_fork_preparation_resumes_past_tied_shadowed_candidates(self):
         fork = b"fork"
