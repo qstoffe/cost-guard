@@ -18,6 +18,7 @@ class PopulationState(Enum):
 @dataclass(frozen=True, slots=True)
 class PopulationPage:
     keys: tuple[bytes, ...]
+    observations: tuple[tuple[int | None, bool], ...]
     next_cursor: bytes | None
 
 
@@ -28,7 +29,7 @@ _STAGE = """
     CREATE TABLE candidates (
         key BLOB PRIMARY KEY, root TEXT NOT NULL, session TEXT NOT NULL,
         clock INTEGER, ordinal INTEGER NOT NULL, message BLOB NOT NULL,
-        slot BLOB NOT NULL, fork BLOB
+        slot BLOB NOT NULL, fork BLOB, observed TEXT, usage_gap INTEGER NOT NULL
     ) WITHOUT ROWID;
     CREATE TABLE eligible (
         period TEXT NOT NULL, key BLOB NOT NULL, message BLOB NOT NULL, slot BLOB NOT NULL,
@@ -63,6 +64,7 @@ class ArchiveStatsPopulation(AbstractContextManager):
         self.source, self.now_ms = source, now_ms
         self.scopes = dict(windows(zone, now_ms))
         self.version = None
+        self.next_completion = None
         self._gaps = set()
         self._ready = False
         self._db = sqlite3.connect("")
@@ -101,10 +103,14 @@ class ArchiveStatsPopulation(AbstractContextManager):
         if not self._ready or self._db is None or period not in self.scopes:
             raise ValueError("stats_population_not_available")
         rows = self._db.execute("""
-            SELECT key FROM accepted WHERE period=? AND key>? ORDER BY key LIMIT ?
+            SELECT a.key,c.observed,c.usage_gap FROM accepted AS a
+            CROSS JOIN candidates AS c ON c.key=a.key
+            WHERE a.period=? AND a.key>? ORDER BY a.key LIMIT ?
         """, (period, after or b"", USAGE_SLICE + 1)).fetchall()
-        keys = tuple(key for key, in rows[:USAGE_SLICE])
-        return PopulationPage(keys, keys[-1] if len(rows) > USAGE_SLICE else None)
+        entries = rows[:USAGE_SLICE]
+        keys = tuple(row[0] for row in entries)
+        observations = tuple((int(amount) if amount is not None else None, bool(gap)) for _, amount, gap in entries)
+        return PopulationPage(keys, observations, keys[-1] if len(rows) > USAGE_SLICE else None)
 
     def close(self):
         if hasattr(self, "_turns"):
@@ -175,6 +181,9 @@ class ArchiveStatsPopulation(AbstractContextManager):
 
     def _stage(self, candidate):
         usage = candidate.usage
+        if usage.clock_ms is not None and usage.clock_ms > self.now_ms:
+            if self.next_completion is None or usage.clock_ms < self.next_completion:
+                self.next_completion = usage.clock_ms
         if candidate.tree is None or not self._extend_root(candidate.tree, usage.clock_ms):
             self._gaps.update(self.scopes)
             return
@@ -184,14 +193,19 @@ class ArchiveStatsPopulation(AbstractContextManager):
             self._gaps.update(self.scopes)
             return
         recipe = candidate.identity
-        self._db.execute("INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?)", (
+        known = usage.known & 0b1111
+        observed = sum(volume for index, volume in enumerate(usage.tokens[:4]) if known & (1 << index))
+        if known & 0b1000:
+            observed += usage.tokens[4]  # Canonical observed Stats output includes reasoning once.
+        self._db.execute("INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?,?,?)", (
             usage.request_key, candidate.tree, usage.session_id, usage.clock_ms, candidate.ordinal,
-            recipe.message_key, recipe.step_key or b"", candidate.fork))
+            recipe.message_key, recipe.step_key or b"", candidate.fork, str(observed) if known else None,
+            known != 0b1111))
 
     def _candidate_pages(self):
         after = b""
         while rows := self._db.execute("""
-            SELECT candidate.*,root.last_end FROM candidates AS candidate
+            SELECT key,message,slot,root.last_end FROM candidates AS candidate
             CROSS JOIN roots AS root ON root.id=candidate.root
             WHERE key>? ORDER BY key LIMIT ?
         """, (after, USAGE_SLICE)).fetchall():
@@ -202,7 +216,7 @@ class ArchiveStatsPopulation(AbstractContextManager):
         for page in self._candidate_pages():
             self._db.executemany("INSERT INTO eligible VALUES(?,?,?,?)", (
                 (period, key, message, slot)
-                for key, _, _, _, _, message, slot, _, end in page
+                for key, message, slot, end in page
                 for period, start in self.scopes.items()
                 if start is None or end is None or end >= start))
             yield PopulationState.MORE

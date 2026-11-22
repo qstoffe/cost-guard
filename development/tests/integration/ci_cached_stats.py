@@ -1,4 +1,4 @@
-"""Real browser and loopback proof for opt-in measured-only AI Stats."""
+"""Real browser and loopback proof for opt-in cached AI Stats subtotals."""
 from dataclasses import replace
 from pathlib import Path
 import shutil
@@ -57,6 +57,7 @@ def check_cached_stats(browser, evidence, product_root):
             page.get_by_role("link", name="AI Stats", exact=True).click()
             view = page.locator("#result .cached-stats")
             working = view.locator('[data-metric="working"]')
+            tokens = view.locator('[data-metric="tokens"]')
             expect(view.get_by_text("No measured work is cached for this period yet."),
                    f"Page errors: {errors!r}; requests: {[path for path, _ in requests]!r}").to_be_visible()
             for label in ("Today", "7 days", "30 days", "This month", "All time"):
@@ -64,6 +65,7 @@ def check_cached_stats(browser, evidence, product_root):
                 button.click()
                 expect(button).to_have_attribute("aria-pressed", "true")
                 expect(working).to_have_text("—")
+                expect(tokens).to_have_text("—")
                 expect(page.locator("#result")).to_have_attribute("aria-busy", "false")
 
             now = int(time.time() * 1000)
@@ -71,12 +73,17 @@ def check_cached_stats(browser, evidence, product_root):
 
             def publish(root_id, start, elapsed, clock):
                 interval = StatsInterval(root_id, "prompt", "prompt", start, elapsed, False)
-                roster = replace(base, requests=(), attribution=(), prompts=None,
+                request, = base.requests
+                identity = replace(request.stats_identity, message_key=root_id.encode().ljust(32, b"-"))
+                observed = replace(request, key=root_id.encode(), clock_ms=start + elapsed, session_id=root_id,
+                                   dedup_tree=root_id, fork_key=None, stats_identity=identity, response=None,
+                                   tokens=(10, 20, 30, 5, 2), known=0b1111)
+                roster = replace(base, requests=(observed,), attribution=(), prompts=None,
                     stats=replace(base.stats, intervals=(interval,), parents=((root_id, None),), first_input=None))
                 archive.history.commit_sessions(archive.views.source, (SessionChange(
                     SessionFact(root_id, "r1", root_id), None, previous_progress=0, request_roster=roster),))
                 archive.close_catalog_work()
-                for _ in range(8):
+                for _ in range(50):
                     archive.stats.advance(clock, active=lambda: True)
                     if not archive.stats.pending():
                         return
@@ -84,6 +91,7 @@ def check_cached_stats(browser, evidence, product_root):
 
             publish("recent", now - 360_000, 60_000, now)
             expect(working).to_have_text("1m")
+            expect(tokens).to_have_text("67")
             expect(view.locator('[data-metric="longest"]')).to_have_text("1m")
             expect(view.locator('[data-metric="parallel"]')).to_have_text("1")
             expect(view.get_by_role("button", name="All time", exact=True)).to_be_focused()
@@ -95,14 +103,18 @@ def check_cached_stats(browser, evidence, product_root):
             peer_view = peer.locator("#result .cached-stats")
             peer_view.get_by_role("button", name="7 days", exact=True).click()
             peer_working = peer_view.locator('[data-metric="working"]')
+            peer_tokens = peer_view.locator('[data-metric="tokens"]')
             expect(peer_working).to_have_text("1m")
+            expect(peer_tokens).to_have_text("67")
             peer.wait_for_function("() => statsCache.hint?.marks?.['7-days'] && !statsCache.flight")
             peer_reads = sum(path == "/api/cache/ai-stats" for path, _ in peer_requests)
 
             publish("aged", now - 60 * 86_400_000, 120_000, now + 1)
             expect(working).to_have_text("3m")
+            expect(tokens).to_have_text("134")
             peer.wait_for_function("(clock) => statsCache.hint?.marks?.all?.[1] === clock", arg=now + 1)
             expect(peer_working).to_have_text("1m")
+            expect(peer_tokens).to_have_text("67")
             assert sum(path == "/api/cache/ai-stats" for path, _ in peer_requests) == peer_reads
 
             period = view.get_by_role("button", name="7 days", exact=True)
@@ -121,9 +133,11 @@ def check_cached_stats(browser, evidence, product_root):
             archive.unbind()
             expect(working).to_have_text("—")
             expect(peer_working).to_have_text("—")
+            expect(tokens).to_have_text("—")
             archive.observe(driver, before_tick=True)
             expect(working).to_have_text("1m")
             expect(peer_working).to_have_text("1m")
+            expect(tokens).to_have_text("67")
             expect(period).to_be_focused()
 
             state = archive.history.source_state(archive.views.source)
@@ -131,6 +145,7 @@ def check_cached_stats(browser, evidence, product_root):
                                            service, eligible=lambda: True)
             expect(working).to_have_text("—")
             expect(peer_working).to_have_text("—")
+            expect(tokens).to_have_text("—")
 
             legacy = [(path, body) for path, body in requests + peer_requests
                       if path in {"/api/data", "/api/interest", "/api/reports"} and '"kind":"ai-stats"' in body]

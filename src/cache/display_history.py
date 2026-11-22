@@ -23,9 +23,10 @@ from .display_stats_reader import read_stats_geometry, read_stats_parents, read_
 from .display_stats_requests import read_stats_candidates, stats_request_schema
 from .display_stats_revision import retained_stats_version, stats_revision_schema
 from .display_stats_time import commit_time, read_time, stats_time_schema, time_due
+from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -258,6 +259,7 @@ class DisplayHistory:
                       {stats_revision_schema(upgrade=version == 18)}
                       {geometry_schema(seed=18 <= version < 23)}
                       {stats_time_schema(upgrade=20 <= version < 23)}
+                      {stats_token_schema()}
                     PRAGMA user_version={SCHEMA_VERSION};
                     COMMIT;
                 """)
@@ -313,7 +315,8 @@ class DisplayHistory:
                   {stats_request_schema()}
                   {stats_revision_schema()}
                   {geometry_schema()}
-                  {stats_time_schema()}
+                   {stats_time_schema()}
+                   {stats_token_schema()}
                 PRAGMA user_version={SCHEMA_VERSION};
                 COMMIT;
             """)
@@ -562,6 +565,29 @@ class DisplayHistory:
             db.execute("BEGIN")
             return read_time(db, source, zone, period, start_ms, now_ms), self._state(db, source).archive_epoch
 
+    def stats_view(self, source, zone, period, start_ms, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            epoch = self._state(db, source).archive_epoch
+            return (read_time(db, source, zone, period, start_ms, now_ms),
+                    read_tokens(db, source, epoch, zone, period, start_ms, now_ms), epoch)
+
+    def stats_tokens_due(self, source, zone, scopes, now_ms):
+        with self._connect(read=True) as db:
+            db.execute("BEGIN")
+            return tokens_due(db, source, zone, scopes, now_ms)
+
+    def publish_stats_tokens(self, source, stamp, rows, *, eligible):
+        with self._write_lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if eligible():
+                published = commit_tokens(db, source, stamp, rows)
+                if published is not None and eligible():
+                    db.commit()
+                    return published
+            db.rollback()
+            return None
+
     def replace_mix_totals(self, source, expected, timezone_id, rows, *, eligible=lambda: True,
                            group_run=None, group_marks=None, reference=None):
         with self._write_lock, self._connect() as db:
@@ -685,6 +711,7 @@ class DisplayHistory:
             db.execute("DELETE FROM archive_stats_revisions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_stats_geometry_revisions WHERE source=?", (source,))
             db.execute("DELETE FROM archive_stats_time_state WHERE source=?", (source,))
+            db.execute("DELETE FROM archive_stats_token_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_fork_trees WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_state WHERE source=?", (source,))
             db.execute("DELETE FROM archive_mix_groups WHERE source=?", (source,))

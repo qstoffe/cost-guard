@@ -155,15 +155,15 @@ class WebMixRefreshTests(unittest.TestCase):
                      patch.object(archive, "publish_running"), \
                      patch.object(archive, "advance_mix", side_effect=track("mix", mix)), \
                      patch.object(archive.stats, "advance", side_effect=track("stats", stats)):
-                    for _ in range(17):
+                    for _ in range(25):
                         WebWatchCoordinator.tick_catalog(owner, catalog)
                         owner.catalog_job.result(timeout=3)
             finally:
                 lane.submit(archive.close_catalog_work).result(timeout=5)
                 archive.close()
 
-        self.assertEqual(["mix", "stats", "mix", "stats", "stats"], order[::4])
-        self.assertTrue(all(order[i:i + 3] == ["scalar"] * 3 for i in (1, 5, 9, 13)))
+        self.assertEqual(["mix", "stats", "mix", "stats", "stats", "stats", "stats"], order[::4])
+        self.assertTrue(all(order[i:i + 3] == ["scalar"] * 3 for i in range(1, 25, 4)))
         self.assertEqual(1, len(events))
         hint, measured = events[0]
         self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["marks"]))

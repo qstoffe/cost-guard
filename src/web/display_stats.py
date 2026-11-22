@@ -4,7 +4,8 @@ from threading import Lock
 
 from src.analysis.ai_stats import scope_rollover, windows
 from src.application.archive_stats_refresh import ArchiveStatsRefresh
-from src.presentation.cached_stats import measured_stats
+from src.cache.display_stats_tokens import StatsTokenPublication
+from src.presentation.cached_stats import cached_stats
 
 
 class DisplayStats:
@@ -40,8 +41,16 @@ class DisplayStats:
         with self._signal:
             if not eligible():
                 return
-            self._marks.update(dict.fromkeys(published.changed_periods, (stamp.version.revision, stamp.as_of)))
-            self._publish("ai-stats-cache", dict(binding=views.binding, archive_epoch=stamp.version.archive_epoch,
+            if isinstance(published, StatsTokenPublication):
+                epoch = stamp.version.usage.archive_epoch
+                token = (stamp.version.usage.revision, stamp.version.evidence, stamp.as_of)
+                for period in published.changed_periods:
+                    self._marks[period] = (*self._marks.get(period, (None, None))[:2], *token)
+            else:
+                epoch = stamp.version.archive_epoch
+                for period in published.changed_periods:
+                    self._marks[period] = (stamp.version.revision, stamp.as_of, *self._marks.get(period, ())[2:])
+            self._publish("ai-stats-cache", dict(binding=views.binding, archive_epoch=epoch,
                 periods=published.changed_periods, marks=self._marks.copy()))
 
     def reset(self, views, *, archive_epoch=None):
@@ -58,20 +67,23 @@ class DisplayStats:
             return None
         binding = self._binding(views)
         start = dict(windows(views.timezone_id, now_ms))[period]
-        value, epoch = archive.history.stats_time_view(views.source, views.timezone_id, period, start, now_ms)
+        value, token, epoch = archive.history.stats_view(views.source, views.timezone_id, period, start, now_ms)
         if archive.views is not views or self._binding(views) != binding:
             return None
         # This is not the canonical estimated working-time card. Even a current
         # subtotal has no authority over unseen, provisional or unmeasured work.
         calendar = value.row.calendar if value else None
         roots = value.row.roots if value else None
+        token_row, token_as_of = token or (None, None)
         return dict(binding=views.binding, archive_epoch=epoch, period=period, start_ms=start,
                     valid_until_ms=scope_rollover(period, views.timezone_id, now_ms),
                     as_of_ms=value.stamp.as_of if value else None,
                     measured_working_ms=value.row.working_ms if value else None,
-                    measured_calendar=asdict(calendar) if calendar else None,
-                    measured_root_time=asdict(roots) if roots else None,
-                    display=measured_stats(value.row if value else None), coverage="unknown")
+                     measured_calendar=asdict(calendar) if calendar else None,
+                     measured_root_time=asdict(roots) if roots else None,
+                     observed_tokens=str(token_row.observed) if token_row and token_row.observed is not None else None,
+                     tokens_as_of_ms=token_as_of,
+                     display=cached_stats(value.row if value else None, token_row), coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()

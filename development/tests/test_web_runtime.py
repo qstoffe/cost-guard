@@ -419,7 +419,7 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, expired[0])
         self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
 
-    def test_ai_stats_endpoint_reads_only_committed_measured_time_and_fences_rebind(self):
+    def test_ai_stats_endpoint_reads_only_committed_subtotals_and_fences_rebind(self):
         from dataclasses import replace
         from development.tests.fixtures.session_snapshots import one_request
         from development.tests.test_archive_stats_evidence import capture
@@ -446,9 +446,12 @@ class WebRuntimeTests(unittest.TestCase):
                             StatsInterval("root", "recent", "prompt", at - 1000, 100, False))
                 archive.history.commit_sessions("verified-fixture", (SessionChange(SessionFact("root", "r1", "Root"),
                     None, previous_progress=0, request_roster=replace(roster, stats=replace(roster.stats, intervals=geometry))),))
-                for _ in range(3):
+                for _ in range(50):
                     archive.stats.advance(at, active=lambda: True)
-                with patch.object(archive.history, "stats_geometry", side_effect=AssertionError("route reduced geometry")):
+                    if not archive.stats.pending():
+                        break
+                with patch.object(archive.history, "stats_geometry", side_effect=AssertionError("route reduced geometry")), \
+                     patch.object(archive.history, "stats_candidates", side_effect=AssertionError("route reduced requests")):
                     periods = ("today", "7-days", "30-days", "month", "all")
                     responses = {period: self.request(endpoint, {"period": period}) for period in periods}
                     invalid = self.request(endpoint, {"period": "all", "source": "foreign"})
@@ -459,26 +462,29 @@ class WebRuntimeTests(unittest.TestCase):
                     "tab": "1" * 32, "section": "ai-stats", "visible": True, "request": report})[0])
                 self.assertFalse(any(request.kind.value == "ai-stats" for request in
                                      self.server.lifecycle.dispatcher.default_requests))
-                read = archive.history.stats_time_view
+                read = archive.history.stats_view
 
                 def read_then_unbind(*args):
                     value = read(*args)
                     archive.unbind()
                     return value
 
-                with patch.object(archive.history, "stats_time_view", side_effect=read_then_unbind):
+                with patch.object(archive.history, "stats_view", side_effect=read_then_unbind):
                     unbound = self.request(endpoint, {"period": "all"})
             finally:
                 archive.close_catalog_work()
                 archive.close()
 
         self.assertEqual((200, None), (cold[0], json.loads(cold[2])["measured_working_ms"]))
+        self.assertIsNone(json.loads(cold[2])["observed_tokens"])
         for period, (status, _, body) in responses.items():
             with self.subTest(period=period):
                 result = json.loads(body)
                 self.assertEqual((200, period, "unknown", at), (status, result["period"], result["coverage"], result["as_of_ms"]))
         self.assertEqual(600, json.loads(responses["all"][2])["measured_working_ms"])
         self.assertLess(json.loads(responses["today"][2])["measured_working_ms"] or 0, 600)
+        self.assertEqual("34", json.loads(responses["all"][2])["observed_tokens"])
+        self.assertIsNone(json.loads(responses["today"][2])["observed_tokens"])
         self.assertEqual(400, invalid[0])
         self.assertEqual((503, {"error": "cache_source_unbound"}), (unbound[0], json.loads(unbound[2])))
 

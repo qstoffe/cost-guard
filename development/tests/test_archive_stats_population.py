@@ -7,6 +7,7 @@ from unittest import TestCase
 from development.tests.fixtures.session_snapshots import DAY, one_request
 from src.analysis import analyze_snapshot
 from src.application.archive_stats_population import ArchiveStatsPopulation, PopulationState
+from src.application.archive_stats_tokens import ArchiveStatsTokens
 from src.application.request_archive_projection import request_roster
 from src.cache.display_history import DisplayHistory, SessionChange, SessionFact
 from src.cache.display_stats_evidence import StatsCapture, StatsInterval
@@ -133,3 +134,48 @@ class ArchiveStatsPopulationTests(TestCase):
 
         self.assertEqual((b"known",), self.build.page("all").keys)
         self.assertEqual(set(self.build.scopes), self.build.gaps)
+
+    def publish_tokens(self, at=NOW):
+        build = ArchiveStatsTokens("source", "UTC", at)
+        self.addCleanup(build.close)
+        for _ in range(100):
+            if not build.step(self.history, eligible=lambda: True):
+                self.assertIsNotNone(build.publication)
+                return build
+        self.fail("token projection did not finish")
+
+    def test_observed_tokens_are_nullable_scoped_and_durable_across_disappearance(self):
+        current = replace(self.request_for("root", b"current"), tokens=(2, 10, 30, 1, 3), known=0b1001)
+        older = replace(self.request_for("root", b"older", clock=START - 1), tokens=(5, 1, 2, 2, 4), known=0b1111)
+        later = replace(self.request_for("root", b"later", clock=NOW + 5), tokens=(16, 0, 0, 0, 0), known=0b1111)
+        self.record("root", (current, older, later))
+        self.publish_tokens()
+        checkpoint = self.history.session_checkpoints("source", ("root",))["root"]
+        self.history.commit_sessions("source", missing=(("root", checkpoint),))
+
+        self.history = DisplayHistory(self.history.path.parent.parent)
+        self.history.initialize()
+        self.assertEqual(6, self.history.stats_view("source", "UTC", "today", START, NOW)[1][0].observed)
+        self.assertEqual(20, self.history.stats_view("source", "UTC", "all", None, NOW)[1][0].observed)
+        self.assertIsNone(self.history.stats_view("separate", "UTC", "all", None, NOW)[1])
+        self.assertIsNone(self.history.stats_view("source", "Asia/Tokyo", "all", None, NOW)[1])
+        self.assertIsNone(self.history.stats_view("source", "UTC", "today", START + DAY, NOW + DAY)[1])
+        self.assertFalse(self.history.stats_tokens_due("source", "UTC", self.build.scopes, NOW + 4))
+        self.assertTrue(self.history.stats_tokens_due("source", "UTC", self.build.scopes, NOW + 5))
+
+        self.publish_tokens(NOW + 5)
+        row, as_of = self.history.stats_view("source", "UTC", "today", START, NOW + 5)[1]
+        self.assertEqual((22, True, NOW + 5), (row.observed, row.usage_gaps, as_of))
+        self.history.clear_confirmed_sessions("source", self.history.source_state("source"))
+        self.assertIsNone(self.history.stats_view("source", "UTC", "all", None, NOW + 5)[1])
+
+    def test_missing_recipe_cannot_publish_plausible_but_unreconciled_token_total(self):
+        known = self.request_for("root", b"known")
+        unknown = replace(self.request_for("root", b"unknown"), stats_identity=None)
+        self.record("root", (known, unknown))
+
+        self.publish_tokens()
+
+        row, _ = self.history.stats_view("source", "UTC", "all", None, NOW)[1]
+        self.assertTrue(row.population_gaps)
+        self.assertIsNone(row.observed)
