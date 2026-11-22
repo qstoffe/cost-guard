@@ -208,6 +208,26 @@ class DisplayModelsTests(unittest.TestCase):
         self.assertEqual(["cached"], self.names(now=now * 1000))
         self.assertEqual(1, len(jobs.values))
 
+    def test_cached_models_route_reprioritizes_one_managed_job_without_a_report_request(self):
+        jobs = RecordingJobs()
+        dispatcher = DataDispatcher(jobs, clock=lambda: 1000, models=self.models,
+                                    cache_only_mix=True, cache_only_stats=True)
+        dispatcher.tick(identity="runtime")
+        dispatcher.interest("tab", "models", True)
+        self.assertEqual({}, jobs.values)  # HTTP lease cannot admit source work.
+
+        dispatcher.tick()
+        self.assertEqual({"0": 0}, jobs.priorities)
+        dispatcher.interest("tab", "sessions", True)
+        dispatcher.tick()
+        self.assertEqual({"0": 2}, jobs.priorities)
+        dispatcher.interest("tab", "models", True)
+        dispatcher.tick()
+
+        self.assertEqual({"0": 0}, jobs.priorities)
+        self.assertEqual("source", jobs.values["0"]["request"].models_scope)
+        self.assertEqual(1, len(jobs.values))
+
     def test_page_parser_rejects_unrecognized_columns_duplicate_orders_and_offsets(self):
         valid = dict(show_all=False, latest=True, orders=[["cost", "desc"]], offset=0)
         self.assertEqual(ModelPage(), model_page(valid))

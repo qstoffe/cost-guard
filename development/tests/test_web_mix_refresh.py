@@ -19,6 +19,7 @@ from src.cache.display_usage_reader import USAGE_SLICE
 from src.pricing.catalog import PricingCatalog
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.watch.web_coordinator import WebWatchCoordinator
+from src.web.dispatch import DataDispatcher
 from src.web.display_archive import DisplayArchive
 
 
@@ -73,7 +74,7 @@ class WebMixRefreshTests(unittest.TestCase):
 
             owner = SimpleNamespace(report_service=service, catalog_observation=None, cards=SimpleNamespace(sessions={}),
                 catalog_job=None, clock_ms=lambda: now, _closed=False, catalog_pool=lane,
-                catalog_turn=0, _catalog_history_turns=3, _catalog_capture=scalar)
+                catalog_turn=0, _catalog_capture=scalar)
             read = archive.history.usage_inputs
 
             def hold_first_slice(*args, **kwargs):
@@ -139,7 +140,7 @@ class WebMixRefreshTests(unittest.TestCase):
             service = SimpleNamespace(timezone_id="UTC")
             owner = SimpleNamespace(report_service=service, catalog_observation=None, cards=SimpleNamespace(sessions={}),
                 catalog_job=None, clock_ms=lambda: now, _closed=False, catalog_pool=lane,
-                catalog_turn=0, _catalog_history_turns=3, _catalog_capture=lambda *_: order.append("scalar"))
+                catalog_turn=0, _catalog_capture=lambda *_: order.append("scalar"))
             mix, stats = archive.advance_mix, archive.stats.advance
 
             def track(kind, action):
@@ -168,3 +169,53 @@ class WebMixRefreshTests(unittest.TestCase):
         hint, measured = events[0]
         self.assertEqual({"today", "7-days", "30-days", "month", "all"}, set(hint["marks"]))
         self.assertEqual(6500, measured)
+
+    def test_visible_route_switch_selects_at_the_next_safe_background_turn(self):
+        now = 1000
+        dispatcher = DataDispatcher(None, clock=lambda: now)
+        start, release = Event(), Event()
+        order = []
+
+        def blocked_model(*_args, **_kwargs):
+            start.set()
+            if not release.wait(3):
+                raise AssertionError("Models was not released")
+            order.append("models")
+
+        with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=1) as lane:
+            archive = DisplayArchive(Path(tmp), lambda *_: None)
+            self.addCleanup(archive.close)
+            archive.visible_sections = dispatcher.visible_sections
+            archive.models = SimpleNamespace(pending=lambda: True, advance=blocked_model)
+            for kind in ("stats", "accounts"):
+                archive.__dict__[kind] = SimpleNamespace(pending=lambda: True,
+                    advance=lambda *_args, name=kind, **_kwargs: order.append(name))
+
+            dispatcher.interest("browser", "models", True)
+            turn = archive.next_projection(lambda: None, history_pending=True)
+            model_job = lane.submit(turn, now, active=lambda: True)
+            try:
+                self.assertTrue(start.wait(3))
+                dispatcher.interest("browser", "sessions", True)
+                self.assertEqual({"sessions"}, dispatcher.visible_sections())
+                dispatcher.interest("browser", "accounts", True)
+                self.assertEqual({"accounts"}, dispatcher.visible_sections())
+                self.assertFalse(model_job.done())
+            finally:
+                release.set()
+            model_job.result(timeout=3)
+
+            self.assertIsNone(archive.next_projection(lambda: None, history_pending=True))
+            accounts = archive.next_projection(lambda: None, history_pending=True)
+            accounts(now, active=lambda: True)
+            for _ in range(24):
+                turn = archive.next_projection(lambda: None, history_pending=True)
+                if turn is not None:
+                    turn(now, active=lambda: True)
+                else:
+                    order.append("history")
+
+        self.assertEqual(["models", "accounts", "history", "stats"], order[:4])
+        self.assertIn("models", order[2:])  # Nonvisible work is demoted, not dropped.
+        self.assertGreater(order[2:].count("accounts"), order[2:].count("stats"))
+        self.assertNotIn(("history", "history"), tuple(zip(order[2:], order[3:])))

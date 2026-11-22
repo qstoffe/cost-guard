@@ -53,6 +53,8 @@ class WebHost:
             models_enabled=self.cached_models_enabled, accounts_enabled=self.cached_accounts_enabled) if jobs is None else None
         self.dispatcher = DataDispatcher(self.jobs, cache_only_mix=self.cached_mix_enabled,
             cache_only_stats=self.cached_stats_enabled, models=self.display_archive.models) if jobs is None else None
+        if self.dispatcher is not None:
+            self.display_archive.visible_sections = self.dispatcher.visible_sections
         self.dependencies = None
         if jobs is None:
             from .composition import dispatch_dependencies

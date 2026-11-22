@@ -89,6 +89,7 @@ class DataDispatcher:
         self.lock = RLock()
         self.entries = OrderedDict()
         self.tabs = OrderedDict()
+        self._visible_leases = ()
         self.initialized = False
         self.identity = ''
         self.projection_epoch = 0
@@ -148,6 +149,8 @@ class DataDispatcher:
                 raise RuntimeError('busy')
             self.tabs[tab] = dict(section=section, visible=visible, request=request, history=history,
                                   account_period=account_period, touched=self.clock())
+            self._visible_leases = tuple((lease['section'], lease['touched'] + LEASE_SECONDS)
+                                         for lease in self.tabs.values() if lease['visible'])
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
@@ -170,8 +173,16 @@ class DataDispatcher:
             if self.clock() - value['touched'] >= LEASE_SECONDS:
                 del self.tabs[tab]
 
+    def visible_sections(self):
+        # Live reads this immutable snapshot without entering the finite jobs lock.
+        now = self.clock()
+        return frozenset(section for section, expires in self._visible_leases if now < expires)
+
     def _foreground(self):
-        return {tab['request'] for tab in self.tabs.values() if tab['visible'] and tab['request']}
+        requests = {tab['request'] for tab in self.tabs.values() if tab['visible'] and tab['request']}
+        if self.model_binding is not None and 'models' in self.visible_sections():
+            requests.add(ReportRequest(ReportKind.NORMAL))
+        return requests
 
     def lookup(self, request, *, retry=False):
         with self.lock:

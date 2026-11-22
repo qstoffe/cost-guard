@@ -19,6 +19,7 @@ from src.sources.errors import SourceError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 
+from .adaptive_dispatch import PROJECTIONS, ProjectionTurns
 from .display_accounts import DisplayAccounts
 from .display_binding import selected_display_binding
 from .display_models import DisplayModels
@@ -36,7 +37,8 @@ class DisplayArchive:
         self.stats = DisplayStats(self, publish) if stats_enabled else None
         self.models = DisplayModels(self, publish) if models_enabled else None
         self.accounts = DisplayAccounts(self, publish) if accounts_enabled else None
-        self._last_projection = None
+        self.projection_turns = ProjectionTurns()
+        self.visible_sections = frozenset
         self._mix_signal = Lock()
         self._mix_marks = {}
         self.sweep = SessionArchiveSweep()
@@ -209,20 +211,16 @@ class DisplayArchive:
         return self.mix_refresh is not None and self.mix_refresh.due(
             (views.binding, self.sessions.clear_fence) if views is not None else None)
 
-    def next_projection(self, reference):
+    def next_projection(self, reference, *, history_pending=False):
         """Offer one fair turn; do not do any projection or I/O on Live."""
-        turns = ("mix", "stats", "models", "accounts")
-        start = turns.index(self._last_projection) + 1 if self._last_projection else 0
-        for kind in (*turns[start:], *turns[:start]):
-            if kind == "mix" and self.mix_pending():
-                self._last_projection = kind
-                return lambda now_ms, *, active: self.advance_mix(now_ms, active=active, reference=reference)
-            if kind != "mix":
-                projection = getattr(self, kind)
-                if projection is not None and projection.pending():
-                    self._last_projection = kind
-                    return projection.advance
-        return None
+        due = {kind for kind, _ in PROJECTIONS if kind != "mix" and
+               (projection := getattr(self, kind)) is not None and projection.pending()}
+        if self.mix_pending():
+            due.add("mix")
+        selected = self.projection_turns.choose(due, self.visible_sections(), history_pending=history_pending)
+        if selected == "mix":
+            return lambda now_ms, *, active: self.advance_mix(now_ms, active=active, reference=reference)
+        return getattr(self, selected).advance if selected is not None else None
 
     def advance_mix(self, now_ms, *, active, reference=lambda: None):
         if self.mix_refresh is None:

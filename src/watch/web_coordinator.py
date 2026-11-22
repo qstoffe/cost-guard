@@ -79,7 +79,6 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_job = None
         self.catalog_turn = 0
         self._catalog_archive = None
-        self._catalog_history_turns = 3
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
 
@@ -180,16 +179,13 @@ class WebWatchCoordinator(WatchCoordinator):
         history_needed = scalar_needed or archive_needed or sweep_needed or coverage_needed
         if self._closed:
             return
-        projection = (archive.next_projection(lambda: _cached_mix_reference(self.report_service))
-                      if archive is not None and (not history_needed or self._catalog_history_turns >= 3) else None)
+        projection = (archive.next_projection(lambda: _cached_mix_reference(self.report_service),
+                                              history_pending=history_needed)
+                      if archive is not None else None)
         if projection is not None:
             self._catalog_archive = archive
-            self._catalog_history_turns = 0
             self.catalog_job = self.catalog_pool.submit(projection, int(self.clock_ms()), active=lambda: not self._closed)
         elif history_needed:
-            # Reserve projection work without removing any turns from the
-            # scalar vs. urgent/older archive acquisition pattern below.
-            self._catalog_history_turns = min(3, self._catalog_history_turns + 1)
             self.catalog_turn += 1
             # Reserve bounded progress even under continuous legacy demand. Both
             # jobs share the original lane; Watch/Mini observation never waits here.
