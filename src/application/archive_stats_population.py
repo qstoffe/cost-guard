@@ -24,11 +24,12 @@ class PopulationObservation:
     usage_gap: bool
     ccost: Decimal | None
     pricing: str | None  # A proved zero-usage/request cost has no price dependency.
+    subagent: bool
 
     @classmethod
-    def decode(cls, tokens, gap, ccost, pricing):
+    def decode(cls, tokens, gap, ccost, pricing, subagent):
         return cls(int(tokens) if tokens is not None else None, bool(gap),
-                   Decimal(ccost) if ccost is not None else None, pricing)
+                   Decimal(ccost) if ccost is not None else None, pricing, bool(subagent))
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +121,7 @@ class ArchiveStatsPopulation(AbstractContextManager):
         if not self._ready or self._db is None or period not in self.scopes:
             raise ValueError("stats_population_not_available")
         rows = self._db.execute("""
-            SELECT a.key,c.observed,c.usage_gap,c.ccost,c.pricing FROM accepted AS a
+            SELECT a.key,c.observed,c.usage_gap,c.ccost,c.pricing,c.session<>c.root FROM accepted AS a
             CROSS JOIN candidates AS c ON c.key=a.key
             WHERE a.period=? AND a.key>? ORDER BY a.key LIMIT ?
         """, (period, after or b"", USAGE_SLICE + 1)).fetchall()

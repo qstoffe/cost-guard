@@ -33,7 +33,7 @@ from .display_stats_time import commit_time, read_time, stats_time_schema, time_
 from .display_stats_tokens import commit_tokens, read_tokens, stats_token_schema, tokens_due
 
 FILENAME = "cost-guard-display.sqlite3"
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 APPLICATION_ID = 0x43474448  # CGDH
 PAGE_LIMIT = 50
 BATCH_LIMIT = 256
@@ -272,6 +272,7 @@ class DisplayHistory:
                 prompts = prompt_schema() if version < 9 else ""
                 countable = countable_schema(upgrade=version >= 8) if version < 10 else ""
                 mix_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_mix_state)")}
+                token_columns = {row[1] for row in db.execute("PRAGMA table_info(archive_stats_tokens)")}
                 running_columns = {row[1] for row in db.execute("PRAGMA table_info(session_running)")}
                 running_metrics = "\n".join(f"ALTER TABLE session_running ADD COLUMN {name} {kind};"
                     for name, kind in _RUNNING_METRICS if running_columns and name not in running_columns)
@@ -297,7 +298,8 @@ class DisplayHistory:
                       {stats_revision_schema(upgrade=version == 18)}
                       {geometry_schema(seed=18 <= version < 23)}
                       {stats_time_schema(upgrade=20 <= version < 23)}
-                      {stats_token_schema(upgrade=version == 25)}
+                       {stats_token_schema(upgrade=version == 25, add_subagent_cost=(
+                           bool(token_columns) and "subagent_reference_ccost" not in token_columns))}
                       {models_schema()}
                       {account_schema()}
                       {watch_quota_schema()}

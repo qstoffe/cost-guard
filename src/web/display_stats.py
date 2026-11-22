@@ -79,14 +79,16 @@ class DisplayStats:
                     valid_until_ms=scope_rollover(period, views.timezone_id, now_ms),
                     as_of_ms=value.stamp.as_of if value else None,
                     measured_working_ms=value.row.working_ms if value else None,
-                     measured_calendar=asdict(calendar) if calendar else None,
-                     measured_root_time=asdict(roots) if roots else None,
-                     observed_tokens=str(token_row.observed) if token_row and token_row.observed is not None else None,
-                     reference_ccost=str(token_row.reference_ccost)
-                         if token_row and token_row.reference_ccost is not None else None,
-                     tokens_as_of_ms=token_as_of,
-                     display=cached_stats(value.row if value else None, token_row),
-                     display_units=cached_stats_units(token_row), coverage="unknown")
+                    measured_calendar=asdict(calendar) if calendar else None,
+                    measured_root_time=asdict(roots) if roots else None,
+                    observed_tokens=str(token_row.observed) if token_row and token_row.observed is not None else None,
+                    reference_ccost=str(token_row.reference_ccost)
+                        if token_row and token_row.reference_ccost is not None else None,
+                    subagent_reference_ccost=str(token_row.subagent_reference_ccost)
+                        if token_row and token_row.subagent_reference_ccost is not None else None,
+                    tokens_as_of_ms=token_as_of,
+                    display=cached_stats(value.row if value else None, token_row),
+                    display_units=cached_stats_units(token_row), coverage="unknown")
 
     def close(self):
         self._refresh.withdraw()

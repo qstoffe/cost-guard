@@ -27,6 +27,7 @@ class StatsTokenRow:
     reference_ccost: Decimal | None = None
     priced: int = 0
     mixed_prices: bool = False
+    subagent_reference_ccost: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,15 +36,19 @@ class StatsTokenPublication:
     changed_periods: tuple[str, ...]
 
 
-def stats_token_schema(*, upgrade=False):
+def stats_token_schema(*, upgrade=False, add_subagent_cost=False):
+    subagent_upgrade = """
+        ALTER TABLE archive_stats_tokens ADD COLUMN subagent_reference_ccost TEXT;
+        UPDATE archive_stats_token_state SET evidence_revision=-1;
+    """ if add_subagent_cost else ""
     if upgrade:
-        return """
+        return subagent_upgrade + """
             ALTER TABLE archive_stats_tokens ADD COLUMN reference_ccost TEXT;
             ALTER TABLE archive_stats_tokens ADD COLUMN priced INTEGER NOT NULL DEFAULT 0;
             ALTER TABLE archive_stats_tokens ADD COLUMN mixed_prices INTEGER NOT NULL DEFAULT 0;
             UPDATE archive_stats_token_state SET evidence_revision=-1;
         """
-    return """
+    return subagent_upgrade + """
         CREATE TABLE IF NOT EXISTS archive_stats_token_state (
             source TEXT PRIMARY KEY REFERENCES sources(source), archive_epoch INTEGER NOT NULL,
             usage_revision INTEGER NOT NULL, evidence_revision INTEGER NOT NULL,
@@ -54,6 +59,7 @@ def stats_token_schema(*, upgrade=False):
             period TEXT NOT NULL, start_ms INTEGER, observed TEXT, requests INTEGER NOT NULL,
             usage_gaps INTEGER NOT NULL, population_gaps INTEGER NOT NULL,
             reference_ccost TEXT, priced INTEGER NOT NULL, mixed_prices INTEGER NOT NULL,
+            subagent_reference_ccost TEXT,
             PRIMARY KEY(source,period)
         ) WITHOUT ROWID;
     """
@@ -68,13 +74,14 @@ def _stamp(db, source):
 
 
 def _decode(row):
-    period, start, observed, calls, usage_gaps, population_gaps, cost, priced, mixed_prices = row
+    period, start, observed, calls, usage_gaps, population_gaps, cost, priced, mixed_prices, subagent_cost = row
     return StatsTokenRow(period, start, int(observed) if observed is not None else None, calls,
                          bool(usage_gaps), bool(population_gaps), Decimal(cost) if cost is not None else None,
-                         priced, bool(mixed_prices))
+                         priced, bool(mixed_prices), Decimal(subagent_cost) if subagent_cost is not None else None)
 
 
-_ROWS = """SELECT period,start_ms,observed,requests,usage_gaps,population_gaps,reference_ccost,priced,mixed_prices
+_ROWS = """SELECT period,start_ms,observed,requests,usage_gaps,population_gaps,reference_ccost,priced,mixed_prices,
+                 subagent_reference_ccost
            FROM archive_stats_tokens WHERE source=?"""
 
 
@@ -84,12 +91,15 @@ def commit_tokens(db, source, stamp, rows):
             or len(rows) != len(_PERIODS) or {row.period for row in rows} != _PERIODS):
         raise ValueError("invalid_stats_token_publication")
     for row in rows:
+        subagent = row.subagent_reference_ccost
         if ((row.start_ms is None) != (row.period == "all")
                 or row.start_ms is not None and row.start_ms > stamp.as_of or row.requests < 0
                 or row.observed is not None and (row.requests <= 0 or row.observed < 0 or row.population_gaps)
                 or not 0 <= row.priced <= row.requests
                 or row.reference_ccost is not None and (row.population_gaps or row.mixed_prices or not row.priced
-                       or not row.reference_ccost.is_finite() or row.reference_ccost < 0)):
+                        or not row.reference_ccost.is_finite() or row.reference_ccost < 0)
+                or subagent is not None and (row.population_gaps or not row.priced
+                                             or not subagent.is_finite() or subagent < 0)):
             raise ValueError("invalid_stats_token_row")
 
     if retained_stats_version(db, source, stamp.version) is None:
@@ -111,17 +121,22 @@ def commit_tokens(db, source, stamp, rows):
     """, (source, stamp.version.usage.archive_epoch, stamp.version.usage.revision, stamp.version.evidence,
           stamp.zone, stamp.as_of, stamp.next_completion))
     db.executemany("""
-        INSERT INTO archive_stats_tokens VALUES(?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO archive_stats_tokens
+            (source,period,start_ms,observed,requests,usage_gaps,population_gaps,reference_ccost,priced,mixed_prices,
+             subagent_reference_ccost) VALUES(?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(source,period) DO UPDATE SET
             start_ms=excluded.start_ms,observed=excluded.observed,requests=excluded.requests,
             usage_gaps=excluded.usage_gaps,population_gaps=excluded.population_gaps,
-            reference_ccost=excluded.reference_ccost,priced=excluded.priced,mixed_prices=excluded.mixed_prices
-        WHERE (start_ms,observed,requests,usage_gaps,population_gaps,reference_ccost,priced,mixed_prices)
-            IS NOT (excluded.start_ms,excluded.observed,excluded.requests,excluded.usage_gaps,excluded.population_gaps,
-                    excluded.reference_ccost,excluded.priced,excluded.mixed_prices)
+            reference_ccost=excluded.reference_ccost,priced=excluded.priced,mixed_prices=excluded.mixed_prices,
+            subagent_reference_ccost=excluded.subagent_reference_ccost
+        WHERE (start_ms,observed,requests,usage_gaps,population_gaps,reference_ccost,priced,mixed_prices,
+               subagent_reference_ccost)
+             IS NOT (excluded.start_ms,excluded.observed,excluded.requests,excluded.usage_gaps,excluded.population_gaps,
+                     excluded.reference_ccost,excluded.priced,excluded.mixed_prices,excluded.subagent_reference_ccost)
     """, ((source, row.period, row.start_ms, str(row.observed) if row.observed is not None else None,
            row.requests, row.usage_gaps, row.population_gaps,
-           str(row.reference_ccost) if row.reference_ccost is not None else None, row.priced, row.mixed_prices)
+            str(row.reference_ccost) if row.reference_ccost is not None else None, row.priced, row.mixed_prices,
+            str(row.subagent_reference_ccost) if row.subagent_reference_ccost is not None else None)
           for row in rows))
     return StatsTokenPublication(stamp, tuple(row.period for row in rows if prior.get(row.period) != row))
 

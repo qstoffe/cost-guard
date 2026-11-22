@@ -60,6 +60,7 @@ def check_cached_stats(browser, evidence, product_root):
             working = view.locator('[data-metric="working"]')
             tokens = view.locator('[data-metric="tokens"]')
             reference = view.locator('[data-metric="referenceCost"]')
+            subagent = view.locator('[data-metric="subagentReferenceCost"]')
             overnight_share = view.locator('[data-metric="overnightShare"]')
             expect(view.get_by_text("No measured work is cached for this period yet."),
                    f"Page errors: {errors!r}; requests: {[path for path, _ in requests]!r}").to_be_visible()
@@ -70,22 +71,24 @@ def check_cached_stats(browser, evidence, product_root):
                 expect(working).to_have_text("—")
                 expect(tokens).to_have_text("—")
                 expect(reference).to_have_text("—")
+                expect(subagent).to_have_text("—")
                 expect(overnight_share).to_have_text("—")
                 expect(page.locator("#result")).to_have_attribute("aria-busy", "false")
 
             now = int(time.time() * 1000)
             base = capture(one_request(running=False))
 
-            def publish(root_id, start, elapsed, clock):
+            def publish(root_id, start, elapsed, clock, *, child=None):
                 interval = StatsInterval(root_id, "prompt", "prompt", start, elapsed, False)
                 request, = base.requests
                 identity = replace(request.stats_identity, message_key=root_id.encode().ljust(32, b"-"))
-                observed = replace(request, key=root_id.encode(), clock_ms=start + elapsed, session_id=root_id,
+                observed = replace(request, key=root_id.encode(), clock_ms=start + elapsed, session_id=child or root_id,
                                    dedup_tree=root_id, fork_key=None, stats_identity=identity, response=None,
                                    tokens=(10, 20, 30, 5, 2), known=0b1111,
                                    category_costs=(Decimal(10), Decimal(20), Decimal(5), Decimal(15)))
+                parents = ((root_id, None),) + (((child, root_id),) if child else ())
                 roster = replace(base, requests=(observed,), attribution=(), prompts=None,
-                    stats=replace(base.stats, intervals=(interval,), parents=((root_id, None),), first_input=None))
+                    stats=replace(base.stats, intervals=(interval,), parents=parents, first_input=None))
                 archive.history.commit_sessions(archive.views.source, (SessionChange(
                     SessionFact(root_id, "r1", root_id), None, previous_progress=0, request_roster=roster),))
                 archive.close_catalog_work()
@@ -96,12 +99,14 @@ def check_cached_stats(browser, evidence, product_root):
                 raise AssertionError("fixture failed to commit measured time")
 
             midnight = now // 86_400_000 * 86_400_000
-            publish("recent", midnight - 12 * 3_600_000, 60_000, now)  # Yesterday at noon UTC.
+            publish("recent", midnight - 12 * 3_600_000, 60_000, now, child="recent-child")
             expect(working).to_have_text("1m")
             expect(tokens).to_have_text("67")
             expect(reference).to_have_text("$0.50")
+            expect(subagent).to_have_text("$0.50")
             view.evaluate("root => ReportView.setUnit('credits', root)")
             expect(reference).to_have_text("50")
+            expect(subagent).to_have_text("50")
             expect(view.locator('[data-metric="longest"]')).to_have_text("1m")
             expect(view.locator('[data-metric="parallel"]')).to_have_text("1")
             expect(overnight_share).to_have_text("0%")
@@ -124,6 +129,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(working).to_have_text("3m")
             expect(tokens).to_have_text("134")
             expect(reference).to_have_text("100")
+            expect(subagent).to_have_text("50")
             expect(overnight_share).to_have_text("67%")
             peer.wait_for_function("(clock) => statsCache.hint?.marks?.all?.[1] === clock", arg=now + 1)
             expect(peer_working).to_have_text("1m")
@@ -150,6 +156,7 @@ def check_cached_stats(browser, evidence, product_root):
             expect(peer_working).to_have_text("—")
             expect(tokens).to_have_text("—")
             expect(reference).to_have_text("—")
+            expect(subagent).to_have_text("—")
             expect(overnight_share).to_have_text("—")
             archive.observe(driver, before_tick=True)
             expect(working).to_have_text("1m")

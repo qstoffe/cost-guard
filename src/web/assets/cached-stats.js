@@ -4,10 +4,12 @@ const CachedStats = (() => {
   const periods = [['today', 'Today'], ['7-days', '7 days'], ['30-days', '30 days'],
     ['month', 'This month'], ['all', 'All time']];
   const fields = [['tokens', 'Observed tokens'], ['referenceCost', 'Known reference CCost'],
+    ['subagentReferenceCost', 'Known subagent reference CCost'],
     ['working', 'Working time'], ['longest', 'Longest session'], ['busiest', 'Busiest day'],
     ['overnight', 'Overnight work'], ['overnightShare', 'Overnight share of measured work'],
     ['streak', 'Longest streak (days)'], ['parallel', 'Peak parallel sessions']];
   const revoked = new Set(['cache_source_unbound', 'authentication_required', 'host_identity_changed', 'instance_stopping']);
+  const costFields = new Set(['referenceCost', 'subagentReferenceCost']);
   const mark = (hint, period) => JSON.stringify(hint?.marks?.[period] ?? null);
   const clock = {now: () => Date.now(), set: (run, wait) => setTimeout(run, wait), cancel: id => clearTimeout(id)};
 
@@ -158,12 +160,12 @@ const CachedStats = (() => {
       for (const [name, button] of this.buttons) button.setAttribute('aria-pressed', String(name === period));
       const display = value?.period === period ? value.display : {};
       ReportView.text(this.caption, blocked || error ? 'Cached AI Stats are unavailable for this source.' :
-        display.working || display.tokens || display.referenceCost ?
+        display.working || display.tokens || display.referenceCost || display.subagentReferenceCost ?
           'Observed cache only. Unobserved and estimated activity is not included.' :
         'No measured work is cached for this period yet.');
       for (const [field, node] of this.values) {
         const item = typeof display[field] === 'string' ? display[field] : '—';
-        ReportView.text(node, field === 'referenceCost' && item !== '—' ?
+        ReportView.text(node, costFields.has(field) && item !== '—' ?
           () => ReportView.metricToken(value, field) ?? '—' : item);
       }
       if (this.root.parentNode !== host) host.replaceChildren(this.root);

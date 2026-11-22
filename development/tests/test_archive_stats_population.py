@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from development.tests.fixtures.session_snapshots import DAY, one_request
+from development.tests.fixtures.session_snapshots import DAY, make_snapshot, one_request
 from src.analysis import analyze_snapshot
 from src.application.archive_stats_population import ArchiveStatsPopulation, PopulationState
 from src.application.archive_stats_tokens import ArchiveStatsTokens
@@ -40,9 +40,10 @@ class ArchiveStatsPopulationTests(TestCase):
 
     def record(self, root, requests, *, intervals=(), previous=None, pricing=None, pending=False):
         revision = "second" if previous else "first"
+        children = tuple(sorted({(row.session_id, root) for row in requests if row.session_id != root}))
         roster = replace(self.template, requests=requests, attribution=(), prompts=None,
                          pricing=pricing or self.template.pricing,
-                         stats=StatsCapture(intervals, pending, None, ((root, None),)))
+                         stats=StatsCapture(intervals, pending, None, ((root, None), *children)))
         self.history.commit_sessions("source", (SessionChange(
             SessionFact(root, revision, root), previous, previous_progress=int(previous is not None),
             request_roster=roster),))
@@ -225,6 +226,49 @@ class ArchiveStatsPopulationTests(TestCase):
         self.assertTrue(lifetime.mixed_prices)
         self.assertIsNone(lifetime.reference_ccost)
 
+    def test_subagent_reference_uses_linked_execution_not_billed_cost_and_survives_source_removal(self):
+        snapshot = make_snapshot()
+        reference = PricingCatalog(())
+        roster = request_roster(snapshot, analyze_snapshot(snapshot, now_ms=NOW), reference, config={})
+        executing_child, = tuple(row for row in roster.requests if row.session_id == "child")
+        self.assertEqual("root", executing_child.dedup_tree)
+        priced = tuple(replace(row, category_costs=(Decimal(2 if row.session_id == "child" else 1),) * 4)
+                       for row in roster.requests)
+        self.history.commit_sessions("source", (SessionChange(
+            SessionFact("root", "first", "Root"), None, previous_progress=0,
+            request_roster=replace(roster, requests=priced)),))
+        self.publish_tokens()
+        checkpoint = self.history.session_checkpoints("source", ("root",))["root"]
+        self.history.commit_sessions("source", missing=(("root", checkpoint),))
+        self.history = DisplayHistory(self.history.path.parent.parent)
+        self.history.initialize()
+        self.publish_tokens()
+
+        recent = self.history.stats_view("source", "UTC", "today", START, NOW)[1][0]
+        lifetime = self.history.stats_view("source", "UTC", "all", None, NOW)[1][0]
+
+        self.assertIsNone(recent.subagent_reference_ccost)
+        self.assertEqual(Decimal(8), lifetime.subagent_reference_ccost)
+        self.assertNotEqual(lifetime.reference_ccost, lifetime.subagent_reference_ccost)
+
+    def test_subagent_cost_counts_fork_survivor_once_and_qualifies_its_own_pricing(self):
+        costs = (Decimal("0.25"),) * 4
+        first = replace(self.request_for("a", b"first", fork=b"clone", ordinal=0),
+                        session_id="a-child", category_costs=costs)
+        clone = replace(self.request_for("b", b"clone", fork=b"clone", ordinal=1),
+                        session_id="b-child", category_costs=costs)
+        root = replace(self.request_for("c", b"root"), category_costs=costs)
+        self.record("a", (first,), pricing="child-price")
+        self.record("b", (clone,), pricing="child-price")
+        self.record("c", (root,), pricing="other-price")
+        self.publish_tokens()
+
+        row, _ = self.history.stats_view("source", "UTC", "today", START, NOW)[1]
+
+        self.assertEqual(2, row.requests)
+        self.assertIsNone(row.reference_ccost)
+        self.assertEqual(Decimal(1), row.subagent_reference_ccost)
+
     def test_v25_retains_token_subtotal_and_leaves_reference_cost_due_for_replay(self):
         current = replace(self.request_for("root", b"root"), category_costs=(Decimal(".1"),) * 4)
         self.record("root", (current,), pricing="reference-v1")
@@ -244,3 +288,25 @@ class ArchiveStatsPopulationTests(TestCase):
         self.assertTrue(self.history.stats_tokens_due("source", "UTC", self.build.scopes, NOW))
         self.publish_tokens()
         self.assertEqual(prior, self.history.stats_view("source", "UTC", "today", START, NOW)[1][0])
+
+    def test_v31_keeps_previous_fields_while_subagent_subtotal_is_due(self):
+        request = replace(self.request_for("root", b"child"), session_id="child",
+                          category_costs=(Decimal("0.25"),) * 4)
+        self.record("root", (request,))
+        self.publish_tokens()
+        with self.history._connect() as db:
+            db.execute("ALTER TABLE archive_stats_tokens DROP COLUMN subagent_reference_ccost")
+            db.execute("PRAGMA user_version=31")
+
+        self.history = DisplayHistory(self.history.path.parent.parent)
+        self.history.initialize()
+        warm, _ = self.history.stats_view("source", "UTC", "today", START, NOW)[1]
+        due = self.history.stats_tokens_due("source", "UTC", self.build.scopes, NOW)
+        self.publish_tokens()
+        refreshed, _ = self.history.stats_view("source", "UTC", "today", START, NOW)[1]
+
+        self.assertTrue(due)
+        self.assertEqual(Decimal(1), warm.reference_ccost)
+        self.assertIsNotNone(warm.observed)
+        self.assertIsNone(warm.subagent_reference_ccost)
+        self.assertEqual(replace(warm, subagent_reference_ccost=Decimal(1)), refreshed)

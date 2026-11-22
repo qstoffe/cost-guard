@@ -12,15 +12,19 @@ def cached_stats(row, token_row):
     if token_row is not None:
         if token_row.observed is not None:
             result["tokens"] = compact_tokens(token_row.observed)
-        if token_row.reference_ccost is not None:
-            result["referenceCost"] = ccost_amount(token_row.reference_ccost, unit="credits")
+        result.update(_costs(token_row, "credits"))
     return result
 
 
 def cached_stats_units(token_row):
-    if token_row is None or token_row.reference_ccost is None:
-        return {}
-    return {"usd": {"referenceCost": ccost_amount(token_row.reference_ccost, unit="usd")}}
+    costs = _costs(token_row, "usd") if token_row is not None else {}
+    return {"usd": costs} if costs else {}
+
+
+def _costs(row, unit):
+    return {field: ccost_amount(value, unit=unit) for field, value in (
+        ("referenceCost", row.reference_ccost), ("subagentReferenceCost", row.subagent_reference_ccost)
+    ) if value is not None}
 
 
 def _measured_stats(row):
