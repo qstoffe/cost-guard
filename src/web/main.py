@@ -77,7 +77,7 @@ def main():
     if is_managed:
         return managed(root, arguments[1], arguments[2])
     from .host import WebHost
-    owner = WebHost(root)
+    owner = WebHost(root, archive_directory=InstanceStore(root).directory)
     try:
         owner.start()
         owner.publish_ready()

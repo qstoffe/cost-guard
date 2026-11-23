@@ -194,5 +194,27 @@ const ReportLoading = (() => {
       await this.pause(Math.min(4000, 500 * 2 ** (this.retries - 1)));
     }
   }
-  return {sections, reset, observe, waiting, show, paintCompletion, View, Attempt, retryable, interrupted};
+  function historyProgress(view, button, progress) {
+    if (!button || !progress && !view.historyStatus) return;
+    if (!view.historyStatus) {
+      const root = view.historyStatus = ReportView.element('span', undefined, 'history-period-progress');
+      view.historySpinner = ReportView.element('span', undefined, 'metric-spinner');
+      view.historySpinner.setAttribute('aria-hidden', 'true');
+      view.historyCount = ReportView.element('span');
+      root.append(view.historySpinner, view.historyCount);
+    }
+    view.historyStatus.hidden = !progress || (progress.complete && !progress.unavailable && !progress.restored);
+    if (progress) {
+      // The spinner means work is pending; an unavailable gap is not queued work.
+      view.historySpinner.style.display = progress.complete || progress.recovering ? 'none' : '';
+      const cached = progress.cached == null ? 'Cached amount unknown' : `${progress.cached} cached`;
+      ReportView.text(view.historyCount,
+        cached + `${progress.remaining == null ? '' : ` · ${progress.remaining} remaining`}` +
+        `${progress.unavailable ? ` · ${progress.unavailable} unavailable` : ''}` +
+        `${progress.recovering ? ' · Local history temporarily unavailable; retrying' :
+          progress.restored ? ' · Checking for updates' : ''}`);
+      if (button.nextSibling !== view.historyStatus) button.after(view.historyStatus);
+    }
+  }
+  return {sections, reset, observe, waiting, show, paintCompletion, View, Attempt, retryable, interrupted, historyProgress};
 })();

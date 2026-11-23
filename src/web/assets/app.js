@@ -14,9 +14,11 @@ let csrf = null;
 let current = null;
 let liveConnection = null;
 let liveValue = null;
+let sourceValue = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let accountTimelineAvailable = false;
+let archiveHistory = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
@@ -32,15 +34,51 @@ function sourceNoticeGeometry() {
 if (sourceNotice && typeof ResizeObserver !== 'undefined') new ResizeObserver(sourceNoticeGeometry).observe(sourceNotice);
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
 function automaticHistory(state) { return ['token-mix', 'ai-stats'].includes(state?.section); }
+function archiveReadable() {
+  return !!csrf && archiveHistory && !ReportLoading.interrupted(hostState);
+}
+function historyBlocked() {
+  return hostState.terminal || (hostState.sourceBlocked && !archiveHistory);
+}
+function reportReadable(state) {
+  return hostState.writable || (automaticHistory(state) && archiveReadable());
+}
+function watchValue(source, history) {
+  if (!archiveHistory || !history) return source;
+  if (!source?.view || hostState.sourceBlocked || source.state === 'failed' || source.state === 'source_unavailable') {
+    return {...source, state: 'retained_history', view: history, source_observed_at_ms: null};
+  }
+  const view = source.view;
+  const liveRoots = new Set([...(view.active_cards || []), ...(view.recent_finished_cards || [])]
+    .map(card => card.session_id));
+  const cards = new Map(history.history_cards.filter(card => !liveRoots.has(card.session_id))
+    .map(card => [card.session_id, card]));
+  for (const card of view.history_cards || []) cards.set(card.session_id, card);
+  const historyCards = [...cards.values()].sort((a, b) =>
+    (a.rows?.[0]?.prompt?.completed_at_ms ?? 0) - (b.rows?.[0]?.prompt?.completed_at_ms ?? 0)).slice(-5);
+  const previews = new Map(history.earlier_previews.map(item => [item.session_id, item]));
+  for (const item of view.earlier_previews || []) previews.set(item.session_id, item);
+  const earlier = [...previews.values()].filter(item => !liveRoots.has(item.session_id))
+    .sort((a, b) => (b.activity_ms || 0) - (a.activity_ms || 0)).slice(0, 5);
+  const retainedDay = history.daily_usage?.day_end_ms > Date.now() ? history.daily_usage : null;
+  const currentDay = hostState.kind === 'connected' && view.daily_usage?.day_end_ms > Date.now() &&
+    ['observed', 'refreshing'].includes(view.daily_state);
+  return {...source, view: {...view, history_cards: historyCards,
+    history_epoch: Math.max(view.history_epoch || 0, history.history_epoch),
+    earlier_previews: earlier, daily_usage: currentDay ? view.daily_usage : retainedDay ?? view.daily_usage,
+    daily_state: !currentDay && retainedDay ? history.daily_state : view.daily_state}};
+}
 function firstReport(state = current) {
-  if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
+  if (csrf && reportReadable(state) && state?.request &&
+      !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
 }
 function scheduleCachedReport() {
   const state = current;
   const recoverCold = automaticHistory(state) && state.failed && state.section !== 'token-mix';
-  if (!historical(state) || !state.result && !recoverCold || state.loading || state.pageNavigation && state.failed || document.hidden || !hostState.writable) {
+  if (!historical(state) || !state.result && !recoverCold ||
+      state.loading || state.pageNavigation && state.failed || document.hidden || !reportReadable(state)) {
     clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
   }
   // Live health arrives more often than the lookup interval. Keep the existing
@@ -49,13 +87,13 @@ function scheduleCachedReport() {
   clearTimeout(cachedReportTimer); cachedReportOwner = state;
   const check = () => {
     cachedReportTimer = null; cachedReportOwner = null;
-    if (current === state && !document.hidden && hostState.writable) {
+    if (current === state && !document.hidden && reportReadable(state)) {
       if (demand) state.benchmark?.load(api);
       acquire(state, true);
     }
   };
   if (demand) {
-    cachedReportTimer = setTimeout(check, 5000);
+    cachedReportTimer = setTimeout(check, automaticHistory(state) ? 1500 : 5000);
     return; // Lookup a publication, never schedule a browser-owned source refresh.
   }
   const cadence = CachedReports.cadences[state.section];
@@ -67,7 +105,7 @@ function enterCachedReport(state) {
   if (state.pageNavigation && state.failed) return; // Explicit Retry owns failed paging, not a lookup timer.
   const band = CachedReports.entry(state.result, state.section);
   state.withheld = state.section === 'ai-stats' ? !!state.result && !AIStatsView.valid(state.result) : band === 'withhold';
-  if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
+  if (demand && !document.hidden && reportReadable(state)) { acquire(state, !!state.result && !state.withheld); return; }
   if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
     acquire(state, !state.withheld);
 }
@@ -128,19 +166,22 @@ function applySettings(value) {
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   const wasWritable = hostState.writable;
+  const couldReadHistory = archiveReadable();
   hostState = {...hostState, ...state};
   hostState.sourceBlocked = ['http_auth_failure', 'source_permission_denied', 'permission_denied',
     'registration_unreadable', 'unsupported_schema', 'unsupported_version', 'registration_invalid']
     .includes(hostState.sourceError);
   if (hostState.sourceBlocked) hostState.writable = false;
   if (hostState.kind !== 'connected' || hostState.sourceBlocked) current?.detail?.updateInvocations();
-  if (!wasWritable && hostState.writable) current?.detail?.catchUp();
+  if (!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) {
+    current?.detail?.catchUp();
+  }
   if (sourceNotice) {
     sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
     sourceNoticeGeometry();
   }
   if (hostState.terminal) demand?.close?.(false);
-  else if (wasWritable !== hostState.writable) demand?.update();
+  else if (wasWritable !== hostState.writable || couldReadHistory !== archiveReadable()) demand?.update();
   liveStatus = message;
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
@@ -165,17 +206,18 @@ function connectionStatus(message, state = {}) {
       ReportView.text(warning, '');
     }
   }
-  const blocked = hostState.terminal || hostState.sourceBlocked;
+  const blocked = historyBlocked();
   for (const view of views.values()) {
-    view.catalog?.sourceHealth(blocked || hostState.sourceOutage, blocked);
-  if (blocked) {
+    view.catalog?.sourceHealth(blocked || hostState.sourceBlocked || hostState.sourceOutage, blocked);
+    if (blocked) {
       view.detail?.invalidateValues(); view.detail?.detach();
       view.accountTimeline?.invalidate();
     }
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
-  if (!wasWritable && hostState.writable && current?.section === 'token-mix' && !current.loading)
+  if ((!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) &&
+      automaticHistory(current) && !current.loading)
     enterCachedReport(current);
   scheduleCachedReport();
 }
@@ -259,11 +301,12 @@ function show(state) {
   const toolbar = document.querySelector('.toolbar');
   if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
-    output.setAttribute('aria-busy', String(state.loading && !state.result && !hostState.sourceBlocked &&
+    const blocked = historyBlocked();
+    output.setAttribute('aria-busy', String(state.loading && !state.result && !blocked &&
       !state.interrupted && !state.statsAcquisitionFailed));
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
-    state.stats.update(state, hostState.sourceBlocked); state.stats.attach(output);
+    state.stats.update(state, blocked); state.stats.attach(output);
     return;
   }
   if (state.section === 'token-mix') {
@@ -271,7 +314,7 @@ function show(state) {
     state.tokenMix ||= new TokenMixView.View(period => selectTokenMix(state, period));
     const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
       (!state.mixBinding || state.mixBinding === tokenMixBinding);
-    output.setAttribute('aria-busy', String(!ready && !state.failed && !state.interrupted && !hostState.sourceBlocked));
+    output.setAttribute('aria-busy', String(!ready && !state.failed && !state.interrupted && !historyBlocked()));
     state.tokenMix.selection(state.period || 'all', ready);
     if (ready) state.tokenMix.update(state.result);
     state.tokenMix.attach(output);
@@ -295,11 +338,11 @@ function show(state) {
   }
   if (state.detail) {
     ReportView.syncUnits(state.detail.root);
-    if (!hostState.terminal && !hostState.sourceBlocked) state.detail.attach(output);
+    if (!historyBlocked()) state.detail.attach(output);
     else output.replaceChildren(state.detail.root);
   } else if (state.catalog) {
     ReportView.syncUnits(state.catalog.root);
-    if (!hostState.terminal && !hostState.sourceBlocked) state.catalog.attach(output);
+    if (!historyBlocked()) state.catalog.attach(output);
     else if (state.catalog.root.parentNode !== output) output.replaceChildren(state.catalog.root);
   } else if (state.live) {
     state.connection = liveStatus;
@@ -311,9 +354,10 @@ function show(state) {
       if (accountTimelineAvailable) {
         state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
         const chart = state.accountTimeline;
-        if (!hostState.terminal && !hostState.sourceBlocked) chart.setScope(liveValue?.account_timeline_scope ?? null);
+        chart.sharedHistory = archiveHistory;
+        if (!archiveHistory && !historyBlocked()) chart.setScope(liveValue?.account_timeline_scope ?? null);
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
-        chart.active(!document.hidden && !!csrf && hostState.writable);
+        chart.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
       }
     } else if (liveValue?.view) {
       state.miniControls = miniWatch?.button.parentNode;
@@ -357,7 +401,7 @@ function failure(code, state) {
   return 'Could not load. Try again.';
 }
 async function acquire(state, background = false, prices = false) {
-  if (state.loading || !hostState.writable) return;
+  if (state.loading || !reportReadable(state)) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
   let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh' &&
@@ -422,6 +466,9 @@ async function acquire(state, background = false, prices = false) {
            if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
              publication_id: admission.result_id || admission.id};
+           else if (admission.cache_first) {
+             await attempt.poll(null, 500); continue; // Wait only for the host's local projection.
+           }
            else if (mix && state.result && !admission.terminal && TokenMixView.compatible(state.result, state.period)) {
              keepRetained = true; return; // Let the host finish a quiet refresh.
            }
@@ -506,7 +553,7 @@ async function acquire(state, background = false, prices = false) {
          // A usable partial response finishes this attempt, not source coverage.
            if (state.result && !mix) {
             state.percent = 100; state.stage = state.stageLabel = 'Report ready';
-            if (initial && state === current && state.loader?.root.isConnected)
+            if (initial && !job.result.cache_first && state === current && state.loader?.root.isConnected)
               await ReportLoading.paintCompletion(state, attempt.controller.signal);
           }
          if (mix) state.percent = 100; // No completion paint on Token Mix's indeterminate loader.
@@ -536,7 +583,7 @@ async function acquire(state, background = false, prices = false) {
       if (owned) {
       if (state.dispatchError && !prices) { state.failed = true; state.message = state.userInitiated ? failure(state.dispatchError, state) : ''; }
       // A background lookup alone does not make failed metrics pending again.
-      if (state.section === 'ai-stats' && state.failed && !ReportLoading.interrupted(hostState) && !hostState.sourceBlocked)
+      if (state.section === 'ai-stats' && state.failed && !ReportLoading.interrupted(hostState) && !historyBlocked())
         state.statsAcquisitionFailed = true;
       state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
       show(state); scheduleCachedReport();
@@ -641,8 +688,7 @@ function navigate() {
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
     if (!current.catalog) {
       current.catalog = new SessionsCatalog.View(api);
-      const blocked = hostState.terminal || hostState.sourceBlocked;
-      current.catalog.sourceHealth(blocked || hostState.sourceOutage, blocked);
+      current.catalog.sourceHealth(historyBlocked() || hostState.sourceBlocked || hostState.sourceOutage, historyBlocked());
     }
     current.catalog.configure(route.params);
      current.request = null; current.message = '';
@@ -676,10 +722,11 @@ async function connect() {
     try { applySettings(await api('/api/settings')); }
    catch (_) { /* Saved settings are optional here; explicit Settings owns errors. */ }
      const state = await api('/api/status');
+     archiveHistory = state.archive_history === true;
      if (state.data_dispatcher && typeof DataDemand !== 'undefined') {
-       const writable = () => !!csrf && hostState.writable && !hostState.terminal;
-       demand = new DataDemand.Controller(api, () => current && {...current,
-         history: false}, writable,
+       // This controller writes only expiring view leases, not source/settings mutations.
+       const writable = () => !!csrf && (hostState.writable || archiveReadable());
+       demand = new DataDemand.Controller(api, () => current && {...current, history: false}, writable,
          {history: state.history_demand === true});
        if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
          () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.needsHistory !== false}),
@@ -690,17 +737,22 @@ async function connect() {
     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
-      liveConnection = LiveConnection.connect(api, (value, progress) => {
-        const firstLiveView = !liveValue?.view && !!value?.view;
-        liveValue = value?.view || !liveValue?.view ? value : {...value,
-          view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
+      liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected) => {
+        const firstLiveView = !sourceValue?.view && !!value?.view;
+        sourceValue = value?.view || !sourceValue?.view ? value : {...value,
+          view: sourceValue.view, source_observed_at_ms: sourceValue.source_observed_at_ms};
+        liveValue = watchValue(sourceValue, watchHistory);
         // A first entry can precede source selection. Use the existing Live
         // readiness signal once rather than polling the optional facts.
         if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
           current.stats.refreshDatabaseSizes();
         miniWatch?.update(liveValue);
-        current?.catalog?.wake(value?.catalog_hint);
-        current?.detail?.wake(value?.detail_hints);
+        if (reconnected) {
+          current?.catalog?.catchUp();
+          if (archiveReadable()) current?.detail?.catchUp();
+        }
+        current?.catalog?.wake(historyHints?.catalog_hint ?? value?.catalog_hint);
+        current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
         current?.detail?.updateInvocations();
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
@@ -764,10 +816,10 @@ if (sessionsNav) {
   });
 }
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
-window.addEventListener('online', () => liveConnection?.resync());
+window.addEventListener('online', () => liveConnection?.resync(true));
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
-  current?.accountTimeline?.active(!document.hidden && !!csrf && hostState.writable);
+  current?.accountTimeline?.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {

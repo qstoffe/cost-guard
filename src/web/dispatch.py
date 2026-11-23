@@ -76,7 +76,7 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, owner_kinds=FINITE):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -90,6 +90,7 @@ class DataDispatcher:
         self.price_actions = set()
         self.ready = False
         self.warm_allowed = False
+        self.owner_kinds = frozenset(owner_kinds)
 
     def price_refresh(self, key):
         with self.lock:
@@ -128,11 +129,14 @@ class DataDispatcher:
 
     def interest(self, tab, section, visible, request=None, *, history=False, account_period=None):
         with self.lock:
+            archive_request = None
+            if request and request.kind not in self.owner_kinds:
+                archive_request, request = request, None
             self._expire()
             if tab not in self.tabs and len(self.tabs) >= 16:
                 raise RuntimeError('busy')
             self.tabs[tab] = dict(section=section, visible=visible, request=request, history=history,
-                                  account_period=account_period, touched=self.clock())
+                                   archive_request=archive_request, account_period=account_period, touched=self.clock())
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
@@ -149,6 +153,14 @@ class DataDispatcher:
             self._expire()
             return frozenset(tab['account_period'] for tab in self.tabs.values()
                              if tab['visible'] and tab['account_period'])
+
+    def history_foreground(self):
+        with self.lock:
+            self._expire()
+            return frozenset(
+                request.stats_scope if request.kind is ReportKind.AI_STATS else request.token_mix_scope
+                for tab in self.tabs.values() if tab['visible']
+                and (request := tab.get('archive_request')) is not None)
 
     def _expire(self):
         for tab, value in tuple(self.tabs.items()):
@@ -302,7 +314,8 @@ class DataDispatcher:
                 self.initialized = True
                 self.next_background = self.clock() + BACKGROUND_STAGGER
                 for request in DEFAULT_REQUESTS:
-                    self._entry(request)
+                    if request.kind in self.owner_kinds:
+                        self._entry(request)
             self.warm_allowed = True
             for request in foreground:
                 entry = self._entry(request)

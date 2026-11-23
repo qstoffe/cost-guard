@@ -141,7 +141,7 @@ def live_acquisition(*, selection=None):
         if selection.selected == 'v2' and isinstance(selection.source, OpenCodeV2Source) else None)
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
         config=config, service_factory=card_service, session_cost_factory=session_cost_resources,
-        card_readers=card_readers,
+         card_readers=card_readers,
         detail_capture=DetailCapture(run_owned_detail),
         guidance_binding=cached_guidance_binding
             if callable(getattr(selection.source, 'refresh_observation_epoch', None)) else None))

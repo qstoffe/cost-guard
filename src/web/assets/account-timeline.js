@@ -308,7 +308,11 @@ const AccountTimelineView = (() => {
       this.pending = true;
       try {
         const value = await this.api('/api/accounts/timeline', {period, revision});
-        if (generation !== this.generation || value.scope !== this.scope) return;
+        if (generation !== this.generation) return;
+        if (value.scope !== this.scope) {
+          if (!this.sharedHistory) return;
+          this.setScope(value.scope);
+        }
         const activityChanged = this.working !== (value.acquiring === true);
         this.working = value.acquiring === true;
         if (value.view) {
@@ -343,7 +347,7 @@ const AccountTimelineView = (() => {
         }
       } finally {
         this.pending = false;
-        this.schedule(generation !== this.generation ? 0 : this.initial ? 350 : 6000);
+        this.schedule(generation !== this.generation ? 0 : this.initial ? 350 : 1500);
       }
     }
 
@@ -395,6 +399,9 @@ const AccountTimelineView = (() => {
       const previous = this.view;
       const roster = view?.series || this.roster || [];
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
+      if (typeof ReportLoading !== 'undefined')
+        ReportLoading.historyProgress(this, this.buttons.find(([id]) => id === this.period)?.[1],
+          view?.history_progress);
       this.legendFor(roster);
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];

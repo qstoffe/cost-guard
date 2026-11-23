@@ -7,8 +7,13 @@ import webbrowser
 
 from src.version import VERSION
 from src.application.live import LiveRuntime
+from src.analysis.account_timeline import PERIODS
 from src.cache.web_archive import WebArchive
+from src.reports import ReportKind
+from src.reports.archived_usage import ArchivedUsage
 from src.log_housekeeping import LogHousekeeping
+from src.config import ConfigError, load_configuration
+from src.watch.account_timeline import AccountTimeline
 from .change_guard import SourceGuard
 from .http import LoopbackServer
 from .instance_state import SCHEMA
@@ -20,10 +25,12 @@ from .security import BrowserLinkUnavailable
 from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
 from .database_sizes import database_sizes
+from .history_reports import HistoryReports
+from .watch_history import WatchHistory
 
 
 class WebHost:
-    def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
+    def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None, archive_directory=None):
         self.root = root
         self.store = store
         self.nonce = nonce or secrets.token_hex(16)
@@ -37,7 +44,7 @@ class WebHost:
         self._source_identity = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
-        self.dispatcher = DataDispatcher(self.jobs) if jobs is None else None
+        self.dispatcher = None
         self.dependencies = None
         if jobs is None:
             from .composition import dispatch_dependencies
@@ -45,14 +52,34 @@ class WebHost:
         self.events = EventHub(self.nonce)
         self.observations = WebObservations()
         self.source_startup = None
+        archive = None
+        usage = None
         if live_factory is None and jobs is None:
             from .source_startup import SourceStartup
+            directory = store.directory if store else archive_directory
+            archive = WebArchive(directory) if directory is not None else None
+            usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
-        archive = WebArchive(root) if self.source_startup else None
+        if jobs is None:
+            self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,))
+                               if usage else DataDispatcher(self.jobs))
+        self.history_reports = HistoryReports(usage, self.dependencies.prices) if usage else None
+        self.history_accounts = AccountTimeline(None, None, archived_usage=usage) if usage else None
+        self.watch_history = WatchHistory(usage, self.dependencies.prices, self.events.publish) if usage else None
+        self.history_config = {}
+        if usage:
+            try:
+                self.history_config = load_configuration(root).values
+            except ConfigError:
+                # Broken or unavailable source settings must not prevent host
+                # authorization, lifecycle cleanup, or reading local history.
+                pass
+        self.history_zone = str(self.history_config.get('timezone') or ('Europe/Stockholm' if archive else 'UTC'))
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher else None,
-            archive=archive) if live_factory else None
+            timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and not usage else None,
+            archive=archive, legacy_archive=root / 'cache' / 'cost-guard-display-v1.sqlite3' if archive else None,
+            timezone_id=self.history_zone) if live_factory else None
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)
@@ -156,12 +183,26 @@ class WebHost:
                     if not self.dependencies.check(self.dispatcher, baseline=baseline):
                         self.stop('source_changed')
                 if not self.stopping.is_set():
+                    if self.history_reports:
+                        self.live.catalog.archive_maintenance()
+                        self.events.publish('history', dict(catalog_hint=self.live.catalog.live_hint(),
+                                            detail_hints=self.live.details.archive_hints()))
+                        driver = self.live.driver
+                        selection = driver.coordinator.report_service.selection if driver else None
+                        self.history_reports.tick(selection=selection,
+                            config=self.history_config, catalog=self.live.catalog,
+                            ready=bool(driver and driver.error is None and self.live.observed.is_set()),
+                            price_signature=self.dependencies.reference_signature,
+                            foreground=self.dispatcher.history_foreground())
+                        self._tick_history_accounts(selection)
+                        self.watch_history.tick(self.live.catalog, self.history_zone,
+                            self.history_config.get('ccostDisplayUnit', 'credits'), int(time.time() * 1000))
                     if self.source_startup is None or self.source_startup.finished.is_set():
                         if self.dispatcher:
                             driver = self.live.driver if self.live else None
                             selection = driver.coordinator.report_service.selection if driver else None
                             identity = source_identity(selection) if selection else ''
-                            if identity and self._source_identity and identity != self._source_identity:
+                            if not self.history_reports and identity and self._source_identity and identity != self._source_identity:
                                 self.live.details.invalidate()
                                 with self.live.catalog.lock:
                                     self.live.catalog.leases.clear()
@@ -189,8 +230,11 @@ class WebHost:
                         self.jobs.close()
                 finally:
                     try:
-                        if self.live:
-                            self.live.close()
+                        try:
+                            if self.live:
+                                self.live.close()
+                        finally:
+                            self._close_history()
                     finally:
                         self.events.close(self.reason or "runtime_fault")
                         self.server.server_close()
@@ -226,6 +270,8 @@ class WebHost:
             try:
                 if not self.thread and self.live:
                     self.live.close()
+                if not self.thread:
+                    self._close_history()
             finally:
                 # Preserve actual use queued since the last host-loop flush. The
                 # finite drain fails soft on contention; never acquire source here.
@@ -234,6 +280,33 @@ class WebHost:
                     self.observations.persist(self, final=True)
                     self.store.remove(self.nonce)
                     self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")
+
+    def _close_history(self):
+        try:
+            if self.history_reports:
+                self.history_reports.close()
+        finally:
+            try:
+                if self.history_accounts:
+                    self.history_accounts.close()
+            finally:
+                if self.watch_history:
+                    self.watch_history.close()
+
+    def _tick_history_accounts(self, selection):
+        accounts, source, observation, captured_at = self.live.account_observation
+        available = captured_at is not None and self.live.driver.error is None
+        catalog = self.live.catalog
+        with catalog.lock:
+            unavailable = catalog.unavailable_history()
+            live_roots = frozenset(catalog.history_live_roots())
+        self.history_accounts.tick(source=source, observation=observation if available else None,
+            accounts=accounts if available else (), periods=frozenset(PERIODS),
+            zone=self.history_zone,
+            catalog=None, prices=self.dependencies.prices, migration_gap=selection.migration_gap if selection else None,
+            now_ms=int(time.time() * 1000), available=available, terminal=not available,
+            foreground=self.dispatcher.account_timeline_foreground(),
+            unavailable_history=unavailable, live_roots=live_roots)
 
     def run_gui(self, gui):
         """Adapter.run(owner) on main thread; poll owner.stopped, finally remove icon.

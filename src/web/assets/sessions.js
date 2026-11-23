@@ -42,12 +42,6 @@ const SessionsCatalog = (() => {
         button.addEventListener('click', () => this.navigateTo(destination(0, null, this.sort, this.direction, key), null, 'period'));
         this.periods.append(button); return {key, button};
       });
-      this.historyProgress = el('span', undefined, 'sessions-history-progress');
-      this.historyProgress.hidden = true;
-      this.historySpinner = el('span', undefined, 'metric-spinner');
-      this.historySpinner.setAttribute('aria-hidden', 'true');
-      this.historyText = el('span');
-      this.historyProgress.append(this.historySpinner, this.historyText);
       const pan = el('div', undefined, 'sessions-table-pan'); pan.tabIndex = 0;
       pan.setAttribute('role', 'region'); pan.setAttribute('aria-label', 'Sessions');
       const table = el('table', undefined, 'sessions-table session-catalog-table');
@@ -183,13 +177,23 @@ const SessionsCatalog = (() => {
     wake(hint) {
       if (typeof hint !== 'string' || !hint || hint === this.liveHint) return;
       this.liveHint = hint;
-      if (!this.attached || document.hidden || this.offset !== 0 || this.terminal || this.operation?.failed) return;
+      if (!this.attached || document.hidden || this.offset !== 0 && !this.data?.cache_first ||
+          this.terminal || this.operation?.failed) return;
       const pending = this.wakePending; this.wakePending = true;
       // Explicit navigation owns the request/cohort. Keep one trailing wake,
       // never cancel or restart an action or an in-flight passive request.
       if (pending || this.busy || this.operation || this.retryDelay) return;
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.poll(), 100);
+    }
+    catchUp() {
+      if (!this.attached || document.hidden || this.terminal || !this.data?.cache_first ||
+          this.operation?.failed) return;
+      // An authenticated host is usable again. Retire only a stale passive
+      // request; keep the selected page, sort and any explicit navigation.
+      this.retryDelay = 0;
+      if (this.busy && !this.operation) this.retire();
+      this.poll();
     }
     async poll() {
       if (!this.attached || this.busy || this.terminal) return;
@@ -200,7 +204,8 @@ const SessionsCatalog = (() => {
       await this.load();
       if (generation === this.generation && this.attached && !this.terminal)
         this.timer = setTimeout(() => this.poll(), this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
-          this.wakePending && this.offset === 0 ? 100 : 5000));
+          this.wakePending && (this.offset === 0 || this.data?.cache_first) ? 100 :
+          this.data?.cache_first ? 1500 : 5000));
     }
     recoverNavigation() {
       if (this.operation.navigation) this.cancelledNavigation = this.operation.navigation;
@@ -399,6 +404,10 @@ const SessionsCatalog = (() => {
         values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
       this.pan.hidden = this.pager.hidden = false;
+      if (this.data?.source?.identity !== data.source?.identity) {
+        this.costs = null;
+        this.body.replaceChildren();
+      }
       this.data = data;
       this.renderTimezone = data.view.timezone_id;
       this.offset = data.offset;
@@ -410,13 +419,8 @@ const SessionsCatalog = (() => {
         this.canonicalPeriod = false;
       }
       this.clearStatus();
-      const progress = data.history_progress;
-      if (progress) {
-        this.historyProgress.hidden = progress.complete;
-        ReportView.text(this.historyText, `${progress.cached} cached${progress.remaining == null ? '' : ` · ${progress.remaining} remaining`}`);
-        const active = this.periodButtons.find(item => item.key === data.period)?.button;
-        if (active?.nextSibling !== this.historyProgress) active?.after(this.historyProgress);
-      }
+      const periodButton = this.periodButtons.find(item => item.key === data.period)?.button;
+      ReportLoading.historyProgress(this, periodButton, data.history_progress);
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');

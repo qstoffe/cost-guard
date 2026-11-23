@@ -39,7 +39,7 @@ def physical_usage_key(entry: TraceEntry) -> tuple | None:
             if entry.invocation_id else None)
 
 
-def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
+def unique_usage(entries: Iterable[TraceEntry], *, shared_history=False) -> tuple[TraceEntry, ...]:
     """Retain independent calls within a tree; clone matching is cross-tree only.
 
     Equal tokens/model/completion time never identify two sibling requests.
@@ -52,6 +52,8 @@ def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
         if key is None:
             legacy.append(entry)
             continue
+        if shared_history:
+            key = key[1:]
         previous = physical.get(key)
         if previous is not None:
             # Prefer complete telemetry over a partial capture; equally complete
@@ -65,7 +67,7 @@ def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
     for entry in sorted((*physical.values(), *legacy), key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id)):
         fingerprint = billing_request_fingerprint(entry)
         if fingerprint:
-            trees = groups.setdefault((entry.source_instance, fingerprint), {})
+            trees = groups.setdefault((None if shared_history else entry.source_instance, fingerprint), {})
             tree = entry.root_session_id if entry.parent_session_id or entry.root_session_id == entry.session_id else entry.session_id
             trees.setdefault(tree, []).append(entry)
         else:

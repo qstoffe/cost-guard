@@ -99,7 +99,7 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None):
+                    on_activity=None, activity_end_ms=None, on_evidence=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -109,7 +109,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
     except (OSError, sqlite3.Error):
         cached = None
-    if not active and cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
+    if (on_evidence is None and not active and cached is not None
+            and cached.source_revision == revision and cached.algorithm_version == ALGORITHM):
         try:
             values = dict(cached.payload)
             semantics = values.pop("model_identity_semantics", None)
@@ -187,6 +188,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
                   **activity_fields(item, on_activity=on_activity))
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
+    if on_evidence is not None:
+        on_evidence(item)
     actual = item.bundle.source_revision
     identity_values = dependencies((*item.bundle.trace_entries,
         *(message for message in item.snapshot.messages if message.model is not None)))

@@ -12,6 +12,7 @@ class DispatchDependencies:
         self.next_check = 0
         self.config_signature = None
         self.price_signature = None
+        self.reference_signature = None
 
     def check(self, dispatcher, *, baseline=None):
         """False means changed/invalid runtime configuration needs a fresh host.
@@ -41,4 +42,5 @@ class DispatchDependencies:
         if self.price_signature is not None and signature != self.price_signature:
             dispatcher.invalidate()
         self.price_signature = signature
+        self.reference_signature = getattr(catalog, 'diagnostic_signature', signature)
         return True

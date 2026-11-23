@@ -97,7 +97,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                         expected = ["c", "d", "e", "a", "b"] if direction == -1 else ["a", "b", "c", "d", "e"]
                     else:
                         expected = ["c", "a", "b", "d", "e"] if direction == -1 else ["a", "b", "c", "d", "e"]
-                    with patch("src.application.session_catalog.sort_value", wraps=sort_value) as extract:
+                    with patch("src.application.session_epoch_page.sort_value", wraps=sort_value) as extract:
                         result = ordered(rows, key, direction)
                     self.assertEqual([row.session_id for row in result], expected)
                     self.assertEqual(extract.call_count, len(rows))

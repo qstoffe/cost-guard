@@ -5,42 +5,131 @@ import sqlite3
 from src.cache.web_archive import ArchiveFact
 
 from .projection import identity, project
-from .session_activity import activity_summary
+from .session_activity import ActivityHistory, activity_summary
+from .session_values import value_authority
 
 
 LOG = logging.getLogger(__name__)
 DOMAIN = 'detail/1'
 
 
-def save_detail(archive, partition, key, revision, report, metadata):
-    if not partition or not isinstance(revision, str):
-        return False
+def detail_fact(key, revision, report, metadata):
+    if not isinstance(revision, str):
+        return None
     block, = report.prompt_blocks
-    if any(row.in_progress for row in block.rows) or not (metadata['activity'] or {}).get('complete'):
-        return False
+    if any(row.in_progress or row.execution_unverified for row in block.rows) or not (metadata['activity'] or {}).get('complete'):
+        return None
     view = project(report, metadata['timezone_id'], metadata['ccost_display_unit'], prompt_details=True).to_json()
     for row in view['prompt_blocks'][0]['rows']:
         row['id'] = identity((key, row['event_id'], row['is_compaction']))
         row['last_observed_at_ms'] = metadata['row_observations'].get(row['event_id'])
         row['retained'] = row['event_id'] in metadata['omitted_ids']
-    observed = metadata['observed_at_ms']
+    return ArchiveFact(revision, metadata['observed_at_ms'], dict(
+        view=view, activity=metadata['activity'], value_authority=metadata['value_authority']))
+
+
+def save_detail(archive, partition, key, revision, report, metadata):
+    if not partition:
+        return False
+    fact = detail_fact(key, revision, report, metadata)
+    if fact is None:
+        return False
     try:
-        archive.publish(partition, DOMAIN, {key: ArchiveFact(revision, observed, dict(
-            view=view, activity=metadata['activity'], value_authority=metadata['value_authority']))})
+        return archive.publish(partition, DOMAIN, {key: fact})
     except (sqlite3.Error, OSError, ValueError):
         LOG.warning('detail_archive_write_unavailable')
         return False
-    return True
 
 
-def load_detail(archive, partition, key):
+def acquired_detail(service, item):
+    """Reuse a qualified background capture rather than acquiring the tree twice."""
+    root, snapshot = item.session, item.snapshot
+    block = service._prompt_block(item, snapshot_running_metrics=True)
+    history = ActivityHistory()
+    history.snapshot = history.fresh_snapshot = snapshot
+    history.report = service.session_detail_projection(root.session_id, root, block)
+    metadata = dict(
+        timezone_id=service.timezone_id, ccost_display_unit=service.config.get('ccostDisplayUnit', 'credits'),
+        activity=history.activity_for(service.source, block.rows), value_authority=value_authority(history, service.source),
+        row_observations={row.event_id: service.now_ms for row in block.rows},
+        omitted_ids=frozenset(), observed_at_ms=service.now_ms,
+    )
+    return detail_fact(root.session_id, item.bundle.source_revision, history.report, metadata)
+
+
+def refresh_detail(archive, key, previous=(0, None)):
     try:
-        fact = archive.read(partition, DOMAIN, item=key).get(key)
-        if fact and fact.value['view']['prompt_blocks'][0]['session_id'] == key:
-            return fact
-    except (sqlite3.Error, OSError, KeyError, IndexError, TypeError):
+        cursor, candidates = archive.history_item(DOMAIN, key, previous[0])
+        readable = []
+        for _, fact in candidates:
+            try:
+                block, = fact.value['view']['prompt_blocks']
+                if block['session_id'] == key and isinstance(block['rows'], list):
+                    readable.append(fact)
+            except (KeyError, TypeError, ValueError):
+                continue
+        return (cursor, _reconcile(key, readable)) if readable else previous
+    except (sqlite3.Error, OSError, KeyError, IndexError, TypeError, ValueError):
         LOG.warning('detail_archive_read_unavailable')
-    return None
+    return previous
+
+
+def load_detail(archive, key):
+    return refresh_detail(archive, key)[1]
+
+
+def _reconcile(key, candidates):
+    winner, *retained = candidates
+    if not retained:
+        return winner
+    value = winner.value
+    view = value['view']
+    block, = view['prompt_blocks']
+    rows = {}
+    for fact in candidates:
+        original, = fact.value['view']['prompt_blocks']
+        for row in original['rows']:
+            if not isinstance(row, dict) or not isinstance(row.get('event_id'), str) or not row['event_id']:
+                continue
+            event = row['event_id'], row.get('is_compaction') is True
+            if event not in rows:
+                # Neither a retained Running flag nor an unverified old start is
+                # allowed to acquire current execution authority.
+                rows[event] = {**row, 'id': identity((key, *event)), 'in_progress': False,
+                               'retained': fact is not winner or row.get('retained', False)}
+            else:
+                rows[event] = _fill_display(rows[event], row, (
+                    'at_ms', 'completed_at_ms', 'duration_ms', 'ccost', 'calls', 'incoming_context_tokens',
+                    'incoming_context_ccost', 'extra_ccost', 'token_mix_percent', 'watch_model', 'watch_effort'))
+        if fact is not winner:
+            block = _fill_display(block, original, ('total_ccost', 'total_calls', 'duration_ms',
+                                  'total_incoming_context_ccost', 'total_extra_ccost', 'total_token_mix_percent'))
+    ordered = sorted(rows.values(), key=lambda row: (-(row.get('at_ms') or 0), row['event_id']))
+    reconciled = {**value, 'view': {**view, 'prompt_blocks': [{**block, 'rows': ordered}]}}
+    authority = value.get('value_authority') or {}
+    reconciled['value_authority'] = {
+        'scope': identity(('shared-history', key)),
+        'rows': {row['event_id']: 'known' if row.get('token_mix_percent') is not None else
+                 'unavailable' for row in ordered},
+        'totals': {**authority.get('totals', {}), **{name: 'known' for name in (
+            'total_ccost', 'total_calls', 'duration_ms', 'total_incoming_context_ccost',
+            'total_extra_ccost', 'total_token_mix_percent') if block.get(name) is not None}},
+    }
+    revision = identity(tuple((item.partition, item.revision, item.observed_ms) for item in candidates))
+    return ArchiveFact(revision, winner.observed_ms, reconciled, winner.partition)
+
+
+def _fill_display(current, old, names):
+    fields = {name: old[name] for name in names
+              if current.get(name) in (None, '', 'N/A') and old.get(name) not in (None, '', 'N/A')}
+    if not fields:
+        return current
+    def merge(values, former):
+        return {**values, **{name: former[name] for name in fields if name in former}}
+    old_units = old.get('display_units') or {}
+    return {**current, **fields, 'display': merge(current.get('display') or {}, old.get('display') or {}),
+            'display_units': {unit: merge(values, old_units.get(unit, {}))
+                              for unit, values in (current.get('display_units') or {}).items()}}
 
 
 def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition):
@@ -58,13 +147,13 @@ def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisi
               max(0, min(offset, max(0, len(rows) - 1))))
     shown = rows[offset:offset + (25 if begin or chunk else 50)]
     view = {**view, 'prompt_blocks': [{**block, 'rows': shown}]}
-    authority = payload['value_authority']
+    authority = payload.get('value_authority')
     if authority is not None:
         authority = {**authority, 'rows': {row['event_id']: authority['rows'].get(row['event_id']) for row in shown}}
-    return dict(state='observed', pending=False, revision=cache_revision, stale_cursor=stale, offset=offset,
+    return dict(cache_first=True, state='observed', pending=False, revision=cache_revision, stale_cursor=stale, offset=offset,
                 total=len(rows), mode=mode, value_authority=authority, values_invalidated=False,
                 export_available=False, acquisition=acquisition,
-                **(dict(activity=activity_summary(payload['activity']), quota_usage=None) if not chunk else {}),
+                 **(dict(activity=activity_summary(payload.get('activity')), quota_usage=None) if not chunk else {}),
                 **(dict(activity_refresh=None, activity_revision=cache_revision) if begin else {}),
                 result=dict(observed_at_ms=fact.observed_ms, view=view,
-                            source=dict(status='acquired', atomicity='per_root_snapshot')))
+                             source=dict(status='partial', identity='shared-history', atomicity='cached_projection')))

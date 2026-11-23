@@ -28,8 +28,8 @@ const AIStatsView = (() => {
   const mainFileHelp = '\n\nMeasures only the main database file, excluding auxiliary files such as the SQLite WAL.';
   const databaseRows = [
     ['opencode_bytes', 'OpenCode DB',
-      'OpenCode stores the source sessions used for CostGuard’s session-based statistics. In OpenCode v2, a deleted session ' +
-      'stops contributing to refreshed source-backed results. Old derived cache entries may remain on disk for a while.'],
+       'OpenCode stores the source sessions used for Cost Guard’s statistics. Verified Web history can remain available ' +
+       'after a source session is deleted. Saved epochs stay separate when OpenCode restarts.'],
     ['cache_bytes', 'CostGuard Cache DB',
       'CostGuard keeps a disposable SQLite cache to speed up repeated analysis. Eligible old session-cache entries can be ' +
       'cleaned up when neither session activity nor meaningful use has occurred for at least 30 days. Cleanup runs while the ' +
@@ -206,6 +206,9 @@ const AIStatsView = (() => {
       ReportView.text(this.databaseValues.get('cache_bytes'), formatFileSize(sizes?.cache_bytes));
     }
     update(state, sourceBlocked) {
+      if (typeof ReportLoading !== 'undefined')
+        ReportLoading.historyProgress?.(this, this.buttons.get(state.period),
+          state.result?.view.history_progress?.[state.period]);
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;
@@ -268,7 +271,7 @@ const AIStatsView = (() => {
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {
           const link = target || e('a'); ReportView.text(link, metric.session_title);
-          link.href = '#/sessions/' + metric.session_id;
+           link.href = '#/sessions/' + metric.session_id;
           if (!target) card.detail.replaceChildren(link);
         } else ReportView.text(card.detail, metric.metric === 'token-rate' ? '' : face(metric.detail || ''));
       }

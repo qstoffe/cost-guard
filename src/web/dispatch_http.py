@@ -4,6 +4,7 @@ import re
 from src.analysis.account_timeline import PERIODS
 from src.reports import ReportKind
 from .dispatch import FINITE, SECTIONS
+from .history_reports import KINDS as ARCHIVED_KINDS
 from .jobs import ReportWorkerStopError, parse_report
 
 SECTION_KIND = {'models': ReportKind.NORMAL, 'token-mix': ReportKind.TOKEN_MIX,
@@ -44,11 +45,16 @@ def handle(handler, value):
                 elif value['section'] == 'watch':
                     housekeeping.use_watch(owner, history=value.get('history', False))
         else:
-            if set(value) != {'request', 'retry'} or type(value['retry']) is not bool:
+            if (set(value) != {'request', 'retry'}
+                    or type(value['retry']) is not bool):
                 raise ValueError('invalid_request')
             request = parse_report(value['request'])
             if request.kind not in FINITE:
                 raise ValueError('invalid_request')
+            archive = getattr(owner, 'history_reports', None)
+            if archive and request.kind in ARCHIVED_KINDS:
+                handler.reply(200, archive.lookup(request, owner.live.catalog))
+                return True
             startup = getattr(owner, 'source_startup', None)
             if startup is not None:
                 status = startup.report_status()

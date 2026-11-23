@@ -41,7 +41,7 @@ class SessionPeriodTests(unittest.TestCase):
         for index, (key, root) in enumerate(catalog.roots.items()):
             catalog.rows[key] = SessionUsageRow(key, root.title, "Model", False, Decimal(index), index,
                 context_tokens=index, effort="High", effort_key="high",
-                last_activity_ms=catalog.activity[key])
+                last_activity_ms=catalog.activity.get(key))
             catalog.valid[key] = catalog.revisions[key], self.clock
             catalog.activity_valid[key] = catalog.revisions[key]
 

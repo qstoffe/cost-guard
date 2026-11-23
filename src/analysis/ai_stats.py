@@ -278,13 +278,15 @@ def _token_metrics(roots, entries, complete, start, now, key):
 
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
-    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None, model_bucket=None):
+    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None, model_bucket=None,
+                 shared_history=False):
         self.roots, self.valuation = tuple(roots), valuation
         self.now, self.zone = now, zone
         self.workday_calendar = workday_calendar
         self._timelines, self._requests = {}, {}
         self._model_names = {}
         self.model_bucket, self.model_name = model_bucket, model_name
+        self.shared_history = shared_history
 
     def model_key(self, entry):
         model = entry.model
@@ -305,7 +307,8 @@ class StatsObservation:
         roots = tuple(root for root in self.roots if not outside_period(root, start))
         population = tuple(id(root) for root in roots)
         if population not in self._requests:
-            self._requests[population] = tuple(deduplicated_requests(e for root in roots for e in root.entries))
+            self._requests[population] = deduplicated_requests(
+                (entry for root in roots for entry in root.entries), shared_history=self.shared_history)
         entries = tuple(entry for entry in self._requests[population]
                         if (start is None or entry.completed_at_ms >= start) and entry.completed_at_ms <= self.now)
         complete = source_complete and all(root.source_complete for root in roots)

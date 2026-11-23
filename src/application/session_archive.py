@@ -1,60 +1,159 @@
 """Session display persistence and pagination over the ready subset."""
 from collections import OrderedDict
-from decimal import InvalidOperation
+from dataclasses import replace
+from decimal import Decimal, InvalidOperation
 import logging
 import sqlite3
 from uuid import uuid4
 
 from src.analysis.metric_evidence import EMPTY_HISTORY
-from src.cache.web_archive import ArchiveFact
-from src.reports.models import ReportKind, ReportProjection
-from src.reports.session_summary import ALGORITHM, decode_summary, encode_summary
+from src.cache.web_archive import ArchiveFact, LEGACY_IMPORT, history_rank
+from src.reports import web_history_evidence
+from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
+from src.reports.session_summary import decode_summary, encode_summary
 
+from . import detail_archive
 from .projection import project
 from .session_catalog_scope import PAGE_SIZE, catalog_window, in_window, row_in_window
 
 
 LOG = logging.getLogger(__name__)
-DOMAIN = f'sessions/{ALGORITHM}'
+DOMAIN = 'sessions/1'
 LIVE_TAIL_MS = 10 * 60_000
 
 
 class SessionArchive:
-    def __init__(self, storage):
+    def __init__(self, storage, legacy=None, *, timezone_id='UTC'):
         self.storage = storage
+        self.legacy = legacy
+        self.timezone_id = timezone_id
         self.partition = None
         self.rows = {}
         self.authorities = {}
+        self.loaded = False
 
-    def load(self, partition):
-        decoded, authorities = {}, {}
+    def load(self):
         try:
             self.storage.initialize()
-            facts = self.storage.read(partition, DOMAIN)
+            return self.read_rows()
         except (sqlite3.Error, OSError):
             LOG.warning('session_archive_read_unavailable')
             return None
-        for key, fact in facts.items():
+
+    def load_legacy(self, stopping):
+        from .legacy_history import import_archive
+        retry = False
+        try:
+            changed = import_archive(self.storage, self.legacy, self.timezone_id, stopping=stopping)
+        except (sqlite3.Error, OSError, TypeError, ValueError):
+            LOG.warning('legacy_history_import_incomplete', exc_info=True)
+            retry = changed = True  # Some batches may already be committed.
+        if changed and not stopping():
+            try:
+                return self.read_rows(legacy_only=True), retry
+            except (sqlite3.Error, OSError):
+                LOG.warning('legacy_history_read_unavailable', exc_info=True)
+                retry = True
+        return ({}, {}), retry
+
+    @staticmethod
+    def prefers(candidate, previous):
+        def rank(authority):
+            revision, _, _, partition, observed = authority
+            return history_rank(partition, observed, revision)
+        return rank(candidate) > rank(previous)
+
+    def read_rows(self, *, legacy_only=False):
+        decoded, authorities, ranks = {}, {}, {}
+        for key, fact in self.storage.history_rows(DOMAIN):
+            if legacy_only and not fact.partition.startswith(LEGACY_IMPORT):
+                continue
             try:
                 row = decode_summary(fact.value['row'])
-                if row.session_id != key or row.running or not row.activity_qualified:
+                if row.session_id != key:
                     continue
-                decoded[key] = row
-                authorities[key] = fact.revision, fact.value['dependencies'], fact.value['models']
-            except (KeyError, TypeError, ValueError, InvalidOperation):
+            except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
+                row = recover_summary(key, fact.value.get('row', fact.value))
+            if row is None:
                 continue
+            row = replace(row, running=False)
+            prior = decoded.get(key)
+            if prior is not None and ranks[key] >= fact.history_rank:
+                decoded[key] = retain_readable_fields(prior, row)
+            else:
+                ranks[key] = fact.history_rank
+                decoded[key] = retain_readable_fields(row, prior)
+                authorities[key] = (fact.revision, fact.value.get('dependencies'), fact.value.get('models', ()),
+                                    fact.partition, fact.observed_ms)
         return decoded, authorities
 
-    def save(self, partition, key, revision, row, observed_ms, dependencies, models):
+    def save(self, partition, key, revision, row, observed_ms, dependencies, models, usage, detail):
         try:
-            self.storage.publish(partition, DOMAIN, {
-                key: ArchiveFact(revision, observed_ms, dict(
-                    row=encode_summary(row), dependencies=dependencies, models=models)),
+            return self.storage.publish_batch(partition, {
+                DOMAIN: {key: ArchiveFact(revision, observed_ms, dict(
+                    row=encode_summary(row), dependencies=dependencies, models=models))},
+                web_history_evidence.DOMAIN: {key: usage},
+                detail_archive.DOMAIN: {key: detail},
             })
         except (sqlite3.Error, OSError, ValueError):
             LOG.warning('session_archive_write_unavailable')
             return False
-        return True
+
+
+def historical_amount(value):
+    try:
+        amount = Decimal(value)
+        return amount if amount.is_finite() and amount >= 0 else None
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def historical_int(value, minimum=0):
+    return value if type(value) is int and minimum <= value <= 2**53 - 1 else None
+
+
+def recover_summary(key, value):
+    """Decode independently representable scalars without manufacturing zeros."""
+    if not isinstance(value, dict) or value.get('session_id', key) != key:
+        return None
+    title = value.get('title')
+    if not isinstance(title, str):
+        return None
+    model = value.get('model')
+    context = historical_int(value.get('context_tokens'))
+    return SessionUsageRow(key, title, model if isinstance(model, str) and model else 'N/A',
+        value.get('multiple_models') is True, historical_amount(value.get('ccost')),
+        historical_int(value.get('prompt_count')), complete=False,
+        duration_ms=historical_int(value.get('duration_ms')),
+        archived=value.get('archived') is True, last_activity_ms=historical_int(value.get('last_activity_ms'), 1),
+        activity_latest_ms=historical_int(value.get('activity_latest_ms'), 1),
+        prompt_started_ms=historical_int(value.get('prompt_started_ms'), 1),
+        context_tokens=context, context_qualified=False,
+        context_detail=(value['context_detail'] if context is not None and isinstance(value.get('context_detail'), str)
+                        else 'Session context unavailable.'),
+        effort=value['effort'] if isinstance(value.get('effort'), str) else 'N/A',
+        effort_qualified=False, model_pending=not model,
+        empty_history=value.get('empty_history') is True)
+
+
+def retain_readable_fields(new, old):
+    if old is None:
+        return new
+    fields = {name: getattr(old, name) for name in ('prompt_count', 'duration_ms', 'context_tokens',
+              'last_activity_ms', 'activity_latest_ms', 'prompt_started_ms')
+              if getattr(new, name) is None and getattr(old, name) is not None}
+    if new.ccost is None and old.ccost is not None:
+        fields.update({name: getattr(old, name) for name in (
+            'ccost', 'main_ccost', 'subagent_ccost', 'cost_groups', 'ccost_unavailable')})
+    if new.model == 'N/A' and old.model != 'N/A':
+        fields.update({name: getattr(old, name) for name in (
+            'model', 'multiple_models', 'contributor_models', 'main_models', 'subagent_models',
+            'has_model_details', 'selected_display_model')})
+    if new.effort == 'N/A' and old.effort != 'N/A':
+        fields.update(effort=old.effort, effort_key=old.effort_key, effort_contributors=old.effort_contributors)
+    if 'context_tokens' in fields:
+        fields.update(context_detail=old.context_detail, context_qualified=False)
+    return replace(new, **fields) if fields else new
 
 
 def cached_page(catalog, ordered, *, token, offset, sort, direction, period, navigation):
@@ -74,8 +173,9 @@ def cached_page(catalog, ordered, *, token, offset, sort, direction, period, nav
     cache_key = (window.identity, catalog.wake_revision, catalog.generation, sort, direction)
     rows = catalog.orders.get(cache_key)
     if rows is None:
-        active_rows = catalog._rows(catalog.rows.keys() | catalog.running_roots | catalog.recent_arrivals.keys())
-        retained = (row for key, row in archive.rows.items() if key not in catalog.rows)
+        active = catalog.rows.keys() | catalog.running_roots | catalog.recent_arrivals.keys()
+        active_rows = catalog._rows(active)
+        retained = (row for key, row in archive.rows.items() if key not in active)
         available = {row.session_id: row for row in (*retained, *active_rows)
                      if period == 'all' or row_in_window(row, window) or (
                          row.session_id in catalog.recent_arrivals
@@ -87,8 +187,7 @@ def cached_page(catalog, ordered, *, token, offset, sort, direction, period, nav
     offset = min(offset, max(0, (len(rows) - 1) // PAGE_SIZE) * PAGE_SIZE)
     shown = rows[offset:offset + PAGE_SIZE]
     lease['visible'] = tuple(row.session_id for row in shown)
-    title = ReportProjection(ReportKind.SESSIONS, 'Sessions', 'OpenCode', (), session_usage=shown)
-    view = project(title, catalog.timezone_id, catalog.unit).to_json()
+    view = session_view(shown, catalog.timezone_id, catalog.unit)
     for value, row in zip(view['session_usage'], shown):
         key = row.session_id
         saved = key in archive.rows or key in catalog.rows
@@ -112,15 +211,30 @@ def cached_page(catalog, ordered, *, token, offset, sort, direction, period, nav
     cached = sum(row.session_id in archive.rows or row.session_id in catalog.rows for row in rows)
     cutoff = window.end_ms - LIVE_TAIL_MS
     pending = catalog.history_pending
-    if catalog.observed is None or catalog.state == 'source_unavailable':
-        complete = False
-    elif window.start_ms is None:
-        complete = not any(at is None or at < cutoff for at in pending.values())
+    live = catalog.history_live_roots()
+    if not archive.loaded or catalog.observed is None or catalog.state == 'source_unavailable':
+        complete = archive.loaded
     else:
-        complete = not any(at is None or window.start_ms <= at < cutoff for at in pending.values())
-    progress = dict(cached=cached, complete=complete, remaining=None)
+        complete = not any(key not in live and (at is None or (window.start_ms or 0) <= at < cutoff)
+                           for key, at in pending.items())
+    unavailable = sum(key not in live and (catalog.activity.get(key) is None or
+                      in_window(catalog.activity.get(key), window))
+                      for key in catalog.unavailable_history())
+    # A storage outage is not proof of a zero-sized archive. The independent
+    # legacy import reports pending until its first attempt can inventory it.
+    restoring = not archive.loaded and catalog.archive_retry_at == 0
+    importing = archive.loaded and archive.legacy is not None and not catalog.legacy_done
+    recovering = not archive.loaded and not restoring or importing and catalog.legacy_retry_at > catalog.clock()
+    progress = dict(cached=cached if archive.loaded or cached else None, complete=bool(complete and not importing),
+                    remaining=None, unavailable=unavailable, recovering=recovering)
     return dict(cache_first=True, token=token, epoch=lease['cache_epoch'], offset=offset, total=len(rows),
                 size=PAGE_SIZE, page_reused=True, retained_order=False, membership_pending=False,
                 candidate_navigation=True, order_state='verified', state='observed', period=period,
                 sort=sort, direction=direction, pending_sort=False, indexed=cached,
-                navigation=navigation, history_progress=progress, view=view)
+                navigation=navigation, history_progress=progress, view=view,
+                source=dict(identity='shared-history'))
+
+
+def session_view(rows, zone, unit):
+    report = ReportProjection(ReportKind.SESSIONS, 'Sessions', 'OpenCode', (), session_usage=rows)
+    return project(report, zone, unit).to_json()

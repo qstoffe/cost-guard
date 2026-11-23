@@ -43,7 +43,7 @@ def period_windows(timezone_id, now_ms):
             ("Rolling 30 days", now_ms - ROLLING_MS))
 
 
-def deduplicated_requests(entries: Iterable[TraceEntry]):
+def deduplicated_requests(entries: Iterable[TraceEntry], *, shared_history=False):
     """Canonical identity reconciliation before the existing clone deduplication.
 
     A step replaces its message-level fallback, just as in period/Watch history.
@@ -53,7 +53,7 @@ def deduplicated_requests(entries: Iterable[TraceEntry]):
     stepped = set()
     for entry in entries:
         message = entry.message_id or (entry.parent_event_id, entry.sort_order)
-        base = entry.source_instance, entry.session_id, message
+        base = None if shared_history else entry.source_instance, entry.session_id, message
         if entry.step_part_id:
             values.pop((*base, None), None)
             stepped.add(base)
@@ -61,7 +61,7 @@ def deduplicated_requests(entries: Iterable[TraceEntry]):
             continue
         key = (*base, entry.step_part_id)
         values[key] = reconcile_usage(values.get(key), entry)
-    return unique_usage(values.values())
+    return unique_usage(values.values(), shared_history=shared_history)
 
 
 def period_active_hours(bundles: Iterable[RootAnalysisBundle], valuation, *, timezone_id,
