@@ -415,8 +415,8 @@ Write-Output 'STAGE:parse'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
-$realLauncher = (Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue).Source
 . (Join-Path (Split-Path -Parent (Split-Path -Parent $Source)) 'python_discovery.ps1')
+$candidateDiscovery = ${function:Get-CostGuardPythonCandidates}
 # Discovery timing may cross its 120ms activity turn. This isolated harness
 # extracts discovery only; startup activity rendering is tested separately.
 function Write-LaunchActivity {}
@@ -426,12 +426,29 @@ Write-Output 'STAGE:direct-python'
 function Get-CostGuardPythonCandidates { $OldPython; $Python }
 $found = Find-CostGuardPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
-if ($realLauncher) {
-    Write-Output 'STAGE:py-launcher'
-    $listing = Invoke-CostGuardPythonProcess $realLauncher '-0p' 2000
-    if (-not $listing -or $listing.Code -ne 0) { throw 'Installed-only launcher listing failed' }
-    if ($listing.Output -notmatch 'python.exe') { throw 'No installed interpreter listed' }
+# The runner's own py.exe need not list anything. Exercise the real listing
+# parser and direct interpreter validation with a controlled launcher response.
+Write-Output 'STAGE:py-launcher'
+${function:Get-CostGuardPythonCandidates} = $candidateDiscovery
+$env:WINDIR = $env:LOCALAPPDATA = $PSScriptRoot
+$launcher = Join-Path $PSScriptRoot 'py.exe'
+[IO.File]::WriteAllText($launcher, '')
+function Get-Command { return @() }
+function Get-CostGuardCanonicalPython { return @() }
+function Get-CostGuardRegisteredPython { return @() }
+$realProbe = ${function:Invoke-CostGuardPythonProcess}
+function Invoke-CostGuardPythonProcess {
+    param($Executable, $Arguments, $Timeout, $Activity)
+    if ($Executable -eq $launcher) {
+        if ($Arguments -ne '-0p') { throw 'Expected installed-only listing' }
+        return @{Code=$listingCode; Output=" -V:3.11 * $Python"}
+    }
+    & $realProbe $Executable $Arguments $Timeout $Activity
 }
+$listingCode = 1
+if ((Find-CostGuardPython).Executable) { throw 'Failed listing used as evidence' }
+$listingCode = 0
+if ((Find-CostGuardPython).Executable -ne $Python) { throw 'Listed interpreter not selected' }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-WebStartupRecord'}, $true)
 Write-Output 'STAGE:private-log'
 Invoke-Expression $logging.Extent.Text
