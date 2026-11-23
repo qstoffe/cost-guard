@@ -8,6 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
+from development.tests.fixtures.catalog_prompt_activity import publish_verified_capture
 from development.tests.fixtures.catalog_warm_sorts import NOW, WarmSortSource
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.watch_summary import summary_watch
@@ -24,10 +25,7 @@ class WarmRuntime(FixtureRuntime):
             unavailable=self.unavailable)
         snapshot = self.service.source.snapshots["root-0000"]
         capture, _ = capture_rows(self.service, snapshot.root, fresh=snapshot)
-        if capture.catalog_prompt is not None:
-            prompt, start, running, ended = capture.catalog_prompt
-            self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
-                prompt, start, running, None, ended),))
+        publish_verified_capture(self.catalog, snapshot, capture)
         if not self.scalar_hold and self.catalog.needed():
             self.catalog.tick(self.service)
         view = project_live(summary_watch(), self.service.timezone_id).to_json()

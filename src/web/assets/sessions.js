@@ -436,9 +436,11 @@ const SessionsCatalog = (() => {
       if (completed) ContextHelp.refresh(this.root);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       const retainedOrder = data.retained_order ? ' · Order as of snapshot' : '';
-      const unit = data.membership_pending ? 'catalog candidates (preliminary)' : 'sessions';
+      const unit = data.membership_pending ? (data.cache_first ? 'currently available sessions' :
+        'catalog candidates (preliminary)') : 'sessions';
+      const empty = data.cache_first && data.membership_pending ? 'No cached matches yet' : 'No confirmed matches among catalog candidates';
       ReportView.text(this.label, data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + data.size, data.total)} of ${data.total} ${unit} · Page ${Math.floor(data.offset / data.size) + 1} of ${pages}${retainedOrder}` :
-        data.state === 'observed' ? `No confirmed matches among catalog candidates in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable');
+        data.state === 'observed' ? `${empty} in ${periods.find(([key]) => key === data.period)?.[1] || data.period} · Page 1 of 1` : 'Session count unavailable');
       const link = (node, offset, enabled) => {
         node.destination = enabled ? this.pageDestination(data, offset) : null;
       };

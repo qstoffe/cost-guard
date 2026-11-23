@@ -33,13 +33,16 @@ def sort_value(row, key):
         "duration": row.duration_ms, "ctx": row.context_tokens if row.context_qualified else None}[key]
 
 
-def ordered(rows, key, direction):
+def ordered(rows, key, direction, recent_finishes=None):
     # Stable value sorting preserves ascending IDs for ties in either direction.
     # Extract each value once; unknown values stay last, including descending.
-    running, known, unknown = [], [], []
+    running, finishing, known, unknown = [], [], [], []
     for row in sorted(rows, key=lambda row: row.session_id):
         if row.running and type(row.prompt_started_ms) is int and row.prompt_started_ms > 0:
             running.append(row)
+            continue
+        if recent_finishes and row.session_id in recent_finishes:
+            finishing.append(row)
             continue
         value = sort_value(row, key)
         if value is None:
@@ -48,7 +51,9 @@ def ordered(rows, key, direction):
             known.append((value, row))
     known.sort(key=lambda item: item[0], reverse=direction == -1)
     running.sort(key=lambda row: -row.prompt_started_ms)
-    return tuple(running) + tuple(row for _, row in known) + tuple(unknown)
+    if finishing:
+        finishing.sort(key=lambda row: -recent_finishes[row.session_id])
+    return tuple(running) + tuple(finishing) + tuple(row for _, row in known) + tuple(unknown)
 
 
 def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigation,
@@ -155,7 +160,8 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
         applied = "activity" if pending and not live_page else sort
         order = -1 if pending and not live_page else direction
         cache_key = window.identity, applied, order, pending, live_page
-        members = event_members(candidates, window, display_rows, event_current)
+        recent = self.recent_finishes
+        members = event_members(candidates, window, display_rows, event_current, recent)
         latest, previous = next(((key, value) for key, value in reversed(lease["epochs"].items())
             if (value.sort, value.direction, value.window.identity) == (applied, order, window.identity)),
             (None, None))
@@ -164,8 +170,8 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
         metadata = {key: self.activity.get(key) for key in members
             if in_window(self.activity.get(key), window)}
         if live_page:
-            members = tuple(key for key in members if display_rows[key].running
-                 or event_current(key) or key in metadata or window.period == 'all')
+            members = tuple(key for key in members if display_rows[key].running or key in recent
+                  or event_current(key) or key in metadata or window.period == 'all')
         positions = {}
         arrivals = ()
         if live_page and pending and (sort, direction) != ("activity", -1):
@@ -174,32 +180,33 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
             # remain display-only, never current-key proof.
             arrivals = tuple(nsmallest(ARRIVAL_SLOTS, (key for key in members if key in metadata
                 and self.clock() - self.recent_arrivals.get(key, float('-inf')) < ARRIVAL_SECONDS
-                and not display_rows[key].running and not qualified(key)),
+                 and not display_rows[key].running and key not in recent and not qualified(key)),
                 key=lambda key: (-metadata[key], key)))
             if previous:
                 allowed = set(members)
                 positions = {row.session_id: index for index, row in enumerate(
                     row for row in previous.rows if not row.running and row.session_id not in previous.arrivals)
                     if row.session_id in allowed and not display_rows[row.session_id].running
-                    and not qualified(row.session_id) and row.session_id not in arrivals}
-            members = tuple(key for key in members if display_rows[key].running or qualified(key))
+                    and not qualified(row.session_id) and row.session_id not in arrivals and row.session_id not in recent}
+            members = tuple(key for key in members if display_rows[key].running or key in recent or qualified(key))
         signature = (tuple((key, metadata.get(key), display_rows[key], event_current(key))
-                            for key in (*members, *positions, *arrivals)), tuple(positions.items()), arrivals)
+                            for key in (*members, *positions, *arrivals)), tuple(positions.items()), arrivals,
+                     tuple(recent.items()))
         cached = self.orders.get(cache_key)
         if nav is not None and navigation is not None and not pending:
-            rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction)
+            rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction, recent)
         elif cached and cached[0] == signature:
             rows = cached[1]
         else:
-            rows = ordered((display_rows[key] for key in members), applied, order)
+            rows = ordered((display_rows[key] for key in members), applied, order, recent)
+            front = tuple(row for row in rows if row.running or row.session_id in recent)
+            tail = tuple(row for row in rows if not row.running and row.session_id not in recent)
             if pending and (applied, order) == ("activity", -1):
-                rows = (live_activity_order(rows, metadata, event_current) if live_page else
-                    provisional_order(rows, self.activity))
+                tail = (live_activity_order(tail, metadata, event_current) if live_page else
+                        provisional_order(tail, self.activity))
             elif positions:
-                rows = retained_positions(rows, positions, display_rows)
-            if arrivals:
-                running_count = sum(row.running for row in rows)
-                rows = rows[:running_count] + tuple(display_rows[key] for key in arrivals) + rows[running_count:]
+                tail = retained_positions(tail, positions, display_rows)
+            rows = front + tuple(display_rows[key] for key in arrivals) + tail
         self.orders[cache_key] = signature, rows
         self.orders.move_to_end(cache_key)
         while len(self.orders) > 32:

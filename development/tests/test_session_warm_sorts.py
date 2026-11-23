@@ -5,6 +5,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from development.tests.fixtures.catalog_prompt_activity import publish_verified_capture
 from development.tests.fixtures.catalog_warm_sorts import NOW, WarmSortSource
 from development.tests.fixtures.compact_reports import report_service
 from src.application.session_catalog import SessionCatalog, SORTS, ordered
@@ -38,10 +39,7 @@ class WarmSortTests(unittest.TestCase):
     def watch(self):
         snapshot = self.source.snapshots["root-0000"]
         capture, _ = capture_rows(self.service, snapshot.root, fresh=snapshot)
-        if capture.catalog_prompt is not None:
-            prompt, start, running, ended = capture.catalog_prompt
-            self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
-                prompt, start, running, None, ended),))
+        publish_verified_capture(self.catalog, snapshot, capture)
 
     def navigate(self, sort, direction):
         self.sequence += 1

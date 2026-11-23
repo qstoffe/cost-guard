@@ -25,6 +25,7 @@ from src.application.live_projection import project_live
 from src.application.session_catalog import SessionCatalog
 from src.application.session_detail import SessionDetails
 from src.domain import ModelRef
+from development.tests.fixtures.catalog_prompt_activity import publish_verified_capture
 from src.reports.watch_capture import capture_rows
 from src.reports.models import SessionUsageRow
 from src.web.host import WebHost
@@ -97,10 +98,7 @@ class FixtureRuntime:
         if self.live_root and not self.unavailable:
             snapshot = self.service.source.snapshots[self.live_root]
             capture, _ = capture_rows(self.service, snapshot.root)
-            if capture.catalog_prompt is not None:
-                prompt, start, running, ended = capture.catalog_prompt
-                self.catalog.observe_prompts(((snapshot.root, snapshot.source_revision, capture.observed_at_ms,
-                    prompt, start, running, None, ended),))
+            publish_verified_capture(self.catalog, snapshot, capture)
         if self.detail_paused:
             pass
         elif self.detail_mode is None:

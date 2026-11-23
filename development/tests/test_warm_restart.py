@@ -341,6 +341,112 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual({'root-0019', 'root-0018'}, set(order[1:3]))
         self.assertEqual(20, len(order))
 
+    def test_cold_week_admits_second_today_page_before_bulk_discovered_older_history(self):
+        source = self.source(74, 1, today_roots=30, now_ms=NOV_5 + 54 * 60_000)
+        older = {key: source.snapshots.pop(key) for key in list(source.snapshots)[:44]}
+        today_ids = set(source.snapshots)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        week = catalog.page(period='7-days', sort='name', direction=1)
+        token = week['token']
+        self.assertEqual(0, week['total'])
+        for _ in range(6):
+            self.tick(catalog, source)
+        today = catalog.page(token=token, period='today')
+        self.assertEqual(24, today['total'])
+        self.assertTrue(today['membership_pending'], 'the live tail is not proof of complete Today coverage')
+
+        source.snapshots.update(older)
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        catalog.page(token=token, period='7-days', sort='name', direction=1)
+        with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as read:
+            self.tick(catalog, source)
+            self.tick(catalog, source)
+        self.assertTrue(all(call.args[0] in today_ids for call in read.call_args_list[:6]))
+        first = catalog.page(token=token, period='today')
+        second = catalog.page(token=token, period='today', offset=25)
+        self.assertEqual((30, 25), (first['total'], second['offset']))
+        shown = first['view']['session_usage'] + second['view']['session_usage']
+        self.assertEqual(today_ids, {row['session_id'] for row in shown})
+        self.assertTrue(all(row['has_summary'] and row['prompt_count'] == 1 for row in shown))
+        self.assertFalse(first['membership_pending'])
+        self.assertTrue(catalog.page(token=token, period='all')['membership_pending'])
+        for _ in range(11):
+            self.tick(catalog, source)
+        settled = catalog.page(token=token, period='all')
+        self.assertEqual(74, settled['total'])
+        self.assertFalse(settled['membership_pending'])
+
+    def test_short_prompt_discovered_and_finished_before_history_catches_up(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Event
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.reports.session_summary import session_summary
+        from src.reports.watch_capture import capture_rows
+        from src.watch.web_coordinator import WebWatchCoordinator
+
+        source = self.source(2, 1, today_roots=2, now_ms=self.now)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        def rows():
+            return catalog.page(period='today', sort='name', direction=1)['view']['session_usage']
+        peer, key = [row['session_id'] for row in rows()]
+        previous = source.snapshots[key]
+        source.snapshots[key] = replace(previous, source_revision='historical-refresh')
+        self.now += 6000
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        started, release = Event(), Event()
+        def delayed(*args, **kwargs):
+            result = session_summary(*args, **kwargs)
+            started.set()
+            if not release.wait(10):
+                raise TimeoutError('history not released')
+            return result
+
+        live = self.source(2, 2, today_roots=2, now_ms=self.now + 3_590_000, running_roots=2)
+        snapshot = replace(live.snapshots[key], source_revision='new-prompt')
+        cards = SimpleNamespace(sessions={}, tick=Mock())
+        coordinator = SimpleNamespace(cards=cards, session_catalog=catalog, _closed=False, clock_ms=lambda: self.now)
+        def publish(snapshot):
+            service = report_service(source, self.cache, self.now, self.pricing)
+            capture, _ = capture_rows(service, snapshot.root, fresh=snapshot)
+            cards.sessions[key] = SimpleNamespace(snapshot=snapshot, capture=capture,
+                generation=1, verified_generation=1, source_status=SimpleNamespace(failed_at=None))
+            WebWatchCoordinator.service_completed(coordinator)
+
+        with ThreadPoolExecutor(max_workers=1) as pool, patch(
+                'src.application.session_catalog.session_summary', side_effect=delayed):
+            job = pool.submit(catalog.tick, report_service(source, self.cache, self.now, self.pricing))
+            try:
+                self.assertTrue(started.wait(10))
+                self.now += 500
+                publish(snapshot)  # Authoritative Watch is ahead of the source catalog revision.
+                self.assertEqual([(key, True), (peer, False)], [(r['session_id'], r['running']) for r in rows()])
+            finally:
+                release.set()
+            job.result(timeout=10)
+        self.assertEqual((key, True), (rows()[0]['session_id'], rows()[0]['running']))
+
+        self.now += 500
+        end = self.now - 150
+        root = replace(snapshot.root, active=False)
+        final = replace(snapshot, root=root, sessions=(root,), source_revision='terminal',
+            messages=(*snapshot.messages[:-1], replace(snapshot.messages[-1], completed_at_ms=end, finish_reason='stop')),
+            invocations=(*snapshot.invocations[:-1], replace(snapshot.invocations[-1], completed_at_ms=end, finish_reason='stop')))
+        source.snapshots[key] = final
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        publish(final)
+        pending, older = rows()
+        self.assertEqual((key, False, None, snapshot.events[-1].created_at_ms),
+            (pending['session_id'], pending['running'], pending['last_activity_ms'], pending['prompt_started_ms']))
+        self.assertEqual(peer, older['session_id'])
+        self.now += 6000
+        self.tick(catalog, source)
+        older, verified = rows()
+        self.assertEqual((peer, key, end), (older['session_id'], verified['session_id'], verified['last_activity_ms']))
+
 
 if __name__ == '__main__':
     unittest.main()

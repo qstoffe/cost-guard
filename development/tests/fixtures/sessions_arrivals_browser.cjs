@@ -50,7 +50,10 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.deepEqual(await evaluate('quietViolations'),[]);
   assert.doesNotMatch(await evaluate('current.catalog.root.textContent'),/Refreshing/);
   await fixture('arrival-hold');
-  await evaluate(`window.stableArrival=document.querySelector('tr[data-id="ses_fixture_00000"]');
+  // Select a retained ordinary row on the current page, not a fixed ID
+  // that newer source history may legitimately have displaced to page two.
+  await evaluate(`window.stableArrival=[...current.catalog.body.rows].find(
+      row=>row.dataset.id.startsWith('ses_fixture_') && row.metrics[0].tabIndex===0);
     window.stableModel=stableArrival.metrics[0];stableModel.focus();
     const range=document.createRange();range.selectNodeContents(stableArrival.titleNode);
     getSelection().removeAllRanges();getSelection().addRange(range);
@@ -110,9 +113,14 @@ module.exports = async ({evaluate, until, fixture}) => {
     burstMeasurements.push({key, visible:await evaluate('Date.now()')});
     assert.equal(await evaluate('current.catalog.body.rows.length'),25);
     assert.equal(await evaluate('current.catalog.next.disabled'),false);
-    assert.equal(await evaluate(`burstRoots.every((row,i)=>current.catalog.body.rows[i]===row &&
-      row.value.running && row.activity.textContent===burstClocks[i]) &&
-      document.activeElement===burstRoots[0].name && getSelection().toString()===burstSelection && scrollY===burstScroll`),true);
+    const state = await evaluate(`({
+      running: [...current.catalog.body.rows].filter(row=>row.value.running).map(row=>row.dataset.id),
+      retained: burstRoots.every((row,i)=>current.catalog.body.rows[i]===row && row.activity.textContent===burstClocks[i]),
+      focus: document.activeElement===burstRoots[0].name,
+      selection: getSelection().toString()===burstSelection, scroll: scrollY===burstScroll
+    })`);
+    assert.deepEqual(state,{running:['ses_arrival_2','ses_arrival_1','ses_arrival_0'],
+      retained:true,focus:true,selection:true,scroll:true});
     assert.deepEqual(await layout(),burstGeometry);
   }
   assert.deepEqual(await evaluate('removedRunning'),[]);
@@ -128,15 +136,22 @@ module.exports = async ({evaluate, until, fixture}) => {
   await evaluate('history.back()');
   await until('current.catalog?.data?.offset===0 && !current.catalog.operation');
   assert.equal(await evaluate('JSON.stringify([...current.catalog.body.rows].map(row=>row.dataset.id))===JSON.stringify(firstBurstPage)'),true);
-  await fixture('arrival-finish');
-  await until(`(()=>{const row=document.querySelector('[data-id="ses_arrival_1"]');
-    return row && !row.value.running && row.value.last_activity_ms>row.value.prompt_started_ms;})()`);
+  const {finish_ms}=await fixture('arrival-finish');
+  const finished=`document.querySelector('tr[data-id="ses_arrival_1"]')`;
+  await until(`${finished} && !${finished}.value.running`,4500);
   assert.deepEqual(await evaluate('Array.from(current.catalog.body.rows).filter(row=>row.value.running).map(row=>row.dataset.id)'),
     ['ses_arrival_2','ses_arrival_0']);
+  assert.equal(await evaluate(`${finished}===current.catalog.body.rows[2] &&
+    ${finished}.value.last_activity_ms===null && ${finished}.activity.textContent.endsWith('*')`),true);
+  await fixture('arrival-hydrate');
+  // The scalar queue still contains the 250 burst arrivals. Its eventual
+  // qualification is distinct from prompt removal, which was bounded above.
+  await until(`${finished}?.value.last_activity_ms===${finish_ms} && !${finished}.activity.textContent.endsWith('*')`,100000);
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
      'title and five labelled spinners; Watch-qualified running top/yellow; in-place real summary hydration',
      'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery',
-     'warm Today return and 250 nonrunning inserts with stable column/row/scroll geometry; alternating lost hints, no scalar reads; provisional paging and Back'],
+     'warm Today return and 250 nonrunning inserts with stable column/row/scroll geometry; alternating lost hints, no scalar reads; provisional paging and Back',
+     'explicit prompt end removes Running before scalar qualification; provisional placement then exact source finish'],
     measurements, burst_ms:burstMeasurements.map(item=>item.observation_to_dom_ms),
     requests:await evaluate('arrivalRequests.length'),source};
 };

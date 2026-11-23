@@ -26,6 +26,90 @@ def stop_parent(server):
 
 
 class StoppedParentChildrenTests(unittest.TestCase):
+    def test_child_settlement_does_not_end_a_root_tool_continuation(self):
+        from development.tests.fixtures.compact_reports import report_service
+        from src.reports.watch_capture import capture_rows
+
+        with incident_source(background=True) as (source, server):
+            key = 'ses_current'
+            server.messages[key] = server.messages[key][:2]  # tool-calls, no final response
+            server.messages['ses_current_child'][1] = assistant('ca', 3400, None)
+            server.active = {'ses_current_child': {'type': 'running'}}
+            service = report_service(self, source, now_ms=6000)
+            root = service.root_for_session(key)
+            live, _ = capture_rows(service, root)
+            self.assertEqual(('u1', 3000), live.catalog_prompt)
+
+            server.messages['ses_current_child'][1] = assistant('ca', 3400, 4700)
+            server.active = {}
+            child_settled, _ = capture_rows(service, root)
+            self.assertNotIn((3000, 'u1'), child_settled.catalog_prompt_ends)
+
+            server.messages[key].append(assistant('final', 4900, 5500))
+            root_settled, _ = capture_rows(service, root)
+            self.assertIn((3000, 'u1'), root_settled.catalog_prompt_ends)
+
+    def test_catalog_matches_mini_and_detail_while_nested_work_outlives_the_root(self):
+        from concurrent.futures import Future
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from development.tests.fixtures.compact_reports import report_service
+        from src.application.session_catalog import SessionCatalog
+        from src.cache.web_archive import WebArchive
+        from src.reports.watch_capture import capture_rows
+        from src.watch.card_workers import CardResult
+        from src.watch.cards import WatchCards
+        from src.watch.observers import observe_catalog
+        from src.watch.web_coordinator import WebWatchCoordinator
+
+        key = 'ses_current'
+        with incident_source(background=True) as (source, server), TemporaryDirectory() as directory:
+            stop_parent(server)
+            server.sessions.append({**server.sessions[1], 'id': 'nested', 'parentID': 'ses_current_child'})
+            server.messages['ses_current_child'][1]['content'] = [
+                link(child='nested', start=3450, end=3600, background=True)]
+            server.messages['nested'] = [user('nu', 3500), assistant('na', 3550, None)]
+            server.active = {'nested': {'type': 'running'}}
+            # The parent has even had a newer, completed prompt. It is the
+            # earlier launch, not that newer turn, that still owns execution.
+            server.messages[key].extend((user('newer', 4200), assistant('answer', 4300, 4400)))
+            cards = WatchCards(SimpleNamespace())
+            detail = SessionHistory()
+            catalog = SessionCatalog(archive=WebArchive(Path(directory)), clock_ms=lambda: now)
+            self.addCleanup(catalog.close)
+            coordinator = SimpleNamespace(cards=cards, catalog_job=Future())
+            for stage, now in [('nested', 5000), ('stale-flag', 6000), ('independent-turn', 7000)]:
+                with self.subTest(stage=stage):
+                    if stage == 'stale-flag':
+                        server.messages['nested'][1] = assistant('na', 3550, 5800)
+                    if stage == 'independent-turn':
+                        server.messages['nested'].extend((user('other', 6100), assistant('other-reply', 6200, None)))
+                    service = report_service(self, source, now_ms=now)
+                    coordinator.report_service = service
+                    observation = observe_catalog(source, include_archived_revisions=True)
+                    coordinator.catalog_observation = observation
+                    cards.catalog(observation)
+                    entry = cards.sessions[key]
+                    capture, item = capture_rows(service, entry.root)
+                    cards.accept(CardResult(key, entry.generation, 'rows', (capture, (), item.snapshot)), now)
+                    WebWatchCoordinator.tick_catalog(coordinator, catalog)
+
+                    active, _, _ = cards.project(now)
+                    mini_inputs = {r.prompt.event_id for card in active if card.session_id == key for r in card.rows
+                                   if r.prompt.in_progress and not r.prompt.execution_unverified}
+                    report, _ = detail.acquire(service, key)
+                    detail_running = {row.event_id for row in report.prompt_blocks[0].rows
+                                      if row.in_progress and not row.execution_unverified}
+                    expected = {'u1'} if stage == 'nested' else set()
+                    self.assertEqual(expected, mini_inputs)
+                    self.assertEqual(expected, detail_running)
+                    page = catalog.page(period='all')
+                    shown = {r['session_id']: r for r in page['view']['session_usage']}
+                    self.assertEqual(bool(expected), shown[key]['running'])
+                    if expected:
+                        self.assertEqual((key, 3000), (page['view']['session_usage'][0]['session_id'],
+                                                       shown[key]['last_activity_ms']))
+
     def test_native_capture_watch_detail_cli_and_rendered_lifecycle_share_truth(self):
         frames = []
         detail = SessionHistory()
