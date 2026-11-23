@@ -6,12 +6,12 @@ async function main() {
   const directory = path.dirname(output);
   const profile = await fs.mkdtemp(path.join(directory, 'export-browser-'));
   const workspace = await fs.mkdtemp(path.join(directory, 'export-host-'));
-  const downloads = await fs.mkdtemp(path.join(directory, 'export-download-'));
+  const downloads = path.join(workspace, 'downloads'); await fs.mkdir(downloads);
   await fs.mkdir(path.join(profile,'Default'));
   await fs.writeFile(path.join(profile,'Default','Preferences'),JSON.stringify({
     download:{default_directory:downloads,prompt_for_download:false}
   }));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_session_export.py', workspace],
+  const server = spawn(process.env.COST_GUARD_TEST_PYTHON || 'python', ['development/tests/integration/serve_session_export.py', workspace],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const serverExit = new Promise(resolve => server.once('exit', resolve));
   let serverError = ''; server.stderr.on('data', value => serverError += value.toString());
@@ -100,7 +100,7 @@ async function main() {
       }
     await evaluate(`location.hash='#/sessions/${launch.session}'`);
     await until(()=>evaluate('!!current?.detail?.data && !current.detail.exporter.button.disabled'), 'observed selection');
-    const filename = 'Synthetic LIVE-style å 日本語 🚀.json';
+    const filename = 'Synthetic LIVE-style å 日本語 🚀.zip';
     assert.equal(await evaluate('current.detail.exporter.filename'),filename,'observed detail title, not native payload title');
     for (const value of layouts) {
       await configure(value.theme,value.width,value.zoom,value.coarse);
@@ -113,24 +113,15 @@ async function main() {
     }
     await configure('classic',1280,1,false);
     assert.equal(await evaluate(`(() => {const a=current.detail.exporter;
-      return a.button.textContent==='Export Sanitized JSON' && !a.button.hasAttribute('title') &&
+      return a.button.textContent==='Export Session Analysis ZIP' && !a.button.hasAttribute('title') &&
         a.root.querySelectorAll('button').length===1 && a.notice.textContent==='' &&
         getComputedStyle(a.notice).display==='none' && current.detail.body.children.length===3;})()`),true);
     await hover(); await until(()=>evaluate(helpVisible),'delayed action help');
     assert.equal(await evaluate('current.detail.exporter.button.getAttribute("aria-describedby")'),'context-help');
-    assert.match(await evaluate('document.querySelector("#context-help").textContent'),/Review the file before sharing/);
+    const help = await evaluate('document.querySelector("#context-help").textContent');
+    for (const phrase of [/nested subagents/i,/best effort/i,/not guaranteed secret-free or anonymous/i,/review.*before sharing/i])
+      assert.match(help,phrase);
     const before = (await fixture('count')).requests;
-    // Real API invoked from trusted user activation. Headless Chromium aborts its
-    // unsupported native dialog; record this separately from mocked save proof.
-    await evaluate(`window.pickerProbe={available:typeof showSaveFilePicker==='function'};
-      if(pickerProbe.available){const original=showSaveFilePicker;window.showSaveFilePicker=async options=>{
-         pickerProbe.activation=navigator.userActivation.isActive;pickerProbe.filename=options.suggestedName;try{return await original(options);}catch(error){pickerProbe.error=error.name;throw error;}};}`);
-    await click();
-    await until(()=>evaluate('!current.detail.exporter.operation'), 'native picker cancellation');
-    await quiet();
-    const picker = await evaluate('pickerProbe');
-    assert.equal(picker.filename,filename);
-    assert.equal((await fixture('count')).requests, before, 'cancelled picker performs no native export');
     const activations = [];
     // Deferred picker doubles preserve the real trusted input/event ordering, but
     // are explicitly not OS dialog success/cancellation evidence.
@@ -171,44 +162,40 @@ async function main() {
     // Native-handle double verifies successful commit and synchronous focus help
     // dismissal; actual destination selection is not simulated as an OS PASS.
     await evaluate(`window.saved=[];window.showSaveFilePicker=async()=>({createWritable:async()=>({
-      write:async blob=>saved.push(JSON.parse(await blob.text()).info.id),close:async()=>saved.push('closed')})});`);
-    await click(); await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("JSON saved")'),'handle double committed');
-    await quiet(); assert.deepEqual(await evaluate('saved'),[launch.session,'closed']);
+      write:async blob=>saved.push(blob.type,Array.from(new Uint8Array(await blob.slice(0,4).arrayBuffer()))),close:async()=>saved.push('closed')})});`);
+    await click(); await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("ZIP saved")'),'handle double committed');
+    await quiet(); assert.deepEqual(await evaluate('saved'),['application/zip',[80,75,3,4],'closed']);
     // Actual authenticated standard browser download, no picker support.
     await evaluate('window.showSaveFilePicker=undefined');
     await command('Browser.setDownloadBehavior', {behavior:'default'}, null);
     await evaluate('current.detail.exporter.button.focus()');
     await click();
     await until(async()=>{try{await fs.access(path.join(downloads,filename));return true;}catch{return false;}}, 'download');
-    const text = await fs.readFile(path.join(downloads,filename),'utf8'), transfer = JSON.parse(text);
-    assert.ok(text.startsWith('{\n  "info": {\n')); assert.ok(text.endsWith('\n}\n'));
-    assert.ok(text.includes('\n  "messages": [\n    {'));
-    assert.deepEqual(transfer,launch.transfer,'pretty JSON changes no native values or string whitespace');
-    assert.equal(transfer.info.id,launch.session); assert.equal(transfer.messages.length,3);
-    assert.equal(transfer.messages[1].outcome,'succeeded'); assert.equal(transfer.messages[2].type,'user');
+    const original = await fs.readFile(path.join(downloads,filename));
+    assert.equal((await fixture('check-downloads')).checked,1);
     assert.equal(await evaluate('document.activeElement === current.detail.exporter.button'),true);
     await until(()=>evaluate('current.detail.exporter.url === null'), 'object URL release');
     // Browser owns collision policy; a repeated download cannot overwrite the first.
     await click();
-    const duplicate = 'Synthetic LIVE-style å 日本語 🚀 (1).json';
+    const duplicate = 'Synthetic LIVE-style å 日本語 🚀 (1).zip';
     await until(async()=>{try{await fs.access(path.join(downloads,duplicate));return true;}catch{return false;}}, 'collision suffix');
-    assert.equal(await fs.readFile(path.join(downloads,filename),'utf8'),text);
-    assert.equal(await fs.readFile(path.join(downloads,duplicate),'utf8'),text);
+    assert.deepEqual(await fs.readFile(path.join(downloads,filename)),original);
+    assert.equal((await fixture('check-downloads')).checked,2);
     await fixture('invalid');
     await click();
-    await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("incomplete export")'), 'malformed source feedback');
+    await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("no complete ZIP was saved")'), 'missing descendant feedback');
     assert.deepEqual((await fs.readdir(downloads)).sort(),[filename,duplicate].sort(), 'no corrupt third download');
     await evaluate('location.hash="#/settings"');
     await until(()=>evaluate('current.section === "settings"'), 'navigation');
-    evidence = {outcome:'PASS',browser:version.product,layouts,activations,native_picker:picker,
-      checks:['canonical selected detail','trusted-click picker activation/cancel without source work',
+    evidence = {outcome:'PASS',browser:version.product,layouts,activations,
+      checks:['canonical selected detail','trusted-click picker double activation/cancel without source work',
         'quiet one-action idle layout','computed Models parity across themes/width/zoom/coarse pointer',
         'pointer/Tab/Enter/Space/touch/pending-hover dismissal and stationary suppression','Escape and intentional re-entry',
         'handle-double commit and picker-focus suppression',
          'title-derived picker and actual fallback filename; browser collision suffix without overwrite',
-         'pretty UTF-8 fallback equals native transfer, including string escapes','focus retained','object URL released',
-        'malformed export saves no partial file','navigation preserved'],
-      limitations:['Hidden native picker abort only; actual visible destination selection/write/cancel remains unverified.',
+          'all five compressed masked UTF-8 entries checked inside both downloaded ZIPs','focus retained','object URL released',
+         'missing descendant saves no partial file','navigation preserved'],
+      limitations:['Picker is mocked: actual native destination selection/write/cancel remains unverified.',
         'Synthetic LIVE-style native service, no Desktop session-list visibility assertion.'],
       inference_calls:0,desktop_effects:false};
   } catch(error) {evidence.error=error.stack; evidence.serverError=serverError;}
@@ -217,7 +204,7 @@ async function main() {
     server.stdin.write('{"command":"stop"}\n'); server.stdin.end(); await serverExit;
     clearTimeout(deadline);
     for (const entry of pending.values()) clearTimeout(entry.timer);
-    await fs.rm(profile,{recursive:true,force:true}); await fs.rm(workspace,{recursive:true,force:true}); await fs.rm(downloads,{recursive:true,force:true});
+    await fs.rm(profile,{recursive:true,force:true}); await fs.rm(workspace,{recursive:true,force:true});
     await fs.writeFile(output,JSON.stringify(evidence,null,2)+'\n');
   }
   console.log(JSON.stringify(evidence));

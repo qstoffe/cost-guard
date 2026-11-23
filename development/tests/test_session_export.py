@@ -1,6 +1,7 @@
-"""Native transfer completeness, privacy boundary, cancellation and HTTP guards."""
+"""One authorized selection -> all and only its native family, masked inside a complete ZIP."""
 from copy import deepcopy
 import http.client
+from io import BytesIO
 import json
 from pathlib import Path
 import shutil
@@ -10,144 +11,173 @@ import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from zipfile import ZIP_DEFLATED, ZipFile
 
-from development.tests.fixtures.session_export import export_source, SESSION, TRANSFER
+from development.tests.fixtures.session_export import CHILD, GRANDCHILD, LEAF, SESSION, SIBLING, TRANSFER, export_source
 from src.application.session_detail import SessionDetails
+from src.application.session_export_archive import analysis_filename
 from src.sources.errors import SessionExportError
-from src.sources.opencode_v2_export import MAX_EXPORT_BYTES
 from src.web.http import LoopbackServer
 from src.web.observations import WebObservations
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def selected_details(source):
+def selected_details(source, member=SESSION):
     details = SessionDetails()
-    token = details.open(SESSION, 'live')
-    details.histories[SESSION].update(validated=details.clock(), export_identity=(
-        source.source_id, source.source_instance, source.observation_epoch, SESSION))
+    token = details.open(member, 'live')
+    details.histories[member].update(validated=details.clock(), source_unavailable=False, export_identity=(
+        source.source_id, source.source_instance, source.observation_epoch, member))
     return details, token
 
 
-class NativeExportTests(unittest.TestCase):
-    def test_pretty_utf8_preserves_native_values_order_and_string_whitespace(self):
+def export(source, member=SESSION):
+    details, token = selected_details(source, member)
+    return details.export(token, source, lambda: False)[0]
+
+
+class SessionArchiveTests(unittest.TestCase):
+    def test_paged_tree_preserves_full_native_documents_in_unique_pretty_compressed_entries(self):
+        names = {SESSION: 'Unicode å 日本語.json', CHILD: 'Unicode å 日本語 (1).json',
+            SIBLING: 'unicode å 日本語 (2).json', GRANDCHILD: 'session-ses_c.json', LEAF: 'Deep 🚀.json'}
         with export_source() as (source, state, _):
-            state.transfer['info']['nested'] = {'values': [None, True, False, 1.5, 'Quotes "å 🚀"\n  next\tline']}
+            state.tree[LEAF]['messages'] = [{'id': f'msg_{i}', 'type': 'assistant', 'sessionID': LEAF,
+                'text': 'cache hit 🇸🇪\n  ' * 160, 'cost': 0.125, 'tokens': {'input': 671, 'cached': 520},
+                'providerID': 'sample', 'modelID': 'test-large', 'effort': 'high',
+                'time': {'created': 1500 + i}, 'nativeExtension': [None, False, True]} for i in range(500)]
 
-            result = source.export_session(SESSION, source.observation_epoch, lambda: False)
+            payload = export(source)
 
-            self.assertEqual(state.transfer, json.loads(result))
-            self.assertEqual(list(state.transfer), list(json.loads(result)))
-            self.assertTrue(result.startswith(b'{\n  "info": {\n'))
-            self.assertIn(b'\n    "nested": {\n      "values": [\n', result)
-            self.assertIn('Quotes \\"å 🚀\\"\\n  next\\tline'.encode(), result)
-            self.assertTrue(result.endswith(b'\n}\n'))
+            # Comparing the full decoded UTF-8 text checks Unicode, whitespace, key order and final newline too.
+            with ZipFile(BytesIO(payload)) as archive:
+                self.assertCountEqual(names.values(), archive.namelist())
+                for member, name in names.items():
+                    self.assertEqual(ZIP_DEFLATED, archive.getinfo(name).compress_type)
+                    expected = json.dumps(state.tree[member], indent=2, ensure_ascii=False) + '\n'
+                    self.assertEqual(expected, archive.read(name).decode('utf-8'))
+                self.assertLess(len(payload), archive.getinfo(names[LEAF]).file_size // 4)
+            self.assertCountEqual([f'/api/experimental/session/{member}/export?sanitize=false' for member in names],
+                [url for url in state.requests if '/experimental/' in url])
+            with ZipFile(BytesIO(export(source, LEAF))) as one:
+                self.assertEqual([names[LEAF]], one.namelist(), 'selecting the leaf excludes even its own ancestors')
 
-    def test_final_pretty_bytes_enforce_real_limit_including_newline(self):
+    def test_only_credential_values_change_in_native_logs_inputs_errors_and_structured_metadata(self):
         with export_source() as (source, state, _):
-            state.transfer['info']['padding'] = ''
-            overhead = len((json.dumps(state.transfer, ensure_ascii=False, indent=2) + '\n').encode())
-            state.transfer['info']['padding'] = 'x' * (MAX_EXPORT_BYTES - overhead)
-            # Compact upstream still fits when pretty output grows beyond the limit.
-            state.body = json.dumps({'data': state.transfer}, ensure_ascii=False, separators=(',', ':')).encode()
+            native = state.tree[LEAF]
+            native['messages'] = [{'id': 'msg_detail', 'type': 'assistant', 'sessionID': LEAF, 'content': [
+                {'type': 'tool', 'callID': 'call_a83f', 'name': 'read', 'args': {'apiKey': 'fixture-key-42',
+                    'authorization': 'Basic Zml4dHVyZQ==', 'pin': 109, 'password': 91826},
+                 'output': 'retry Authorization: Bearer fixture.t0ken; git=6fba937dd84146cabcec00010203040506070809',
+                 'error': 'E012: postgres://user:fixture-pass@localhost/db => denied',
+                 'code': ('if (token === expected) return true;\n'
+                          'tokens.filter(token => token == expected);\n'
+                          'check(password=os.getenv("DB_PASS"))\n'
+                          'connect(password=process.env.DB_PASS)\n'),
+                 'log': 'stage 1\nPASSWORD="fixture pass"; next\n' + 'ghp_' + 'A' * 36,
+                 'pem': 'start\n-----BEGIN PRIVATE KEY-----\nZml4dHVyZQ==\n-----END PRIVATE KEY-----\nend'}]}]
+            expected = deepcopy(native)
+            tool = expected['messages'][0]['content'][0]
+            tool['args'].update(apiKey='[REDACTED]', authorization='Basic [REDACTED]', password=0)
+            tool['output'] = 'retry Authorization: Bearer [REDACTED]; git=6fba937dd84146cabcec00010203040506070809'
+            tool['error'] = 'E012: postgres://user:[REDACTED]@localhost/db => denied'
+            tool['log'] = 'stage 1\nPASSWORD="[REDACTED]"; next\n[REDACTED]'
+            tool['pem'] = 'start\n-----BEGIN PRIVATE KEY-----\n[REDACTED]\n-----END PRIVATE KEY-----\nend'
 
-            result = source.export_session(SESSION, source.observation_epoch, lambda: False)
+            for _ in range(2):
+                with ZipFile(BytesIO(export(source, LEAF))) as archive:
+                    self.assertEqual(expected, json.loads(archive.read('Deep 🚀.json')))
 
-            self.assertEqual(MAX_EXPORT_BYTES, len(result))
-            state.transfer['info']['padding'] += 'å'
-            state.body = json.dumps({'data': state.transfer}, ensure_ascii=False, separators=(',', ':')).encode()
-            self.assertLess(len(state.body), MAX_EXPORT_BYTES)
-            with self.assertRaisesRegex(SessionExportError, '^export_too_large$'):
-                source.export_session(SESSION, source.observation_epoch, lambda: False)
+    def test_suggested_names_stay_flat_portable_and_do_not_disclose_credentials(self):
+        for title, stem in [('Refactor: <auth>/fix?', 'Refactor authfix'), ('Översyn 👩‍💻', 'Översyn 👩‍💻'),
+                ('a\x00b\u202ec. . ', 'abc'), ('password=fixture-only', 'password=[REDACTED]'),
+                ('🚀' * 100, '🚀' * 50), ('  internal spaces', '  internal spaces'),
+                *[(value, 'session-' + SESSION) for value in (None, '.. ', 'COM1 .txt', 'lpt9', '<>:|?*')]]:
+            with self.subTest(title=title):
+                self.assertEqual(stem + '.zip', analysis_filename(title, SESSION))
 
-    def test_complete_native_payload_preserves_types_lifecycle_unicode_and_zero_assistants(self):
-        with export_source() as (source, state, _):
-            for messages in ([], TRANSFER['messages'], [
-                    {'id': f'msg_{index}', 'type': 'assistant', 'content': [{'type': 'text', 'text': 'å' * 1000}]}
-                    for index in range(700)]):
-                state.transfer['messages'] = messages
-                result = source.export_session(SESSION, source.observation_epoch, lambda: False)
-                self.assertEqual(state.transfer, json.loads(result))
-                self.assertIn('sanitize=true', state.requests[-1])
-            self.assertEqual(6, len(state.requests), 'one bounded specification + one full transfer, no message pages')
+    def test_bad_member_identity_and_incomplete_catalog_cannot_produce_a_partial_zip(self):
+        for error in ('foreign parent', 'foreign session', 'foreign message', 'duplicate message', 'cycle cursor',
+                'empty continuation', 'invalid transfer', 'unsupported', 'missing descendant'):
+            with self.subTest(error=error), export_source() as (source, state, _):
+                expected = 'export_invalid_response'
+                if error == 'foreign parent':
+                    state.tree[LEAF]['info'] = {**state.tree[LEAF]['info'], 'parentID': SESSION}
+                elif error == 'foreign session':
+                    state.tree[LEAF]['info'] = {**state.tree[LEAF]['info'], 'id': CHILD}
+                elif error == 'foreign message':
+                    state.tree[LEAF]['messages'] = [{'id': 'm', 'type': 'user', 'sessionID': SESSION}]
+                elif error == 'duplicate message':
+                    state.tree[LEAF]['messages'] = [TRANSFER['messages'][0]] * 2
+                elif error == 'cycle cursor':
+                    state.pages['page 2']['cursor']['next'] = 'page 2'
+                elif error == 'empty continuation':
+                    state.pages['page 2'] = {'data': [], 'cursor': {'next': 'omitted'}}
+                elif error == 'invalid transfer':
+                    state.body = b'{"data":null}'
+                elif error == 'unsupported':
+                    state.specification['paths'].clear()
+                    expected = 'export_unavailable'
+                elif error == 'missing descendant':
+                    del state.tree[LEAF]
+                    expected = 'export_descendant_unavailable'
+                with self.assertRaisesRegex(SessionExportError, '^' + expected + '$'):
+                    export(source)
 
-    def test_unsupported_schema_bad_id_epoch_and_native_response_fail_closed(self):
-        with export_source() as (source, state, _):
-            for session_id in ('../ses_bad', 'ses_bad?sanitize=false', 'root', 'ses_å'):
-                with self.subTest(session_id=session_id), self.assertRaisesRegex(SessionExportError, 'export_unavailable'):
-                    source.export_session(session_id, source.observation_epoch, lambda: False)
-            self.assertEqual([], state.requests)
-            with self.assertRaisesRegex(SessionExportError, 'export_source_changed'):
-                source.export_session(SESSION, 'retired-epoch', lambda: False)
-            state.specification = {'paths': {}}
-            with self.assertRaisesRegex(SessionExportError, 'export_unavailable'):
-                source.export_session(SESSION, source.observation_epoch, lambda: False)
-            self.assertEqual(['/openapi.json'], state.requests)
-        for body in (b'{}', b'[]', b'{"data": {"info": {"id": "ses_wrong"}, "messages": []}}',
-                b'{"data": null}', b'{"data": {}, "data": {}}', b'{"data": NaN}', b'{"data":',
-                json.dumps({'data': dict(TRANSFER, messages=[{'id': 'm', 'type': 'user', 'sessionID': 'ses_other'}])}).encode(),
-                json.dumps({'data': dict(TRANSFER, messages=[TRANSFER['messages'][0]] * 2)}).encode()):
-            with self.subTest(body=body[:40]), export_source() as (source, state, _):
-                state.body = body
-                with self.assertRaisesRegex(SessionExportError, 'export_invalid_response'):
-                    source.export_session(SESSION, source.observation_epoch, lambda: False)
+    def test_response_bounds_status_and_malformed_wire_fail_closed(self):
+        for field, value, expected in [
+                ('length', '33554433', 'export_too_large'), ('length', '99999', 'export_invalid_response'),
+                ('content_type', 'text/html', 'export_invalid_response'), ('status', 403, 'export_source_denied'),
+                ('status', 302, 'export_source_unavailable'), ('status', 500, 'export_source_unavailable'),
+                ('body', b'{"data":{}, "data":{}}', 'export_invalid_response')]:
+            with self.subTest(field=field, value=value), export_source() as (source, state, _):
+                setattr(state, field, value)
+                with self.assertRaisesRegex(SessionExportError, '^' + expected + '$'):
+                    export(source)
+        for limit in ('MAX_ARCHIVE_BYTES', 'MAX_JSON_BYTES'):
+            with self.subTest(limit=limit), export_source() as (source, _, _):
+                with patch('src.application.session_export_archive.' + limit, 128):
+                    with self.assertRaisesRegex(SessionExportError, '^export_too_large$'):
+                        export(source)
 
-    def test_transport_status_mime_size_truncation_and_restart_have_no_partial_success(self):
-        for status, code in ((401, 'export_source_denied'), (403, 'export_source_denied'),
-                (404, 'export_unavailable'), (500, 'export_source_unavailable'), (302, 'export_source_unavailable')):
-            with self.subTest(status=status), export_source() as (source, state, _):
-                state.status = status
-                state.body = b'private source error must not escape'
-                with self.assertRaisesRegex(SessionExportError, '^' + code + '$'):
-                    source.export_session(SESSION, source.observation_epoch, lambda: False)
-        for length in (str(16 * 1024 * 1024 + 1), 'omit'):
-            with self.subTest(length=length), export_source() as (source, state, _):
-                state.length = length
-                if length == 'omit':
-                    state.body = b' ' * (16 * 1024 * 1024 + 1)
-                with self.assertRaisesRegex(SessionExportError, 'export_too_large'):
-                    source.export_session(SESSION, source.observation_epoch, lambda: False)
+    def test_source_restart_retired_selection_and_reader_deadline_discard_work(self):
         with export_source() as (source, state, registration):
-            state.content_type = 'text/html'
-            with self.assertRaisesRegex(SessionExportError, 'export_invalid_response'):
-                source.export_session(SESSION, source.observation_epoch, lambda: False)
-            state.content_type = 'application/json'
-            state.length = '99999'
-            with self.assertRaisesRegex(SessionExportError, 'export_invalid_response'):
-                source.export_session(SESSION, source.observation_epoch, lambda: False)
-            state.length = None
-            def restart():
-                value = json.loads(registration.read_text())
-                value['pid'] += 1
-                registration.write_text(json.dumps(value))
+            def restart(member):
+                if member == LEAF:
+                    record = json.loads(registration.read_text())
+                    record['pid'] += 1
+                    registration.write_text(json.dumps(record))
             state.before_export = restart
-            with self.assertRaisesRegex(SessionExportError, 'export_source_changed'):
-                source.export_session(SESSION, source.observation_epoch, lambda: False)
-
-    def test_absolute_deadline_and_cancellation_close_owned_readers(self):
+            with self.assertRaisesRegex(SessionExportError, '^export_source_changed$'):
+                export(source)
+        with export_source() as (source, state, _):
+            details, token = selected_details(source)
+            state.before_export = lambda member: details.close(token) if member == CHILD else None
+            with self.assertRaisesRegex(SessionExportError, '^export_cancelled$'):
+                details.export(token, source, lambda: False)
+            self.assertFalse(any(f'/{LEAF}/export' in url for url in state.requests))
         with export_source() as (source, state, _):
             state.hold = True
             started = time.monotonic()
-            with patch('src.sources.opencode_v2_export.EXPORT_SECONDS', .15):
-                with self.assertRaises(SessionExportError):
-                    source.export_session(SESSION, source.observation_epoch, lambda: False)
-            self.assertLess(time.monotonic() - started, 1)
-            state.release.set()
-        with export_source() as (source, state, _):
-            details, token = selected_details(source)
-            state.before_export = lambda: details.close(token)
-            with self.assertRaisesRegex(SessionExportError, 'export_cancelled|export_source_unavailable'):
-                details.export(token, source, lambda: False)
+            with patch('src.sources.opencode_v2_export.REQUEST_SECONDS', .25):
+                with self.assertRaisesRegex(SessionExportError, '^export_timed_out$'):
+                    export(source)
+            self.assertLess(time.monotonic() - started, 2)
+
+    def test_unobserved_selection_stale_epoch_and_invalid_id_never_contact_source(self):
         with export_source() as (source, state, _):
             details, token = selected_details(source)
             details.histories[SESSION]['export_identity'] = None
-            with self.assertRaisesRegex(SessionExportError, 'export_unavailable'):
+            with self.assertRaisesRegex(SessionExportError, '^export_unavailable$'):
                 details.export(token, source, lambda: False)
+            for member, epoch, code in [(SESSION, 'retired', 'export_source_changed'),
+                    ('ses_bad?sanitize=false', source.observation_epoch, 'export_unavailable')]:
+                with self.assertRaisesRegex(SessionExportError, '^' + code + '$'):
+                    list(source.export_session_tree(member, epoch, lambda: False))
             self.assertEqual([], state.requests)
 
 
 class ExportHttpTests(unittest.TestCase):
-    def test_protected_post_exact_selection_headers_limits_and_shutdown(self):
+    def test_authenticated_complete_attachment_or_bounded_error_only(self):
         with export_source() as (source, state, _):
             details, token = selected_details(source)
             owner = SimpleNamespace(root=ROOT, nonce='export-host', observations=WebObservations(), stopping=Event(),
@@ -156,18 +186,21 @@ class ExportHttpTests(unittest.TestCase):
             server = LoopbackServer(SimpleNamespace(), owner)
             thread = Thread(target=server.serve_forever, args=(.02,)); thread.start()
             cookie, csrf = server.session.exchange(server.session.bootstrap())
+
             def request(body=None, *, method='POST', extra=None, authenticated=True):
                 connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
-                headers = {'Origin': server.origin, 'Content-Type': 'application/json', 'X-CG-CSRF': csrf,
-                    'X-CG-Instance': owner.nonce}
-                if authenticated:
-                    headers['Cookie'] = server.session.cookie_name + '=' + cookie
-                headers.update(extra or {})
-                connection.request(method, '/api/detail/export', json.dumps(body) if body is not None else None, headers)
-                response = connection.getresponse()
-                result = response.status, dict(response.getheaders()), response.read()
-                connection.close()
-                return result
+                try:
+                    headers = {'Origin': server.origin, 'Content-Type': 'application/json', 'X-CG-CSRF': csrf,
+                        'X-CG-Instance': owner.nonce}
+                    if authenticated:
+                        headers['Cookie'] = server.session.cookie_name + '=' + cookie
+                    headers.update(extra or {})
+                    connection.request(method, '/api/detail/export', json.dumps(body) if body is not None else None, headers)
+                    response = connection.getresponse()
+                    return response.status, dict(response.getheaders()), response.read()
+                finally:
+                    connection.close()
+
             try:
                 for extra, status in (({'Origin': 'https://foreign.invalid'}, 403), ({'Sec-Fetch-Site': 'cross-site'}, 403),
                         ({'X-CG-CSRF': 'wrong'}, 403), ({'Host': 'foreign.invalid'}, 403), ({'X-CG-Instance': 'retired'}, 409)):
@@ -177,19 +210,24 @@ class ExportHttpTests(unittest.TestCase):
                 for body in ({'token': token, 'path': '../out'}, {'session_id': SESSION}, {'token': ['bad']}):
                     self.assertEqual(400, request(body)[0])
                 self.assertEqual(410, request({'token': 'a' * 32})[0])
-                self.assertEqual([], state.requests, 'all security failures precede native work')
+                self.assertEqual([], state.requests)
                 status, headers, body = request({'token': token})
                 self.assertEqual(200, status)
-                self.assertEqual(TRANSFER, json.loads(body))
-                self.assertEqual('no-store', headers['Cache-Control'])
-                self.assertEqual('nosniff', headers['X-Content-Type-Options'])
-                self.assertEqual('application/json; charset=utf-8', headers['Content-Type'])
-                self.assertEqual(len(body), int(headers['Content-Length']))
-                self.assertTrue(body.startswith(b'{\n  "info": {'))
-                self.assertTrue(body.endswith(b'\n}\n'))
-                self.assertEqual(f'attachment; filename="opencode-{SESSION}-sanitized.json"', headers['Content-Disposition'])
-                self.assertEqual(owner.nonce, headers['X-CG-Instance'])
-                self.assertTrue(server.exports.slot.acquire(False))
+                self.assertEqual('application/zip', headers['Content-Type'])
+                self.assertEqual(f'attachment; filename="opencode-{SESSION}-analysis.zip"', headers['Content-Disposition'])
+                self.assertEqual(('no-store', 'nosniff', owner.nonce, str(len(body))),
+                    tuple(headers[key] for key in ('Cache-Control', 'X-Content-Type-Options', 'X-CG-Instance', 'Content-Length')))
+                with ZipFile(BytesIO(body)) as archive:
+                    self.assertEqual(5, len(archive.infolist()))
+                # The HTTP body can reach the client before the handler's finally releases the slot.
+                self.assertTrue(server.exports.slot.acquire(timeout=2))
+                server.exports.slot.release()
+                del state.tree[LEAF]
+                status, headers, body = request({'token': token})
+                self.assertEqual(409, status)
+                self.assertNotIn('Content-Disposition', headers)
+                self.assertEqual({'error': 'export_descendant_unavailable'}, json.loads(body))
+                self.assertTrue(server.exports.slot.acquire(timeout=2))
                 self.assertEqual(429, request({'token': token})[0])
                 server.exports.slot.release()
                 owner.stopping.set()
