@@ -30,12 +30,17 @@ def _observed_ends(snapshot, children, events, attempts, owners, unsettled, ende
         key = event.session_id, event.event_id
         if key in unsettled:
             continue
-        scopes = children.scopes(attempts[key])
+        own = attempts[key]
+        # A child or job may finish between requests of a root continuation.
+        # If the root has issued a request, its own end must be observed too.
+        if key not in ended_attempts and any(message.role is MessageRole.ASSISTANT for message in own):
+            continue
+        scopes = children.scopes(own)
         if scopes and any(descendant_activity(snapshot, children, scopes)):
             continue
         linked = children.messages(scopes)
         child_keys = _prompt_keys(linked, owners)
-        background = [work for message in (*attempts[key], *linked)
+        background = [work for message in (*own, *linked)
                       for work in background_by_owner.get((message.session_id, message.message_id), ())]
         if (not (child_keys & unsettled) and not any(work.running for work in background)
                 and (key in ended_attempts or child_keys & ended_attempts or background)):
