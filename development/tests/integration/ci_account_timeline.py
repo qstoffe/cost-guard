@@ -33,6 +33,8 @@ from src.web.host import WebHost
 
 
 class ChartSource(SyntheticMonthSource):
+    source_instance = 'synthetic-month'
+
     def __init__(self, accounts):
         super().__init__(0, 0, month_start_ms=NOV_1)
         self.clock_offset_ms = 0

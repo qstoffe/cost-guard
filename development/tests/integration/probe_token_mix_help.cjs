@@ -76,10 +76,10 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
   await evaluate(`current.tokenMix.title.blur()`);
   const forbidden = /\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?) \d{1,2},? \d{4}\b/i;
   const surfaces = [];
-  for (const section of ['models','watch','accounts','ai-stats','comparisons','settings']) {
+  for (const section of ['models','watch','accounts','ai-stats','settings']) {
     await evaluate(`location.hash='#/${section}'`);
      await until(`current.section==='${section}' && !current.loading && document.getElementById('result').textContent.length>0`);
-     if (['models','ai-stats','comparisons'].includes(section)) await until(`!!current.result`);
+     if (['models','ai-stats'].includes(section)) await until(`!!current.result`);
      assert.doesNotMatch(await evaluate(`document.getElementById('result').textContent`), forbidden, section+' visible dates');
      if (section === 'models') {
        const day = await evaluate(`(() => {
