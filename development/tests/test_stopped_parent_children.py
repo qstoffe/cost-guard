@@ -26,6 +26,29 @@ def stop_parent(server):
 
 
 class StoppedParentChildrenTests(unittest.TestCase):
+    def test_child_settlement_does_not_end_a_root_tool_continuation(self):
+        from development.tests.fixtures.compact_reports import report_service
+        from src.reports.watch_capture import capture_rows
+
+        with incident_source(background=True) as (source, server):
+            key = 'ses_current'
+            server.messages[key] = server.messages[key][:2]  # tool-calls, no final response
+            server.messages['ses_current_child'][1] = assistant('ca', 3400, None)
+            server.active = {'ses_current_child': {'type': 'running'}}
+            service = report_service(self, source, now_ms=6000)
+            root = service.root_for_session(key)
+            live, _ = capture_rows(service, root)
+            self.assertEqual(('u1', 3000), live.catalog_prompt)
+
+            server.messages['ses_current_child'][1] = assistant('ca', 3400, 4700)
+            server.active = {}
+            child_settled, _ = capture_rows(service, root)
+            self.assertNotIn((3000, 'u1'), child_settled.catalog_prompt_ends)
+
+            server.messages[key].append(assistant('final', 4900, 5500))
+            root_settled, _ = capture_rows(service, root)
+            self.assertIn((3000, 'u1'), root_settled.catalog_prompt_ends)
+
     def test_catalog_matches_mini_and_detail_while_nested_work_outlives_the_root(self):
         from concurrent.futures import Future
         from pathlib import Path

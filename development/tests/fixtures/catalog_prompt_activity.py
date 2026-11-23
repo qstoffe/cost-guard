@@ -1,8 +1,17 @@
 """Synthetic 01:18 prompt versus 01:52 metadata; no private session history."""
 from dataclasses import replace
 from datetime import datetime, timezone
+from types import SimpleNamespace
+
+from src.watch.web_coordinator import publish_catalog_prompts
 
 from .synthetic_month import make_root_snapshot
+
+
+def publish_verified_capture(catalog, snapshot, capture):
+    entry = SimpleNamespace(snapshot=snapshot, capture=capture, source_status=SimpleNamespace(failed_at=None),
+                            generation=1, verified_generation=1)
+    publish_catalog_prompts(catalog, SimpleNamespace(sessions={snapshot.root.session_id: entry}))
 
 
 def at(clock):

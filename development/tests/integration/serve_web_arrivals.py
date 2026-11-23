@@ -238,7 +238,10 @@ def main():
                     message['time']['completed'] = now
                     next(row for row in owner.sessions if row['id'] == key)['time']['updated'] = now
                     owner.events.append(dict(type="message.updated", data=dict(sessionID=key)))
-                catalog.hold = False
+                # Keep the existing scalar gate closed until the browser has
+                # observed the end from Live without a verified activity clock.
+                print(json.dumps(dict(ok=True, finish_ms=now)), flush=True)
+                continue
             elif command == "arrival-hold":
                 catalog.hold = True
                 job = host.live.driver.coordinator.catalog_job

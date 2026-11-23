@@ -136,15 +136,22 @@ module.exports = async ({evaluate, until, fixture}) => {
   await evaluate('history.back()');
   await until('current.catalog?.data?.offset===0 && !current.catalog.operation');
   assert.equal(await evaluate('JSON.stringify([...current.catalog.body.rows].map(row=>row.dataset.id))===JSON.stringify(firstBurstPage)'),true);
-  await fixture('arrival-finish');
-  await until(`(()=>{const row=document.querySelector('[data-id="ses_arrival_1"]');
-    return row && !row.value.running && row.value.last_activity_ms>row.value.prompt_started_ms;})()`);
+  const {finish_ms}=await fixture('arrival-finish');
+  const finished=`document.querySelector('tr[data-id="ses_arrival_1"]')`;
+  await until(`${finished} && !${finished}.value.running`,4500);
   assert.deepEqual(await evaluate('Array.from(current.catalog.body.rows).filter(row=>row.value.running).map(row=>row.dataset.id)'),
     ['ses_arrival_2','ses_arrival_0']);
+  assert.equal(await evaluate(`${finished}===current.catalog.body.rows[2] &&
+    ${finished}.value.last_activity_ms===null && ${finished}.activity.textContent.endsWith('*')`),true);
+  await fixture('arrival-hydrate');
+  // The scalar queue still contains the 250 burst arrivals. Its eventual
+  // qualification is distinct from prompt removal, which was bounded above.
+  await until(`${finished}?.value.last_activity_ms===${finish_ms} && !${finished}.activity.textContent.endsWith('*')`,100000);
   return {checks:['three native-V2 title arrivals and qualified prompt starts before 5s recovery, scalars withheld',
      'title and five labelled spinners; Watch-qualified running top/yellow; in-place real summary hydration',
      'focus/keyed rows/25 visible retained; silent banner; one in-flight; unchanged Live frames bounded by recovery',
-     'warm Today return and 250 nonrunning inserts with stable column/row/scroll geometry; alternating lost hints, no scalar reads; provisional paging and Back'],
+     'warm Today return and 250 nonrunning inserts with stable column/row/scroll geometry; alternating lost hints, no scalar reads; provisional paging and Back',
+     'explicit prompt end removes Running before scalar qualification; provisional placement then exact source finish'],
     measurements, burst_ms:burstMeasurements.map(item=>item.observation_to_dom_ms),
     requests:await evaluate('arrivalRequests.length'),source};
 };
