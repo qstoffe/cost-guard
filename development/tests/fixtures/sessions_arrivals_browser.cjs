@@ -50,7 +50,10 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.deepEqual(await evaluate('quietViolations'),[]);
   assert.doesNotMatch(await evaluate('current.catalog.root.textContent'),/Refreshing/);
   await fixture('arrival-hold');
-  await evaluate(`window.stableArrival=document.querySelector('tr[data-id="ses_fixture_00000"]');
+  // Select a retained ordinary row on the current page, not a fixed ID
+  // that newer source history may legitimately have displaced to page two.
+  await evaluate(`window.stableArrival=[...current.catalog.body.rows].find(
+      row=>row.dataset.id.startsWith('ses_fixture_') && row.metrics[0].tabIndex===0);
     window.stableModel=stableArrival.metrics[0];stableModel.focus();
     const range=document.createRange();range.selectNodeContents(stableArrival.titleNode);
     getSelection().removeAllRanges();getSelection().addRange(range);
@@ -110,9 +113,14 @@ module.exports = async ({evaluate, until, fixture}) => {
     burstMeasurements.push({key, visible:await evaluate('Date.now()')});
     assert.equal(await evaluate('current.catalog.body.rows.length'),25);
     assert.equal(await evaluate('current.catalog.next.disabled'),false);
-    assert.equal(await evaluate(`burstRoots.every((row,i)=>current.catalog.body.rows[i]===row &&
-      row.value.running && row.activity.textContent===burstClocks[i]) &&
-      document.activeElement===burstRoots[0].name && getSelection().toString()===burstSelection && scrollY===burstScroll`),true);
+    const state = await evaluate(`({
+      running: [...current.catalog.body.rows].filter(row=>row.value.running).map(row=>row.dataset.id),
+      retained: burstRoots.every((row,i)=>current.catalog.body.rows[i]===row && row.activity.textContent===burstClocks[i]),
+      focus: document.activeElement===burstRoots[0].name,
+      selection: getSelection().toString()===burstSelection, scroll: scrollY===burstScroll
+    })`);
+    assert.deepEqual(state,{running:['ses_arrival_2','ses_arrival_1','ses_arrival_0'],
+      retained:true,focus:true,selection:true,scroll:true});
     assert.deepEqual(await layout(),burstGeometry);
   }
   assert.deepEqual(await evaluate('removedRunning'),[]);

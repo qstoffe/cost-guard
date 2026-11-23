@@ -24,6 +24,14 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal((await ids())[0],'root-0000');
   assert.equal(await evaluate('current.catalog.body.rows[0].value.running'),true);
   assert.equal(await evaluate('current.catalog.body.rows[1].value.running'),false);
+  const appearance = await evaluate(`(()=>{
+    const [running,finished] = current.catalog.body.rows;
+    return {label:running.name.innerText,colors:[...running.cells].map(cell=>getComputedStyle(cell).color),
+      ordinary:getComputedStyle(finished.cells[0]).color};
+  })()`);
+  assert.match(appearance.label,/^\[RUNNING\] /);
+  assert.equal(new Set(appearance.colors).size,1,'the Running colour applies to the entire row');
+  assert.notEqual(appearance.colors[0],appearance.ordinary);
   assert.equal(await evaluate('current.catalog.body.rows[1].activity.textContent.includes("*")'),false);
   await evaluate('current.catalog.previous.click()');
   await until('current.catalog.data.offset===0 && !current.catalog.operation && !current.catalog.busy');

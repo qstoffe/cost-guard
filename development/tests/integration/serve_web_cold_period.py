@@ -25,6 +25,7 @@ def main():
     (root / 'config').mkdir()
     shutil.copyfile(ROOT / 'config/default-config.jsonc', root / 'config/default-config.jsonc')
     source = fixture(302)
+    source.source_instance = 'cold-period-fixture'
     database = CacheDatabase(root)
     database.initialize()
     cache, pricing = CacheRepository(database), FakePricingProvider()
