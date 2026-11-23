@@ -27,6 +27,12 @@ class SessionExports:
             handler.reply(429, {'error': 'export_busy'})
             return
         try:
+            # The complete authenticated POST has been admitted. From here the
+            # archive/source budgets and disconnect checks own preparation.
+            if handler.deadline is not None:
+                handler.deadline.cancel()
+                handler.deadline.join()
+
             def cancelled():
                 if (owner.stopping.is_set() or owner.live.driver is not driver or
                         not handler.server.session.authenticated(handler.headers.get('Cookie'))):
@@ -40,6 +46,8 @@ class SessionExports:
                 driver.coordinator.report_service.source, cancelled)
             if cancelled():
                 raise SessionExportError('export_cancelled')
+            # A complete local transfer has its own bounded write window.
+            handler.connection.settimeout(15)
             handler.reply(200, payload, content_type='application/zip',
                           disposition=f'attachment; filename="{filename}"')
         except KeyError:

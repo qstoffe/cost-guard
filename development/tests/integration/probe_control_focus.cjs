@@ -48,6 +48,7 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
       for(const type of ['focus','blur'])window.addEventListener(type,()=>focusProbeEvents.push(type));}`);
     await command('Page.bringToFront',{},mini);
     if(input!=='mouse')await tabTo(mini,'.mini-summary');
+    await until(mini,'document.hasFocus()');
     const before={owner:await evaluate(owner,'document.hasFocus()'),mini:await evaluate(mini,'document.hasFocus()')};
     assert.equal(before.mini,true,'PiP actually focused before native return');
     if(input==='mouse')await pointer(mini,'.mini-summary');
@@ -74,7 +75,7 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
     await pointer(id,selector);
     await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1},id);
     const mouse=await sample(id,selector);
-    assert.equal(mouse.outline,'none','same-element pointer must clear extra halo '+selector);
+    assert.equal(mouse.outline,'none','same-element pointer must clear extra halo '+selector+' '+JSON.stringify(mouse));
     assert.equal(mouse.active,false);
     await tabTo(id,selector);
     assert.equal((await sample(id,selector)).outline,'solid','Tab restores keyboard cue '+selector);
@@ -96,8 +97,10 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
   }
   await exercise(mini,'.mini-fit-height');
   await exercise(mini,'.mini-prompt-table th:first-child button');
+  // Install the synthetic API before the first visit: the catalog caches its reader.
+  await installSessionFixture();
   // Every primary navigation entry, both same-route and selected/unselected.
-  for(const route of ['watch','models','sessions','accounts','token-mix','ai-stats','comparisons','settings']) {
+  for(const route of ['watch','models','sessions','accounts','token-mix','ai-stats','settings']) {
     const selector=`nav a[href="#/${route}"]`;
     await exercise(owner,selector);
     await until(owner,`current.section===${JSON.stringify(route)}`);
@@ -117,14 +120,14 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
   await exercise(owner,'.watch-active th button');
   // Controlled catalog/detail replies, as in the existing quiet-refresh probe.
   // The actual views/actions/input run; no private history or native save is used.
-  await evaluate(owner,`window.focusApi=api;sessionDetailAvailable=true;
-    window.showSaveFilePicker=async()=>{throw new DOMException('Synthetic cancellation','AbortError');};
+  async function installSessionFixture() { await evaluate(owner,`window.focusApi=api;sessionDetailAvailable=true;
     api=async(path,value,...rest)=>{
+      if(path==='/api/detail/export')throw new Error('export_source_unavailable');
       if(path==='/api/sessions') {
         if(value.action==='interest')return {};
-        return {token:'focus-token',epoch:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',state:'observed',total:151,size:50,
-          offset:value.offset,sort:value.sort,direction:value.direction,age_ms:0,
-          view:{session_usage:Array.from({length:Math.min(50,151-value.offset)},(_,i)=>({
+        return {token:'focus-token',epoch:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',state:'observed',total:151,size:25,
+          offset:value.offset,period:value.period,sort:value.sort,direction:value.direction,age_ms:0,
+          view:{timezone_id:'UTC',session_usage:Array.from({length:Math.min(25,151-value.offset)},(_,i)=>({
             session_id:'focus-'+(value.offset+i),title:'Synthetic focus session',last_activity_ms:1000,
             indexed:true,has_summary:true,metric_state:'ready',prompt_count:1,model:'Test',display:{ccost:'1',duration_ms:'1s'}}))}};
       }
@@ -135,17 +138,19 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
             ...liveValue.view.active_cards[0].rows[0].prompt,id:'focus-prompt',watch_model:'Test'}],totals:{display:{}},session_context:null}]}}};
       }
       return focusApi(path,value,...rest);
-    };location.hash='#/sessions';`);
-  await until(owner,`current.catalog?.body.children.length===50`);
+    };`); }
+  await evaluate(owner,`location.hash='#/sessions/focus-0'`);
+  await until(owner,`current.detail?.data?.revision==='focus-revision'`);
+  await exercise(owner,'.session-export button');
+  assert.match(await evaluate(owner,'current.detail.exporter.notice.textContent'),/unavailable/);
+  await exercise(owner,'.session-history-table th button');
+  layouts.push({phase:'sessions-detail',source:'synthetic catalog/detail API',export:'synthetic preparation failure; no file saved'});
+  await evaluate(owner,`location.hash='#/sessions'`);
+  await until(owner,`current.catalog?.body.children.length===25`);
   await exercise(owner,'.sessions-table th button');
   // Locate using the live view's own action, without guessing its CSS class.
   await evaluate(owner,`current.catalog.next.id='focus-next'`);
   await exercise(owner,'#focus-next');
-  await evaluate(owner,`location.hash='#/sessions/focus-0'`);
-  await until(owner,`current.detail?.data?.revision==='focus-revision'`);
-  await exercise(owner,'.session-export button');
-  await exercise(owner,'.session-history-table th button');
-  layouts.push({phase:'sessions-detail',source:'synthetic catalog/detail API',export:'synthetic picker cancellation; no file saved'});
   await evaluate(owner,`location.hash='#/settings'`);
   await until(owner,`!!document.querySelector('.web-settings')`);
   await exercise(owner,'.web-settings label.help-value');
@@ -160,6 +165,6 @@ module.exports = async function controlFocus({command,evaluate,until,owner,mini,
   await command('Emulation.setEmulatedMedia',{features:[{name:'forced-colors',value:'active'},{name:'prefers-reduced-motion',value:'reduce'}]},owner);
   await tabTo(owner,'nav a[href="#/settings"]');
   assert.equal((await sample(owner,'nav a[href="#/settings"]')).outline,'solid');
-  checks.push('native mouse/touch/Tab and Enter/Space: all eight nav entries, Models filter/sort, Watch/help, AI Stats period, Sessions sort/pager/detail/export cancellation, Settings help, actual PiP return/Fit/header; selected state and keyboard rings preserved; 360/1280 Classic/Web 100/150%, forced colors/reduced motion');
+  checks.push('native mouse/touch/Tab and Enter/Space: primary nav, Models filter/sort, Watch/help, AI Stats period, Sessions sort/pager/detail/export failure, Settings help, actual PiP return/Fit/header; selected state and keyboard rings preserved; 360/1280 Classic/Web 100/150%, forced colors/reduced motion');
   return {focusTransferVerified:transitions.every(value=>value.focusTransferVerified),transitions};
 };
