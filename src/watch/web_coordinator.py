@@ -37,22 +37,22 @@ class DailyAccountHistory:
 
 
 def publish_catalog_prompts(catalog, cards):
-    evidence, failures = [], []
+    evidence, ends, failures = [], [], []
     for entry in cards.sessions.values():
         if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
-                or entry.capture.catalog_prompt is None or entry.source_status.failed_at is not None):
+                or entry.source_status.failed_at is not None):
             if getattr(entry, 'terminal_failure', False):
                 failures.append((entry.root, entry.admitted_at_ms))
             continue
-        prompt, start, running, ended = entry.capture.catalog_prompt
-        # Tree revisions include active flags, child clocks and costs. An
-        # independently read positive capture may be newer than metadata;
-        # a negative capture still requires the current tree revision.
-        if not running and entry.verified_generation != entry.generation:
-            continue
-        evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
-                          prompt, start, running, None, ended))
+        root, revision, at = entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms
+        if entry.capture.catalog_prompt is not None:
+            prompt, start = entry.capture.catalog_prompt
+            evidence.append((root, revision, at, prompt, start, True, None, False))
+        elif entry.capture.catalog_prompt_ends and entry.verified_generation == entry.generation:
+            ends.append((root, revision, at, entry.capture.catalog_prompt_ends))
     catalog.observe_prompts(evidence)
+    if ends:
+        catalog.observe_prompt_ends(ends)
     if failures:
         catalog.withdraw_prompts(failures)
 

@@ -99,7 +99,7 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None, on_evidence=None):
+                    on_activity=None, activity_end_ms=None, on_evidence=None, on_prompt_ends=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -185,7 +185,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     groups = session_cost_groups(item.bundle.trace_entries, root.session_id, service._load_comparison_catalog())
     row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=groups,
                   empty_history=empty_history(item.snapshot),
-                  **activity_fields(item, on_activity=on_activity))
+                  **activity_fields(item, on_activity=on_activity, on_prompt_ends=on_prompt_ends))
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
     if on_evidence is not None:

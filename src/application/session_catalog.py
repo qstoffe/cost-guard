@@ -550,6 +550,21 @@ class SessionCatalog:
                 self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
                                     wake=True)
 
+    def observe_prompt_ends(self, observations):
+        """A current Watch capture can stop the accepted prompt, not pick its finish clock."""
+        with self.lock:
+            if self.state != "observed":
+                return
+            now = self.clock_ms()
+            for root, revision, at, ended in observations:
+                key = root.session_id
+                if (key in self.running_roots and root.provenance == self.roots[key].provenance
+                        and revision == self.revisions.get(key) and 0 <= now - at <= PROMPT_FRESHNESS_MS):
+                    previous = self.prompt_activity[key]
+                    if previous.identity in ended:
+                        self._record_prompt(key, PromptEvidence(at, previous.prompt_id, previous.start_ms,
+                            False, None, ended=True, revision=revision), wake=True)
+
     def withdraw_prompts(self, failures):
         """Terminal Watch read failures invalidate execution, not prove a finish."""
         with self.lock:
@@ -586,6 +601,8 @@ class SessionCatalog:
         was_running = self._running(key)
         if evidence.finish_ms is not None:
             evidence = replace(evidence, ended=True)
+        if not evidence.running and not evidence.ended:
+            return
         if previous is None:
             if not evidence.running:
                 return  # Ordinary history belongs to the scalar index.
@@ -599,7 +616,6 @@ class SessionCatalog:
             if evidence.prompt_id == previous.prompt_id:
                 if (evidence.start_ms != previous.start_ms or (evidence.running and previous.finish_ms is not None
                         and (evidence.revision == previous.revision or not wake))
-                        or not evidence.running and not evidence.ended
                         or evidence.observed_ms == previous.observed_ms and evidence.running):
                     return
                 if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
@@ -817,9 +833,11 @@ class SessionCatalog:
             try:
                 identity_values = []
                 evidence = []
+                ended_prompts = set()
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
                     on_stage=lambda stage: self._stage(stage, retrying),
                     on_dependencies=identity_values.extend,
+                    on_prompt_ends=ended_prompts.update if active else None,
                     on_evidence=(lambda item: evidence.append(item)) if partition and not active else None,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
@@ -880,7 +898,8 @@ class SessionCatalog:
                                 self.activity_valid[key] = actual
                             else:
                                 self.activity_valid.pop(key, None)
-                            self._record_summary_prompt(key, row, captured_at, historical=not active)
+                            self._record_summary_prompt(key, row, captured_at, historical=not active,
+                                                        ended_prompts=ended_prompts)
                             partial = None if row.running else (
                                 'context' if not row.context_qualified and self._requested(key, 'ctx') else
                                 'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
@@ -939,13 +958,22 @@ class SessionCatalog:
             self.work_sequence += 1
             self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
-    def _record_summary_prompt(self, key, row, captured_at, *, historical=False):
+    def _record_summary_prompt(self, key, row, captured_at, *, historical=False, ended_prompts=()):
         # A history job started without live context cannot overrule the
         # independent Watch lane. The latter can publish before this job ends.
-        if row.running or row.activity_qualified and (not historical or not self._running(key)):
-            self._record_prompt(key, PromptEvidence(captured_at, row.activity_prompt_id, row.prompt_started_ms,
-                row.running, None if row.running else row.last_activity_ms,
-                ended=not historical and row.activity_qualified and not row.running, revision=self.revisions.get(key)))
+        revision = self.revisions.get(key)
+        prompt = row.prompt_started_ms, row.activity_prompt_id
+        if row.running:
+            self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], True, None, revision=revision))
+        elif row.activity_qualified and (not historical or not self._running(key)):
+            previous = self.prompt_activity.get(key)
+            if self._running(key) and previous.identity != prompt:
+                if previous.identity not in ended_prompts:
+                    return
+                self._record_prompt(key, PromptEvidence(captured_at, previous.prompt_id, previous.start_ms,
+                    False, None, ended=True, revision=revision))
+            self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], False, row.last_activity_ms,
+                ended=prompt in ended_prompts, revision=revision))
 
     def _with_lifecycle(self, rows, lifecycle=None):
         if lifecycle is None:

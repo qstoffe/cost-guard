@@ -31,6 +31,7 @@ class WatchCapture:
     duration_intervals: tuple = ()
     context_comparable_ids: frozenset = frozenset()
     catalog_prompt: tuple | None = None
+    catalog_prompt_ends: frozenset = frozenset()
 
     @property
     def history_row(self):
@@ -140,17 +141,17 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
         for record in bundle.prompts) + tuple((record.created_at_ms, record.duration_ms, False)
                  for record in bundle.compactions)) if fresh.complete else ()
     catalog_prompt = None
+    ended = set()
     if fresh.complete:
         # The display may retain old rows, but only the fresh tree can bind
         # current execution. analyze_observed already requalifies the records.
-        activity = activity_fields(AnalyzedRoot(root, bundle, False, fresh))
-        if activity['activity_prompt_id']:
-            running = activity['running']
-            catalog_prompt = (activity['activity_prompt_id'], activity['prompt_started_ms'],
-                              running, not running)
+        activity = activity_fields(AnalyzedRoot(root, bundle, False, fresh),
+                                   on_prompt_ends=ended.update if not retained else None)
+        if activity['running']:
+            catalog_prompt = (activity['activity_prompt_id'], activity['prompt_started_ms'])
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids), catalog_prompt), item
+        intervals, frozenset(comparable_ids), catalog_prompt, frozenset(ended)), item

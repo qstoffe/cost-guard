@@ -15,7 +15,34 @@ def source_identity(provenance):
     return provenance.source_type, provenance.source_generation, provenance.source_instance
 
 
-def activity_fields(item, *, on_activity=None):
+def _prompt_keys(messages, owners):
+    return {(message.session_id, owners.get((message.session_id,
+        message.parent_message_id if message.role is MessageRole.ASSISTANT else message.message_id)))
+        for message in messages}
+
+
+def _observed_ends(snapshot, children, events, attempts, owners, unsettled, ended_attempts):
+    """Match end evidence to its own root turn, never to the next turn in history."""
+    background_by_owner = defaultdict(list)
+    for work in snapshot.background:
+        background_by_owner[work.session_id, work.owner_message_id].append(work)
+    for event in events:
+        key = event.session_id, event.event_id
+        if key in unsettled:
+            continue
+        scopes = children.scopes(attempts[key])
+        if scopes and any(descendant_activity(snapshot, children, scopes)):
+            continue
+        linked = children.messages(scopes)
+        child_keys = _prompt_keys(linked, owners)
+        background = [work for message in (*attempts[key], *linked)
+                      for work in background_by_owner.get((message.session_id, message.message_id), ())]
+        if (not (child_keys & unsettled) and not any(work.running for work in background)
+                and (key in ended_attempts or child_keys & ended_attempts or background)):
+            yield event.created_at_ms, event.event_id
+
+
+def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     """Focal root prompt start while running, explicit causal end when finished.
 
     A catalog touch, part rewrite, polling time, and inferred inactivity are not
@@ -64,7 +91,7 @@ def activity_fields(item, *, on_activity=None):
                   if record.in_progress or record.execution_unverified}
     unsettled.update((record.session_id, record.user_message_id) for record in item.bundle.compactions
                      if record.in_progress)
-    values, terminals = [], {}
+    values, terminals, ended_attempts = [], {}, set()
     for key, event in events.items():
         start = event.created_at_ms
         if type(start) is not int or start <= 0:
@@ -77,6 +104,8 @@ def activity_fields(item, *, on_activity=None):
         # last request of a still-unfinished tool-calls continuation.
         terminal = (latest.termination.completed_at_ms if latest.termination else
                     latest.completed_at_ms if latest.finish_reason not in (None, "tool-calls") or latest.error_name else None)
+        if latest.termination or latest.error_name or terminal is not None:
+            ended_attempts.add(key)
         if type(terminal) is int and terminal >= start:
             values.append(terminal)
             terminals[key] = terminal
@@ -96,6 +125,8 @@ def activity_fields(item, *, on_activity=None):
             if scopes and descendant_activity(snapshot, children, scopes)[0]:
                 live = event
                 break
+    if on_prompt_ends is not None and snapshot.complete and live is None:
+        on_prompt_ends(_observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts))
     focal = live or (root_events[0] if root_events else None)
     start = focal.created_at_ms if focal is not None else None
     if type(start) is not int or start <= 0:
@@ -108,9 +139,7 @@ def activity_fields(item, *, on_activity=None):
     # Scope child finishes to this root prompt, not the latest activity anywhere
     # in the tree. A reused child's independent turn cannot advance this clock.
     focal_children = children.messages(children.scopes(attempts[key]))
-    child_keys = {(message.session_id, owners.get((message.session_id,
-        message.parent_message_id if message.role is MessageRole.ASSISTANT else message.message_id)))
-        for message in focal_children}
+    child_keys = _prompt_keys(focal_children, owners)
     terminal = terminals.get(key)
     if terminal is not None and not is_running and not (child_keys & unsettled):
         message_ids = {(message.session_id, message.message_id) for message in (*attempts[key], *focal_children)}
