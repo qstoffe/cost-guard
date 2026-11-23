@@ -536,6 +536,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-export > span { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 .session-export > button { min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
 .session-export > [role="status"]:empty { display: none; }
+.session-export > .metric-spinner[hidden] { display: none; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .account-subscription { box-shadow: none; font-size: .85rem; max-width: var(--watch-account-width, 448px);
   min-width: 0; padding: 0 0 .8rem; text-align: left; overflow-wrap: anywhere; }

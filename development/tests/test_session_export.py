@@ -188,7 +188,7 @@ class ExportHttpTests(unittest.TestCase):
             cookie, csrf = server.session.exchange(server.session.bootstrap())
 
             def request(body=None, *, method='POST', extra=None, authenticated=True):
-                connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=15)
                 try:
                     headers = {'Origin': server.origin, 'Content-Type': 'application/json', 'X-CG-CSRF': csrf,
                         'X-CG-Instance': owner.nonce}
@@ -211,7 +211,10 @@ class ExportHttpTests(unittest.TestCase):
                     self.assertEqual(400, request(body)[0])
                 self.assertEqual(410, request({'token': 'a' * 32})[0])
                 self.assertEqual([], state.requests)
+                # The five valid native transfers together exceed an ordinary request's five seconds.
+                state.before_export = lambda member: time.sleep(1.1)
                 status, headers, body = request({'token': token})
+                state.before_export = None
                 self.assertEqual(200, status)
                 self.assertEqual('application/zip', headers['Content-Type'])
                 self.assertEqual(f'attachment; filename="opencode-{SESSION}-analysis.zip"', headers['Content-Disposition'])

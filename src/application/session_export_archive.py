@@ -12,7 +12,7 @@ from .session_export_mask import mask_session, mask_text
 # Keep the browser's response cap in app.js in sync.
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_JSON_BYTES = 192 * 1024 * 1024  # Total pretty UTF-8 across all entries.
-ARCHIVE_SECONDS = 90
+ARCHIVE_SECONDS = 240  # Hard ceiling across acquisition and ZIP assembly.
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f-\x9f\u00ad\u061c\u200b\u200e\u200f'
                      r'\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]')
 _DEVICE = re.compile(r'^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(?: *\.|$)', re.I)

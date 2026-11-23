@@ -240,9 +240,9 @@ async function api(path, value, signal, attachment = false) {
   const aborted = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener('abort', aborted, {once: true});
-  // ZIPs allow up to 90 s of server work, plus time for the completed response.
+  // ZIPs allow up to 240 s of preparation plus the bounded response transfer.
   let timedOut = false;
-  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 120000 : 5000);
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 270000 : 5000);
   try {
     const response = await fetch(path, options).catch(cause => {
       if (signal?.aborted || !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;

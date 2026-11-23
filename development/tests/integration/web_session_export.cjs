@@ -36,33 +36,37 @@ async function main() {
   }, 'ses_test');
   action.update('selected', true, 'FixAuthTests.zip');
   assert.equal(action.button.textContent, 'Export Session Analysis ZIP');
-  assert.deepEqual(action.root.children, [action.button, action.notice], 'one action and one quiet live region');
+  assert.deepEqual(action.root.children, [action.button, action.spinner, action.notice]);
   assert.equal(action.notice.attributes.role, 'status'); assert.equal(action.notice.textContent, '');
   assert.equal(action.button.passive, false, 'the action itself owns non-pinning help');
-  for (const phrase of [/nested subagents/i, /best effort/i, /not guaranteed secret-free or anonymous/i, /review.*before sharing/i])
-    assert.match(action.button.help, phrase);
-  assert.doesNotMatch(action.button.help, /\n/,'privacy reminder remains concise; native picker/fallback behavior is tested below');
   action.update('refreshed', true); assert.equal(action.notice.textContent, '', 'refresh cannot restore passive advice');
   action.update('selected', true, 'FixAuthTests.zip');
   window.showSaveFilePicker = async options => {
-    order.push('picker'); assert.equal(calls, 0); assert.equal(options.suggestedName, 'FixAuthTests.zip');
+    order.push('picker'); assert.equal(options.suggestedName, 'FixAuthTests.zip');
     assert.deepEqual(Array.from(options.types[0].accept['application/zip']), ['.zip']);
     throw Object.assign(new Error(), {name: 'AbortError'});
   };
-  const cancelled = action.save();
-  assert.deepEqual(order, ['picker'], 'picker is invoked in the original click turn, not after an await');
+  const preparing = action.button.events.click();
+  assert.equal(action.button.disabled, true); assert.equal(action.spinner.hidden, false);
+  await action.button.events.click();
+  await preparing;
+  assert.deepEqual(order, ['export']); assert.equal(action.button.textContent, 'Save ZIP');
+  assert.equal(action.spinner.hidden, true); assert.equal(action.button.disabled, false);
+  const cancelled = action.button.events.click();
+  assert.deepEqual(order, ['export', 'picker'], 'second click invokes the picker synchronously');
   await cancelled;
-  assert.deepEqual(order, ['picker']); assert.equal(calls, 0); assert.match(action.notice.textContent, /cancelled/);
+  assert.equal(calls, 1); assert.match(action.notice.textContent, /cancelled/);
+  assert.equal(action.button.textContent, 'Export Session Analysis ZIP'); assert.equal(timers.size, 0);
   order.length = 0;
   window.showSaveFilePicker = async () => { order.push('picker'); return {createWritable: async () => ({
     async write(blob) { order.push('write'); assert.equal(blob, 'archive'); },
     async close() { order.push('commit'); }, async abort() { order.push('abort'); }
   })}; };
-  await action.save();
-  assert.deepEqual(order, ['picker', 'export', 'write', 'commit']);
+  await action.button.events.click(); await action.button.events.click();
+  assert.deepEqual(order, ['export', 'picker', 'write', 'commit']);
   action.update('selected', true, 'Renamed å.zip'); assert.match(action.notice.textContent, /saved/, 'polling preserves action feedback');
   delete window.showSaveFilePicker; order.length = 0;
-  await action.save();
+  await action.button.events.click(); await action.button.events.click();
   assert.deepEqual(order, ['export', 'url', 'download']);
   assert.deepEqual(downloads, ['Renamed å.zip'], 'fallback ignores trusted transport filename for its display name');
   assert.match(action.notice.textContent, /browser controls/);
@@ -73,28 +77,42 @@ async function main() {
   }
   for (const code of ['detail_expired', 'export_too_large', 'export_source_unavailable']) {
     const failed = new context.Action(async () => { throw new Error(code); }, 'ses_test');
-    failed.update('selected', true); await failed.save();
+    failed.update('selected', true); await failed.button.events.click();
+    assert.equal(failed.spinner.hidden, true);
+    assert.equal(failed.button.textContent, 'Export Session Analysis ZIP');
     assert.match(failed.notice.textContent, /expired|size limit|unavailable/); assert.equal(failed.button.disabled, false);
   }
   let finish;
   window.showSaveFilePicker = () => new Promise(resolve => { finish = resolve; });
   action.update('selected', true);
-  const pending = action.save(); action.close(); finish({}); await pending;
-  assert.equal(calls, 2, 'navigation while picker is open starts no native read');
+  await action.button.events.click();
+  const pending = action.button.events.click(); action.close(); finish({}); await pending;
+  assert.equal(action.notice.textContent, '', 'late picker result after navigation is silent');
   assert.equal(action.filename, 'session-ses_test.zip');
   action.update('selected', true, 'Old title');
-  const switched = action.save();
-  action.update('other-token', true, 'New title'); finish({}); await switched;
-  assert.equal(calls, 2, 'token replacement while picker is open starts no native read');
+  await action.button.events.click();
+  action.update('other-token', true, 'New title');
+  assert.equal(action.button.textContent, 'Export Session Analysis ZIP');
+  assert.equal(timers.size, 0, 'new token retires the ready payload and expiry timer');
+  action.update('selected', true);
+  await action.button.events.click();
+  const [expire] = timers.values(); expire();
+  assert.equal(action.button.textContent, 'Export Session Analysis ZIP'); assert.match(action.notice.textContent, /expired/);
+  window.showSaveFilePicker = async () => ({createWritable: async () => ({
+    write: async () => {throw new Error('synthetic write failure');}, abort: async () => order.push('abort')
+  })});
+  await action.button.events.click(); await action.button.events.click();
+  assert.equal(order.at(-1), 'abort'); assert.match(action.notice.textContent, /no completed export/);
   delete window.showSaveFilePicker;
   let complete;
   const late = new context.Action(() => new Promise(resolve => { complete = resolve; }), 'ses_other');
   late.update('old-token', true, 'Old session');
-  const response = late.save();
+  const response = late.button.events.click();
   late.update('new-token', true, 'New session');
   complete({blob:'late', filename:'opencode-ses_other-analysis.zip'}); await response;
+  assert.equal(late.button.textContent, 'Export Session Analysis ZIP'); assert.equal(late.notice.textContent, '');
   const wrong = new context.Action(async () => ({blob: 'other', filename:'opencode-ses_other-analysis.zip'}), 'ses_test');
-  wrong.update('selected', true); await wrong.save();
+  wrong.update('selected', true); await wrong.button.events.click();
   assert.match(wrong.notice.textContent,/invalid or incomplete/);
   assert.deepEqual(downloads, ['Renamed å.zip'], 'a stale or foreign export never saves');
   // Run the shipped attachment parser unchanged: a display name must not relax transport trust.

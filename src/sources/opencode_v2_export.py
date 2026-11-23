@@ -9,8 +9,7 @@ from .opencode_v2_transport import V2HttpClient
 from .opencode_v2_wire import fetch_global_sessions
 
 MAX_EXPORT_BYTES = 32 * 1024 * 1024  # Per native transfer.
-EXPORT_SECONDS = 90
-REQUEST_SECONDS = 15
+REQUEST_SECONDS = 15  # Per source response, not the aggregate catalog and tree.
 SESSION_ID = re.compile(r'ses_[A-Za-z0-9_-]{1,160}\Z')
 EXPORT_ROUTE = '/api/experimental/session/{sessionID}/export'
 
@@ -19,17 +18,14 @@ class ExportReads:
     def __init__(self, client, cancelled):
         self.client = client
         self.cancelled = cancelled
-        self.deadline = time.monotonic() + EXPORT_SECONDS
 
     def check(self):
         if self.cancelled():
             raise SessionExportError('export_cancelled')
-        if time.monotonic() >= self.deadline:
-            raise SessionExportError('export_timed_out')
 
     def json(self, path, *, query=None, max_bytes=8 * 1024 * 1024):
         self.check()
-        deadline = min(self.deadline, time.monotonic() + REQUEST_SECONDS)
+        deadline = time.monotonic() + REQUEST_SECONDS
         try:
             return self.client.bounded_json(path, query=query, max_bytes=max_bytes,
                                             deadline=deadline, cancelled=self.cancelled)
