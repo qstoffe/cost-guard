@@ -1,5 +1,6 @@
 """Owned shipped Web host with synthetic native export and canonical detail data."""
 from dataclasses import replace
+from copy import deepcopy
 import json
 from pathlib import Path
 import shutil
@@ -7,11 +8,12 @@ import sys
 from threading import Event, Thread
 from types import SimpleNamespace
 import unittest
+from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.compact_reports import report_service
-from development.tests.fixtures.session_export import export_source, SESSION
+from development.tests.fixtures.session_export import export_source, SESSION, CHILD, SIBLING, GRANDCHILD, LEAF
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.watch_summary import summary_watch
@@ -58,21 +60,35 @@ def main():
             field: tuple(replace(item, session_id=SESSION) for item in getattr(snapshot, field))
             for field in ('messages', 'parts', 'events', 'invocations')})
         source.source_id, source.source_instance = native.source_id, native.source_instance
-        source.observation_epoch, source.export_session = native.observation_epoch, native.export_session
+        source.observation_epoch, source.export_session_tree = native.observation_epoch, native.export_session_tree
+        state.tree[LEAF]['messages'] = [{'id': 'msg_error', 'type': 'assistant',
+            'error': 'E_FIXTURE: password=synthetic-fixture-value; retry'}]
+        expected = deepcopy(state.tree)
+        expected[LEAF]['messages'][0]['error'] = 'E_FIXTURE: password=[REDACTED]; retry'
         service = report_service(test, source)
         host = WebHost(config, jobs=HelpAuditJobs())
         host.live = ExportRuntime(service, host.events.publish)
         host.start(); host.publish_ready()
-        print(json.dumps({'url': host.browser_url(), 'session': SESSION, 'transfer': state.transfer}), flush=True)
+        print(json.dumps({'url': host.browser_url(), 'session': SESSION}), flush=True)
         try:
             for line in sys.stdin:
                 command = json.loads(line)['command']
                 if command == 'stop':
                     break
                 if command == 'invalid':
-                    state.body = b'{"data":null}'
-                elif command == 'recover':
-                    state.body = None
+                    del state.tree[LEAF]
+                elif command == 'check-downloads':
+                    for downloaded in sorted((config / 'downloads').glob('*.zip')):
+                        with ZipFile(downloaded) as archive:
+                            names = {SESSION: 'Unicode å 日本語.json', CHILD: 'Unicode å 日本語 (1).json',
+                                SIBLING: 'unicode å 日本語 (2).json', GRANDCHILD: 'session-ses_c.json', LEAF: 'Deep 🚀.json'}
+                            test.assertCountEqual(names.values(), archive.namelist())
+                            for member, name in names.items():
+                                test.assertEqual(ZIP_DEFLATED, archive.getinfo(name).compress_type)
+                                test.assertEqual(json.dumps(expected[member], ensure_ascii=False, indent=2) + '\n',
+                                    archive.read(name).decode('utf-8'))
+                    print(json.dumps({'checked': len(list((config / 'downloads').glob('*.zip')))}), flush=True)
+                    continue
                 print(json.dumps({'requests': len(state.requests)}), flush=True)
         finally:
             host.close()
