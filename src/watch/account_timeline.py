@@ -386,6 +386,8 @@ class AccountTimeline:
         self.archive_generation = None
         self.unavailable_history = frozenset()
         self.archive_live_roots = frozenset()
+        self.archive_pending_history = frozenset()
+        self.archive_coverage_confirmed = False
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None
@@ -426,13 +428,13 @@ class AccountTimeline:
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
              now_ms, available=True, terminal=False, card_today=None, shared_roots=None,
              foreground=None, require_background_prices=False, unavailable_history=frozenset(),
-             live_roots=frozenset()):
+             live_roots=frozenset(), pending_history=frozenset(), coverage_confirmed=False):
         foreground = periods if foreground is None else foreground
         changed_source = source is not None and source != self.source
         if changed_source:
             self.source = source
         if available:
-            roster = account_roster(accounts)
+            roster = account_roster(accounts, now_ms=now_ms if self.archive else None)
         else:
             source, roster = self.source, () if changed_source else self.roster
         # Names and ordering can change without losing selections. Keys and
@@ -448,6 +450,10 @@ class AccountTimeline:
         day_changed = day != self.day
         self.day = day
         starts = {period: period_start(period, now_ms, zone) for period in periods if period != '7-days'}
+        if self.archive and 'month' in starts:
+            starts['month'] = timeline_window('month', now_ms, zone, native_bounds=tuple(
+                (item.month.start, item.month.reset) for item in roster
+                if item.month is not None and item.month.start is not None)).start
         with self.lock:
             if self.archive or available or changed_source or terminal:
                 self.public_ready = bool(self.archive) or available and not terminal
@@ -527,11 +533,14 @@ class AccountTimeline:
         self.foreground = foreground
         if self.archive:
             revision = self.archive.generation(ARCHIVED_USAGE)
-            if (revision, unavailable_history, live_roots) != (
-                    self.archive_generation, self.unavailable_history, self.archive_live_roots):
+            if (revision, unavailable_history, live_roots, pending_history, coverage_confirmed) != (
+                    self.archive_generation, self.unavailable_history, self.archive_live_roots,
+                    self.archive_pending_history, self.archive_coverage_confirmed):
                 self.archive_generation = revision
                 self.unavailable_history = unavailable_history
                 self.archive_live_roots = live_roots
+                self.archive_pending_history = pending_history
+                self.archive_coverage_confirmed = coverage_confirmed
                 self.due = 0
         if available and not terminal:
             with self.lock:
@@ -559,7 +568,8 @@ class AccountTimeline:
 
         def step():
             started = monotonic()
-            extra = dict(unavailable_history=unavailable_history, live_roots=live_roots) if self.archive else {}
+            extra = dict(unavailable_history=unavailable_history, live_roots=live_roots,
+                          pending_history=pending_history, source_available=coverage_confirmed) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
                  shared_roots=shared_roots, require_prices=require_background_prices and not foreground, **extra)

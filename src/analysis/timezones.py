@@ -166,6 +166,14 @@ def local_month_start_ms(timezone_id: str, *, now_ms: int) -> int:
     return int(datetime(local.year, local.month, 1, tzinfo=zone).timestamp() * 1000)
 
 
+def calendar_periods(zone, now):
+    return (('today', local_day_start_ms(zone, now_ms=now)),
+            ('7-days', local_day_start_ms(zone, now_ms=now, days_ago=6)),
+            ('30-days', local_day_start_ms(zone, now_ms=now, days_ago=29)),
+            ('month', local_month_start_ms(zone, now_ms=now)),
+            ('all', None))
+
+
 def utc_month_start_ms(*, now_ms: int | None = None) -> int:
     now = datetime.now(tz=timezone.utc) if now_ms is None else datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
     return int(datetime(now.year, now.month, 1, tzinfo=timezone.utc).timestamp() * 1000)

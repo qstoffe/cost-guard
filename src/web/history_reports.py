@@ -4,8 +4,9 @@ import logging
 import time
 from types import SimpleNamespace
 
-from src.analysis.ai_stats import windows
+from src.analysis.ai_stats import ROLLING_DAYS
 from src.analysis.cache import dependency_signature
+from src.analysis.timezones import calendar_periods
 from src.cache.web_archive import ArchiveFact, REPORT_CHECKPOINTS
 from src.pricing.catalog import PricingCatalog
 from src.reports import ReportKind
@@ -20,6 +21,7 @@ KINDS = {ReportKind.AI_STATS, ReportKind.TOKEN_MIX}
 VIEWS = 'report-view/1'
 RENDER_INTERVAL = 1.0
 PROGRESS_INTERVAL = 2.5
+ROLLING_REFRESH_MS = 60_000
 
 
 class HistoryReports:
@@ -86,11 +88,12 @@ class HistoryReports:
         else:
             row, = fresh['ai_stats']
             previous = next((item for item in saved['ai_stats'] if item['period'] == period
-                             and item['start_ms'] == row['start_ms']), None)
+                             and (period in ROLLING_DAYS or item['start_ms'] == row['start_ms'])), None)
             if previous:
                 known = {metric['metric']: metric for metric in previous['metrics'] if metric.get('value') is not None}
-                row['metrics'] = [known.get(metric['metric'], metric) if metric.get('value') is None else metric
-                                  for metric in row['metrics']]
+                row['metrics'] = [known.get(metric['metric'], metric)
+                                  if metric.get('value') is None and metric['metric'] != 'hourly-rate'
+                                  else metric for metric in row['metrics']]
                 if row.get('matched') is None:
                     row['matched'] = previous.get('matched')
         return current
@@ -130,9 +133,11 @@ class HistoryReports:
             self.job = None
         if self.job is not None or turn < self.next_turn:
             return
+        if not catalog.archive.storage_ready:
+            return
         now = int(time.time() * 1000)
         zone = str(config.get('timezone') or 'Europe/Stockholm')
-        scopes = dict(windows(zone, now))
+        scopes = dict(calendar_periods(zone, now))
         settings = dependency_signature({key: value for key, value in config.items() if key != 'webSettings'})
 
         def stamp(period):
@@ -153,8 +158,14 @@ class HistoryReports:
             if not catalog.archive.loaded:
                 return
             progress_key = catalog.generation, ready, catalog.legacy_done
-            keys = {name: ((revision, price_signature, settings, start), progress_key)
-                    for name, start in scopes.items()}
+            keys = {}
+            for name, start in scopes.items():
+                retained = self.published_keys.get(name)
+                # An open rolling view ages out old data without causing idle
+                # background rendering in unobserved periods.
+                bucket = (now // ROLLING_REFRESH_MS if name in foreground and name in ROLLING_DAYS
+                          else retained[0][-1] if retained else None)
+                keys[name] = ((revision, price_signature, settings, start, bucket), progress_key)
             candidates = []
             for name, key in keys.items():
                 saved = self.published_keys.get(name)

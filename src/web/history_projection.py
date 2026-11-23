@@ -7,6 +7,7 @@ from uuid import uuid4
 from src.analysis.ai_stats import StatsObservation, outside_period, windows
 from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.matched_runs import period_fact
+from src.analysis.timezones import calendar_periods
 from src.application.projection import project
 from src.reports import ReportKind
 from src.reports.migration_notice import migration_gap_notes
@@ -28,14 +29,12 @@ class HistoryProjection:
             return {}, True
         zone = str(config.get('timezone') or 'Europe/Stockholm')
         periods = windows(zone, now)
-        selected_start = dict(periods).get(only)
+        mix_starts = dict(calendar_periods(zone, now))
         roots, requests, prompt_of, matches, costs = [], [], {}, {}, {}
         for key, fact in sorted(facts.items(), key=lambda pair: pair[1].report_rank):
             if fact.report is None:
                 continue
             stats, usage, match = fact.report
-            if outside_period(stats, selected_start):
-                continue
             roots.append(stats)
             if match:
                 matches[key] = replace(match, title=stats.title)
@@ -59,27 +58,34 @@ class HistoryProjection:
             model_bucket=lambda model: friendly_model(model, reference), shared_history=True)
         self.sequence += 1
         reports, stats_rows, progress = {}, [], {}
+
+        def coverage(start, cached):
+            lower = start or 0
+            waiting = any(key not in live_roots and key not in unavailable and
+                          (at is None or lower <= at < historical_cutoff) for key, at in pending.items())
+            unqualified = sum(key not in live_roots and key in unavailable and (at is None or lower <= at)
+                              for key, at in pending.items())
+            complete = (available and not more and not any(at is None or lower <= at for at in pending.values())
+                        and not migration_gap_notes(selection.migration_gap, start_ms=start) and not selection.warnings)
+            return complete, dict(cached=cached, complete=not more and not waiting,
+                                  remaining=None, unavailable=unqualified)
+
         for name, start in periods:
             if only is not None and name != only:
                 continue
-            period_roots = roots if only is not None else [root for root in roots if not outside_period(root, start)]
-            gap = migration_gap_notes(selection.migration_gap, start_ms=start)
-            coverage_pending = any(key not in live_roots and key not in unavailable and
-                                   (at is None or (start or 0) <= at < historical_cutoff) for key, at in pending.items())
-            unqualified = sum(key not in live_roots and key in unavailable and (at is None or (start or 0) <= at)
-                              for key, at in pending.items())
-            complete = available and not more and not pending and not gap and not selection.warnings
-            progress[name] = dict(cached=len(period_roots), complete=not more and not coverage_pending,
-                                  remaining=None, unavailable=unqualified)
+            period_roots = [root for root in roots if not outside_period(root, start)]
+            complete, progress[name] = coverage(start, len(period_roots))
             stats_rows.append(replace(stats.period(period=name, start=start, source_complete=complete),
                 matched=period_fact([matches[root.session_id] for root in period_roots if root.session_id in matches],
                                     start, now, complete=complete and
                                     all(root.source_complete and root.session_id in matches for root in period_roots))))
             mix = history_projection(service, reference, requests, prompt_of, lambda *_: None, scope=name,
-                                     valuation=valuation, archived=True)
+                                      valuation=valuation, archived=True)
+            mix_start = mix_starts[name]
+            mix_complete, mix_progress = coverage(mix_start, sum(not outside_period(root, mix_start) for root in roots))
             mix = replace(mix, token_mix_period={**mix.token_mix_period,
-                           **({'coverage': 'partial'} if not complete else {})})
-            reports['token-mix', name] = self._result(mix, service, config, identity, complete, progress[name])
+                            **({'coverage': 'partial'} if not mix_complete else {})})
+            reports['token-mix', name] = self._result(mix, service, config, identity, mix_complete, mix_progress)
         report = ReportProjection(ReportKind.AI_STATS, 'AI Stats', selection.selected.upper(),
             selection.warnings, notes=migration_gap_notes(selection.migration_gap), ai_stats=tuple(stats_rows),
             ai_stats_work=dict(scopes={name: dict(completed=value['cached'], ready=True)

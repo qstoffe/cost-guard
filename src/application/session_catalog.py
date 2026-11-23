@@ -80,7 +80,7 @@ def retain_pending_metrics(row, previous):
 
 class SessionCatalog:
     def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000),
-                 timezone_id="UTC", archive=None, legacy_archive=None):
+                 timezone_id="UTC", archive=None, legacy_archive=None, archive_upgrade=None):
         self.clock = clock
         self.clock_ms = clock_ms
         self.lock = Lock()
@@ -128,7 +128,7 @@ class SessionCatalog:
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
-        self.archive = (SessionArchive(archive, legacy_archive, timezone_id=timezone_id)
+        self.archive = (SessionArchive(archive, legacy_archive, timezone_id=timezone_id, upgrade=archive_upgrade)
                         if archive is not None else None)
         self.history_pending = {}
         self.archive_rejections = {}

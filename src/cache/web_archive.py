@@ -13,6 +13,7 @@ SCHEMA = 2
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 LEGACY_IMPORT = 'import-fr000778'
 REPORT_CHECKPOINTS = 'shared-history'
+WEB_ARCHIVE_FILENAME = 'cost-guard-web-history-v1.sqlite3'
 
 
 def source_partition(generation, instance, epoch=None):
@@ -48,13 +49,18 @@ def history_rank(partition, observed_ms, revision):
 
 class WebArchive:
     def __init__(self, directory):
-        self.path = directory / 'cost-guard-web-history-v1.sqlite3'
+        self.path = directory / WEB_ARCHIVE_FILENAME
         self._lock = Lock()
         self._generations = {}
 
     def generation(self, domain):
         with self._lock:
             return self._generations.get(domain, 0)
+
+    def note_publication(self, domains):
+        with self._lock:
+            for domain in domains:
+                self._generations[domain] = self._generations.get(domain, 0) + 1
 
     @staticmethod
     def _history_index(db):
@@ -238,7 +244,5 @@ class WebArchive:
                         WHERE partition=? AND domain=? AND item=? AND algorithm=? AND observed_ms<?''',
                         (value[5], *value[:4], value[5]))
         if changed:
-            with self._lock:
-                for domain in changed:
-                    self._generations[domain] = self._generations.get(domain, 0) + 1
+            self.note_publication(changed)
         return True

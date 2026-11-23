@@ -406,13 +406,17 @@ const AccountTimelineView = (() => {
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
       this.selectedLegend.hidden = !view || !selectedSeries.length;
+      const totalText = value => value ? (view?.history_progress ? shown(value) :
+        shown(value).replace(/^[~≈]/, '')) : '—';
       const legend = this.series.map(item => [
-        this.colors.get(item.id), item.account, item.total ? shown(item.total).replace(/^[~≈]/, '') : '—'
+        this.colors.get(item.id), item.account,
+        item.provider_monthly_total ? totalText(item.month_total) : totalText(item.total),
+        item.provider_monthly_total ? totalText(item.observed_total) : null
       ]);
       const legendKey = JSON.stringify(legend);
       if (legendKey !== this.legendKey) {
         this.legendKey = legendKey;
-        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total]) => {
+        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total, observed]) => {
           const row = e('li');
           const value = e('span', total === '—' ? undefined : total, 'account-timeline-legend-value');
           if (total === '—') {
@@ -420,7 +424,11 @@ const AccountTimelineView = (() => {
             dash.setAttribute('aria-hidden', 'true');
             value.append(dash, e('span', 'Total unavailable', 'sr-only'));
           }
-          row.append(swatch(ink), e('span', name), value);
+          row.append(swatch(ink), e('span', name));
+          if (observed !== null) {
+            row.append(e('span', 'Provider monthly total:'), value,
+              e('span', `Observed OpenCode subtotal: ${observed}`));
+          } else row.append(value);
           return row;
         }));
       }
@@ -441,6 +449,9 @@ const AccountTimelineView = (() => {
       this.empty.hidden = !this.frame.hidden && !unselected;
       this.empty.classList.toggle('over-plot', !this.frame.hidden);
       this.plot.setAttribute('tabindex', this.frame.hidden ? '-1' : '0');
+      const nativeMonth = this.series.some(item => item.provider_monthly_total);
+      this.plot.setAttribute('aria-label', (nativeMonth ? 'Observed OpenCode daily CCost.' : 'Usage by time.') +
+        ' Use Left and Right arrows for bucket values.');
       if (this.frame.hidden) return this.inspect(null);
 
       const axis = [];
@@ -463,7 +474,8 @@ const AccountTimelineView = (() => {
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
       this.range.title = layout.shortDates ? 'A rolling seven-day window; dates at either end may be partial.' : '';
-      ReportView.text(this.range, `Range: ${rangeLabel(view, layout, this.future)}`);
+      ReportView.text(this.range, (nativeMonth ? 'Observed OpenCode daily CCost · ' : '') +
+        `Range: ${rangeLabel(view, layout, this.future)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);

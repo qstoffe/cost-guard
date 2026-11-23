@@ -1,6 +1,10 @@
 """Independent request-cost/union-time oracles for the standard hourly-rate card."""
 from dataclasses import replace
 from decimal import Decimal
+import json
+from pathlib import Path
+import shutil
+import subprocess
 import unittest
 
 from development.tests.fixtures.active_hour import epoch
@@ -229,6 +233,29 @@ class AIStatsRateTests(unittest.TestCase):
             self.assertEqual((), card.podium)
             self.assertEqual(display, dto['display']['value'])
             self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Unavailable')
+
+    @unittest.skipUnless(shutil.which('node'), 'optional JS VM unavailable')
+    def test_ready_untimed_history_reaches_reader_without_hiding_known_spend(self):
+        fact, _ = request('untimed', NOW - 2_000, 1_000, 4)
+        row = period_stats((root(((fact, None),)),), lambda _m, t: Decimal(t.input),
+                           period='today', start=NOW - 24 * HOUR_MS, now=NOW, zone='UTC')
+        view = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,),
+                       ai_stats_work={'scopes': {'today': {'ready': True, 'completed': 1}}})).to_json()
+        result = {'view': view, 'source': {'identity': 'synthetic', 'generation': 'v1', 'observed_at_ms': NOW},
+                  'scope': {'timezone_id': 'UTC'}}
+        script = """
+          const fs=require('node:fs'), vm=require('node:vm'), c=vm.createContext({
+            result:JSON.parse(fs.readFileSync(0,'utf8')),state:{period:'today'}});
+          for(const name of ['cached-reports','ai-stats'])
+            vm.runInContext(fs.readFileSync('src/web/assets/'+name+'.js','utf8'),c);
+          vm.runInContext('AIStatsView.remember(state,result)',c);
+          const metrics=c.state.result?.view.ai_stats[0].metrics ?? [];
+          const rate=metrics.find(m=>m.metric==='hourly-rate'), cost=metrics.find(m=>m.metric==='total-cost');
+          console.log(JSON.stringify([metrics.length,cost?.value,rate?.value,rate?.status,rate?.podium]));
+        """
+        reader = subprocess.run(['node', '-e', script], input=json.dumps(result), capture_output=True,
+                                encoding='utf-8', cwd=Path(__file__).resolve().parents[2], timeout=10, check=True)
+        self.assertEqual([13, '4', None, 'partial', []], json.loads(reader.stdout))
 
     def test_legacy_calendar_shift_scalars_remain_compatible_but_not_presented(self):
         at = epoch('2026-11-02T06:00:00+00:00')

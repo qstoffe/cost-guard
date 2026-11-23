@@ -4,7 +4,7 @@
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
-  const idleRateHelp = 'Average cost across all AI work: total CCost for every model ÷ total active AI hours. ' +
+  const idleRateHelp = 'CCost for calls with measured execution ÷ their measured hours in this period. ' +
     'Overlapping work counts once. Individual models can have higher or lower hourly rates.';
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
@@ -29,7 +29,7 @@ const AIStatsView = (() => {
   const databaseRows = [
     ['opencode_bytes', 'OpenCode DB',
        'OpenCode stores the source sessions used for Cost Guard’s statistics. Verified Web history can remain available ' +
-       'after a source session is deleted. Saved epochs stay separate when OpenCode restarts.'],
+         'after a source session is deleted or OpenCode restarts.'],
     ['cache_bytes', 'CostGuard Cache DB',
       'CostGuard keeps a disposable SQLite cache to speed up repeated analysis. Eligible old session-cache entries can be ' +
       'cleaned up when neither session activity nor meaningful use has occurred for at least 30 days. Cleanup runs while the ' +
@@ -46,12 +46,17 @@ const AIStatsView = (() => {
     }
     return `${sizeNumber.format(bytes)} ${sizeUnits[unit]}`;
   }
+  function missingHourlyRate(metric) {
+    return metric.metric === 'hourly-rate' && metric.value === null &&
+      metric.status === 'partial' && metric.podium?.length === 0;
+  }
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
       Array.isArray(rows) && rows.length > 0 && rows.every(row =>
       periods.some(([id]) => id === row.period) && row.metrics?.length === definitions.length && definitions.every(([key]) =>
-        row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
+        row.metrics.filter(metric => metric.metric === key && (missingHourlyRate(metric) ||
+          metric.value !== null && Number.isFinite(Number(metric.value))) &&
           typeof metric.display?.value === 'string' && typeof metric.display?.trait === 'string' &&
           (key !== 'total-tokens' || /^\d+$/.test(metric.exact_value) && typeof metric.display.token_help === 'string') &&
           ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
@@ -122,8 +127,9 @@ const AIStatsView = (() => {
       this.buttons = new Map(); this.cards = new Map();
       for (const [id, label] of periods) {
         const button = e('button', label); button.type = 'button';
-        ContextHelp.heading(button, {today: 'Today’s robot adventures.', '7-days': 'A week of silicon shenanigans.',
-          '30-days': 'Thirty days of robot quests.', month: 'This calendar month’s adventures.', all: 'The whole robot saga.'}[id], true);
+        ContextHelp.heading(button, {today: 'Activity in the last 24 hours.', '7-days': 'Activity in the last 7 × 24 hours.',
+          '30-days': 'Activity in the last 30 × 24 hours.', month: 'Activity since local midnight on the first of this month.',
+          all: 'All available history through now.'}[id], true);
         button.addEventListener('click', () => select(id));
         this.buttons.set(id, button); this.selector.append(button);
       }
@@ -242,7 +248,7 @@ const AIStatsView = (() => {
       this.readyScope = scope;
       this.costs ||= new ReportView.CostDisplay();
       for (let metric of row.metrics) {
-        if (costMetrics.has(metric.metric)) {
+        if (costMetrics.has(metric.metric) && !missingHourlyRate(metric)) {
           metric = this.costs.select(metric, [state.result.source?.identity, state.result.source?.generation,
             row.period, row.start_ms, metric.metric,
             metric.metric === 'expensive-session' ? metric.session_id : null], 'value',

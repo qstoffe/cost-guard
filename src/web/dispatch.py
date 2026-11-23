@@ -9,7 +9,8 @@ from threading import RLock
 import time
 
 from src.analysis.cache import dependency_signature
-from src.analysis.ai_stats import POLICY as STATS_POLICY, windows
+from src.analysis.ai_stats import POLICY as STATS_POLICY
+from src.analysis.timezones import calendar_periods
 from src.reports import ReportKind, ReportRequest
 from .jobs import MAX_PENDING
 from .report_control import ManagedReport
@@ -56,7 +57,8 @@ def current_result(request, result, now_ms):
         return True
     try:
         zone = view['timezone_id']
-        return isinstance(zone, str) and period.get('start_ms') == dict(windows(zone, now_ms))[request.token_mix_scope]
+        return isinstance(zone, str) and period.get('start_ms') == dict(
+            calendar_periods(zone, now_ms))[request.token_mix_scope]
     except (KeyError, ValueError, OverflowError):
         return False
 

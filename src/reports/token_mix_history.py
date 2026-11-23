@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable
 
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import physical_usage_key, unique_usage
-from src.analysis.ai_stats import windows
+from src.analysis.timezones import calendar_periods
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity, unverified_alias
@@ -90,7 +90,7 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
     period = {}
     undated = 0
     if scope is not None:
-        start = dict(windows(service.timezone_id, service.now_ms))[scope]
+        start = dict(calendar_periods(service.timezone_id, service.now_ms))[scope]
         undated = sum(entry.completed_at_ms <= 0 for entry in usage)
         # Deduplicate physical requests BEFORE scope membership. Child calls use
         # their own canonical event time, not their parent's prompt start.

@@ -114,6 +114,13 @@ def native_reference_amounts(capacity, limit, used, remaining, fraction, *, dire
     return used, remaining
 
 
+def direct_native_ccost(values, provider):
+    return (provider in {"github-copilot", "github-copilot-enterprise"} and
+            values.get("scope") == "account" and values.get("model_id") is None and
+            values.get("period") == "fixed" and values.get("label", "").casefold() in {"monthly", "month"} and
+            (values.get("unit") or "").casefold() == "ai credits")
+
+
 def unavailable_capacity_reason(values, context, cost, used, fraction, coherent, current, convertible, now_ms):
     """Explain the failed eligibility fact; never substitute another quota's cost."""
     if not current:
@@ -167,10 +174,7 @@ def quota_ccost_values(values, now_ms):
     coherent = coherent_native(limit, native_used, native_remaining, fraction)
     # Recognize the conversion separately from freshness/validity. A failed native
     # mapping must not fall through to independently observed OpenCode Used.
-    direct = (context["provider_id"] in {"github-copilot", "github-copilot-enterprise"} and
-              values.get("scope") == "account" and values.get("model_id") is None and
-              values.get("period") == "fixed" and values.get("label", "").casefold() in {"monthly", "month"} and
-              (values.get("unit") or "").casefold() == "ai credits")
+    direct = direct_native_ccost(values, context["provider_id"])
     verified = values.get("reference_ccost_capacity")
     convertible = direct or verified is not None
     if convertible and not values.get("unlimited"):

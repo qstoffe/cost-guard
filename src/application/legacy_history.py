@@ -8,6 +8,7 @@ import sqlite3
 
 from src.analysis.cache import dependency_signature
 from src.cache.web_archive import ArchiveFact, LEGACY_IMPORT
+from src.cache.web_upgrade import retire, snapshot_stamp
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.reports.web_history_evidence import DOMAIN as USAGE
 
@@ -25,32 +26,31 @@ LOG = logging.getLogger(__name__)
 UNREADABLE = (AttributeError, IndexError, KeyError, TypeError, ValueError, OverflowError)
 
 
-def _snapshot_stamp(path):
-    main = path.stat()
-    try:
-        wal = path.with_name(path.name + '-wal').stat()
-    except FileNotFoundError:
-        wal = None
-    return dependency_signature((VERSION, main.st_size, main.st_mtime_ns,
-                                 (wal.st_size, wal.st_mtime_ns) if wal is not None else None))
-
-
-def import_archive(archive, path, zone, *, stopping=lambda: False):
-    if not path.is_file():
+def import_archive(archive, path, zone, *, stopping=lambda: False, retire_source=False):
+    if retire_source and (path.is_symlink() or path.is_file() and path.samefile(archive.path)):
+        raise OSError('old display store aliases destination')
+    original = snapshot_stamp(path)
+    if original[0] is None:
+        if retire_source and not stopping():
+            retire(path, original)
         return
-    stamp = _snapshot_stamp(path)
+    stamp = dependency_signature((VERSION, *original[0], original[1]))
     if archive.import_checkpoint(LEDGER, 'snapshot') == stamp:
+        if retire_source and not stopping():
+            retire(path, original)
         return
     with closing(sqlite3.connect(path.absolute().as_uri() + '?mode=ro', uri=True, timeout=0.2)) as db:
         db.execute('PRAGMA query_only=ON')
         db.execute('BEGIN')
         if (db.execute('PRAGMA application_id').fetchone()[0],
                 db.execute('PRAGMA user_version').fetchone()[0]) != (APPLICATION_ID, VERSION):
-            return
+            supported = False
+        else:
+            supported = True
         db.row_factory = sqlite3.Row
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type IN ('table', 'view')")}
-        sessions = db.execute('SELECT * FROM sessions ORDER BY source, session_id')
-        while not stopping() and (batch := sessions.fetchmany(BATCH_SIZE)):
+        sessions = db.execute('SELECT * FROM sessions ORDER BY source, session_id') if supported and 'sessions' in tables else None
+        while sessions is not None and not stopping() and (batch := sessions.fetchmany(BATCH_SIZE)):
             partitions = {}
             for row in batch:
                 key = row['session_id']
@@ -86,8 +86,18 @@ def import_archive(archive, path, zone, *, stopping=lambda: False):
                 archive.import_batch(partition, domains)
     # Finish only after every bounded publication. A changed source file is
     # eligible again, and repeated batches update identities rather than add rows.
-    if not stopping() and _snapshot_stamp(path) == stamp:
+    if not stopping() and snapshot_stamp(path) == original:
         archive.record_import_checkpoint(LEDGER, 'snapshot', stamp)
+        if retire_source:
+            if archive.import_checkpoint(LEDGER, 'snapshot') != stamp:
+                raise sqlite3.DatabaseError('legacy transfer checkpoint not readable')
+            # Read the newly committed representation, not merely a writer's
+            # successful return. Unsupported fields may legitimately be absent.
+            with archive._connect() as verified:
+                verified.execute('SELECT value FROM facts WHERE domain=? LIMIT 1', (SESSIONS,)).fetchone()
+            retire(path, original)
+    elif not stopping() and retire_source:
+        raise OSError('legacy history changed during import')
     return True
 
 

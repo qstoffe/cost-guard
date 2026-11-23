@@ -354,15 +354,7 @@ class WatchCoordinator:
                     else self._hydrate_startup(roots, now_ms=now_ms))
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
-        if defer_history:
-            self.today_ccost.defer_history(observation.sessions, now_ms, active_root_ids=tuple(observation.active_candidates),
-                                           fresh_root_ids=hydrated, live_root_ids=tuple(observation.live_candidates))
-        else:
-            self.today_ccost.schedule_history(self.report_service, observation.sessions, now_ms,
-                                              active_root_ids=tuple(observation.active_candidates), fresh_root_ids=hydrated,
-                                              live_root_ids=tuple(observation.live_candidates))
-            while self.today_ccost.history_pending:
-                self.today_ccost.advance_history(self.report_service, now_ms)
+        self._initialize_today_history(observation, hydrated, now_ms, defer_history)
         self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
         self._last_quota_refresh_ms = now_ms
         self.accounts.begin(now_ms)
@@ -381,6 +373,17 @@ class WatchCoordinator:
         self.report_service.metrics.milliseconds["first_usable_dashboard"] = (time.perf_counter() - self._startup_measurement_start) * 1000
         self._record_full_dashboard(cycle.projection)
         return cycle
+
+    def _initialize_today_history(self, observation, hydrated, now_ms, defer_history):
+        if defer_history:
+            self.today_ccost.defer_history(observation.sessions, now_ms, active_root_ids=tuple(observation.active_candidates),
+                                           fresh_root_ids=hydrated, live_root_ids=tuple(observation.live_candidates))
+        else:
+            self.today_ccost.schedule_history(self.report_service, observation.sessions, now_ms,
+                                              active_root_ids=tuple(observation.active_candidates), fresh_root_ids=hydrated,
+                                              live_root_ids=tuple(observation.live_candidates))
+            while self.today_ccost.history_pending:
+                self.today_ccost.advance_history(self.report_service, now_ms)
 
     def _record_catalog_counts(self, observation: CatalogObservation) -> None:
         self.report_service.metrics.counts.update(catalog_sessions=len(observation.sessions), catalog_roots=len(observation.roots))

@@ -34,9 +34,14 @@ def number(value, *, cap=Decimal('1e12')):
         return Decimal(0)
 
 
-def rate_tokens(raw, reasons=()):
-    return {'rate_help': 'Average cost across all AI work: total CCost for every model ÷ total active AI hours. '
-            'Overlapping work counts once. Individual models can have higher or lower hourly rates.'}
+def rate_tokens(reasons, *, missing=False):
+    help_text = ('CCost for calls with measured execution ÷ their measured hours in this period. '
+                 'Overlapping work counts once. Individual models can have higher or lower hourly rates.')
+    if missing:
+        help_text += '\n\nNo calls have both known cost and measured time. Untimed costs still count in Total AI Cost.'
+    elif 'unpaired-request-timing' in reasons:
+        help_text += '\n\nPartial timing coverage. Calls without measured time still count in Total AI Cost.'
+    return {'rate_help': help_text}
 
 
 def compact_volume(value):
@@ -114,6 +119,9 @@ def stat_tokens(values):
     if values['metric'] in ('total-tokens', 'token-rate'):
         return traffic_tokens(values)
     metric = values['metric']
+    if metric == 'hourly-rate' and values['value'] is None:
+        return {'value': '—', 'trait': 'No measured cost and time pairs.',
+                **rate_tokens(values.get('reasons', ()), missing=True)}
     value = number(values['value'], cap=None) if metric == 'hourly-rate' else number(values['value'])
     if metric in ('original-thinker', 'match-speed-gap'):
         return {'value': 'Original Thinker' if metric == 'original-thinker' else f'{Decimal(value):.1f}×',
@@ -139,5 +147,4 @@ def stat_tokens(values):
         text = f'{Decimal(value):.0f}%'
     else:
         text = str(int(value)) + (' days' if metric == 'streak' else '')
-    return {'value': text, 'trait': line, **(rate_tokens(values['rates'], values.get('reasons', ()))
-        if metric == 'hourly-rate' and values.get('rates') else {})}
+    return {'value': text, 'trait': line, **(rate_tokens(values.get('reasons', ())) if metric == 'hourly-rate' else {})}

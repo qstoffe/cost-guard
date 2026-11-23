@@ -7,7 +7,9 @@ import sqlite3
 from uuid import uuid4
 
 from src.analysis.metric_evidence import EMPTY_HISTORY
+from src.cache.database import CacheDatabase, cache_paths
 from src.cache.web_archive import ArchiveFact, LEGACY_IMPORT, history_rank
+from src.cache.web_upgrade import import_web_archive, retire, retire_disposable
 from src.reports import web_history_evidence
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
 from src.reports.session_summary import decode_summary, encode_summary
@@ -23,7 +25,7 @@ LIVE_TAIL_MS = 10 * 60_000
 
 
 class SessionArchive:
-    def __init__(self, storage, legacy=None, *, timezone_id='UTC'):
+    def __init__(self, storage, legacy=None, *, timezone_id='UTC', upgrade=None):
         self.storage = storage
         self.legacy = legacy
         self.timezone_id = timezone_id
@@ -31,26 +33,55 @@ class SessionArchive:
         self.rows = {}
         self.authorities = {}
         self.loaded = False
+        self.storage_ready = False
+        self.upgrade = upgrade
+        self.previous_pending = upgrade is not None and upgrade[1] is not None
 
     def load(self):
         try:
             self.storage.initialize()
+            self.storage_ready = True
             return self.read_rows()
         except (sqlite3.Error, OSError):
             LOG.warning('session_archive_read_unavailable')
             return None
 
+    def _import_previous(self, stopping):
+        if not self.previous_pending:
+            return False
+        path = self.upgrade[1]
+        try:
+            original = import_web_archive(self.storage, path)
+        except (sqlite3.Error, OSError):
+            LOG.warning('previous_web_history_transfer_incomplete')
+            return False
+        if not stopping():
+            try:
+                retire(path, original)
+            except OSError:
+                LOG.warning('previous_web_history_retirement_pending')
+            else:
+                self.previous_pending = False
+        # Even when retirement is temporarily blocked, committed data can be
+        # displayed. Read rows after the attempt, not only after the unlink.
+        return original[0] is not None
+
     def load_legacy(self, stopping):
         from .legacy_history import import_archive
-        retry = False
+        previous_changed = self._import_previous(stopping)
+        retry = self.previous_pending
         try:
-            changed = import_archive(self.storage, self.legacy, self.timezone_id, stopping=stopping)
+            changed = import_archive(self.storage, self.legacy, self.timezone_id, stopping=stopping,
+                                     retire_source=self.upgrade is not None)
+            if self.upgrade is not None and not stopping():
+                root = self.upgrade[0]
+                retire_disposable(CacheDatabase(root), cache_paths(root, 2).database)
         except (sqlite3.Error, OSError, TypeError, ValueError):
             LOG.warning('legacy_history_import_incomplete', exc_info=True)
             retry = changed = True  # Some batches may already be committed.
-        if changed and not stopping():
+        if (changed or previous_changed) and not stopping():
             try:
-                return self.read_rows(legacy_only=True), retry
+                return self.read_rows(legacy_only=not previous_changed), retry
             except (sqlite3.Error, OSError):
                 LOG.warning('legacy_history_read_unavailable', exc_info=True)
                 retry = True

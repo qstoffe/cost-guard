@@ -69,6 +69,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.include_archived_revisions = True
         self.catalog_observation = None
         self.session_catalog = None
+        self.caught_up_web = False
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
         self.reads = SourceReads()
@@ -211,6 +212,21 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def _hydrate_startup(self, roots, *, now_ms):
         return ()
+
+    def _initialize_today_history(self, observation, hydrated, now_ms, defer_history):
+        # Web's _account_history worker owns this acquisition, unlike CLI.
+        # Never leave its unused CLI enrichment queue perpetually pending.
+        pass
+
+    def _wait_delay_seconds(self, active_count):
+        # The Web cadence is bounded even when an adaptive CLI interval is long.
+        # Hints still bring the read deadline forward.
+        catalog = self.session_catalog
+        if catalog is None or catalog.archive is None:
+            return super()._wait_delay_seconds(active_count)
+        idle = (self.caught_up_web and not active_count and self.daily_usage is not None
+                and self.history_job is None and self.catalog_job is None)
+        return self.accounts.wait_delay(6.0 if idle else 3.0)
 
     def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None):
         service = None
