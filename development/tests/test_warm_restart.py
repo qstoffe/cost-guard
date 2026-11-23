@@ -1,6 +1,7 @@
 """Cross-service reuse and cold parity; process/DOM evidence lives in the benchmark."""
 from dataclasses import replace
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from development.tests.test_account_timeline import NOV_5, projected
 from src.analysis.account_timeline import DAY_MS
 from src.application.account_timeline import account_roster
 from src.application.detail_archive import load_detail
-from src.application.session_archive import DOMAIN as SESSIONS
+from src.application.session_archive import DOMAIN as SESSIONS, SessionArchive
 from src.application.session_catalog import SessionCatalog
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
@@ -138,7 +139,7 @@ class WarmRestartTests(unittest.TestCase):
     def test_stats_rollover_calendar_timezone_and_corruption_do_not_relabel_projection(self):
         source, cache = self.history(8), self.cache()
         self.stats(source, cache, scan='warm')
-        for now, zone, calendar in ((NOV_5 + DAY_MS, 'UTC', 'SE'), (NOV_5, 'America/New_York', 'SE'),
+        for now, zone, calendar in ((NOV_5 + DAY_MS, 'UTC', 'SE'), (NOV_5, 'Europe/Stockholm', 'SE'),
                                     (NOV_5, 'UTC', 'US'), (NOV_5 + 28 * DAY_MS, 'UTC', 'SE')):
             with self.subTest(now=now, zone=zone, calendar=calendar):
                 candidate, hit = self.stats(source, cache, now, zone=zone, calendar=calendar, scan=str(now) + zone + calendar)
@@ -287,6 +288,43 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(('Retained session', 8), (row['title'], row['prompt_count']))
         self.assertFalse(row['running'])
         self.assertIsNone(row['duration_ms'])
+
+    def test_upgrade_keeps_inputs_after_failed_write_then_reopens_both_histories(self):
+        cache_dir = self.directory / 'cache'
+        old_web = WebArchive(self.directory / 'instance')
+        old_web.initialize()
+        old_web.publish('old-epoch', SESSIONS, {'from-appdata': ArchiveFact('r1', 100, {
+            'title': 'Earlier history', 'prompt_count': 3, 'running': True})})
+        display = cache_dir / 'cost-guard-display-v1.sqlite3'
+        with sqlite3.connect(display) as db:
+            db.executescript('''PRAGMA application_id=0x43474448; PRAGMA user_version=1;
+                CREATE TABLE sessions(source, session_id, title, revision, prompts);
+                INSERT INTO sessions VALUES ('old','from-display','Display history','r2',7);''')
+        db.close()
+        disposable = CacheDatabase(self.directory, generation=2)
+        disposable.initialize()
+        unrelated = cache_dir / 'unrelated.sqlite3'
+        unrelated.write_bytes(b'not a migration input')
+
+        destination = WebArchive(cache_dir)
+        upgrade = SessionArchive(destination, display, upgrade=(self.directory, old_web.path))
+        # The destination does not exist yet; no successful transfer is possible.
+        with self.assertLogs('src.application.session_archive', level='WARNING'):
+            _, retry = upgrade.load_legacy(lambda: False)
+        self.assertTrue(retry)
+        self.assertTrue(all(path.exists() for path in (old_web.path, display, disposable.paths.database)))
+
+        destination.initialize()
+        _, retry = upgrade.load_legacy(lambda: False)
+        self.assertFalse(retry)
+        rows, _ = SessionArchive(WebArchive(cache_dir)).load()
+        self.assertEqual({'from-appdata': 3, 'from-display': 7},
+                         {key: row.prompt_count for key, row in rows.items()})
+        self.assertFalse(rows['from-appdata'].running)
+        for path in (old_web.path, display, disposable.paths.database):
+            for suffix in ('', '-wal', '-shm'):
+                self.assertFalse(path.with_name(path.name + suffix).exists())
+        self.assertEqual(b'not a migration input', unrelated.read_bytes())
 
     def test_running_and_today_precede_old_all_time_work_without_starvation(self):
         source = self.source(20, 1, today_roots=2, now_ms=NOV_5, running_roots=1)

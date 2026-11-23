@@ -277,7 +277,8 @@ class ConfigurationCacheTests(unittest.TestCase):
             before = old_db.paths.database.read_bytes()
             current_db = CacheDatabase(root)
             current_db.initialize()
-            self.assertEqual("cost-guard-cache-v2.sqlite3", CACHE_FILENAME)
+            self.assertNotEqual("cost-guard-cache-v2.sqlite3", CACHE_FILENAME, "retired upgrade input")
+            self.assertFalse((root / "cache/cost-guard-cache-v2.sqlite3").exists())
             self.assertNotEqual(old_db.paths.database, current_db.paths.database)
             args = dict(provenance=snapshot.root.provenance, root_session_id="root", source_revision=snapshot.source_revision,
                         dependencies=AnalysisDependencies("same", "same"))

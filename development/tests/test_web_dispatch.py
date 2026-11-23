@@ -286,7 +286,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertNotEqual(key, self.dispatch.lookup(request)['id'])
 
     def test_token_mix_keeps_qualified_result_through_failed_and_partial_refresh(self):
-        from src.analysis.ai_stats import windows
+        from src.analysis.timezones import calendar_periods
         request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='7-days')
         self.now += 1_760_000_000
         self.dispatch.interest('one', 'token-mix', True, request)
@@ -295,7 +295,7 @@ class DispatcherTests(unittest.TestCase):
             observed = int(self.now * 1000)
             value = result(observed)
             value['view'].update(kind='token-mix', timezone_id='UTC', token_mix_period=dict(
-                period='7-days', start_ms=dict(windows('UTC', observed))['7-days'],
+                period='7-days', start_ms=dict(calendar_periods('UTC', observed))['7-days'],
                 end_ms=observed, coverage=coverage))
             return value
 

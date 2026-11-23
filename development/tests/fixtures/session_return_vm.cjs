@@ -16,7 +16,7 @@ const context = vm.createContext({
     pushState(state,_,hash){this.state=state;context.location.hash=hash;}}, document:{
     title:'',body:{dataset:{}},activeElement:null,getElementById:element,querySelectorAll:()=>nav
   },sessionsNav:nav[0],rememberedSession:null,views:new Map(),current:null,heading:element('heading'),
-  csrf:'synthetic',hostState:{terminal:false},sessionDetailAvailable:true,
+  csrf:'synthetic',hostState:{terminal:false},historyBlocked:()=>false,sessionDetailAvailable:true,
   output:{addEventListener(_,handler){this.click=handler;}},demand:null,
   show(){},enterCachedReport(){},scheduleCachedReport(){},firstReport(){},focusReport(){},
   window:{scrollY:250,scrollTo(){}},api(){},

@@ -15,6 +15,7 @@ from development.tests.fixtures.synthetic_month import SyntheticMonthSource, mak
 from development.tests.fixtures.ai_stats_views import stats_report
 from src.analysis.ai_stats import StatsObservation, StatsRoot, calendar_activity, period_stats, windows, DAY_MS
 from src.analysis.active_hour import HOUR_MS
+from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.models import TraceEntry
 from src.application import ReportApplication
 from src.application.ai_stats import stat_tokens
@@ -61,11 +62,11 @@ class AIStatsAnalysisTests(unittest.TestCase):
         cases = (
             (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration', 60_000, 'partial'),
             (root, {'complete': False}, 'working-time', 'source-incomplete', HOUR_MS, 'partial'),
-            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete', 4, 'partial'),
+            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete', None, 'partial'),
             (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests', Decimal('.000012'), 'partial'),
             (replace(root, entries=(replace(root.entries[0], tokens=TokenUsage(input=4, known_fields=())),)),
              {}, 'expensive-session', 'missing-token-usage', Decimal('4.003750'), 'partial'),
-            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage', 4, 'partial'),
+            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage', None, 'partial'),
         )
 
         for evidence, options, key, reason, value, status in cases:
@@ -106,6 +107,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
         at = epoch('2026-11-01T10:00:00+00:00')
         recent = StatsRoot('recent', 'Recent', (request('recent', at, 4),), ((at, HOUR_MS, False),))
         old = StatsRoot('old', 'Old', (request('old', at - 40 * DAY_MS, 99),), ((at - 40 * DAY_MS, HOUR_MS, False),))
+        recent = replace(recent, activity=(ModelActivity(recent.entries[0], at - HOUR_MS, HOUR_MS),))
         valuation = lambda _model, tokens: None if tokens.input == 99 else Decimal(tokens.input)
 
         short = metrics((recent, old), start=at - DAY_MS, valuation=valuation)
@@ -114,7 +116,8 @@ class AIStatsAnalysisTests(unittest.TestCase):
         self.assertEqual((4, 'complete', ()), (short['hourly-rate'].value, short['hourly-rate'].status, short['hourly-rate'].reasons))
         self.assertEqual((Decimal('4.099'), 'partial', ('unpriced-requests',)),
                          (all_time['total-cost'].value, all_time['total-cost'].status, all_time['total-cost'].reasons))
-        self.assertEqual(Decimal('2.0495'), all_time['hourly-rate'].value)
+        self.assertEqual(Decimal(4), all_time['hourly-rate'].value)
+        self.assertIn('unpaired-request-timing', all_time['hourly-rate'].reasons)
         self.assertEqual(2 * HOUR_MS, all_time['working-time'].value)
 
     def test_legacy_null_and_unrecognized_codes_have_no_presentation_surface(self):
@@ -134,9 +137,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
         self.assertEqual(13, len(result))
         self.assertEqual(Decimal(18), result['total-cost'].value)
         self.assertEqual(3 * HOUR_MS, result['working-time'].value)
-        self.assertEqual(Decimal(6), result['hourly-rate'].value)
-        self.assertEqual(Decimal(48), result['hourly-rate'].rates.robot_day)
-        self.assertEqual(Decimal(6), result['hourly-rate'].rates.active_rate)
+        self.assertIsNone(result['hourly-rate'].value, 'session time is not request execution time')
         self.assertEqual(Decimal(9), result['average-cost'].value)
         self.assertEqual('a', result['expensive-session'].session_id)
         self.assertEqual('a', result['longest-session'].session_id)
@@ -192,9 +193,12 @@ class AIStatsAnalysisTests(unittest.TestCase):
         local = dict(windows('Europe/Stockholm', now))
         utc = dict(windows('UTC', now))
         self.assertLess(local['month'], local['30-days'])
-        self.assertNotEqual(local['today'], utc['today'])
-        self.assertEqual(epoch('2026-10-24T22:00:00+00:00'), local['7-days'])
-        self.assertEqual(epoch('2026-10-01T22:00:00+00:00'), local['30-days'])
+        self.assertEqual(epoch('2026-09-30T22:00:00+00:00'), local['month'])
+        self.assertEqual(epoch('2026-10-01T00:00:00+00:00'), utc['month'])
+        for period, days in [('today', 1), ('7-days', 7), ('30-days', 30)]:
+            self.assertEqual(now - days * 24 * HOUR_MS, local[period])
+            self.assertEqual(local[period], utc[period])
+        self.assertIsNone(local['all'])
 
     def test_shared_observation_reuses_only_identical_populations_and_keeps_period_clipping(self):
         from src.analysis.active_hour import deduplicated_requests
@@ -210,7 +214,7 @@ class AIStatsAnalysisTests(unittest.TestCase):
             month = observation.period(period='30-days', start=now - 30 * DAY_MS, source_complete=False)
             week_again = observation.period(period='7-days', start=now - 7 * DAY_MS)
 
-        self.assertEqual(2, dedup.call_count)
+        self.assertEqual(1, dedup.call_count, 'one physical population across all five periods')
         self.assertEqual(week, week_again)
         self.assertEqual((Decimal(6), HOUR_MS), (week.metrics[1].value, week.metrics[2].value))
         self.assertEqual((Decimal(10), 2 * HOUR_MS), (entire.metrics[1].value, entire.metrics[2].value))
@@ -229,10 +233,10 @@ class AIStatsAnalysisTests(unittest.TestCase):
         root = StatsRoot('a', 'A', (request('a', at, 1),), ((at, None, False),))
         unknown = metrics((root,))
         self.assertEqual(60_000, unknown['working-time'].value)
-        self.assertEqual(60, unknown['hourly-rate'].value)
+        self.assertIsNone(unknown['hourly-rate'].value)
         priced = metrics((replace(root, intervals=((at, HOUR_MS, True),)),))
         self.assertEqual('provisional', priced['working-time'].status)
-        self.assertEqual(1, priced['hourly-rate'].value)
+        self.assertIsNone(priced['hourly-rate'].value)
         partial = metrics((root,), valuation=lambda *_: None)
         self.assertEqual('partial', partial['total-cost'].status)
         self.assertEqual('a', partial['expensive-session'].session_id)
@@ -266,10 +270,11 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         metrics = {m['metric']: m for m in result['view']['ai_stats'][-1]['metrics']}
         self.assertEqual((393, 'complete'), (metrics['total-tokens']['value'], metrics['total-tokens']['status']))
         self.assertNotIn('rates', metrics['token-rate'])
-        self.assertNotRegex(str([m['display'] for m in metrics.values()]), r'Unavailable|N/A')
+        self.assertEqual('N/A', metrics['hourly-rate']['display']['value'])
+        self.assertNotRegex(str([m['display'] for k, m in metrics.items() if k != 'hourly-rate']), r'Unavailable|N/A')
         self.assertIn('unpriced-requests', metrics['total-cost']['reasons'])
 
-    def test_streamed_response_endpoint_changes_only_podium_and_invalid_markers_fall_back(self):
+    def test_streamed_response_endpoint_changes_timed_rates_and_invalid_markers_fall_back(self):
         original, source = self.original(1)
         first = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
         sid, snapshot = next(iter(source.snapshots.items()))
@@ -283,8 +288,10 @@ class AIStatsAcquisitionTests(unittest.TestCase):
             changed = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
 
             for before, after in zip(first.ai_stats, changed.ai_stats):
-                self.assertEqual(tuple(replace(m, podium=()) for m in before.metrics if m.metric != 'token-rate'),
-                                 tuple(replace(m, podium=()) for m in after.metrics if m.metric != 'token-rate'))
+                unaffected = lambda period: tuple(replace(m, podium=()) for m in period.metrics
+                                                   if m.metric not in ('token-rate', 'hourly-rate'))
+                self.assertEqual(unaffected(before), unaffected(after))
+                self.assertEqual(before.metrics[0].value * (200 if delay == 1 else 1), after.metrics[0].value)
                 work = next(m for m in after.metrics if m.metric == 'working-time')
                 if work.podium:
                     self.assertEqual(3 if delay == 1 else 600, work.podium[0].value)

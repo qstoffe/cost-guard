@@ -8,6 +8,7 @@ from development.tests.fixtures.session_snapshots import make_native_v2_compacti
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats, windows
+from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.compaction import completed_compactions
 from src.analysis.models import TraceEntry
 from src.application.ai_stats import stat_tokens
@@ -32,6 +33,11 @@ def calculate(roots, *, start=None, complete=True, valuation=None):
     return {m.metric: m for m in result.metrics}
 
 
+def measured(record):
+    entry, = record.entries
+    return replace(record, activity=(ModelActivity(entry, entry.completed_at_ms - HOUR, HOUR),))
+
+
 class ObservedStatsTests(unittest.TestCase):
     def test_one_incomplete_snapshot_among_thousands_preserves_observed_work(self):
         source = SyntheticMonthSource(2700, 1, month_start_ms=NOW - DAY_MS)
@@ -51,7 +57,7 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertIsNone(report.ai_stats[-1].matched)
 
     def test_one_unknown_supplements_the_timeline_and_keeps_ratios_streak_and_peak(self):
-        good = root('good', NOW - 2 * HOUR)
+        good = measured(root('good', NOW - 2 * HOUR))
         bad = replace(root('bad', NOW - DAY_MS), intervals=((NOW - DAY_MS, None, False),))
 
         values = calculate((good, bad))
@@ -63,13 +69,13 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertEqual('good', values['longest-session'].session_id)
         self.assertEqual(8, values['total-cost'].value)
         self.assertEqual(4, values['average-cost'].value)
-        self.assertEqual(Decimal(8) * HOUR / (HOUR + 60_000), values['hourly-rate'].value)
+        self.assertEqual(4, values['hourly-rate'].value, 'only four CCost have paired execution time')
         self.assertEqual(0, values['night-owl'].value)
         self.assertEqual(2, values['streak'].value)
         self.assertEqual(1, values['parallel'].value)
 
     def test_missing_price_or_tokens_supplements_cost_without_erasing_measured_time(self):
-        good, bad = root('good', NOW - HOUR, 8), root('bad', NOW - 2 * HOUR, 99)
+        good, bad = measured(root('good', NOW - HOUR, 8)), root('bad', NOW - 2 * HOUR, 99)
         for damaged, valuation, reason in (
             (bad, lambda _m, t: None if t.input == 99 else Decimal(t.input), 'unpriced-requests'),
             (replace(bad, entries=(replace(bad.entries[0], tokens=TokenUsage(input=2, known_fields=('input',))),)),
@@ -80,7 +86,7 @@ class ObservedStatsTests(unittest.TestCase):
 
             self.assertEqual((2 * HOUR, 'complete'), (values['working-time'].value, values['working-time'].status))
             self.assertGreater(values['average-cost'].value, 4)
-            self.assertEqual(values['average-cost'].value, values['hourly-rate'].value)
+            self.assertEqual(8, values['hourly-rate'].value)
             winner = values['expensive-session']
             self.assertGreater(winner.value, 0)
             self.assertEqual('partial', winner.status)
@@ -139,7 +145,7 @@ class ObservedStatsTests(unittest.TestCase):
             self.assertEqual(expected, records[0].duration_ms)
 
     def test_mixed_damage_has_ten_finite_playful_values_in_every_period_and_unit(self):
-        good = root('good', NOW - HOUR, 8)
+        good = measured(root('good', NOW - HOUR, 8))
         request_only = replace(root('requests', NOW - 2 * HOUR), intervals=())
         missing_start = replace(root('start', NOW - HOUR), intervals=((0, None, False),))
         invalid = replace(root('negative', NOW - HOUR), intervals=((NOW - HOUR, -1, False),))
@@ -157,7 +163,8 @@ class ObservedStatsTests(unittest.TestCase):
 
             self.assertEqual('fun-5-buckets', dto['ai_stats_policy'])
             self.assertEqual(13, len(stats.metrics))
-            self.assertEqual((), stats.metrics[0].podium, 'session-time guesses never become model-rate evidence')
+            rate, = stats.metrics[0].podium
+            self.assertEqual(8, rate.value, 'only the measured request supplies rate evidence')
             for metric in dto['ai_stats'][0]['metrics'][:10]:
                 self.assertTrue(Decimal(metric['value']).is_finite())
                 self.assertGreaterEqual(Decimal(metric['value']), 0)
@@ -183,8 +190,7 @@ class ObservedStatsTests(unittest.TestCase):
 
         self.assertEqual(24, values['total-cost'].value)
         self.assertEqual(0, values['working-time'].value)
-        self.assertEqual((1, 0, 0), (hourly.rates.calendar_rate, hourly.rates.active_rate, hourly.rates.robot_day))
-        self.assertEqual('0 CCost/h', tokens['value'])
+        self.assertIsNone(hourly.value, 'positive spend with no measured time is not a measured zero rate')
         self.assertEqual((), hourly.podium)
         self.assertNotRegex(str(tokens), r'Calendar|Workday|replacement')
         self.assertIn('Overlapping work counts once', tokens['rate_help'])

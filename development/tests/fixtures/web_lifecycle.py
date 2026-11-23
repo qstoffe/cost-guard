@@ -36,6 +36,7 @@ def run_cycle(*, competing=False, failed_daily=False, http_timeout=False, deep_d
     started = time.monotonic()
     with tempfile.TemporaryDirectory() as tmp:
         source = SyntheticMonthSource(3, 2, month_start_ms=1000)
+        source.source_instance = 'synthetic-month'
         source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
         config, selection, service, _ = make_service(tmp, source, now_ms=80_000_000)
 
