@@ -240,7 +240,9 @@ async function api(path, value, signal, attachment = false) {
   const aborted = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener('abort', aborted, {once: true});
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  // ZIPs allow up to 90 s of server work, plus time for the completed response.
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 120000 : 5000);
   try {
     const response = await fetch(path, options).catch(cause => {
       if (signal?.aborted || !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;
@@ -271,15 +273,19 @@ async function api(path, value, signal, attachment = false) {
     if (hostState.terminal) throw new Error('instance_stopping');
     if (attachment) {
       const disposition = response.headers.get('Content-Disposition') || '';
-      const filename = /^attachment; filename="(opencode-ses_[A-Za-z0-9_-]+-sanitized\.json)"$/.exec(disposition)?.[1];
+      const filename = /^attachment; filename="(opencode-ses_[A-Za-z0-9_-]{1,160}-analysis\.zip)"$/.exec(disposition)?.[1];
       const length = Number(response.headers.get('Content-Length'));
-      if (!identity || !filename || !Number.isInteger(length) || length <= 0 || length > 16 * 1024 * 1024 ||
-          response.headers.get('Content-Type') !== 'application/json; charset=utf-8') throw new Error('export_invalid_response');
+      // Keep this in sync with MAX_ARCHIVE_BYTES on the server.
+      if (!identity || !filename || !Number.isInteger(length) || length <= 0 || length > 64 * 1024 * 1024 ||
+          response.headers.get('Content-Type') !== 'application/zip') throw new Error('export_invalid_response');
       const blob = await response.blob();
       if (blob.size !== length || controller.signal.aborted || hostState.terminal) throw new Error('export_invalid_response');
       return {blob, filename};
     }
     return data;
+  } catch (error) {
+    if (attachment && timedOut) throw new Error('export_timed_out', {cause: error});
+    throw error;
   } finally { clearTimeout(timeout); signal?.removeEventListener('abort', aborted); }
 }
 function show(state) {

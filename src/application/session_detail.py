@@ -17,6 +17,7 @@ from src.sources.errors import SourceError, SessionExportError
 from .detail_archive import DOMAIN as ARCHIVE_DOMAIN, archived_page, refresh_detail, save_detail
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
+from .session_export_archive import analysis_filename, build_analysis_zip
 from .session_values import INVALID_REASONS, value_authority
 from .session_quota import session_quota_evidence, session_quota_usage
 
@@ -426,7 +427,7 @@ class SessionDetails:
 
     def export(self, token, source, cancelled):
         identity = self.export_identity(token)
-        capability = getattr(source, 'export_session', None)
+        capability = getattr(source, 'export_session_tree', None)
         if not identity or not callable(capability):
             raise SessionExportError('export_unavailable')
         source_id, instance, epoch, session_id = identity
@@ -437,10 +438,10 @@ class SessionDetails:
                 return cancelled() or self.export_identity(token) != identity
             except KeyError:
                 return True
-        payload = capability(session_id, epoch, retired)
+        payload = build_analysis_zip(lambda cancelled: capability(session_id, epoch, cancelled), retired)
         if retired():
             raise SessionExportError('export_cancelled')
-        return payload, f'opencode-{session_id}-sanitized.json'
+        return payload, f'opencode-{session_id}-analysis.zip'
 
     @staticmethod
     def _capture(entry):
@@ -504,6 +505,9 @@ class SessionDetails:
                                          acquisition=status if status['phase'] == 'failed' else None)
                 if reconciled and begin and mode == 'live':
                     response['export_available'] = self.export_identity(token) is not None
+                    if response['export_available']:
+                        block, = response['result']['view']['prompt_blocks']
+                        response['export_name'] = analysis_filename(block.get('title'), key)
                 return response
         with self.lock:
             lease = self.leases.get(token)
@@ -525,6 +529,7 @@ class SessionDetails:
             expired = entry.get('validated') is None or not 0 <= self.clock() - entry['validated'] <= 3600
             pending = pending or expired
             acquisition = self.acquisition_status(entry)
+            export_available = bool(entry.get('export_identity'))
             invalidated = acquisition["reason"] in INVALID_REASONS
             if self.archive and entry.get('source_unavailable') and lease['frozen'] is None:
                 pending = True  # Do not show old Running while the cache read catches up.
@@ -572,7 +577,8 @@ class SessionDetails:
             **(dict(activity=activity_summary(capture["activity"])) if not chunk else {}),
             offset=offset, total=len(rows), pending=False, mode=lease["mode"],
             **(dict(acquisition=acquisition) if acquisition['phase'] == 'failed' and lease['frozen'] is None else {}),
-            export_available=bool(entry.get('export_identity')),
+             export_available=export_available,
+             **(dict(export_name=analysis_filename(block.title, block.session_id)) if export_available and not chunk else {}),
             result=dict(observed_at_ms=capture["observed_at_ms"], view=view,
                         source=dict(status="partial" if capture["state"] != "observed" else "acquired",
                                     atomicity="per_root_snapshot")))
@@ -596,7 +602,7 @@ def acquire_detail(service, history, key, *, unavailable=False):
         source = service.source
         export_identity = ((source.source_id, source.source_instance,
             getattr(source, 'observation_epoch', None), report.prompt_blocks[0].session_id)
-            if state == 'observed' and callable(getattr(source, 'export_session', None)) else None)
+             if state == 'observed' and callable(getattr(source, 'export_session_tree', None)) else None)
         return dict(history=history, report=report, state=state, changed=report is not previous,
             metadata=dict(timezone_id=service.timezone_id,
                 ccost_display_unit=service.config.get('ccostDisplayUnit', 'credits'),

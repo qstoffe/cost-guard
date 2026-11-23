@@ -69,7 +69,10 @@ class SessionArchiveTests(unittest.TestCase):
                     'authorization': 'Basic Zml4dHVyZQ==', 'pin': 109, 'password': 91826},
                  'output': 'retry Authorization: Bearer fixture.t0ken; git=6fba937dd84146cabcec00010203040506070809',
                  'error': 'E012: postgres://user:fixture-pass@localhost/db => denied',
-                 'code': 'if enabled:\n    connect(password=process.env.DB_PASS)\n',
+                 'code': ('if (token === expected) return true;\n'
+                          'tokens.filter(token => token == expected);\n'
+                          'check(password=os.getenv("DB_PASS"))\n'
+                          'connect(password=process.env.DB_PASS)\n'),
                  'log': 'stage 1\nPASSWORD="fixture pass"; next\n' + 'ghp_' + 'A' * 36,
                  'pem': 'start\n-----BEGIN PRIVATE KEY-----\nZml4dHVyZQ==\n-----END PRIVATE KEY-----\nend'}]}]
             expected = deepcopy(native)

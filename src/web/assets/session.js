@@ -234,7 +234,7 @@ const SessionDetail = (() => {
         }
         if (data.result && this.values.scope && data.value_authority?.scope !== this.values.scope)
           this.invalidateValues();
-        this.exporter?.update(this.token, data.export_available === true, data.result?.view?.prompt_blocks?.[0]?.title);
+        this.exporter?.update(this.token, data.export_available === true, data.export_name);
         if (!data.result) {
           this.showActivityFeedback(data.activity_refresh || (this.activityFeedbackState && data.acquisition?.reason
             ? 'unavailable' : null));

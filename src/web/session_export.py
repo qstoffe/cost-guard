@@ -1,4 +1,4 @@
-"""Explicit POST-only native transfer; no durable content or download leases."""
+"""Explicit POST-only analysis ZIP transfer; no durable export storage."""
 import select
 import socket
 from threading import BoundedSemaphore
@@ -40,7 +40,8 @@ class SessionExports:
                 driver.coordinator.report_service.source, cancelled)
             if cancelled():
                 raise SessionExportError('export_cancelled')
-            handler.reply(200, payload, disposition=f'attachment; filename="{filename}"')
+            handler.reply(200, payload, content_type='application/zip',
+                          disposition=f'attachment; filename="{filename}"')
         except KeyError:
             handler.reply(410, {'error': 'detail_expired'})
         except SessionExportError as error:
