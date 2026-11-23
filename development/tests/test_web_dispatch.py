@@ -81,9 +81,9 @@ class DispatcherTests(unittest.TestCase):
             self.dispatch.tick()
 
         self.assertTrue(self.dispatch.warm_allowed)
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS},
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX},
                          {job['request'].kind for job in self.jobs.values.values()})
-        self.assertEqual({'0': 0, '1': 2, '2': 2, '3': 2}, self.jobs.priorities)
+        self.assertEqual({'0': 0, '1': 2, '2': 2}, self.jobs.priorities)
 
     def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -388,20 +388,17 @@ class DispatcherTests(unittest.TestCase):
             self.assertEqual('not_acquired', value['source']['status'])
             self.assertIsNone(value['view'])
 
-    def test_rejected_comparison_pin_is_terminal_and_new_first_page_can_run(self):
-        pinned = ReportRequest(ReportKind.COMPARISONS, comparison_offset=10, comparison_revision='a' * 64)
-        self.dispatch.interest('one', 'comparisons', True, pinned)
-        key = self.dispatch.lookup(pinned)['id']
-        self.jobs.values[key].update(status='complete', result=dict(
-            error=dict(code='session_catalog_changed', retryable=False)))
-        self.dispatch.tick()
-        self.now += 10000
-        self.assertTrue(self.dispatch.lookup(pinned)['terminal'])
-        self.dispatch.tick()
-        self.assertEqual(1, sum(job['request'].comparison_revision == 'a' * 64 for job in self.jobs.values.values()))
-        first = ReportRequest(ReportKind.COMPARISONS)
-        self.dispatch.interest('one', 'comparisons', True, first)
-        self.assertIsNotNone(self.dispatch.lookup(first)['id'])
+    def test_removed_comparisons_section_cannot_request_a_report(self):
+        from src.web.dispatch_http import handle
+        replies = []
+        handler = SimpleNamespace(server=SimpleNamespace(lifecycle=SimpleNamespace(dispatcher=self.dispatch)),
+                                  reply=lambda status, body: replies.append(status))
+        for handler.path, body in (
+                ('/api/interest', dict(tab='a' * 32, request=None, visible=True, section='comparisons')),
+                ('/api/data', dict(request={'kind': 'comparisons'}, retry=False))):
+            handle(handler, body)
+        self.assertEqual([400, 400], replies)
+        self.assertFalse(self.jobs.values)
 
     def test_completed_human_work_returns_to_idle_priority_and_sleep_due_work_staggers(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -419,7 +416,7 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.interest('one', 'watch', False)
         self.now += 7200
         seen = []
-        for number in range(4):
+        for number in range(3):
             self.dispatch.tick()
             pending = [(key, value) for key, value in self.jobs.values.items() if value['status'] == 'queued']
             self.assertEqual(1, len(pending))
@@ -432,9 +429,9 @@ class DispatcherTests(unittest.TestCase):
             self.dispatch.tick()
             self.assertEqual(number + 1, len(self.jobs.values), 'no simultaneous due-product stampede')
             self.now += 1
-        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}, set(seen))
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX}, set(seen))
         self.dispatch.tick()
-        self.assertEqual(4, len(self.jobs.values), 'missed periods are not replayed')
+        self.assertEqual(3, len(self.jobs.values), 'missed periods are not replayed')
 
     def test_source_terminal_error_preserves_valid_result_but_never_launches_new_work(self):
         self.dispatch.interest('one', 'models', True, self.models)
@@ -729,8 +726,8 @@ class QuantumProcessTests(unittest.TestCase):
         self.addCleanup(jobs.close)
         dispatch = DataDispatcher(jobs)
         dispatch.tick(identity='source')
-        request = ReportRequest(ReportKind.COMPARISONS)
-        dispatch.interest('opener', 'comparisons', True, request)
+        request = ReportRequest(ReportKind.AI_STATS)
+        dispatch.interest('opener', 'ai-stats', True, request)
         dispatch.tick()
         key = dispatch.entries[request]['job']
         jobs.prioritize({key: 2})

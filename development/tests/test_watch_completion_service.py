@@ -38,6 +38,20 @@ class ControlledWorkers:
         return tuple(request.root.session_id for request in requests)
 
 
+class CompletionCoordinator:
+    def __init__(self):
+        self.today_ccost = SimpleNamespace(history_pending=True)
+        self.work_ready = Event()
+        self.report_service = SimpleNamespace(selection=SimpleNamespace(
+            selected='v2', source=SimpleNamespace(source_instance='completion-fixture')))
+
+    def tick_catalog(self, *_args, **_kwargs):
+        pass
+
+    def tick_details(self, *_args, **_kwargs):
+        pass
+
+
 class WatchCompletionServiceTests(unittest.TestCase):
     def owner(self):
         from dataclasses import replace
@@ -159,17 +173,7 @@ class WatchCompletionServiceTests(unittest.TestCase):
             workers.close()
 
     def test_runtime_services_completion_without_an_extra_full_publication(self):
-        class Coordinator:
-            today_ccost = SimpleNamespace(history_pending=True)
-            work_ready = Event()
-
-            def tick_catalog(self, *_args, **_kwargs):
-                pass
-
-            def tick_details(self, *_args, **_kwargs):
-                pass
-
-        owner = Coordinator()
+        owner = CompletionCoordinator()
         driver = SimpleNamespace(coordinator=owner, tick=Mock(return_value=None), terminal=False,
             error=None, close=Mock())
         runtime = LiveRuntime(lambda: driver, Mock())
@@ -194,17 +198,7 @@ class WatchCompletionServiceTests(unittest.TestCase):
             workers.close()
 
     def test_due_publication_wins_over_a_completion_arriving_during_service(self):
-        class Coordinator:
-            today_ccost = SimpleNamespace(history_pending=True)
-            work_ready = Event()
-
-            def tick_catalog(self, *_args, **_kwargs):
-                pass
-
-            def tick_details(self, *_args, **_kwargs):
-                pass
-
-        owner, clock = Coordinator(), [100.0]
+        owner, clock = CompletionCoordinator(), [100.0]
         driver = SimpleNamespace(coordinator=owner, terminal=False, error=None, close=Mock())
         runtime = LiveRuntime(lambda: driver, Mock())
         def tick():
