@@ -36,6 +36,27 @@ class DailyAccountHistory:
     roots: dict
 
 
+def publish_catalog_prompts(catalog, cards):
+    evidence, failures = [], []
+    for entry in cards.sessions.values():
+        if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
+                or entry.capture.catalog_prompt is None or entry.source_status.failed_at is not None):
+            if getattr(entry, 'terminal_failure', False):
+                failures.append((entry.root, entry.admitted_at_ms))
+            continue
+        prompt, start, running, ended = entry.capture.catalog_prompt
+        # Tree revisions include active flags, child clocks and costs. An
+        # independently read positive capture may be newer than metadata;
+        # a negative capture still requires the current tree revision.
+        if not running and entry.verified_generation != entry.generation:
+            continue
+        evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
+                          prompt, start, running, None, ended))
+    catalog.observe_prompts(evidence)
+    if failures:
+        catalog.withdraw_prompts(failures)
+
+
 class WebWatchCoordinator(WatchCoordinator):
     def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
                  card_readers=None, detail_capture=None, **kwargs):
@@ -152,17 +173,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.session_catalog = catalog
         catalog.observe(self.catalog_observation, unavailable=unavailable,
                         source_interrupted=source_interrupted, timezone_id=self.report_service.timezone_id)
-        evidence = []
-        for entry in self.cards.sessions.values():
-            if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
-                    or entry.capture.retained or entry.capture.catalog_prompt is None
-                    or entry.source_status.failed_at is not None
-                    or entry.verified_generation != entry.generation):
-                continue
-            prompt, start, running, ended = entry.capture.catalog_prompt
-            evidence.append((entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms,
-                             prompt, start, running, None, ended))
-        catalog.observe_prompts(evidence)
+        publish_catalog_prompts(catalog, self.cards)
         if self.catalog_job is not None:
             if not self.catalog_job.done():
                 return
@@ -296,9 +307,11 @@ class WebWatchCoordinator(WatchCoordinator):
         return self.card_workers.completed
 
     def service_completed(self):
-        """Owner-thread refill only; no source polling, accounts or publication."""
+        """Owner-thread refill and publish prompt facts without a source poll."""
         if not self._closed:
             self.cards.tick(int(self.clock_ms()), completed_only=True)
+            if self.session_catalog is not None:
+                publish_catalog_prompts(self.session_catalog, self.cards)
 
     def _build_projection(self, *, now_ms, status="", status_active=False, scanned=False):
         self.cards.tick(now_ms)

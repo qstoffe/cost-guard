@@ -36,6 +36,8 @@ PASSIVE_ATTEMPTS = 4
 ARCHIVE_QUALIFICATION_ATTEMPTS = 3
 INTERACTIVE_ATTEMPTS = 12
 INTERACTIVE_ADMISSION_SECONDS = 0.35
+PROMPT_FRESHNESS_MS = 15_000
+FINISH_PLACEMENT_MS = 120_000
 # Maximum Mini viewport (10) plus a small scrollback window. The card
 # scheduler still owns bounded source admission; this shortlist is in-memory.
 MINI_PREVIEW_LIMIT = 15
@@ -103,6 +105,7 @@ class SessionCatalog:
         self.active = frozenset()
         self.prompt_activity = {}
         self.running_roots = set()
+        self.recent_finishes = {}
         self.interrupted = False
         self.lifecycle_cutoff_ms = 0
         self.leases = OrderedDict()
@@ -327,7 +330,7 @@ class SessionCatalog:
 
     def _population(self, period):
         window = catalog_window(period, self.timezone_id, self.clock_ms())
-        lifecycle = self.running_roots | {key for key, proof in self.prompt_activity.items()
+        lifecycle = self.running_roots | self.recent_finishes.keys() | {key for key, proof in self.prompt_activity.items()
             if in_window(proof.finish_ms or proof.start_ms, window)}
         return window, candidate_population(self.roots, self.activity, self.activity_index,
             self.rows, self.changed_roots | self.active | lifecycle, window)
@@ -369,6 +372,7 @@ class SessionCatalog:
                     # capture that predates the confirmed outage.
                     self.interrupted = True
                     self.lifecycle_cutoff_ms = self.clock_ms()
+                    self.recent_finishes.clear()
                 self.state = "source_unavailable"
                 return
             if observation is self.last_observation:
@@ -378,7 +382,8 @@ class SessionCatalog:
             if source_changed:
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
-                             'failure_reasons', 'prompt_activity', 'running_roots', 'model_dependencies', 'orders',
+                             'failure_reasons', 'prompt_activity', 'running_roots', 'recent_finishes',
+                             'model_dependencies', 'orders',
                              'archive_rejections'):
                     getattr(self, name).clear()
                 self._clear_epochs()
@@ -455,6 +460,8 @@ class SessionCatalog:
                 if key in self.roots and self.roots[key].archived_at_ms is None
                 and previous_roots[key].provenance == self.roots[key].provenance}
             self.running_roots.intersection_update(self.prompt_activity)
+            self.recent_finishes = {key: at for key, at in self.recent_finishes.items()
+                                    if key in self.prompt_activity}
             self.failures = {key: failure for key, failure in self.failures.items()
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
                               and failure[0] == self.revisions.get(key)}
@@ -488,7 +495,16 @@ class SessionCatalog:
         return old[3] == self.archive_target
 
     def history_live_roots(self):
-        return self.active | self.running_roots | self.recent_arrivals.keys()
+        return self.active | self.running_roots | self._new_live_roots()
+
+    def _new_live_roots(self):
+        # A catalog expansion can discover old sessions in bulk. Treat them
+        # as history, not urgent arrivals that jump the recency queue.
+        latest = self.clock_ms()
+        cutoff = latest - ARRIVAL_SECONDS * 1000
+        now = self.clock()
+        return {key for key, discovered in self.recent_arrivals.items()
+                if now - discovered < ARRIVAL_SECONDS and cutoff <= self.activity.get(key, 0) <= latest}
 
     def _archive_signature(self, key):
         return self.archive_target, self.revisions.get(key), self.dependencies
@@ -521,16 +537,42 @@ class SessionCatalog:
         against the same per-root evidence used by the scalar lane and page order.
         """
         with self.lock:
+            self._expire_recent_finishes()
             if self.state != "observed":
                 return
             now = self.clock_ms()
             for root, revision, captured_at, prompt_id, start, running, finish, ended in evidence:
                 key = root.session_id
                 if (key not in self.roots or root.provenance != self.roots[key].provenance
-                        or revision != self.revisions.get(key) or not 0 <= now - captured_at <= 15_000):
+                        or not 0 <= now - captured_at <= PROMPT_FRESHNESS_MS
+                        or revision != self.revisions.get(key) and not running):
                     continue
                 self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
                                     wake=True)
+
+    def withdraw_prompts(self, failures):
+        """Terminal Watch read failures invalidate execution, not prove a finish."""
+        with self.lock:
+            removed = False
+            for root, attempted_at in failures:
+                key = root.session_id
+                if (key in self.running_roots and root.provenance == self.roots[key].provenance
+                        and attempted_at >= self.prompt_activity[key].observed_ms):
+                    self.running_roots.remove(key)
+                    self.prompt_activity[key] = replace(self.prompt_activity[key], observed_ms=attempted_at)
+                    removed = True
+            if removed:
+                self.generation += 1
+                self.wake_revision += 1
+
+    def _expire_recent_finishes(self):
+        now = self.clock_ms()
+        finished = {key for key, at in self.recent_finishes.items() if now - at >= FINISH_PLACEMENT_MS}
+        if finished:
+            for key in finished:
+                del self.recent_finishes[key]
+            self.generation += 1
+            self.wake_revision += 1
 
     def _record_prompt(self, key, evidence, *, wake=False):
         now = self.clock_ms()
@@ -541,34 +583,50 @@ class SessionCatalog:
                 or evidence.finish_ms is not None and not evidence.start_ms <= evidence.finish_ms <= now):
             return
         previous = self.prompt_activity.get(key)
+        was_running = self._running(key)
         if evidence.finish_ms is not None:
             evidence = replace(evidence, ended=True)
         if previous is None:
             if not evidence.running:
                 return  # Ordinary history belongs to the scalar index.
         else:
-            if evidence.identity < previous.identity or evidence.observed_ms < previous.observed_ms:
+            # An older prompt can still own active background work. Only a
+            # newer qualified positive can move the focal identity backward.
+            if (evidence.observed_ms < previous.observed_ms
+                    or evidence.identity < previous.identity
+                    and (not evidence.running or evidence.observed_ms == previous.observed_ms)):
                 return
             if evidence.prompt_id == previous.prompt_id:
-                if (evidence.start_ms != previous.start_ms or evidence.running and previous.ended
+                if (evidence.start_ms != previous.start_ms or (evidence.running and previous.finish_ms is not None
+                        and (evidence.revision == previous.revision or not wake))
                         or not evidence.running and not evidence.ended
                         or evidence.observed_ms == previous.observed_ms and evidence.running):
                     return
                 if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
                     evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
+        previous_finish = self.recent_finishes.get(key)
+        if evidence.running or evidence.finish_ms is not None:
+            self.recent_finishes.pop(key, None)
+        elif was_running:
+            # Sort/membership hint only, never a displayed or durable finish.
+            self.recent_finishes[key] = evidence.observed_ms
+        elif previous is not None and previous.identity != evidence.identity:
+            self.recent_finishes.pop(key, None)
         self.prompt_activity[key] = evidence
-        was_running = key in self.running_roots
         if evidence.running:
             self.running_roots.add(key)
         else:
             self.running_roots.discard(key)
-        if self.archive is not None and was_running != evidence.running:
+        if self.archive is not None and (was_running != evidence.running
+                or previous_finish != self.recent_finishes.get(key)):
             self.generation += 1
-        if wake and (previous is None or (previous.identity, previous.running, previous.finish_ms) !=
-                (evidence.identity, evidence.running, evidence.finish_ms)):
+        if wake and (previous is None or was_running != evidence.running or previous.identity != evidence.identity
+                     or previous.finish_ms != evidence.finish_ms):
             self.wake_revision += 1
 
     def _running(self, key):
+        # A quiet but qualified Live card may not change for minutes. Clock
+        # age limits admission of new Watch facts, not existing execution.
         return (not self.interrupted and key in self.running_roots
                 and self.prompt_activity[key].observed_ms > self.lifecycle_cutoff_ms)
 
@@ -606,7 +664,7 @@ class SessionCatalog:
             if not self.archive.loaded or not self.archive.partition:
                 return False
             return (key in self.active or key in self.running_roots or not self._archive_unavailable(key) and (
-                self._archive_needs_capture(key)))
+                key in self.recent_finishes or self._archive_needs_capture(key)))
         navigation_pending = any(self._browsing(lease) and lease.get('navigation') is not None
             and not lease['navigation'].invalid
             and key in lease['navigation'].roots and key not in lease['navigation'].facts
@@ -635,10 +693,20 @@ class SessionCatalog:
                 return None
             visible = {key for lease in self.leases.values() if self._browsing(lease)
                        for key in lease.get('visible', ())}
+            urgent = self.history_live_roots() | self.recent_finishes.keys()
+            now = self.clock_ms()
+            today = catalog_window('today', self.timezone_id, now).start_ms
+
             def priority(key):
-                observed = self.activity.get(key) or 0
-                urgent = key in self.active or key in self.running_roots or key in self.recent_arrivals
-                return (not urgent, -(observed // 900_000), key not in visible, -observed, key)
+                observed = self.activity.get(key, 0)
+                if not 0 < observed <= now:
+                    created = self.roots[key].created_at_ms
+                    observed = created if 0 < created <= now else 0
+                # Do not let a visible older page cross the Today boundary
+                # even when the day starts inside a recency bucket.
+                return (key not in urgent, observed < today, -(observed // 900_000),
+                        key not in visible, -observed, -self.discovery[key], key)
+
             return min(candidates, key=priority)
         navigations = [lease['navigation'] for lease in self.leases.values() if self._browsing(lease)
             and lease.get('navigation') is not None and not lease['navigation'].invalid]
@@ -812,7 +880,7 @@ class SessionCatalog:
                                 self.activity_valid[key] = actual
                             else:
                                 self.activity_valid.pop(key, None)
-                            self._record_summary_prompt(key, row, captured_at)
+                            self._record_summary_prompt(key, row, captured_at, historical=not active)
                             partial = None if row.running else (
                                 'context' if not row.context_qualified and self._requested(key, 'ctx') else
                                 'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
@@ -871,10 +939,13 @@ class SessionCatalog:
             self.work_sequence += 1
             self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
-    def _record_summary_prompt(self, key, row, captured_at):
-        if row.running or row.activity_qualified:
+    def _record_summary_prompt(self, key, row, captured_at, *, historical=False):
+        # A history job started without live context cannot overrule the
+        # independent Watch lane. The latter can publish before this job ends.
+        if row.running or row.activity_qualified and (not historical or not self._running(key)):
             self._record_prompt(key, PromptEvidence(captured_at, row.activity_prompt_id, row.prompt_started_ms,
-                row.running, None if row.running else row.last_activity_ms, revision=self.revisions.get(key)))
+                row.running, None if row.running else row.last_activity_ms,
+                ended=not historical and row.activity_qualified and not row.running, revision=self.revisions.get(key)))
 
     def _with_lifecycle(self, rows, lifecycle=None):
         if lifecycle is None:
@@ -895,11 +966,12 @@ class SessionCatalog:
             prompt = self.prompt_activity.get(key)
             running = self._running(key)
             started, prompt_id = value.prompt_started_ms, value.activity_prompt_id
-            if prompt is not None and (prompt.running or not self._activity_current(key) or value.running):
+            if prompt is not None and (prompt.running or value.activity_prompt_id == prompt.prompt_id
+                    or key in self.recent_finishes or not self._activity_current(key) or value.running):
                 started, prompt_id = prompt.identity
                 # Preserve the scalar lane's causal finish (including linked
                 # work), never the timestamp of a different prompt.
-                activity = started if running else None if prompt.running else prompt.finish_ms
+                activity = started if running else prompt.finish_ms if self._finish_known(key) else None
             elif value.running:
                 activity = started = None
                 prompt_id = ""
@@ -947,6 +1019,7 @@ class SessionCatalog:
         with self.lock:
             if period not in PERIODS:
                 raise ValueError("invalid_request")
+            self._expire_recent_finishes()
             if self.archive is not None:
                 return cached_page(self, ordered, token=token, offset=offset, sort=sort, direction=direction,
                                    period=period, navigation=navigation)

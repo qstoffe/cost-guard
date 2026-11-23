@@ -73,17 +73,18 @@ def in_window(at, window):
     return type(at) is int and max(1, window.start_ms or 1) <= at < window.end_ms
 
 
-def event_members(candidates, window, rows, activity_current):
+def event_members(candidates, window, rows, activity_current, recent_finishes):
     """Partial/retained evidence cannot establish a current-revision exclusion."""
     return tuple(key for key in candidates if window.period == 'all'
-                  or not activity_current(key) or row_in_window(rows[key], window))
+                  or not activity_current(key) or row_in_window(rows[key], window, recent_finishes.get(key)))
 
 
-def row_in_window(row, window):
+def row_in_window(row, window, recently_finished=None):
     # A currently executing, source-qualified prompt spans midnight. Its fixed
     # display start need not be in today's window; ancient finished work does.
-    return in_window(row.activity_latest_ms or row.last_activity_ms, window) or bool(row.running
-        and type(row.prompt_started_ms) is int and 0 < row.prompt_started_ms < window.end_ms)
+    return (in_window(row.activity_latest_ms, window) or in_window(row.last_activity_ms, window)
+        or in_window(recently_finished, window) or bool(row.running
+        and type(row.prompt_started_ms) is int and 0 < row.prompt_started_ms < window.end_ms))
 
 
 def activity_time(row):
