@@ -51,36 +51,46 @@ def hourly_rates(total, duration, *, period, now, zone, calendar, evidence_start
         total / workday_hours if workday_hours else None, active_rate, robot_day, robot_day * workdays)
 
 
-def model_hourly_rates(groups, entries, values, union):
-    """Rank all qualified models, sharing Total AI Cost's exact request valuations.
+@dataclass(frozen=True, slots=True)
+class MeasuredRates:
+    cost: Decimal
+    duration_ms: int
+    podium: tuple
+    partial: bool
 
-    Completion owns full cost membership; the same period clips observed execution.
-    No session-time fillers or partial timing coverage can supply a denominator.
-    """
+
+def model_hourly_rates(groups, entries, values, union):
+    """Use only requests with both cost and observed execution for rates."""
     costs = {call_key(entry): value for entry, value in zip(entries, values)}
     candidates = []
-    for name, rows in groups.items():
-        if any(pair is None for _entry, pair in rows):
-            continue
+    measured = {}
+    for name, observations in groups.items():
+        rows = [(entry, pair) for entry, pair in observations
+                if pair is not None and costs[call_key(entry)] is not None]
         evidence = [entry for entry, _pair in rows]
         duration = sum(b - a for a, b in union(pair for _entry, pair in rows))
         if not duration:
             continue
         total, efforts = Decimal(0), {}
         for entry, pair in rows:
-            value = costs[call_key(entry)]
+            key = call_key(entry)
+            value = costs[key]
+            measured[key] = pair
             total += value
             cost, pairs = efforts.setdefault(selected_effort(entry), [Decimal(0), []])
             efforts[selected_effort(entry)][0] = cost + value
             pairs.append(pair)
         rates = {effort: cost * HOUR_MS / sum(b - a for a, b in union(pairs))
                  for effort, (cost, pairs) in efforts.items()}
-        row = ModelStanding(providers(evidence), name, total * HOUR_MS / duration,
-            tuple(sorted({entry.model.recorded_model for entry in evidence})), effort_evidence(evidence),
-            display_name=name, by_effort=effort_values(rates))
-        candidates.append((duration, row))
+        if name:
+            row = ModelStanding(providers(evidence), name, total * HOUR_MS / duration,
+                tuple(sorted({entry.model.recorded_model for entry in evidence})), effort_evidence(evidence),
+                display_name=name, by_effort=effort_values(rates))
+            candidates.append((duration, row))
     order = lambda row: (-row.value, row.model, row.provider)
     primary = sorted((row for duration, row in candidates if duration >= 60_000), key=order)
     short = sorted((row for duration, row in candidates if duration < 60_000), key=order)
     selected = primary[:3] if len(primary) >= 3 else primary + short[:3 - len(primary)]
-    return tuple(sorted(selected, key=order))
+    return MeasuredRates(sum((costs[key] for key in measured), Decimal(0)),
+                         sum(b - a for a, b in union(measured.values())),
+                         tuple(sorted(selected, key=order)), len(measured) < len(costs))

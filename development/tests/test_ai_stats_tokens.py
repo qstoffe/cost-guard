@@ -83,7 +83,7 @@ class TokenTrafficTests(unittest.TestCase):
             self.assertEqual(expected, metrics['total-tokens'].value)
             self.assertIn(reason, metrics['total-tokens'].reasons)
             self.assertEqual(str(expected), dto['total-tokens']['display']['value'])
-            for card in dto.values():
+            for card in (dto['total-tokens'], dto['token-rate']):
                 self.assertNotRegex(str(card['display']), r'Unavailable|N/A')
 
     def test_workflow_time_cannot_become_a_response_denominator(self):
@@ -108,7 +108,7 @@ class TokenTrafficTests(unittest.TestCase):
             for calendar in ('SE', ''):
                 for period in ('today', '7-days', '30-days', 'month', 'all'):
                     metrics, _ = calculate((root,), now, period, calendar=calendar)
-                    self.assertEqual(Decimal('.002520'), metrics['hourly-rate'].rates.active_rate)
+                    self.assertIsNone(metrics['hourly-rate'].value, 'workflow duration is not paired execution')
                     self.assertIsNone(metrics['token-rate'].rates)
 
         metrics, dto = calculate((), epoch('2026-11-07T12:00:00+00:00'), 'today')
@@ -179,7 +179,7 @@ class ResponsePodiumTests(unittest.TestCase):
         self.assertEqual((1200, 11000), (podium[1].output_tokens, podium[1].duration_ms))
         self.assertEqual('1 sampled call', dto['token-rate']['podium'][0]['sample'])
         self.assertNotIn('calendar_rate', dto['token-rate']['display'])
-        for card in dto.values():
+        for card in (dto['total-tokens'], dto['token-rate']):
             self.assertNotRegex(str(card['display']), r'Unavailable|N/A')
 
     def test_one_two_32_and_many_samples_are_bounded_stable_and_per_model(self):

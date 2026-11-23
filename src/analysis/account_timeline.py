@@ -43,10 +43,15 @@ def _midnight(day, zone):
     return _stamp(datetime.combine(day, time(), zone))
 
 
-def _calendar_window(period, now_ms, zone):
+def _calendar_window(period, now_ms, zone, native_bounds):
     today = _local(now_ms, zone).date()
     if period == 'month':
         first, count = today.replace(day=1), monthrange(today.year, today.month)[1]
+        if native_bounds:
+            next_month = first + timedelta(days=count)
+            first = min(first, *(_local(start, zone).date() for start, _ in native_bounds))
+            last = max(next_month - timedelta(days=1), *(_local(reset - 1, zone).date() for _, reset in native_bounds))
+            count = (last - first).days + 1
     else:
         first, count = today - timedelta(days=29), 30
     days = tuple(first + timedelta(days=i) for i in range(count + 1))
@@ -83,10 +88,10 @@ def _hours(day, zone):
     return boundaries
 
 
-def timeline_window(period, now_ms, timezone_id):
+def timeline_window(period, now_ms, timezone_id, *, native_bounds=()):
     zone = resolve_timezone(timezone_id)
     if period in ('month', '30-days'):
-        return _calendar_window(period, now_ms, zone)
+        return _calendar_window(period, now_ms, zone, native_bounds)
     start = period_start(period, now_ms, timezone_id)
     first_day = _local(start, zone).date()
     if period == 'today':

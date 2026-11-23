@@ -1,6 +1,7 @@
 """Cross-service reuse and cold parity; process/DOM evidence lives in the benchmark."""
 from dataclasses import replace
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,15 +12,21 @@ from development.tests.fixtures.synthetic_month import SyntheticMonthSource, mak
 from development.tests.test_account_timeline import NOV_5, projected
 from src.analysis.account_timeline import DAY_MS
 from src.application.account_timeline import account_roster
+from src.application.detail_archive import load_detail
+from src.application.session_archive import DOMAIN as SESSIONS, SessionArchive
+from src.application.session_catalog import SessionCatalog
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
+from src.cache.web_archive import ArchiveFact, WebArchive
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports import ai_stats_warm
+from src.reports.archived_usage import ArchivedUsage
 from src.sources.selection import SourceSelection
 from src.watch.account_timeline import TimelineHistory
 from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
 from src.web.composition import open_cache
+from src.web.history_projection import HistoryProjection
 
 
 def report_service(source, cache, now, pricing, *, zone='UTC', calendar='SE'):
@@ -132,7 +139,7 @@ class WarmRestartTests(unittest.TestCase):
     def test_stats_rollover_calendar_timezone_and_corruption_do_not_relabel_projection(self):
         source, cache = self.history(8), self.cache()
         self.stats(source, cache, scan='warm')
-        for now, zone, calendar in ((NOV_5 + DAY_MS, 'UTC', 'SE'), (NOV_5, 'America/New_York', 'SE'),
+        for now, zone, calendar in ((NOV_5 + DAY_MS, 'UTC', 'SE'), (NOV_5, 'Europe/Stockholm', 'SE'),
                                     (NOV_5, 'UTC', 'US'), (NOV_5 + 28 * DAY_MS, 'UTC', 'SE')):
             with self.subTest(now=now, zone=zone, calendar=calendar):
                 candidate, hit = self.stats(source, cache, now, zone=zone, calendar=calendar, scan=str(now) + zone + calendar)
@@ -202,6 +209,137 @@ class WarmRestartTests(unittest.TestCase):
         self.assertEqual(1, source.load_count - before)
         self.assertEqual(self.timeline(source, self.cache()), chart)
         self.assertEqual(self.stats(source, self.cache(), scan='canonical')[0].ai_stats, result.ai_stats)
+
+
+class DisplayHistoryTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.directory = Path(folder.name)
+        self.now = NOV_5
+        self.pricing = FakePricingProvider()
+        self.cache = open_cache(self.directory)
+
+    def restore(self, epoch):
+        archive = WebArchive(self.directory)
+        catalog = SessionCatalog(archive=archive, clock=lambda: (self.now - NOV_5) / 1000,
+                                 clock_ms=lambda: self.now)
+        self.addCleanup(catalog.close)
+        catalog.bind_archive('v2', 'synthetic-month', epoch)
+        catalog.archive_maintenance()
+        # A queued barrier on this catalog's single worker runs after the
+        # restore callback, even if the callback has already cleared archive_job.
+        catalog.archive_pool.submit(lambda: None).result(timeout=10)
+        return archive, catalog
+
+    def source(self, roots, requests, **kwargs):
+        source = SyntheticMonthSource(roots, requests, month_start_ms=NOV_5 - 5 * DAY_MS, **kwargs)
+        source.source_id = 'opencode-v2'
+        source.source_instance = 'synthetic-month'
+        source.observation_epoch = 'one'
+        source.snapshots = {k: replace(s, complete=True) for k, s in source.snapshots.items()}
+        return source
+
+    def tick(self, catalog, source):
+        self.now += 1000
+        catalog.tick(report_service(source, self.cache, self.now, self.pricing))
+
+    def request_count(self, archive, source):
+        service = report_service(source, self.cache, self.now, self.pricing)
+        views, _ = HistoryProjection(ArchivedUsage(archive)).render(identity='shared-history',
+            selection=service.selection, config=service.config, reference=self.pricing.catalog, now=self.now,
+            revisions={}, activity={}, available=False, only='all')
+        return views['token-mix', 'all']['view']['token_mix']['request_count']
+
+    def test_reports_details_and_rows_survive_an_empty_new_epoch_then_merge_a_correction(self):
+        source = self.source(2, 3)
+        archive, first = self.restore('one')
+        first.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(4):
+            self.tick(first, source)
+        self.assertEqual(6, self.request_count(archive, source))
+
+        replacement = self.source(0, 0)
+        replacement.observation_epoch = 'two'
+        reopened, second = self.restore('two')
+        second.observe(observe_catalog(replacement, include_archived_revisions=True))
+        page = second.page(period='all')
+        self.assertEqual(2, page['total'])
+        self.assertEqual(6, self.request_count(reopened, replacement))
+        self.assertEqual(3, len(load_detail(reopened, 'root-0000').value['view']['prompt_blocks'][0]['rows']))
+        self.assertEqual(0, replacement.load_count)
+
+        changed = make_root_snapshot(0, 4, month_start_ms=NOV_5 - DAY_MS)
+        replacement.snapshots['root-0000'] = replace(changed, complete=True, source_revision='corrected')
+        second.observe(observe_catalog(replacement, include_archived_revisions=True))
+        self.tick(second, replacement)
+        self.assertEqual(2, second.page(period='all')['total'])
+        self.assertEqual(7, self.request_count(reopened, replacement))
+
+    def test_unrecognized_summary_shape_keeps_readable_fields_without_reviving_running(self):
+        archive = WebArchive(self.directory)
+        archive.initialize()
+        archive.publish('old-store', SESSIONS, {'old': ArchiveFact('old-codec', 1, {
+            'title': 'Retained session', 'prompt_count': 8, 'running': True, 'duration_ms': 'unknown'})})
+
+        _, catalog = self.restore('other')
+        page = catalog.page(period='all')
+        row, = page['view']['session_usage']
+        self.assertEqual(('Retained session', 8), (row['title'], row['prompt_count']))
+        self.assertFalse(row['running'])
+        self.assertIsNone(row['duration_ms'])
+
+    def test_upgrade_keeps_inputs_after_failed_write_then_reopens_both_histories(self):
+        cache_dir = self.directory / 'cache'
+        old_web = WebArchive(self.directory / 'instance')
+        old_web.initialize()
+        old_web.publish('old-epoch', SESSIONS, {'from-appdata': ArchiveFact('r1', 100, {
+            'title': 'Earlier history', 'prompt_count': 3, 'running': True})})
+        display = cache_dir / 'cost-guard-display-v1.sqlite3'
+        with sqlite3.connect(display) as db:
+            db.executescript('''PRAGMA application_id=0x43474448; PRAGMA user_version=1;
+                CREATE TABLE sessions(source, session_id, title, revision, prompts);
+                INSERT INTO sessions VALUES ('old','from-display','Display history','r2',7);''')
+        db.close()
+        disposable = CacheDatabase(self.directory, generation=2)
+        disposable.initialize()
+        unrelated = cache_dir / 'unrelated.sqlite3'
+        unrelated.write_bytes(b'not a migration input')
+
+        destination = WebArchive(cache_dir)
+        upgrade = SessionArchive(destination, display, upgrade=(self.directory, old_web.path))
+        # The destination does not exist yet; no successful transfer is possible.
+        with self.assertLogs('src.application.session_archive', level='WARNING'):
+            _, retry = upgrade.load_legacy(lambda: False)
+        self.assertTrue(retry)
+        self.assertTrue(all(path.exists() for path in (old_web.path, display, disposable.paths.database)))
+
+        destination.initialize()
+        _, retry = upgrade.load_legacy(lambda: False)
+        self.assertFalse(retry)
+        rows, _ = SessionArchive(WebArchive(cache_dir)).load()
+        self.assertEqual({'from-appdata': 3, 'from-display': 7},
+                         {key: row.prompt_count for key, row in rows.items()})
+        self.assertFalse(rows['from-appdata'].running)
+        for path in (old_web.path, display, disposable.paths.database):
+            for suffix in ('', '-wal', '-shm'):
+                self.assertFalse(path.with_name(path.name + suffix).exists())
+        self.assertEqual(b'not a migration input', unrelated.read_bytes())
+
+    def test_running_and_today_precede_old_all_time_work_without_starvation(self):
+        source = self.source(20, 1, today_roots=2, now_ms=NOV_5, running_roots=1)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as read:
+            catalog.page(period='all', sort='name')
+            self.tick(catalog, source)
+            catalog.page(period='today')
+            for _ in range(10):
+                self.tick(catalog, source)
+        order = list(dict.fromkeys(call.args[0] for call in read.call_args_list))
+        self.assertEqual('root-0000', order[0])
+        self.assertEqual({'root-0019', 'root-0018'}, set(order[1:3]))
+        self.assertEqual(20, len(order))
 
 
 if __name__ == '__main__':

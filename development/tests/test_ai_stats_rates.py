@@ -1,6 +1,10 @@
 """Independent request-cost/union-time oracles for the standard hourly-rate card."""
 from dataclasses import replace
 from decimal import Decimal
+import json
+from pathlib import Path
+import shutil
+import subprocess
 import unittest
 
 from development.tests.fixtures.active_hour import epoch
@@ -90,8 +94,8 @@ class AIStatsRateTests(unittest.TestCase):
         card, dto = calculate(roots, valuation=price)
 
         self.assertEqual(4, len(valuations), 'one canonical valuation per request')
-        self.assertEqual(7, card.value, 'seven CCost / one global session hour')
-        self.assertEqual(7, card.rates.active_rate)
+        self.assertEqual(280, card.value, 'seven CCost / 90 seconds of measured execution')
+        self.assertEqual(280, card.rates.active_rate)
         self.assertEqual(['a', 'b'], [r.model for r in card.podium])
         self.assertEqual(240, card.podium[0].value, 'six CCost / 90 unioned seconds')
         self.assertEqual(60, card.podium[1].value)
@@ -103,22 +107,27 @@ class AIStatsRateTests(unittest.TestCase):
                          '\n• Max — 180 CCost/h\n• High — 120 CCost/h', medal['model_help'])
         self.assertEqual('$2.40/h', medal['display_units']['usd']['amount'])
         self.assertIn('• Default — $36.00/h', medal['display_units']['usd']['model_help'])
-        self.assertEqual('7 CCost/h', dto['display']['value'])
-        self.assertIn('every model ÷ total active AI hours', dto['display']['rate_help'])
+        self.assertEqual('280 CCost/h', dto['display']['value'])
+        self.assertIn('measured execution', dto['display']['rate_help'])
         self.assertIn('higher or lower', dto['display']['rate_help'])
         self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Active AI average')
 
-    def test_incomplete_timing_omits_whole_model_not_just_untimed_cost(self):
+    def test_older_untimed_peer_never_erases_recent_model_in_larger_rolling_period(self):
         timed = request('partial:timed', NOW - 2000, 1000, 1)
-        untimed, _activity = request('partial:untimed', NOW - 2000, 1000, 1000, 'max')
+        untimed, _activity = request('partial:untimed', NOW - 48 * HOUR_MS, 1000, 1000, 'max')
         good = request('good', NOW - 2000, 1000, 1)
         roots = (root((timed, (untimed, None), good), source_complete=False, cost_pending=True),)
 
-        card, _dto = calculate(roots)
-
-        self.assertEqual(['good'], [r.model for r in card.podium])
-        self.assertEqual(1002, card.value)
-        self.assertIn('source-incomplete', card.reasons)
+        for period, total in [('today', 2), ('7-days', 1002), ('30-days', 1002)]:
+            with self.subTest(period=period):
+                row = period_stats(roots, lambda _m, t: Decimal(t.input), period=period,
+                                   start=dict(windows('UTC', NOW))[period], now=NOW, zone='UTC')
+                card, cost = row.metrics[:2]
+                self.assertEqual(['good', 'partial'], [r.model for r in card.podium])
+                self.assertEqual(7200, card.value, 'two paired CCost / one measured second')
+                self.assertEqual(total, cost.value)
+                self.assertEqual(period != 'today', 'unpaired-request-timing' in card.reasons)
+                self.assertIn('source-incomplete', card.reasons)
 
     def test_simultaneous_models_keep_global_union_headline_even_with_untimed_cost(self):
         first = request('a', NOW - 120000, 120000, 2)
@@ -130,10 +139,10 @@ class AIStatsRateTests(unittest.TestCase):
 
         card, _dto = calculate(roots)
 
-        self.assertEqual(300, card.value, 'ten CCost / two global unioned minutes, not three summed minutes')
+        self.assertEqual(150, card.value, 'five paired CCost / two global unioned minutes')
         self.assertEqual(['b', 'a'], [r.model for r in card.podium])
         self.assertEqual([Decimal(180), Decimal(60)], [r.value for r in card.podium])
-        self.assertEqual(300, card.rates.active_rate, 'unsupported medal still contributes headline cost')
+        self.assertEqual(150, card.rates.active_rate)
 
     def test_invalid_failed_cancelled_future_and_foreign_timing_cannot_supply_rates(self):
         good, activity = request('model', NOW - 2000, 1000, 1)
@@ -161,7 +170,7 @@ class AIStatsRateTests(unittest.TestCase):
         foreign, _dto = calculate((roots[0], replace(roots[1], activity=(
             replace(activity, entry=replace(clone, source_instance='foreign')),))))
 
-        self.assertEqual(2, card.value)
+        self.assertEqual(720, card.value)
         self.assertEqual(720, card.podium[0].value)
         self.assertEqual((), foreign.podium)
 
@@ -178,7 +187,7 @@ class AIStatsRateTests(unittest.TestCase):
                 roots = (root((crossing, excluded, at_edge)),)
                 with self.subTest(stamp=stamp, period=period):
                     card, _dto = calculate(roots, now, period, 'Europe/Stockholm')
-                    self.assertEqual(5, card.rates.total, 'inclusive completion boundary, no cost proration')
+                    self.assertEqual(2, card.rates.total, 'only crossing has positive measured time in this period')
                     self.assertEqual(['crossing'], [r.model for r in card.podium])
                     self.assertEqual(240, card.podium[0].value, 'full two CCost / clipped 30 seconds')
 
@@ -204,31 +213,53 @@ class AIStatsRateTests(unittest.TestCase):
         self.assertEqual('3600000000000 CCost/h', dto['display']['value'])
         self.assertEqual('$36000000000.00/h', dto['display_units']['usd']['value'])
 
-    def test_best_effort_costs_share_total_cost_values_without_timing_guesses(self):
+    def test_estimated_cost_is_not_a_measured_rate_even_with_timing(self):
         fact, activity = request('unknown', NOW - 10000, 10000, 100)
         fact = replace(fact, tokens=TokenUsage(input=100, known_fields=('input',)))
         observed = root(((fact, replace(activity, entry=fact)),))
 
         card, _dto = calculate((observed,), valuation=lambda *_: None)
 
-        self.assertEqual(Decimal('.0033'), card.rates.total)
-        self.assertEqual(Decimal('1.188'), card.podium[0].value)
-        self.assertEqual((('Default', Decimal('1.188')),), card.podium[0].by_effort)
+        self.assertIsNone(card.value)
+        self.assertEqual((), card.podium)
         self.assertIn('unpriced-requests', card.reasons)
 
     def test_empty_and_no_duration_preserve_safe_headline_and_no_podium(self):
-        for roots in ((), (replace(root((request('untimed', NOW - 1000, 1000, 24),)),
-                                  intervals=((NOW - 1000, 0, False),), activity=()),)):
+        untimed = root((request('untimed', NOW - 1000, 1000, 24),))
+        for roots, expected, display in [((), 0, '0 CCost/h'),
+                ((replace(untimed, activity=()),), None, 'N/A')]:
             card, dto = calculate(roots)
-            self.assertEqual(0, card.value)
+            self.assertEqual(expected, card.value)
             self.assertEqual((), card.podium)
-            self.assertEqual('0 CCost/h', dto['display']['value'])
+            self.assertEqual(display, dto['display']['value'])
             self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Unavailable')
+
+    @unittest.skipUnless(shutil.which('node'), 'optional JS VM unavailable')
+    def test_ready_untimed_history_reaches_reader_without_hiding_known_spend(self):
+        fact, _ = request('untimed', NOW - 2_000, 1_000, 4)
+        row = period_stats((root(((fact, None),)),), lambda _m, t: Decimal(t.input),
+                           period='today', start=NOW - 24 * HOUR_MS, now=NOW, zone='UTC')
+        view = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,),
+                       ai_stats_work={'scopes': {'today': {'ready': True, 'completed': 1}}})).to_json()
+        result = {'view': view, 'source': {'identity': 'synthetic', 'generation': 'v1', 'observed_at_ms': NOW},
+                  'scope': {'timezone_id': 'UTC'}}
+        script = """
+          const fs=require('node:fs'), vm=require('node:vm'), c=vm.createContext({
+            result:JSON.parse(fs.readFileSync(0,'utf8')),state:{period:'today'}});
+          for(const name of ['cached-reports','ai-stats'])
+            vm.runInContext(fs.readFileSync('src/web/assets/'+name+'.js','utf8'),c);
+          vm.runInContext('AIStatsView.remember(state,result)',c);
+          const metrics=c.state.result?.view.ai_stats[0].metrics ?? [];
+          const rate=metrics.find(m=>m.metric==='hourly-rate'), cost=metrics.find(m=>m.metric==='total-cost');
+          console.log(JSON.stringify([metrics.length,cost?.value,rate?.value,rate?.status,rate?.podium]));
+        """
+        reader = subprocess.run(['node', '-e', script], input=json.dumps(result), capture_output=True,
+                                encoding='utf-8', cwd=Path(__file__).resolve().parents[2], timeout=10, check=True)
+        self.assertEqual([13, '4', None, 'partial', []], json.loads(reader.stdout))
 
     def test_legacy_calendar_shift_scalars_remain_compatible_but_not_presented(self):
         at = epoch('2026-11-02T06:00:00+00:00')
-        fact, _activity = request('model', at, HOUR_MS, 840)
-        observed = replace(root(((fact, None),)), intervals=((at, 28 * HOUR_MS, False),))
+        observed = root((request('model', at, 28 * HOUR_MS, 840),))
 
         card, dto = calculate((observed,), epoch('2026-11-08T20:00:00+00:00'), '7-days',
                               'Europe/Stockholm')

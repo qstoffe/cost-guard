@@ -127,10 +127,11 @@ class PeriodCCostIndex:
     """Value once per history publication; moving windows query prefix sums, no rescans."""
 
     def __init__(self, entries: Iterable[TraceEntry], valuation: ReferenceValuation, *,
-                 account_only: bool = False, timeline_valuation=None, timeline_accounts=()) -> None:
+                 account_only: bool = False, timeline_valuation=None, timeline_accounts=(), shared_history=False) -> None:
         self._series: dict[tuple, _Series] = {}
         self.earliest_ms = None
-        canonical = tuple(entry for entry in unique_usage(entries) if _eligible(entry, account_only))
+        canonical = tuple(entry for entry in unique_usage(entries, shared_history=shared_history)
+                          if _eligible(entry, account_only))
         clues = _account_clues(canonical, timeline_accounts)
         values = (timeline_valuation(canonical) if timeline_valuation is not None
                   else (comparison_cost((entry,), valuation) for entry in canonical))

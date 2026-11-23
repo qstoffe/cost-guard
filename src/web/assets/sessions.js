@@ -177,13 +177,23 @@ const SessionsCatalog = (() => {
     wake(hint) {
       if (typeof hint !== 'string' || !hint || hint === this.liveHint) return;
       this.liveHint = hint;
-      if (!this.attached || document.hidden || this.offset !== 0 || this.terminal || this.operation?.failed) return;
+      if (!this.attached || document.hidden || this.offset !== 0 && !this.data?.cache_first ||
+          this.terminal || this.operation?.failed) return;
       const pending = this.wakePending; this.wakePending = true;
       // Explicit navigation owns the request/cohort. Keep one trailing wake,
       // never cancel or restart an action or an in-flight passive request.
       if (pending || this.busy || this.operation || this.retryDelay) return;
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.poll(), 100);
+    }
+    catchUp() {
+      if (!this.attached || document.hidden || this.terminal || !this.data?.cache_first ||
+          this.operation?.failed) return;
+      // An authenticated host is usable again. Retire only a stale passive
+      // request; keep the selected page, sort and any explicit navigation.
+      this.retryDelay = 0;
+      if (this.busy && !this.operation) this.retire();
+      this.poll();
     }
     async poll() {
       if (!this.attached || this.busy || this.terminal) return;
@@ -194,7 +204,8 @@ const SessionsCatalog = (() => {
       await this.load();
       if (generation === this.generation && this.attached && !this.terminal)
         this.timer = setTimeout(() => this.poll(), this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
-          this.wakePending && this.offset === 0 ? 100 : 5000));
+          this.wakePending && (this.offset === 0 || this.data?.cache_first) ? 100 :
+          this.data?.cache_first ? 1500 : 5000));
     }
     recoverNavigation() {
       if (this.operation.navigation) this.cancelledNavigation = this.operation.navigation;
@@ -255,9 +266,9 @@ const SessionsCatalog = (() => {
           if (data.token !== this.token || !this.attached || this.operation?.failed) this.interest(false, data.token);
           return;
         }
-        if (data.period !== this.period || requestedEpoch && !passive && data.epoch !== requestedEpoch ||
+        if (data.period !== this.period || !data.cache_first && requestedEpoch && !passive && data.epoch !== requestedEpoch ||
           (!data.pending_sort || data.passive) &&
-          (data.sort !== this.sort || data.direction !== this.direction || data.offset !== this.offset)) {
+          (data.sort !== this.sort || data.direction !== this.direction || !data.cache_first && data.offset !== this.offset)) {
           throw new Error('catalog_response_mismatch');
         }
         const opened = this.token !== data.token;
@@ -374,7 +385,7 @@ const SessionsCatalog = (() => {
         if (this.operation) this.pendingNavigation(data);
         return;
       }
-      if (this.sourceUnverified) return; // A pre-outage HTTP reply cannot restore Live.
+      if (this.sourceUnverified && !data.cache_first) return; // A pre-outage HTTP reply cannot restore Live.
       // A requested candidate-scope sort is not applied until every eligible key is valid. Keep
       // the previous actual order, header and pager rather than relabeling it.
       const provisional = !this.operation && this.offset === 0 && data.offset === 0 && data.passive &&
@@ -393,16 +404,23 @@ const SessionsCatalog = (() => {
         values.some((value, index) => this.body.children[index].dataset.id !== value.session_id));
       const completed = this.operation;
       this.pan.hidden = this.pager.hidden = false;
+      if (this.data?.source?.identity !== data.source?.identity) {
+        this.costs = null;
+        this.body.replaceChildren();
+      }
       this.data = data;
       this.renderTimezone = data.view.timezone_id;
       this.offset = data.offset;
-      if (this.recovering || this.canonicalPeriod || data.passive && this.epoch && data.epoch !== this.epoch) {
+      if (this.recovering || this.canonicalPeriod || data.cache_first && (this.epoch !== data.epoch && data.offset > 0) ||
+          data.passive && this.epoch && data.epoch !== this.epoch) {
         this.epoch = data.offset || this.epoch && data.order_state === 'verified' ? data.epoch : null;
         history.replaceState(history.state, '', destination(data.offset, this.epoch, this.sort, this.direction, this.period));
         this.recovering = false;
         this.canonicalPeriod = false;
       }
       this.clearStatus();
+      const periodButton = this.periodButtons.find(item => item.key === data.period)?.button;
+      ReportLoading.historyProgress(this, periodButton, data.history_progress);
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');

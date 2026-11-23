@@ -254,7 +254,8 @@ const SessionDetail = (() => {
           JSON.stringify(data.value_authority?.totals) &&
           Object.entries(data.value_authority?.rows || {}).every(([id, state]) =>
             this.data?.value_authority?.rows?.[id] === state);
-        if (this.data?.revision === data.revision && sameValues && (this.data.activity?.failures?.length || 0) >=
+        if (this.data?.revision === data.revision && sameValues &&
+            this.data.result.view.prompt_blocks[0].rows.length === data.total && (this.data.activity?.failures?.length || 0) >=
             Math.min(this.activityLimit, data.activity?.total || 0)) {
           this.showActivityFeedback(data.activity_refresh);
           if (this.pendingRender) this.update(this.data); return;
@@ -271,6 +272,11 @@ const SessionDetail = (() => {
           }
         };
         validate(rows);
+        if (!this.data && rows.length && rows.length < data.total && data.cache_first) {
+          const block = data.result.view.prompt_blocks[0];
+          this.update({...data, result: {...data.result, view: {...data.result.view,
+            prompt_blocks: [{...block, rows: [...rows]}]}}});
+        }
         const materialTransfer = this.data?.activity_revision && data.activity_revision &&
           this.data.activity_revision !== data.activity_revision &&
           (rows.length < data.total || (data.activity?.failures?.length || 0) <

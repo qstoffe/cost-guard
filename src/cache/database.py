@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-CACHE_SCHEMA_GENERATION = 2
+CACHE_SCHEMA_GENERATION = 3
 CACHE_FILENAME = f"cost-guard-cache-v{CACHE_SCHEMA_GENERATION}.sqlite3"
 DEFAULT_BUSY_TIMEOUT_MS = 5000
 

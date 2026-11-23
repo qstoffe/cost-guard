@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
-from src.analysis.valuation import unique_usage
-from src.analysis.ai_stats import windows
+from src.analysis.valuation import physical_usage_key, unique_usage
+from src.analysis.timezones import calendar_periods
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity, unverified_alias
@@ -76,15 +76,21 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress, *
     return history_projection(service, reference, entries, prompt_of, progress, scope=scope)
 
 
-def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None):
+def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None,
+                       archived=False):
     """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
     valuation = valuation or reference.reference_category_valuation
     progress(WorkProgress("Pricing token categories", "finalizing"), None)
-    usage = unique_usage(entries)
+    archival_prompts = {key[1:]: value for entry, value in prompt_of.items()
+                        if archived and (key := physical_usage_key(entry)) is not None}
+    usage = unique_usage(entries, shared_history=archived)
+    if archived:
+        prompt_of = {entry: value for entry in usage
+                     if (value := prompt_of.get(entry) or archival_prompts.get((physical_usage_key(entry) or ())[1:]))}
     period = {}
     undated = 0
     if scope is not None:
-        start = dict(windows(service.timezone_id, service.now_ms))[scope]
+        start = dict(calendar_periods(service.timezone_id, service.now_ms))[scope]
         undated = sum(entry.completed_at_ms <= 0 for entry in usage)
         # Deduplicate physical requests BEFORE scope membership. Child calls use
         # their own canonical event time, not their parent's prompt start.
@@ -96,7 +102,8 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
     if undated:
         warnings += (f"Request time unavailable for {undated} recorded calls; undated usage is included only in All time.",)
     # All-history scope: any V1 gap may make the result incomplete.
-    notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
+    notes = [('History includes verified usage saved locally, including previously observed deleted sessions.'
+              if archived else HISTORY_NOTE), *migration_gap_notes(service.selection.migration_gap)]
     # Executed history is not a current-entitlement/model-picker roster.
     # Keep every observed model, including retired models and other routes.
     rows = []

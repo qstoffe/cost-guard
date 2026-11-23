@@ -3,7 +3,7 @@ from bisect import bisect_left
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
-from src.analysis.ai_stats import windows
+from src.analysis.timezones import calendar_periods
 
 PERIODS = ("today", "7-days", "30-days", "month", "all")
 PAGE_SIZE = 25
@@ -44,7 +44,7 @@ class CatalogEpoch:
 def catalog_window(period, timezone_id, now_ms):
     if period not in PERIODS:
         raise ValueError("invalid_request")
-    return CatalogWindow(period, timezone_id, dict(windows(timezone_id, now_ms))[period], now_ms + 1)
+    return CatalogWindow(period, timezone_id, dict(calendar_periods(timezone_id, now_ms))[period], now_ms + 1)
 
 
 def population(roots, activity_index, window):

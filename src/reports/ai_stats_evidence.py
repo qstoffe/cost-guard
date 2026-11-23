@@ -31,9 +31,9 @@ def payload(bundle, reference, snapshot, config, *, now=None):
                 pending=any(p.in_progress and not p.entries for p in bundle.prompts))
 
 
-def decoded(value, root, source=None, *, now=None):
+def decoded(value, root, source=None, *, now=None, verified_archive=False):
     facts = decode(value['usage'])
-    if not current(source, (entry.model for entry, _prompt, _cost in facts)):
+    if not verified_archive and not current(source, (entry.model for entry, _prompt, _cost in facts)):
         raise ModelCatalogChanged('changed_model_catalog')
     intervals = value['intervals']
     if (not isinstance(intervals, list) or type(value['pending']) is not bool

@@ -9,6 +9,7 @@ async function main() {
   const config = await fs.mkdtemp(path.join(directory, 'sessions-config-'));
   const python = process.env.COST_GUARD_TEST_PYTHON || 'py';
    const server = spawn(python, [...(process.env.COST_GUARD_TEST_PYTHON ? [] : ['-3']),
+      mode === '--archive' ? 'development/tests/integration/serve_web_archive.py' :
       mode === '--warm-sorts' ? 'development/tests/integration/serve_web_warm_sorts.py' :
       mode === '--cold-period' ? 'development/tests/integration/serve_web_cold_period.py' :
       mode === '--warm-pages' ? 'development/tests/integration/serve_web_warm_pages.py' :
@@ -99,6 +100,14 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
       await command('Page.navigate',{url:launch.url},sessionId);
             await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+            if (mode === '--archive') {
+              const timings=await require('../fixtures/sessions_archive_browser.cjs')({
+                evaluate,until,fixture,command:(method,params)=>command(method,params,sessionId)});
+              assert.deepEqual(errors,[]);
+              checks.push('10k restored rows; seven rendered sorts both ways; period, paging, correction and reconnect');
+              evidence={outcome:'PASS',browser:version.product,timings};
+              console.log(JSON.stringify(evidence));return;
+            }
               if (mode === '--warm-pages') {
                 const details = await require('../fixtures/sessions_warm_pages_browser.cjs')({evaluate, until, fixture});
                 assert.deepEqual(errors, []);

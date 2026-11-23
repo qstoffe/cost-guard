@@ -190,6 +190,7 @@ class WebShutdownTests(unittest.TestCase):
         clients, errors = [], []
         with tempfile.TemporaryDirectory() as tmp:
             source = MutableSource()
+            source.source_instance = 'instance-v1'
             config, selection, service, _ = make_service(tmp, source)
 
             def factory(now):
@@ -264,9 +265,9 @@ class WebShutdownTests(unittest.TestCase):
                 self.assertFalse(host.thread.is_alive())
                 self.assertTrue(all(f.done() for f in coordinator.card_workers.jobs.values()))
                 self.assertIsNone(host.jobs._active)
-                self.assertTrue(coordinator.history_job.done())
+                self.assertTrue(coordinator.history_job is None or coordinator.history_job.done())
                 if phase == 'body':
-                    self.assertTrue(coordinator.detail_job.done())
+                    self.assertTrue(coordinator.detail_job is None or coordinator.detail_job.done())
                 host.close()
             finally:
                 release.set()

@@ -38,7 +38,6 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
-             "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
              "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
              "/data-demand.js": ("data-demand.js", "text/javascript; charset=utf-8"),
             "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
@@ -337,13 +336,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if self.path == '/api/accounts/timeline':
                 period, revision = value.get('period'), value.get('revision')
-                if (set(value) != {'period', 'revision'} or period not in ACCOUNT_PERIODS
+                if (set(value) != {'period', 'revision'}
+                        or period not in ACCOUNT_PERIODS
                         or revision is not None and (type(revision) is not int or revision < 0)):
                     self.reply(400, {'error': 'invalid_request'})
                     return
                 live = getattr(self.server.lifecycle, 'live', None)
-                driver = live.driver if live else None
-                timeline = getattr(driver.coordinator, 'account_timeline', None) if driver and not driver.terminal else None
+                timeline = getattr(self.server.lifecycle, 'history_accounts', None)
+                if timeline is None and live and live.driver and not live.driver.terminal:
+                    timeline = getattr(live.driver.coordinator, 'account_timeline', None)
                 self.reply(200, timeline.lookup(period, revision) if timeline else
                            dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False,
                                 acquiring=False))
@@ -440,6 +441,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 value['data_dispatcher'] = getattr(self.server.lifecycle, 'dispatcher', None) is not None
                 value['history_demand'] = value['data_dispatcher']
                 value['account_timeline'] = value['data_dispatcher'] and self.server.lifecycle.live is not None
+                value['archive_history'] = getattr(self.server.lifecycle, 'history_reports', None) is not None
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

@@ -10,9 +10,10 @@ from .ai_stats_responses import response_rows
 from .ai_stats_buckets import model_key
 from .ai_stats_models import activity_groups, model_costs, model_time, observed_tokens, standings
 from .ai_stats_subagents import child_requests
-from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
+from .timezones import local_month_start_ms, resolve_timezone
 
 DAY_MS = 24 * HOUR_MS
+ROLLING_DAYS = {'today': 1, '7-days': 7, '30-days': 30}
 FALLBACK_MS = 60_000
 MAX_GUESSED_MS = 4 * HOUR_MS
 GENERIC_TOKEN_COST = Decimal('.000003')
@@ -60,9 +61,7 @@ class StatsPeriod:
 
 
 def windows(zone, now):
-    return (('today', local_day_start_ms(zone, now_ms=now)),
-            ('7-days', local_day_start_ms(zone, now_ms=now, days_ago=6)),
-            ('30-days', local_day_start_ms(zone, now_ms=now, days_ago=29)),
+    return (*((period, now - days * DAY_MS) for period, days in ROLLING_DAYS.items()),
             ('month', local_month_start_ms(zone, now_ms=now)),
             ('all', None))
 
@@ -204,9 +203,10 @@ def _request_costs(entries, valuation):
             value = None
         values.append(value)
         missing_fields.append(USAGE_FIELDS - set(entry.tokens.known_fields))
-    guessed = any(value is None or missing for value, missing in zip(values, missing_fields))
+    observed = tuple(value if not missing else None for value, missing in zip(values, missing_fields))
+    guessed = any(value is None for value in observed)
     if not guessed:
-        return values, False
+        return values, observed, False
     rates = {}
     for entry, value, missing in zip(entries, values, missing_fields):
         if value is not None and entry.tokens.total and not missing:
@@ -220,12 +220,12 @@ def _request_costs(entries, valuation):
             amount = min(10_000_000, max(0, entry.tokens.total) + extra)
             supplement = min(Decimal(10), rate * (amount if value is None else extra))
             values[index] = (value or Decimal(0)) + supplement
-    return values, guessed
+    return values, observed, guessed
 
 
-def _cost_metrics(roots, entries, valuation, source_complete, duration, time_reasons, per_root, key, activity):
+def _cost_metrics(roots, entries, valuation, source_complete, time_reasons, per_root, key, activity):
     owner = {entry.session_id: root for root in roots for entry in root.entries}
-    values, guessed = _request_costs(entries, valuation)
+    values, observed, guessed = _request_costs(entries, valuation)
     cost_podium, average_podium = model_costs(roots, entries, values, key)
     children, child_values, ancestry_unknown = child_requests(roots, entries, values)
     reasons = tuple(code for code, present in (
@@ -242,20 +242,23 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
     total = sum(costs.values(), Decimal(0))
     cost_status = 'partial' if reasons else 'complete'
     child_reasons = reasons + (('unknown-subagent-ancestry',) if ancestry_unknown else ())
-    rate = total * HOUR_MS / duration if duration else Decimal(0)
     average = total / len(costs) if costs else Decimal(0)
     expensive = min(costs, key=lambda sid: (-costs[sid], sid)) if costs else None
     root = next((root for root in roots if root.session_id == expensive), None)
-    rate_reasons = tuple(dict.fromkeys((*reasons, *time_reasons)))
-    return (Stat('hourly-rate', rate, cost_status, reasons=rate_reasons,
-                 podium=model_hourly_rates(activity, entries, values, union)),
+    earned = model_hourly_rates(activity, entries, observed, union)
+    timing_reasons = ('unpaired-request-timing',) if earned.partial else ()
+    rate_reasons = tuple(dict.fromkeys((*reasons, *time_reasons, *timing_reasons)))
+    rate = earned.cost * HOUR_MS / earned.duration_ms if earned.duration_ms else (None if earned.partial else Decimal(0))
+    metrics = (Stat('hourly-rate', rate, 'partial' if rate_reasons else 'complete', reasons=rate_reasons,
+                    podium=earned.podium),
          Stat('total-cost', total, cost_status, reasons=reasons, podium=cost_podium),
          Stat('average-cost', average, cost_status, reasons=reasons, podium=average_podium),
          Stat('expensive-session', costs[expensive] if root else Decimal(0), cost_status,
               root.session_id if root else None, root.title if root else '',
               reasons=reasons),
          Stat('subagent-cost', sum(child_values, Decimal(0)), 'partial' if child_reasons else 'complete',
-              reasons=child_reasons, podium=standings(children, child_values, key)))
+               reasons=child_reasons, podium=standings(children, child_values, key)))
+    return metrics, earned
 
 
 def _token_metrics(roots, entries, complete, start, now, key):
@@ -278,13 +281,15 @@ def _token_metrics(roots, entries, complete, start, now, key):
 
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
-    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None, model_bucket=None):
+    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None, model_bucket=None,
+                 shared_history=False):
         self.roots, self.valuation = tuple(roots), valuation
         self.now, self.zone = now, zone
         self.workday_calendar = workday_calendar
-        self._timelines, self._requests = {}, {}
+        self._timelines, self._requests = {}, None
         self._model_names = {}
         self.model_bucket, self.model_name = model_bucket, model_name
+        self.shared_history = shared_history
 
     def model_key(self, entry):
         model = entry.model
@@ -302,22 +307,22 @@ class StatsObservation:
         return self._timelines[key]
 
     def period(self, *, period, start, source_complete=True):
+        if self._requests is None:
+            self._requests = deduplicated_requests(
+                (entry for root in self.roots for entry in root.entries), shared_history=self.shared_history)
         roots = tuple(root for root in self.roots if not outside_period(root, start))
-        population = tuple(id(root) for root in roots)
-        if population not in self._requests:
-            self._requests[population] = tuple(deduplicated_requests(e for root in roots for e in root.entries))
-        entries = tuple(entry for entry in self._requests[population]
+        entries = tuple(entry for entry in self._requests
                         if (start is None or entry.completed_at_ms >= start) and entry.completed_at_ms <= self.now)
         complete = source_complete and all(root.source_complete for root in roots)
         per_root, unknown, provisional = _timing(roots, start, self.now, self)
-        duration, _status, reasons, timed = _time_metrics(roots, per_root, unknown, provisional, self.zone, complete)
+        _duration, _status, reasons, timed = _time_metrics(roots, per_root, unknown, provisional, self.zone, complete)
         activity = activity_groups(roots, entries, start, self.now, self.model_key)
-        cost = _cost_metrics(roots, entries, self.valuation, complete, duration, reasons, per_root, self.model_key, activity)
+        cost, earned = _cost_metrics(roots, entries, self.valuation, complete, reasons, per_root, self.model_key, activity)
         # Original positive evidence only: no session metadata, epoch or guessed age.
         stamps = [entry.completed_at_ms for entry in entries if 0 < entry.completed_at_ms <= self.now]
         stamps.extend(left for root in roots for left, _duration, _running in root.intervals
                       if 0 < left <= self.now)
-        rates = hourly_rates(cost[1].value, duration, period=period, now=self.now, zone=self.zone,
+        rates = hourly_rates(earned.cost, earned.duration_ms, period=period, now=self.now, zone=self.zone,
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
         metrics = (replace(cost[0], rates=rates), cost[1],
             replace(timed[0], podium=model_time(activity, union)),

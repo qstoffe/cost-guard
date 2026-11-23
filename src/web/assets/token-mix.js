@@ -156,6 +156,9 @@ const TokenMixView = (() => {
       if (this.result === result) return;
       this.result = result;
       const view = result.view;
+      if (typeof ReportLoading !== 'undefined')
+        ReportLoading.historyProgress?.(this, this.buttons.find(item => item.id === view.token_mix_period?.period)?.button,
+          view.history_progress);
       const coverage = view.token_mix_period?.coverage;
       const hasUsage = !!view.model_token_mix.length || !!view.token_mix?.request_count;
       const unknown = coverage === 'unknown' || !hasUsage && result.source.status === 'partial';

@@ -334,13 +334,13 @@ class MatchedInputsTests(unittest.TestCase):
     def test_application_allowlist_display_units_and_http_validation(self):
         service = self.service(source(1))
         result = ReportApplication(lambda now, progress: self.fresh(service), clock=lambda: service.now_ms).execute(
-            parse_report({'kind': 'comparisons'})).to_json()
+            ReportRequest(ReportKind.COMPARISONS)).to_json()
         self.assertIsNone(result['error'])
         row = result['view']['comparisons']['groups'][0]['runs'][0]
         self.assertNotIn('fingerprint', row)
         self.assertIn('precise_start', row['display'])
         self.assertIn('$', row['display_units']['usd']['ccost'])
-        for value in [{'kind': 'comparisons', 'comparison_offset': 10},
+        for value in [{'kind': 'comparisons'}, {'kind': 'comparisons', 'comparison_offset': 10},
                       {'kind': 'comparisons', 'comparison_offset': -10},
                       {'kind': 'comparisons', 'comparison_revision': 'bad'},
                       {'kind': 'normal', 'comparison_offset': 0}]:

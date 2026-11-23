@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from src.analysis.ai_stats import windows
 from src.analysis.timezones import local_date_range
 from src.application.session_catalog import SessionCatalog, ordered, sort_value
 from src.reports.models import SessionUsageRow
@@ -97,7 +96,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                         expected = ["c", "d", "e", "a", "b"] if direction == -1 else ["a", "b", "c", "d", "e"]
                     else:
                         expected = ["c", "a", "b", "d", "e"] if direction == -1 else ["a", "b", "c", "d", "e"]
-                    with patch("src.application.session_catalog.sort_value", wraps=sort_value) as extract:
+                    with patch("src.application.session_epoch_page.sort_value", wraps=sort_value) as extract:
                         result = ordered(rows, key, direction)
                     self.assertEqual([row.session_id for row in result], expected)
                     self.assertEqual(extract.call_count, len(rows))
@@ -113,7 +112,6 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                         expected[period] = local_date_range((date - timedelta(days=ago)).isoformat(), zone).start_ms
                     expected.update(month=local_date_range(date.replace(day=1).isoformat(), zone).start_ms, all=None)
                     for now in (span.start_ms, span.end_ms - 1):
-                        self.assertEqual(dict(windows(zone, now)), expected)
                         source = SyntheticMonthSource(0, 1, month_start_ms=now)
                         service = report_service(self, source, now_ms=now, timezone_id=zone)
                         catalog = SessionCatalog(clock_ms=lambda: now, timezone_id=zone)
@@ -122,10 +120,10 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                             report = service.build_token_mix_history(scope=period)
                             self.assertEqual(report.token_mix_period["start_ms"], start)
                         stats = service.build(ReportRequest(ReportKind.AI_STATS, stats_scope="30-days"))
-                        self.assertEqual({item.period: item.start_ms for item in stats.ai_stats}, expected)
-                    tomorrow = dict(windows(zone, span.end_ms))
-                    self.assertEqual(tomorrow["today"], span.end_ms)
-                    self.assertNotEqual(tomorrow["7-days"], expected["7-days"])
+                        rolling = {period: now - days * 86_400_000 for period, days in
+                                   (("today", 1), ("7-days", 7), ("30-days", 30))}
+                        self.assertEqual({item.period: item.start_ms for item in stats.ai_stats},
+                                         {**expected, **rolling})
 
     def test_5000_root_metadata_and_warm_page_four_ignore_offscreen_running_age(self):
         now = int(datetime(2026, 11, 15, 12, tzinfo=timezone.utc).timestamp() * 1000)

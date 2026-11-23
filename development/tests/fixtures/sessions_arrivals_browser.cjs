@@ -58,9 +58,10 @@ module.exports = async ({evaluate, until, fixture}) => {
   await until('document.querySelector("#context-help")?.matches(":popover-open")');
   await fixture('arrival-new-3');
   await until('document.querySelector("tr[data-id=ses_arrival_3]")');
-  assert.equal(await evaluate(`stableArrival.isConnected && document.activeElement===stableModel &&
-    getSelection().toString()===arrivalSelection && Math.abs(scrollY-arrivalScroll)<2 &&
-    document.querySelector("#context-help").matches(":popover-open")`),true);
+  assert.deepEqual(await evaluate(`({connected:stableArrival.isConnected,focus:document.activeElement===stableModel,
+    selection:getSelection().toString()===arrivalSelection,scroll:Math.abs(scrollY-arrivalScroll)<2,
+    help:document.querySelector("#context-help").matches(":popover-open")})`),
+    {connected:true,focus:true,selection:true,scroll:true,help:true});
   assert.equal(await evaluate('current.catalog.body.children.length'),25);
   await evaluate(`window.arrivalLabelChanges=0;
     new MutationObserver(records=>arrivalLabelChanges+=records.length)

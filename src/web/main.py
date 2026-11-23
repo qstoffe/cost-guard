@@ -77,7 +77,13 @@ def main():
     if is_managed:
         return managed(root, arguments[1], arguments[2])
     from .host import WebHost
-    owner = WebHost(root)
+    store = InstanceStore(root)
+    # One host per checkout owns the upgrade, including developer runs.
+    with store.lock(timeout=0, lifetime=True):
+        return foreground(WebHost(root, previous_archive_directory=store.directory))
+
+
+def foreground(owner):
     try:
         owner.start()
         owner.publish_ready()

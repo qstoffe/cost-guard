@@ -53,9 +53,13 @@ const MiniWatch = (() => {
       return {...card, session_summary: summary};
     }
     update(publication, now) {
-      if (!publication?.view || publication.state !== 'running') return;
+      if (!publication?.view || !['running', 'retained_history'].includes(publication.state)) return;
       this.costs ||= new ReportView.CostDisplay();
       const view = WatchView.costProjection(publication.view, this.costs, publication.source_generation);
+      if (publication.state === 'retained_history') {
+        this.view = view;
+        return; // A read-only archive update never renews prompt or quota freshness.
+      }
       const previous = this.view;
       const prompts = view.cards_state === 'observed';
       const oldCards = new Map((previous?.active_cards || []).map(card =>
@@ -103,7 +107,7 @@ const MiniWatch = (() => {
         earlier_cards: (view.earlier_cards || []).map(card => this.context(card)),
         // Missing refresh data retains this day's usable summary only. The
         // configured boundary below still clears yesterday, even disconnected.
-        daily_usage: daily ? dailyUsable || !previous?.daily_usage ||
+        daily_usage: daily ? dailyUsable || view.daily_state === 'retained' || !previous?.daily_usage ||
           daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage :
           previous?.daily_usage?.day_end_ms > now ? previous.daily_usage : null,
         accounts: accounts ? {...view.accounts, accounts} : previous?.accounts};
@@ -763,7 +767,8 @@ const MiniWatch = (() => {
     update(value) {
       // Progress events and repeated HTTP snapshots may contain the same retained
       // Live value. They are not fresh source/presentation publications.
-      if (typeof value?.view?.now_ms === 'number' && value.view.now_ms < this.publication?.view?.now_ms) return;
+      if (value?.state === this.publication?.state && typeof value?.view?.now_ms === 'number' &&
+          value.view.now_ms < this.publication?.view?.now_ms) return;
       // A changed source cannot inherit prompt observations or displayed context.
       const scope = JSON.stringify([this.instance, value?.view?.source_label]);
       if (scope !== this.sourceScope) {

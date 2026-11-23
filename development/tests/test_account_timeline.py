@@ -134,6 +134,23 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual('Safe label 1', series[0]['account'])
         self.assertNotIn('private-account-key', str(series))
 
+    def test_provider_monthly_amount_is_separate_from_observed_days_and_confirmed_zeros(self):
+        quota = QuotaComponent('Monthly', 'fixed', used=Decimal(795), limit=Decimal(1000),
+                               unit='AI credits', reset_at_ms=NOV_1 + 30 * DAY_MS)
+        account = replace(subscription('github-copilot'), quotas=(quota,))
+        roster = account_roster(projected(account), now_ms=NOV_5)
+        call = request('one', NOV_1 + 1000, amount=40, provider='github-copilot', ref=account.ref)
+        index = PeriodCCostIndex((call,), lambda _, tokens: Decimal(tokens.input), account_only=True)
+
+        chart = timeline_view('month', NOV_5, 'UTC', roster, index, first_covered_ms=NOV_1, gaps=()).to_json()
+
+        series, = chart['series']
+        self.assertTrue(series['provider_monthly_total'])
+        self.assertEqual('$7.95', series['month_total']['display']['usd'])
+        self.assertEqual('$0.40', series['observed_total']['display']['usd'])
+        self.assertEqual(['40', '0', '0', '0', '0'], [p['amount'] for p in series['points'][:5]])
+        self.assertFalse(chart['pending_buckets'])
+
     def test_covered_zero_differs_from_partial_pricing_attribution_and_source_gaps(self):
         a, b = subscription(identity='first'), subscription(identity='second')
         calls = (request('a', NOV_1 + 1, amount=500, ref=a.ref),

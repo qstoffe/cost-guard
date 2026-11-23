@@ -4,7 +4,7 @@
 // page-level operational failures are distinct. See architecture/modules/reports.md.
 // Equal-treatment cards over server-prepared values; no numerical accounting here.
 const AIStatsView = (() => {
-  const idleRateHelp = 'Average cost across all AI work: total CCost for every model ÷ total active AI hours. ' +
+  const idleRateHelp = 'CCost for calls with measured execution ÷ their measured hours in this period. ' +
     'Overlapping work counts once. Individual models can have higher or lower hourly rates.';
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
@@ -28,8 +28,8 @@ const AIStatsView = (() => {
   const mainFileHelp = '\n\nMeasures only the main database file, excluding auxiliary files such as the SQLite WAL.';
   const databaseRows = [
     ['opencode_bytes', 'OpenCode DB',
-      'OpenCode stores the source sessions used for CostGuard’s session-based statistics. In OpenCode v2, a deleted session ' +
-      'stops contributing to refreshed source-backed results. Old derived cache entries may remain on disk for a while.'],
+       'OpenCode stores the source sessions used for Cost Guard’s statistics. Verified Web history can remain available ' +
+         'after a source session is deleted or OpenCode restarts.'],
     ['cache_bytes', 'CostGuard Cache DB',
       'CostGuard keeps a disposable SQLite cache to speed up repeated analysis. Eligible old session-cache entries can be ' +
       'cleaned up when neither session activity nor meaningful use has occurred for at least 30 days. Cleanup runs while the ' +
@@ -46,12 +46,17 @@ const AIStatsView = (() => {
     }
     return `${sizeNumber.format(bytes)} ${sizeUnits[unit]}`;
   }
+  function missingHourlyRate(metric) {
+    return metric.metric === 'hourly-rate' && metric.value === null &&
+      metric.status === 'partial' && metric.podium?.length === 0;
+  }
   function valid(result) {
     const rows = result?.view?.ai_stats;
     return !result?.error && result?.view?.kind === 'ai-stats' && result.view.ai_stats_policy === 'fun-5-buckets' &&
       Array.isArray(rows) && rows.length > 0 && rows.every(row =>
       periods.some(([id]) => id === row.period) && row.metrics?.length === definitions.length && definitions.every(([key]) =>
-        row.metrics.filter(metric => metric.metric === key && metric.value !== null && Number.isFinite(Number(metric.value)) &&
+        row.metrics.filter(metric => metric.metric === key && (missingHourlyRate(metric) ||
+          metric.value !== null && Number.isFinite(Number(metric.value))) &&
           typeof metric.display?.value === 'string' && typeof metric.display?.trait === 'string' &&
           (key !== 'total-tokens' || /^\d+$/.test(metric.exact_value) && typeof metric.display.token_help === 'string') &&
           ['usd', 'credits'].every(unit => typeof (metric.display_units?.[unit]?.value ?? metric.display.value) === 'string' &&
@@ -122,8 +127,9 @@ const AIStatsView = (() => {
       this.buttons = new Map(); this.cards = new Map();
       for (const [id, label] of periods) {
         const button = e('button', label); button.type = 'button';
-        ContextHelp.heading(button, {today: 'Today’s robot adventures.', '7-days': 'A week of silicon shenanigans.',
-          '30-days': 'Thirty days of robot quests.', month: 'This calendar month’s adventures.', all: 'The whole robot saga.'}[id], true);
+        ContextHelp.heading(button, {today: 'Activity in the last 24 hours.', '7-days': 'Activity in the last 7 × 24 hours.',
+          '30-days': 'Activity in the last 30 × 24 hours.', month: 'Activity since local midnight on the first of this month.',
+          all: 'All available history through now.'}[id], true);
         button.addEventListener('click', () => select(id));
         this.buttons.set(id, button); this.selector.append(button);
       }
@@ -188,8 +194,7 @@ const AIStatsView = (() => {
         'Same opening move. Who crossed the finish line first?');
       title.append(symbol, this.extraHeading);
       this.extraValue = e('p', '', 'ai-stat-value'); this.extraDetail = e('p', '', 'ai-stat-detail'); this.extraTrait = e('p', '', 'ai-stat-trait');
-      const link = e('a', 'Comparisons'); link.href = '#/comparisons';
-      this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
+      this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait);
     }
     async refreshDatabaseSizes() {
       // Optional local facts never share the report request or its error state.
@@ -207,6 +212,9 @@ const AIStatsView = (() => {
       ReportView.text(this.databaseValues.get('cache_bytes'), formatFileSize(sizes?.cache_bytes));
     }
     update(state, sourceBlocked) {
+      if (typeof ReportLoading !== 'undefined')
+        ReportLoading.historyProgress?.(this, this.buttons.get(state.period),
+          state.result?.view.history_progress?.[state.period]);
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;
@@ -240,7 +248,7 @@ const AIStatsView = (() => {
       this.readyScope = scope;
       this.costs ||= new ReportView.CostDisplay();
       for (let metric of row.metrics) {
-        if (costMetrics.has(metric.metric)) {
+        if (costMetrics.has(metric.metric) && !missingHourlyRate(metric)) {
           metric = this.costs.select(metric, [state.result.source?.identity, state.result.source?.generation,
             row.period, row.start_ms, metric.metric,
             metric.metric === 'expensive-session' ? metric.session_id : null], 'value',
@@ -269,7 +277,7 @@ const AIStatsView = (() => {
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {
           const link = target || e('a'); ReportView.text(link, metric.session_title);
-          link.href = '#/sessions/' + metric.session_id;
+           link.href = '#/sessions/' + metric.session_id;
           if (!target) card.detail.replaceChildren(link);
         } else ReportView.text(card.detail, metric.metric === 'token-rate' ? '' : face(metric.detail || ''));
       }

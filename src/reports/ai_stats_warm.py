@@ -1,14 +1,15 @@
-"""Restore a complete, fixed-day AI Stats projection after live metadata proof."""
+"""Restore a complete AI Stats projection while its time-dependent evidence is stable."""
 from dataclasses import asdict, replace
 from decimal import Decimal, InvalidOperation
 
-from src.analysis.ai_stats import MAX_GUESSED_MS, POLICY, Stat, StatsPeriod, windows
+from src.analysis.ai_stats import DAY_MS, POLICY, ROLLING_DAYS, Stat, StatsPeriod, windows
 from src.analysis.ai_stats_models import ModelStanding
 from src.analysis.ai_stats_rates import HourlyRates
 from src.analysis.ai_stats_responses import ModelResponse
 from src.analysis.cache import dependency_signature
 from src.analysis.effort_defaults import REVISION as EFFORT_REVISION
 from src.analysis.model_identity import current, decode_model, encode_model
+from src.analysis.timezones import local_day_start_ms
 from src.cache import warm_history
 from src.domain.effort import EffortEvidence
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS
@@ -16,7 +17,7 @@ from .ai_stats_evidence import ALGORITHM as EVIDENCE_ALGORITHM
 from .history_cohort import identity, structure
 
 NAMESPACE = 'ai-stats-warm-projection'
-ALGORITHM = 'ai-stats-projection-1'
+ALGORITHM = 'ai-stats-projection-2'
 KEY = 'last-complete'
 MAX_BYTES = 512 * 1024
 
@@ -27,7 +28,8 @@ def binding(service, sessions, revisions, reference):
         return None
     periods = windows(service.timezone_id, service.now_ms)
     signature = dependency_signature((ALGORITHM, EVIDENCE_ALGORITHM, POLICY, MODEL_IDENTITY_SEMANTICS, EFFORT_REVISION,
-        identity(service), service.timezone_id, periods, service._dependencies(service._load_catalog()),
+        identity(service), service.timezone_id, local_day_start_ms(service.timezone_id, now_ms=service.now_ms),
+        service._dependencies(service._load_catalog()),
         reference.diagnostic_signature, service.config.get('workdayCalendar', 'SE'),
         sorted((sid, members[sid], revision) for sid, revision in revisions.items())))
     return signature, periods
@@ -88,17 +90,37 @@ def restore(service, qualification, roots):
     try:
         if not 0 <= service.now_ms - value['observed'] <= warm_history.MAX_AGE_MS:
             return None
+        if service.now_ms >= value['valid_before']:
+            return None
         if not current(service.source, (decode_model(model) for model in value['models'])):
             return None
         titles = {root.session_id: root.title for root in roots}
         rows = value['rows']
-        if [(row['period'], row['start']) for row in rows] != list(periods):
+        if [row['period'] for row in rows] != [period for period, _ in periods]:
             return None
-        return tuple(StatsPeriod(row['period'], row['start'], service.now_ms,
+        return tuple(StatsPeriod(period, start, service.now_ms,
             tuple(_decode_metric(metric, titles) for metric in row['metrics']),
-            _decode_metric(row['matched'], titles) if row['matched'] else None) for row in rows)
+            _decode_metric(row['matched'], titles) if row['matched'] else None)
+            for row, (period, start) in zip(rows, periods))
     except (KeyError, TypeError, ValueError, InvalidOperation, OverflowError):
         return None
+
+
+def _rolling_valid_before(now, periods, evidence, matches):
+    """Find the first ms at which a rolling bucket could change."""
+    deadlines = [now + warm_history.MAX_AGE_MS + 1]
+    points = [entry.completed_at_ms for root in evidence for entry in root.entries]
+    points.extend(run.started_at_ms for run in matches if run)
+    intervals = [(left, left + duration) for root in evidence for left, duration, _ in root.intervals]
+    intervals.extend((fact.start_ms, fact.start_ms + fact.duration_ms)
+                     for root in evidence for fact in root.activity)
+    for period, start in periods:
+        if period not in ROLLING_DAYS:
+            continue
+        delta = DAY_MS * ROLLING_DAYS[period]
+        deadlines.extend(point + delta + 1 for point in points if point >= start)
+        deadlines.extend(max(left, start) + delta + 1 for left, end in intervals if end > start)
+    return min(deadlines)
 
 
 def publish(service, qualification, evidence, matches, rows):
@@ -109,8 +131,14 @@ def publish(service, qualification, evidence, matches, rows):
         # Only save observations whose event/timing frontier is fully behind Now.
         if (not root.source_complete or root.cost_pending
                 or any(entry.completed_at_ms > now for entry in root.entries)
-                or any(running or (left > 0 and left + (MAX_GUESSED_MS if duration is None else duration) > now)
-                       for left, duration, running in root.intervals)):
+                or any(running or left <= 0 or duration is None or duration < 0 or left + duration > now
+                        for left, duration, running in root.intervals)):
+            return
+        # Request-only roots use a synthetic minute for the Working Time card.
+        # Avoid reusing any guessed interval at a moving left boundary.
+        if (root.entries and not root.intervals
+                or any(type(fact.start_ms) is not int or type(fact.duration_ms) is not int
+                       for fact in root.activity)):
             return
         for entry in root.entries:
             model = entry.model
@@ -118,8 +146,9 @@ def publish(service, qualification, evidence, matches, rows):
     if any(run and (run.started_at_ms > now or run.completed_at_ms and run.completed_at_ms > now
                     or run.status == 'running') for run in matches):
         return
-    signature, _ = qualification
-    value = dict(observed=now, models=[encode_model(model) for model in models.values()],
-        rows=[dict(period=row.period, start=row.start_ms, metrics=[_metric(metric) for metric in row.metrics],
+    signature, periods = qualification
+    value = dict(observed=now, valid_before=_rolling_valid_before(now, periods, evidence, matches),
+         models=[encode_model(model) for model in models.values()],
+         rows=[dict(period=row.period, metrics=[_metric(metric) for metric in row.metrics],
                    matched=_metric(row.matched) if row.matched else None) for row in rows])
     warm_history.publish(service.cache_repository, NAMESPACE, KEY, ALGORITHM, signature, value, limit=MAX_BYTES)

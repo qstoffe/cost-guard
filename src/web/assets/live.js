@@ -7,6 +7,7 @@ const LiveConnection = (() => {
     let source = null, instance = null, sequence = 0, syncing = null, stopped = false;
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     let sourceOutage = false, healthOwner = null, healthCheck = -1;
+    let recoveringHost = false;
     function sourceHealth() {
       const proof = values.live?.source_health;
       if (!proof || !Number.isSafeInteger(proof.check_id)) return;
@@ -41,10 +42,13 @@ const LiveConnection = (() => {
       else if (live.state !== 'running') report('source_unavailable', 'SOURCE UNAVAILABLE — HTTP connected; last source observation retained, not live.');
       else report('connected', 'Live connected.');
     }
-    function publish(validate = false) {
+    function publish(validate = false, reconnected = false) {
       if (values.terminal) {
         stop(`STOPPED — NOT LIVE · ${values.terminal.reason}: host stopped. Run the launcher again using the OS launcher.`);
-      } else { if (validate) health(); update(values.live, values.progress); }
+      } else {
+        if (validate) health();
+        update(values.live, values.progress, values.watch_history?.view, values.history, reconnected);
+      }
     }
     async function sync() {
       if (stopped) return;
@@ -58,9 +62,12 @@ const LiveConnection = (() => {
           }
           instance = snapshot.instance_id;
           authenticatedAt = clock.now();
+          const reconnected = recoveringHost;
+          recoveringHost = false;
           if (snapshot.sequence >= sequence) {
-            sequence = snapshot.sequence; values = snapshot.values; publish(true);
+            sequence = snapshot.sequence; values = snapshot.values;
           }
+          publish(true, reconnected);
           openStream();
         } catch (error) {
           if (stopped) return;
@@ -70,7 +77,10 @@ const LiveConnection = (() => {
             stop('HOST IDENTITY CHANGED — NOT LIVE. Obtain a fresh authorized launcher link.', 'identity_changed');
           } else if (error.message === 'instance_stopping') {
             stop('STOPPED — NOT LIVE. Run the launcher again using the OS launcher.');
-          } else report('offline', 'OFFLINE — last observation retained; Live offline. Host unreachable. Retrying this host only; no server will be started.');
+          } else {
+            recoveringHost = true;
+            report('offline', 'OFFLINE — last observation retained; Live offline. Host unreachable. Retrying this host only; no server will be started.');
+          }
         }
       })();
       await syncing;
@@ -107,7 +117,8 @@ const LiveConnection = (() => {
       const opened = sourceFactory('/api/events'); // No reusable secret or query string.
       source = opened;
       const current = () => !stopped && source === opened;
-      for (const kind of ['live', 'progress', 'terminal']) opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
+      for (const kind of ['live', 'progress', 'watch_history', 'history', 'terminal'])
+        opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
       opened.addEventListener('resync', () => { if (current()) sync(); });
       opened.addEventListener('authorization_required', () => {
         if (!current()) return;
@@ -119,6 +130,7 @@ const LiveConnection = (() => {
       opened.onerror = () => {
         if (!current()) return;
         streamOpen = false;
+        recoveringHost = true;
         report('reconnecting', 'RECONNECTING — live stream interrupted; host reachability being checked. Last observation retained, not live.');
       };
     }
@@ -126,8 +138,9 @@ const LiveConnection = (() => {
       await sync();
       if (!stopped) timer = clock.later(probe, 10000);
     }
-    function revalidate() {
+    function revalidate(afterNetworkChange = false) {
       if (stopped) return;
+      if (afterNetworkChange) recoveringHost = true;
       if (!streamOpen || authenticatedAt == null || clock.now() - authenticatedAt >= 15000)
         report('reconnecting', 'RECONNECTING — revalidating after idle; last observation retained, not live.');
       sync();

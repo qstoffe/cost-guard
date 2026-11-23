@@ -56,10 +56,10 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   checks.push('passive asynchronous exception retains source-qualified history with no 500ms busy retry or user affordance');
   // Real route composition and popovers, with controlled benign presentation
   // failures over the synthetic HTTP reports. No installed/private source.
-  for (const route of ['models','watch','sessions','accounts','token-mix','ai-stats','comparisons','settings']) {
+  for (const route of ['models','watch','sessions','accounts','token-mix','ai-stats','settings']) {
     await evaluate(`location.hash='#/${route}'`);
     await until(`current?.section==='${route}'`);
-    if (['models','token-mix','ai-stats','comparisons'].includes(route))
+    if (['models','token-mix','ai-stats'].includes(route))
       await until('current.result && !current.loading');
     if (route==='sessions') await until('current.catalog?.data && !current.catalog.busy');
     if (route==='settings') await until('settingsView?.loaded && !settingsView.busy');

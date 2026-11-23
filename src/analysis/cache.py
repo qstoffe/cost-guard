@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, fields
 from decimal import Decimal, InvalidOperation
@@ -10,6 +9,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from src.cache import CacheRepository
 from src.cache.session_scope import snapshot_scope
+from src.cache.signature import dependency_signature
 from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession, Provenance, SessionSnapshot, TokenUsage
 from src.domain.acquisition import AcquisitionMetrics
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
@@ -48,11 +48,6 @@ class CacheObservation:
             and self.source_revision == revision and self.dependencies == dependencies
             and (self.bundle is None or (self.bundle.root_session_id == root.session_id
                 and self.bundle.source_revision == revision)))
-
-
-def dependency_signature(value: Any) -> str:
-    payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _flat_fields(value: Any, nested: frozenset[str] = frozenset()) -> dict[str, Any]:

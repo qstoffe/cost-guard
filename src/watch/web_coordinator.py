@@ -68,6 +68,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self.detail_capture = detail_capture
         self.include_archived_revisions = True
         self.catalog_observation = None
+        self.session_catalog = None
+        self.caught_up_web = False
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
         self.catalog_job = None
         self.reads = SourceReads()
@@ -80,6 +82,13 @@ class WebWatchCoordinator(WatchCoordinator):
         observation = self.catalog_observation
         available = available and observation is not None and observation.source_epoch == source[-1]
         identified = source[0] != 'opencode-v2' or source[-1] is not None
+        catalog = self.session_catalog
+        unavailable_history = live_roots = frozenset()
+        if catalog is not None and observation is not None:
+            with catalog.lock:
+                if catalog.last_observation is observation:
+                    unavailable_history = catalog.unavailable_history()
+                    live_roots = frozenset(catalog.history_live_roots())
         return self.account_timeline.tick(source=source if identified else None, observation=observation,
             accounts=frame.quota.accounts if frame and frame.quota else (), periods=frozenset(PERIODS),
             zone=service.timezone_id, catalog=service.comparison_pricing_catalog,
@@ -87,7 +96,8 @@ class WebWatchCoordinator(WatchCoordinator):
             migration_gap=service.selection.migration_gap, now_ms=int(self.clock_ms()),
             available=available, terminal=terminal, card_today=self.card_today,
             shared_roots=self.history_roots if self.history_source == source else None,
-            foreground=foreground, require_background_prices=True)
+            foreground=foreground, require_background_prices=True, unavailable_history=unavailable_history,
+            live_roots=live_roots)
 
     def _record_refresh_duration(self, seconds):
         if not self.card_timing_observed:
@@ -139,6 +149,7 @@ class WebWatchCoordinator(WatchCoordinator):
         return roots
 
     def tick_catalog(self, catalog, *, unavailable=False, source_interrupted=False):
+        self.session_catalog = catalog
         catalog.observe(self.catalog_observation, unavailable=unavailable,
                         source_interrupted=source_interrupted, timezone_id=self.report_service.timezone_id)
         evidence = []
@@ -201,6 +212,21 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def _hydrate_startup(self, roots, *, now_ms):
         return ()
+
+    def _initialize_today_history(self, observation, hydrated, now_ms, defer_history):
+        # Web's _account_history worker owns this acquisition, unlike CLI.
+        # Never leave its unused CLI enrichment queue perpetually pending.
+        pass
+
+    def _wait_delay_seconds(self, active_count):
+        # The Web cadence is bounded even when an adaptive CLI interval is long.
+        # Hints still bring the read deadline forward.
+        catalog = self.session_catalog
+        if catalog is None or catalog.archive is None:
+            return super()._wait_delay_seconds(active_count)
+        idle = (self.caught_up_web and not active_count and self.daily_usage is not None
+                and self.history_job is None and self.catalog_job is None)
+        return self.accounts.wait_delay(6.0 if idle else 3.0)
 
     def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None):
         service = None

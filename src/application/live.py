@@ -14,7 +14,8 @@ from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, archive=None,
+                 legacy_archive=None, archive_upgrade=None, timezone_id='UTC'):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
@@ -22,17 +23,21 @@ class LiveRuntime:
         self.stopping = Event()
         self.thread = None
         self.failure = None
-        self.details = SessionDetails()
-        self.catalog = SessionCatalog()
+        self.details = SessionDetails(archive=archive)
+        self.catalog = SessionCatalog(archive=archive, legacy_archive=legacy_archive,
+                                      archive_upgrade=archive_upgrade, timezone_id=timezone_id)
         self.driver = None
+        self.account_observation = (), None, None, None
         self.source_failure = None
         self.observed = Event()
         self.working = Event()
+        self.caught_up_web = Event()
         self.startup_health = SourceStatus()
 
     def start(self):
         if self.thread is not None:
             raise RuntimeError("live_already_started")
+        self.catalog.archive_maintenance()
         self.thread = Thread(target=self._run, name="cost-guard-live")
         self.thread.start()
 
@@ -81,8 +86,19 @@ class LiveRuntime:
                     continue
                 self.working.set()
                 try:
+                    if self.catalog.archive is not None:
+                        coordinator.caught_up_web = self.caught_up_web.is_set()
                     frame = driver.tick()
                     if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
+                        selection = coordinator.report_service.selection
+                        if driver.error is None:
+                            epoch = getattr(selection.source, 'observation_epoch', None)
+                            observation = getattr(coordinator, 'catalog_observation', None)
+                            confirmed = observation is not None and observation.source_epoch == epoch
+                            binding = self.catalog.bind_archive(selection.selected, selection.source.source_instance,
+                                                                epoch if confirmed else None)
+                            if binding is not None:
+                                self.details.bind_archive(*binding)
                         health = getattr(driver, 'source_status', None)
                         driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None,
                             source_interrupted=driver.terminal or isinstance(health, SourceStatus) and health.outage_confirmed())
@@ -98,7 +114,8 @@ class LiveRuntime:
                 if driver.terminal:
                     break
                 # Yield between history slices and keep account-only updates timely.
-                publication_due = time.monotonic() + (0.25 if driver.coordinator.today_ccost.history_pending else 1)
+                delay = 0.25 if coordinator.today_ccost.history_pending else 1
+                publication_due = time.monotonic() + delay
                 timeline_due = time.monotonic() + FOREGROUND_SLICE_MS / 1000
         except SourceError as error:
             self.source_failure = error
@@ -112,15 +129,15 @@ class LiveRuntime:
             else:
                 raise
         finally:
-            if driver is not None:
-                try:
+            try:
+                if driver is not None:
                     driver.close()
-                except BaseException as error:
-                    self.failure = self.failure or error
-                    if self.on_failure:
-                        self.on_failure(error)
-                    else:
-                        raise
+            except BaseException as error:
+                self.failure = self.failure or error
+                if self.on_failure:
+                    self.on_failure(error)
+                else:
+                    raise
 
     def _tick_timeline(self, driver, frame):
         coordinator = driver.coordinator
@@ -137,8 +154,12 @@ class LiveRuntime:
         verified = frame is not None and driver.error is None and driver.observed_at_ms is not None
         timeline_scope = self._tick_timeline(driver, frame)
         if frame is not None:
-            self.details.observe_accounts(frame.quota, source_scope(driver.coordinator.report_service.source),
-                frame.now_ms, stale=frame.quota_stale or not verified)
+            scope = source_scope(driver.coordinator.report_service.source)
+            self.details.observe_accounts(frame.quota, scope, frame.now_ms, stale=frame.quota_stale or not verified)
+            if verified:
+                observation = getattr(driver.coordinator, 'catalog_observation', None)
+                accounts = frame.quota.accounts if frame.quota and not frame.quota_stale else ()
+                self.account_observation = accounts, scope, observation, driver.observed_at_ms
         self.publish("live", record(state=driver.source_state,
              account_timeline_scope=timeline_scope,
              catalog_hint=self.catalog.live_hint(),
@@ -160,3 +181,10 @@ class LiveRuntime:
             self.thread.join(timeout=10)
             if self.thread.is_alive():
                 raise RuntimeError("live_shutdown_timeout")
+        self._close_archive()
+
+    def _close_archive(self):
+        try:
+            self.catalog.close()
+        finally:
+            self.details.close_archive()

@@ -19,11 +19,13 @@ from src.application.session_quota import source_scope
 from src.cache.session_scope import snapshot_scope
 from src.domain.session_tree import root_activity
 from src.pricing.catalog import PricingCatalog
+from src.reports.web_history_evidence import DOMAIN as ARCHIVED_USAGE
 from src.reports.history_snapshots import load as load_snapshots
 from src.reports.history_cohort import structure
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 from . import account_timeline_warm as warm
+from .account_timeline_archive import ArchivedAccountTimeline
 
 
 ROOTS_PER_TURN = 12
@@ -377,8 +379,15 @@ class TimelineHistory:
 class AccountTimeline:
     """Live schedules at most one small slice; HTTP reads detached summaries only."""
 
-    def __init__(self, factory, reads, repository=None):
-        self.history = TimelineHistory(factory, reads, repository)
+    def __init__(self, factory, reads, repository=None, *, archived_usage=None):
+        self.history = (ArchivedAccountTimeline(archived_usage) if archived_usage
+                        else TimelineHistory(factory, reads, repository))
+        self.archive = archived_usage.archive if archived_usage else None
+        self.archive_generation = None
+        self.unavailable_history = frozenset()
+        self.archive_live_roots = frozenset()
+        self.archive_pending_history = frozenset()
+        self.archive_coverage_confirmed = False
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None
@@ -418,29 +427,36 @@ class AccountTimeline:
 
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
              now_ms, available=True, terminal=False, card_today=None, shared_roots=None,
-             foreground=None, require_background_prices=False):
+             foreground=None, require_background_prices=False, unavailable_history=frozenset(),
+             live_roots=frozenset(), pending_history=frozenset(), coverage_confirmed=False):
         foreground = periods if foreground is None else foreground
         changed_source = source is not None and source != self.source
         if changed_source:
             self.source = source
         if available:
-            roster = account_roster(accounts)
+            roster = account_roster(accounts, now_ms=now_ms if self.archive else None)
         else:
             source, roster = self.source, () if changed_source else self.roster
         # Names and ordering can change without losing selections. Keys and
         # compatible account routes, unlike balances/labels, define membership.
-        scope = (source, zone, frozenset((entry.key, entry.routes, entry.allocation) for entry in roster))
+        scope = ('shared-history', zone) if self.archive else (
+            source, zone, frozenset((entry.key, entry.routes, entry.allocation) for entry in roster))
         if terminal:
             self.source = None
             roster = ()
-            scope = None
+            if not self.archive:
+                scope = None
         day = period_start('today', now_ms, zone)
         day_changed = day != self.day
         self.day = day
         starts = {period: period_start(period, now_ms, zone) for period in periods if period != '7-days'}
+        if self.archive and 'month' in starts:
+            starts['month'] = timeline_window('month', now_ms, zone, native_bounds=tuple(
+                (item.month.start, item.month.reset) for item in roster
+                if item.month is not None and item.month.start is not None)).start
         with self.lock:
-            if available or changed_source or terminal:
-                self.public_ready = available and not terminal
+            if self.archive or available or changed_source or terminal:
+                self.public_ready = bool(self.archive) or available and not terminal
             if roster != self.roster or terminal:
                 self.public_roster = tuple(dict(id=item.key, account=item.label)
                                            for item in roster) if not terminal else ()
@@ -470,7 +486,7 @@ class AccountTimeline:
         if self.job is not None and self.job.done():
             try:
                 job_marker, values, more, removed, initial, pending, elapsed = self.job.result()
-                if job_marker == marker and available:
+                if job_marker == marker and (available or self.archive):
                     self.initial_periods, self.pending_periods = initial, pending
                     values = {period: value for period, value in values.items()
                               if period_start('today', value['end_ms'], zone) == day
@@ -515,10 +531,22 @@ class AccountTimeline:
         if not foreground and self.foreground:
             self.due = max(self.due, self.last_started + BACKGROUND_SLICE_MS)
         self.foreground = foreground
+        if self.archive:
+            revision = self.archive.generation(ARCHIVED_USAGE)
+            if (revision, unavailable_history, live_roots, pending_history, coverage_confirmed) != (
+                    self.archive_generation, self.unavailable_history, self.archive_live_roots,
+                    self.archive_pending_history, self.archive_coverage_confirmed):
+                self.archive_generation = revision
+                self.unavailable_history = unavailable_history
+                self.archive_live_roots = live_roots
+                self.archive_pending_history = pending_history
+                self.archive_coverage_confirmed = coverage_confirmed
+                self.due = 0
         if available and not terminal:
             with self.lock:
                 self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
-        if self.closed or terminal or not available or not periods or observation is None or not roster:
+        if self.closed or not periods or (not self.archive and (
+                terminal or not available or observation is None or not roster)):
             self.fast = False
             with self.lock:
                 self.active_periods = frozenset()
@@ -532,15 +560,19 @@ class AccountTimeline:
             self.active_periods = cold if self.job is not None else frozenset()
         self.fast = bool(fast and (self.job is not None or due <= now_ms + FOREGROUND_SLICE_MS))
         minimum = FOREGROUND_SLICE_MS if fast else 1000 if foreground else BACKGROUND_SLICE_MS
+        if self.archive is not None:
+            minimum = 1000  # Coalesce archive commits instead of rebuilding for every backfill root.
         if self.job is not None or now_ms < max(due, self.last_started + minimum):
             return marker
         self.last_started = now_ms
 
         def step():
             started = monotonic()
+            extra = dict(unavailable_history=unavailable_history, live_roots=live_roots,
+                          pending_history=pending_history, source_available=coverage_confirmed) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
-                shared_roots=shared_roots, require_prices=require_background_prices and not foreground)
+                 shared_roots=shared_roots, require_prices=require_background_prices and not foreground, **extra)
             return (marker, {period: value.to_json() for period, value in values.items()}, more, removed,
                      self.history.initial_periods.copy(), self.history.pending_periods.copy(),
                      int((monotonic() - started) * 1000))
