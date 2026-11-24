@@ -23,6 +23,7 @@ from .session_quota import session_quota_evidence, session_quota_usage
 
 
 LOG = logging.getLogger(__name__)
+ADMISSION_STALL_SECONDS = 120
 RECOVERABLE = frozenset({
     'detail_not_admitted', 'detail_no_progress', 'detail_worker_failed', 'detail_internal_error',
     'source_unavailable', 'concurrent_source_change', 'connection_timeout', 'connection_reset',
@@ -42,6 +43,7 @@ def prompt_activity(rows):
 class SessionDetails:
     def __init__(self, *, clock=time.monotonic, archive=None):
         self.clock = clock
+        self.last_owner_tick = None
         self.lock = Lock()
         self.histories = OrderedDict()
         self.leases = OrderedDict()
@@ -83,6 +85,7 @@ class SessionDetails:
     def observe_source(self, observation, cards=None, *, unavailable=False):
         """Reuse selected-root revisions and proven Watch rows; no source reads."""
         with self.lock:
+            self.last_owner_tick = self.clock()
             for key, entry in self.histories.items():
                 if not self._active(key):
                     continue
@@ -262,7 +265,9 @@ class SessionDetails:
                    for token in entry['attempt_leases'])
 
     def _schedule(self, entry):
-        if entry['acquisition']['reason'] not in RECOVERABLE and not entry['acquisition'].get('recoverable'):
+        status = entry['acquisition']
+        recoverable = status['reason'] in RECOVERABLE or status.get('recoverable')
+        if not recoverable or status['reason'] in INVALID_REASONS:
             entry['retry_at'] = None
             return
         entry['retry_windows'] = min(5, entry['retry_windows'] + 1)
@@ -273,6 +278,7 @@ class SessionDetails:
 
     def claim(self, *, unavailable=False):
         with self.lock:
+            self.last_owner_tick = self.clock()
             # Re-arm only on the existing owner lane, after cooldown and while a
             # live lease still wants this source. HTTP reads cannot reset budgets.
             for key, entry in self.histories.items():
@@ -390,27 +396,33 @@ class SessionDetails:
 
     def acquisition_status(self, entry):
         status = entry['acquisition']
-        age = max(0, self.clock() - status['changed_at'])
+        now = self.clock()
+        age = max(0, now - status['changed_at'])
         # A stopped/uninitialized owner must not leave an eternal unadmitted bar.
-        if (entry['attempt'] is None and ((status['phase'] == 'queued' and age >= 120)
+        if (entry['attempt'] is None and ((status['phase'] == 'queued' and age >= ADMISSION_STALL_SECONDS)
                 or (entry.get('activity_signal') and status['phase'] == 'ready'
-                    and self.clock() - entry['activity_queued_at'] >= 120))):
+                    and now - entry['activity_queued_at'] >= ADMISSION_STALL_SECONDS))):
             status.update(phase='failed', reason='detail_not_admitted')
             self._schedule(entry)
+        retry_at = entry['retry_at']
+        owner_active = self.last_owner_tick is not None and now - self.last_owner_tick < ADMISSION_STALL_SECONDS
+        # Once the cooldown expires, an absent owner cannot act on the schedule.
+        retry_scheduled = retry_at is not None and (now < retry_at or owner_active)
         return dict(phase=status['phase'], reason=status['reason'], attempts=status['attempts'],
             attempt_id=status.get('attempt_id'), percent=status['percent'],
             phase_completed=status.get('phase_completed'), phase_total=status.get('phase_total'),
             completed=status['completed'], progress_age_seconds=int(age),
             attempt_age_seconds=int(max(0, self.clock() - (status['started_at'] or self.clock()))),
             retry_available=status['phase'] == 'failed',
-            retry_after_seconds=max(0, int(entry['retry_at'] - self.clock())) if entry['retry_at'] is not None else None)
+            retry_scheduled=retry_scheduled,
+            retry_after_seconds=max(0, int(retry_at - now)) if retry_scheduled else None)
 
     def failed(self, reason):
         with self.lock:
             for key, entry in self.histories.items():
                 if self._active(key):
                     entry['attempt'] = None
-                    entry['acquisition'].update(phase='failed', reason=reason)
+                    entry['acquisition'].update(phase='failed', reason=reason, recoverable=False)
                     self._schedule(entry)
 
     def export_identity(self, token):
@@ -460,11 +472,11 @@ class SessionDetails:
                 lease['touched'] = self.clock()
                 activity = saved.value.get('activity')
                 if activity is None:
-                    raise KeyError('detail_expired')
+                    raise KeyError('detail_read_stale')
                 return dict(revision=revision, **activity_page(activity, offset))
             capture = lease.get("reading") or lease["frozen"]
             if capture is None or capture["revision"] != revision or capture["activity"] is None:
-                raise KeyError("detail_expired")
+                raise KeyError("detail_read_stale")
             lease["touched"] = self.clock()
             return dict(revision=revision, **activity_page(capture["activity"], offset))
 
@@ -524,7 +536,7 @@ class SessionDetails:
             if begin:
                 capture = lease["reading"]
             if chunk and (capture is None or capture["revision"] != revision):
-                raise KeyError("detail_expired")
+                raise KeyError("detail_read_stale")
             pending = lease["frozen"] is None and entry["generation"] <= lease["after"]
             expired = entry.get('validated') is None or not 0 <= self.clock() - entry['validated'] <= 3600
             pending = pending or expired

@@ -140,7 +140,7 @@ def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisi
     cache_revision = identity(('durable-history', fact.revision, fact.observed_ms))
     stale = revision is not None and revision != cache_revision
     if chunk and stale:
-        raise KeyError('detail_expired')
+        raise KeyError('detail_read_stale')
     if stale and anchor:
         offset = next((i for i, row in enumerate(rows) if row['id'] == anchor), offset)
     offset = (max(0, len(rows) - 50) if offset >= 2**52 else

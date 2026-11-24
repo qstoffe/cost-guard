@@ -22,6 +22,11 @@ const SessionDetail = (() => {
   };
   const validMix = values => Array.isArray(values) && values.length === 4 &&
     values.every(value => Number.isFinite(value) && value >= 0);
+  const initialReadRetries = 3;
+  const restartableReads = new Set(['detail_expired', 'detail_busy', 'detail_read_stale',
+    'inconsistent_history', 'inconsistent_activity']);
+  const invalidatingFailures = new Set(['instance_stopping', 'authentication_required', 'host_identity_changed',
+    'csrf_required', 'permission_denied', 'http_auth_failure', 'source_identity_changed', 'session_missing']);
   class Values {
     constructor() { this.clear(); }
     clear() { this.scope = null; this.retained = false; this.mixes = new Map(); this.totals = new Map(); }
@@ -154,6 +159,8 @@ const SessionDetail = (() => {
       this.freshness();
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
+      this.initialFailed = false; this.readFailures = 0;
+      if (!this.data) this.progress = {percent: 0, stage: 'Opening session…'};
       this.attached = true; this.poll();
     }
     detach() {
@@ -181,7 +188,7 @@ const SessionDetail = (() => {
       this.invocations.update(this.attached ? this.live() : null, this.id, data?.activity?.invocation_scope);
     }
     async poll() {
-      if (!this.attached) return;
+      if (!this.attached || this.initialFailed) return;
       if (this.busy) { this.trailing = true; return; }
       clearTimeout(this.timer);
       if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
@@ -189,25 +196,33 @@ const SessionDetail = (() => {
       const generation = this.generation;
       this.pendingLoad = this.load();
       await this.pendingLoad;
-      if (this.attached) this.timer = setTimeout(() => this.poll(),
+      if (this.attached && !this.initialFailed) this.timer = setTimeout(() => this.poll(),
         this.trailing || generation !== this.generation ? 0 : this.waiting ? 500 : 5000);
     }
     async retrySource() {
       if (this.retry.disabled || !this.token) return;
       const token = this.token;
+      const generation = this.generation;
       this.retry.disabled = true;
+      this.readFailures = 0;
       try {
         // A click during a short status read must not be silently discarded.
         await this.pendingLoad;
         if (!this.attached || this.token !== token) return;
         await this.api('/api/detail', {action: 'retry', token});
         if (!this.attached || this.token !== token) return;
-        if (!this.data) this.progress = {percent: 0, stage: 'Queued for session source…'};
+        this.initialFailed = false;
+        if (!this.data) {
+          this.progress = {percent: 0};
+          this.loading('Loading session…');
+        }
         this.retry.hidden = true; this.waiting = true;
         await this.poll();
       } catch (error) {
-        this.status.textContent = this.data ? '' : 'Could not load. Return to Sessions to try again.';
-        this.status.hidden = !this.status.textContent;
+        if (this.attached && generation === this.generation) {
+          this.readFailed(error);
+          if (this.waiting) await this.poll();
+        }
       } finally { this.retry.disabled = false; }
     }
     async load() {
@@ -215,7 +230,6 @@ const SessionDetail = (() => {
       this.busy = true;
       const generation = this.generation;
       try {
-        if (!this.token && !this.data) this.progress = {percent: 0, stage: 'Opening session…'};
         if (!this.token) this.loading('Opening session…');
         if (!this.token) {
           const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
@@ -236,12 +250,12 @@ const SessionDetail = (() => {
           this.invalidateValues();
         this.exporter?.update(this.token, data.export_available === true, data.export_name);
         if (!data.result) {
+          this.readFailures = 0;
           this.showActivityFeedback(data.activity_refresh || (this.activityFeedbackState && data.acquisition?.reason
             ? 'unavailable' : null));
           this.sourceStatus(data);
           return;
         }
-        this.sourceStatus(data);
         // Pending quota publication is not observed nonuse. Host/source
         // invalidation above still retires the entire retained projection.
         if (data.quota_usage) this.quotaUsage?.update(data.quota_usage);
@@ -318,25 +332,35 @@ const SessionDetail = (() => {
         }
         this.loading('Preparing session…');
         this.update(data);
+        this.readFailures = 0;
         this.showActivityFeedback(data.activity_refresh);
         this.sourceStatus(data);
       } catch (error) {
-        if (!this.attached || generation !== this.generation) return;
-        this.waiting = false;
-        if (this.activityFeedbackState) this.showActivityFeedback('unavailable');
-        this.status.textContent = this.data ? '' : 'Could not load. Return to Sessions to try again.';
-        this.retry.hidden = true;
-        this.status.hidden = !this.status.textContent;
-        this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
-        if (error.message === 'detail_expired') {
-          this.token = null; this.exporter?.close(); this.activity.update(null);
-          if (this.data) this.data.activity = null;
-        }
-        if (['instance_stopping', 'authentication_required', 'host_identity_changed', 'csrf_required',
-            'permission_denied', 'http_auth_failure', 'source_identity_changed', 'session_missing'].includes(error.message)) {
-          this.invalidateValues(); this.detach();
-        }
+        if (this.attached && generation === this.generation) this.readFailed(error);
       } finally { this.busy = false; this.activity.more.disabled = false; }
+    }
+    readFailed(error) {
+      if (error.message === 'detail_expired') {
+        this.token = null; this.exporter?.close(); this.activity.update(null);
+        if (this.data) this.data.activity = null;
+      }
+      if (invalidatingFailures.has(error.message)) {
+        this.invalidateValues(); this.detach();
+      } else if (!this.data && (error.retryable === true || restartableReads.has(error.message)) &&
+                 ++this.readFailures <= initialReadRetries) {
+        this.initialFailed = false; this.waiting = true; this.retry.hidden = true;
+        this.loading('Loading session…');
+        return;
+      }
+      if (this.activityFeedbackState) this.showActivityFeedback('unavailable');
+      this.finishLoading(!this.data);
+    }
+    finishLoading(failed, retryAvailable = false) {
+      this.initialFailed = failed; this.waiting = false; this.retry.hidden = !retryAvailable;
+      this.status.textContent = !failed ? '' : retryAvailable
+        ? 'Could not load. Try again or return to Sessions.' : 'Could not load. Return to Sessions to try again.';
+      this.status.hidden = !failed;
+      this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
     }
     showActivityFeedback(state) {
       state = this.data && ['pending', 'unavailable'].includes(state) ? state : null;
@@ -361,43 +385,33 @@ const SessionDetail = (() => {
       const acquisition = data.acquisition;
       if (data.values_invalidated) {
         this.invalidateValues(); this.detach();
-        this.waiting = false; this.retry.hidden = true;
-        this.status.textContent = 'Could not load. Return to Sessions to try again.';
-        this.status.hidden = false;
+        this.finishLoading(true);
         return;
       }
-      this.waiting = !this.data && !data.result && acquisition?.phase !== 'failed';
-      this.retry.hidden = Boolean(this.data) || !acquisition?.retry_available;
       // Retained live history is never a foreground action. Silence includes
       // the live region, Retry tab stop, loader and its reserved geometry.
-      if (this.data && !data.values_invalidated) {
-        this.status.textContent = ''; this.status.hidden = true;
-        this.retry.hidden = true; this.loader.root.hidden = true;
-        this.scroll.setAttribute('aria-busy', 'false');
+      if (this.data) {
+        this.finishLoading(false);
         return;
       }
-      if (acquisition?.phase === 'failed') {
-        if (['source_identity_changed', 'session_missing'].includes(acquisition.reason)) {
-          this.activity.update(null); if (this.data) this.data.activity = null;
-        }
-        this.status.textContent = 'Could not load. Try again or return to Sessions.';
-        this.status.hidden = false; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
+      if (acquisition?.phase === 'failed' && !acquisition.retry_scheduled) {
+        this.finishLoading(true, acquisition.retry_available);
         return;
       }
-      if (!data.result && acquisition) {
+      this.retry.hidden = true;
+      if (acquisition) {
+        this.waiting = true;
         const phase = 'Loading session';
         const percent = Number.isFinite(acquisition.percent) && acquisition.percent >= 0 && acquisition.percent <= 70 ? acquisition.percent : this.progress.percent;
         this.loading(`${phase}…`, percent, phase);
         return;
       }
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
-        if (!this.data) this.loading('Loading session…');
-        // Passive work is silent; a pending observation cannot clear a real fault.
+        this.waiting = true;
+        this.loading('Loading session…');
         return;
       }
-      this.status.textContent = data.result ? '' : 'Could not load. Return to Sessions to try again.';
-      this.status.hidden = !this.status.textContent;
-      if (!data.result && !this.data) { this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false'); }
+      this.finishLoading(true);
     }
     historyProgress(completed, total) {
       // Source-owned milestones 0–70%; pinned rows 70–95%; applied DOM 100%.

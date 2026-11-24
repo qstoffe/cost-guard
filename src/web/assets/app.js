@@ -221,6 +221,9 @@ function connectionStatus(message, state = {}) {
     enterCachedReport(current);
   scheduleCachedReport();
 }
+function retryableReadError(message, cause) {
+  return Object.assign(new Error(message, {cause}), {retryable: true});
+}
 async function api(path, value, signal, attachment = false) {
   if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
     hostState.kind === 'identity_changed' ? 'host_identity_changed' : 'instance_stopping');
@@ -243,20 +246,26 @@ async function api(path, value, signal, attachment = false) {
   // ZIPs allow up to 240 s of preparation plus the bounded response transfer.
   let timedOut = false;
   const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 270000 : 5000);
+  const detail = path === '/api/detail';
   try {
     const response = await fetch(path, options).catch(cause => {
-      if (signal?.aborted || !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;
-      const error = new Error('report_transport_unavailable', {cause});
-      error.retryable = true;
-      throw error;
+      if (signal?.aborted || !detail && !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;
+      throw retryableReadError(detail ? 'detail_transport_unavailable' : 'report_transport_unavailable', cause);
     });
-    const data = response.ok && attachment ? null : await response.json();
     const identity = response.headers?.get('X-CG-Instance');
     if (identity && hostInstance && identity !== hostInstance) {
       connectionStatus('HOST IDENTITY CHANGED — NOT LIVE. Use a fresh authorized launcher link.',
         {kind: 'identity_changed', terminal: true, writable: false});
       throw new Error('host_identity_changed');
     }
+    const data = response.ok && attachment ? null : await response.json().catch(cause => {
+      // Headers can arrive before a transport fault. Malformed JSON (SyntaxError)
+      // and definitive HTTP errors do not qualify for Detail's bounded read retry.
+      if (detail && response.ok && !signal?.aborted &&
+          (cause instanceof TypeError || timedOut && cause.name === 'AbortError'))
+        throw retryableReadError('detail_transport_unavailable', cause);
+      throw cause;
+    });
     if (response.ok && identity) hostInstance = identity;
     if (!response.ok) {
       if (response.status === 401 || data.error === 'csrf_required') {
