@@ -20,6 +20,68 @@ class V2TreeBracketTests(unittest.TestCase):
         reader.begin_card_read(origin)
         return reader
 
+    def test_scalar_live_listing_saves_only_a_before_bracket_and_never_certifies_a_changed_tree(self):
+        with source_with_current_service() as (origin, server, _registration):
+            reader = self.reader(origin, server)
+            with patch('src.sources.opencode_v2.time.perf_counter', return_value=10):
+                origin.list_sessions()
+                reader.begin_card_read(origin, use_live_catalog_hint=True)
+                child = dict(server.sessions[1], id='ses_new', parentID='ses_current_child')
+                server.sessions.append(child)
+                server.messages['ses_new'] = []
+
+                actual = reader.load_session_snapshot('ses_current')
+
+            self.assertEqual({'ses_current', 'ses_current_child', 'ses_new'}, {s.session_id for s in actual.sessions})
+            self.assertTrue(actual.complete)
+            self.assertEqual(1, reader.metrics.counts['snapshot_catalog_reuses'])
+            self.assertEqual(3, reader.metrics.counts['scoped_catalog_brackets'],
+                             'changed after-bracket requires fresh before and after on retry')
+            self.assertNotIn('ses_new', origin._catalog_index.by_id)
+
+    def test_scalar_rejects_old_listing_running_or_unknown_descendant_and_restarted_service(self):
+        for condition in ('expired', 'child-running', 'unknown', 'restarted'):
+            with self.subTest(condition=condition), source_with_current_service() as (origin, server, registration):
+                reader = self.reader(origin, server)
+                if condition == 'child-running':
+                    server.active = {'ses_current_child': {'type': 'running'}}
+                elif condition == 'unknown':
+                    server.active = None
+                with patch('src.sources.opencode_v2.time.perf_counter', return_value=10):
+                    origin.list_sessions()
+                if condition == 'restarted':
+                    value = json.loads(registration.read_text())
+                    value['pid'] += 1
+                    registration.write_text(json.dumps(value))
+                reader.begin_card_read(origin, use_live_catalog_hint=True)
+                with patch('src.sources.opencode_v2.time.perf_counter', return_value=13 if condition == 'expired' else 11):
+                    actual = reader.load_session_snapshot('ses_current')
+                self.assertTrue(actual.complete)
+                self.assertEqual(2, reader.metrics.counts['scoped_catalog_brackets'])
+                self.assertEqual(0, reader.metrics.counts.get('snapshot_catalog_reuses', 0))
+
+    def test_settled_scalar_child_may_finish_first_without_reordering_tree_evidence(self):
+        with source_with_current_service() as (origin, server, _registration):
+            reader = self.reader(origin, server)
+            server.messages['ses_current_child'] = [dict(server.messages['ses_current'][0], id='msg_child')]
+            expected = origin.load_session_snapshot('ses_current')
+            reader.begin_card_read(origin, use_live_catalog_hint=True)
+            child_finished = Event()
+            load = reader._load_messages
+
+            def finish_child_first(member):
+                if member.data['id'] == 'ses_current':
+                    self.assertTrue(child_finished.wait(4), 'settled child could not advance alongside its root')
+                values = load(member)
+                if member.data['id'] == 'ses_current_child':
+                    child_finished.set()
+                return values
+
+            with patch.object(reader, '_load_messages', side_effect=finish_child_first):
+                actual = reader.load_session_snapshot('ses_current')
+            self.assertEqual(expected, actual)
+            self.assertEqual(['ses_current', 'ses_current_child'], [event.session_id for event in actual.events])
+
     def test_scoped_multilevel_child_heavy_tree_matches_global_without_global_scans(self):
         with source_with_current_service() as (origin, server, _registration):
             for index in range(65):

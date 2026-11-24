@@ -48,7 +48,8 @@ def handoff_snapshot(phase='pending'):
 
 
 def handoff_capture(snapshot, now_ms=2500):
-    service = SimpleNamespace(now_ms=now_ms, config={}, _load_catalog=catalog,
+    service = SimpleNamespace(source=SimpleNamespace(observation_epoch='mini-fixture'),
+        now_ms=now_ms, config={}, _load_catalog=catalog,
         _analyze_snapshot=lambda value: analyze_snapshot(value, now_ms=now_ms, tracked_provider=None),
         _threshold_multiplier=None)
     return capture_rows(service, snapshot.root, fresh=snapshot)[0]

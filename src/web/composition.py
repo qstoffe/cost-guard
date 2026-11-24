@@ -108,11 +108,11 @@ def live_acquisition(*, selection=None):
         account_provider=accounts[0] if accounts else None, account_providers=accounts,
         model_availability_source=_model_availability_source(selection),
         cache_repository=cache, config=config, now_ms=int(time.time() * 1000))
-    def card_service(now_ms, *, reader=None):
+    def card_service(now_ms, *, reader=None, use_live_catalog_hint=False):
         # Construct on the worker: no mutable integration/SQLite connection is
         # shared with Live, detail transport, or another card's acquisition.
         if reader is not None:
-            reader.begin_card_read(selection.source)
+            reader.begin_card_read(selection.source, use_live_catalog_hint=use_live_catalog_hint)
         card_selection = SourceSelector(inspect_migration_gap=False,
             **({'v2_factory': lambda: reader} if reader is not None else {})).select(selection.selected)
         inherit = getattr(card_selection.source, 'inherit_live_evidence', None)
@@ -139,9 +139,11 @@ def live_acquisition(*, selection=None):
     from .detail_worker import run_owned_detail
     card_readers = (CardReaders(selection.source.new_card_reader)
         if selection.selected == 'v2' and isinstance(selection.source, OpenCodeV2Source) else None)
+    catalog_readers = CardReaders(selection.source.new_card_reader, limit=1) if card_readers is not None else None
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
         config=config, service_factory=card_service, session_cost_factory=session_cost_resources,
          card_readers=card_readers,
+         catalog_readers=catalog_readers,
         detail_capture=DetailCapture(run_owned_detail),
         guidance_binding=cached_guidance_binding
             if callable(getattr(selection.source, 'refresh_observation_epoch', None)) else None))

@@ -32,6 +32,7 @@ class WatchCapture:
     context_comparable_ids: frozenset = frozenset()
     catalog_prompt: tuple | None = None
     catalog_prompt_ends: frozenset = frozenset()
+    source_epoch: str | None = None
 
     @property
     def history_row(self):
@@ -89,6 +90,7 @@ def running_context_rows(rows, context, comparable_ids):
 def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False):
     if fresh is None:
         fresh = service.source.load_session_snapshot(root.session_id)
+    source_epoch = getattr(service.source, 'observation_epoch', None)
     snapshot, bundle, retained = analyze_observed(service, previous, fresh)
     item = AnalyzedRoot(root, bundle, False, snapshot)
     projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=service._load_catalog(),
@@ -154,4 +156,4 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids), catalog_prompt, frozenset(ended)), item
+        intervals, frozenset(comparable_ids), catalog_prompt, frozenset(ended), source_epoch), item

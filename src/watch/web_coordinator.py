@@ -5,6 +5,7 @@ Session captures and account-history aggregation have separate isolated services
 none of their full histories run on the presentation/live thread.
 """
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 
 from src.pricing.base import PricingUnavailableError
@@ -14,6 +15,7 @@ from src.analysis.daily_usage import DailyUsage
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_catalog import MINI_PREVIEW_LIMIT
 from src.application.session_quota import source_scope
+from src.reports.context_guidance import ComparisonMixMemo
 from src.reports.history import WatchHistoryAcquisition
 from src.reports.accounts import AccountPeriodHistory
 from .account_timeline import AccountTimeline, CardToday
@@ -36,8 +38,8 @@ class DailyAccountHistory:
     roots: dict
 
 
-def publish_catalog_prompts(catalog, cards):
-    evidence, ends, failures = [], [], []
+def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
+    evidence, ends, failures, snapshots = [], [], [], {}
     for entry in cards.sessions.values():
         if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
                 or entry.source_status.failed_at is not None):
@@ -48,6 +50,10 @@ def publish_catalog_prompts(catalog, cards):
         if entry.capture.catalog_prompt is not None:
             prompt, start = entry.capture.catalog_prompt
             evidence.append((root, revision, at, prompt, start, True, None, False))
+            if (offer_snapshots and entry.verified_generation == entry.generation
+                    and entry.capture.source_epoch == cards.source_epoch and not entry.capture.retained
+                    and entry.cost.evidence is not None and entry.cost.evidence.complete):
+                snapshots[root.session_id] = at, entry.cost.evidence
         elif entry.capture.catalog_prompt_ends and entry.verified_generation == entry.generation:
             ends.append((root, revision, at, entry.capture.catalog_prompt_ends))
     catalog.observe_prompts(evidence)
@@ -55,11 +61,34 @@ def publish_catalog_prompts(catalog, cards):
         catalog.observe_prompt_ends(ends)
     if failures:
         catalog.withdraw_prompts(failures)
+    if offer_snapshots:
+        catalog.offer_active_snapshots(cards.source_epoch, snapshots)
+
+
+def refill_catalog(owner, catalog, *, completion_only=False):
+    job = getattr(owner, 'catalog_job', None)
+    if job is not None:
+        if not job.done():
+            return
+        owner.catalog_job = None
+        try:
+            job.result()
+        except Exception:
+            catalog.index_failed('scalar_worker_failed')
+    elif completion_only:
+        return
+    if owner._closed:
+        return
+    history_ready = catalog.history_ready()
+    if history_ready or not completion_only and catalog.needed():
+        owner.catalog_job = owner.catalog_pool.submit(owner._catalog_capture, catalog, int(owner.clock_ms()))
+        if history_ready:
+            owner.catalog_job.add_done_callback(lambda _: owner.work_ready.set())
 
 
 class WebWatchCoordinator(WatchCoordinator):
     def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
-                 card_readers=None, detail_capture=None, **kwargs):
+                 card_readers=None, catalog_readers=None, detail_capture=None, **kwargs):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory,
             batch_size=2 if callable(getattr(self.source, 'load_card_snapshots', None)) else 1,
@@ -92,6 +121,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self.session_catalog = None
         self.caught_up_web = False
         self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
+        self.catalog_readers = catalog_readers
+        self.catalog_guidance = ComparisonMixMemo()
         self.catalog_job = None
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
@@ -173,17 +204,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self.session_catalog = catalog
         catalog.observe(self.catalog_observation, unavailable=unavailable,
                         source_interrupted=source_interrupted, timezone_id=self.report_service.timezone_id)
-        publish_catalog_prompts(catalog, self.cards)
-        if self.catalog_job is not None:
-            if not self.catalog_job.done():
-                return
-            job, self.catalog_job = self.catalog_job, None
-            try:
-                job.result()
-            except Exception:
-                catalog.index_failed('scalar_worker_failed')
-        if not self._closed and catalog.needed():
-            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
+        publish_catalog_prompts(catalog, self.cards, offer_snapshots=self.catalog_readers is not None)
+        refill_catalog(self, catalog)
 
     def catalog_frame(self, catalog, frame):
         # Publication reads only the shared index. Never wait for catalog_job or
@@ -203,18 +225,24 @@ class WebWatchCoordinator(WatchCoordinator):
             earlier_cards=self.cards.preview_cards(frame.now_ms))
 
     def _catalog_capture(self, catalog, now_ms):
-        service = None
+        readers = self.catalog_readers if catalog.archive is not None else None
         try:
-            service = self.history_factory(now_ms)
-            with self.reads.using(service.source):
-                catalog.tick(service)
+            with readers.borrow() if readers is not None else nullcontext() as reader:
+                service = (self.history_factory(now_ms, reader=reader, use_live_catalog_hint=True)
+                           if reader is not None else self.history_factory(now_ms))
+                try:
+                    if reader is not None:
+                        with self.catalog_guidance.carry(service):
+                            catalog.tick(service, fresh_snapshots=True)
+                    else:
+                        with self.reads.using(service.source):
+                            catalog.tick(service)
+                finally:
+                    service.close_accounts()
         except SourceError as error:
             catalog.index_failed(str(error.code), terminal=error.terminal)
         except PricingUnavailableError:
             catalog.index_failed('pricing_unavailable')
-        finally:
-            if service is not None:
-                service.close_accounts()
 
     def _hydrate(self, roots, *, now_ms, force_fresh_ids=()):
         # The card scheduler admits bounded work and publishes each session
@@ -304,14 +332,18 @@ class WebWatchCoordinator(WatchCoordinator):
 
     @property
     def work_ready(self):
+        # Live's owner services both card and historical-scalar completions.
         return self.card_workers.completed
 
     def service_completed(self):
         """Owner-thread refill and publish prompt facts without a source poll."""
         if not self._closed:
             self.cards.tick(int(self.clock_ms()), completed_only=True)
-            if self.session_catalog is not None:
-                publish_catalog_prompts(self.session_catalog, self.cards)
+            catalog = self.session_catalog
+            if catalog is not None:
+                publish_catalog_prompts(catalog, self.cards,
+                    offer_snapshots=getattr(self, 'catalog_readers', None) is not None)
+                refill_catalog(self, catalog, completion_only=True)
 
     def _build_projection(self, *, now_ms, status="", status_active=False, scanned=False):
         self.cards.tick(now_ms)
@@ -357,6 +389,8 @@ class WebWatchCoordinator(WatchCoordinator):
             self.detail_capture.cancel()
         cancel_source(self.source)
         self.reads.cancel()
+        if self.catalog_readers is not None:
+            self.catalog_readers.cancel()
         if self.guidance is not None:
             self.guidance.cancel()
         self.card_workers.cancel()
@@ -371,6 +405,8 @@ class WebWatchCoordinator(WatchCoordinator):
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             self.catalog_pool.shutdown(wait=True, cancel_futures=True)
+            if self.catalog_readers is not None:
+                self.catalog_readers.close()
             self.account_timeline.close()
             for future in (self.history_job, self.catalog_job):
                 if future is not None and not future.cancelled():

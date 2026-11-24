@@ -77,7 +77,7 @@ class StoppedParentChildrenTests(unittest.TestCase):
             detail = SessionHistory()
             catalog = SessionCatalog(archive=WebArchive(Path(directory)), clock_ms=lambda: now)
             self.addCleanup(catalog.close)
-            coordinator = SimpleNamespace(cards=cards, catalog_job=Future())
+            coordinator = SimpleNamespace(cards=cards, catalog_job=Future(), catalog_readers=None)
             for stage, now in [('nested', 5000), ('stale-flag', 6000), ('independent-turn', 7000)]:
                 with self.subTest(stage=stage):
                     if stage == 'stale-flag':

@@ -167,6 +167,28 @@ def recover_summary(key, value):
         empty_history=value.get('empty_history') is True)
 
 
+def retain_pending_metrics(row, previous):
+    """Display-only last-good fields; pending qualification still blocks sorting."""
+    if previous is None:
+        return row
+    fields = {}
+    if not row.context_qualified and row.context_tokens is None:
+        fields.update(context_tokens=previous.context_tokens,
+            context_detail="Previous same-session Ctx; source acquisition pending.")
+    if row.model_pending and row.model == "N/A":
+        for name in ("model", "multiple_models", "contributor_models", "main_models", "subagent_models"):
+            fields[name] = getattr(previous, name)
+    if not row.contributor_models_complete and previous.has_model_details:
+        fields["has_model_details"] = True
+        if row.linked_agent_count < previous.linked_agent_count:
+            fields["linked_agent_count"] = previous.linked_agent_count
+            fields["subagent_models"] = previous.subagent_models
+    if (row.effort_pending or not row.effort_qualified) and row.effort_key is None:
+        for name in ("effort", "effort_key", "effort_contributors", "effort_details_complete"):
+            fields[name] = getattr(previous, name)
+    return replace(row, **fields)
+
+
 def retain_readable_fields(new, old):
     if old is None:
         return new

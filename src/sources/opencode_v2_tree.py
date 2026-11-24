@@ -1,4 +1,4 @@
-"""Web-card-only, job-local tree brackets from the documented V2 parent filter.
+"""Web job-local tree brackets from the documented V2 parent filter.
 
 Complete global discovery still owns global membership and revision hints. This
 owner retains only a capability bit per observed epoch between exclusive jobs;
@@ -113,9 +113,24 @@ class CardTreeBrackets:
         self.epoch = None
         self.supported = None
         self.trees = {}
+        self.before_hint = None
+        self.before_index = None
 
     def reset_job(self):
         self.trees.clear()
+        self.before_hint = self.before_index = None
+
+    def _live_before(self, root_ids):
+        if self.before_hint is None:
+            return None
+        epoch, started, values = self.before_hint
+        if epoch != self.epoch or not 0 <= time.perf_counter() - started <= self.reuse_seconds:
+            return None
+        if self.before_index is None:
+            self.before_index = V2CatalogIndex(values)
+        index = self.before_index
+        return index if all(root in index.by_id and
+            all(native.active is False for native in index.tree(root)) for root in root_ids) else None
 
     def _capable(self):
         source = self.source
@@ -125,7 +140,8 @@ class CardTreeBrackets:
             raise SourceConcurrentChangeError('Unknown service epoch during capability detection', phase='capability')
         if epoch == self.epoch and self.supported is not None:
             return self.supported
-        self.reset_job()
+        self.trees.clear()
+        self.before_index = None
         source.metrics.add('scoped_capability_fetches')
         try:
             supported = _supports_tree(client.json('/openapi.json', phase='capability'))
@@ -144,6 +160,12 @@ class CardTreeBrackets:
         source = self.source
         if not self._capable():
             return global_bracket(source, root_ids, allow_reuse=allow_reuse, failures=failures)
+        if allow_reuse:
+            inherited = self._live_before(root_ids)
+            if inherited is not None:
+                source.metrics.add('snapshot_catalog_reuses')
+                source._diagnostics['snapshot_catalog_reuses'] += 1
+                return inherited, True
         cached, index = source._catalog_cache, source._catalog_index
         if (allow_reuse and cached is not None and index is not None
                 and time.monotonic() - source._catalog_listed_at <= self.reuse_seconds

@@ -408,6 +408,15 @@ class ReportService:
         catalog = self._load_comparison_catalog()
         return threshold_cost_multiplier(catalog, model_id, threshold, self._comparison_mix[0])
 
+    @property
+    def comparison_mix_observation(self):
+        return self._comparison_mix
+
+    def restore_comparison_mix(self, mix, sampled_at_ms):
+        """Accept only a sample whose scope and lifetime the caller has already checked."""
+        self._comparison_mix = mix, sampled_at_ms
+        return self._comparison_mix
+
     def _model_comparison(
         self, roots: Sequence[AnalyzedRoot], *, all_models: bool = False, include_model_catalog: bool = False,
     ):
