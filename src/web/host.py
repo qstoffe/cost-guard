@@ -115,9 +115,8 @@ class WebHost:
     def database_sizes(self):
         driver = getattr(self.live, 'driver', None)
         selection = driver.coordinator.report_service.selection if driver else None
-        cache = (self.history_reports.archive.path if self.history_reports
-                 else self.cache_housekeeping.lifecycle.database.paths.database)
-        return database_sizes(selection, cache)
+        archive = self.history_reports.archive if self.history_reports else None
+        return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database, archive=archive)
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:

@@ -25,26 +25,40 @@ const AIStatsView = (() => {
   const costMetrics = new Set(['hourly-rate', 'total-cost', 'subagent-cost', 'average-cost', 'expensive-session']);
   const podiumMetrics = new Set(['hourly-rate', 'token-rate', 'total-tokens', 'total-cost', 'subagent-cost', 'working-time', 'average-cost']);
   const face = value => typeof value === 'string' ? value.replace(/\b(?:N\/A|Not Applicable)\b/gi, '—') : value;
-  const mainFileHelp = '\n\nMeasures only the main database file, excluding auxiliary files such as the SQLite WAL.';
   const databaseRows = [
-    ['opencode_bytes', 'OpenCode DB',
-       'OpenCode stores the source sessions used for Cost Guard’s statistics. Verified Web history can remain available ' +
-         'after a source session is deleted or OpenCode restarts.'],
-    ['cache_bytes', 'CostGuard Cache DB',
-      'CostGuard keeps a disposable SQLite cache to speed up repeated analysis. Eligible old session-cache entries can be ' +
-      'cleaned up when neither session activity nor meaningful use has occurred for at least 30 days. Cleanup runs while the ' +
-      'host is idle, after at least 60 minutes of uptime—not immediately or on a fixed schedule. Removing entries may not ' +
-      'shrink the database file straight away. Cleanup never deletes OpenCode source data.']
+    ['opencode', 'OpenCode DB'],
+    ['cache', 'CostGuard Cache DB']
   ];
   const sizeUnits = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const sizeNumber = new Intl.NumberFormat('en', {maximumFractionDigits: 1});
+  const knownCount = value => Number.isSafeInteger(value) && value >= 0;
   function formatFileSize(bytes) {
-    if (!Number.isSafeInteger(bytes) || bytes < 0) return 'Size unavailable';
+    if (!knownCount(bytes)) return 'Size unavailable';
     let unit = 0;
     while (unit < sizeUnits.length - 1 && Math.round(bytes * 10) >= 10000) {
       bytes /= 1000; unit++;
     }
     return `${sizeNumber.format(bytes)} ${sizeUnits[unit]}`;
+  }
+  function sessionCount(count, kind) {
+    if (!knownCount(count)) return `${kind[0].toUpperCase()}${kind.slice(1)} sessions unavailable`;
+    return `${sizeNumber.format(count)} ${kind} ${count === 1 ? 'session' : 'sessions'}`;
+  }
+  function sizeCaption(openCode, cache) {
+    if (!knownCount(openCode) || !knownCount(cache) || !openCode || !cache)
+      return 'A size comparison needs two measured databases.';
+    if (cache < openCode / 4) return 'The CostGuard cache is traveling light.';
+    if (cache < openCode * 0.9) return 'The CostGuard cache packs a smaller suitcase.';
+    if (cache <= openCode * 1.1) return 'These databases pack about the same.';
+    if (cache < openCode * 4) return 'The CostGuard cache has the bigger suitcase.';
+    return 'The CostGuard cache brought the whole luggage set.';
+  }
+  function cardHeading(icon, title, help) {
+    const e = ReportView.element;
+    const heading = e('h4'), symbol = e('span', icon, 'ai-stat-icon');
+    symbol.setAttribute('aria-hidden', 'true');
+    heading.append(symbol, ContextHelp.button(title, help));
+    return heading;
   }
   function missingHourlyRate(metric) {
     return metric.metric === 'hourly-rate' && metric.value === null &&
@@ -137,19 +151,17 @@ const AIStatsView = (() => {
       this.grid = e('div', undefined, 'ai-stats-groups');
       this.databaseValues = new Map();
       this.databaseRefresh = 0;
-      this.hasOpenCodeSize = false;
+      this.hasOpenCodeDatabaseFacts = false;
       for (const [name, items] of [['Overview', definitions.slice(0, 7)], ['Fun Facts', definitions.slice(7)]]) {
         const section = e('section', undefined, 'ai-stats-section'), grid = e('div', undefined, 'ai-stats-grid');
         section.append(e('h3', name), grid); this.grid.append(section);
         for (const [key, icon, title, help] of items) {
-          const card = e('article', undefined, 'ai-stat'), heading = e('h4');
+          const card = e('article', undefined, 'ai-stat');
           card.dataset.metric = key;
-          const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
           const retained = {metric: null, podium: []};
           const hourly = key === 'hourly-rate', hasPodium = podiumMetrics.has(key), response = key === 'token-rate';
-          const helpButton = ContextHelp.button(title, () => retained.metric && (hourly || response || key === 'total-tokens') ?
+          const heading = cardHeading(icon, title, () => retained.metric && (hourly || response || key === 'total-tokens') ?
             ReportView.display(retained.metric, hourly ? 'rate_help' : response ? 'response_help' : 'token_help') : help);
-          heading.append(symbol, helpButton);
           const value = e('p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
           const podium = e('div', undefined, 'ai-stat-podium');
           if (hasPodium) {
@@ -171,20 +183,8 @@ const AIStatsView = (() => {
           this.cards.set(key, Object.assign(retained, {card, title, nodes: [heading, value, podium, detail, trait], value, podiumNode: podium, detail, trait}));
           card.append(heading, value, podium, detail, trait);
         }
-        if (name === 'Fun Facts') {
-          this.funFacts = grid;
-          this.databaseCard = e('article', undefined, 'ai-stat ai-stat-databases');
-          const rows = e('dl');
-          for (const [key, label, help] of databaseRows) {
-            const row = e('div', undefined, 'ai-stat-size-row'), term = e('dt');
-            term.append(ContextHelp.button(label, help + mainFileHelp));
-            const value = e('dd', formatFileSize(null));
-            row.append(term, value); rows.append(row);
-            this.databaseValues.set(key, value);
-          }
-          this.databaseCard.append(e('h4', 'Database Sizes'), rows);
-          grid.append(this.databaseCard);
-        }
+        if (name === 'Overview') grid.append(this.buildDatabaseCard());
+        else this.funFacts = grid;
       }
       this.root.append(this.selector, this.content);
       this.content.append(this.grid);
@@ -196,20 +196,58 @@ const AIStatsView = (() => {
       this.extraValue = e('p', '', 'ai-stat-value'); this.extraDetail = e('p', '', 'ai-stat-detail'); this.extraTrait = e('p', '', 'ai-stat-trait');
       this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait);
     }
+    buildDatabaseCard() {
+      const e = ReportView.element;
+      const card = e('article', undefined, 'ai-stat ai-stat-databases');
+      const heading = cardHeading('🗄️', 'Database Sizes', () => {
+        const store = this.databaseFacts?.cache_kind === 'web_history' ? 'saved Web history'
+          : this.databaseFacts?.cache_kind === 'analysis' ? 'the analysis cache' : 'its local cache';
+        return `OpenCode holds source sessions; CostGuard shows ${store}. ` +
+          'Sizes cover the main SQLite files only, not side files.';
+      });
+      const rows = e('dl');
+      for (const [key, label] of databaseRows) {
+        const row = e('div', undefined, 'ai-stat-size-row'), term = e('dt', label);
+        const size = e('dd', formatFileSize(null), 'ai-stat-value');
+        const countCell = e('dd');
+        const sessions = ContextHelp.button('', () => {
+          const count = this.databaseFacts?.[`${key}_subagent_sessions`];
+          return `${sessionCount(count, 'subagent')} in ${label}.` +
+            (knownCount(count) ? ' Includes nested subagents.' : '');
+        });
+        countCell.append(sessions); row.append(term, size, countCell); rows.append(row);
+        this.databaseValues.set(key, {size, sessions, label});
+      }
+      this.databaseCaption = e('p', '', 'ai-stat-trait');
+      card.append(heading, rows, this.databaseCaption);
+      this.updateDatabaseCard();
+      return card;
+    }
+    updateDatabaseCard(facts) {
+      this.databaseFacts = facts;
+      const openCodeSize = facts?.opencode_bytes;
+      this.hasOpenCodeDatabaseFacts = [openCodeSize, facts?.opencode_main_sessions,
+        facts?.opencode_subagent_sessions].every(knownCount);
+      for (const [key, {size, sessions, label}] of this.databaseValues) {
+        ReportView.text(size, formatFileSize(facts?.[`${key}_bytes`]));
+        const count = sessionCount(facts?.[`${key}_main_sessions`], 'main');
+        ReportView.text(sessions, count);
+        sessions.setAttribute('aria-label', `${label}: ${count}`);
+      }
+      ReportView.text(this.databaseCaption, sizeCaption(openCodeSize, facts?.cache_bytes));
+    }
     async refreshDatabaseSizes() {
       // Optional local facts never share the report request or its error state.
       const request = ++this.databaseRefresh;
-      let sizes;
+      let facts;
       try {
         const response = await fetch('/api/database-sizes', {credentials: 'same-origin', cache: 'no-store',
           signal: AbortSignal.timeout(5000)});
-        if (response.ok) sizes = await response.json();
-      } catch (_) { /* A failed read only affects this card. */ }
-      if (request !== this.databaseRefresh) return;
-      const openCodeSize = formatFileSize(sizes?.opencode_bytes);
-      this.hasOpenCodeSize = openCodeSize !== 'Size unavailable';
-      ReportView.text(this.databaseValues.get('opencode_bytes'), openCodeSize);
-      ReportView.text(this.databaseValues.get('cache_bytes'), formatFileSize(sizes?.cache_bytes));
+        if (response.ok) facts = await response.json();
+      } catch (_) { /* Keep the last good optional facts on a failed refresh. */ }
+      if (request !== this.databaseRefresh || !facts) return;
+      this.updateDatabaseCard(facts);
+      ContextHelp.refresh(this.root);
     }
     update(state, sourceBlocked) {
       if (typeof ReportLoading !== 'undefined')
@@ -286,7 +324,7 @@ const AIStatsView = (() => {
         ReportView.text(this.extraHeading, row.matched.metric === 'original-thinker' ? 'Original Thinker' : 'Biggest AI Speed Gap');
         ReportView.text(this.extraValue, () => face(ReportView.display(row.matched, 'value')));
         ReportView.text(this.extraTrait, face(row.matched.display.trait)); ReportView.text(this.extraDetail, face(row.matched.detail));
-        if (!this.funFacts.contains(this.extra)) this.funFacts.insertBefore(this.extra, this.databaseCard);
+        if (!this.funFacts.contains(this.extra)) this.funFacts.append(this.extra);
       } else this.extra.remove();
       ContextHelp.refresh(this.root);
     }

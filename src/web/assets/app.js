@@ -759,7 +759,7 @@ async function connect() {
         liveValue = watchValue(sourceValue, watchHistory);
         // A first entry can precede source selection. Use the existing Live
         // readiness signal once rather than polling the optional facts.
-        if (firstLiveView && current?.stats && !current.stats.hasOpenCodeSize)
+        if (firstLiveView && current?.stats && !current.stats.hasOpenCodeDatabaseFacts)
           current.stats.refreshDatabaseSizes();
         miniWatch?.update(liveValue);
         if (reconnected) {

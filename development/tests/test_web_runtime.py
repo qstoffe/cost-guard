@@ -8,6 +8,7 @@ import io
 import json
 from pathlib import Path
 import socket
+import sqlite3
 import tempfile
 from threading import Event, Thread
 from types import SimpleNamespace
@@ -18,8 +19,11 @@ from unittest.mock import Mock
 from unittest.mock import call
 
 from development.tests.fixtures.report_process import ReportProcess
+from development.tests.fixtures.opencode_v2_service import source_with_current_service, source_with_service
 from development.tests.fixtures.web_reports import finite_report
 from src.cache.database import CacheDatabase
+from src.cache.web_archive import ArchiveFact, WebArchive
+from src.application.session_archive import DOMAIN as SESSION_DOMAIN
 from src.domain import IntegrationHealth
 from src.reports import ReportKind, ReportRequest
 from src.sources.discovery import discover_v2_registration_candidate
@@ -47,8 +51,14 @@ class LoopbackBindingTests(unittest.TestCase):
             server.server_close()
 
 
+def analysis_facts(source_size=None, cache_size=None):
+    return dict(opencode_bytes=source_size, cache_bytes=cache_size, cache_kind='analysis',
+                opencode_main_sessions=None, opencode_subagent_sessions=None,
+                cache_main_sessions=None, cache_subagent_sessions=None)
+
+
 class DatabaseSizesTests(unittest.TestCase):
-    def test_selected_v1_and_canonical_cache_are_measured_independently_without_opening(self):
+    def test_unreadable_counts_keep_main_file_sizes_excluding_sidecars(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source_path = root / 'selected.sqlite'
@@ -65,16 +75,60 @@ class DatabaseSizesTests(unittest.TestCase):
                     raise PermissionError(str(path))
                 return stat(path, *args, **kwargs)
 
-            with patch('sqlite3.connect', side_effect=AssertionError('size must not open SQLite')):
-                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': 10}, database_sizes(selection, cache_path))
-                with patch.object(Path, 'stat', denied_on_source):
-                    self.assertEqual({'opencode_bytes': None, 'cache_bytes': 10}, database_sizes(selection, cache_path))
-                missing = root / 'missing.sqlite'
-                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': None}, database_sizes(selection, missing))
-                self.assertEqual({'opencode_bytes': 19, 'cache_bytes': None}, database_sizes(selection, root))
+            self.assertEqual(analysis_facts(19, 10), database_sizes(selection, cache_path))
+            with patch.object(Path, 'stat', denied_on_source):
+                self.assertEqual(analysis_facts(None, 10), database_sizes(selection, cache_path))
+            missing = root / 'missing.sqlite'
+            self.assertEqual(analysis_facts(19), database_sizes(selection, missing))
+            self.assertEqual(analysis_facts(19), database_sizes(selection, root))
             self.assertFalse(missing.exists())
             self.assertEqual(b'invalid SQLite file', source_path.read_bytes())
             self.assertEqual(b'disposable', cache_path.read_bytes())
+
+    def test_selected_databases_count_their_own_distinct_sessions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / 'selected.db'
+            selection = SourceSelection(OpenCodeV1Source(source_path), 'v1', (), IntegrationHealth(True, True))
+            archive = WebArchive(root)
+            archive.initialize()
+            with contextlib.closing(sqlite3.connect(source_path)) as db:
+                db.execute('CREATE TABLE session(id TEXT PRIMARY KEY, parent_id TEXT)')
+                empty = database_sizes(selection, None, archive=archive)
+                self.assertEqual((0, 0, 0, None), tuple(empty[key] for key in (
+                    'opencode_main_sessions', 'opencode_subagent_sessions', 'cache_main_sessions', 'cache_subagent_sessions')))
+                db.executemany('INSERT INTO session VALUES(?, ?)', [
+                    ('a', None), ('b', ''), ('c', 'a'), ('d', 'c'), ('e', 'd')])
+                db.commit()
+            fact = ArchiveFact('rev', 1000, {})
+            archive.publish('previous', SESSION_DOMAIN, {'b': fact})
+            archive.publish('current', SESSION_DOMAIN, {'b': fact})
+            archive.publish('current', 'other', {'unrelated': fact})
+
+            self.assertEqual(dict(opencode_bytes=source_path.stat().st_size,
+                opencode_main_sessions=2, opencode_subagent_sessions=3, cache_kind='web_history',
+                cache_bytes=archive.path.stat().st_size, cache_main_sessions=1, cache_subagent_sessions=None),
+                database_sizes(selection, None, archive=archive))
+
+    def test_v2_counts_need_a_complete_global_listing_from_this_epoch(self):
+        with source_with_current_service() as (source, server, registration):
+            server.sessions.append(dict(server.sessions[1], id='nested', parentID='ses_current_child'))
+            read = lambda: database_sizes(SourceSelection(source, 'v2', (), IntegrationHealth(True, True)), None)
+            source.list_sessions(since_ms=8500)
+            self.assertIsNone(read()['opencode_main_sessions'])
+            source.list_sessions()
+            before = len(server.requests)
+            facts = read()
+            self.assertEqual((1, 2), (facts['opencode_main_sessions'], facts['opencode_subagent_sessions']))
+            self.assertEqual(before, len(server.requests), 'count display must not fetch another catalog')
+            value = json.loads(registration.read_text())
+            value['pid'] += 1
+            registration.write_text(json.dumps(value))
+            source.refresh_observation_epoch()
+            self.assertIsNone(read()['opencode_subagent_sessions'])
+        with source_with_service() as (source, _server, _registration):
+            self.assertTrue(source.list_sessions())
+            self.assertIsNone(source.database_session_counts(), 'a project catalog is not the whole database')
 
     def test_v2_uses_default_data_only_for_registered_local_source(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,10 +155,10 @@ class DatabaseSizesTests(unittest.TestCase):
 
                 for source in (remote, unverified, explicit):
                     with self.subTest(source=source):
-                        self.assertEqual({'opencode_bytes': None, 'cache_bytes': None},
+                        self.assertEqual(analysis_facts(),
                                          database_sizes(SourceSelection(source, 'v2', (), health), None))
                 selection = SourceSelection(local, 'v2', (), health)
-                self.assertEqual({'opencode_bytes': 128, 'cache_bytes': None}, database_sizes(selection, None))
+                self.assertEqual(analysis_facts(128), database_sizes(selection, None))
 
 
 class WebRuntimeTests(unittest.TestCase):
@@ -270,7 +324,7 @@ class WebRuntimeTests(unittest.TestCase):
             self.login()
             status, _, body = self.request('/api/database-sizes')
             self.assertEqual(200, status)
-            self.assertEqual({'opencode_bytes': None, 'cache_bytes': None}, json.loads(body))
+            self.assertEqual(analysis_facts(), json.loads(body))
             self.assertFalse(cache_file.parent.exists())
 
             cache_file.parent.mkdir()
@@ -278,7 +332,7 @@ class WebRuntimeTests(unittest.TestCase):
             status, headers, body = self.request('/api/database-sizes')
             self.assertEqual(200, status)
             self.assertEqual('no-store', headers['Cache-Control'])
-            self.assertEqual({'opencode_bytes': None, 'cache_bytes': 1024}, json.loads(body))
+            self.assertEqual(analysis_facts(cache_size=1024), json.loads(body))
             self.assertEqual([], self.jobs.updates()['jobs'])
 
     def test_price_refresh_uses_protected_empty_body_action_and_bounded_jobs(self):

@@ -35,7 +35,7 @@ module.exports = async ({command,evaluate,until,cases,tab,checks}) => {
     }
   }
   // Every actual title owner exposes concise copy, including the single-sentence token joke.
-  for(const metric of await evaluate(`[...document.querySelectorAll('.ai-stat')].map(n=>n.dataset.metric)`)) {
+  for(const metric of await evaluate(`[...document.querySelectorAll('.ai-stat[data-metric]')].map(n=>n.dataset.metric)`)) {
     await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
       document.querySelector('[data-metric="${metric}"] h4 button').focus()`);
     await until(`!document.getElementById('context-help').hidden`);

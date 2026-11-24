@@ -60,7 +60,7 @@ def evidence_views():
         ('pending-usage', (replace(root, cost_pending=True),), True, Decimal(4)),
         ('provisional', (replace(root, intervals=((at, 3_600_000, True),)),), True, Decimal(4)),
         ('observed-time', (replace(root, intervals=((at, 1_800_000, False), (at - 86_400_000, None, False))),), True, Decimal(4)),
-        ('podium-three', (podium,), False, None),
+        ('podium-three', (podium,), True, Decimal(4)),
         ('podium-two', (replace(podium, entries=racers[:2], responses=podium.responses[:2], activity=podium.activity[:2]),), True, Decimal(4)),
         ('friendly-aliases', (model_root(aliases),), True, Decimal(4)),
         ('friendly-unknown', (model_root(unknown),), True, Decimal(4)),
@@ -80,8 +80,10 @@ def evidence_views():
         ('three-rates', 28, '7-days', fixed_now, start),
         ('faster-robot', 7, '7-days', fixed_now, start),
         ('no-workdays', 4, 'today', epoch('2026-11-07T12:00:00+00:00'), epoch('2026-11-07T06:00:00+00:00'))):
-        synthetic = replace(root, entries=(replace(entry, completed_at_ms=stamp),), responses=(),
-                            intervals=((stamp, hours * 3_600_000, False),))
+        duration = hours * 3_600_000
+        timed = replace(entry, completed_at_ms=stamp + duration)
+        synthetic = replace(root, entries=(timed,), responses=(),
+                            intervals=((stamp, duration, False),), activity=(ModelActivity(timed, stamp, duration),))
         period = period_stats((synthetic,), lambda *_: Decimal(840), period=period_name,
             start=clock - 7 * 86_400_000 if period_name == '7-days' else epoch('2026-11-06T23:00:00+00:00'),
             now=clock, zone='Europe/Stockholm')

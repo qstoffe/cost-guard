@@ -156,6 +156,7 @@ class OpenCodeV2Source:
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
+        self._database_counts: tuple[tuple[_NativeSession, ...], str, tuple[int, int]] | None = None
         self._catalog_before_hint = None
         self._catalog_index: V2CatalogIndex | None = None
         self._message_lock = threading.Lock()
@@ -186,6 +187,13 @@ class OpenCodeV2Source:
         """Only the discovered, already validated local service implies the default DB."""
         if self._candidate.origin == "default" and self._endpoint is not None:
             return default_opencode_data_dir() / "opencode.db"
+        return None
+
+    def database_session_counts(self) -> tuple[int, int] | None:
+        """Use the last complete global listing; never fetch on the caller's thread."""
+        snapshot = self._database_counts
+        if snapshot is not None and snapshot[0] is self._catalog_cache and snapshot[1] == self.observation_epoch:
+            return snapshot[2]
         return None
 
     def _read_endpoint(self) -> V2Endpoint:
@@ -496,10 +504,16 @@ class OpenCodeV2Source:
         self.metrics.milliseconds["catalog"] = self.metrics.milliseconds.get("catalog", 0) + (time.perf_counter() - started) * 1000
         self._diagnostics["raw_sessions"] = len(result)
         if since_ms is None:
-            self._catalog_cache = tuple(result)
+            catalog = self._catalog_cache = tuple(result)
             self._catalog_index = V2CatalogIndex(result)
             self.metrics.add("catalog_index_builds")
             self._catalog_listed_at = time.monotonic()
+            if epoch is not None and contract.startswith("global-"):
+                # The wire reader has already deduplicated the unfiltered listing by ID.
+                children = sum(item.data.get("parentID") not in (None, "") for item in catalog)
+                self._database_counts = catalog, epoch, (len(catalog) - children, children)
+            else:
+                self._database_counts = None  # Project listings need not cover the whole database.
             if epoch is not None:
                 # The listing's native values are read-only from this point.
                 # Publish atomically; the reader builds its own mutable index.

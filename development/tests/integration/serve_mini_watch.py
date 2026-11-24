@@ -78,17 +78,24 @@ def main():
             jobs = ModelsRefreshJobs(root)
         host = WebHost(root, jobs=jobs)
         if sys.argv[2:] == ['--ai-stats']:
+            from contextlib import closing
+            import sqlite3
+            from src.application.session_archive import DOMAIN as SESSION_DOMAIN
+            from src.cache.web_archive import ArchiveFact, WebArchive
             from src.domain import IntegrationHealth
             from src.sources.opencode_v1 import OpenCodeV1Source
             from src.sources.selection import SourceSelection
             from src.web.database_sizes import database_sizes
             source_db = root / 'fixture-opencode.db'
-            cache_db = host.cache_housekeeping.lifecycle.database.paths.database
-            source_db.write_bytes(b'\0' * 128)
-            cache_db.parent.mkdir(exist_ok=True)
-            cache_db.write_bytes(b'\0' * 92_000)
+            with closing(sqlite3.connect(source_db)) as db, db:
+                db.execute('CREATE TABLE session(id TEXT PRIMARY KEY, parent_id TEXT)')
+                db.executemany('INSERT INTO session VALUES (?, ?)', [
+                    ('a', None), ('b', None), ('child', 'a'), ('nested', 'child')])
+            archive = WebArchive(root / 'cache')
+            archive.initialize()
+            archive.publish('source', SESSION_DOMAIN, {'a': ArchiveFact('rev', 1, {})})
             selection = SourceSelection(OpenCodeV1Source(source_db), 'v1', (), IntegrationHealth(True, True))
-            host.database_sizes = partial(database_sizes, selection, cache_db)
+            host.database_sizes = partial(database_sizes, selection, None, archive=archive)
         # All browser-fixture modes are offline/synthetic, including the optional lane.
         from development.tests.fixtures.benchmark import payload
         from src.benchmarks import parse_pages
@@ -191,7 +198,7 @@ def main():
             for line in sys.stdin:
                 command = json.loads(line)["command"]
                 if command == 'stats-resize-cache' and sys.argv[2:] == ['--ai-stats']:
-                    cache_db.write_bytes(b'\0' * 2_500_000)
+                    archive.publish('source', 'unrelated', {'large': ArchiveFact('rev', 1, {'text': 'a' * 2_500_000})})
                     print('{"ok":true}', flush=True)
                     continue
                 if command == "stop":
