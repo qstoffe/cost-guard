@@ -99,6 +99,11 @@ const WatchView = (() => {
     const target = disclosure(); target.node.className = 'watch-running-tool';
     target.note = el('p', undefined, 'detail'); target.input = el('pre', undefined, 'watch-invocation');
     target.list.append(target.input, target.note);
+    return target;
+  }
+  function runningDisclosure() {
+    const target = disclosure(); target.node.className = 'watch-running-tool';
+    target.note = el('p', undefined, 'detail');
     target.jobs = new Map();
     return target;
   }
@@ -125,11 +130,11 @@ const WatchView = (() => {
     const start = timing.anchor ? detail.started_at_ms : null;
     const elapsed = Number.isFinite(now) && start != null ? now - start : null;
     const timeout = timing.timeout_ms;
-    const deadline = timing.anchor === 'execution' && timeout != null ? start + timeout : null;
+    const deadline = timing.anchor === 'execution' && start != null && timeout != null ? start + timeout : null;
     const typical = timing.estimated_duration_ms;
     const estimated = typical != null && elapsed != null && elapsed >= 0 && elapsed < typical ?
-      stamp(start + typical) : 'N/A';
-    const matches = timing.sample_count === 1 ? '1 similar completed run' : `${timing.sample_count} similar completed runs`;
+      stamp(start + typical) : null;
+    const matches = `${timing.sample_count} similar completed runs`;
     const provenance = detail.mode === 'background' ? ' · native completion notices' : '';
     const anchor = timing.anchor === 'execution' ? 'native execution start' :
       timing.anchor === 'call_created' ? 'tool-call creation; execution start unrecorded' :
@@ -138,17 +143,11 @@ const WatchView = (() => {
       ['Started', start != null ? `${stamp(start)} (${anchor})` : 'Execution start unrecorded'],
       ['Elapsed', elapsed == null ? 'Unavailable' : elapsed < 0 ? 'Source start is ahead of the Watch clock' :
         shellDuration(elapsed) + (timing.anchor === 'execution' ? '' : ' since recorded creation')],
-      ['Estimated finish', typical == null ? (timing.sample_count ? `Unavailable — only ${matches}` :
-        'Unavailable — no qualified comparable history') : elapsed == null || elapsed < 0 ?
-        'Unavailable — source and Watch clocks not aligned' : elapsed >= typical ?
-          `Unavailable — past the historical typical duration (${matches})` :
-          estimated === 'N/A' ? 'Unavailable' : `~${estimated} (Low confidence · ${matches}${provenance})`],
-      ['Timeout deadline', deadline != null ? stamp(deadline) :
-        timeout != null ? 'Unavailable — native execution start unrecorded' : null],
-      ['Time to timeout', deadline == null ? null : elapsed == null || elapsed < 0 ? 'Unavailable' :
+      ['Estimated finish', estimated == null ? null : `~${estimated} (Low confidence · ${matches}${provenance})`],
+      ['Timeout deadline', deadline == null ? null : stamp(deadline)],
+      ['Time to timeout', deadline == null || elapsed == null || elapsed < 0 ? null :
         deadline <= now ? 'Deadline passed; still running' : shellDuration(deadline - now)],
       ['Timeout', timeout == null ? 'Not recorded' : `${timeout.toLocaleString('en-US', {maximumFractionDigits: 20})} ms (${shellDuration(timeout)})`],
-      ['Progress', 'Unknown (no structured phase evidence)'],
     ];
     if (!job.timing) {
       const node = el('dl', undefined, 'watch-shell-timing');
@@ -204,25 +203,28 @@ const WatchView = (() => {
     drawShellTiming(job, null);
   }
   function drawInvocations(target, label, details, total, verified, mode, legacy, state, clock) {
-    const reason = !verified ? 'Awaiting verified live source; previous commands cleared.' :
-      mode === 'background' ? 'Original call links missing; only background activity is observable.' :
-      'Command not recorded in the current tool event.';
-    const rows = label && verified ? (details?.length ? details : legacy ? [legacy] : []).slice(0, 5) : [];
-    const pending = label && state === 'pending';
-    if (pending) {
-      for (const job of target.jobs.values()) withholdInvocation(job);
-      target.node.hidden = false;
-      invocationText(target.summary, label);
-      text(target.note, reason);
-      target.note.hidden = false;
-      reconcile(target.list, [...target.jobs.values()].map(job => job.node).concat(target.note));
-      return;
-    }
+    const limit = 5;
+    const observed = verified && state !== 'pending' && state !== 'invalidated';
+    const rows = label && observed ?
+      (details?.length ? details : legacy ? [legacy] : []).filter(detail => detail.identity).slice(0, limit) : [];
     const keep = new Set(rows.map(detail => detail.identity));
+    // No rows under a live label means missing details, not completed work.
+    // A capped or otherwise partial list cannot establish that an absent job ended.
+    const complete = keep.size > 0 && keep.size >= total;
     const continuing = [...keep].some(key => target.jobs.has(key));
-    if (!continuing) target.node.open = false;
-    for (const [key, job] of target.jobs) if (!keep.has(key)) {
-      clearInvocation(job); target.jobs.delete(key);
+    const reset = !label || state === 'invalidated' || complete && target.jobs.size > 0 && !continuing;
+    if (reset) target.node.open = false;
+    const startOpen = reset || target.jobs.size === 0;
+    const withheld = [];
+    // Retain at most a page of missing jobs, newest observations first.
+    for (const [key, job] of [...target.jobs].reverse()) if (!keep.has(key)) {
+      if (!reset && !complete && withheld.length < limit) {
+        withholdInvocation(job);
+        job.node.hidden = true;
+        withheld.push(job.node);
+      } else {
+        clearInvocation(job); target.jobs.delete(key);
+      }
     }
     // Always keep the same per-call nodes: 1→2→1 is membership, not a new layout.
     // New siblings start closed if a surviving call's parent is already expanded.
@@ -230,24 +232,26 @@ const WatchView = (() => {
     rows.forEach((detail, index) => {
       const fresh = !target.jobs.has(detail.identity);
       const job = target.jobs.get(detail.identity) || invocationDisclosure();
+      target.jobs.delete(detail.identity);
       target.jobs.set(detail.identity, job);
       job.node.className = 'watch-running-tool' + (rows.length === 1 && total <= 1 ? ' watch-running-single' : '');
       drawInvocation(job, `${detail.kind || 'Tool'} ${index + 1} — ${mode}, running`, detail);
       drawShellTiming(job, detail, clock);
-      if (fresh) job.node.open = !continuing;
+      if (fresh) job.node.open = startOpen;
       wanted.push(job.node);
     });
     target.node.hidden = !label;
     if (!label) {
-      text(target.summary, ''); text(target.note, ''); text(target.input, '');
+      text(target.summary, ''); text(target.note, '');
       reconcile(target.list, []); return;
     }
     if (!protectedNode(target.summary)) text(target.summary, label);
-    const omitted = Math.max(0, total - Math.min(rows.length, 5));
-    if (rows.length) target.input = target.jobs.get(rows[0].identity).input;
+    const omitted = Math.max(0, total - rows.length);
+    const reason = observed ? 'Running activity is visible, but the original call details are not available.' :
+      'Waiting for verified details from the live source.';
     text(target.note, rows.length ? (omitted ? `+${omitted} more running ${mode} items` : '') : reason);
     target.note.hidden = !target.note.textContent;
-    wanted.push(target.note); reconcile(target.list, wanted);
+    reconcile(target.list, [...wanted, ...withheld, target.note]);
   }
   function fragments(target, parts) {
     const signature = JSON.stringify(parts);
@@ -386,7 +390,7 @@ const WatchView = (() => {
   class LiveInvocations {
     constructor() {
       this.root = el('div', undefined, 'watch-activity');
-      this.running = invocationDisclosure(); this.background = invocationDisclosure();
+      this.running = runningDisclosure(); this.background = runningDisclosure();
       this.root.append(this.running.node, this.background.node);
       this.update(null);
     }
@@ -528,7 +532,7 @@ const WatchView = (() => {
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
       this.tools = disclosure(); this.skills = disclosure();
-      this.runningDetail = invocationDisclosure(); this.backgroundDetail = invocationDisclosure();
+      this.runningDetail = runningDisclosure(); this.backgroundDetail = runningDisclosure();
       this.running = this.runningDetail.node; this.background = this.backgroundDetail.node;
       ContextHelp.attach(this.tools.summary, '• Counts include failures and cancellations; red outcomes are a subset, not extra calls.\n• Only recorded errors or cancellations count; missing evidence is not success.');
       ContextHelp.attach(this.skills.summary, 'Confirmed custom skill loads only.\nFailure counts require direct skill attribution.');
@@ -665,7 +669,8 @@ const WatchView = (() => {
       drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [],
         unidentified, state, clock?.zone);
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
-      drawRunningActivity(this.runningDetail, this.backgroundDetail, tool, verified, state, clock);
+      // A transport retry withholds call details without invalidating the job.
+      drawRunningActivity(this.runningDetail, this.backgroundDetail, tool, verified, tool?.detail_state, clock);
     }
   }
   class View {
