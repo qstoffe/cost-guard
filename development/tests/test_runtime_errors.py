@@ -392,7 +392,8 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
                          "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/application/live.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
-                                 "src/watch/observers.py", "src/web/host.py", "src/web/jobs.py", "src/log_housekeeping.py",
+                                 "src/watch/observers.py", "src/web/host.py", "src/web/host.py",  # maintenance and HTTP listener
+                                 "src/web/jobs.py", "src/log_housekeeping.py",
                                    "src/web/native_windows.py", "src/web/native_windows.py",
                                    "src/web/native_macos.py"]), sorted(roots))
 
