@@ -282,9 +282,9 @@ function setup() {
   input.view.active_cards = [originals[1], originals[0], originals[0], {session_id:'pending',focal_id:'',rows:[]}];
   controller.update(input);
   assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
-  assert.equal(view.body.children[0], firstRow, 'canonical newest start first and keyed row');
+  assert.equal(view.body.children[0], firstRow, 'oldest start stays first when the source list is shuffled');
   assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
-   assert.match(firstRow.attributes['aria-label'], /Prompt 24 · Running/);
+   assert.match(firstRow.attributes['aria-label'], /Prompt 23 · Running/);
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
@@ -365,7 +365,7 @@ function setup() {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
-     assert.match(helpText(view.body.children[0].children[2].children[0]), /Duration: 20m/);
+     assert.match(helpText(cardRow(1).children[2].children[0]), /Duration: 20m/);
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;

@@ -44,7 +44,7 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   await until('miniWatch.view.promptRows.size===5');
   const bounds=await evaluate('[miniWatch.window.outerWidth,miniWatch.window.outerHeight]');
   const painted=Date.now();
-  assert.deepEqual((await rows()).map(row=>row.id),shortlist);
+  assert.deepEqual((await rows()).map(row=>row.id).sort(),[...shortlist].sort(),'both views select the same sessions');
   assert.equal((await fixture('preview-counts')).reads,warmCounts.reads,'warm Sessions facts are reused');
   const upgrade=shortlist[0];
   const oldTotal=await evaluate(`(()=>{window.upgradeNode=miniWatch.view.promptRows.get(${JSON.stringify(upgrade)});

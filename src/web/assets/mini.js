@@ -152,9 +152,11 @@ const MiniWatch = (() => {
       if (!old || (previewRank(card) - previewRank(old) || card.activity_ms - old.activity_ms) > 0)
         catalog.set(card.session_id, card);
     }
-    const compare = (a, b) => (b.activity.at ?? -Infinity) - (a.activity.at ?? -Infinity) ||
+    const compareActivity = (a, b) => (a.activity.at ?? -Infinity) - (b.activity.at ?? -Infinity);
+    const compareIdentity = (a, b) =>
       a.card.session_id.localeCompare(b.card.session_id) ||
       (b.item?.prompt?.event_id || '').localeCompare(a.item?.prompt?.event_id || '');
+    const newestFirst = (a, b) => compareActivity(b, a) || compareIdentity(a, b);
     const add = (pool, card, item, {running = false, usesStart = false, historical = false} = {}) => {
       const metadata = catalog.get(card.session_id);
       const value = {card, item, running, usesStart, historical, catalog: metadata,
@@ -165,7 +167,7 @@ const MiniWatch = (() => {
       const clock = usesStart ? 'at_ms' : 'completed_at_ms';
       const oldAt = old?.item?.prompt?.[clock], at = item?.prompt?.[clock];
       const byPrompt = (knownTime(oldAt) ? oldAt : -Infinity) - (knownTime(at) ? at : -Infinity);
-      if (!old || (byPrompt || compare(value, old)) <= 0) pool.set(card.session_id, value);
+      if (!old || (byPrompt || newestFirst(value, old)) <= 0) pool.set(card.session_id, value);
     };
     for (const card of view?.active_cards || []) for (const item of card.rows || []) {
       const prompt = item.prompt;
@@ -187,8 +189,10 @@ const MiniWatch = (() => {
     }
     for (const id of active.keys()) finished.delete(id);
     const slots = Math.max(0, rowTarget - active.size);
-    const fillers = [...finished.values()].sort(compare).slice(0, slots);
-    return {rows: [...active.values()].sort(compare).concat(fillers), fillers, slots};
+    const fillers = [...finished.values()].sort(newestFirst).slice(0, slots);
+    const rows = [...active.values(), ...fillers].sort((a, b) =>
+      compareActivity(a, b) || compareIdentity(a, b));
+    return {rows, fillers, slots};
   }
   function activityLabel({at, clock = '—', full}, now, today) {
     if (at == null) return '—';
@@ -392,7 +396,7 @@ const MiniWatch = (() => {
       table.setAttribute('aria-label', 'Session activity: representative prompt CCost, whole-session Total CCost and estimated next incoming context (Ctx)');
       for (const name of ['Activity', 'Session', 'CCost', 'Total', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Activity: 'Running sessions come first. Each group is sorted by newest activity.\n• Running prompts show their start time.\n• Other rows show the prompt’s finish or last known start, or a newer session activity time when available.', Session: 'The name of the session.',
+        const explanation = {Activity: 'Sessions are sorted by activity, oldest at the top and newest at the bottom.\n• Running prompts show their start time.\n• Other rows show the prompt’s finish or last known start, or a newer session activity time when available.', Session: 'The name of the session.',
           CCost: "Reference cost of this session's latest represented prompt, including attributed linked subagent calls.",
           Total: ReportView.headerHelp.sessionCost,
           Ctx: ReportView.headerHelp.context}[name];

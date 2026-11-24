@@ -27,7 +27,7 @@ module.exports = async ({fixture,evaluate,until,command,sessionId,open,close,che
   const size = await evaluate('({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight})');
   await fixture('proof-observed'); await until(`miniWatch.view.promptRows.has('proof-4')`);
   assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0);
-  assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(r=>r.dataset.id).filter(id=>id?.startsWith('proof-'))`),['proof-4','proof-3','proof-2','proof-1']);
+  assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(r=>r.dataset.id).filter(id=>id?.startsWith('proof-'))`),['proof-1','proof-2','proof-3','proof-4']);
   assert.doesNotMatch(await ax(sessionId),/Latest sample/);
   assert.match(await ax(pip),/Latest sample 4/);
   const miniNames=await ax(pip); assert.match(miniNames,/Activity/); assert.doesNotMatch(miniNames,/Latest sample 0/);
