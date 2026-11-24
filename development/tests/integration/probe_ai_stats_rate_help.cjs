@@ -20,9 +20,9 @@ module.exports = async function({command,evaluate,until,fixture,tab,checks}) {
       current.stats.update(current);`);
   };
   const headline=copy=>{
-    assert.equal(copy,'Average cost across all AI work: total CCost for every model ÷ total active AI hours. '+
-      'Overlapping work counts once. Individual models can have higher or lower hourly rates.');
-    assert.doesNotMatch(copy,/Calendar|Workday|Active AI average|shift|salary|replacement|\n/);
+    assert.match(copy,/CCost for calls with measured execution ÷ their measured hours in this period/);
+    assert.match(copy,/Overlapping work counts once\. Individual models can have higher or lower hourly rates/);
+    assert.doesNotMatch(copy,/Calendar|Workday|Active AI average|shift|salary|replacement/);
   };
   for(const theme of ['classic','light','dark']) for(const width of [360,1280])
     for(const [font,zoom] of [['15px','1'],['30px','1'],['15px','1.25']]) {

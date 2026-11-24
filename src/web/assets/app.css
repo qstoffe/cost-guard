@@ -408,11 +408,12 @@ span.account-timeline-ring {
 .ai-stat-response .ai-stat-podium { margin-top: 0; }
 .ai-stat-detail { margin: .25rem 0; }
 .ai-stat-trait { margin: auto 0 0; padding-top: .7rem; font-size: .85rem; color: var(--muted); }
-.ai-stat-databases { min-height: 0; align-self: start; }
-.ai-stat-databases dl { display: grid; gap: .55rem; margin: 0; }
-.ai-stat-size-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); gap: .6rem; align-items: baseline; font-size: .9rem; }
+.ai-stat-databases dl { display: grid; gap: .7rem; margin: 0; }
+.ai-stat-size-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); gap: .1rem .6rem; align-items: baseline; font-size: .9rem; }
 .ai-stat-size-row button { text-align: left; }
-.ai-stat-size-row dd { margin: 0; max-width: 12ch; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ai-stat-size-row dd { margin: 0; }
+.ai-stat-size-row .ai-stat-value { max-width: 12ch; text-align: right; font-size: 1.15rem; }
+.ai-stat-size-row dd:last-child { grid-column: 1 / -1; color: var(--muted); font-variant-numeric: tabular-nums; }
 .token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }
 .token-mix-summary > div { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .token-mix-summary > div > span { color: var(--muted); width: fit-content; }

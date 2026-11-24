@@ -277,21 +277,20 @@ class OpenCodeV1Source:
         return self._instance_id
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
+    def _connection(self, *, timeout_seconds: float = 5.0) -> Iterator[sqlite3.Connection]:
         if not self._path.is_file():
             raise SourceUnavailableError("OpenCode V1 database is not available", code=FailureCode.V1_MISSING, generation="v1")
         # as_uri() safely encodes spaces/non-ASCII.  mode=ro prevents creation and
         # writes while still allowing SQLite to observe an active WAL file.
         uri = self._path.resolve().as_uri() + "?mode=ro"
         try:
-            connection = sqlite3.connect(uri, uri=True, timeout=5.0)
+            connection = sqlite3.connect(uri, uri=True, timeout=timeout_seconds)
         except sqlite3.Error as exc:
             raise SourceUnavailableError("OpenCode V1 database could not be opened read-only",
                                          code=FailureCode.V1_UNREADABLE, generation="v1") from exc
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA query_only = ON")
-            connection.execute("PRAGMA busy_timeout = 5000")
             yield connection
         except sqlite3.Error as exc:
             # Includes OperationalError, InterfaceError and DatabaseError.
@@ -301,6 +300,14 @@ class OpenCodeV1Source:
             ) from exc
         finally:
             connection.close()
+
+    def database_session_counts(self) -> tuple[int, int]:
+        """Count main and subagent session IDs, including nested children."""
+        with self._connection(timeout_seconds=0.1) as connection:
+            total, children = connection.execute(
+                "SELECT COUNT(DISTINCT id), COUNT(DISTINCT CASE WHEN parent_id <> '' THEN id END) FROM session"
+            ).fetchone()
+        return total - children, children
 
     def inspect_schema(self) -> V1SchemaInfo:
         if not self._path.is_file():

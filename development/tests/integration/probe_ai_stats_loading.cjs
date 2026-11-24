@@ -57,7 +57,7 @@ module.exports = async ({evaluate,checks}) => {
      const neutralView=new AIStatsView.View(()=>{});
      neutralView.update({period:'30-days',result:unsupported});
      const neutral=!/N\\/A|Not Applicable/i.test(neutralView.root.textContent) &&
-        [...neutralView.root.querySelectorAll('.ai-stat-value')].every(n=>n.textContent==='—');
+         [...neutralView.root.querySelectorAll('[data-metric] .ai-stat-value')].every(n=>n.textContent==='—');
       const hourly=parent.querySelector('[data-metric="hourly-rate"]');
       const standardHourly=hourly.querySelector('.ai-stat-value').tagName==='P' &&
         hourly.querySelectorAll('.ai-stat-value').length===1 && !hourly.querySelector('.ai-stat-rate');
@@ -69,6 +69,6 @@ module.exports = async ({evaluate,checks}) => {
       assert.equal(value,true,key+': '+JSON.stringify(result.firstFailure||result.coldState));
    assert.equal(result.cases,160);
   assert.deepEqual(result.order.map(t=>t.replace(/^[^A-Za-z]+/,'')),[
-     'AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session']);
+      'AI Hourly Rate','Total AI Cost','Subagent Cost','Total Tokens','Token Consumption Rate','AI Working Time','Average Cost per Session','Database Sizes']);
     checks.push('thirteen stable shells: cold/new-scope Loading, whole same-scope retained cards, no N/A; quiet polls, ready commit, truthful failure, token unit independence');
 };

@@ -185,6 +185,11 @@ class WebArchive:
         with self._connect() as db:
             return db.execute('SELECT MAX(cursor) FROM fact_cursors WHERE domain=?', (domain,)).fetchone()[0] or 0
 
+    def history_item_count(self, domain: str) -> int:
+        """Count distinct retained keys across partitions without decoding any facts."""
+        with self._connect() as db:
+            return db.execute('SELECT COUNT(DISTINCT item) FROM fact_cursors WHERE domain=?', (domain,)).fetchone()[0]
+
     @staticmethod
     def _historical_facts(rows):
         for key, revision, observed, raw, partition in rows:

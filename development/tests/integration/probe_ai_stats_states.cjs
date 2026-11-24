@@ -91,7 +91,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     assert.equal(rendered.length,13);
     rendered.forEach(card=>{
       const metric=expected.find(m=>m.metric===card.metric);
-      if (card.metric!=='token-rate') assert.equal(card.value,metric.display_units?.[unit]?.value || metric.display.value);
+      if (card.metric!=='token-rate') assert.equal(card.value,(metric.display_units?.[unit]?.value || metric.display.value).replace(/\bN\/A\b/g,'—'));
       assert.equal(card.trait,metric.display.trait);
       assert.equal(card.state,false);
        assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
