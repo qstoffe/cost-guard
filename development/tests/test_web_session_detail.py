@@ -257,11 +257,13 @@ class SessionDetailTests(unittest.TestCase):
                                        "revision": pinned["revision"], "offset": 0})
             self.assertEqual((200, 0, []), (status, activity["total"], activity["failures"]))
             self.assertEqual(post({"action": "activity", "token": token,
-                                   "revision": "stale", "offset": 0})[0], 410)
+                                   "revision": "stale", "offset": 0})[:2],
+                             (409, {"error": "detail_read_stale"}))
             self.assertEqual(post({"action": "activity", "token": token,
                                    "revision": pinned["revision"], "offset": True})[0], 400)
             self.assertEqual(post({"action": "page", "token": token, "offset": True})[0], 400)
-            self.assertEqual(post({"action": "page", "token": "expired"})[0], 410)
+            self.assertEqual(post({"action": "page", "token": "expired"})[:2],
+                             (410, {"error": "detail_expired"}))
             self.assertEqual(post({"action": "close", "token": token})[0], 200)
         finally:
             server.shutdown()
