@@ -242,6 +242,7 @@ class DetailLivenessTests(unittest.TestCase):
             page = self.details.page(token, 0, begin=True)
             self.assertEqual('failed', page['acquisition']['phase'])
             self.assertEqual(3, page['acquisition']['attempts'])
+            self.assertTrue(page['acquisition']['retry_scheduled'])
         self.details.open('root-0000', 'live')
         now[0] = 44
         self.details.tick(self.service)
@@ -315,7 +316,7 @@ class DetailLivenessTests(unittest.TestCase):
             key, attempt, _ = details.claim()
             details.finish(key, attempt, dict(error=reason, terminal=True))
             now[0] = 200
-            details.page(token, 0)
+            self.assertFalse(details.page(token, 0)['acquisition']['retry_scheduled'], reason)
             self.assertIsNone(details.claim(), reason)
         now = [0]
         details = SessionDetails(clock=lambda: now[0])
@@ -374,6 +375,10 @@ class DetailLivenessTests(unittest.TestCase):
             page = details.page(token, 0)
             self.assertEqual('detail_not_admitted', page['acquisition']['reason'])
             self.assertTrue(page['acquisition']['retry_available'])
+            self.assertTrue(page['acquisition']['retry_scheduled'])
+        now[0] = 151
+        self.assertFalse(details.page(token, 0)['acquisition']['retry_scheduled'],
+                         'status polls cannot impersonate an owner after its cooldown')
 
     def capture(self, mode, *, rows=3, timeout=2):
         lane = DetailCapture(run_owned_fixture, no_progress_seconds=timeout)

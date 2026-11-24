@@ -2,8 +2,48 @@
 const assert = require('node:assert/strict');
 module.exports = async ({evaluate, until, fixture, command, checks = [], layouts = []}) => {
   const run = source => evaluate(`(async()=>{${source}})()`);
-  await evaluate(`location.hash='#/sessions/root-0000'`);
+  await evaluate(`window.initialRead={bodyLost:false,expired:false,stale:false,opens:0,replies:[],samples:0,gaps:0};
+    window.normalFetch=window.fetch;
+    window.fetch=async(url,options)=>{
+      if(url!=='/api/detail')return normalFetch(url,options);
+      const request=JSON.parse(options.body), trace=initialRead;
+      if(request.action==='open')trace.opens++;
+      // A fetch may resolve at headers and still lose the body before JSON is available.
+      if(request.action==='begin' && !trace.bodyLost){
+        trace.bodyLost=true;
+        return new Response(new ReadableStream({start(controller){
+          controller.error(new TypeError('Synthetic body transport interrupted'));
+        }}));
+      }
+      if(request.action==='begin' && !trace.expired){
+        trace.expired=true;
+        await normalFetch(url,{...options,body:JSON.stringify({action:'close',token:request.token})});
+      }
+      if(request.action==='chunk' && !trace.stale){
+        trace.stale=true;
+        options={...options,body:JSON.stringify({...request,revision:'obsolete'})};
+      }
+      const reply=await normalFetch(url,options);
+      if(!reply.ok)trace.replies.push([reply.status,(await reply.clone().json()).error]);
+      return reply;
+    };
+    window.initialDOM=new MutationObserver(()=>{
+      const view=current?.detail;
+      if(!view?.root.isConnected || view.body.rows.length)return;
+      initialRead.samples++;
+      if(view.loader.root.hidden || !view.status.hidden || !view.retry.hidden ||
+         view.scroll.getAttribute('aria-busy')!=='true')initialRead.gaps++;
+    });
+    initialDOM.observe(output,{attributes:true,subtree:true,childList:true,characterData:true});
+    location.hash='#/sessions/root-0000'`);
+  await until('current.detail?.data?.total===1001 || (current.detail && !current.detail.status.hidden)');
+  assert.equal(await evaluate('current.detail.body.rows.length'),1001,'the cold table must appear without intervention');
   await until('current.detail?.data?.total===1001 && !current.detail.busy');
+  const trace=await evaluate('initialDOM.disconnect();window.fetch=normalFetch;initialRead');
+  assert.deepEqual(trace.replies,[[410,'detail_expired'],[409,'detail_read_stale']]);
+  assert.equal(trace.opens,2,'only the expired lease needs reopening');
+  assert.ok(trace.bodyLost && trace.samples>0); assert.equal(trace.gaps,0);
+  checks.push('cold prompt history survives a dropped body, expired lease and stale chunk without losing its visible loader or requesting a click');
   await evaluate(`window.quietRow=current.detail.body.firstChild;window.quietFooter=current.detail.footer.textContent;
     window.quietRevision=current.detail.data.revision;window.quietFocus=current.detail.root.querySelector('a');
     quietFocus.focus();window.quietTop=current.detail.scroll.getBoundingClientRect().top;`);
@@ -130,7 +170,7 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   // An actual cold-open action retains a small deliberate accessible recovery.
    await run(`window.coldQuiet=new SessionDetail.View(async(_,request)=>
     request.action==='open'?{token:'cold'}:{state:'source_unavailable',result:null,
-      acquisition:{phase:'failed',reason:'detail_not_admitted',retry_available:true}},'cold');
+      acquisition:{phase:'failed',reason:'detail_not_admitted',retry_available:true,retry_scheduled:false}},'cold');
     coldQuiet.attach(output);await coldQuiet.pendingLoad;`);
   assert.equal(await evaluate(`!coldQuiet.retry.hidden && coldQuiet.status.textContent==='Could not load. Try again or return to Sessions.'`),true);
   for (const theme of ['classic','web']) for (const scheme of ['light','dark']) for (const width of [360,1366]) {

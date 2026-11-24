@@ -43,6 +43,11 @@ module.exports = async function sessionLiveness({evaluate, until, fixture, comma
   assert.equal(await evaluate('peerRows'),1);
   await evaluate(`api('/api/detail',{action:'close',token:peerToken})`);
   checks.push('one permanently blocked owned child retires; healthy competing snapshot publishes one canonical row');
+  await until(`detailEvents.some(event=>event.phase==='failed') && !current.detail.busy`);
+  assert.equal(await evaluate(`current.detail.status.hidden && current.detail.retry.hidden &&
+    !current.detail.loader.root.hidden && current.detail.scroll.getAttribute('aria-busy')==='true'`),true,
+    'an exhausted attempt window is not a terminal screen while the next window is scheduled');
+  await fixture('detail-stop-owner');
   await until('current.detail.retry.hidden===false && !current.detail.busy');
   const failed = await evaluate(`({text:current.detail.status.textContent,bar:current.detail.loader.bar.value,
     hidden:current.detail.loader.root.hidden,rows:current.detail.body.rows.length,
@@ -58,7 +63,7 @@ module.exports = async function sessionLiveness({evaluate, until, fixture, comma
   assert.equal((await fixture('detail-observe')).started,terminal.started,'failed polls cannot reset retry budget');
   measurements.failed_attempts = failed.attempts;
   measurements.retired_children = terminal.retired;
-  checks.push('repeated actual 500ms pending reads end in typed no-progress failure after three attempts; no fake percent or empty success');
+  checks.push('three stalled attempts retain honest progress through the scheduled cooldown; a stopped owner past its due time yields an actionable error');
   for (const theme of ['classic','web']) for (const scheme of ['light','dark'])
     for (const width of [360,1366]) for (const zoom of [1,1.25,1.5]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
