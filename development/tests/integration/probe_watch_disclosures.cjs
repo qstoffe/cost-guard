@@ -59,11 +59,12 @@ module.exports = async evaluate => {
         card.skills.list.firstElementChild===skill && group.node.isConnected && !group.node.hidden;
       focus &&= document.activeElement===failure.summary;
       selected &&= failure.input.firstChild===anchor && selection.anchorNode===anchor;
-      noRemount &&= !observer.takeRecords().some(r=>[...r.removedNodes].some(n=>survivors.has(n)));
+      // Moving a surviving sibling in the same list also emits a removal record.
+      noRemount &&= !observer.takeRecords().some(r=>[...r.removedNodes].some(n=>survivors.has(n) && n.parentNode!==r.target));
       if(INPUT.view.active_cards[0].state==='partial') {
         pending++;
         privateCleared &&= failure.input.textContent==='' && running.input.textContent==='' &&
-          background.input.textContent==='' && /temporarily unavailable/.test(failure.note.textContent);
+           background.input.textContent==='' && failure.note.textContent==='' && /temporarily unavailable/.test(group.note.innerText);
       }
     }
     observer.disconnect(); selection.removeAllRanges(); document.activeElement?.blur();

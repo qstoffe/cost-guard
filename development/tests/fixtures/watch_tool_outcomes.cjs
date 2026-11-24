@@ -20,9 +20,23 @@ module.exports = (card, helpText, document, select) => {
   assert.ok(card.tools.list.children.slice(0, 7).every(node => !node.children[0].className));
   assert.equal(card.tools.list.querySelectorAll('img').length, 0, 'tool names stay literal text');
   assert.equal(card.running.className, 'watch-running-tool');
-   assert.equal(card.runningDetail.summary.textContent, 'Running: execute 12s');
-  assert.match(card.runningDetail.note.textContent, /Awaiting verified live source/);
+  assert.equal(card.runningDetail.summary.textContent, 'Running: execute 12s');
+  assert.match(card.runningDetail.note.textContent, /waiting.*verified.*source/i);
   assert.equal(card.running.hidden, false);
+  // Two shells still run, but the capture can link only one command per frame.
+  const shells = {...tool, background_kinds:['shell','shell'], background_invocation_count:2};
+  const aShell = {identity:'a', kind:'shell', text:'command:\nfirst.py'};
+  const bShell = {identity:'b', kind:'shell', text:'command:\nsecond.py'};
+  const panel = card.backgroundDetail;
+  card.drawActivity({...shells, background_invocations:[aShell]}, true);
+  panel.node.open = true; panel.jobs.get('a').node.open = false;
+  card.drawActivity({...shells, background_invocations:[bShell]}, true);
+  assert.equal(panel.node.open, true, 'a partial list cannot establish that the first job ended');
+  assert.doesNotMatch(panel.list.textContent, /first\.py/);
+  assert.match(panel.list.textContent, /second\.py/);
+  card.drawActivity({...shells, background_invocations:[aShell,bShell]}, true);
+  assert.equal(panel.jobs.get('a').node.open, false, 'restoring a missing call respects its manual close');
+  assert.equal(panel.jobs.get('a').input.textContent, 'command:\nfirst.py');
   assert.match(helpText(card.tools.summary), /subset, not extra calls/);
   assert.match(helpText(card.tools.summary), /missing evidence is not success/);
   const first = card.tools.list.children[0]; card.tools.node.open = true;
