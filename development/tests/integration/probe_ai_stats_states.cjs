@@ -60,7 +60,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
       document.querySelectorAll('.ai-stats-periods button')[${index}].focus();`);
     await until(`!document.getElementById('context-help').hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),index===3?/calendar month/:/whole robot saga/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),index===3?/local midnight on the first of this month/:/all available history/i);
     await escape(); await until(`document.getElementById('context-help').hidden`);
   }
   await evaluate(`document.activeElement.blur(); document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));`);
@@ -73,7 +73,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]},tab);
   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},tab);
   await until(`!document.getElementById('context-help').hidden`);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/whole robot saga/i);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/all available history/i);
   await escape(); await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
   assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-periods [title]').length`),0);
   await evaluate(`api=__statsApi`);
