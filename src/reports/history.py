@@ -52,12 +52,13 @@ def daily_roots(sessions: Sequence[NormalizedSession], start_ms: int) -> tuple[N
 class WatchHistoryAcquisition:
     """Incremental source-backed daily scope; process retention belongs to Watch.
 
-    Only revision-proven stable roots skip reanalysis. A completed plan publishes
-    its flattened scope once, not quadratically after every enrichment slice.
+    Only revision-proven stable roots skip reanalysis. Web retains the traces
+    of those roots across scope changes and publishes only at requested bounds.
     """
 
-    def __init__(self, *, share_roots: bool = False) -> None:
+    def __init__(self, *, share_roots: bool = False, progressive: bool = False) -> None:
         self.share_roots = share_roots
+        self.progressive = progressive
         self.chart_roots: dict[str, tuple[str, tuple[TraceEntry, ...]]] = {}
         self.entries_by_root: dict[str, tuple[TraceEntry, ...]] = {}
         self.state: dict[str, tuple[int, str]] = {}
@@ -89,7 +90,9 @@ class WatchHistoryAcquisition:
                    start_ms: int | None = None) -> tuple[tuple[NormalizedSession, ...], Mapping[str, str]]:
         day = local_day_start_ms(timezone_id, now_ms=now_ms)
         start = min(day, start_ms) if start_ms is not None else day
-        if self.day_start_ms != day or self.scope_start_ms is None or start < self.scope_start_ms:
+        if self.progressive:
+            self._change_scope(day, start, now_ms)
+        elif self.day_start_ms != day or self.scope_start_ms is None or start < self.scope_start_ms:
             retained = dict(self._retained)
             stepped = set(self._stepped)
             prompts = dict(self.prompt_of)
@@ -115,8 +118,23 @@ class WatchHistoryAcquisition:
         self.chart_roots = {key: value for key, value in self.chart_roots.items() if revisions.get(key) == value[0]}
         return roots, revisions
 
+    def _change_scope(self, day: int, start: int, now_ms: int) -> None:
+        previous = self.scope_start_ms
+        self.day_start_ms, self.scope_start_ms = day, start
+        if previous is None or previous == start:
+            return
+        self._dirty = True
+        if start < previous:
+            for entries in self.entries_by_root.values():
+                self._retain(tuple(entry for entry in entries if start <= entry.completed_at_ms < previous), now_ms)
+        else:
+            self._retained = {key: entry for key, entry in self._retained.items() if entry.completed_at_ms >= start}
+            self._stepped.intersection_update(key[:3] for key in self._retained if key[3] is not None)
+            self.prompt_of = {key: prompt for key, prompt in self.prompt_of.items() if key in self._retained}
+
     def unchanged(self, root_id: str, revision: str) -> bool:
-        return self.state.get(root_id) == (self.day_start_ms, revision)
+        state = self.state.get(root_id)
+        return state is not None and state[1] == revision and (self.progressive or state[0] == self.day_start_ms)
 
     def record(self, root_id: str, bundle: RootAnalysisBundle, *, now_ms: int) -> tuple[TraceEntry, ...]:
         assert self.scope_start_ms is not None
@@ -124,8 +142,10 @@ class WatchHistoryAcquisition:
         self._retain(bundle.trace_entries, now_ms)
         self.prompt_of.update((key, value) for key, value in prompt_attributions(bundle).items()
                               if key in self._retained)
-        self._dirty = self._dirty or self.entries_by_root.get(root_id) != entries
-        self.entries_by_root[root_id] = entries
+        stored = (tuple(entry for entry in bundle.trace_entries if entry.completed_at_ms <= now_ms)
+                  if self.progressive else entries)
+        self._dirty = self._dirty or self.entries_by_root.get(root_id) != stored
+        self.entries_by_root[root_id] = stored
         if bundle.cacheable and all(entry.completed_at_ms <= now_ms for entry in bundle.trace_entries):
             self.state[root_id] = (self.day_start_ms, bundle.source_revision)
         else:
@@ -156,12 +176,13 @@ class WatchHistoryAcquisition:
     def retained_entries(self) -> tuple[TraceEntry, ...]:
         return self._retained_publication
 
-    def entries(self) -> tuple[TraceEntry, ...]:
-        self.published_start_ms = self.scope_start_ms
+    def entries(self, *, covered_since_ms: int | None = None) -> tuple[TraceEntry, ...]:
+        self.published_start_ms = self.scope_start_ms if covered_since_ms is None else covered_since_ms
         retained = tuple(self._retained.values())
         if retained != self._retained_publication:
             self._retained_publication = retained
         if self._dirty:
-            self._published_entries = tuple(entry for values in self.entries_by_root.values() for entry in values)
+            self._published_entries = tuple(entry for values in self.entries_by_root.values() for entry in values
+                if not self.progressive or entry.completed_at_ms >= self.scope_start_ms)
             self._dirty = False
         return self._published_entries

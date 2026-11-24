@@ -15,6 +15,14 @@ from src.reports.models import ReportProjection
 from src.reports.token_mix_history import history_projection
 
 
+def observed_in_period(root, start, now):
+    lower = start or 0
+    return (any(entry.completed_at_ms > 0 and lower <= entry.completed_at_ms <= now for entry in root.entries)
+            or any(0 < left <= now and duration is not None and duration >= 0
+                   and not running and left + duration >= lower
+                   for left, duration, running in root.intervals))
+
+
 class HistoryProjection:
     def __init__(self, usage):
         self.usage = usage
@@ -23,7 +31,7 @@ class HistoryProjection:
 
     def render(self, *, identity, selection, config, reference, now, revisions, activity, available,
                only=None, defer_while_loading=False, unavailable=frozenset(),
-               live_roots=frozenset(), snapshot=None):
+               live_roots=frozenset(), refresh_roots=frozenset(), snapshot=None):
         _, facts, more = snapshot if snapshot is not None else self.usage.snapshot()
         if more and defer_while_loading:
             return {}, True
@@ -46,7 +54,7 @@ class HistoryProjection:
                     costs[entry.model, entry.tokens] = parts
         pending = {key: activity.get(key) for key, revision in revisions.items()
                    if key not in facts or facts[key].report is None or facts[key].revision != revision}
-        historical_cutoff = now - 600_000
+        refreshes = {key for key in refresh_roots if key in facts and facts[key].report is not None}
         service = SimpleNamespace(timezone_id=zone, now_ms=now, selection=selection)
         def valuation(model, tokens):
             return costs.get((model, tokens)) or reference.reference_category_valuation(model, tokens)
@@ -61,14 +69,15 @@ class HistoryProjection:
 
         def coverage(start, cached):
             lower = start or 0
-            waiting = any(key not in live_roots and key not in unavailable and
-                          (at is None or lower <= at < historical_cutoff) for key, at in pending.items())
+            waiting = any(key not in live_roots and key not in unavailable
+                          and (key not in refreshes or not observed_in_period(facts[key].report[0], start, now))
+                          and (at is None or lower <= at <= now) for key, at in pending.items())
             unqualified = sum(key not in live_roots and key in unavailable and (at is None or lower <= at)
                               for key, at in pending.items())
             complete = (available and not more and not any(at is None or lower <= at for at in pending.values())
                         and not migration_gap_notes(selection.migration_gap, start_ms=start) and not selection.warnings)
-            return complete, dict(cached=cached, complete=not more and not waiting,
-                                  remaining=None, unavailable=unqualified)
+            return complete, dict(cached=cached, complete=available and not more and not waiting,
+                                  remaining=None, unavailable=unqualified, recovering=not available)
 
         for name, start in periods:
             if only is not None and name != only:

@@ -39,7 +39,7 @@ class ArchivedAccountTimeline:
 
     def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *,
              unavailable_history=frozenset(), live_roots=frozenset(), pending_history=frozenset(),
-             source_available=False, **_):
+             source_available=False, progress_roots=None, **_):
         if not self.usage.archive.path.is_file():
             return {}, True, False
         cursor, facts, more = self.usage.snapshot()
@@ -72,8 +72,8 @@ class ArchivedAccountTimeline:
                  for key in first if key in waiting_keys or key in unknown_keys}
         unavailable = tuple(span for key, span in spans.items() if key not in waiting_keys)
         waiting = [span for key, span in spans.items() if key in waiting_keys]
-        historical = [span for key, span in spans.items() if key in waiting_keys and key not in live_roots
-                      and span[0] < now_ms - 600_000]
+        live_progress, refresh_roots = progress_roots if progress_roots is not None else (live_roots, frozenset())
+        historical = {key: span for key, span in spans.items() if key in waiting_keys and key not in live_progress}
         gaps = tuple((item.first_ms, item.last_ms + 1) for item in migration_gap.sessions
                      ) if migration_gap and migration_gap.has_gap else ()
         stamps = {key: tuple(entry.completed_at_ms for entry in fact.accounts or ()
@@ -87,16 +87,20 @@ class ArchivedAccountTimeline:
             starts['month'] = timeline_window('month', now_ms, zone, native_bounds=tuple(
                 (month.start, month.reset) for month in months.values()
                 if month is not None and month.start is not None)).start
-        self.initial_periods = {name for name, start in starts.items()
-                                if more or any(end >= start for _, end in historical)}
-        self.pending_periods = self.initial_periods.copy()
+        self.initial_periods = set()
         values = {}
         for name, start in starts.items():
+            initial = [span for key, span in historical.items() if span[1] > start and (
+                key not in refresh_roots or not any(at >= start for at in stamps.get(key, ())))]
+            if more or initial:
+                self.initial_periods.add(name)
             value = timeline_view(name, now_ms, zone, display_roster, self.index, first_covered_ms=oldest,
-                  gaps=gaps + unavailable, pending=waiting, initial_pending=historical,
+                   gaps=gaps + unavailable, pending=waiting, initial_pending=initial,
                   price_revision=catalog.diagnostic_signature, month_index=self.month_index)
             progress = dict(cached=sum(any(at >= start for at in times) for times in stamps.values()),
-                             complete=name not in self.initial_periods, remaining=None,
+                              complete=source_available and name not in self.initial_periods, remaining=None,
+                              recovering=not source_available,
                              unavailable=sum(end >= start for _, end in unavailable))
             values[name] = ObjectValue(value.fields + (('history_progress', record(**progress)),))
+        self.pending_periods = self.initial_periods.copy()
         return values, bool(waiting) or more, False

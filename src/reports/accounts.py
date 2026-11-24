@@ -22,7 +22,7 @@ def account_projections(
     catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
     timezone_id: str = "UTC", workday_calendar: str = "",
     period_index: PeriodCCostIndex | None = None, watch: bool = False,
-    observed_start_ms: int | None = None, require_history: bool = False,
+    observed_start_ms: int | None = None, require_history: bool = False, observed_at_ms: int | None = None,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
     providers = Counter(route for item in accounts for route in account_usage_routes(item))
@@ -47,7 +47,7 @@ def account_projections(
                            and entry.model.provider == account.ref.provider_id)
         scopes, notes, account_unknown, provider_notes, estimated_scopes = _period_scopes(account, index, providers, explained, today_start_ms,
                                        month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms,
-                                       require_history=require_history)
+                                        require_history=require_history, observed_at_ms=observed_at_ms)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
         billing_known = not unassigned
@@ -99,7 +99,7 @@ def _unaccounted_usage(account, index, providers, now_ms, observed_start_ms):
 
 
 def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,
-                    observed_start_ms, require_history):
+                     observed_start_ms, require_history, observed_at_ms):
     provider = usage_provider(account.ref.provider_id)
     ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
     if not watch:
@@ -119,7 +119,8 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             scopes.append((name, index.cost(provider, account.key, start, end, model)))
             notes.append(f"CCost {name}: {basis}; no requests in this period.")
             continue
-        if require_history and (observed_start_ms is None or observed_start_ms > start):
+        if require_history and (observed_start_ms is None or observed_start_ms > start
+                                or observed_at_ms is not None and observed_at_ms < start):
             scopes.append((name, None))
             notes.append(f"CCost {name}: waiting for complete period history.")
             continue
@@ -162,12 +163,13 @@ class AccountPeriodHistory:
     index: PeriodCCostIndex
     catalog: PricingCatalog
     observed_start_ms: int | None
+    observed_at_ms: int | None = None
 
     def project(self, accounts, *, now_ms, today_start_ms, month_start_ms, timezone_id, workday_calendar):
         return account_projections(accounts, (), self.catalog, now_ms=now_ms,
             today_start_ms=today_start_ms, month_start_ms=month_start_ms, timezone_id=timezone_id,
             workday_calendar=workday_calendar, period_index=self.index, watch=True,
-            observed_start_ms=self.observed_start_ms, require_history=True)
+            observed_start_ms=self.observed_start_ms, require_history=True, observed_at_ms=self.observed_at_ms)
 
 
 class WatchAccountProjection:
@@ -187,7 +189,8 @@ class WatchAccountProjection:
     def project(self, accounts: Sequence[AccountSnapshot], entries: tuple[TraceEntry, ...], catalog: PricingCatalog, *,
                 now_ms: int, day_start_ms: int, month_start_ms: int, timezone_id: str,
                  workday_calendar: str, period_entries: tuple[TraceEntry, ...] | None = None,
-                 observed_start_ms: int | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+                observed_start_ms: int | None = None,
+                observed_at_ms: int | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         boundaries = (day_start_ms, month_start_ms)
         if self._entries is not entries or self._catalog is not catalog or self._boundaries != boundaries:
             self._local = accounts_quota_projection_with_today_entries(
@@ -199,7 +202,7 @@ class WatchAccountProjection:
             self._period_index = PeriodCCostIndex(period_entries, catalog.reference_valuation)
             self._period_entries, self._period_catalog = period_entries, catalog
         assert self._local is not None
-        self.history = AccountPeriodHistory(self._period_index, catalog, observed_start_ms)
+        self.history = AccountPeriodHistory(self._period_index, catalog, observed_start_ms, observed_at_ms)
         projection, today = self._local
         native = self.history.project(accounts, now_ms=now_ms, today_start_ms=day_start_ms,
                                       month_start_ms=month_start_ms, timezone_id=timezone_id,

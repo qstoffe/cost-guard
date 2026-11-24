@@ -648,8 +648,8 @@ class ReportService:
                 entries.extend(self._watch_history.record(root.session_id, item.bundle, now_ms=self.now_ms))
         return tuple(entries)
 
-    def publish_watch_history(self) -> None:
-        self._watch_quota_entries = self._watch_history.entries()
+    def publish_watch_history(self, *, covered_since_ms: int | None = None) -> None:
+        self._watch_quota_entries = self._watch_history.entries(covered_since_ms=covered_since_ms)
 
     def project_watch_today(self):
         """One retained daily population, independent of account attribution."""
@@ -670,7 +670,8 @@ class ReportService:
         self._watch_period_start_ms = history_start(quotas, day, self.now_ms, include_native_month=True)
         return day
 
-    def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+    def project_watch_accounts(self, quotas: Sequence[AccountSnapshot], *,
+                               history_through_ms: int | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         """Publish new quota evidence over cached local usage, without source I/O."""
         day = self.prepare_watch_account_history(quotas)
         projection, today = self._watch_account_projection.project(
@@ -680,7 +681,8 @@ class ReportService:
             workday_calendar=str(self.config.get("workdayCalendar") or ""),
             period_entries=self._watch_history.retained_entries(),
             observed_start_ms=(self._watch_history.published_start_ms
-                               if self._watch_history.day_start_ms == day else None))
+                               if self._watch_history.day_start_ms == day else None),
+            observed_at_ms=history_through_ms)
         return projection, today
 
     def watch_account_history(self):

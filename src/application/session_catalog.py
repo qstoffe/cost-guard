@@ -104,10 +104,12 @@ class SessionCatalog:
         self.last_page = ()
         self.background_due = 0
         self.observed = None
+        self.observed_ms = None
         self.last_observation = None
         self.orders = OrderedDict()
         self.discovery = {}
         self.recent_arrivals = {}
+        self.live_arrivals = set()
         self.discovery_sequence = 0
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
@@ -140,6 +142,7 @@ class SessionCatalog:
                 self.archive.partition = partition if self.archive.loaded else None
                 self.archive_rejections.clear()
                 self.history_pending.clear()
+                self.live_arrivals.clear()
                 self.rows.clear()
                 self.valid.clear()
                 self.orders.clear()
@@ -356,6 +359,7 @@ class SessionCatalog:
                     self.interrupted = True
                     self.lifecycle_cutoff_ms = self.clock_ms()
                     self.recent_finishes.clear()
+                    self.live_arrivals.clear()
                 self.state = "source_unavailable"
                 return
             if observation is self.last_observation:
@@ -376,16 +380,25 @@ class SessionCatalog:
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions
                                       if root.parent_session_id is None)
             now = self.clock()
+            now_ms = self.clock_ms()
             self.recent_arrivals = {} if source_changed else {key: at for key, at in self.recent_arrivals.items()
                 if key in self.roots and self.roots[key].provenance == previous_roots[key].provenance
                 and now - at < ARRIVAL_SECONDS}
             if self.observed is not None and not source_changed:
                 added = self.roots.keys() - previous_roots.keys()
                 self.recent_arrivals.update((key, now) for key in added)
+                self.live_arrivals = {key for key in self.live_arrivals
+                    if key in self.roots and self.roots[key].provenance == previous_roots[key].provenance}
+                if not self.interrupted and self.archive is not None and self.observed_ms is not None:
+                    # An actually new root stays Live work after the display's
+                    # short arrival grace. Late discovery of old roots is history.
+                    self.live_arrivals.update(key for key in added
+                        if self.observed_ms <= self.roots[key].created_at_ms <= now_ms)
                 if added:
                     self.background_due = min(self.background_due, now + 15)
             elif source_changed:
                 self.background_due = now
+                self.live_arrivals.clear()
             self.discovery = {key: age for key, age in self.discovery.items() if key in self.roots}
             for key in self.roots:
                 if key not in self.discovery:
@@ -455,6 +468,7 @@ class SessionCatalog:
             self.state = "observed"
             self.interrupted = False
             self.observed = self.clock()
+            self.observed_ms = now_ms
             if self.archive is not None:
                 self._restore_archived_rows()
                 self._record_history_pending()
@@ -479,6 +493,18 @@ class SessionCatalog:
 
     def history_live_roots(self):
         return self.active | self.running_roots | self._new_live_roots()
+
+    def history_progress_live_roots(self):
+        """Live additions do not reopen historical acquisition when their UI grace expires."""
+        return self._archive_urgent() | self.live_arrivals | {
+            key for key in self.prompt_activity if self._finish_known(key)}
+
+    def history_refresh_roots(self):
+        """Previously acquired roots can need refresh without missing historical membership."""
+        return {key for key in self.history_pending
+                if (saved := self.archive.authorities.get(key)) is not None
+                and saved[3] == self.archive_target
+                and (row := self.archive.rows.get(key)) is not None and row.activity_qualified}
 
     def _new_live_roots(self):
         # A catalog expansion can discover old sessions in bulk. Treat them

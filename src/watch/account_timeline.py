@@ -388,6 +388,7 @@ class AccountTimeline:
         self.archive_live_roots = frozenset()
         self.archive_pending_history = frozenset()
         self.archive_coverage_confirmed = False
+        self.archive_progress_roots = None
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None
@@ -428,7 +429,7 @@ class AccountTimeline:
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
              now_ms, available=True, terminal=False, card_today=None, shared_roots=None,
              foreground=None, require_background_prices=False, unavailable_history=frozenset(),
-             live_roots=frozenset(), pending_history=frozenset(), coverage_confirmed=False):
+             live_roots=frozenset(), pending_history=frozenset(), coverage_confirmed=False, progress_roots=None):
         foreground = periods if foreground is None else foreground
         changed_source = source is not None and source != self.source
         if changed_source:
@@ -533,14 +534,15 @@ class AccountTimeline:
         self.foreground = foreground
         if self.archive:
             revision = self.archive.generation(ARCHIVED_USAGE)
-            if (revision, unavailable_history, live_roots, pending_history, coverage_confirmed) != (
+            if (revision, unavailable_history, live_roots, pending_history, coverage_confirmed, progress_roots) != (
                     self.archive_generation, self.unavailable_history, self.archive_live_roots,
-                    self.archive_pending_history, self.archive_coverage_confirmed):
+                    self.archive_pending_history, self.archive_coverage_confirmed, self.archive_progress_roots):
                 self.archive_generation = revision
                 self.unavailable_history = unavailable_history
                 self.archive_live_roots = live_roots
                 self.archive_pending_history = pending_history
                 self.archive_coverage_confirmed = coverage_confirmed
+                self.archive_progress_roots = progress_roots
                 self.due = 0
         if available and not terminal:
             with self.lock:
@@ -568,7 +570,7 @@ class AccountTimeline:
 
         def step():
             started = monotonic()
-            extra = dict(unavailable_history=unavailable_history, live_roots=live_roots,
+            extra = dict(unavailable_history=unavailable_history, live_roots=live_roots, progress_roots=progress_roots,
                           pending_history=pending_history, source_available=coverage_confirmed) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,

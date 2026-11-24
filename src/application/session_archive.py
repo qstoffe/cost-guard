@@ -21,7 +21,6 @@ from .session_catalog_scope import PAGE_SIZE, catalog_window, in_window, row_in_
 
 LOG = logging.getLogger(__name__)
 DOMAIN = 'sessions/1'
-LIVE_TAIL_MS = 10 * 60_000
 
 
 class SessionArchive:
@@ -264,15 +263,12 @@ def cached_page(catalog, ordered, *, token, offset, sort, direction, period, nav
         if row.empty_history and saved and not row.running:
             value['metric_absences'] = dict.fromkeys(('model', 'ctx', 'activity'), EMPTY_HISTORY)
     cached = sum(row.session_id in archive.rows or row.session_id in catalog.rows for row in rows)
-    cutoff = window.end_ms - LIVE_TAIL_MS
-    pending = catalog.history_pending
-    live = catalog.history_live_roots()
-    # The recent tail is not a substitute for coverage on a cold cache. It
-    # only suppresses the spinner for rows whose activity is already known.
-    missing = any(key not in live and (at is None or in_window(at, window)) and (
-        at is None or at < cutoff or not catalog._activity_current(key))
-        for key, at in pending.items())
-    complete = archive.loaded and catalog.observed is not None and not missing
+    live = catalog.history_progress_live_roots()
+    refreshes = {key for key in catalog.history_refresh_roots()
+                 if period == 'all' or row_in_window(archive.rows[key], window)}
+    missing = any(key not in live and key not in refreshes and not catalog._activity_current(key)
+        and (at is None or in_window(at, window)) for key, at in catalog.history_pending.items())
+    complete = archive.loaded and catalog.state == 'observed' and not missing
     unavailable = sum(key not in live and (catalog.activity.get(key) is None or
                       in_window(catalog.activity.get(key), window))
                       for key in catalog.unavailable_history())
@@ -280,11 +276,13 @@ def cached_page(catalog, ordered, *, token, offset, sort, direction, period, nav
     # legacy import reports pending until its first attempt can inventory it.
     restoring = not archive.loaded and catalog.archive_retry_at == 0
     importing = archive.loaded and archive.legacy is not None and not catalog.legacy_done
-    recovering = not archive.loaded and not restoring or importing and catalog.legacy_retry_at > catalog.clock()
+    recovering = (catalog.state == 'source_unavailable' or not archive.loaded and not restoring
+                  or importing and catalog.legacy_retry_at > catalog.clock())
     progress = dict(cached=cached if archive.loaded or cached else None, complete=bool(complete and not importing),
                     remaining=None, unavailable=unavailable, recovering=recovering)
     return dict(cache_first=True, token=token, epoch=lease['cache_epoch'], offset=offset, total=len(rows),
-                 size=PAGE_SIZE, page_reused=True, retained_order=False, membership_pending=not progress['complete'],
+                  size=PAGE_SIZE, page_reused=True, retained_order=False,
+                  membership_pending=not progress['complete'] or bool(unavailable),
                 candidate_navigation=True, order_state='verified', state='observed', period=period,
                 sort=sort, direction=direction, pending_sort=False, indexed=cached,
                 navigation=navigation, history_progress=progress, view=view,
